@@ -294,6 +294,96 @@ export function runBarycenterRefinement({
       const ids = rankMap.get(r);
       if (!ids || ids.length === 0) return;
 
+      // Grid packing for dense entity ranks (e.g., 1 PK hub connected to 4+ FK tables)
+      if (ids.length >= 4 && hasEntityNodesLocal) {
+        const numCols = Math.min(3, Math.ceil(Math.sqrt(ids.length)));
+        const numRows = Math.ceil(ids.length / numCols);
+
+        let maxNodeWidth = 0;
+        let maxNodeHeight = 0;
+        ids.forEach((id) => {
+          const node = flowNodes.find((n) => n.id === id);
+          if (!node) return;
+          const { width, height } = getNodeDimensions(node);
+          if (width > maxNodeWidth) maxNodeWidth = width;
+          if (height > maxNodeHeight) maxNodeHeight = height;
+        });
+
+        const subGapX = 80;
+        const subGapY = 80;
+
+        const gridTotalWidth =
+          numCols * maxNodeWidth + (numCols - 1) * subGapX;
+        const gridTotalHeight =
+          numRows * maxNodeHeight + (numRows - 1) * subGapY;
+
+        const avgCenter =
+          ids.reduce((s, id) => s + computeBarycenter(id), 0) / ids.length;
+
+        let secondaryPos =
+          ids.reduce((s, id) => {
+            const pos = positionsMap.get(id);
+            if (!pos) return s;
+            const node = flowNodes.find((n) => n.id === id)!;
+            const { width, height } = getNodeDimensions(node);
+            return s + (isHorizontal ? pos.x + width / 2 : pos.y + height / 2);
+          }, 0) / ids.length;
+
+        const primarySpanHalf =
+          (isHorizontal ? maxNodeWidth : maxNodeHeight) / 2;
+
+        if (lastRankMaxPrimary !== -Infinity) {
+          const minAllowedCenter =
+            lastRankMaxPrimary + minRankGap + primarySpanHalf;
+          if (secondaryPos < minAllowedCenter) {
+            secondaryPos = minAllowedCenter;
+          }
+        }
+
+        let currentRankMaxPrimary = -Infinity;
+
+        if (isHorizontal) {
+          // Ranks move Left-to-Right along X. Grid packs X sub-columns & Y rows.
+          const startY = avgCenter - gridTotalHeight / 2;
+
+          ids.forEach((id, index) => {
+            const col = Math.floor(index / numRows);
+            const row = index % numRows;
+
+            const x = secondaryPos + col * (maxNodeWidth + subGapX);
+            const y = startY + row * (maxNodeHeight + subGapY);
+
+            positionsMap.set(id, { x, y });
+
+            const nodeRight = x + maxNodeWidth;
+            if (nodeRight > currentRankMaxPrimary) {
+              currentRankMaxPrimary = nodeRight;
+            }
+          });
+        } else {
+          // Ranks move Top-to-Bottom along Y. Grid packs X sub-columns & Y rows.
+          const startX = avgCenter - gridTotalWidth / 2;
+
+          ids.forEach((id, index) => {
+            const row = Math.floor(index / numCols);
+            const col = index % numCols;
+
+            const x = startX + col * (maxNodeWidth + subGapX);
+            const y = secondaryPos + row * (maxNodeHeight + subGapY);
+
+            positionsMap.set(id, { x, y });
+
+            const nodeBottom = y + maxNodeHeight;
+            if (nodeBottom > currentRankMaxPrimary) {
+              currentRankMaxPrimary = nodeBottom;
+            }
+          });
+        }
+
+        lastRankMaxPrimary = currentRankMaxPrimary;
+        return;
+      }
+
       let totalLen = 0;
       ids.forEach((id, idx) => {
         const node = flowNodes.find((n) => n.id === id)!;

@@ -5,6 +5,7 @@ import {
   BaseEdge,
   EdgeLabelRenderer,
   useReactFlow,
+  Position,
 } from "@xyflow/react";
 import { BackendEdge } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -25,8 +26,6 @@ export const ForeignKeyEdge = (props: ForeignKeyEdgeProps) => {
     sourceY,
     targetX,
     targetY,
-    sourcePosition,
-    targetPosition,
     data,
     selected,
     style,
@@ -37,14 +36,19 @@ export const ForeignKeyEdge = (props: ForeignKeyEdgeProps) => {
   const updateEdge = useBackendCanvasStore((s) => s.updateEdge);
   const [isHovered, setIsHovered] = useState(false);
 
+  // Column handles in ColumnRow.tsx are ALWAYS Position.Right (source) and
+  // Position.Left (target). Ignore the node-level sourcePosition/targetPosition
+  // passed in from ReactFlow — using them would route the bezier to the node head
+  // instead of the specific column row.
   const [ edgePath ] = getBezierPath({
     sourceX,
     sourceY,
-    sourcePosition,
+    sourcePosition: Position.Right,
     targetX,
     targetY,
-    targetPosition,
+    targetPosition: Position.Left,
   });
+
 
   // Calculate unique t-offset along bezier path per edge to prevent label collisions
   const hashStr = props.id || "";
@@ -61,9 +65,10 @@ export const ForeignKeyEdge = (props: ForeignKeyEdgeProps) => {
   const t = tValues[handleIdx % tValues.length]!;
 
   const dx = Math.abs(targetX - sourceX);
-  const c1x = sourceX + (sourcePosition === "left" ? -dx * 0.5 : dx * 0.5);
+  // Source handle is always Position.Right, target always Position.Left for FK column edges
+  const c1x = sourceX + dx * 0.5;
   const c1y = sourceY;
-  const c2x = targetX + (targetPosition === "right" ? dx * 0.5 : -dx * 0.5);
+  const c2x = targetX - dx * 0.5;
   const c2y = targetY;
 
   const oneMinusT = 1 - t;

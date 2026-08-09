@@ -104,23 +104,42 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
 
   // Helper to link canvas FK edges between mapped Better Auth tables
   const syncForeignKeysForTable = (def: BetterAuthTableDefinition, currentTableId: string, currentMappings: BetterAuthTableMapping) => {
-    def.defaultColumns.forEach((col) => {
+    const currentNodes = useBackendCanvasStore.getState().nodes;
+    const currentEdges = useBackendCanvasStore.getState().edges;
+
+    def.defaultColumns.forEach((col, colIdx) => {
       if (col.isForeignKey && col.references) {
         const targetTableName = col.references.table;
         const targetDef = BETTER_AUTH_TABLE_DEFINITIONS.find((d) => d.name === targetTableName);
         if (targetDef) {
           const targetNodeId = currentMappings[targetDef.key] || (targetDef.key === "userEntityId" ? (data.userEntityId || data.userSchemaId) : undefined);
           if (targetNodeId && targetNodeId !== currentTableId) {
-            const hasEdge = edges.some(
+            const targetNode = currentNodes.find((n) => n.id === targetNodeId);
+            const currentTableNode = currentNodes.find((n) => n.id === currentTableId);
+
+            // Skip edge creation if source or target table node does not exist in store
+            if (!targetNode || !currentTableNode) return;
+
+            const hasEdge = currentEdges.some(
               (e) =>
                 (e.source === targetNodeId && e.target === currentTableId) ||
                 (e.source === currentTableId && e.target === targetNodeId),
             );
             if (!hasEdge) {
+              const sourceCols = targetNode.data?.columns || targetDef.defaultColumns;
+              const sourcePkIdx = sourceCols.findIndex((c) => c.isPrimaryKey);
+              const sourceColIdx = sourcePkIdx !== -1 ? sourcePkIdx : 0;
+
+              const targetCols = currentTableNode.data?.columns || def.defaultColumns;
+              const targetFkIdx = targetCols.findIndex((c) => c.name === col.name);
+              const targetColIdx = targetFkIdx !== -1 ? targetFkIdx : colIdx;
+
               addEdge({
                 id: `edge-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                 source: targetNodeId,
                 target: currentTableId,
+                sourceHandle: `source-${sourceColIdx}`,
+                targetHandle: `target-${targetColIdx}`,
                 type: "foreign-key",
               });
             }

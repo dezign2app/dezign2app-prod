@@ -166,6 +166,39 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
       },
     );
 
+    // Heal FK edges that were saved without column handles (e.g. created by AI).
+    // Without handles, ReactFlow falls back to the first handle it finds on the node
+    // which is `database-entity-target` at the top — making edges point to the card head.
+    const nodeMap = new Map(nodesToSet.map((n) => [n.id, n]));
+    const healedEdges = edgesToSet.map((edge) => {
+      if (
+        edge.type !== "foreign-key" ||
+        (edge.sourceHandle && edge.targetHandle)
+      ) {
+        return edge;
+      }
+      const srcNode = nodeMap.get(edge.source);
+      const tgtNode = nodeMap.get(edge.target);
+      if (
+        srcNode?.type !== "entity" ||
+        tgtNode?.type !== "entity" ||
+        !srcNode.data.columns ||
+        !tgtNode.data.columns
+      ) {
+        return edge;
+      }
+      const pkIdx = srcNode.data.columns.findIndex((c) => c.isPrimaryKey);
+      const fkIdx = tgtNode.data.columns.findIndex(
+        (c) =>
+          c.isForeignKey && c.references?.table === srcNode.data.label,
+      );
+      return {
+        ...edge,
+        sourceHandle: edge.sourceHandle ?? (pkIdx !== -1 ? `source-${pkIdx}` : undefined),
+        targetHandle: edge.targetHandle ?? (fkIdx !== -1 ? `target-${fkIdx}` : undefined),
+      };
+    });
+
     const fullEndpointSchema = endpointSchema.extend({ nodeId: z.string() });
     const fullEventSchema = z.union([
       publishedEventSchema.extend({
@@ -216,7 +249,7 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
 
     setNodesAndEdges(
       nodesToSet,
-      edgesToSet,
+      healedEdges,
       endpointsToSet,
       eventsToSet,
       providersToSet,
