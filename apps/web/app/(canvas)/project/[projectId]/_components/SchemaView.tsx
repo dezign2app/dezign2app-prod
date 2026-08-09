@@ -250,6 +250,8 @@ export function SchemaView({ projectId }: SchemaViewProps) {
         edgeTypes={edgeTypes}
         onMoveEnd={handleMoveEnd}
         attributionPosition="bottom-right"
+        minZoom={0.01}
+        maxZoom={3}
       >
         <Background gap={12} size={1} />
         <Controls />

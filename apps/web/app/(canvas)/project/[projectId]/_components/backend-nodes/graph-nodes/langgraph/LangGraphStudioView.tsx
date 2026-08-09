@@ -353,6 +353,8 @@ export function LangGraphStudioView({
             edgesReconnectable={true}
             edgesFocusable={true}
             elementsSelectable={true}
+            minZoom={0.01}
+            maxZoom={3}
             onEdgeClick={(_: React.MouseEvent, edge: LangGraphCanvasEdge) => {
               setEdges((eds) =>
                 eds.map((e) => ({ ...e, selected: e.id === edge.id })),
