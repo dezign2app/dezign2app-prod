@@ -1,12 +1,7 @@
-import type { MessagingResourceType } from "../constants";
+import type { MessagingResourceType, BACKEND_EDGE_TYPES } from "../constants";
 import type { BackendNode } from "./nodes";
 
-export type BackendEdgeType =
-  | "connection"
-  | "foreign-key"
-  | "message"
-  | "identity-connection"
-  | "database-connection";
+export type BackendEdgeType = (typeof BACKEND_EDGE_TYPES)[keyof typeof BACKEND_EDGE_TYPES];
 
 export type BackendEdge = {
   id: string;

@@ -1,19 +1,3 @@
-export const COLUMN_TYPES = [
-  "INT",
-  "BIGINT",
-  "SMALLINT",
-  "VARCHAR",
-  "TEXT",
-  "CHAR",
-  "BOOLEAN",
-  "TIMESTAMP",
-  "DATE",
-  "TIME",
-  "UUID",
-  "JSON",
-  "JSONB",
-  "FLOAT",
-  "DECIMAL",
-  "NUMERIC",
-  "VECTOR",
-];
+import { DB_COLUMN_TYPES } from "@workspace/canvas";
+
+export const COLUMN_TYPES = Object.values(DB_COLUMN_TYPES);

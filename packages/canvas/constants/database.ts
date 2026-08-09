@@ -21,3 +21,25 @@ export const DATABASE_CATEGORY_MAP: Record<string, "sql" | "nosql" | "vector" | 
   weaviate: "vector",
   redis: "key-value",
 };
+
+export const DB_COLUMN_TYPES = {
+  UUID: "UUID",
+  VARCHAR: "VARCHAR",
+  TEXT: "TEXT",
+  BOOLEAN: "BOOLEAN",
+  TIMESTAMP: "TIMESTAMP",
+  INTEGER: "INTEGER",
+  BIGINT: "BIGINT",
+  SMALLINT: "SMALLINT",
+  INT: "INT",
+  JSON: "JSON",
+  JSONB: "JSONB",
+  DATE: "DATE",
+  TIME: "TIME",
+  FLOAT: "FLOAT",
+  DECIMAL: "DECIMAL",
+  NUMERIC: "NUMERIC",
+  VECTOR: "VECTOR",
+} as const;
+
+export type DbColumnType = (typeof DB_COLUMN_TYPES)[keyof typeof DB_COLUMN_TYPES];
