@@ -17,8 +17,9 @@ import {
   generatePageCode,
   generateRootIndexPage,
 } from "./componentTemplates";
-import { generateMiddleware } from "./middlewareTemplate";
+import { generateProxy } from "./middlewareTemplate";
 import { generateAuthClient } from "../../../generators/auth-providers/better-auth/v1.7/generateAuthClient";
+import { compileAuth } from "../../../compileAuth";
 
 export type { LinkedEndpointInfo };
 export { getServicePort, resolveLinkedEndpoint };
@@ -79,14 +80,53 @@ export function compileNextjsV16WebClient(
   // Project configuration files
   files.push(...generateProjectConfigFiles());
 
-  // Check if AuthNode is connected or auth rules are specified
+  // Check if an AuthNode is explicitly connected to this WebClient/WebApp via an edge or authNodeId reference
   const authNode = allNodes.find((n) => n.type === "auth");
   const authPort = authNode?.data?.port || "3000";
   const authBaseUrl = authNode?.data?.baseUrl || `http://localhost:${authPort}`;
 
-  // Generate Auth Client if protected routes or AuthNode exist
+  const webNodeIds = new Set<string>();
+  webClientNodes.forEach((w) => webNodeIds.add(w.id));
+  allNodes
+    .filter((n) => n.type === "webApp" || n.type === "webClient" || n.data?.isWebClient)
+    .forEach((n) => webNodeIds.add(n.id));
+
+  const isAuthNodeConnected = authNode
+    ? allEdges.some((edge) => {
+        const connectsAuth = edge.source === authNode.id || edge.target === authNode.id;
+        const connectsWeb = webNodeIds.has(edge.source) || webNodeIds.has(edge.target);
+        return connectsAuth && connectsWeb;
+      }) ||
+      webClientNodes.some((w) => w.data?.authNodeId === authNode.id) ||
+      allNodes.some(
+        (n) => (n.type === "webApp" || n.type === "webClient") && n.data?.authNodeId === authNode.id
+      )
+    : false;
+
   const hasProtectedRoutes = pagesInfo.some((p) => p.accessType && p.accessType !== "public");
-  if (authNode || hasProtectedRoutes) {
+
+  // ONLY generate Auth server files if an AuthNode is explicitly CONNECTED to this Web App
+  if (isAuthNodeConnected && authNode) {
+    const compiledAuth = compileAuth(authNode, endpoints, events, allNodes, allEdges, testCases);
+
+    const authFile = compiledAuth.files.find((f) => f.filename.endsWith("auth.ts"));
+    if (authFile) {
+      files.push({
+        filename: "lib/auth.ts",
+        language: "typescript",
+        content: authFile.content,
+      });
+    }
+
+    const routeFile = compiledAuth.files.find((f) => f.filename.endsWith("route.ts"));
+    if (routeFile) {
+      files.push({
+        filename: "app/api/auth/[...all]/route.ts",
+        language: "typescript",
+        content: routeFile.content,
+      });
+    }
+
     files.push({
       filename: "lib/auth-client.ts",
       language: "typescript",
@@ -95,13 +135,25 @@ export function compileNextjsV16WebClient(
         plugins: ["adminClient", "organizationClient"],
       }),
     });
+  } else if (hasProtectedRoutes || authNode) {
+    // If protected routes exist or an AuthNode is on canvas but NOT connected to this app, only generate client helper if needed
+    if (hasProtectedRoutes) {
+      files.push({
+        filename: "lib/auth-client.ts",
+        language: "typescript",
+        content: generateAuthClient({
+          baseUrl: authBaseUrl,
+          plugins: ["adminClient", "organizationClient"],
+        }),
+      });
+    }
   }
 
-  // Generate Route Protection Middleware
+  // Generate Next.js 16 Route Protection Proxy (proxy.ts replaces deprecated middleware.ts in Next.js 16)
   files.push({
-    filename: "middleware.ts",
+    filename: "proxy.ts",
     language: "typescript",
-    content: generateMiddleware(pagesInfo),
+    content: generateProxy(pagesInfo),
   });
 
   // Root layout

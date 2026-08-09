@@ -1,9 +1,9 @@
 import { PageInfo } from "./types";
 
 /**
- * Generates Next.js App Router middleware.ts for route protection
+ * Generates Next.js 16 proxy.ts for route protection (replaces deprecated middleware.ts)
  */
-export function generateMiddleware(pagesInfo: PageInfo[]): string {
+export function generateProxy(pagesInfo: PageInfo[]): string {
   const protectedPages = pagesInfo.filter(
     (p) => p.accessType && p.accessType !== "public",
   );
@@ -12,7 +12,7 @@ export function generateMiddleware(pagesInfo: PageInfo[]): string {
     return `import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   return NextResponse.next();
 }
 
@@ -56,7 +56,7 @@ const PROTECTED_ROUTES: RouteRule[] = [
 ${routeRules.join(",\n")}
 ];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
   const matchedRule = PROTECTED_ROUTES.find((r) => 
@@ -77,7 +77,6 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Additional role, payment plan, or org membership checks can be evaluated here or via session API
   return NextResponse.next();
 }
 
@@ -86,3 +85,6 @@ export const config = {
 };
 `;
 }
+
+export const generateMiddleware = generateProxy;
+
