@@ -1,9 +1,9 @@
-import { BetterAuthV17NodeData } from "../types";
+import { BetterAuthV16NodeData } from "../types";
 
 /**
  * Generates `auth_middleware.py` for FastAPI services to verify tokens against Better Auth server
  */
-export function generateFastApiMiddleware(data: BetterAuthV17NodeData): string {
+export function generateFastApiMiddleware(data: BetterAuthV16NodeData): string {
   return `import os
 import httpx
 from fastapi import HTTPException, Security, status

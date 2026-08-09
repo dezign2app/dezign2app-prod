@@ -12,11 +12,11 @@ export const AUTH_FRAMEWORK_OPTIONS = [
 ] as const;
 
 export const BETTER_AUTH_VERSIONS = [
-  { value: "v1.7", label: "v1.7" },
+  { value: "v1.6", label: "v1.6" },
 ] as const;
 
 export const DEFAULT_AUTH_FRAMEWORK = AUTH_FRAMEWORK_BETTER_AUTH;
-export const DEFAULT_BETTER_AUTH_VERSION = "v1.7";
+export const DEFAULT_BETTER_AUTH_VERSION = "v1.6";
 
 export const ACCOUNT_LINKING_POLICY_OPTIONS = [
   {

@@ -12,7 +12,7 @@ export * from "./compileUiPackage";
 export * from "./compileMonorepo";
 
 // Tech & Version Specific Compilers
-export * from "./auth/better-auth/v1.7";
+export * from "./auth/better-auth/v1.6";
 export * from "./services/express/v4";
 export * from "./services/fastapi/v0";
 export * from "./webClients/nextjs/v16";

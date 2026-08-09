@@ -1,10 +1,10 @@
 import { DEFAULT_BETTER_AUTH_VERSION } from "@workspace/canvas";
-import { BetterAuthV17NodeData } from "../types";
+import { BetterAuthV16NodeData } from "../types";
 
 /**
  * Generates `README.md`
  */
-export function generateReadme(data: BetterAuthV17NodeData): string {
+export function generateReadme(data: BetterAuthV16NodeData): string {
   const serviceName = data.label || "Auth Server";
   return `# ${serviceName} (Better Auth Standalone Service)
 

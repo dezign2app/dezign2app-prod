@@ -1,9 +1,9 @@
-import { BetterAuthV17NodeData } from "../types";
+import { BetterAuthV16NodeData } from "../types";
 
 /**
  * Generates the Hono server entry point (`src/index.ts`)
  */
-export function generateAuthIndex(data: BetterAuthV17NodeData): string {
+export function generateAuthIndex(data: BetterAuthV16NodeData): string {
   return `import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";

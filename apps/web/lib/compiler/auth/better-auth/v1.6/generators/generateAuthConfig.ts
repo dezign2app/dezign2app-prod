@@ -3,14 +3,14 @@ import {
   EndpointHookConfig,
   DbHookConfig,
 } from "@workspace/canvas";
-import { BetterAuthV17NodeData } from "../types";
+import { BetterAuthV16NodeData } from "../types";
 import { getAdapterConfig } from "../adapters";
 import { resolveOAuthProviders } from "../providers";
 
 /**
  * Generates the core `src/auth.ts` file for Better Auth
  */
-export function generateAuthConfig(data: BetterAuthV17NodeData): string {
+export function generateAuthConfig(data: BetterAuthV16NodeData): string {
   const version = data.version || DEFAULT_BETTER_AUTH_VERSION;
   const dbAdapterKey = data.dbAdapter || "sqlite-raw";
   const adapterConfig = getAdapterConfig(version, dbAdapterKey);

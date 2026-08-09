@@ -1,10 +1,10 @@
-import { BetterAuthV17NodeData } from "../types";
+import { BetterAuthV16NodeData } from "../types";
 import { resolveOAuthProviders } from "../providers";
 
 /**
  * Generates `.env` and `.env.example` file contents for Better Auth
  */
-export function generateEnvExample(data: BetterAuthV17NodeData): string {
+export function generateEnvExample(data: BetterAuthV16NodeData): string {
   const oauthProviders = resolveOAuthProviders(data);
 
   let oauthEnvs = "";
