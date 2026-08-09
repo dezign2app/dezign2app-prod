@@ -79,8 +79,8 @@ export function useAutoLayout(options?: UseAutoLayoutOptions) {
 
       // 4. Run Dagre layout for flowNodes and flowEdges
       const isSchemaView =
-        flowNodes.length > 0 && flowNodes.every((n) => n.type === "entity");
-      const hasEntityNodes = flowNodes.some((n) => n.type === "entity");
+        flowNodes.length > 0 && flowNodes.every((n) => n.type === "entity" || n.type === "database");
+      const hasEntityNodes = flowNodes.some((n) => n.type === "entity" || n.type === "database");
 
       const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(
         () => ({}),

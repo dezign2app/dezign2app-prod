@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { NodeProps } from "@xyflow/react";
+import { NodeProps, Handle, Position } from "@xyflow/react";
 import { Database, Table2, Trash2, Settings } from "lucide-react";
 import {
   BackendNode,
@@ -25,6 +25,8 @@ import { ColumnList } from "./ColumnList";
 import { IndexList } from "./IndexList";
 import { VectorConfig } from "./VectorConfig";
 import { DbOperationsList } from "./DbOperationsList";
+
+import { DEFAULT_DATABASE_NODE_LABEL, getUniqueNodeLabel } from "@workspace/canvas";
 
 export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
@@ -58,10 +60,9 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
           const relatedTarget = (e as React.FocusEvent)
             .relatedTarget as Node | null;
           if (nodeRef.current?.contains(relatedTarget)) {
-            const defaultName = "Untitled_Table";
-            const latestNode = useBackendCanvasStore
-              .getState()
-              .nodes.find((n) => n.id === id);
+            const allNodes = useBackendCanvasStore.getState().nodes;
+            const defaultName = getUniqueNodeLabel(allNodes, "Untitled_Table", "entity");
+            const latestNode = allNodes.find((n) => n.id === id);
             if (latestNode) {
               updateNode(id, {
                 data: { ...latestNode.data, label: defaultName },
@@ -91,7 +92,8 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         if (isEmpty || isInitial) {
           useBackendCanvasStore.getState().deleteNode(id);
         } else {
-          const defaultName = "Untitled_Table";
+          const allNodes = useBackendCanvasStore.getState().nodes;
+          const defaultName = getUniqueNodeLabel(allNodes, "Untitled_Table", "entity");
           updateNode(id, { data: { ...latestNode.data, label: defaultName } });
           setEditingName(defaultName);
           setNameError(false);
@@ -138,6 +140,9 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
 
   const currentDbEngine = data.dbEngine || "sqlite";
 
+  const allNodes = useBackendCanvasStore((s) => s.nodes);
+  const dbNodes = allNodes.filter((n) => n.type === "database");
+
   return (
     <div
       ref={nodeRef}
@@ -147,6 +152,14 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         selected ? "border-primary" : "border-border",
       )}
     >
+      {/* Top Handle for Database Node connection */}
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="database-entity-target"
+        className="w-3 h-3 bg-amber-500 border-2 border-background !-top-1.5"
+      />
+
       <div
         className={cn(
           "px-3 py-2 border-b flex flex-col gap-1.5 group rounded-t-[10px]",
@@ -242,34 +255,67 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
           </div>
         </div>
 
-        {data.dbType !== "vector" && (
-          <div className="flex items-center gap-1.5 nodrag pt-0.5 border-t border-border/40">
-            <Select
-              value={currentDbEngine}
-              onValueChange={(val: string) => {
-                if (isDatabaseEngine(val)) {
-                  updateNode(id, {
-                    data: {
-                      ...data,
-                      dbEngine: val,
-                    },
+        {/* Database Node Association Dropdown */}
+        <div className="flex items-center justify-between gap-1.5 nodrag pt-1 border-t border-border/40 text-[10px]">
+          <span className="text-muted-foreground font-medium shrink-0 flex items-center gap-1">
+            <Database size={10} className="text-amber-500" />
+            DB Node:
+          </span>
+          <Select
+            value={data.databaseId || "none"}
+            onValueChange={(val: string) => {
+              const selectedDbId = val === "none" ? undefined : val;
+              const store = useBackendCanvasStore.getState();
+
+              // Update node data
+              updateNode(id, {
+                data: {
+                  ...data,
+                  databaseId: selectedDbId,
+                },
+              });
+
+              // Clean up existing edge if changed
+              const existingEdge = store.edges.find(
+                (e) => e.target === id && e.type === "database-connection",
+              );
+              if (existingEdge && existingEdge.source !== selectedDbId) {
+                store.deleteEdge(existingEdge.id);
+              }
+
+              // Add new edge if selected
+              if (selectedDbId) {
+                const edgeExists = store.edges.some(
+                  (e) => e.source === selectedDbId && e.target === id,
+                );
+                if (!edgeExists) {
+                  store.addEdge({
+                    id: `edge-${selectedDbId}-${id}`,
+                    source: selectedDbId,
+                    target: id,
+                    sourceHandle: "database-source",
+                    targetHandle: "database-entity-target",
+                    type: "database-connection",
                   });
                 }
-              }}
-            >
-              <SelectTrigger className="h-5 text-[10px] font-semibold bg-background/60 hover:bg-background border-border/40 px-1.5 py-0 shadow-none">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DATABASE_ENGINE_OPTIONS.map((e) => (
-                  <SelectItem key={e.value} value={e.value} className="text-xs">
-                    {e.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+              }
+            }}
+          >
+            <SelectTrigger className="h-5 text-[10px] font-semibold bg-background/60 hover:bg-background border-border/40 px-1.5 py-0 shadow-none">
+              <SelectValue placeholder="Unattached" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none" className="text-xs italic text-muted-foreground">
+                Unattached
+              </SelectItem>
+              {dbNodes.map((db) => (
+                <SelectItem key={db.id} value={db.id} className="text-xs">
+                  {db.data.label || "SQLite DB"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Description */}

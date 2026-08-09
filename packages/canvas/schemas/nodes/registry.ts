@@ -29,6 +29,7 @@ import {
   vectorDbRefDataSchema,
   searchIndexDataSchema,
 } from "./ai";
+import { databaseDataSchema } from "./database";
 import { langgraphDataSchema, langgraphStepDataSchema } from "./langgraph";
 
 export const nodeDataSchemas: Record<string, z.ZodSchema> = {
@@ -41,6 +42,7 @@ export const nodeDataSchemas: Record<string, z.ZodSchema> = {
   "redis-streams": redisStreamsDataSchema,
   "redis-cache": redisCacheDataSchema,
   entity: entityDataSchema,
+  database: databaseDataSchema,
   service: serviceDataSchema,
   db_ref: dbRefDataSchema,
   webClient: webClientDataSchema,

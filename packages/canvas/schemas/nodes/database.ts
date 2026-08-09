@@ -1,0 +1,20 @@
+import { z } from "zod";
+import { baseNodeDataSchema } from "./base";
+
+export const databaseDataSchema = baseNodeDataSchema.extend({
+  description: z.string().optional(),
+  dbEngine: z.string().optional(),
+  dbType: z.enum(["relational", "document", "vector", "key-value"]).optional(),
+  dbCategory: z.enum(["sql", "nosql", "vector", "key-value"]).optional(),
+  provider: z.string().optional(),
+  dbConnectionType: z.enum(["env_var", "connection_string"]).optional(),
+  connectionStringEnv: z.string().optional(),
+  dbFilePathEnv: z.string().optional(),
+  hostEnv: z.string().optional(),
+  portEnv: z.string().optional(),
+  databaseNameEnv: z.string().optional(),
+  usernameEnv: z.string().optional(),
+  passwordEnv: z.string().optional(),
+  apiKeyEnv: z.string().optional(),
+  isDefault: z.boolean().optional(),
+});

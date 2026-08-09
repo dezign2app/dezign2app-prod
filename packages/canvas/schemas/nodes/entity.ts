@@ -78,6 +78,7 @@ export const entityDataSchema = baseNodeDataSchema
       )
       .optional(),
     dbOperations: z.array(dbOperationFunctionSchema).optional(),
+    databaseId: z.string().optional(),
   })
   .strict();
 

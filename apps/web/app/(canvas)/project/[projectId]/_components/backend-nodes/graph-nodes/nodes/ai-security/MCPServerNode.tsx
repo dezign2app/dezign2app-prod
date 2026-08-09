@@ -102,14 +102,16 @@ export const MCPServerNode = ({
               </Label>
               <Select
                 value={data.connectionType || "SSE"}
-                onValueChange={(v) =>
-                  updateNode(id, {
-                    data: {
-                      ...data,
-                      connectionType: v as typeof data.connectionType,
-                    },
-                  })
-                }
+                onValueChange={(v) => {
+                  if (v === "stdio" || v === "SSE" || v === "HTTP") {
+                    updateNode(id, {
+                      data: {
+                        ...data,
+                        connectionType: v,
+                      },
+                    });
+                  }
+                }}
               >
                 <SelectTrigger className="h-6 text-xs w-[120px]">
                   <SelectValue />

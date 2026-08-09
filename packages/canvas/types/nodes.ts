@@ -152,11 +152,32 @@ export interface CanvasEntityNodeData {
   tableRef?: string;
   /** Reference to vector collection (used by Vector DB Ref nodes). */
   collectionRef?: string;
-  /** Reference to DB node (used by Vector DB Ref nodes). */
+  /** Reference to DB node (used by Vector DB Ref nodes or Entity nodes). */
   dbRef?: string;
+  /** Associated Database node ID to which this table hangs. */
+  databaseId?: string;
   /** Seed data rows for the entity. */
   seedRows?: Record<string, string | number | boolean | null>[];
 }
+
+/** Database node fields — connection configurations, environment variables, engine. */
+export interface CanvasDatabaseNodeData {
+  dbEngine?: DatabaseEngine | string;
+  dbType?: "relational" | "document" | "vector" | "key-value";
+  dbCategory?: "sql" | "nosql" | "vector" | "key-value";
+  provider?: string;
+  dbConnectionType?: "env_var" | "connection_string";
+  connectionStringEnv?: string;
+  dbFilePathEnv?: string;
+  hostEnv?: string;
+  portEnv?: string;
+  databaseNameEnv?: string;
+  usernameEnv?: string;
+  passwordEnv?: string;
+  apiKeyEnv?: string;
+  isDefault?: boolean;
+}
+
 
 /** Service / web-client node fields — endpoints, routing, CORS, etc. (canvas type). */
 export interface CanvasServiceNodeData {
@@ -367,7 +388,8 @@ export interface CanvasPaymentsNodeData {
  */
 export type BackendNodeData = BaseNodeData &
   Partial<
-    CanvasEntityNodeData &
+    CanvasDatabaseNodeData &
+      CanvasEntityNodeData &
       CanvasServiceNodeData &
       CanvasWebAppNodeData &
       CanvasWebClientNodeData &

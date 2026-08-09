@@ -31,9 +31,11 @@ import {
 import { SchemaGroupNode } from "./SchemaGroupNode";
 import { WebAppGroupNode } from "./WebAppGroupNode";
 import { EntityNode } from "./entity-node/EntityNode";
+import { DatabaseNode } from "./database-node/DatabaseNode";
 
 export const nodeTypes = {
   service: ServiceNode,
+  database: DatabaseNode,
   db_ref: DatabaseTableRefNode,
   queue: QueueNode,
   pubsub: PubSubNode,

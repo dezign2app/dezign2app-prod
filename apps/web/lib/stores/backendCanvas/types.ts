@@ -22,7 +22,8 @@ export type ConfigItemType =
   | "langgraphRoute"
   | "payments"
   | "zone"
-  | "entityFunctions";
+  | "entityFunctions"
+  | "database";
 
 export interface ActiveConfigItem {
   type: ConfigItemType;
