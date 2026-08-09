@@ -1,4 +1,4 @@
-import type { LayoutNode, LayoutEdge } from "./types";
+import type { LayoutNode, LayoutEdge, DagreGraph } from "./types";
 import { getNodeDimensions, getHandleYRatio } from "./nodeDimensions";
 
 // ---------------------------------------------------------------------------
@@ -79,7 +79,7 @@ function buildEdgeBezier(
 // ---------------------------------------------------------------------------
 
 export interface BarycenterRefinementParams {
-  dagreGraph: any;
+  dagreGraph: DagreGraph;
   flowNodes: LayoutNode[];
   flowEdges: LayoutEdge[];
   positionsMap: Map<string, { x: number; y: number }>;

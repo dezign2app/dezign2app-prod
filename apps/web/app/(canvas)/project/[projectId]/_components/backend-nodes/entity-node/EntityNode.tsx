@@ -142,22 +142,31 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
 
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const dbNodes = allNodes.filter((n) => n.type === "database");
+  const parentDbNode = allNodes.find((n) => n.id === data.databaseId);
+  const dbThemeColor = parentDbNode?.data?.color;
 
   return (
     <div
       ref={nodeRef}
       tabIndex={-1}
       className={cn(
-        "shadow-md rounded-xl bg-card border-2 min-w-[250px] max-w-[350px] focus:outline-none",
-        selected ? "border-primary" : "border-border",
+        "shadow-md rounded-xl bg-card border-2 min-w-[250px] max-w-[350px] focus:outline-none transition-all",
+        !dbThemeColor && (selected ? "border-primary" : "border-border"),
       )}
+      style={{
+        borderColor: dbThemeColor ? dbThemeColor : undefined,
+        boxShadow: selected
+          ? `0 0 0 2px ${dbThemeColor || "var(--primary)"}50, 0 4px 6px -1px rgba(0, 0, 0, 0.1)`
+          : undefined,
+      }}
     >
       {/* Top Handle for Database Node connection */}
       <Handle
         type="target"
         position={Position.Top}
         id="database-entity-target"
-        className="w-3 h-3 bg-amber-500 border-2 border-background !-top-1.5"
+        className="w-3 h-3 border-2 border-background !-top-1.5"
+        style={{ backgroundColor: dbThemeColor || "#f59e0b" }}
       />
 
       <div
@@ -171,11 +180,12 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center flex-1">
             {data.dbType === "vector" ? (
-              <Database size={14} className="mr-2 shrink-0" />
+              <Database size={14} className="mr-2 shrink-0" style={dbThemeColor ? { color: dbThemeColor } : undefined} />
             ) : (
               <Table2
                 size={14}
-                className="mr-2 text-muted-foreground shrink-0"
+                className="mr-2 shrink-0 text-muted-foreground"
+                style={dbThemeColor ? { color: dbThemeColor } : undefined}
               />
             )}
             {isEditingName ? (
@@ -206,7 +216,8 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
               </div>
             ) : (
               <span
-                className="font-semibold text-sm cursor-pointer hover:text-primary transition-colors flex-1 truncate"
+                className="font-bold text-sm cursor-pointer hover:opacity-80 transition-colors flex-1 truncate"
+                style={dbThemeColor ? { color: dbThemeColor } : undefined}
                 onClick={() => setIsEditingName(true)}
               >
                 {data.label}
@@ -258,7 +269,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         {/* Database Node Association Dropdown */}
         <div className="flex items-center justify-between gap-1.5 nodrag pt-1 border-t border-border/40 text-[10px]">
           <span className="text-muted-foreground font-medium shrink-0 flex items-center gap-1">
-            <Database size={10} className="text-amber-500" />
+            <Database size={10} style={{ color: dbThemeColor || "#f59e0b" }} />
             DB Node:
           </span>
           <Select

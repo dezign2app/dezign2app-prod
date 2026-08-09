@@ -115,6 +115,7 @@ export const backendNodeDataValidator = v.union(
   // Fallback for completely empty data (allowable in some updates)
   v.object({
     label: v.optional(v.string()),
+    color: v.optional(v.string()),
     parentId: v.optional(v.string()),
     position: v.optional(v.object({ x: v.number(), y: v.number() })),
     style: v.optional(
