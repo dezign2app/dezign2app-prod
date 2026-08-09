@@ -7,10 +7,12 @@ export * from "./compileRedisNodes";
 export * from "./compileServiceNode";
 export * from "./compileLangGraphNode";
 export * from "./compileWebClientNode";
+export * from "./compileAuth";
 export * from "./compileUiPackage";
 export * from "./compileMonorepo";
 
 // Tech & Version Specific Compilers
+export * from "./auth/better-auth/v1.7";
 export * from "./services/express/v4";
 export * from "./services/fastapi/v0";
 export * from "./webClients/nextjs/v16";

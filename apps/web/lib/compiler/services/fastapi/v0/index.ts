@@ -1,1 +1,2 @@
-export { compileFastAPIService } from "./generators/compiler";
+export { compileFastAPIService, compileAuthNode } from "./generators/compiler";
+

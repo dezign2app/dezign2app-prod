@@ -5,6 +5,9 @@ import { generateRoutes } from "./routeGenerator";
 import { generateEventConsumersAndProducers } from "./eventGenerators";
 import { generateServerAndTestFiles } from "./serverAndTestGenerators";
 import { generateManifestFiles } from "./manifestGenerators";
+import { compileAuthNode } from "./authGenerator";
+
+export { compileAuthNode };
 
 export function compileFastAPIService(
   node: BackendNode,
@@ -17,6 +20,9 @@ export function compileFastAPIService(
   allEdges: BackendEdge[] = [],
   testCases: SimulationTestCase[] = [],
 ): CompiledServiceResult {
+  if (node.type === "auth") {
+    return compileAuthNode(node, allNodes, allEdges);
+  }
   const serviceName = node.data.label || "Service";
   const sanitizedName =
     serviceName
