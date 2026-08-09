@@ -348,15 +348,67 @@ export const createEdgeSlice = (
   },
 
   addEdge: (edgeWithoutIndex) => {
+    const nodes = get().nodes;
+    const sourceExists = nodes.some((n) => n.id === edgeWithoutIndex.source);
+    const targetExists = nodes.some((n) => n.id === edgeWithoutIndex.target);
+
+    if (!sourceExists || !targetExists) {
+      console.warn(
+        `[addEdge] Aborting edge creation: source node "${edgeWithoutIndex.source}" (exists: ${sourceExists}) or target node "${edgeWithoutIndex.target}" (exists: ${targetExists}) was not found in canvas store.`,
+      );
+      return;
+    }
+
     const lastEdgeIndex = getLastIndex(get().edges);
     const fractionalIndex = generateKeyBetween(lastEdgeIndex, null);
-    const edge = { ...edgeWithoutIndex, fractionalIndex };
+    let edge = { ...edgeWithoutIndex, fractionalIndex };
+
+    // When AI creates a foreign-key edge (via add_edge) it never sets sourceHandle /
+    // targetHandle, so ReactFlow falls back to the first handle it finds — which is
+    // `database-entity-target` at the top of the card. Auto-derive column handles here.
+    if (
+      edge.type === "foreign-key" &&
+      (!edge.sourceHandle || !edge.targetHandle)
+    ) {
+      const nodes = get().nodes;
+      const sourceNode = nodes.find((n) => n.id === edge.source);
+      const targetNode = nodes.find((n) => n.id === edge.target);
+
+      if (
+        sourceNode?.type === "entity" &&
+        targetNode?.type === "entity" &&
+        sourceNode.data.columns &&
+        targetNode.data.columns
+      ) {
+        // Find the PK column on the source node
+        const pkIdx = sourceNode.data.columns.findIndex(
+          (c) => c.isPrimaryKey,
+        );
+        // Find the FK column on the target node that references the source table
+        const fkIdx = targetNode.data.columns.findIndex(
+          (c) =>
+            c.isForeignKey &&
+            c.references?.table === sourceNode.data.label,
+        );
+
+        if (pkIdx !== -1) {
+          edge = {
+            ...edge,
+            sourceHandle: `source-${pkIdx}`,
+            // Only set targetHandle if we found a matching FK column
+            targetHandle: fkIdx !== -1 ? `target-${fkIdx}` : edge.targetHandle,
+          };
+        }
+      }
+    }
+
     const next = [...get().edges, edge];
     set({
       edges: next,
       pendingEdgeUpserts: [...get().pendingEdgeUpserts, edge],
     });
   },
+
 
   updateEdge: (id, changes) => {
     const next = get().edges.map((e) =>
