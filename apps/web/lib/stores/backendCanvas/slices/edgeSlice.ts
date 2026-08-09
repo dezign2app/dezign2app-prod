@@ -134,6 +134,16 @@ export const createEdgeSlice = (
       pendingEdgeUpserts: [...get().pendingEdgeUpserts, newEdge],
     });
 
+    // Automatically sync databaseId on target entity node when connecting database -> entity
+    if (sourceNode.type === "database" && targetNode.type === "entity") {
+      get().updateNode(targetNode.id, {
+        data: {
+          ...targetNode.data,
+          databaseId: sourceNode.id,
+        },
+      });
+    }
+
     // Update targetNodeId on service events if connected via messaging handles
     if (isPublishedConnect && connection.sourceHandle) {
       const eventId = connection.sourceHandle.replace(

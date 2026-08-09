@@ -24,6 +24,7 @@ import { EventTestingConfig } from "./config-sidebar/EventTestingConfig";
 
 import { LangGraphRouteConfig } from "./config-sidebar/LangGraphRouteConfig";
 import { EntityFunctionsConfig } from "./config-sidebar/EntityFunctionsConfig";
+import { DatabaseConfig } from "./config-sidebar/DatabaseConfig";
 
 export const ConfigSidebar = () => {
   const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
@@ -141,7 +142,9 @@ export const ConfigSidebar = () => {
                       ? "Configure reusable authentication policy."
                       : type === "identityProvider"
                         ? "Configure identity provider."
-                        : "Configure event and messaging properties."}
+                        : type === "database"
+                          ? "Configure database connection properties."
+                          : "Configure event and messaging properties."}
             </SheetDescription>
           </SheetHeader>
 
@@ -193,6 +196,8 @@ export const ConfigSidebar = () => {
             <LangGraphRouteConfig id={id} nodeId={nodeId} />
           ) : type === "entityFunctions" ? (
             <EntityFunctionsConfig id={id} nodeId={nodeId} />
+          ) : type === "database" ? (
+            <DatabaseConfig id={id} nodeId={nodeId} />
           ) : (
             <EventConfig id={id} nodeId={nodeId} />
           )}

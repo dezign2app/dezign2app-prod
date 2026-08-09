@@ -91,7 +91,7 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
             <Label className="text-xs font-semibold flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-primary" /> Session Lifetime & Refresh Token Policy
             </Label>
-            <div className="grid grid-cols-3 gap-3 pt-1">
+            <div className="grid grid-cols-2 gap-3 pt-1">
               <div className="flex flex-col gap-1">
                 <Label className="text-[11px] text-muted-foreground font-medium">Session Lifetime</Label>
                 <Select
@@ -130,23 +130,21 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
                   <span className="text-[10px] text-muted-foreground shrink-0 font-mono">Days</span>
                 </div>
               </div>
+            </div>
 
-              <div className="flex flex-col gap-1.5 justify-center pt-2">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="token-rot"
-                    checked={sessionConfig.refreshTokenRotation ?? true}
-                    onCheckedChange={(c) =>
-                      updateData({
-                        session: { ...sessionConfig, refreshTokenRotation: Boolean(c) },
-                      })
-                    }
-                  />
-                  <Label htmlFor="token-rot" className="text-[11px] font-normal cursor-pointer flex items-center gap-1">
-                    <RefreshCw className="w-3 h-3 text-primary shrink-0" /> Refresh Token Rotation
-                  </Label>
-                </div>
-              </div>
+            <div className="flex items-center gap-2 pt-2 border-t border-border/40">
+              <Checkbox
+                id="token-rot"
+                checked={sessionConfig.refreshTokenRotation ?? true}
+                onCheckedChange={(c) =>
+                  updateData({
+                    session: { ...sessionConfig, refreshTokenRotation: Boolean(c) },
+                  })
+                }
+              />
+              <Label htmlFor="token-rot" className="text-[11px] font-normal cursor-pointer flex items-center gap-1">
+                <RefreshCw className="w-3 h-3 text-primary shrink-0" /> Refresh Token Rotation
+              </Label>
             </div>
           </div>
 

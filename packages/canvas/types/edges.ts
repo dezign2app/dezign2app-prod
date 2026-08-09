@@ -5,7 +5,8 @@ export type BackendEdgeType =
   | "connection"
   | "foreign-key"
   | "message"
-  | "identity-connection";
+  | "identity-connection"
+  | "database-connection";
 
 export type BackendEdge = {
   id: string;

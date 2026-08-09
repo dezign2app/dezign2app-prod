@@ -38,6 +38,10 @@ import {
   DbOperationFunction,
   BetterAuthTableDefinition,
   BETTER_AUTH_TABLE_DEFINITIONS,
+  DEFAULT_DATABASE_NODE_LABEL,
+  DEFAULT_DATABASE_ENGINE,
+  DEFAULT_DATABASE_ENV_VARS,
+  getUniqueNodeLabel,
 } from "@workspace/canvas";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -131,6 +135,30 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
     const baseX = (authNode?.position?.x || 100) + 320;
     const baseY = (authNode?.position?.y || 100) + schemaEntities.length * 90;
 
+    // Check if a database node exists; if not, create default SQLite DB node
+    let dbNode = allNodes.find((n) => n.type === "database");
+    let dbId = dbNode?.id;
+
+    if (!dbId) {
+      dbId = crypto.randomUUID();
+      const dbLabel = getUniqueNodeLabel(allNodes, DEFAULT_DATABASE_NODE_LABEL, "database");
+      addNode({
+        id: dbId,
+        type: "database",
+        position: { x: baseX - 300, y: baseY - 50 },
+        data: {
+          label: dbLabel,
+          dbEngine: DEFAULT_DATABASE_ENGINE,
+          dbType: "relational",
+          dbCategory: "sql",
+          dbConnectionType: "env_var",
+          connectionStringEnv: DEFAULT_DATABASE_ENV_VARS.connectionStringEnv,
+          dbFilePathEnv: DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv,
+          isDefault: true,
+        },
+      });
+    }
+
     const newEntityId = `entity-${Date.now()}-${def.name}`;
     addNode({
       id: newEntityId,
@@ -140,8 +168,20 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
         label: def.name,
         description: def.description,
         columns: def.defaultColumns,
+        databaseId: dbId,
       },
     });
+
+    if (dbId) {
+      addEdge({
+        id: `edge-${dbId}-${newEntityId}`,
+        source: dbId,
+        target: newEntityId,
+        sourceHandle: "database-source",
+        targetHandle: "database-entity-target",
+        type: "database-connection",
+      });
+    }
 
     const updatedMappings: BetterAuthTableMapping = {
       ...tableMappings,
@@ -185,24 +225,64 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
       return false;
     });
 
+    if (tablesToCreate.length === 0) return;
+
+    const authNode = allNodes.find((n) => n.id === nodeId);
+    const baseX = (authNode?.position?.x || 100) + 340;
+    const baseY = (authNode?.position?.y || 100);
+
+    // Check if a database node exists; if not, create default SQLite DB node
+    let dbNode = allNodes.find((n) => n.type === "database");
+    let dbId = dbNode?.id;
+
+    if (!dbId) {
+      dbId = crypto.randomUUID();
+      const dbLabel = getUniqueNodeLabel(allNodes, DEFAULT_DATABASE_NODE_LABEL, "database");
+      addNode({
+        id: dbId,
+        type: "database",
+        position: { x: baseX - 300, y: baseY - 50 },
+        data: {
+          label: dbLabel,
+          dbEngine: DEFAULT_DATABASE_ENGINE,
+          dbType: "relational",
+          dbCategory: "sql",
+          dbConnectionType: "env_var",
+          connectionStringEnv: DEFAULT_DATABASE_ENV_VARS.connectionStringEnv,
+          dbFilePathEnv: DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv,
+          isDefault: true,
+        },
+      });
+    }
+
     const activeMappings: BetterAuthTableMapping = { ...tableMappings };
 
     tablesToCreate.forEach((def, index) => {
-      const authNode = allNodes.find((n) => n.id === nodeId);
-      const baseX = (authNode?.position?.x || 100) + 340;
-      const baseY = (authNode?.position?.y || 100) + (schemaEntities.length + index) * 110;
+      const posY = baseY + (schemaEntities.length + index) * 110;
 
       const newEntityId = `entity-${Date.now()}-${def.name}`;
       addNode({
         id: newEntityId,
         type: "entity",
-        position: { x: baseX, y: baseY },
+        position: { x: baseX, y: posY },
         data: {
           label: def.name,
           description: def.description,
           columns: def.defaultColumns,
+          databaseId: dbId,
         },
       });
+
+      if (dbId) {
+        addEdge({
+          id: `edge-${dbId}-${newEntityId}`,
+          source: dbId,
+          target: newEntityId,
+          sourceHandle: "database-source",
+          targetHandle: "database-entity-target",
+          type: "database-connection",
+        });
+      }
 
       activeMappings[def.key] = newEntityId;
     });
@@ -312,7 +392,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
         <div className="flex flex-col gap-6 pt-2">
           {/* Section 1: Better Auth Required Tables Grouped By Category */}
           <div className="flex flex-col gap-4 p-3.5 bg-background/50 rounded-lg border border-border/40">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col items-start gap-4 justify-start">
               <div>
                 <Label className="text-xs font-semibold flex items-center gap-1.5">
                   <Table className="w-3.5 h-3.5 text-primary" /> Better Auth Schema Entity Mapping

@@ -41,6 +41,28 @@ export function isBackendNode(type: string): type is BackendNodeType {
   return ALL_BACKEND_NODE_TYPES.some((t) => t === type);
 }
 
+export function getUniqueNodeLabel(
+  existingNodes: Array<{ type?: string; data?: { label?: string } }>,
+  baseLabel: string,
+  type: string = "entity",
+): string {
+  const existingLabels = new Set(
+    existingNodes
+      .filter((n) => n.type === type && n.data?.label)
+      .map((n) => n.data!.label!.toLowerCase()),
+  );
+
+  if (!existingLabels.has(baseLabel.toLowerCase())) {
+    return baseLabel;
+  }
+
+  let counter = 1;
+  while (existingLabels.has(`${baseLabel}_${counter}`.toLowerCase())) {
+    counter++;
+  }
+  return `${baseLabel}_${counter}`;
+}
+
 export function getSuggestion(
   sourceKind: HandleKind,
   targetKind: HandleKind,

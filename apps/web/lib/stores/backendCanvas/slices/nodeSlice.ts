@@ -4,6 +4,7 @@ import {
   DEFAULT_LLM_MODEL,
   DEFAULT_LLM_TEMPERATURE,
 } from "@workspace/canvas/constants";
+import { getUniqueNodeLabel } from "@workspace/canvas";
 import { applyNodeChanges, NodeChange } from "@xyflow/react";
 import { generateKeyBetween } from "fractional-indexing";
 import { BackendCanvasState } from "../types";
@@ -73,19 +74,12 @@ export const createNodeSlice = (
         nonRemoveChanges
           .filter((c) => {
             if (
-              c.type === "position" ||
               c.type === "add" ||
-              c.type === "replace"
-            ) {
+              c.type === "replace" ||
+              c.type === "dimensions"
+            )
               return true;
-            }
-            if (
-              c.type === "dimensions" &&
-              "resizing" in c &&
-              Boolean((c as { resizing?: boolean }).resizing)
-            ) {
-              return true;
-            }
+            if (c.type === "position" && !c.dragging) return true;
             return false;
           })
           .map((c) => c.id),
@@ -93,11 +87,11 @@ export const createNodeSlice = (
 
       const upserts = next.filter((n) => persistentChangedNodeIds.has(n.id));
 
-      updates.nodes = next;
-      updates.pendingNodeUpserts = [
-        ...currentState.pendingNodeUpserts,
-        ...upserts,
-      ];
+      updates = {
+        ...updates,
+        nodes: next,
+        pendingNodeUpserts: [...get().pendingNodeUpserts, ...upserts],
+      };
     }
 
     if (Object.keys(updates).length > 0) {
@@ -107,6 +101,23 @@ export const createNodeSlice = (
 
   addNode: (nodeWithoutIndex) => {
     let finalNode = nodeWithoutIndex;
+    if (
+      (nodeWithoutIndex.type === "entity" || nodeWithoutIndex.type === "database") &&
+      nodeWithoutIndex.data?.label
+    ) {
+      const uniqueLabel = getUniqueNodeLabel(
+        get().nodes,
+        nodeWithoutIndex.data.label,
+        nodeWithoutIndex.type,
+      );
+      finalNode = {
+        ...finalNode,
+        data: {
+          ...finalNode.data,
+          label: uniqueLabel,
+        },
+      };
+    }
     if (nodeWithoutIndex.type === "service" && !nodeWithoutIndex.data?.port) {
       const existingPorts = new Set(
         get()

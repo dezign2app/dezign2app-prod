@@ -1,4 +1,5 @@
 export { EntityNode } from "./entity-node/EntityNode";
+export { DatabaseNode } from "./database-node/DatabaseNode";
 export { ColumnRow } from "./entity-node/ColumnRow";
 export type { ColumnRowProps, ColumnItem } from "./entity-node/ColumnRow";
 export { ColumnList } from "./entity-node/ColumnList";

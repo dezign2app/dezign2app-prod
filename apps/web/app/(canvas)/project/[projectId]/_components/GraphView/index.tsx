@@ -60,7 +60,11 @@ export function GraphView({ projectId }: GraphViewProps) {
   const { handleLayout } = useAutoLayout();
 
   const graphNodes = nodes.filter(
-    (n) => n.type !== "group" && n.type !== "entity",
+    (n) => n.type !== "group" && n.type !== "entity" && n.type !== "database",
+  );
+
+  const graphEdges = edges.filter(
+    (e) => e.type !== "database-connection" && e.type !== "foreign-key",
   );
 
   const hasFitted = useRef(false);
@@ -190,7 +194,7 @@ export function GraphView({ projectId }: GraphViewProps) {
     <div className="w-full h-full bg-muted/20">
       <ReactFlow
         nodes={visualGraphNodes}
-        edges={edges}
+        edges={graphEdges}
         elevateEdgesOnSelect={true}
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}

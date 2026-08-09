@@ -42,6 +42,42 @@ export const DATABASE_ENGINE_OPTIONS = [
     versions: [{ value: "3.x", label: "3.x" }],
     defaultVersion: "3.x",
   },
+  {
+    value: "postgres",
+    label: "PostgreSQL",
+    versions: [{ value: "16.x", label: "16.x" }],
+    defaultVersion: "16.x",
+  },
+  {
+    value: "mysql",
+    label: "MySQL",
+    versions: [{ value: "8.x", label: "8.x" }],
+    defaultVersion: "8.x",
+  },
+  {
+    value: "mongodb",
+    label: "MongoDB",
+    versions: [{ value: "7.x", label: "7.x" }],
+    defaultVersion: "7.x",
+  },
+  {
+    value: "pinecone",
+    label: "Pinecone",
+    versions: [{ value: "v2", label: "v2" }],
+    defaultVersion: "v2",
+  },
+  {
+    value: "qdrant",
+    label: "Qdrant",
+    versions: [{ value: "1.x", label: "1.x" }],
+    defaultVersion: "1.x",
+  },
+  {
+    value: "redis",
+    label: "Redis",
+    versions: [{ value: "7.x", label: "7.x" }],
+    defaultVersion: "7.x",
+  },
 ] as const;
 
 // Derived TypeScript Types (inferred directly from the single source of truth!)

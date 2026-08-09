@@ -1,5 +1,6 @@
 export * from "./base";
 export * from "./entity";
+export * from "./database";
 export * from "./messaging";
 export * from "./storage";
 export * from "./services";
