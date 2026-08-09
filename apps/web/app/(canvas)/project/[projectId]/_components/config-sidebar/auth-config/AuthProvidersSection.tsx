@@ -15,12 +15,13 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@workspace/ui/components/accordion";
-import { Key, Plus, Trash2, Lock, ShieldCheck, GitMerge } from "lucide-react";
+import { Key, Plus, Trash2, Lock, ShieldCheck, GitMerge, ShieldAlert } from "lucide-react";
 import {
   AUTH_FRAMEWORK_OPTIONS,
   BETTER_AUTH_VERSIONS,
   DEFAULT_AUTH_FRAMEWORK,
   DEFAULT_BETTER_AUTH_VERSION,
+  ACCOUNT_LINKING_POLICY_OPTIONS,
   OAuthProviderConfig,
   EmailPasswordConfig,
   AccountLinkingPolicy,
@@ -49,10 +50,11 @@ export const AuthProvidersSection: React.FC<AuthConfigSectionProps> = ({
   };
 
   const accountLinking: AccountLinkingPolicy = data.providers?.accountLinking || {
-    enabled: true,
-    policy: "prompt",
-    trustedProvidersOnly: true,
+    policy: "merge",
+    trustedProviders: [],
+    allowDifferentEmails: false,
   };
+  const activePolicy = accountLinking.policy || (accountLinking.enabled === false ? "block" : "merge");
 
   const providers = data.providers || {
     emailPassword,
@@ -332,40 +334,155 @@ export const AuthProvidersSection: React.FC<AuthConfigSectionProps> = ({
 
           {/* Account Linking Policy */}
           {isSocialEnabled && (
-            <div className="flex flex-col gap-3 p-3.5 bg-background/50 rounded-lg border border-border/40 text-xs">
+            <div className="flex flex-col gap-3.5 p-3.5 bg-background/50 rounded-lg border border-border/40 text-xs">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold flex items-center gap-1.5">
                   <GitMerge className="w-3.5 h-3.5 text-primary" /> Multi-Provider Account Linking Policy
                 </Label>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 capitalize font-medium">
-                  {accountLinking.policy || "prompt"}
+                  {activePolicy === "prompt"
+                    ? "Prompt & Verify"
+                    : activePolicy === "merge"
+                    ? "Auto-Merge"
+                    : "Block Account Linking"}
                 </span>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Action when a user signs in with social OAuth after already possessing an email/password account.
+                Determines how Better Auth handles an OAuth sign-in when an existing user profile possesses the same email.
               </p>
+
+              {/* Policy Buttons */}
               <div className="grid grid-cols-3 gap-2 pt-1">
-                {(["prompt", "merge", "block"] satisfies Array<NonNullable<AccountLinkingPolicy["policy"]>>).map((strat) => (
+                {ACCOUNT_LINKING_POLICY_OPTIONS.map((strat) => (
                   <button
-                    key={strat}
+                    key={strat.id}
                     onClick={() =>
                       updateData({
                         providers: {
                           ...providers,
-                          accountLinking: { ...accountLinking, policy: strat },
+                          accountLinking: {
+                            ...accountLinking,
+                            policy: strat.id,
+                            enabled: strat.id !== "block",
+                          },
                         },
                       })
                     }
-                    className={`p-2 rounded border text-[11px] font-medium capitalize text-center transition-colors ${
-                      accountLinking.policy === strat
-                        ? "bg-primary/15 border-primary text-primary font-bold"
-                        : "bg-background border-border/50 text-muted-foreground hover:text-foreground"
+                    className={`p-2.5 rounded-lg border text-left flex flex-col gap-1 transition-all ${
+                      activePolicy === strat.id
+                        ? "bg-primary/15 border-primary text-primary font-semibold shadow-sm"
+                        : "bg-background border-border/50 text-muted-foreground hover:text-foreground hover:border-border"
                     }`}
                   >
-                    {strat === "prompt" ? "Prompt & Verify" : strat === "merge" ? "Auto-Merge" : "Block Sign-In"}
+                    <span className="text-[11px] font-bold">{strat.label}</span>
+                    <span className="text-[10px] opacity-80 leading-tight font-normal">
+                      {strat.desc.split(" — ")[0]}
+                    </span>
                   </button>
                 ))}
               </div>
+
+              <div className="text-[10px] text-muted-foreground p-2 rounded bg-muted/50 border border-border/30">
+                {activePolicy === "prompt" && (
+                  <span>
+                    <strong>Prompt & Verify:</strong> Disables silent automatic linking (<code>disableImplicitLinking: true</code>). Better Auth returns an <code>account_not_linked</code> status so your app can prompt the user to sign in with their password and link manually via <code>authClient.linkSocial()</code>.
+                  </span>
+                )}
+                {activePolicy === "merge" && (
+                  <span>
+                    <strong>Auto-Merge:</strong> Implicitly links same-email accounts when the provider confirms the email is verified (<code>enabled: true</code>).
+                  </span>
+                )}
+                {activePolicy === "block" && (
+                  <span>
+                    <strong>Block Account Linking:</strong> Disables account linking entirely (<code>enabled: false</code>). OAuth sign-in attempts for existing emails will be rejected.
+                  </span>
+                )}
+              </div>
+
+              {/* Elevated Security Overrides (Visible when policy != block) */}
+              {activePolicy !== "block" && (
+                <div className="flex flex-col gap-3 pt-2 border-t border-border/30">
+                  {/* trustedProviders selection */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-[11px] font-semibold flex items-center gap-1 text-foreground">
+                      <ShieldAlert className="w-3.5 h-3.5 text-amber-500" /> Trusted Providers (Elevated Trust Override)
+                    </Label>
+                    <p className="text-[10px] text-muted-foreground">
+                      Selected providers bypass the email verification requirement and force-link accounts even if the provider does not flag the email as verified.
+                    </p>
+
+                    {providers.oauth && providers.oauth.length > 0 ? (
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        {providers.oauth.map((oa) => {
+                          const isTrusted = (accountLinking.trustedProviders || []).includes(oa.provider);
+                          return (
+                            <div
+                              key={oa.id || oa.provider}
+                              className="flex items-center gap-2 p-1.5 rounded bg-background border border-border/40"
+                            >
+                              <Checkbox
+                                id={`trusted-${oa.id || oa.provider}`}
+                                checked={isTrusted}
+                                onCheckedChange={(checked) => {
+                                  const current = accountLinking.trustedProviders || [];
+                                  const updated = checked
+                                    ? [...current, oa.provider]
+                                    : current.filter((p) => p !== oa.provider);
+                                  updateData({
+                                    providers: {
+                                      ...providers,
+                                      accountLinking: {
+                                        ...accountLinking,
+                                        trustedProviders: updated,
+                                      },
+                                    },
+                                  });
+                                }}
+                              />
+                              <Label
+                                htmlFor={`trusted-${oa.id || oa.provider}`}
+                                className="text-xs font-mono capitalize cursor-pointer"
+                              >
+                                {oa.provider}
+                              </Label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground italic">No OAuth providers configured yet.</span>
+                    )}
+                  </div>
+
+                  {/* allowDifferentEmails */}
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="flex flex-col gap-0.5">
+                      <Label htmlFor="allow-diff-emails" className="text-[11px] font-medium cursor-pointer">
+                        Allow Different Emails for Manual Linking
+                      </Label>
+                      <span className="text-[10px] text-muted-foreground">
+                        Permit signed-in users to manually call <code>linkSocial()</code> with an OAuth account using a different email.
+                      </span>
+                    </div>
+                    <Checkbox
+                      id="allow-diff-emails"
+                      checked={Boolean(accountLinking.allowDifferentEmails)}
+                      onCheckedChange={(checked) =>
+                        updateData({
+                          providers: {
+                            ...providers,
+                            accountLinking: {
+                              ...accountLinking,
+                              allowDifferentEmails: Boolean(checked),
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -374,10 +491,6 @@ export const AuthProvidersSection: React.FC<AuthConfigSectionProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <Label className="text-xs font-semibold">OAuth 2.0 / Social Providers</Label>
-                <div className="flex items-center gap-1 pt-0.5 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">
-                  <Lock className="w-3 h-3 shrink-0" />
-                  <span>Stored as encrypted environment variables (process.env.XXXX)</span>
-                </div>
               </div>
               <div className="flex items-center gap-2">
                 <Checkbox

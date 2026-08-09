@@ -350,10 +350,25 @@ export type {
   BetterAuthTableMapping,
 };
 
+import type {
+  BetterAuthTableKey,
+  BetterAuthTableName,
+  BetterAuthCategory,
+  AuthHookEvent,
+} from "../constants";
+
+export interface AuthLifecycleHookDefinition {
+  event: AuthHookEvent;
+  label: string;
+  description: string;
+  defaultPrompt: string;
+  defaultCode: string;
+}
+
 export interface BetterAuthTableDefinition {
-  key: keyof BetterAuthTableMapping;
-  name: string;
-  category: "core" | "organization" | "plugin";
+  key: BetterAuthTableKey;
+  name: BetterAuthTableName;
+  category: BetterAuthCategory;
   description: string;
   defaultColumns: Array<{
     name: string;

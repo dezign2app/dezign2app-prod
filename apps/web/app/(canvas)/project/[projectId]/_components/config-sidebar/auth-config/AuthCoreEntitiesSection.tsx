@@ -38,10 +38,18 @@ import {
   DbOperationFunction,
   BetterAuthTableDefinition,
   BETTER_AUTH_TABLE_DEFINITIONS,
+  BETTER_AUTH_TABLE_KEYS,
+  BETTER_AUTH_CATEGORIES,
+  BetterAuthCategory,
+  BACKEND_NODE_ENTITY,
+  BACKEND_NODE_DATABASE,
+  BACKEND_EDGE_FOREIGN_KEY,
+  BACKEND_EDGE_DATABASE_CONNECTION,
   DEFAULT_DATABASE_NODE_LABEL,
   DEFAULT_DATABASE_ENGINE,
   DEFAULT_DATABASE_ENV_VARS,
   getUniqueNodeLabel,
+  isBetterAuthTableRequired,
 } from "@workspace/canvas";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -56,7 +64,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
 }) => {
   const authFunctions: AuthFunctionRef[] = data.authFunctions || [];
   const tableMappings: BetterAuthTableMapping = data.tableMappings || {};
-  const schemaEntities = allNodes.filter((n) => n.type === "entity");
+  const schemaEntities = allNodes.filter((n) => n.type === BACKEND_NODE_ENTITY);
 
   const orgConfig = data.organization || { enabled: true };
   const isOrgEnabled = orgConfig.enabled ?? true;
@@ -103,16 +111,23 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
   };
 
   // Helper to link canvas FK edges between mapped Better Auth tables
-  const syncForeignKeysForTable = (def: BetterAuthTableDefinition, currentTableId: string, currentMappings: BetterAuthTableMapping) => {
+  const syncForeignKeysForTable = (
+    def: BetterAuthTableDefinition,
+    currentTableId: string,
+    currentMappings: BetterAuthTableMapping,
+  ) => {
     const currentNodes = useBackendCanvasStore.getState().nodes;
-    const currentEdges = useBackendCanvasStore.getState().edges;
 
     def.defaultColumns.forEach((col, colIdx) => {
       if (col.isForeignKey && col.references) {
         const targetTableName = col.references.table;
         const targetDef = BETTER_AUTH_TABLE_DEFINITIONS.find((d) => d.name === targetTableName);
         if (targetDef) {
-          const targetNodeId = currentMappings[targetDef.key] || (targetDef.key === "userEntityId" ? (data.userEntityId || data.userSchemaId) : undefined);
+          const targetNodeId =
+            currentMappings[targetDef.key] ||
+            (targetDef.key === BETTER_AUTH_TABLE_KEYS.USER
+              ? data.userEntityId || data.userSchemaId
+              : undefined);
           if (targetNodeId && targetNodeId !== currentTableId) {
             const targetNode = currentNodes.find((n) => n.id === targetNodeId);
             const currentTableNode = currentNodes.find((n) => n.id === currentTableId);
@@ -120,6 +135,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
             // Skip edge creation if source or target table node does not exist in store
             if (!targetNode || !currentTableNode) return;
 
+            const currentEdges = useBackendCanvasStore.getState().edges;
             const hasEdge = currentEdges.some(
               (e) =>
                 (e.source === targetNodeId && e.target === currentTableId) ||
@@ -140,7 +156,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
                 target: currentTableId,
                 sourceHandle: `source-${sourceColIdx}`,
                 targetHandle: `target-${targetColIdx}`,
-                type: "foreign-key",
+                type: BACKEND_EDGE_FOREIGN_KEY,
               });
             }
           }
@@ -150,69 +166,96 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
   };
 
   const createEntityForTable = (def: BetterAuthTableDefinition) => {
-    const authNode = allNodes.find((n) => n.id === nodeId);
+    const storeNodes = useBackendCanvasStore.getState().nodes;
+    const authNode = storeNodes.find((n) => n.id === nodeId);
     const baseX = (authNode?.position?.x || 100) + 320;
     const baseY = (authNode?.position?.y || 100) + schemaEntities.length * 90;
 
-    // Check if a database node exists; if not, create default SQLite DB node
-    let dbNode = allNodes.find((n) => n.type === "database");
-    let dbId = dbNode?.id;
+    // Check if an entity node with matching label already exists on canvas
+    const matchingEntity = storeNodes.find(
+      (n) => n.type === BACKEND_NODE_ENTITY && n.data?.label?.toLowerCase().trim() === def.name.toLowerCase().trim()
+    );
 
-    if (!dbId) {
-      dbId = crypto.randomUUID();
-      const dbLabel = getUniqueNodeLabel(allNodes, DEFAULT_DATABASE_NODE_LABEL, "database");
+    let targetEntityId: string;
+
+    if (matchingEntity) {
+      targetEntityId = matchingEntity.id;
+      // Inject missing default columns if any
+      const currentCols = matchingEntity.data?.columns || [];
+      const missingCols = def.defaultColumns.filter(
+        (reqCol) => !currentCols.some((c) => c.name.toLowerCase() === reqCol.name.toLowerCase())
+      );
+      if (missingCols.length > 0) {
+        updateNode(matchingEntity.id, {
+          data: {
+            ...matchingEntity.data,
+            columns: [...currentCols, ...missingCols],
+          },
+        });
+      }
+    } else {
+      // Check if a database node exists; if not, create default SQLite DB node
+      let dbNode = storeNodes.find((n) => n.type === BACKEND_NODE_DATABASE);
+      let dbId = dbNode?.id;
+
+      if (!dbId) {
+        dbId = crypto.randomUUID();
+        const dbLabel = getUniqueNodeLabel(storeNodes, DEFAULT_DATABASE_NODE_LABEL, "database");
+        addNode({
+          id: dbId,
+          type: BACKEND_NODE_DATABASE,
+          position: { x: baseX - 300, y: baseY - 50 },
+          data: {
+            label: dbLabel,
+            dbEngine: DEFAULT_DATABASE_ENGINE,
+            dbType: "relational",
+            dbCategory: "sql",
+            dbConnectionType: "env_var",
+            connectionStringEnv: DEFAULT_DATABASE_ENV_VARS.connectionStringEnv,
+            dbFilePathEnv: DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv,
+            isDefault: true,
+          },
+        });
+      }
+
+      targetEntityId = `entity-${Date.now()}-${def.name}`;
       addNode({
-        id: dbId,
-        type: "database",
-        position: { x: baseX - 300, y: baseY - 50 },
+        id: targetEntityId,
+        type: BACKEND_NODE_ENTITY,
+        position: { x: baseX, y: baseY },
         data: {
-          label: dbLabel,
-          dbEngine: DEFAULT_DATABASE_ENGINE,
-          dbType: "relational",
-          dbCategory: "sql",
-          dbConnectionType: "env_var",
-          connectionStringEnv: DEFAULT_DATABASE_ENV_VARS.connectionStringEnv,
-          dbFilePathEnv: DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv,
-          isDefault: true,
+          label: def.name,
+          description: def.description,
+          columns: def.defaultColumns,
+          databaseId: dbId,
         },
       });
-    }
 
-    const newEntityId = `entity-${Date.now()}-${def.name}`;
-    addNode({
-      id: newEntityId,
-      type: "entity",
-      position: { x: baseX, y: baseY },
-      data: {
-        label: def.name,
-        description: def.description,
-        columns: def.defaultColumns,
-        databaseId: dbId,
-      },
-    });
-
-    if (dbId) {
-      addEdge({
-        id: `edge-${dbId}-${newEntityId}`,
-        source: dbId,
-        target: newEntityId,
-        sourceHandle: "database-source",
-        targetHandle: "database-entity-target",
-        type: "database-connection",
-      });
+      if (dbId) {
+        addEdge({
+          id: `edge-${dbId}-${targetEntityId}`,
+          source: dbId,
+          target: targetEntityId,
+          sourceHandle: "database-source",
+          targetHandle: "database-entity-target",
+          type: BACKEND_EDGE_DATABASE_CONNECTION,
+        });
+      }
     }
 
     const updatedMappings: BetterAuthTableMapping = {
       ...tableMappings,
-      [def.key]: newEntityId,
+      [def.key]: targetEntityId,
     };
 
     updateData({
       tableMappings: updatedMappings,
-      ...(def.key === "userEntityId" ? { userEntityId: newEntityId, userSchemaId: newEntityId } : {}),
+      ...(def.key === BETTER_AUTH_TABLE_KEYS.USER
+        ? { userEntityId: targetEntityId, userSchemaId: targetEntityId }
+        : {}),
     });
 
-    syncForeignKeysForTable(def, newEntityId, updatedMappings);
+    syncForeignKeysForTable(def, targetEntityId, updatedMappings);
   };
 
   const fixEntitySchema = (
@@ -221,7 +264,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
     missingColumns: BetterAuthTableDefinition["defaultColumns"],
   ) => {
     const entityNode = schemaEntities.find((e) => e.id === entityId);
-    if (!entityNode || entityNode.type !== "entity") return;
+    if (!entityNode || entityNode.type !== BACKEND_NODE_ENTITY) return;
 
     const currentCols = entityNode.data.columns || [];
     const updatedCols = [...currentCols, ...missingColumns];
@@ -236,30 +279,47 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
   };
 
   const autoCreateAllMissingTables = () => {
+    const storeNodes = useBackendCanvasStore.getState().nodes;
+    const existingEntities = storeNodes.filter((n) => n.type === BACKEND_NODE_ENTITY);
+    const enabledPlugins: string[] = data.plugins || ["bearer", "admin", "organization", "jwt"];
+
+    const rawUserMapping = data.userEntityId || data.userSchemaId;
+    const activeMappings: BetterAuthTableMapping = {};
+
+    BETTER_AUTH_TABLE_DEFINITIONS.forEach((def) => {
+      const rawId =
+        tableMappings[def.key] ||
+        (def.key === BETTER_AUTH_TABLE_KEYS.USER ? rawUserMapping : undefined);
+      if (rawId && existingEntities.some((e) => e.id === rawId)) {
+        activeMappings[def.key] = rawId;
+      }
+    });
+
     const tablesToCreate = BETTER_AUTH_TABLE_DEFINITIONS.filter((def) => {
-      if (def.category === "core") return !tableMappings[def.key];
-      if (def.category === "organization") return isOrgEnabled && !tableMappings[def.key];
-      if (def.key === "passkeyEntityId") return Boolean(data.providers?.passkey) && !tableMappings[def.key];
-      if (def.key === "rateLimitEntityId") return Boolean(data.providers?.emailPassword?.rateLimit) && !tableMappings[def.key];
-      return false;
+      if (activeMappings[def.key]) return false;
+      return isBetterAuthTableRequired(def, {
+        isOrgEnabled,
+        enabledPlugins,
+        providers: data.providers,
+      });
     });
 
     if (tablesToCreate.length === 0) return;
 
-    const authNode = allNodes.find((n) => n.id === nodeId);
+    const authNode = storeNodes.find((n) => n.id === nodeId);
     const baseX = (authNode?.position?.x || 100) + 340;
     const baseY = (authNode?.position?.y || 100);
 
     // Check if a database node exists; if not, create default SQLite DB node
-    let dbNode = allNodes.find((n) => n.type === "database");
+    let dbNode = storeNodes.find((n) => n.type === BACKEND_NODE_DATABASE);
     let dbId = dbNode?.id;
 
     if (!dbId) {
       dbId = crypto.randomUUID();
-      const dbLabel = getUniqueNodeLabel(allNodes, DEFAULT_DATABASE_NODE_LABEL, "database");
+      const dbLabel = getUniqueNodeLabel(storeNodes, DEFAULT_DATABASE_NODE_LABEL, "database");
       addNode({
         id: dbId,
-        type: "database",
+        type: BACKEND_NODE_DATABASE,
         position: { x: baseX - 300, y: baseY - 50 },
         data: {
           label: dbLabel,
@@ -274,41 +334,68 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
       });
     }
 
-    const activeMappings: BetterAuthTableMapping = { ...tableMappings };
+    let createdCount = 0;
+    tablesToCreate.forEach((def) => {
+      // 1. Check if an entity node with matching name already exists on canvas
+      const matchingEntity = existingEntities.find(
+        (e) => e.data?.label?.toLowerCase().trim() === def.name.toLowerCase().trim()
+      );
 
-    tablesToCreate.forEach((def, index) => {
-      const posY = baseY + (schemaEntities.length + index) * 110;
+      if (matchingEntity) {
+        // Map to existing entity
+        activeMappings[def.key] = matchingEntity.id;
 
-      const newEntityId = `entity-${Date.now()}-${def.name}`;
-      addNode({
-        id: newEntityId,
-        type: "entity",
-        position: { x: baseX, y: posY },
-        data: {
-          label: def.name,
-          description: def.description,
-          columns: def.defaultColumns,
-          databaseId: dbId,
-        },
-      });
+        // Check if missing any default columns and inject them
+        const currentCols = matchingEntity.data?.columns || [];
+        const missingCols = def.defaultColumns.filter(
+          (reqCol) => !currentCols.some((c) => c.name.toLowerCase() === reqCol.name.toLowerCase())
+        );
 
-      if (dbId) {
-        addEdge({
-          id: `edge-${dbId}-${newEntityId}`,
-          source: dbId,
-          target: newEntityId,
-          sourceHandle: "database-source",
-          targetHandle: "database-entity-target",
-          type: "database-connection",
+        if (missingCols.length > 0) {
+          updateNode(matchingEntity.id, {
+            data: {
+              ...matchingEntity.data,
+              columns: [...currentCols, ...missingCols],
+            },
+          });
+        }
+      } else {
+        // Create new entity node
+        const posY = baseY + (existingEntities.length + createdCount) * 110;
+        createdCount++;
+
+        const newEntityId = `entity-${Date.now()}-${def.name}`;
+        addNode({
+          id: newEntityId,
+          type: BACKEND_NODE_ENTITY,
+          position: { x: baseX, y: posY },
+          data: {
+            label: def.name,
+            description: def.description,
+            columns: def.defaultColumns,
+            databaseId: dbId,
+          },
         });
-      }
 
-      activeMappings[def.key] = newEntityId;
+        if (dbId) {
+          addEdge({
+            id: `edge-${dbId}-${newEntityId}`,
+            source: dbId,
+            target: newEntityId,
+            sourceHandle: "database-source",
+            targetHandle: "database-entity-target",
+            type: BACKEND_EDGE_DATABASE_CONNECTION,
+          });
+        }
+
+        activeMappings[def.key] = newEntityId;
+      }
     });
 
     updateData({
       tableMappings: activeMappings,
       userEntityId: activeMappings.userEntityId || data.userEntityId,
+      userSchemaId: activeMappings.userEntityId || data.userSchemaId,
     });
 
     BETTER_AUTH_TABLE_DEFINITIONS.forEach((def) => {
@@ -320,17 +407,31 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
   };
 
   const syncAllTableRelationships = () => {
+    const storeNodes = useBackendCanvasStore.getState().nodes;
+    const existingEntities = storeNodes.filter((n) => n.type === BACKEND_NODE_ENTITY);
+    const rawUserMapping = data.userEntityId || data.userSchemaId;
+    const activeMappings: BetterAuthTableMapping = {};
+
     BETTER_AUTH_TABLE_DEFINITIONS.forEach((def) => {
-      const mappedId = tableMappings[def.key] || (def.key === "userEntityId" ? (data.userEntityId || data.userSchemaId) : undefined);
+      const rawId =
+        tableMappings[def.key] ||
+        (def.key === BETTER_AUTH_TABLE_KEYS.USER ? rawUserMapping : undefined);
+      if (rawId && existingEntities.some((e) => e.id === rawId)) {
+        activeMappings[def.key] = rawId;
+      }
+    });
+
+    BETTER_AUTH_TABLE_DEFINITIONS.forEach((def) => {
+      const mappedId = activeMappings[def.key];
       if (mappedId) {
-        syncForeignKeysForTable(def, mappedId, tableMappings);
+        syncForeignKeysForTable(def, mappedId, activeMappings);
       }
     });
   };
 
   const categories = [
     {
-      id: "core",
+      id: BETTER_AUTH_CATEGORIES.CORE,
       title: "Core Auth Tables",
       icon: ShieldAlert,
       badgeText: "Required",
@@ -339,7 +440,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
       isToggleable: false,
     },
     {
-      id: "organization",
+      id: BETTER_AUTH_CATEGORIES.ORGANIZATION,
       title: "Organization & Workspaces Tables",
       icon: Building2,
       badgeText: isOrgEnabled ? "Plugin Active" : "Disabled",
@@ -361,7 +462,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
       },
     },
     {
-      id: "plugin",
+      id: BETTER_AUTH_CATEGORIES.PLUGIN,
       title: "Extension & Plugin Tables",
       icon: KeyRound,
       badgeText: "Optional Plugins",
@@ -370,7 +471,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
       isToggleable: false,
     },
   ] satisfies Array<{
-    id: "core" | "organization" | "plugin";
+    id: BetterAuthCategory;
     title: string;
     icon: React.ComponentType<{ className?: string }>;
     badgeText: string;
@@ -381,7 +482,12 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
     onToggle?: (enabled: boolean) => void;
   }>;
 
-  const mappedCount = BETTER_AUTH_TABLE_DEFINITIONS.filter((def) => Boolean(tableMappings[def.key])).length;
+  const mappedCount = BETTER_AUTH_TABLE_DEFINITIONS.filter((def) => {
+    const rawId =
+      tableMappings[def.key] ||
+      (def.key === "userEntityId" ? data.userEntityId || data.userSchemaId : undefined);
+    return Boolean(rawId && schemaEntities.some((e) => e.id === rawId));
+  }).length;
 
   return (
     <AccordionItem
@@ -488,10 +594,11 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
                     {!isCatDisabled ? (
                       <div className="flex flex-col gap-2 pt-1">
                         {catTables.map((def) => {
-                          const mappedId =
+                          const rawMappedId =
                             tableMappings[def.key] ||
-                            (def.key === "userEntityId" ? (data.userEntityId || data.userSchemaId) : undefined);
-                          const mappedEntity = schemaEntities.find((e) => e.id === mappedId);
+                            (def.key === "userEntityId" ? data.userEntityId || data.userSchemaId : undefined);
+                          const mappedEntity = schemaEntities.find((e) => e.id === rawMappedId);
+                          const mappedId = mappedEntity ? mappedEntity.id : undefined;
 
                           const existingCols = mappedEntity?.type === "entity" ? mappedEntity.data.columns || [] : [];
                           const missingColumns = mappedEntity

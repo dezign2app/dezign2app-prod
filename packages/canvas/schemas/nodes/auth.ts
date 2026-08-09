@@ -11,18 +11,11 @@ export type OAuthProviderConfig = z.infer<typeof oauthProviderConfigSchema>;
 
 export const sessionClaimConfigSchema = z.object({
   key: z.string(),
-  source: z.enum([
-    "userColumn",
-    "dbFunction",
-    "serviceEndpoint",
-    "customFunction",
-    "orgRole",
-    "subscription",
-    "paymentsAccess",
-    "customField",
-  ]),
+  source: z.string(),
+  entityId: z.string().optional(),
   targetValue: z.string().optional(),
-  deliveryMode: z.enum(["jwt", "cookie"]),
+  deliveryMode: z.enum(["jwt", "cookie", "session", "oauthToken"]).optional(),
+  destination: z.enum(["jwt", "session", "oauthToken"]).optional(),
 });
 export type SessionClaimConfig = z.infer<typeof sessionClaimConfigSchema>;
 
@@ -71,9 +64,10 @@ export type AdditionalAuthTableConfig = z.infer<
 >;
 
 export const accountLinkingPolicySchema = z.object({
-  enabled: z.boolean().optional(),
   policy: z.enum(["prompt", "merge", "block"]).optional(),
-  trustedProvidersOnly: z.boolean().optional(),
+  trustedProviders: z.array(z.string()).optional(),
+  allowDifferentEmails: z.boolean().optional(),
+  enabled: z.boolean().optional(),
 });
 export type AccountLinkingPolicy = z.infer<typeof accountLinkingPolicySchema>;
 
@@ -98,6 +92,12 @@ export const sessionConfigSchema = z.object({
   claims: z.array(sessionClaimConfigSchema).optional(),
   expiresInSeconds: z.number().optional(),
   updateAgeSeconds: z.number().optional(),
+  cookieCache: z
+    .object({
+      enabled: z.boolean().optional(),
+      maxAgeSeconds: z.number().optional(),
+    })
+    .optional(),
   refreshTokenRotation: z.boolean().optional(),
   rememberMeDurationDays: z.number().optional(),
 });

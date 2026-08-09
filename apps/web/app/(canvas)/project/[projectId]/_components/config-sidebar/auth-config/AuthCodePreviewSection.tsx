@@ -37,6 +37,42 @@ export const AuthCodePreviewSection: React.FC<AuthConfigSectionProps> = ({
 
   const activeHooks = hooks.filter((h) => h.enabled !== false && h.event);
 
+  const policy = accountLinking.policy || (accountLinking.enabled === false ? "block" : "merge");
+  const isAccountLinkingEnabled = policy !== "block";
+  const disableImplicitLinking = policy === "prompt";
+  const trustedProviders = accountLinking.trustedProviders || [];
+  const allowDifferentEmails = Boolean(accountLinking.allowDifferentEmails);
+
+  const accountLinkingCode = isAccountLinkingEnabled
+    ? `account: {
+    accountLinking: {
+      enabled: true,${disableImplicitLinking ? '\n      disableImplicitLinking: true,' : ''}${allowDifferentEmails ? '\n      allowDifferentEmails: true,' : ''}${trustedProviders.length > 0 ? `\n      trustedProviders: ${JSON.stringify(trustedProviders)},` : ''}
+    },
+  },`
+    : `account: {
+    accountLinking: {
+      enabled: false,
+    },
+  },`;
+
+  const sessionClaims = session.claims || [];
+  const sessionCookieClaims = sessionClaims.filter(
+    (c) => c.destination === "session" || c.deliveryMode === "session" || c.deliveryMode === "cookie",
+  );
+  const jwtClaims = sessionClaims.filter(
+    (c) => c.destination === "jwt" || c.deliveryMode === "jwt",
+  );
+  const cookieCache = session.cookieCache || { enabled: true, maxAgeSeconds: 300 };
+
+  const sessionBlock = `session: {
+    expiresIn: ${session.expiresInSeconds ?? 604800},
+    updateAge: ${session.updateAgeSeconds ?? 86400},${cookieCache.enabled !== false ? `\n    cookieCache: {\n      enabled: true,\n      maxAge: ${cookieCache.maxAgeSeconds ?? 300},\n    },` : ''}
+  },`;
+
+  const customSessionBlock = sessionCookieClaims.length > 0
+    ? `\n  customSession: async (session, user, ctx) => {\n    return {\n      ...session,\n      user: {\n        ...user,\n${sessionCookieClaims.map((c) => `        ${c.key}: ${c.source === 'userColumn' ? `user.${c.targetValue || c.key}` : `await resolveClaim("${c.key}", { user, session })`},`).join("\n")}\n      },\n    };\n  },`
+    : "";
+
   const generatedCode = `import { betterAuth } from "better-auth";
 import { sqliteAdapter } from "better-auth/adapters/sqlite";
 ${enabledPlugins.includes("jwt") ? 'import { jwt } from "better-auth/plugins";\n' : ''}${enabledPlugins.includes("organization") ? 'import { organization } from "better-auth/plugins";\n' : ''}${isPaymentsInjected ? 'import { creem } from "@creem_io/better-auth";\n' : ''}
@@ -47,15 +83,8 @@ export const auth = betterAuth({
     requireEmailVerification: ${emailPassword.requireVerification ?? true},
     minPasswordLength: ${emailPassword.minLength ?? 8},
   },
-  accountLinking: {
-    enabled: ${accountLinking.enabled ?? true},
-    trustedProviders: ["google", "github"],
-  },
-  session: {
-    expiresIn: ${session.expiresInSeconds ?? 604800},
-    updateAge: ${session.updateAgeSeconds ?? 86400},
-    freshTokenRotation: ${session.refreshTokenRotation ?? true},
-  },
+  ${accountLinkingCode}
+  ${sessionBlock}${customSessionBlock}
   trustedOrigins: ${JSON.stringify(trustedOrigins)},
   ${activeHooks.length > 0 ? `databaseHooks: {\n    ${activeHooks.map((h) => `${h.event}: {\n      before: async (data, ctx) => {\n        // ${h.prompt || "Custom hook logic"}\n      }\n    }`).join(",\n    ")}\n  },\n  ` : ''}plugins: [
     ${enabledPlugins.map((p) => (p === "organization" && selectedOrgEntity ? `organization({ schema: "${selectedOrgEntity.data.label || "organization"}" })` : `${p}()`)).join(",\n    ")}${isPaymentsInjected ? ',\n    creem({ apiKey: process.env.CREEM_API_KEY!, webhookSecret: process.env.CREEM_WEBHOOK_SECRET! })' : ''}
