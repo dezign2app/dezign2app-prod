@@ -127,6 +127,26 @@ export function compileNextjsV16WebClient(
       });
     }
 
+    const envFile = compiledAuth.files.find((f) => f.filename.endsWith(".env"));
+    if (envFile) {
+      const existingEnvIdx = files.findIndex((f) => f.filename === ".env");
+      if (existingEnvIdx !== -1) {
+        files[existingEnvIdx]!.content = envFile.content;
+      } else {
+        files.push({
+          filename: ".env",
+          language: "dotenv",
+          content: envFile.content,
+        });
+      }
+
+      files.push({
+        filename: ".env.example",
+        language: "dotenv",
+        content: envFile.content,
+      });
+    }
+
     files.push({
       filename: "lib/auth-client.ts",
       language: "typescript",
@@ -135,6 +155,19 @@ export function compileNextjsV16WebClient(
         plugins: ["adminClient", "organizationClient"],
       }),
     });
+
+    // Add better-auth to package.json dependencies
+    const pkgFileIdx = files.findIndex((f) => f.filename === "package.json");
+    if (pkgFileIdx !== -1) {
+      try {
+        const pkgObj = JSON.parse(files[pkgFileIdx]!.content);
+        pkgObj.dependencies = pkgObj.dependencies || {};
+        pkgObj.dependencies["better-auth"] = `^${authNode.data?.version || "1.7.0"}`;
+        files[pkgFileIdx]!.content = JSON.stringify(pkgObj, null, 2);
+      } catch (err) {
+        // preserve existing content on parse failure
+      }
+    }
   } else if (hasProtectedRoutes || authNode) {
     // If protected routes exist or an AuthNode is on canvas but NOT connected to this app, only generate client helper if needed
     if (hasProtectedRoutes) {
