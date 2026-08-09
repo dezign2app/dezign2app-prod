@@ -31,3 +31,15 @@ export interface NodeHandleData {
   consumedEvents?: Array<string | { id?: string; _id?: string }>;
   publishedEvents?: Array<string | { id?: string; _id?: string }>;
 }
+
+export interface DagreNodeInfo {
+  rank?: number;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+}
+
+export interface DagreGraph {
+  node(id: string): DagreNodeInfo | undefined;
+}

@@ -81,7 +81,7 @@ const EdgeMarkers = () => (
   </svg>
 );
 
-// 3. Database Reference Edge (Amber/Orange Dashed)
+// 3. Database Reference Edge (Dashed, visible only when source DB node is selected)
 export const DatabaseRefEdge = (props: EdgeProps<BackendEdge>) => {
   const {
     sourceX,
@@ -91,8 +91,22 @@ export const DatabaseRefEdge = (props: EdgeProps<BackendEdge>) => {
     sourcePosition,
     targetPosition,
     style,
+    source,
   } = props;
+
+  const sourceNode = useBackendCanvasStore((s) =>
+    s.nodes.find((n) => n.id === source),
+  );
   const simulation = useSimulationEdgeState(props.id);
+
+  // Requirement: Show edges ONLY when the database node is selected
+  const isDbSelected = sourceNode?.selected || false;
+  if (!isDbSelected) {
+    return null;
+  }
+
+  const dbColor = sourceNode?.data?.color || "#f59e0b"; // Default amber
+  const markerId = `arrow-db-${dbColor.replace("#", "")}`;
 
   const [edgePath] = getBezierPath({
     sourceX,
@@ -106,15 +120,29 @@ export const DatabaseRefEdge = (props: EdgeProps<BackendEdge>) => {
   return (
     <>
       <EdgeStyles />
-      <EdgeMarkers />
+      <svg style={{ position: "absolute", top: 0, left: 0, width: 0, height: 0 }}>
+        <defs>
+          <marker
+            id={markerId}
+            viewBox="0 0 10 10"
+            refX="6"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={dbColor} />
+          </marker>
+        </defs>
+      </svg>
 
-      {/* Base path */}
+      {/* Base path / glow */}
       <BaseEdge
         path={edgePath}
         style={{
           ...style,
           strokeWidth: 3,
-          stroke: "rgba(245, 158, 11, 0.1)",
+          stroke: `${dbColor}20`,
           opacity: simulation.hasRun && !simulation.isVisited ? 0.05 : 1,
         }}
       />
@@ -122,15 +150,15 @@ export const DatabaseRefEdge = (props: EdgeProps<BackendEdge>) => {
       {/* Main dashed edge */}
       <BaseEdge
         path={edgePath}
-        markerEnd="url(#arrow-amber)"
+        markerEnd={`url(#${markerId})`}
         style={{
           ...style,
           strokeWidth: 1.5,
-          stroke: "#f59e0b", // amber-500
+          stroke: dbColor,
           strokeDasharray: "4, 4",
           opacity: simulation.hasRun && !simulation.isVisited ? 0.08 : 1,
           filter: simulation.isCurrent
-            ? "drop-shadow(0 0 5px #f59e0b)"
+            ? `drop-shadow(0 0 5px ${dbColor})`
             : undefined,
         }}
       />

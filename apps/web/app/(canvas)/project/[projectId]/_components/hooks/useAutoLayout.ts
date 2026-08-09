@@ -14,6 +14,7 @@ import {
 import { getNodeDimensions, getIsPkNode } from "./auto-layout/nodeDimensions";
 import { runBarycenterRefinement } from "./auto-layout/barycenterLayout";
 import { layoutHeadNodes } from "./auto-layout/headNodeLayout";
+import { layoutSchemaRanks } from "./auto-layout/schemaRankLayout";
 
 export type {
   LayoutNode,
@@ -177,10 +178,15 @@ export function useAutoLayout(options?: UseAutoLayoutOptions) {
         }
       });
 
-      // 5.5. Handle-Aware Barycenter Crossing Minimization (Sugiyama-style)
-      // Skip for schema views — the FK web is too interconnected and barycenter
-      // shuffling makes the spaghetti worse rather than better.
-      if (!isSchemaView) {
+      // 5.5. Layout pass: schema multi-column staggering for schema view, barycenter for canvas graph
+      if (isSchemaView) {
+        layoutSchemaRanks({
+          dagreGraph,
+          entityFlowNodes,
+          entityFlowEdges,
+          positionsMap,
+        });
+      } else {
         runBarycenterRefinement({
           dagreGraph,
           flowNodes: entityFlowNodes,

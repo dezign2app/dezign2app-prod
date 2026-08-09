@@ -77,6 +77,7 @@ export type BackendNodeType =
 export interface BaseNodeData {
   label: string;
   description?: string;
+  color?: string;
   isWebClient?: boolean;
   parentId?: string;
   /** Nested position inside a group node. */
