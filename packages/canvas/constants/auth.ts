@@ -37,60 +37,154 @@ export const ACCOUNT_LINKING_POLICY_OPTIONS = [
 ] as const;
 
 // ─── Auth Lifecycle Hook Events & Default Slots ──────────────────────────────
-export const AUTH_HOOK_EVENTS = {
-  ON_SIGN_UP: "onSignUp",
-  ON_SIGN_IN: "onSignIn",
-  ON_SIGN_OUT: "onSignOut",
-  ON_PASSWORD_RESET: "onPasswordReset",
-  ON_EMAIL_VERIFY: "onEmailVerify",
-  ON_ORG_CREATE: "onOrgCreate",
-  ON_ORG_INVITE: "onOrgInvite",
+// Better Auth has TWO separate hook systems:
+//   1. Endpoint hooks → hooks.before / hooks.after  (createAuthMiddleware, branch on ctx.path)
+//   2. Database hooks → databaseHooks.{model}.{operation}.{before|after}
+
+// --- Endpoint Hook Events (ctx.path strings) ---
+export const AUTH_ENDPOINT_HOOK_EVENTS = {
+  SIGN_UP: "/sign-up",
+  SIGN_IN_EMAIL: "/sign-in/email",
+  SIGN_OUT: "/sign-out",
+  RESET_PASSWORD: "/reset-password",
+  VERIFY_EMAIL: "/verify-email",
 } as const;
+export type AuthEndpointHookEvent = (typeof AUTH_ENDPOINT_HOOK_EVENTS)[keyof typeof AUTH_ENDPOINT_HOOK_EVENTS];
 
-export type AuthHookEvent = (typeof AUTH_HOOK_EVENTS)[keyof typeof AUTH_HOOK_EVENTS];
+// Backwards-compat alias (old code referenced AUTH_HOOK_EVENTS)
+export const AUTH_HOOK_EVENTS = AUTH_ENDPOINT_HOOK_EVENTS;
+export type AuthHookEvent = AuthEndpointHookEvent;
 
+// --- Database Hook Models & Operations (verified against Better Auth v1.x docs) ---
+export const AUTH_DB_HOOK_MODELS = ["user", "session", "account"] as const;
+export type AuthDbHookModel = (typeof AUTH_DB_HOOK_MODELS)[number];
+
+export const AUTH_DB_HOOK_OPERATIONS = ["create", "update", "delete"] as const;
+export type AuthDbHookOperation = (typeof AUTH_DB_HOOK_OPERATIONS)[number];
+
+export const AUTH_DB_HOOK_PHASES = ["before", "after"] as const;
+export type AuthDbHookPhase = (typeof AUTH_DB_HOOK_PHASES)[number];
+
+// All three operations are supported on all three core models in v1.x
+export const AUTH_DB_MODEL_OPERATIONS: Record<AuthDbHookModel, AuthDbHookOperation[]> = {
+  user: ["create", "update", "delete"],
+  session: ["create", "update", "delete"],
+  account: ["create", "update", "delete"],
+};
+
+// --- Endpoint Hook Slot Definitions ---
 export const LIFECYCLE_HOOK_SLOTS: AuthLifecycleHookDefinition[] = [
   {
-    event: AUTH_HOOK_EVENTS.ON_SIGN_UP,
-    label: "onSignUp",
-    description: "Triggered immediately after a new user completes sign-up.",
+    event: AUTH_ENDPOINT_HOOK_EVENTS.SIGN_UP,
+    phase: "after",
+    label: "hooks.after → /sign-up",
+    description: "Runs after sign-up. Access ctx.context.newSession for the created session.",
     defaultPrompt: "After sign up, create a default workspace, initialize user settings, and send a welcome email.",
-    defaultCode: `export async function onSignUp(user: User, ctx: AuthContext) {\n  await createDefaultWorkspace(user.id);\n  await sendWelcomeEmail(user.email);\n}`,
+    defaultCode: `hooks: {\n  after: createAuthMiddleware(async (ctx) => {\n    if (ctx.path === "/sign-up/email") {\n      const newSession = ctx.context.newSession;\n      if (newSession) {\n        await createDefaultWorkspace(newSession.user.id);\n        await sendWelcomeEmail(newSession.user.email);\n      }\n    }\n  }),\n}`,
   },
   {
-    event: AUTH_HOOK_EVENTS.ON_SIGN_IN,
-    label: "onSignIn",
-    description: "Triggered on every successful user sign-in.",
+    event: AUTH_ENDPOINT_HOOK_EVENTS.SIGN_IN_EMAIL,
+    phase: "after",
+    label: "hooks.after → /sign-in/email",
+    description: "Runs after email sign-in. Log analytics, check IP anomalies, update last-seen.",
     defaultPrompt: "Log sign-in timestamp, update lastLoginIp, and check for geo-location anomalies.",
-    defaultCode: `export async function onSignIn(session: Session, ctx: AuthContext) {\n  console.log(\`User \${session.userId} signed in from \${session.ipAddress}\`);\n}`,
+    defaultCode: `hooks: {\n  after: createAuthMiddleware(async (ctx) => {\n    if (ctx.path === "/sign-in/email") {\n      // log analytics, check IP anomaly\n    }\n  }),\n}`,
   },
   {
-    event: AUTH_HOOK_EVENTS.ON_PASSWORD_RESET,
-    label: "onPasswordReset",
-    description: "Triggered when a user requests or completes a password reset.",
+    event: AUTH_ENDPOINT_HOOK_EVENTS.RESET_PASSWORD,
+    phase: "after",
+    label: "hooks.after → /reset-password",
+    description: "Runs after a password reset. Invalidate other sessions, notify user.",
     defaultPrompt: "On password reset, invalidate all other active sessions and notify the user via email.",
-    defaultCode: `export async function onPasswordReset(user: User, ctx: AuthContext) {\n  await revokeAllUserSessions(user.id);\n}`,
+    defaultCode: `hooks: {\n  after: createAuthMiddleware(async (ctx) => {\n    if (ctx.path === "/reset-password") {\n      // revoke sessions, send security email\n    }\n  }),\n}`,
   },
   {
-    event: AUTH_HOOK_EVENTS.ON_EMAIL_VERIFY,
-    label: "onEmailVerify",
-    description: "Triggered when user clicks email verification link.",
+    event: AUTH_ENDPOINT_HOOK_EVENTS.VERIFY_EMAIL,
+    phase: "after",
+    label: "hooks.after → /verify-email",
+    description: "Runs after the email verification link is clicked.",
     defaultPrompt: "Upon email verification, mark user status active and grant 14-day trial access.",
-    defaultCode: `export async function onEmailVerify(user: User, ctx: AuthContext) {\n  await updateUserStatus(user.id, "active");\n}`,
+    defaultCode: `hooks: {\n  after: createAuthMiddleware(async (ctx) => {\n    if (ctx.path === "/verify-email") {\n      // activate user, start trial\n    }\n  }),\n}`,
+  },
+];
+
+// --- Database Hook Slot Definitions ---
+// Verified against Better Auth v1.x docs: user / session / account support create + update + delete
+export interface AuthDbHookDefinition {
+  model: AuthDbHookModel;
+  operation: AuthDbHookOperation;
+  label: string;
+  description: string;
+  defaultPrompt: string;
+  defaultCode: string;
+}
+
+export const DB_HOOK_SLOTS: AuthDbHookDefinition[] = [
+  // user
+  {
+    model: "user", operation: "create",
+    label: "databaseHooks.user.create",
+    description: "Before/after a user row is inserted. Return { data: user } in before to mutate fields.",
+    defaultPrompt: "Before user creation, normalize email to lowercase and trim whitespace.",
+    defaultCode: `databaseHooks: {\n  user: {\n    create: {\n      before: async (user, ctx) => {\n        return { data: { ...user, email: user.email.toLowerCase().trim() } };\n      },\n    },\n  },\n}`,
   },
   {
-    event: AUTH_HOOK_EVENTS.ON_ORG_CREATE,
-    label: "onOrgCreate",
-    description: "Triggered when a new Organization workspace is created.",
-    defaultPrompt: "When an organization is created, assign creator as owner and seed default roles.",
-    defaultCode: `export async function onOrgCreate(org: Organization, user: User) {\n  await addMember(org.id, user.id, "owner");\n}`,
+    model: "user", operation: "update",
+    label: "databaseHooks.user.update",
+    description: "Before/after a user row is updated.",
+    defaultPrompt: "After a user is updated, invalidate their profile cache.",
+    defaultCode: `databaseHooks: {\n  user: {\n    update: {\n      after: async (user, ctx) => {\n        await invalidateUserCache(user.id);\n      },\n    },\n  },\n}`,
   },
   {
-    event: AUTH_HOOK_EVENTS.ON_ORG_INVITE,
-    label: "onOrgInvite",
-    description: "Triggered when an invitation is dispatched.",
-    defaultPrompt: "Send email invite containing secure single-use sign-up token link.",
-    defaultCode: `export async function onOrgInvite(invite: Invitation) {\n  await sendInviteMail(invite.email, invite.token);\n}`,
+    model: "user", operation: "delete",
+    label: "databaseHooks.user.delete",
+    description: "Before/after a user row is deleted. Return false in before to abort.",
+    defaultPrompt: "Before deleting a user, cascade-delete their workspaces and subscriptions.",
+    defaultCode: `databaseHooks: {\n  user: {\n    delete: {\n      before: async (user, ctx) => {\n        await deleteUserWorkspaces(user.id);\n      },\n    },\n  },\n}`,
+  },
+  // session
+  {
+    model: "session", operation: "create",
+    label: "databaseHooks.session.create",
+    description: "Before/after a session row is created (sign-in, token refresh).",
+    defaultPrompt: "After session creation, log the IP and user-agent for audit purposes.",
+    defaultCode: `databaseHooks: {\n  session: {\n    create: {\n      after: async (session, ctx) => {\n        await logSessionCreated(session.userId, session.ipAddress);\n      },\n    },\n  },\n}`,
+  },
+  {
+    model: "session", operation: "update",
+    label: "databaseHooks.session.update",
+    description: "Before/after a session row is updated (e.g. token rotation).",
+    defaultPrompt: "After session update, emit a session-renewed analytics event.",
+    defaultCode: `databaseHooks: {\n  session: {\n    update: {\n      after: async (session, ctx) => {\n        await trackSessionRenewed(session.userId);\n      },\n    },\n  },\n}`,
+  },
+  {
+    model: "session", operation: "delete",
+    label: "databaseHooks.session.delete",
+    description: "Before/after a session row is deleted (sign-out, expiry).",
+    defaultPrompt: "After session deletion, notify the user about the sign-out event.",
+    defaultCode: `databaseHooks: {\n  session: {\n    delete: {\n      after: async (session, ctx) => {\n        await notifySignOut(session.userId);\n      },\n    },\n  },\n}`,
+  },
+  // account
+  {
+    model: "account", operation: "create",
+    label: "databaseHooks.account.create",
+    description: "Before/after an OAuth account row is created (first OAuth login).",
+    defaultPrompt: "After account creation, send a welcome email for new OAuth users.",
+    defaultCode: `databaseHooks: {\n  account: {\n    create: {\n      after: async (account, ctx) => {\n        if (account.providerId !== "credential") {\n          await sendWelcomeEmail(account.userId);\n        }\n      },\n    },\n  },\n}`,
+  },
+  {
+    model: "account", operation: "update",
+    label: "databaseHooks.account.update",
+    description: "Before/after an OAuth account row is updated (token refresh, re-auth).",
+    defaultPrompt: "After account update, log the token refresh for security auditing.",
+    defaultCode: `databaseHooks: {\n  account: {\n    update: {\n      after: async (account, ctx) => {\n        await logTokenRefresh(account.userId, account.providerId);\n      },\n    },\n  },\n}`,
+  },
+  {
+    model: "account", operation: "delete",
+    label: "databaseHooks.account.delete",
+    description: "Before/after an OAuth account row is deleted (provider unlink).",
+    defaultPrompt: "After account deletion, notify the user that a linked provider was removed.",
+    defaultCode: `databaseHooks: {\n  account: {\n    delete: {\n      after: async (account, ctx) => {\n        await notifyProviderUnlinked(account.userId, account.providerId);\n      },\n    },\n  },\n}`,
   },
 ];
 

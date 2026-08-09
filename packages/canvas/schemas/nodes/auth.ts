@@ -27,32 +27,38 @@ export const authFunctionRefSchema = z.object({
 });
 export type AuthFunctionRef = z.infer<typeof authFunctionRefSchema>;
 
-export const userCustomFieldSchema = z.object({
-  name: z.string(),
-  type: z.string(),
-  default: z.string().optional(),
-  required: z.boolean(),
-});
-export type UserCustomField = z.infer<typeof userCustomFieldSchema>;
-
+// Endpoint hooks → betterAuth({ hooks: { before/after: createAuthMiddleware(...) } })
+// DB hooks      → betterAuth({ databaseHooks: { user/session/account: { create/update/delete: { before/after } } } })
+// Object schema structured for clean zodToConvex database validator generation
 export const authHookConfigSchema = z.object({
-  event: z
-    .enum([
-      "onSignUp",
-      "onSignIn",
-      "onSignOut",
-      "onPasswordReset",
-      "onEmailVerify",
-      "onOrgCreate",
-      "onOrgInvite",
-    ])
-    .optional(),
+  hookType: z.enum(["endpoint", "db"]).optional(),
+  event: z.string().optional(),
+  model: z.string().optional(),
+  operation: z.enum(["create", "update", "delete"]).optional(),
+  phase: z.enum(["before", "after"]).optional(),
   enabled: z.boolean().optional(),
-  mode: z.enum(["naturalLanguage", "code"]),
+  mode: z.enum(["naturalLanguage", "code"]).optional(),
   prompt: z.string().optional(),
   code: z.string().optional(),
 });
+
 export type AuthHookConfig = z.infer<typeof authHookConfigSchema>;
+
+export type EndpointHookConfig = AuthHookConfig & {
+  hookType: "endpoint";
+  event: string;
+  phase: "before" | "after";
+};
+
+export type DbHookConfig = AuthHookConfig & {
+  hookType: "db";
+  model: string;
+  operation: "create" | "update" | "delete";
+  phase: "before" | "after";
+};
+
+
+
 
 export const additionalAuthTableConfigSchema = z.object({
   id: z.string(),
@@ -190,7 +196,6 @@ export const authDataSchema = baseNodeDataSchema
         entityId: z.string().optional(),
       })
       .optional(),
-    customFields: z.array(userCustomFieldSchema).optional(),
     hooks: z.array(authHookConfigSchema).optional(),
     paymentsPlugin: z
       .object({

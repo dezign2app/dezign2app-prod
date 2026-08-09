@@ -7,6 +7,7 @@ import {
 } from "@workspace/ui/components/accordion";
 import { Code2 } from "lucide-react";
 import { AuthConfigSectionProps } from "./types";
+import { AuthHookConfig } from "@workspace/canvas";
 
 export const AuthCodePreviewSection: React.FC<AuthConfigSectionProps> = ({
   data,
@@ -35,7 +36,96 @@ export const AuthCodePreviewSection: React.FC<AuthConfigSectionProps> = ({
     (e) => e.target === nodeId && e.targetHandle === "payments-plugin-in",
   );
 
-  const activeHooks = hooks.filter((h) => h.enabled !== false && h.event);
+  // --- Hook code generation ---
+  type EndpointHookItem = AuthHookConfig & { event: string };
+  type DbHookItem = AuthHookConfig & { model: string; operation: "create" | "update" | "delete" };
+
+  const activeEndpointHooks = hooks.filter(
+    (h): h is EndpointHookItem =>
+      (h.hookType === "endpoint" || (!h.hookType && !("model" in h))) &&
+      h.enabled !== false &&
+      typeof h.event === "string" &&
+      h.event.length > 0
+  );
+  const activeDbHooks = hooks.filter(
+    (h): h is DbHookItem =>
+      (h.hookType === "db" || (!h.hookType && "model" in h)) &&
+      h.enabled !== false &&
+      typeof h.model === "string" &&
+      Boolean(h.operation)
+  );
+
+  const hasEndpointHooks = activeEndpointHooks.length > 0;
+  const hasDbHooks = activeDbHooks.length > 0;
+
+  // Group endpoint hooks by phase → else-if chains per phase
+  const endpointBefore = activeEndpointHooks.filter((h) => (h.phase || "after") === "before");
+  const endpointAfter = activeEndpointHooks.filter((h) => (h.phase || "after") === "after");
+
+  const buildEndpointChain = (phaseHooks: EndpointHookItem[], phase: "before" | "after"): string => {
+    return phaseHooks
+      .map((h, i) => {
+        const event = h.event;
+        const pathCheck = event.includes("*") || event.endsWith("/")
+          ? `if (ctx.path.startsWith("${event.replace(/\*$/, "")}"))`
+          : `if (ctx.path === "${event}")`;
+        const condition = i === 0 ? pathCheck : pathCheck.replace(/^if/, "else if");
+
+        let body = "";
+        if (h.mode === "code" && h.code) {
+          body = h.code.trim();
+        } else if (phase === "before") {
+          body = `if (!ctx.body) {\n  throw new APIError("BAD_REQUEST", { message: "Missing request body" });\n}\n// ${h.prompt || "Validate request parameters"}`;
+        } else {
+          // after phase
+          if (event.startsWith("/sign-up")) {
+            body = `const newSession = ctx.context.newSession;\nif (newSession) {\n  ctx.context.runInBackground(async () => {\n    // ${h.prompt || "Send welcome email & track analytics"}\n  });\n}`;
+          } else {
+            body = `// ${h.prompt || "Run post-request side effects"}`;
+          }
+        }
+
+        const indentedBody = body.split("\n").map((line) => `      ${line}`).join("\n");
+        return `    ${condition} {\n${indentedBody}\n    }`;
+      })
+      .join("\n");
+  };
+
+  const hooksBlock = hasEndpointHooks
+    ? `hooks: {\n${[
+        endpointBefore.length > 0
+          ? `    before: createAuthMiddleware(async (ctx) => {\n${buildEndpointChain(endpointBefore, "before")}\n    }),`
+          : null,
+        endpointAfter.length > 0
+          ? `    after: createAuthMiddleware(async (ctx) => {\n${buildEndpointChain(endpointAfter, "after")}\n    }),`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n")}\n  },\n  `
+    : "";
+
+  // Group DB hooks by model → operation → phase
+  const dbHooksByModel: Record<string, Record<string, { phase: string; prompt?: string; code?: string }>> = {};
+  for (const h of activeDbHooks) {
+    const modelHooks = (dbHooksByModel[h.model] ||= {});
+    modelHooks[h.operation] = { phase: h.phase || "after", prompt: h.prompt, code: h.code };
+  }
+
+
+  const databaseHooksBlock = hasDbHooks
+    ? `databaseHooks: {\n  ${Object.entries(dbHooksByModel)
+        .map(([model, ops]) => {
+          const opLines = Object.entries(ops)
+            .map(([op, { phase, prompt }]) => {
+              const body = prompt ? `// ${prompt}` : "// custom logic";
+              const returnHint = phase === "before" ? `\n          return { data: ${model} };` : "";
+              return `      ${op}: {\n        ${phase}: async (${model}, ctx) => {\n          ${body}${returnHint}\n        },\n      }`;
+            })
+            .join(",\n");
+          return `  ${model}: {\n${opLines}\n  }`;
+        })
+        .join(",\n")}\n},\n  `
+    : "";
 
   const policy = accountLinking.policy || (accountLinking.enabled === false ? "block" : "merge");
   const isAccountLinkingEnabled = policy !== "block";
@@ -74,11 +164,11 @@ export const AuthCodePreviewSection: React.FC<AuthConfigSectionProps> = ({
     : "";
 
   const generatedCode = `import { betterAuth } from "better-auth";
-import { sqliteAdapter } from "better-auth/adapters/sqlite";
-${enabledPlugins.includes("jwt") ? 'import { jwt } from "better-auth/plugins";\n' : ''}${enabledPlugins.includes("organization") ? 'import { organization } from "better-auth/plugins";\n' : ''}${isPaymentsInjected ? 'import { creem } from "@creem_io/better-auth";\n' : ''}
+import { sqliteAdapter } from "better-auth/adapters/sqlite";${hasEndpointHooks ? '\nimport { createAuthMiddleware, APIError } from "better-auth/api";' : ""}
+${enabledPlugins.includes("jwt") ? 'import { jwt } from "better-auth/plugins";\n' : ""}${enabledPlugins.includes("organization") ? 'import { organization } from "better-auth/plugins";\n' : ""}${isPaymentsInjected ? 'import { creem } from "@creem_io/better-auth";\n' : ""}
 export const auth = betterAuth({
   database: sqliteAdapter(db, { provider: "sqlite" }),
-  ${selectedUserEntity ? `user: { modelName: "${selectedUserEntity.data.label}" },\n  ` : ''}emailAndPassword: {
+  ${selectedUserEntity ? `user: { modelName: "${selectedUserEntity.data.label}" },\n  ` : ""}emailAndPassword: {
     enabled: ${emailPassword.enabled ?? true},
     requireEmailVerification: ${emailPassword.requireVerification ?? true},
     minPasswordLength: ${emailPassword.minLength ?? 8},
@@ -86,8 +176,8 @@ export const auth = betterAuth({
   ${accountLinkingCode}
   ${sessionBlock}${customSessionBlock}
   trustedOrigins: ${JSON.stringify(trustedOrigins)},
-  ${activeHooks.length > 0 ? `databaseHooks: {\n    ${activeHooks.map((h) => `${h.event}: {\n      before: async (data, ctx) => {\n        // ${h.prompt || "Custom hook logic"}\n      }\n    }`).join(",\n    ")}\n  },\n  ` : ''}plugins: [
-    ${enabledPlugins.map((p) => (p === "organization" && selectedOrgEntity ? `organization({ schema: "${selectedOrgEntity.data.label || "organization"}" })` : `${p}()`)).join(",\n    ")}${isPaymentsInjected ? ',\n    creem({ apiKey: process.env.CREEM_API_KEY!, webhookSecret: process.env.CREEM_WEBHOOK_SECRET! })' : ''}
+  ${hooksBlock}${databaseHooksBlock}plugins: [
+    ${enabledPlugins.map((p) => (p === "organization" && selectedOrgEntity ? `organization({ schema: "${selectedOrgEntity.data.label || "organization"}" })` : `${p}()`)).join(",\n    ")}${isPaymentsInjected ? ',\n    creem({ apiKey: process.env.CREEM_API_KEY!, webhookSecret: process.env.CREEM_WEBHOOK_SECRET! })' : ""}
   ]
 });`;
 

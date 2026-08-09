@@ -324,8 +324,9 @@ import type {
   OAuthProviderConfig,
   SessionClaimConfig,
   AuthFunctionRef,
-  UserCustomField,
   AuthHookConfig,
+  EndpointHookConfig,
+  DbHookConfig,
   AdditionalAuthTableConfig,
   AccountLinkingPolicy,
   EmailPasswordConfig,
@@ -339,8 +340,9 @@ export type {
   OAuthProviderConfig,
   SessionClaimConfig,
   AuthFunctionRef,
-  UserCustomField,
   AuthHookConfig,
+  EndpointHookConfig,
+  DbHookConfig,
   AdditionalAuthTableConfig,
   AccountLinkingPolicy,
   EmailPasswordConfig,
@@ -359,11 +361,13 @@ import type {
 
 export interface AuthLifecycleHookDefinition {
   event: AuthHookEvent;
+  phase: "before" | "after";
   label: string;
   description: string;
   defaultPrompt: string;
   defaultCode: string;
 }
+
 
 export interface BetterAuthTableDefinition {
   key: BetterAuthTableKey;

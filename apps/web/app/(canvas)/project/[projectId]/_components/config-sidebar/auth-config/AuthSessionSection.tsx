@@ -312,90 +312,86 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
                     key={idx}
                     className="flex flex-col gap-2 p-2.5 rounded-lg bg-background border border-border/50 text-xs"
                   >
-                    <div className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-3">
-                        <Input
-                          className="h-7 text-xs font-mono bg-background"
-                          value={claim.key}
-                          placeholder="claim_name"
-                          onChange={(e) => {
-                            const updated = claims.map((c, i) =>
-                              i === idx ? { ...c, key: e.target.value } : c,
-                            );
-                            updateData({ session: { ...sessionConfig, claims: updated } });
-                          }}
-                        />
-                      </div>
+                    {/* Row 1: JWT Token selector + delete */}
+                    <div className="flex items-center justify-between gap-2">
+                      <Select
+                        value={delivery}
+                        onValueChange={(val: "jwt" | "session" | "oauthToken") => {
+                          const updated = claims.map((c, i) =>
+                            i === idx ? { ...c, deliveryMode: val, destination: val } : c,
+                          );
+                          updateData({ session: { ...sessionConfig, claims: updated } });
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-xs font-mono bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="font-mono">
+                          <SelectItem value="jwt" className="text-xs font-mono">
+                            JWT Token (Edge)
+                          </SelectItem>
+                          <SelectItem value="session" className="text-xs font-mono">
+                            Cookie Session (DB)
+                          </SelectItem>
+                          <SelectItem value="oauthToken" className="text-xs font-mono">
+                            OAuth Access Token
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
 
-                      <div className="col-span-4">
-                        <Select
-                          value={claim.source}
-                          onValueChange={(val: string) => {
-                            let entId = claim.entityId;
-                            if (val.startsWith("table:")) {
-                              entId = val.replace("table:", "");
-                            } else if (val === "userColumn") {
-                              entId = selectedUserSchemaId;
-                            } else if (val === "subscription") {
-                              entId = subConfig?.entityId;
-                            }
-                            const updated = claims.map((c, i) =>
-                              i === idx ? { ...c, source: val, entityId: entId, targetValue: "" } : c,
-                            );
-                            updateData({ session: { ...sessionConfig, claims: updated } });
-                          }}
-                        >
-                          <SelectTrigger className="h-7 text-xs bg-background">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {customEntities.map((ent) => (
-                              <SelectItem key={ent.id} value={`table:${ent.id}`} className="text-xs font-mono">
-                                {ent.data.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      <button
+                        onClick={() => {
+                          const updated = claims.filter((_, i) => i !== idx);
+                          updateData({ session: { ...sessionConfig, claims: updated } });
+                        }}
+                        className="p-1 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
 
-                      <div className="col-span-4">
-                        <Select
-                          value={delivery}
-                          onValueChange={(val: "jwt" | "session" | "oauthToken") => {
-                            const updated = claims.map((c, i) =>
-                              i === idx ? { ...c, deliveryMode: val, destination: val } : c,
-                            );
-                            updateData({ session: { ...sessionConfig, claims: updated } });
-                          }}
-                        >
-                          <SelectTrigger className="h-7 text-xs font-mono bg-background">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="font-mono">
-                            <SelectItem value="jwt" className="text-xs font-mono">
-                              JWT Token (Edge)
-                            </SelectItem>
-                            <SelectItem value="session" className="text-xs font-mono">
-                              Cookie Session (DB)
-                            </SelectItem>
-                            <SelectItem value="oauthToken" className="text-xs font-mono">
-                              OAuth Access Token
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    {/* Row 2: Claim key + Source/Table selector */}
+                    <div className="grid grid-cols-2 gap-2 items-center">
+                      <Input
+                        className="h-7 text-xs font-mono bg-background"
+                        value={claim.key}
+                        placeholder="claim_name"
+                        onChange={(e) => {
+                          const updated = claims.map((c, i) =>
+                            i === idx ? { ...c, key: e.target.value } : c,
+                          );
+                          updateData({ session: { ...sessionConfig, claims: updated } });
+                        }}
+                      />
 
-                      <div className="col-span-1 flex justify-end">
-                        <button
-                          onClick={() => {
-                            const updated = claims.filter((_, i) => i !== idx);
-                            updateData({ session: { ...sessionConfig, claims: updated } });
-                          }}
-                          className="p-1 text-muted-foreground hover:text-destructive transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      <Select
+                        value={claim.source}
+                        onValueChange={(val: string) => {
+                          let entId = claim.entityId;
+                          if (val.startsWith("table:")) {
+                            entId = val.replace("table:", "");
+                          } else if (val === "userColumn") {
+                            entId = selectedUserSchemaId;
+                          } else if (val === "subscription") {
+                            entId = subConfig?.entityId;
+                          }
+                          const updated = claims.map((c, i) =>
+                            i === idx ? { ...c, source: val, entityId: entId, targetValue: "" } : c,
+                          );
+                          updateData({ session: { ...sessionConfig, claims: updated } });
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-xs bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {customEntities.map((ent) => (
+                            <SelectItem key={ent.id} value={`table:${ent.id}`} className="text-xs font-mono">
+                              {ent.data.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     {/* Target column selector when a table is selected */}
