@@ -18,7 +18,7 @@ import {
   generateRootIndexPage,
 } from "./componentTemplates";
 import { generateProxy } from "./middlewareTemplate";
-import { generateAuthClient } from "../../../generators/auth-providers/better-auth/v1.7/generateAuthClient";
+import { generateAuthClient } from "../../../generators/auth-providers/better-auth/v1.6/generateAuthClient";
 import { compileAuth } from "../../../compileAuth";
 
 export type { LinkedEndpointInfo };

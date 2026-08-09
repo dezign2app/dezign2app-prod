@@ -1,6 +1,6 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { CompiledFile, CompiledServiceResult } from "@workspace/canvas/types";
-import { BetterAuthV17NodeData } from "./types";
+import { BetterAuthV16NodeData } from "./types";
 import {
   generateAuthConfig,
   generateNextJsRouteHandler,
@@ -17,14 +17,14 @@ export * from "./providers";
 export * from "./generators";
 
 /**
- * Compiles a Canvas Auth Node into a complete `CompiledServiceResult` using Better Auth v1.7
+ * Compiles a Canvas Auth Node into a complete `CompiledServiceResult` using Better Auth v1.6
  */
-export function compileBetterAuthV17Service(
+export function compileBetterAuthV16Service(
   node: BackendNode,
   _allNodes: BackendNode[] = [],
   _allEdges: BackendEdge[] = []
 ): CompiledServiceResult {
-  const data = (node.data || {}) as BetterAuthV17NodeData;
+  const data = (node.data || {}) as BetterAuthV16NodeData;
   const serviceName = data.label || "Auth Server";
 
   const files: CompiledFile[] = [

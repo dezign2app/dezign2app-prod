@@ -1,11 +1,13 @@
 import { DEFAULT_BETTER_AUTH_VERSION } from "@workspace/canvas";
-import { BetterAuthV17NodeData } from "../types";
+import { BetterAuthV16NodeData } from "../types";
 
 /**
  * Generates `package.json` for standalone Better Auth server
  */
-export function generateAuthPackageJson(data: BetterAuthV17NodeData): string {
-  const version = data.version || DEFAULT_BETTER_AUTH_VERSION;
+export function generateAuthPackageJson(data: BetterAuthV16NodeData): string {
+  const rawVersion = data.version || DEFAULT_BETTER_AUTH_VERSION;
+  const cleanVersion = rawVersion.replace(/^v/, "");
+  const semverVersion = cleanVersion.split(".").length === 2 ? `${cleanVersion}.0` : cleanVersion;
   const name = (data.label || "auth-server")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "-")
@@ -23,7 +25,7 @@ export function generateAuthPackageJson(data: BetterAuthV17NodeData): string {
         start: "node dist/index.js",
       },
       dependencies: {
-        "better-auth": `^${version}`,
+        "better-auth": `^${semverVersion}`,
         hono: "^4.0.0",
         "@hono/node-server": "^1.11.0",
         "better-sqlite3": "^11.0.0",

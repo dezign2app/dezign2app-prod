@@ -1,7 +1,7 @@
 import { OAuthProviderConfig } from "@workspace/canvas";
-import { BetterAuthV17NodeData } from "./types";
+import { BetterAuthV16NodeData } from "./types";
 
-export function resolveOAuthProviders(data: BetterAuthV17NodeData): OAuthProviderConfig[] {
+export function resolveOAuthProviders(data: BetterAuthV16NodeData): OAuthProviderConfig[] {
   const isSocialEnabled = data.providers?.socialEnabled ?? data.providers?.oauthEnabled ?? true;
   if (!isSocialEnabled) {
     return [];
