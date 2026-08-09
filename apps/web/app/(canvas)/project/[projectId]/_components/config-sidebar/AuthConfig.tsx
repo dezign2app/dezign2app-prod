@@ -8,7 +8,6 @@ import {
   AuthSecuritySection,
   AuthSessionSection,
   AuthOrgRbacSection,
-  AuthUserSchemaSection,
   AuthHooksSection,
   AuthPluginsSection,
   AuthCodePreviewSection,
@@ -50,7 +49,6 @@ export const AuthConfig = ({
           "security-redirects",
           "session",
           "org",
-          "schema",
           "hooks",
           "plugins",
           "preview",
@@ -86,13 +84,6 @@ export const AuthConfig = ({
           nodeId={nodeId}
         />
         <AuthOrgRbacSection
-          data={data}
-          updateData={updateData}
-          allNodes={allNodes}
-          edges={edges}
-          nodeId={nodeId}
-        />
-        <AuthUserSchemaSection
           data={data}
           updateData={updateData}
           allNodes={allNodes}

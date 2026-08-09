@@ -5,7 +5,6 @@ export * from "./AuthProvidersSection";
 export * from "./AuthSecuritySection";
 export * from "./AuthSessionSection";
 export * from "./AuthOrgRbacSection";
-export * from "./AuthUserSchemaSection";
 export * from "./AuthHooksSection";
 export * from "./AuthPluginsSection";
 export * from "./AuthCodePreviewSection";

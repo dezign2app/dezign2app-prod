@@ -19,8 +19,6 @@ import type {
   WebAppZone,
   ProtectionRule,
   OAuthProviderConfig,
-  SessionClaimConfig,
-  UserCustomField,
   AuthHookConfig,
   PaymentsPlanConfig,
   AdditionalAuthTableConfig,
@@ -326,7 +324,6 @@ export interface CanvasAuthNodeData {
     schemaId?: string;
     entityId?: string;
   };
-  customFields?: UserCustomField[];
   hooks?: AuthHookConfig[];
   paymentsPlugin?: { provider: "creem"; apiKeyEnv: string; webhookSecretEnv: string };
 }
