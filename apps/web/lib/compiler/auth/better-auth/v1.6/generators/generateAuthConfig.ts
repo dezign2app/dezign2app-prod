@@ -83,9 +83,9 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
   const org = data.organization;
   if (org?.enabled !== false && (enabledPlugins.includes("organization") || org?.enabled)) {
     pluginImports.add("organization");
-    const roles = JSON.stringify(org?.roles || ["owner", "admin", "member"]);
+    const teamsEnabled = Boolean(org?.teams);
     pluginCalls.push(
-      `organization({\n    roles: ${roles},\n    teams: ${Boolean(org?.teams)},\n    allowUserToCreateOrganization: ${Boolean(org?.multiOrg ?? true)},\n  })`
+      `organization({\n    teams: {\n      enabled: ${teamsEnabled},\n    },\n    allowUserToCreateOrganization: ${Boolean(org?.multiOrg ?? true)},\n  })`
     );
   }
 

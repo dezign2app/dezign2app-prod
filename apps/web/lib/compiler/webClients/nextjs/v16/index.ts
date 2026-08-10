@@ -1,4 +1,5 @@
 import { BackendNode, BackendEdge, SimulationTestCase } from "@/types/canvas";
+import { DEFAULT_BETTER_AUTH_VERSION } from "@workspace/canvas";
 import {
   Endpoint,
   AnyMessagingResource,
@@ -156,13 +157,35 @@ export function compileNextjsV16WebClient(
       }),
     });
 
-    // Add better-auth to package.json dependencies
+    // Add better-auth and database adapter dependencies to package.json
     const pkgFileIdx = files.findIndex((f) => f.filename === "package.json");
     if (pkgFileIdx !== -1) {
       try {
         const pkgObj = JSON.parse(files[pkgFileIdx]!.content);
         pkgObj.dependencies = pkgObj.dependencies || {};
-        pkgObj.dependencies["better-auth"] = `^${authNode.data?.version || "1.7.0"}`;
+        pkgObj.devDependencies = pkgObj.devDependencies || {};
+
+        const rawVersion = authNode.data?.version || DEFAULT_BETTER_AUTH_VERSION;
+        const cleanVersion = rawVersion.replace(/^v/, "");
+        const semverVersion = cleanVersion.split(".").length === 2 ? `${cleanVersion}.0` : cleanVersion;
+        pkgObj.dependencies["better-auth"] = `^${semverVersion}`;
+        pkgObj.dependencies["zod"] = "^4.4.3";
+
+        const dbAdapterKey = String(authNode.data?.dbAdapter || "sqlite-raw");
+        if (
+          dbAdapterKey === "sqlite-raw" ||
+          dbAdapterKey === "sqlite" ||
+          dbAdapterKey === "default"
+        ) {
+          pkgObj.dependencies["better-sqlite3"] = "^12.0.0";
+          pkgObj.devDependencies["@types/better-sqlite3"] = "^7.6.12";
+        } else if (dbAdapterKey === "drizzle") {
+          pkgObj.dependencies["drizzle-orm"] = "^0.30.0";
+        } else if (dbAdapterKey === "prisma") {
+          pkgObj.dependencies["@prisma/client"] = "^5.10.0";
+          pkgObj.devDependencies["prisma"] = "^5.10.0";
+        }
+
         files[pkgFileIdx]!.content = JSON.stringify(pkgObj, null, 2);
       } catch (err) {
         // preserve existing content on parse failure
@@ -179,6 +202,41 @@ export function compileNextjsV16WebClient(
           plugins: ["adminClient", "organizationClient"],
         }),
       });
+
+      const pkgFileIdx = files.findIndex((f) => f.filename === "package.json");
+      if (pkgFileIdx !== -1) {
+        try {
+          const pkgObj = JSON.parse(files[pkgFileIdx]!.content);
+          pkgObj.dependencies = pkgObj.dependencies || {};
+          const rawVersion = authNode?.data?.version || DEFAULT_BETTER_AUTH_VERSION;
+          const cleanVersion = rawVersion.replace(/^v/, "");
+          const semverVersion = cleanVersion.split(".").length === 2 ? `${cleanVersion}.0` : cleanVersion;
+          pkgObj.dependencies["better-auth"] = `^${semverVersion}`;
+          pkgObj.dependencies["zod"] = "^4.4.3";
+          files[pkgFileIdx]!.content = JSON.stringify(pkgObj, null, 2);
+        } catch (err) {
+          // preserve
+        }
+      }
+    }
+  }
+
+  // Include @workspace/db dependency only if database nodes exist on canvas
+  const hasDatabaseNodes = allNodes.some((n) => n.type === "entity" || n.type === "db_ref");
+  if (hasDatabaseNodes) {
+    const pkgFileIdx = files.findIndex((f) => f.filename === "package.json");
+    if (pkgFileIdx !== -1) {
+      try {
+        const pkgObj = JSON.parse(files[pkgFileIdx]!.content);
+        pkgObj.dependencies = pkgObj.dependencies || {};
+        pkgObj.devDependencies = pkgObj.devDependencies || {};
+        pkgObj.dependencies["@workspace/db"] = "workspace:*";
+        pkgObj.dependencies["better-sqlite3"] = "^12.0.0";
+        pkgObj.devDependencies["@types/better-sqlite3"] = "^7.6.12";
+        files[pkgFileIdx]!.content = JSON.stringify(pkgObj, null, 2);
+      } catch (err) {
+        // preserve
+      }
     }
   }
 
@@ -207,7 +265,7 @@ export function compileNextjsV16WebClient(
 
   webClientNodes.forEach((node, idx) => {
     const pageMeta = pagesInfo[idx]!;
-    const rawEvents: UIEventItem[] = (node.data.events as UIEventItem[]) || [];
+    const rawEvents = Array.isArray(node.data.events) ? node.data.events : [];
 
     const pageLoadEvents = rawEvents.filter((evt) => {
       const eStr = (evt.event || evt.name || "").toLowerCase();

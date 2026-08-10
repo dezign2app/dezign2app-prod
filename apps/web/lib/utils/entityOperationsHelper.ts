@@ -1,12 +1,14 @@
 import { DbOperationFunction } from "@workspace/canvas/types";
-import { toSqlIdentifier } from "@/lib/compiler/utils";
+import { toSqlIdentifier, toTableName, toVarName } from "@/lib/compiler/utils";
 import type { BackendNode } from "@/types/canvas";
 
 function toPascal(str: string): string {
-  const clean = toSqlIdentifier(str, "table");
+  if (!str) return "Item";
+  const snake = str.replace(/([a-z0-9])([A-Z])/g, "$1_$2");
+  const clean = toSqlIdentifier(snake, "table");
   return clean
     .split(/[_\-\s]+/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join("");
 }
 
@@ -133,7 +135,7 @@ export function generateDefaultDbOperations(
   indexes: { name: string; columns: string; isUnique?: boolean }[] = [],
   allNodes: BackendNode[] = [],
 ): DbOperationFunction[] {
-  const tableName = toSqlIdentifier(label || "table", "table");
+  const tableName = toTableName(label || "table");
   const pascal = toPascal(tableName);
   const pascalSingular = toSingular(pascal);
   const pascalPlural = toPlural(pascal);
@@ -146,7 +148,7 @@ export function generateDefaultDbOperations(
 
   const pkCol = columns.find((c) => c.isPrimaryKey) || columns[0];
   const pkColName = pkCol?.name || "id";
-  const pkVarName = toCamel(pkColName);
+  const pkVarName = toVarName(pkColName);
   const pkType =
     (pkCol?.type || "string").toLowerCase() === "number" ||
     (pkCol?.type || "string").toLowerCase() === "integer"
@@ -156,14 +158,14 @@ export function generateDefaultDbOperations(
   const writableCols = columns.filter((c) => !c.isPrimaryKey);
   const insertCols = writableCols.map((c) => c.name).join(", ");
   const insertPlaceholders = writableCols.map(() => "?").join(", ");
-  const insertBindArgs = writableCols.map((c) => `data.${toCamel(c.name)}`).join(", ");
+  const insertBindArgs = writableCols.map((c) => `data.${toVarName(c.name)}`).join(", ");
 
   const createCode = writableCols.length > 0
     ? `export function create${pascalSingular}(data: Create${pascal}Data): ${pascal}Row {\n  const info = stmtInsert.run(${insertBindArgs});\n  const _rowId = typeof info.lastInsertRowid === "bigint" ? info.lastInsertRowid.toString() : String(info.lastInsertRowid);\n  return { ${pkColName}: _rowId, ...data } as ${pascal}Row;\n}`
     : `export function create${pascalSingular}(): ${pascal}Row {\n  const info = db.prepare("INSERT INTO ${tableName} DEFAULT VALUES").run();\n  const _rowId = typeof info.lastInsertRowid === "bigint" ? info.lastInsertRowid.toString() : String(info.lastInsertRowid);\n  return { ${pkColName}: _rowId } as ${pascal}Row;\n}`;
 
   const updateCode = writableCols.length > 0
-    ? `export function update${pascalSingular}(${pkVarName}: ${pkType}, data: Update${pascal}Data): ${pascal}Row | undefined {\n  const current = find${pascalSingular}ById(${pkVarName});\n  if (!current) return undefined;\n  const updated = { ...current, ...data };\n  stmtUpdate.run(${writableCols.map((c) => `updated.${toCamel(c.name)}`).join(", ")}, ${pkVarName});\n  return find${pascalSingular}ById(${pkVarName});\n}`
+    ? `export function update${pascalSingular}(${pkVarName}: ${pkType}, data: Update${pascal}Data): ${pascal}Row | undefined {\n  const current = find${pascalSingular}ById(${pkVarName});\n  if (!current) return undefined;\n  const updated = { ...current, ...data };\n  stmtUpdate.run(${writableCols.map((c) => `updated.${toVarName(c.name)}`).join(", ")}, ${pkVarName});\n  return find${pascalSingular}ById(${pkVarName});\n}`
     : `export function update${pascalSingular}(${pkVarName}: ${pkType}): ${pascal}Row | undefined {\n  return find${pascalSingular}ById(${pkVarName});\n}`;
 
   const ops: DbOperationFunction[] = [
@@ -286,7 +288,6 @@ export function generateDefaultDbOperations(
     const rawIdxName = idx.name || `idx_${colList.join("_")}`;
     const cleanName = rawIdxName.replace(new RegExp(`^idx_${tableName}_|^idx_|^by_`, "i"), "");
     const pascalIdxName = toPascal(cleanName || colList.join("_"));
-    const fnName = `findBy${pascalIdxName}`;
 
     // Cardinality invariant: if the indexed column is a FK column, it is always N-cardinality
     // regardless of how the index was declared. Only truly unique constraints use .get().
@@ -296,6 +297,15 @@ export function generateDefaultDbOperations(
     );
     const isUnique = !!idx.isUnique && !colIsForeignKey;
 
+    const targetPrefix = isUnique ? pascalSingular : pascalPlural;
+    const fnName =
+      cleanName.toLowerCase().startsWith(pascalSingular.toLowerCase()) ||
+      cleanName.toLowerCase().startsWith(pascalPlural.toLowerCase())
+        ? `findBy${pascalIdxName}`
+        : `find${targetPrefix}By${pascalIdxName}`;
+
+    const stmtVarName = `stmt${fnName.charAt(0).toUpperCase() + fnName.slice(1)}`;
+
     const paramList: { name: string; type: string; required?: boolean; defaultValue?: string }[] = colList.map((colName) => {
       const colObj = columns.find((c) => c.name.toLowerCase() === colName.toLowerCase());
       const colType =
@@ -303,7 +313,7 @@ export function generateDefaultDbOperations(
         (colObj?.type || "string").toLowerCase() === "integer"
           ? "number"
           : "string";
-      return { name: toCamel(colName), type: colType, required: true };
+      return { name: toVarName(colName), type: colType, required: true };
     });
 
     if (!isUnique) {
@@ -318,7 +328,7 @@ export function generateDefaultDbOperations(
       .join(", ");
     const returnType = isUnique ? `${pascal}Row | undefined` : `${pascal}Row[]`;
     const whereClause = colList.map((c) => `${c} = ?`).join(" AND ");
-    const argList = colList.map((c) => toCamel(c)).join(", ") + (isUnique ? "" : ", limit, offset");
+    const argList = colList.map((c) => toVarName(c)).join(", ") + (isUnique ? "" : ", limit, offset");
 
     const paramTypes = colList.map((colName) => {
       const colObj = columns.find((c) => c.name.toLowerCase() === colName.toLowerCase());
@@ -327,12 +337,12 @@ export function generateDefaultDbOperations(
         (colObj?.type || "string").toLowerCase() === "integer"
           ? "number"
           : "string";
-      return `${toCamel(colName)}: ${colType}`;
+      return `${toVarName(colName)}: ${colType}`;
     }).join(", ");
 
     const indexCode = isUnique
-      ? `const stmtFindBy${pascalIdxName} = db.prepare<[${paramTypes}], ${pascal}Row>(\n  "SELECT * FROM ${tableName} WHERE ${whereClause}"\n);\n\nexport function ${fnName}(${paramSig}): ${returnType} {\n  return stmtFindBy${pascalIdxName}.get(${argList}) as ${returnType};\n}`
-      : `const stmtFindBy${pascalIdxName} = db.prepare<[${paramTypes}, limit?: number, offset?: number], ${pascal}Row>(\n  "SELECT * FROM ${tableName} WHERE ${whereClause} LIMIT ? OFFSET ?"\n);\n\nexport function ${fnName}(${paramSig}): ${returnType} {\n  return stmtFindBy${pascalIdxName}.all(${argList}) as ${returnType};\n}`;
+      ? `const ${stmtVarName} = db.prepare<[${paramTypes}], ${pascal}Row>(\n  "SELECT * FROM ${tableName} WHERE ${whereClause}"\n);\n\nexport function ${fnName}(${paramSig}): ${returnType} {\n  return ${stmtVarName}.get(${argList}) as ${returnType};\n}`
+      : `const ${stmtVarName} = db.prepare<[${paramTypes}, limit?: number, offset?: number], ${pascal}Row>(\n  "SELECT * FROM ${tableName} WHERE ${whereClause} LIMIT ? OFFSET ?"\n);\n\nexport function ${fnName}(${paramSig}): ${returnType} {\n  return ${stmtVarName}.all(${argList}) as ${returnType};\n}`;
 
     ops.push({
       id: `auto-index-${tableName}-${rawIdxName}-${i}`,
@@ -408,7 +418,7 @@ export function generateDefaultDbOperations(
   entityNodes.forEach((otherNode) => {
     const otherLabel = otherNode.data?.label || otherNode.data?.tableRef;
     if (!otherLabel) return;
-    const otherTableName = toSqlIdentifier(otherLabel, "table");
+    const otherTableName = toTableName(otherLabel);
     if (otherTableName === tableName) return;
 
     const otherCols: { name: string; type: string; isPrimaryKey?: boolean; isForeignKey?: boolean }[] =

@@ -5,24 +5,32 @@ export function generateProjectConfigFiles(): CompiledFile[] {
     {
       name: "@workspace/web-client",
       version: "0.0.1",
+      type: "module",
       private: true,
       scripts: {
         dev: "next dev",
         build: "next build",
         start: "next start",
         lint: "next lint",
+        typecheck: "tsc --noEmit",
         test: "vitest run",
+        postinstall: "pnpm rebuild better-sqlite3",
       },
       dependencies: {
-        "@workspace/ui": "workspace:*",
+        "@workspace/db": "workspace:*",
         "@workspace/logger": "workspace:*",
+        "@workspace/ui": "workspace:*",
+        "better-auth": "^1.6.0",
+        "better-sqlite3": "^12.0.0",
+        "lucide-react": "^0.475.0",
         next: "^16.0.0",
         react: "^19.0.0",
         "react-dom": "^19.0.0",
-        "lucide-react": "^0.475.0",
+        zod: "^4.4.3",
       },
       devDependencies: {
         "@tailwindcss/postcss": "^4.0.0",
+        "@types/better-sqlite3": "^7.6.12",
         "@types/node": "^20.19.0",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
@@ -38,31 +46,20 @@ export function generateProjectConfigFiles(): CompiledFile[] {
 
   const tsconfig = JSON.stringify(
     {
-      extends: "@workspace/typescript-config/base.json",
+      extends: "@workspace/typescript-config/nextjs.json",
       compilerOptions: {
-        target: "es5",
-        lib: ["dom", "dom.iterable", "esnext"],
-        allowJs: true,
-        skipLibCheck: true,
-        strict: true,
-        noEmit: true,
-        esModuleInterop: true,
-        module: "esnext",
-        moduleResolution: "bundler",
-        resolveJsonModule: true,
-        isolatedModules: true,
-        jsx: "preserve",
-        incremental: true,
-        plugins: [
-          {
-            name: "next",
-          },
-        ],
+        baseUrl: ".",
         paths: {
           "@/*": ["./*"],
         },
       },
-      include: ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+      include: [
+        "next-env.d.ts",
+        "next.config.mjs",
+        "**/*.ts",
+        "**/*.tsx",
+        ".next/types/**/*.ts",
+      ],
       exclude: ["node_modules"],
     },
     null,
@@ -73,6 +70,7 @@ export function generateProjectConfigFiles(): CompiledFile[] {
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@workspace/ui", "@workspace/logger"],
+  serverExternalPackages: ["better-sqlite3", "better-auth"],
 };
 
 export default nextConfig;

@@ -7,6 +7,8 @@ export function generateNextJsRouteHandler(data: BetterAuthV16NodeData): string 
   return `import { auth } from "@/lib/auth";
 import { toNextJsHandler } from "better-auth/next-js";
 
+export const dynamic = "force-dynamic";
+
 export const { POST, GET } = toNextJsHandler(auth);
 `;
 }
