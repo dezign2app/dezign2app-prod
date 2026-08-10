@@ -13,8 +13,8 @@ interface AdapterConfig {
 }
 
 const DEFAULT_SQLITE_CONFIG: AdapterConfig = {
-  importStatement: `import Database from "better-sqlite3";\nimport { sqliteAdapter } from "better-auth/adapters/sqlite";`,
-  adapterCall: `sqliteAdapter(new Database(process.env.DATABASE_URL || "sqlite.db"), {\n    provider: "sqlite",\n  })`,
+  importStatement: `import Database from "better-sqlite3";\n`,
+  adapterCall: `new Database(process.env.DATABASE_URL || "sqlite.db")`,
 };
 
 const ADAPTER_REGISTRY: Record<string, Record<string, AdapterConfig>> = {
@@ -120,9 +120,9 @@ export function generateAuthConfig(data: AuthNodeData): string {
   const org = data.organization;
   if (org?.enabled !== false && (enabledPlugins.includes("organization") || org?.enabled)) {
     pluginImports.add("organization");
-    const roles = JSON.stringify(org?.roles || ["owner", "admin", "member"]);
+    const teamsEnabled = Boolean(org?.teams);
     pluginCalls.push(
-      `organization({\n    roles: ${roles},\n    teams: ${Boolean(org?.teams)},\n    allowUserToCreateOrganization: ${Boolean(org?.multiOrg ?? true)},\n  })`
+      `organization({\n    teams: {\n      enabled: ${teamsEnabled},\n    },\n    allowUserToCreateOrganization: ${Boolean(org?.multiOrg ?? true)},\n  })`
     );
   }
 
@@ -406,16 +406,18 @@ export function generatePackageJson(data: AuthNodeData): string {
         dev: "tsx src/index.ts",
         build: "tsc",
         start: "node dist/index.js",
+        postinstall: "pnpm rebuild better-sqlite3",
       },
       dependencies: {
         "better-auth": `^${version}`,
         hono: "^4.0.0",
         "@hono/node-server": "^1.11.0",
-        "better-sqlite3": "^11.0.0",
+        "better-sqlite3": "^12.0.0",
+        zod: "^4.0.0",
         dotenv: "^16.4.5",
       },
       devDependencies: {
-        "@types/better-sqlite3": "^7.6.11",
+        "@types/better-sqlite3": "^7.6.12",
         "@types/node": "^20.14.0",
         typescript: "^5.4.5",
         tsx: "^4.19.0",
@@ -495,6 +497,8 @@ Authentication endpoints are mounted at \`/api/auth/*\` (e.g. \`/api/auth/sign-i
 export function generateNextJsRouteHandler(data: AuthNodeData): string {
   return `import { auth } from "@/lib/auth";
 import { toNextJsHandler } from "better-auth/next-js";
+
+export const dynamic = "force-dynamic";
 
 export const { POST, GET } = toNextJsHandler(auth);
 `;

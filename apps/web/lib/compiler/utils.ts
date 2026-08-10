@@ -29,7 +29,9 @@ export function toVarName(str: string): string {
 }
 
 export function toPascalCase(str: string): string {
-  const safe = toSqlIdentifier(str, "Item");
+  if (!str) return "Item";
+  const snake = str.replace(/([a-z0-9])([A-Z])/g, "$1_$2");
+  const safe = toSqlIdentifier(snake, "Item");
   const hasLeadingUnderscore = safe.startsWith("_");
   const core = hasLeadingUnderscore ? safe.slice(1) : safe;
   const camel = core.replace(/_([a-z0-9])/gi, (_, char) => char.toUpperCase());
@@ -39,7 +41,9 @@ export function toPascalCase(str: string): string {
 }
 
 export function toTableName(str: string): string {
-  return toSqlIdentifier((str || "table").toLowerCase(), "table");
+  if (!str) return "table";
+  const snake = str.replace(/([a-z0-9])([A-Z])/g, "$1_$2");
+  return toSqlIdentifier(snake.toLowerCase(), "table");
 }
 
 export function toEnvVarName(str: string): string {

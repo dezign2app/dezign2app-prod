@@ -27,6 +27,9 @@ export function generateRootFiles(projectName: string): CompiledFile[] {
         vitest: "^1.6.0",
       },
       packageManager: "pnpm@10.4.1",
+      pnpm: {
+        onlyBuiltDependencies: ["better-sqlite3"],
+      },
       engines: {
         node: ">=20",
       },
@@ -143,6 +146,50 @@ export function generateTypescriptConfigPackage(): CompiledFile[] {
     filename: "packages/typescript-config/base.json",
     language: "json",
     content: tsConfigBase,
+  });
+
+  const tsConfigNextjs = JSON.stringify(
+    {
+      $schema: "https://json.schemastore.org/tsconfig",
+      display: "Next.js",
+      extends: "./base.json",
+      compilerOptions: {
+        plugins: [{ name: "next" }],
+        module: "ESNext",
+        moduleResolution: "Bundler",
+        allowJs: true,
+        jsx: "preserve",
+        noEmit: true,
+      },
+    },
+    null,
+    2,
+  );
+  files.push({
+    filename: "packages/typescript-config/nextjs.json",
+    language: "json",
+    content: tsConfigNextjs,
+  });
+
+  const tsConfigReactLibrary = JSON.stringify(
+    {
+      $schema: "https://json.schemastore.org/tsconfig",
+      display: "React Library",
+      extends: "./base.json",
+      compilerOptions: {
+        jsx: "react-jsx",
+        lib: ["es2022", "DOM", "DOM.Iterable"],
+        module: "ESNext",
+        moduleResolution: "Bundler",
+      },
+    },
+    null,
+    2,
+  );
+  files.push({
+    filename: "packages/typescript-config/react-library.json",
+    language: "json",
+    content: tsConfigReactLibrary,
   });
 
   return files;

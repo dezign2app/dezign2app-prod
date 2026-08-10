@@ -95,9 +95,8 @@ export default config;
   // 4. tsconfig.json
   const tsconfig = JSON.stringify(
     {
-      extends: "@workspace/typescript-config/base.json",
+      extends: "@workspace/typescript-config/react-library.json",
       compilerOptions: {
-        jsx: "react-jsx",
         baseUrl: ".",
         paths: {
           "@workspace/ui/*": ["./src/*"],

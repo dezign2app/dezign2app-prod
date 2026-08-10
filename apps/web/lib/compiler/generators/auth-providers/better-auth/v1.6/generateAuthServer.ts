@@ -11,7 +11,7 @@ export function generateAuthServer(options: BetterAuthServerOptions = {}): strin
   return `import { betterAuth } from "better-auth";
 import { ${plugins.join(", ")} } from "better-auth/plugins";
 
-export const auth = betterAuth({
+export const auth: ReturnType<typeof betterAuth> = betterAuth({
   database: {
     provider: "sqlite",
   },

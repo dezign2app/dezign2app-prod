@@ -1,5 +1,5 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { Endpoint, CompiledFile } from "@workspace/canvas/types";
+import { Endpoint, CompiledFile, JSONValue } from "@workspace/canvas/types";
 import { parseSchemaJson, toPascalCase } from "../../../../utils";
 import { resolveEndpointTrace } from "../../../../traceResolver";
 import { convertPathParams, toPythonRouteFileName } from "./utils";
@@ -92,11 +92,15 @@ async def health_handler():
       let pydanticModelCode = "";
       if (isBodyMethod && ep.requestBody?.rawJson) {
         const parsedReqBody = parseSchemaJson(ep.requestBody.rawJson);
-        if (parsedReqBody && typeof parsedReqBody === "object") {
+        if (
+          parsedReqBody !== null &&
+          typeof parsedReqBody === "object" &&
+          !Array.isArray(parsedReqBody)
+        ) {
           requestModelName = `${pascalName}Request`;
           pydanticModelCode += `class ${requestModelName}(BaseModel):\n`;
           Object.keys(parsedReqBody).forEach((key) => {
-            const val = (parsedReqBody as any)[key];
+            const val = parsedReqBody[key];
             let pyType = "Any";
             if (typeof val === "string") pyType = "str";
             else if (typeof val === "number") pyType = "float";
