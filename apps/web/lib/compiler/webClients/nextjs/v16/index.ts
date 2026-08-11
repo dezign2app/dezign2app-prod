@@ -15,8 +15,12 @@ import { labelToSlug, slugToComponentName } from "./slugUtils";
 import { generateProjectConfigFiles } from "./configTemplates";
 import {
   generateRootLayout,
+  generateSectionLayout,
+  generatePageLayout,
+  generateEventComponent,
   generatePageCode,
   generateRootIndexPage,
+  EventComponentMeta,
 } from "./componentTemplates";
 import { generateProxy } from "./middlewareTemplate";
 import { generateAuthClient } from "../../../generators/auth-providers/better-auth/v1.6/generateAuthClient";
@@ -39,11 +43,17 @@ export function compileNextjsV16WebClient(
   allEdges: BackendEdge[] = [],
   projectName: string = "Blueprint Monorepo",
   testCases: SimulationTestCase[] = [],
+  appSlug?: string,
 ): CompiledWebClientResult {
   const files: CompiledFile[] = [];
 
   const pagesInfo: PageInfo[] = [];
   const usedSlugs = new Set<string>();
+
+  const effectiveAppSlug =
+    appSlug ||
+    webClientNodes[0]?.data.appSlug ||
+    "web-app";
 
   webClientNodes.forEach((node, idx) => {
     const rawLabel = node.data.label || `Page ${idx + 1}`;
@@ -54,10 +64,18 @@ export function compileNextjsV16WebClient(
     }
     usedSlugs.add(slug);
 
+    const cleanLabel = rawLabel.trim().toLowerCase();
     const isRoot =
-      idx === 0 && (slug === "home" || webClientNodes.length === 1);
+      node.data.isRoot === true ||
+      cleanLabel === "home" ||
+      cleanLabel === "index" ||
+      cleanLabel === "/";
     const routePath = isRoot ? "/" : `/${slug}`;
     const componentName = slugToComponentName(slug);
+
+    const routeGroup =
+      node.data.routeGroup ||
+      (node.data.accessType && node.data.accessType !== "public" ? "private" : "public");
 
     pagesInfo.push({
       nodeId: node.id,
@@ -67,19 +85,35 @@ export function compileNextjsV16WebClient(
       routePath,
       componentName,
       isRoot,
+      routeGroup,
       accessType: node.data.accessType || "public",
       allowedRoles: node.data.allowedRoles,
       requiredPlans: node.data.requiredPlans,
       allowedOrgRoles: node.data.allowedOrgRoles,
       redirectTo: node.data.redirectTo,
       isAuthPage: node.data.isAuthPage,
-      appSlug: node.data.appSlug,
+      appSlug: node.data.appSlug || effectiveAppSlug,
       appName: node.data.appName,
     });
   });
 
+  // Generate Group Layouts (e.g. app/(public)/layout.tsx, app/(private)/layout.tsx)
+  const routeGroups = new Set<string>();
+  pagesInfo.forEach((p) => {
+    if (p.routeGroup) routeGroups.add(p.routeGroup);
+  });
+  if (routeGroups.size === 0) routeGroups.add("public");
+
+  routeGroups.forEach((groupName) => {
+    files.push({
+      filename: `app/(${groupName})/layout.tsx`,
+      language: "typescript",
+      content: generateSectionLayout(groupName),
+    });
+  });
+
   // Project configuration files
-  files.push(...generateProjectConfigFiles());
+  files.push(...generateProjectConfigFiles(effectiveAppSlug));
 
   // Check if an AuthNode is explicitly connected to this WebClient/WebApp via an edge or authNodeId reference
   const authNode = allNodes.find((n) => n.type === "auth");
@@ -239,49 +273,45 @@ export function compileNextjsV16WebClient(
       }
     }
   }
+  // Root Layout (required by Next.js App Router, contains <html> and <body>)
+  const navLinksHtml = pagesInfo
+    .map((p) => `<Link href="${p.routePath}" className="hover:underline">${p.label}</Link>`)
+    .join("\n              ");
 
-  // Generate Next.js 16 Route Protection Proxy (proxy.ts replaces deprecated middleware.ts in Next.js 16)
+  files.push({
+    filename: "app/layout.tsx",
+    language: "typescript",
+    content: generateRootLayout(projectName, navLinksHtml),
+  });
+
+  // Next.js Proxy/Middleware config template
   files.push({
     filename: "proxy.ts",
     language: "typescript",
     content: generateProxy(pagesInfo),
   });
 
-  // Root layout
-  const pagesNavLinks = pagesInfo
-    .map(
-      (p) =>
-        `<Link href="${p.routePath}" className="hover:text-indigo-400 transition-colors font-medium">${p.label}</Link>`,
-    )
-    .join("\n              ");
-
-  files.push({
-    filename: "app/layout.tsx",
-    language: "typescript",
-    content: generateRootLayout(projectName, pagesNavLinks),
-  });
-
-  const hasExplicitRoot = pagesInfo.some((p) => p.routePath === "/");
+  // Generate pages, individual event components, and page load fetch statements
+  let hasExplicitRoot = false;
 
   webClientNodes.forEach((node, idx) => {
     const pageMeta = pagesInfo[idx]!;
-    const rawEvents = Array.isArray(node.data.events) ? node.data.events : [];
+    if (pageMeta.isRoot) {
+      hasExplicitRoot = true;
+    }
 
-    const pageLoadEvents = rawEvents.filter((evt) => {
-      const eStr = (evt.event || evt.name || "").toLowerCase();
-      return eStr === "pageload" || eStr === "onload";
-    });
-
-    const actionEvents = rawEvents.filter(
-      (evt) => !pageLoadEvents.includes(evt),
+    const nodeEvents: UIEventItem[] = node.data?.events || [];
+    const pageLoadEvents = nodeEvents.filter(
+      (e) => (e.event as string) === "pageLoad" || e.name === "pageLoad",
+    );
+    const actionEvents = nodeEvents.filter(
+      (e) => (e.event as string) !== "pageLoad" && e.name !== "pageLoad",
     );
 
     let pageLoadFetchStatements = "";
-    if (pageLoadEvents.length === 0) {
-      pageLoadFetchStatements = `setPageLoadData({ status: "idle", message: "No pageLoad event triggers attached to this page node." });`;
-    } else {
+    if (pageLoadEvents.length > 0) {
       const statements: string[] = [];
-      pageLoadEvents.forEach((evt, eIdx) => {
+      pageLoadEvents.forEach((evt) => {
         const link = resolveLinkedEndpoint(
           node.id,
           evt.id,
@@ -289,23 +319,16 @@ export function compileNextjsV16WebClient(
           allEdges,
           endpoints,
         );
-        const eventNameStr = evt.name || "pageLoad";
+        const evtKey = evt.name || "pageLoad";
         if (link) {
-          statements.push(`
-        try {
-          const res_${eIdx} = await fetch("${link.fullUrl}", {
-            method: "${link.method}",
-            headers: { "Content-Type": "application/json" },
-          });
-          const json_${eIdx} = await res_${eIdx}.json();
-          results["${eventNameStr}"] = json_${eIdx};
-        } catch (err: any) {
-          results["${eventNameStr}"] = { error: err.message, endpoint: "${link.fullUrl}" };
+          statements.push(`const res_${link.targetNodeId} = await fetch("${link.fullUrl}", { headers: { "Content-Type": "application/json" } });
+        if (res_${link.targetNodeId}.ok) {
+          results["${evtKey}"] = await res_${link.targetNodeId}.json();
+        } else {
+          results["${evtKey}"] = { error: "HTTP " + res_${link.targetNodeId}.status };
         }`);
         } else {
-          statements.push(`
-        results["${eventNameStr}"] = {
-          status: "simulated",
+          statements.push(`results["${evtKey}"] = {
           message: "pageLoad event triggered on mount (no target endpoint connected in canvas)",
         };`);
         }
@@ -324,49 +347,66 @@ export function compileNextjsV16WebClient(
       }`;
     }
 
-    let actionButtonsJsx = "";
-    if (actionEvents.length === 0) {
-      actionButtonsJsx = `<p className="text-slate-500 text-sm italic">No click or trigger events configured for this page node.</p>`;
-    } else {
-      const buttonElems = actionEvents.map((evt) => {
-        const link = resolveLinkedEndpoint(
-          node.id,
-          evt.id,
-          allNodes,
-          allEdges,
-          endpoints,
-        );
-        const url = link ? link.fullUrl : "";
-        const method = link ? link.method : "POST";
-        const evtName = evt.name || "Action";
-        const evtType = evt.event || "click";
-        return `
-              <Button
-                onClick={() => handleTriggerAction("${evtName}", "${evtType}", "${url}", "${method}")}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-sm transition-all flex items-center gap-2 cursor-pointer border border-indigo-500/30"
-              >
-                <span>${evtName}</span>
-                <span className="text-xs opacity-75 font-mono">(${evtType})</span>
-              </Button>`;
+    const eventComponentsMeta: EventComponentMeta[] = [];
+
+    actionEvents.forEach((evt, evtIdx) => {
+      const link = resolveLinkedEndpoint(
+        node.id,
+        evt.id,
+        allNodes,
+        allEdges,
+        endpoints,
+      );
+      const url = link ? link.fullUrl : "";
+      const method = link ? link.method : "POST";
+      const evtName = evt.name || `Action ${evtIdx + 1}`;
+      const evtType = evt.event || "click";
+      const compName = slugToComponentName(labelToSlug(evtName, evtIdx)).replace(/Page$/, "Action");
+
+      eventComponentsMeta.push({
+        componentName: compName,
+        eventName: evtName,
+        eventType: evtType,
+        url,
+        method,
       });
-      actionButtonsJsx = `<div className="flex flex-wrap gap-3">\n${buttonElems.join("\n")}\n          </div>`;
-    }
+
+      const groupFolder = pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)";
+      const componentFilePath = pageMeta.isRoot
+        ? `app/${groupFolder}/_components/${compName}.tsx`
+        : `app/${groupFolder}/${pageMeta.slug}/_components/${compName}.tsx`;
+
+      files.push({
+        filename: componentFilePath,
+        language: "typescript",
+        content: generateEventComponent(evtName, evtType, url, method, compName),
+      });
+    });
 
     const pageCode = generatePageCode(
       pageMeta,
       pageLoadFetchStatements,
-      actionButtonsJsx,
+      eventComponentsMeta,
     );
 
+    const groupFolder = pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)";
     const targetFilePath = pageMeta.isRoot
-      ? "app/page.tsx"
-      : `app/${pageMeta.slug}/page.tsx`;
+      ? `app/${groupFolder}/page.tsx`
+      : `app/${groupFolder}/${pageMeta.slug}/page.tsx`;
 
     files.push({
       filename: targetFilePath,
       language: "typescript",
       content: pageCode,
     });
+
+    if (!pageMeta.isRoot) {
+      files.push({
+        filename: `app/${groupFolder}/${pageMeta.slug}/layout.tsx`,
+        language: "typescript",
+        content: generatePageLayout(pageMeta.slug),
+      });
+    }
   });
 
   if (!hasExplicitRoot) {
@@ -387,7 +427,7 @@ export function compileNextjsV16WebClient(
       .join("\n");
 
     files.push({
-      filename: "app/page.tsx",
+      filename: "app/(public)/page.tsx",
       language: "typescript",
       content: generateRootIndexPage(projectName, indexCards),
     });

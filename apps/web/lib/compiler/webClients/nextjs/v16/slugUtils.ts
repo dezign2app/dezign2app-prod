@@ -1,10 +1,21 @@
 export function labelToSlug(label: string, index: number): string {
   const clean = label.trim().toLowerCase();
-  if (clean === "home" || clean === "index" || clean === "/") {
+  if (
+    clean === "home" ||
+    clean === "index" ||
+    clean === "/" ||
+    clean === "web client" ||
+    clean === "web client (page)" ||
+    clean === "web client(page)" ||
+    clean === "webclient" ||
+    clean === "web-client" ||
+    clean === "web-client-page" ||
+    clean === "page-client"
+  ) {
     return "home";
   }
   const slug = clean.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return slug || `page-${index + 1}`;
+  return slug || "home";
 }
 
 export function slugToComponentName(slug: string): string {
