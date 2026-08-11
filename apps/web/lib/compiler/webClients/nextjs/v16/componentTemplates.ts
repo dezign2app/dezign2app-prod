@@ -1,50 +1,68 @@
 import { PageInfo } from "./types";
+import { slugToComponentName } from "./slugUtils";
 
-export function generateRootLayout(
-  projectName: string,
-  pagesNavLinks: string,
+export interface EventComponentMeta {
+  componentName: string;
+  eventName: string;
+  eventType: string;
+  url: string;
+  method: string;
+}
+
+export {
+  generateRootLayout,
+  generateSectionLayout,
+  generatePageLayout,
+} from "./layoutGenerators";
+
+export function generateEventComponent(
+  eventName: string,
+  eventType: string,
+  url: string,
+  method: string,
+  componentName: string,
 ): string {
-  return `import type { Metadata } from "next";
-import Link from "next/link";
-import "@workspace/ui/globals.css";
+  return `"use client";
 
-export const metadata: Metadata = {
-  title: "${projectName} Web Client",
-  description: "Next.js Web Client generated from Blueprint architecture canvas",
-};
+import React from "react";
+import { Button } from "@workspace/ui/components/button";
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+interface ${componentName}Props {
+  onTrigger: (eventName: string, eventType: string, url: string, method: string) => void;
+}
+
+export function ${componentName}({ onTrigger }: ${componentName}Props) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-slate-950 text-slate-100 min-h-screen antialiased flex flex-col font-sans">
-        <nav className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50 px-6 py-3">
-          <div className="max-w-5xl mx-auto flex items-center justify-between">
-            <Link href="/" className="font-bold text-white flex items-center gap-2 text-sm hover:opacity-90 transition-opacity">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Web Client App</span>
-            </Link>
-            <div className="flex items-center gap-4 text-xs text-slate-300">
-              ${pagesNavLinks}
-            </div>
-          </div>
-        </nav>
-        <div className="flex-1">{children}</div>
-      </body>
-    </html>
+    <Button
+      onClick={() => onTrigger("${eventName}", "${eventType}", "${url}", "${method}")}
+      className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-sm transition-all flex items-center gap-2 cursor-pointer border border-indigo-500/30"
+    >
+      <span>${eventName}</span>
+      <span className="text-xs opacity-75 font-mono">(${eventType})</span>
+    </Button>
   );
 }
+
+export default ${componentName};
 `;
 }
 
 export function generatePageCode(
   pageMeta: PageInfo,
   pageLoadFetchStatements: string,
-  actionButtonsJsx: string,
+  eventComponents: EventComponentMeta[],
 ): string {
+  const eventImports = eventComponents
+    .map((c) => `import { ${c.componentName} } from "./_components/${c.componentName}";`)
+    .join("\n");
+
+  const actionButtonsJsx =
+    eventComponents.length === 0
+      ? `<p className="text-slate-500 text-sm italic">No click or trigger events configured for this page node.</p>`
+      : `<div className="flex flex-wrap gap-3">\n${eventComponents
+          .map((c) => `            <${c.componentName} onTrigger={handleTriggerAction} />`)
+          .join("\n")}\n          </div>`;
+
   return `"use client";
 
 import React, { useState, useEffect } from "react";
@@ -52,7 +70,7 @@ import Link from "next/link";
 import { Button } from "@workspace/ui/components/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@workspace/ui/components/card";
 import { Badge } from "@workspace/ui/components/badge";
-
+${eventImports ? `${eventImports}\n` : ""}
 export default function ${pageMeta.componentName}() {
   const [pageLoadData, setPageLoadData] = useState<Record<string, Record<string, string | number | boolean | null>> | null>(null);
   const [pageLoadLoading, setPageLoadLoading] = useState<boolean>(false);

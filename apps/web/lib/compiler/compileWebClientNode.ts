@@ -24,6 +24,7 @@ export function compileWebClientNodes(
   allEdges: BackendEdge[] = [],
   projectName: string = "Blueprint Monorepo",
   testCases: SimulationTestCase[] = [],
+  appSlug?: string,
 ): CompiledWebClientResult {
   return compileNextjsV16WebClient(
     webClientNodes,
@@ -33,5 +34,6 @@ export function compileWebClientNodes(
     allEdges,
     projectName,
     testCases,
+    appSlug,
   );
 }

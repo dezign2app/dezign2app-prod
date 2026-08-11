@@ -237,20 +237,37 @@ export function compileMonorepo(
       });
     });
 
+    // Default app slug from first WebApp node or fallback "web-app"
+    const defaultAppSlug =
+      webAppNodes.length > 0
+        ? (webAppNodes[0]!.data.appSlug ||
+           (webAppNodes[0]!.data.label || "web-app").toLowerCase().replace(/[^a-z0-9]+/g, "-"))
+        : "web-app";
+
+    if (webAppNodes.length === 0 && !appMap.has(defaultAppSlug)) {
+      appMap.set(defaultAppSlug, {
+        appName: "Web Application",
+        appSlug: defaultAppSlug,
+        pageNodes: [],
+      });
+    }
+
     // Process page nodes (WebClient) and trace their section connections to WebApp nodes
     webClientNodes.forEach((pageNode) => {
-      // Find edge connecting this pageNode (page-out) to a WebAppNode section
+      // Find edge connecting this pageNode to a WebAppNode section (in either direction)
       const edgeToApp = edges.find(
         (e) =>
-          e.source === pageNode.id &&
-          webAppNodes.some((appNode) => appNode.id === e.target),
+          (e.source === pageNode.id && webAppNodes.some((appNode) => appNode.id === e.target)) ||
+          (e.target === pageNode.id && webAppNodes.some((appNode) => appNode.id === e.source)),
       );
 
-      let targetAppSlug = "web-client";
+      let targetAppSlug: string | undefined = undefined;
+      let routeGroup: string = "public";
       let accessTypeOverride: "public" | "private" | "role-gated" | "payment-gated" | "org-gated" | undefined = undefined;
 
       if (edgeToApp) {
-        const targetAppNode = webAppNodes.find((n) => n.id === edgeToApp.target);
+        const targetAppId = edgeToApp.source === pageNode.id ? edgeToApp.target : edgeToApp.source;
+        const targetAppNode = webAppNodes.find((n) => n.id === targetAppId);
         if (targetAppNode) {
           targetAppSlug =
             targetAppNode.data.appSlug ||
@@ -258,15 +275,58 @@ export function compileMonorepo(
               .toLowerCase()
               .replace(/[^a-z0-9]+/g, "-");
 
-          const handle = edgeToApp.targetHandle || "";
-          if (handle.startsWith("public-in")) accessTypeOverride = "public";
-          else if (handle.startsWith("private-in")) accessTypeOverride = "private";
-          else if (handle.startsWith("role-in")) accessTypeOverride = "role-gated";
-          else if (handle.startsWith("payment-in")) accessTypeOverride = "payment-gated";
-          else if (handle.startsWith("org-in")) accessTypeOverride = "org-gated";
+          const handle = (edgeToApp.source === pageNode.id ? edgeToApp.targetHandle : edgeToApp.sourceHandle) || "";
+          const zones = targetAppNode.data?.zones || [];
+          const matchedZone = zones.find((z: { handleId: string; name?: string; accessType?: string }) => z.handleId === handle);
+
+          if (matchedZone) {
+            if (matchedZone.accessType === "public" || handle.startsWith("public-in") || handle.includes("public")) {
+              routeGroup = "public";
+              accessTypeOverride = "public";
+            } else if (matchedZone.accessType === "protected" || handle.startsWith("private-in") || handle.includes("private")) {
+              routeGroup = "private";
+              accessTypeOverride = "private";
+            } else {
+              const zoneSlug = (matchedZone.name || "custom")
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-");
+              routeGroup = zoneSlug || "custom";
+              accessTypeOverride = "private";
+            }
+          } else if (handle.startsWith("public-in") || handle.includes("public")) {
+            routeGroup = "public";
+            accessTypeOverride = "public";
+          } else if (handle.startsWith("private-in") || handle.includes("private")) {
+            routeGroup = "private";
+            accessTypeOverride = "private";
+          } else if (handle.startsWith("role-in") || handle.includes("role")) {
+            routeGroup = "role-gated";
+            accessTypeOverride = "role-gated";
+          } else if (handle.startsWith("payment-in") || handle.includes("payment")) {
+            routeGroup = "payment-gated";
+            accessTypeOverride = "payment-gated";
+          } else if (handle.startsWith("org-in") || handle.includes("org")) {
+            routeGroup = "org-gated";
+            accessTypeOverride = "org-gated";
+          } else {
+            const cleanHandle = handle.replace(/-(in|out)$/, "").replace(/^zone-/, "");
+            routeGroup = cleanHandle ? cleanHandle.toLowerCase().replace(/[^a-z0-9]+/g, "-") : "public";
+          }
         }
-      } else if (pageNode.data.appSlug) {
+      } else if (pageNode.data.appSlug && appMap.has(pageNode.data.appSlug)) {
         targetAppSlug = pageNode.data.appSlug;
+        routeGroup =
+          pageNode.data.routeGroup ||
+          (pageNode.data.accessType && pageNode.data.accessType !== "public" ? "private" : "public");
+      } else if (webAppNodes.length === 0) {
+        targetAppSlug = defaultAppSlug;
+        routeGroup =
+          pageNode.data.routeGroup ||
+          (pageNode.data.accessType && pageNode.data.accessType !== "public" ? "private" : "public");
+      }
+
+      if (!targetAppSlug || !appMap.has(targetAppSlug)) {
+        return;
       }
 
       if (!appMap.has(targetAppSlug)) {
@@ -287,6 +347,7 @@ export function compileMonorepo(
           ...pageNode.data,
           appSlug: targetAppSlug,
           appName: targetAppObj.appName,
+          routeGroup,
           accessType: accessTypeOverride || pageNode.data.accessType || "public",
           allowedRoles: pageNode.data.allowedRoles || appNodeData?.allowedRoles,
           requiredPlans: pageNode.data.requiredPlans || appNodeData?.requiredPlans,
@@ -313,6 +374,7 @@ export function compileMonorepo(
         edges,
         `${projectName} - ${appName}`,
         testCases,
+        appSlug,
       );
 
       webClientResult.files.forEach((f) => {

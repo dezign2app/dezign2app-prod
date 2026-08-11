@@ -191,6 +191,9 @@ export interface CanvasServiceNodeData {
   endpoints?: Endpoint[];
 
 
+  isRoot?: boolean;
+  isAuthPage?: boolean;
+  routeGroup?: string;
   routeGroups?: {
     id: string;
     name: string;

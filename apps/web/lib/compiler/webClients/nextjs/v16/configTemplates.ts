@@ -1,9 +1,9 @@
 import { CompiledFile } from "@workspace/canvas/types";
 
-export function generateProjectConfigFiles(): CompiledFile[] {
+export function generateProjectConfigFiles(appSlug: string = "web-app"): CompiledFile[] {
   const packageJson = JSON.stringify(
     {
-      name: "@workspace/web-client",
+      name: `@workspace/${appSlug}`,
       version: "0.0.1",
       type: "module",
       private: true,
