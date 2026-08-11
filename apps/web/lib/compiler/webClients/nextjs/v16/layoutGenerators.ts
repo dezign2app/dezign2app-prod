@@ -20,14 +20,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-slate-950 text-slate-100 min-h-screen antialiased flex flex-col font-sans">
-        <nav className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50 px-6 py-3">
+      <body className="bg-background text-foreground min-h-screen antialiased flex flex-col font-sans">
+        <nav className="border-b border-border bg-background/80 backdrop-blur sticky top-0 z-50 px-6 py-3">
           <div className="max-w-5xl mx-auto flex items-center justify-between">
-            <Link href="/" className="font-bold text-white flex items-center gap-2 text-sm hover:opacity-90 transition-opacity">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <Link href="/" className="font-bold text-foreground flex items-center gap-2 text-sm hover:opacity-90 transition-opacity">
+              <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
               <span>Web Client App</span>
             </Link>
-            <div className="flex items-center gap-4 text-xs text-slate-300">
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
               ${pagesNavLinks}
             </div>
           </div>
@@ -42,9 +42,7 @@ export default function RootLayout({
 
 export function generateSectionLayout(groupName: string): string {
   const isPublic = groupName === "public";
-  const badgeColor = isPublic
-    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-    : "bg-indigo-500/10 text-indigo-400 border-indigo-500/30";
+  const badgeVariant = isPublic ? "secondary" : "outline";
   const sectionTitle = groupName.charAt(0).toUpperCase() + groupName.slice(1);
 
   return `import React from "react";
@@ -56,13 +54,13 @@ export default function ${slugToComponentName(groupName)}Layout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
-      <div className="border-b border-slate-800 bg-slate-900/40 px-6 py-2 flex items-center justify-between text-xs">
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
+      <div className="border-b border-border bg-muted/40 px-6 py-2 flex items-center justify-between text-xs">
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="${badgeColor}">
+          <Badge variant="${badgeVariant}">
             (${groupName}) ${sectionTitle} Section
           </Badge>
-          <span className="text-slate-400">
+          <span className="text-muted-foreground">
             Next.js App Router Route Group Layout
           </span>
         </div>
