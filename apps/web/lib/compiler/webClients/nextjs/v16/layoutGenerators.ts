@@ -44,11 +44,13 @@ export function generateSectionLayout(groupName: string): string {
   const isPublic = groupName === "public";
   const badgeVariant = isPublic ? "secondary" : "outline";
   const sectionTitle = groupName.charAt(0).toUpperCase() + groupName.slice(1);
+  const componentName = slugToComponentName(groupName) + "Layout";
 
-  return `import React from "react";
+  if (isPublic) {
+    return `import React from "react";
 import { Badge } from "@workspace/ui/components/badge";
 
-export default function ${slugToComponentName(groupName)}Layout({
+export default function ${componentName}({
   children,
 }: {
   children: React.ReactNode;
@@ -61,7 +63,46 @@ export default function ${slugToComponentName(groupName)}Layout({
             (${groupName}) ${sectionTitle} Section
           </Badge>
           <span className="text-muted-foreground">
-            Next.js App Router Route Group Layout
+            Unprotected Public Route Group Layout
+          </span>
+        </div>
+      </div>
+      <div className="flex-1">{children}</div>
+    </div>
+  );
+}
+`;
+  }
+
+  return `import React from "react";
+import { Badge } from "@workspace/ui/components/badge";
+
+/**
+ * Next.js 16 Protected Section Layout
+ * Tier 2 Validation: Deep session verification via requireSession() helper
+ */
+export default async function ${componentName}({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  let session = null;
+  try {
+    const { requireSession } = await import("@/lib/auth/require-session");
+    session = await requireSession("/login");
+  } catch (err) {
+    session = null;
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
+      <div className="border-b border-border bg-muted/40 px-6 py-2 flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2">
+          <Badge variant="${badgeVariant}">
+            (${groupName}) ${sectionTitle} Section
+          </Badge>
+          <span className="text-muted-foreground font-mono">
+            Verified Session: {session?.user?.email || session?.user?.name || session?.user?.id || "Authenticated User"}
           </span>
         </div>
       </div>
@@ -71,3 +112,5 @@ export default function ${slugToComponentName(groupName)}Layout({
 }
 `;
 }
+
+

@@ -2,6 +2,7 @@ import { PageInfo } from "./types";
 
 /**
  * Generates Next.js 16 proxy.ts for route protection (replaces deprecated middleware.ts)
+ * Implements Tier 1: Lightweight optimistic session cookie redirect using getSessionCookie(request)
  */
 export function generateProxy(pagesInfo: PageInfo[]): string {
   const protectedPages = pagesInfo.filter(
@@ -40,8 +41,8 @@ export const config = {
   }`;
   });
 
-  return `import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+  return `import { getSessionCookie } from "better-auth/cookies";
+import { NextRequest, NextResponse } from "next/server";
 
 interface RouteRule {
   path: string;
@@ -56,27 +57,31 @@ const PROTECTED_ROUTES: RouteRule[] = [
 ${routeRules.join(",\n")}
 ];
 
+/**
+ * Next.js 16 Proxy / Middleware
+ * Tier 1: Lightweight optimistic UX redirect check for session cookie presence
+ */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  const matchedRule = PROTECTED_ROUTES.find((r) => 
-    r.path === "/" ? pathname === "/" : pathname.startsWith(r.path)
+  const matchedRule = PROTECTED_ROUTES.find((rule) => 
+    rule.path === "/" ? pathname === "/" : pathname.startsWith(rule.path)
   );
 
   if (!matchedRule) {
     return NextResponse.next();
   }
 
-  // Check auth session cookie / bearer token
-  const token = request.cookies.get("better-auth.session_token")?.value || 
-                request.headers.get("authorization")?.replace("Bearer ", "");
+  // Tier 1 Optimistic Check using Better Auth cookie helper
+  const sessionCookie = getSessionCookie(request);
 
-  if (!token) {
-    const loginUrl = new URL(matchedRule.redirectTo, request.url);
+  if (!sessionCookie) {
+    const loginUrl = new URL(matchedRule.redirectTo || "/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
+  // Cookie exists -> pass through to Next.js page for Tier 2 auth server-side validation
   return NextResponse.next();
 }
 
@@ -87,4 +92,6 @@ export const config = {
 }
 
 export const generateMiddleware = generateProxy;
+
+
 

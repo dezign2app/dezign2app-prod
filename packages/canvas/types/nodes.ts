@@ -91,6 +91,8 @@ export interface BaseNodeData {
   targetServerId?: string;
   targetRouteId?: string;
   pageSlug?: string;
+  path?: string;
+  route?: string;
   // Shared visual / misc
   authentication?: string;
   tags?: string[];
