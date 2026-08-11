@@ -1,0 +1,227 @@
+import { Position } from "@xyflow/react";
+import dagre from "@dagrejs/dagre";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import {
+  HEAD_TARGET_HANDLES,
+  HEAD_NODE_TYPES,
+  TARGET_NODE_TYPES,
+  type LayoutNode,
+  type LayoutEdge,
+  type PositionNodeChange,
+} from "./types";
+import { getNodeDimensions } from "./nodeDimensions";
+import { runBarycenterRefinement } from "./barycenterLayout";
+import { layoutHeadNodes } from "./headNodeLayout";
+
+export interface PerformGraphLayoutOptions {
+  nodes: LayoutNode[];
+  edges: LayoutEdge[];
+  onNodesChange?: (changes: PositionNodeChange[]) => void;
+  fitView: (options?: { duration?: number; padding?: number }) => void;
+  direction?: string;
+  storeEndpoints?: any[];
+  storeEvents?: any[];
+}
+
+export function performGraphLayout({
+  nodes,
+  edges,
+  onNodesChange,
+  fitView,
+  direction = "LR",
+  storeEndpoints = [],
+  storeEvents = [],
+}: PerformGraphLayoutOptions) {
+  const isHorizontal = direction === "LR";
+
+  // Filter for graph nodes and graph edges only
+  const graphNodes = nodes.filter(
+    (n: LayoutNode) =>
+      n.type !== "group" && n.type !== "entity" && n.type !== "database",
+  );
+  if (graphNodes.length === 0) return;
+
+  const graphEdges = edges.filter(
+    (e: LayoutEdge) =>
+      e.type !== "database-connection" && e.type !== "foreign-key",
+  );
+
+  // 1. Identify Target nodes (nodes that can have attached head nodes)
+  const targetNodeIds = new Set<string>();
+  graphNodes.forEach((n: LayoutNode) => {
+    if (TARGET_NODE_TYPES.has(n.type ?? "")) {
+      targetNodeIds.add(n.id);
+    }
+  });
+  graphEdges.forEach((edge: LayoutEdge) => {
+    if (HEAD_TARGET_HANDLES.has(edge.targetHandle ?? "")) {
+      targetNodeIds.add(edge.target);
+    }
+  });
+
+  // 2. Identify head-connection edges vs main flow edges
+  const isHeadConnectionEdge = (edge: LayoutEdge): boolean => {
+    const isTargetMatch = targetNodeIds.has(edge.target);
+    const isHeadHandle = HEAD_TARGET_HANDLES.has(edge.targetHandle ?? "");
+    const sourceNodeType =
+      graphNodes.find((n: LayoutNode) => n.id === edge.source)?.type ?? "";
+    const isHeadSourceType = HEAD_NODE_TYPES.has(sourceNodeType);
+    return isTargetMatch && (isHeadHandle || isHeadSourceType);
+  };
+
+  const headEdges: LayoutEdge[] = graphEdges.filter(isHeadConnectionEdge);
+  const flowEdges: LayoutEdge[] = graphEdges.filter(
+    (e: LayoutEdge) => !isHeadConnectionEdge(e),
+  );
+
+  // 3. Identify attached head nodes
+  const attachedHeadNodeIdSet = new Set<string>(
+    headEdges.map((e: LayoutEdge) => e.source),
+  );
+  const attachedHeadNodes: LayoutNode[] = graphNodes.filter((n: LayoutNode) =>
+    attachedHeadNodeIdSet.has(n.id),
+  );
+  const mainGraphNodes: LayoutNode[] = graphNodes.filter(
+    (n: LayoutNode) => !attachedHeadNodeIdSet.has(n.id),
+  );
+
+  // 4. Run Dagre layout for mainGraphNodes and flowEdges
+  const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+  dagreGraph.setGraph({
+    rankdir: direction,
+    marginx: 80,
+    marginy: 80,
+    ranksep: isHorizontal ? 200 : 150,
+    nodesep: 110,
+  });
+
+  mainGraphNodes.forEach((node: LayoutNode) => {
+    const { width, height } = getNodeDimensions(node);
+    dagreGraph.setNode(node.id, { width, height });
+  });
+
+  flowEdges.forEach((edge: LayoutEdge) => {
+    dagreGraph.setEdge(edge.source, edge.target);
+  });
+
+  dagre.layout(dagreGraph);
+
+  // 5. Store positions computed by Dagre
+  const positionsMap = new Map<string, { x: number; y: number }>();
+  mainGraphNodes.forEach((node: LayoutNode) => {
+    const nodeWithPosition = dagreGraph.node(node.id);
+    const { width, height } = getNodeDimensions(node);
+    if (nodeWithPosition) {
+      positionsMap.set(node.id, {
+        x: nodeWithPosition.x - width / 2,
+        y: nodeWithPosition.y - height / 2,
+      });
+    } else {
+      positionsMap.set(node.id, { x: node.position.x, y: node.position.y });
+    }
+  });
+
+  // 5.5. Barycenter refinement pass
+  runBarycenterRefinement({
+    dagreGraph,
+    flowNodes: mainGraphNodes,
+    flowEdges,
+    positionsMap,
+    isHorizontal,
+    storeEndpoints,
+    storeEvents,
+  });
+
+  // 6. Layout attached head nodes grouped by category columns above each target node
+  layoutHeadNodes({
+    targetNodeIds,
+    nodes: graphNodes,
+    positionsMap,
+    headEdges,
+    attachedHeadNodes,
+  });
+
+  // 6.6. Enforce positive canvas origin margin (minX >= 60, minY >= 60)
+  let globalMinX = Infinity;
+  let globalMinY = Infinity;
+  positionsMap.forEach((pos) => {
+    if (pos.x < globalMinX) globalMinX = pos.x;
+    if (pos.y < globalMinY) globalMinY = pos.y;
+  });
+
+  const shiftX = globalMinX < 60 ? 60 - globalMinX : 0;
+  const shiftY = globalMinY < 60 ? 60 - globalMinY : 0;
+
+  if (shiftX !== 0 || shiftY !== 0) {
+    positionsMap.forEach((pos, id) => {
+      positionsMap.set(id, {
+        x: pos.x + shiftX,
+        y: pos.y + shiftY,
+      });
+    });
+  }
+
+  // 7. Update node positions atomically
+  if (onNodesChange) {
+    const nodeChanges: PositionNodeChange[] = graphNodes.map((node: LayoutNode) => {
+      const pos = positionsMap.get(node.id) ?? {
+        x: node.position.x,
+        y: node.position.y,
+      };
+      const isAttachedHead = attachedHeadNodeIdSet.has(node.id);
+      return {
+        id: node.id,
+        type: "position",
+        position: pos,
+        sourcePosition: isAttachedHead
+          ? Position.Bottom
+          : isHorizontal
+            ? Position.Right
+            : Position.Bottom,
+        targetPosition: isAttachedHead
+          ? Position.Top
+          : isHorizontal
+            ? Position.Left
+            : Position.Top,
+      };
+    });
+    onNodesChange(nodeChanges);
+  } else {
+    useBackendCanvasStore.setState((state) => {
+      const updatedNodes = state.nodes.map((node) => {
+        const pos = positionsMap.get(node.id);
+        if (!pos) return node;
+        const isAttachedHead = attachedHeadNodeIdSet.has(node.id);
+        return {
+          ...node,
+          position: pos,
+          sourcePosition: isAttachedHead
+            ? Position.Bottom
+            : isHorizontal
+              ? Position.Right
+              : Position.Bottom,
+          targetPosition: isAttachedHead
+            ? Position.Top
+            : isHorizontal
+              ? Position.Left
+              : Position.Top,
+        };
+      });
+
+      const movedNodeIds = new Set(positionsMap.keys());
+      const upserts = updatedNodes.filter((n) => movedNodeIds.has(n.id));
+
+      return {
+        nodes: updatedNodes,
+        pendingNodeUpserts: [
+          ...state.pendingNodeUpserts.filter((u) => !movedNodeIds.has(u.id)),
+          ...upserts,
+        ],
+      };
+    });
+  }
+
+  setTimeout(() => {
+    fitView({ duration: 300, padding: 0.15 });
+  }, 50);
+}
