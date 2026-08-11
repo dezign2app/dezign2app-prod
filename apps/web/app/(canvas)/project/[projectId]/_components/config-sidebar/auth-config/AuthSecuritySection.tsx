@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
@@ -16,20 +16,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { ShieldCheck, Globe, ArrowRightLeft, Plus, Trash2, Edit3, LayoutList } from "lucide-react";
+import { ShieldCheck, Globe, ArrowRightLeft, Plus, Trash2, KeyRound } from "lucide-react";
 import { RedirectsConfig } from "@workspace/canvas";
 import { BackendNode } from "@/types/canvas";
 import { labelToSlug } from "@/lib/compiler/webClients/nextjs/v16/slugUtils";
 import { AuthConfigSectionProps } from "./types";
 
 interface ConfiguredPage {
+  id: string;
   path: string;
   label: string;
   isCanvasPage?: boolean;
 }
 
 const getConfiguredPages = (allNodes: BackendNode[]): ConfiguredPage[] => {
-  const pagesMap = new Map<string, ConfiguredPage>();
+  const pagesList: ConfiguredPage[] = [];
+  const seenPaths = new Set<string>();
 
   // 1. WebClient nodes from Canvas
   const webClientNodes = (allNodes || []).filter(
@@ -45,133 +47,113 @@ const getConfiguredPages = (allNodes: BackendNode[]): ConfiguredPage[] => {
     }
     if (!path.startsWith("/")) path = `/${path}`;
 
-    pagesMap.set(path, {
+    pagesList.push({
+      id: node.id,
       path,
       label: rawLabel,
       isCanvasPage: true,
     });
+    seenPaths.add(path);
   });
 
   // 2. WebApp node routes
   const webAppNode = (allNodes || []).find((n) => n.type === "webApp");
   if (webAppNode?.data?.routes && Array.isArray(webAppNode.data.routes)) {
-    webAppNode.data.routes.forEach((r) => {
+    webAppNode.data.routes.forEach((r, idx) => {
       if (r.path) {
         const p = r.path.startsWith("/") ? r.path : `/${r.path}`;
-        if (!pagesMap.has(p)) {
-          pagesMap.set(p, {
+        const id = r.id || `webapp-route-${idx}`;
+        if (!seenPaths.has(p)) {
+          pagesList.push({
+            id,
             path: p,
             label: r.name || p,
             isCanvasPage: true,
           });
+          seenPaths.add(p);
         }
       }
     });
   }
 
-  // 3. Default standard auth routes
-  const defaultRoutes = [
-    { path: "/dashboard", label: "Dashboard" },
-    { path: "/onboarding", label: "Onboarding" },
-    { path: "/login", label: "Login / Sign-In" },
-    { path: "/api/auth/callback", label: "OAuth Callback" },
-    { path: "/", label: "Home" },
-  ];
-
-  defaultRoutes.forEach((def) => {
-    if (!pagesMap.has(def.path)) {
-      pagesMap.set(def.path, {
-        path: def.path,
-        label: def.label,
-        isCanvasPage: false,
-      });
-    }
-  });
-
-  return Array.from(pagesMap.values());
+  return pagesList;
 };
 
 interface RedirectRouteSelectorProps {
   label: string;
   value: string;
+  nodeIdValue?: string;
   placeholder: string;
   configuredPages: ConfiguredPage[];
-  onChange: (newValue: string) => void;
+  onChange: (newPath: string, newNodeId?: string) => void;
 }
 
 const RedirectRouteSelector: React.FC<RedirectRouteSelectorProps> = ({
   label,
   value,
+  nodeIdValue,
   placeholder,
   configuredPages,
   onChange,
 }) => {
-  const [isCustomMode, setIsCustomMode] = useState(false);
+  // Find page by nodeId first, then fall back to path matching
+  const matchingByNodeId = nodeIdValue
+    ? configuredPages.find((p) => p.id === nodeIdValue)
+    : undefined;
+  const matchingByPath = configuredPages.find((p) => p.path === value);
+  const matchedPage = matchingByNodeId || matchingByPath;
 
-  const matchesKnown = configuredPages.some((p) => p.path === value);
+  const effectivePath = matchedPage ? matchedPage.path : value;
+  const currentSelectValue = matchedPage ? matchedPage.id : "";
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between">
-        <Label className="text-[11px] text-muted-foreground font-medium">{label}</Label>
-        <button
-          type="button"
-          onClick={() => setIsCustomMode(!isCustomMode)}
-          className="text-[10px] text-primary hover:underline flex items-center gap-1 font-medium cursor-pointer"
-        >
-          {isCustomMode ? (
-            <>
-              <LayoutList className="w-3 h-3" /> Select page
-            </>
-          ) : (
-            <>
-              <Edit3 className="w-3 h-3" /> Custom path
-            </>
-          )}
-        </button>
-      </div>
+      <Label className="text-[11px] text-muted-foreground font-medium">{label}</Label>
 
-      {isCustomMode ? (
-        <Input
-          className="h-7 text-xs font-mono bg-background"
-          placeholder={placeholder}
-          value={value || ""}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      ) : (
-        <Select
-          value={matchesKnown ? value : value ? "__custom_val__" : ""}
-          onValueChange={(val) => {
-            if (val === "__enter_custom__") {
-              setIsCustomMode(true);
-            } else if (val !== "__custom_val__") {
-              onChange(val);
-            }
-          }}
-        >
-          <SelectTrigger className="h-7 text-xs font-mono bg-background w-full">
-            <SelectValue placeholder={placeholder} />
-          </SelectTrigger>
-          <SelectContent className="nodrag">
-            {configuredPages.some((p) => p.isCanvasPage) && (
-              <SelectGroup>
-                <SelectLabel className="text-[10px] uppercase font-bold tracking-wider">
-                  Configured Canvas Pages
-                </SelectLabel>
-                {configuredPages
-                  .filter((p) => p.isCanvasPage)
-                  .map((p) => (
-                    <SelectItem key={p.path} value={p.path} className="text-xs font-mono">
-                      <div className="flex items-center justify-between w-full gap-2">
-                        <span className="font-sans font-medium text-foreground">{p.label}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-              </SelectGroup>
+      <Select
+        value={currentSelectValue}
+        onValueChange={(selectedId) => {
+          const selectedPage = configuredPages.find((p) => p.id === selectedId);
+          if (selectedPage) {
+            onChange(selectedPage.path, selectedPage.id);
+          }
+        }}
+      >
+        <SelectTrigger className="h-7 text-xs font-mono bg-background w-full">
+          <SelectValue placeholder={placeholder}>
+            {matchedPage ? (
+              <div className="flex items-center gap-1.5 overflow-hidden">
+                <span className="font-sans font-medium text-foreground truncate">
+                  {matchedPage.label}
+                </span>
+              </div>
+            ) : (
+              effectivePath || placeholder
             )}
-          </SelectContent>
-        </Select>
-      )}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent className="nodrag">
+          {configuredPages.length > 0 ? (
+            <SelectGroup>
+              <SelectLabel className="text-[10px] uppercase font-bold tracking-wider">
+                Configured Canvas Pages
+              </SelectLabel>
+              {configuredPages.map((p) => (
+                <SelectItem key={p.id} value={p.id} className="text-xs font-mono">
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <span className="font-sans font-medium text-foreground">{p.label}</span>
+                    <span className="text-[10px] text-muted-foreground font-mono">({p.path})</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          ) : (
+            <div className="p-2 text-xs text-muted-foreground italic text-center">
+              No canvas pages found
+            </div>
+          )}
+        </SelectContent>
+      </Select>
     </div>
   );
 };
@@ -181,12 +163,7 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
   updateData,
   allNodes,
 }) => {
-  const redirects: RedirectsConfig = data.redirects || {
-    signInRedirectUrl: "/dashboard",
-    signUpRedirectUrl: "/onboarding",
-    signOutRedirectUrl: "/login",
-    callbackUrl: "/api/auth/callback",
-  };
+  const redirects: RedirectsConfig = data.redirects || {};
 
   const trustedOrigins: string[] = data.trustedOrigins || [
     "http://localhost:3000",
@@ -195,6 +172,52 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
 
   const configuredPages = getConfiguredPages(allNodes);
   const canvasPagesCount = configuredPages.filter((p) => p.isCanvasPage).length;
+
+  // Auto-sync saved path values when linked canvas node paths change (e.g. node label edited)
+  useEffect(() => {
+    let needsUpdate = false;
+    const updatedRedirects = { ...redirects };
+
+    if (redirects.signInPageNodeId) {
+      const page = configuredPages.find((p) => p.id === redirects.signInPageNodeId);
+      if (page && page.path !== redirects.signInPageUrl) {
+        updatedRedirects.signInPageUrl = page.path;
+        needsUpdate = true;
+      }
+    }
+    if (redirects.signUpPageNodeId) {
+      const page = configuredPages.find((p) => p.id === redirects.signUpPageNodeId);
+      if (page && page.path !== redirects.signUpPageUrl) {
+        updatedRedirects.signUpPageUrl = page.path;
+        needsUpdate = true;
+      }
+    }
+    if (redirects.signInRedirectNodeId) {
+      const page = configuredPages.find((p) => p.id === redirects.signInRedirectNodeId);
+      if (page && page.path !== redirects.signInRedirectUrl) {
+        updatedRedirects.signInRedirectUrl = page.path;
+        needsUpdate = true;
+      }
+    }
+    if (redirects.signUpRedirectNodeId) {
+      const page = configuredPages.find((p) => p.id === redirects.signUpRedirectNodeId);
+      if (page && page.path !== redirects.signUpRedirectUrl) {
+        updatedRedirects.signUpRedirectUrl = page.path;
+        needsUpdate = true;
+      }
+    }
+    if (redirects.signOutRedirectNodeId) {
+      const page = configuredPages.find((p) => p.id === redirects.signOutRedirectNodeId);
+      if (page && page.path !== redirects.signOutRedirectUrl) {
+        updatedRedirects.signOutRedirectUrl = page.path;
+        needsUpdate = true;
+      }
+    }
+
+    if (needsUpdate) {
+      updateData({ redirects: updatedRedirects });
+    }
+  }, [allNodes]);
 
   return (
     <AccordionItem
@@ -205,7 +228,7 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
         <div className="flex items-center gap-2 text-left flex-1">
           <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Trusted Origins & Redirects
+            Auth Pages, Redirects & CORS
           </span>
           <div className="flex items-center gap-1.5 ml-auto mr-2">
             {canvasPagesCount > 0 && (
@@ -221,6 +244,46 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
       </AccordionTrigger>
       <AccordionContent className="px-4 pb-4 pt-1">
         <div className="flex flex-col gap-4 pt-2">
+          {/* Auth Pages Definition Card */}
+          <div className="flex flex-col gap-3 p-3.5 bg-background/50 rounded-lg border border-border/40 text-xs">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 text-primary" /> Auth Pages (Login & Register)
+              </Label>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                Define Auth UI routes
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <RedirectRouteSelector
+                label="Sign-In / Login Page Path"
+                placeholder="/login"
+                value={redirects.signInPageUrl || ""}
+                nodeIdValue={redirects.signInPageNodeId}
+                configuredPages={configuredPages}
+                onChange={(val, nodeId) =>
+                  updateData({
+                    redirects: { ...redirects, signInPageUrl: val, signInPageNodeId: nodeId },
+                  })
+                }
+              />
+
+              <RedirectRouteSelector
+                label="Sign-Up / Register Page Path"
+                placeholder="/register"
+                value={redirects.signUpPageUrl || ""}
+                nodeIdValue={redirects.signUpPageNodeId}
+                configuredPages={configuredPages}
+                onChange={(val, nodeId) =>
+                  updateData({
+                    redirects: { ...redirects, signUpPageUrl: val, signUpPageNodeId: nodeId },
+                  })
+                }
+              />
+            </div>
+          </div>
+
           {/* Redirect URLs Card */}
           <div className="flex flex-col gap-3 p-3.5 bg-background/50 rounded-lg border border-border/40 text-xs">
             <div className="flex items-center justify-between">
@@ -239,10 +302,11 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
                 label="Sign-In Success Redirect"
                 placeholder="/dashboard"
                 value={redirects.signInRedirectUrl || ""}
+                nodeIdValue={redirects.signInRedirectNodeId}
                 configuredPages={configuredPages}
-                onChange={(val) =>
+                onChange={(val, nodeId) =>
                   updateData({
-                    redirects: { ...redirects, signInRedirectUrl: val },
+                    redirects: { ...redirects, signInRedirectUrl: val, signInRedirectNodeId: nodeId },
                   })
                 }
               />
@@ -251,10 +315,11 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
                 label="Sign-Up Success Redirect"
                 placeholder="/onboarding"
                 value={redirects.signUpRedirectUrl || ""}
+                nodeIdValue={redirects.signUpRedirectNodeId}
                 configuredPages={configuredPages}
-                onChange={(val) =>
+                onChange={(val, nodeId) =>
                   updateData({
-                    redirects: { ...redirects, signUpRedirectUrl: val },
+                    redirects: { ...redirects, signUpRedirectUrl: val, signUpRedirectNodeId: nodeId },
                   })
                 }
               />
@@ -263,10 +328,11 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
                 label="Sign-Out Redirect"
                 placeholder="/login"
                 value={redirects.signOutRedirectUrl || ""}
+                nodeIdValue={redirects.signOutRedirectNodeId}
                 configuredPages={configuredPages}
-                onChange={(val) =>
+                onChange={(val, nodeId) =>
                   updateData({
-                    redirects: { ...redirects, signOutRedirectUrl: val },
+                    redirects: { ...redirects, signOutRedirectUrl: val, signOutRedirectNodeId: nodeId },
                   })
                 }
               />
@@ -275,10 +341,11 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
                 label="OAuth Callback URL"
                 placeholder="/api/auth/callback"
                 value={redirects.callbackUrl || ""}
+                nodeIdValue={redirects.callbackNodeId}
                 configuredPages={configuredPages}
-                onChange={(val) =>
+                onChange={(val, nodeId) =>
                   updateData({
-                    redirects: { ...redirects, callbackUrl: val },
+                    redirects: { ...redirects, callbackUrl: val, callbackNodeId: nodeId },
                   })
                 }
               />
@@ -342,4 +409,5 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
     </AccordionItem>
   );
 };
+
 

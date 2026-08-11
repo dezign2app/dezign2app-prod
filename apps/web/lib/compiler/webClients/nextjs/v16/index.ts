@@ -1,5 +1,5 @@
 import { BackendNode, BackendEdge, SimulationTestCase } from "@/types/canvas";
-import { DEFAULT_BETTER_AUTH_VERSION } from "@workspace/canvas";
+import { DEFAULT_BETTER_AUTH_VERSION, WebAppZone, ConditionNode } from "@workspace/canvas";
 import {
   Endpoint,
   AnyMessagingResource,
@@ -58,7 +58,7 @@ export function compileNextjsV16WebClient(
 
   const webAppNode = allNodes.find((n) => n.type === "webApp");
 
-  const defaultZones = [
+  const defaultZones: WebAppZone[] = [
     {
       id: "zone-public",
       name: "Public Section",
@@ -85,7 +85,7 @@ export function compileNextjsV16WebClient(
     },
   ];
 
-  const appZones =
+  const appZones: WebAppZone[] =
     webAppNode && Array.isArray(webAppNode.data?.zones) && webAppNode.data.zones.length > 0
       ? webAppNode.data.zones
       : defaultZones;
@@ -117,17 +117,17 @@ export function compileNextjsV16WebClient(
       return webAppNode ? otherId === webAppNode.id : allNodes.some((n) => n.id === otherId && n.type === "webApp");
     });
 
-    let matchedZone: any;
+    let matchedZone: WebAppZone | undefined = undefined;
     if (connectedEdge && webAppNode) {
       const sectionHandleId =
         connectedEdge.source === webAppNode.id
           ? connectedEdge.sourceHandle
           : connectedEdge.targetHandle;
-      matchedZone = appZones.find((z: any) => z.handleId === sectionHandleId);
+      matchedZone = appZones.find((z) => z.handleId === sectionHandleId);
     }
 
     if (!matchedZone && node.data.zoneId) {
-      matchedZone = appZones.find((z: any) => z.id === node.data.zoneId);
+      matchedZone = appZones.find((z) => z.id === node.data.zoneId);
     }
 
     let accessType: "public" | "private" | "role-gated" | "payment-gated" | "org-gated" = "public";
@@ -149,7 +149,7 @@ export function compileNextjsV16WebClient(
         }
 
         if (matchedZone.rule?.conditions) {
-          const extractConditions = (condNode: any) => {
+          const extractConditions = (condNode: ConditionNode | undefined): void => {
             if (!condNode) return;
             if (condNode.kind === "leaf" && condNode.condition) {
               const cond = condNode.condition;
@@ -578,10 +578,17 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
       content: generatePageHeaderComponent(pageMeta),
     });
 
+    const effectiveAuthNode =
+      authNode ||
+      allNodes.find(
+        (n) => n.type === "auth" || (node.data?.authNodeId && n.id === node.data.authNodeId)
+      );
+
     const pageCode = generatePageCode(
       pageMeta,
       pageLoadFetchStatements,
       eventComponentsMeta,
+      effectiveAuthNode?.data,
     );
 
     const targetFilePath = pageMeta.isRoot

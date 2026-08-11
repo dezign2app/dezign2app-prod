@@ -409,5 +409,33 @@ export { Input };
     content: inputCode,
   });
 
+  // 11. src/components/label.tsx
+  const labelCode = `import * as React from "react";
+import { cn } from "@workspace/ui/lib/utils";
+
+export interface LabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> {}
+
+const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
+  ({ className, ...props }, ref) => (
+    <label
+      ref={ref}
+      className={cn(
+        "text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 select-none",
+        className
+      )}
+      {...props}
+    />
+  )
+);
+Label.displayName = "Label";
+
+export { Label };
+`;
+  files.push({
+    filename: "src/components/label.tsx",
+    language: "typescript",
+    content: labelCode,
+  });
+
   return { files };
 }
