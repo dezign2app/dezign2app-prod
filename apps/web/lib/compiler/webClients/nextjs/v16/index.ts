@@ -288,6 +288,92 @@ export function compileNextjsV16WebClient(
       }),
     });
 
+    // Reusable Server Authorization Helpers under lib/auth/
+    files.push({
+      filename: "lib/auth/require-session.ts",
+      language: "typescript",
+      content: `import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+
+export async function requireSession(redirectTo: string = "/login") {
+  let session = null;
+  try {
+    const { auth } = await import("@/lib/auth");
+    session = await auth.api.getSession({
+      headers: await headers(),
+    });
+  } catch (err) {
+    session = null;
+  }
+
+  if (!session) {
+    redirect(redirectTo);
+  }
+
+  return session;
+}
+`,
+    });
+
+    files.push({
+      filename: "lib/auth/require-role.ts",
+      language: "typescript",
+      content: `import { requireSession } from "./require-session";
+import { redirect } from "next/navigation";
+
+export async function requireRole(allowedRoles: string[], redirectTo: string = "/unauthorized") {
+  const session = await requireSession();
+  const role = (session.user as { role?: string })?.role || "user";
+
+  if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
+    redirect(redirectTo);
+  }
+
+  return session;
+}
+`,
+    });
+
+    files.push({
+      filename: "lib/auth/require-org-role.ts",
+      language: "typescript",
+      content: `import { requireSession } from "./require-session";
+import { redirect } from "next/navigation";
+
+export async function requireOrgRole(allowedOrgRoles: string[], redirectTo: string = "/unauthorized") {
+  const session = await requireSession();
+  const activeOrgRole = (session.session as { activeOrgRole?: string })?.activeOrgRole ||
+                        (session.user as { orgRole?: string })?.orgRole;
+
+  if (allowedOrgRoles.length > 0 && (!activeOrgRole || !allowedOrgRoles.includes(activeOrgRole))) {
+    redirect(redirectTo);
+  }
+
+  return session;
+}
+`,
+    });
+
+    files.push({
+      filename: "lib/auth/require-plan.ts",
+      language: "typescript",
+      content: `import { requireSession } from "./require-session";
+import { redirect } from "next/navigation";
+
+export async function requirePlan(requiredPlans: string[], redirectTo: string = "/pricing") {
+  const session = await requireSession();
+  const plan = (session.session as { plan?: string })?.plan ||
+               (session.user as { plan?: string })?.plan || "free";
+
+  if (requiredPlans.length > 0 && !requiredPlans.includes(plan)) {
+    redirect(redirectTo);
+  }
+
+  return session;
+}
+`,
+    });
+
     // Add better-auth and database adapter dependencies to package.json
     const pkgFileIdx = files.findIndex((f) => f.filename === "package.json");
     if (pkgFileIdx !== -1) {

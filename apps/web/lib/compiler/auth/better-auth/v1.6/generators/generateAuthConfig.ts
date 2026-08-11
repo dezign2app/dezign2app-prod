@@ -237,8 +237,9 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
   const trustedOriginsBlock = `\n  trustedOrigins: ${JSON.stringify(trustedOrigins)},`;
 
   // Secret Key
+  // Secret Key & Base URL
   const secretBlock = `\n  secret: process.env.BETTER_AUTH_SECRET || "default_super_secret_key_change_in_production",`;
-  const baseUrlBlock = `\n  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3001",`;
+  const baseUrlBlock = `\n  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",`;
 
   // Imports
   const pluginImportStr = pluginImports.size > 0
@@ -250,13 +251,16 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
     : "";
 
   return `import { betterAuth } from "better-auth";
+import { nextCookies } from "better-auth/next-js";
 ${adapterConfig.importStatement}
 ${createMiddlewareImport}${pluginImportStr}
 export const auth = betterAuth({
   database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}
   plugins: [
-    ${pluginCalls.join(",\n    ")}
+    ${pluginCalls.join(",\n    ")},
+    nextCookies(),
   ],
 });
 `;
 }
+
