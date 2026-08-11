@@ -5,6 +5,7 @@ import {
   ConditionPrimitive,
   ProtectionRule,
   WebAppZone,
+  SessionClaimConfig,
 } from "@workspace/canvas";
 import {
   DEFAULT_ZONES,
@@ -33,6 +34,9 @@ export const ZoneConfig = ({
   const addNode = useBackendCanvasStore((s) => s.addNode);
   const addEdge = useBackendCanvasStore((s) => s.addEdge);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
+  const setActiveConfigItem = useBackendCanvasStore(
+    (s) => s.setActiveConfigItem,
+  );
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     conditions: true,
@@ -48,11 +52,53 @@ export const ZoneConfig = ({
   if (!node) return null;
 
   const data = node.data;
-  const zones: WebAppZone[] =
-    data.zones && data.zones.length > 0 ? data.zones : DEFAULT_ZONES;
+  const zones: WebAppZone[] = Array.isArray(data.zones) ? data.zones : DEFAULT_ZONES;
   const currentZone =
     zones.find((z) => z.id === id) ||
     (id === "zone-public" ? DEFAULT_ZONES[0]! : DEFAULT_ZONES[1]!);
+
+  const handleDeleteZone = (zoneId: string) => {
+    const updatedZones = zones.filter((z) => z.id !== zoneId);
+    updateNode(nodeId, { data: { ...data, zones: updatedZones } });
+
+    const targetZone = zones.find((z) => z.id === zoneId);
+    if (targetZone) {
+      const handleId = targetZone.handleId;
+      const connectedEdges = edges.filter(
+        (e) =>
+          (e.target === nodeId && e.targetHandle === handleId) ||
+          (e.source === nodeId && e.sourceHandle === handleId),
+      );
+      connectedEdges.forEach((e) => deleteEdge(e.id));
+    }
+
+    setActiveConfigItem(null);
+  };
+
+  // Find connected Auth Node or fallback to any Auth node in workspace
+  const connectedAuthEdge = edges.find(
+    (e) =>
+      (e.target === nodeId && e.targetHandle === "auth-in") ||
+      (e.source === nodeId && e.sourceHandle === "auth-out"),
+  );
+  const connectedAuthNode = connectedAuthEdge
+    ? nodes.find(
+        (n) =>
+          n.id ===
+          (connectedAuthEdge.source === nodeId
+            ? connectedAuthEdge.target
+            : connectedAuthEdge.source),
+      )
+    : nodes.find((n) => n.type === "auth");
+
+  const isAuthConnected = Boolean(connectedAuthNode);
+  const authNodeLabel = connectedAuthNode?.data?.label || "Auth Server";
+
+  const authClaims: SessionClaimConfig[] = connectedAuthNode?.data?.session?.claims || [
+    { key: "orgRole", source: "orgRole", deliveryMode: "jwt", destination: "jwt" },
+    { key: "subscriptionStatus", source: "entityColumn", targetValue: "status", deliveryMode: "session", destination: "session" },
+    { key: "planId", source: "entityColumn", targetValue: "plan_id", deliveryMode: "jwt", destination: "jwt" },
+  ];
 
   const rule: ProtectionRule = currentZone.rule || {
     id: `rule-${currentZone.id}`,
@@ -197,7 +243,10 @@ export const ZoneConfig = ({
 
   const leaves = getLeafConditions(rule.conditions);
 
-  const handleAddCondition = (primitiveType: ConditionPrimitive["type"]) => {
+  const handleAddCondition = (
+    primitiveType: ConditionPrimitive["type"],
+    customKey?: string,
+  ) => {
     let newPrim: ConditionPrimitive;
     if (primitiveType === "auth") newPrim = { type: "auth", op: "signedIn" };
     else if (primitiveType === "org") newPrim = { type: "org", op: "required" };
@@ -213,7 +262,7 @@ export const ZoneConfig = ({
       };
     else if (primitiveType === "plan")
       newPrim = { type: "plan", op: "in", values: ["pro", "enterprise"] };
-    else newPrim = { type: "customClaim", key: "isVip", op: "truthy" };
+    else newPrim = { type: "customClaim", key: customKey || "isVip", op: "truthy" };
 
     const initialChildren: ConditionNode[] =
       rule.conditions.kind === "group"
@@ -327,6 +376,7 @@ export const ZoneConfig = ({
       <ProtectedZoneHeader
         currentZone={currentZone}
         onUpdateZoneName={updateZoneName}
+        onDeleteZone={() => handleDeleteZone(currentZone.id)}
       />
 
       <div className="flex flex-col gap-6">
@@ -335,6 +385,9 @@ export const ZoneConfig = ({
           onToggle={() => toggleSection("conditions")}
           leaves={leaves}
           connectedPages={connectedPages}
+          authClaims={authClaims}
+          authNodeLabel={authNodeLabel}
+          isAuthConnected={isAuthConnected}
           onAddCondition={handleAddCondition}
           onRemoveCondition={handleRemoveCondition}
         />

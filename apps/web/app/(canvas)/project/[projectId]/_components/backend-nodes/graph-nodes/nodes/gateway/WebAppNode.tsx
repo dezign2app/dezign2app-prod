@@ -6,6 +6,7 @@ import {
   Settings,
   ShieldCheck,
   Plus,
+  Trash2,
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { WebAppZone } from "@workspace/canvas/types";
@@ -60,6 +61,7 @@ export const WebAppNode = ({
   );
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
+  const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
 
   const appSlug =
     data.appSlug ||
@@ -86,7 +88,30 @@ export const WebAppNode = ({
   const authNodeLabel = connectedAuthNode?.data?.label || "Auth";
 
   // User-defined zones or default zones
-  const zones: WebAppZone[] = data.zones && data.zones.length > 0 ? data.zones : DEFAULT_ZONES;
+  const zones: WebAppZone[] = Array.isArray(data.zones) ? data.zones : DEFAULT_ZONES;
+
+  const handleDeleteZone = (zoneId: string) => {
+    const updatedZones = zones.filter((z) => z.id !== zoneId);
+    updateNode(id, { data: { ...data, zones: updatedZones } });
+
+    // Clean up connected edges to this zone handle
+    const targetZone = zones.find((z) => z.id === zoneId);
+    if (targetZone) {
+      const handleId = targetZone.handleId;
+      const connectedEdges = edges.filter(
+        (e) =>
+          (e.target === id && e.targetHandle === handleId) ||
+          (e.source === id && e.sourceHandle === handleId),
+      );
+      connectedEdges.forEach((e) => deleteEdge(e.id));
+    }
+
+    // Reset active config item if deleted zone was active
+    const activeItem = useBackendCanvasStore.getState().activeConfigItem;
+    if (activeItem?.id === zoneId) {
+      setActiveConfigItem(null);
+    }
+  };
 
   const handleAddZone = () => {
     const newZoneId = `zone-${Date.now()}`;
@@ -249,6 +274,18 @@ export const WebAppNode = ({
                   >
                     <Settings className="w-3 h-3" />
                   </button>
+                  {!isPublic && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteZone(zone.id);
+                      }}
+                      className="p-1 hover:bg-destructive/15 rounded text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                      title={`Delete ${zone.name}`}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               </div>
 
