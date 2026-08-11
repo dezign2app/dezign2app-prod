@@ -448,7 +448,15 @@ export const WebClientNode = ({
   );
 
   // Find incoming WebApp edge connecting to this page
-  const incomingEdge = edges.find((e) => e.target === id || e.source === id);
+  const incomingEdge = edges.find((e) => {
+    const isTarget = e.target === id;
+    const isSource = e.source === id;
+    if (!isTarget && !isSource) return false;
+    const otherId = isSource ? e.target : e.source;
+    const otherNode = nodes.find((n) => n.id === otherId);
+    return otherNode?.type === "webApp";
+  });
+
   const connectedWebAppNode = incomingEdge
     ? nodes.find(
         (n) =>
@@ -464,8 +472,15 @@ export const WebClientNode = ({
       incomingEdge.source === connectedWebAppNode.id
         ? incomingEdge.sourceHandle
         : incomingEdge.targetHandle;
-    const zones = connectedWebAppNode.data?.zones || [];
-    const matchedZone = zones.find((z) => z.handleId === handleId);
+    const defaultZones = [
+      { handleId: "public-in", name: "Public Section" },
+      { handleId: "private-in", name: "Private Section" },
+    ];
+    const zones =
+      connectedWebAppNode.data?.zones && connectedWebAppNode.data.zones.length > 0
+        ? connectedWebAppNode.data.zones
+        : defaultZones;
+    const matchedZone = zones.find((z: { handleId: string; name: string }) => z.handleId === handleId);
     if (matchedZone) {
       connectedZoneName = matchedZone.name;
     } else if (handleId === "public-in") {
