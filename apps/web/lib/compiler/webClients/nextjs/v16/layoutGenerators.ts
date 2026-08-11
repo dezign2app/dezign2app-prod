@@ -71,20 +71,3 @@ export default function ${slugToComponentName(groupName)}Layout({
 }
 `;
 }
-
-export function generatePageLayout(pageSlug: string): string {
-  return `import React from "react";
-
-export default function ${slugToComponentName(pageSlug)}Layout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="w-full flex flex-col flex-1">
-      {children}
-    </div>
-  );
-}
-`;
-}

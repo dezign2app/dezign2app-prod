@@ -16,8 +16,9 @@ import { generateProjectConfigFiles } from "./configTemplates";
 import {
   generateRootLayout,
   generateSectionLayout,
-  generatePageLayout,
   generateEventComponent,
+  generatePageHeaderComponent,
+  generateRootIndexHeaderComponent,
   generatePageCode,
   generateRootIndexPage,
   EventComponentMeta,
@@ -55,6 +56,40 @@ export function compileNextjsV16WebClient(
     webClientNodes[0]?.data.appSlug ||
     "web-app";
 
+  const webAppNode = allNodes.find((n) => n.type === "webApp");
+
+  const defaultZones = [
+    {
+      id: "zone-public",
+      name: "Public Section",
+      handleId: "public-in",
+      accessType: "public",
+      rule: {
+        id: "rule-public",
+        scope: "zone",
+        conditions: { kind: "leaf", condition: { type: "auth", op: "signedOut" } },
+        redirects: { default: "/login" },
+      },
+    },
+    {
+      id: "zone-private",
+      name: "Private Section",
+      handleId: "private-in",
+      accessType: "protected",
+      rule: {
+        id: "rule-private",
+        scope: "zone",
+        conditions: { kind: "leaf", condition: { type: "auth", op: "signedIn" } },
+        redirects: { "no-auth": "/login", default: "/login" },
+      },
+    },
+  ];
+
+  const appZones =
+    webAppNode && Array.isArray(webAppNode.data?.zones) && webAppNode.data.zones.length > 0
+      ? webAppNode.data.zones
+      : defaultZones;
+
   webClientNodes.forEach((node, idx) => {
     const rawLabel = node.data.label || `Page ${idx + 1}`;
     let slug = labelToSlug(rawLabel, idx);
@@ -73,9 +108,71 @@ export function compileNextjsV16WebClient(
     const routePath = isRoot ? "/" : `/${slug}`;
     const componentName = slugToComponentName(slug);
 
+    // Find edge connecting a webApp node handle to this webClient node handle
+    const connectedEdge = allEdges.find((e) => {
+      const isTarget = e.target === node.id;
+      const isSource = e.source === node.id;
+      if (!isTarget && !isSource) return false;
+      const otherId = isSource ? e.target : e.source;
+      return webAppNode ? otherId === webAppNode.id : allNodes.some((n) => n.id === otherId && n.type === "webApp");
+    });
+
+    let matchedZone: any;
+    if (connectedEdge && webAppNode) {
+      const sectionHandleId =
+        connectedEdge.source === webAppNode.id
+          ? connectedEdge.sourceHandle
+          : connectedEdge.targetHandle;
+      matchedZone = appZones.find((z: any) => z.handleId === sectionHandleId);
+    }
+
+    if (!matchedZone && node.data.zoneId) {
+      matchedZone = appZones.find((z: any) => z.id === node.data.zoneId);
+    }
+
+    let accessType: "public" | "private" | "role-gated" | "payment-gated" | "org-gated" = "public";
+    let redirectTo = node.data.redirectTo || "/login";
+    let allowedOrgRoles: string[] = node.data.allowedOrgRoles || [];
+    let requiredPlans: string[] = node.data.requiredPlans || [];
+
+    if (matchedZone) {
+      const isPublicZone = matchedZone.accessType === "public" || matchedZone.id === "zone-public";
+      if (isPublicZone) {
+        accessType = "public";
+      } else {
+        accessType = "private";
+        if (matchedZone.rule?.redirects) {
+          redirectTo =
+            matchedZone.rule.redirects["no-auth"] ||
+            matchedZone.rule.redirects["default"] ||
+            "/login";
+        }
+
+        if (matchedZone.rule?.conditions) {
+          const extractConditions = (condNode: any) => {
+            if (!condNode) return;
+            if (condNode.kind === "leaf" && condNode.condition) {
+              const cond = condNode.condition;
+              if (cond.type === "orgRole" && Array.isArray(cond.values)) {
+                allowedOrgRoles = [...allowedOrgRoles, ...cond.values];
+              }
+              if ((cond.type === "plan" || cond.type === "subscriptionStatus") && Array.isArray(cond.values)) {
+                requiredPlans = [...requiredPlans, ...cond.values];
+              }
+            } else if (condNode.kind === "group" && Array.isArray(condNode.children)) {
+              condNode.children.forEach(extractConditions);
+            }
+          };
+          extractConditions(matchedZone.rule.conditions);
+        }
+      }
+    } else {
+      accessType = node.data.accessType || "public";
+    }
+
     const routeGroup =
       node.data.routeGroup ||
-      (node.data.accessType && node.data.accessType !== "public" ? "private" : "public");
+      (accessType !== "public" ? "private" : "public");
 
     pagesInfo.push({
       nodeId: node.id,
@@ -86,11 +183,11 @@ export function compileNextjsV16WebClient(
       componentName,
       isRoot,
       routeGroup,
-      accessType: node.data.accessType || "public",
+      accessType,
       allowedRoles: node.data.allowedRoles,
-      requiredPlans: node.data.requiredPlans,
-      allowedOrgRoles: node.data.allowedOrgRoles,
-      redirectTo: node.data.redirectTo,
+      requiredPlans: requiredPlans.length > 0 ? Array.from(new Set(requiredPlans)) : undefined,
+      allowedOrgRoles: allowedOrgRoles.length > 0 ? Array.from(new Set(allowedOrgRoles)) : undefined,
+      redirectTo,
       isAuthPage: node.data.isAuthPage,
       appSlug: node.data.appSlug || effectiveAppSlug,
       appName: node.data.appName,
@@ -383,13 +480,24 @@ export function compileNextjsV16WebClient(
       });
     });
 
+    const groupFolder = pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)";
+    const headerCompName = `${pageMeta.componentName}Header`;
+    const headerFilePath = pageMeta.isRoot
+      ? `app/${groupFolder}/_components/${headerCompName}.tsx`
+      : `app/${groupFolder}/${pageMeta.slug}/_components/${headerCompName}.tsx`;
+
+    files.push({
+      filename: headerFilePath,
+      language: "typescript",
+      content: generatePageHeaderComponent(pageMeta),
+    });
+
     const pageCode = generatePageCode(
       pageMeta,
       pageLoadFetchStatements,
       eventComponentsMeta,
     );
 
-    const groupFolder = pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)";
     const targetFilePath = pageMeta.isRoot
       ? `app/${groupFolder}/page.tsx`
       : `app/${groupFolder}/${pageMeta.slug}/page.tsx`;
@@ -399,14 +507,6 @@ export function compileNextjsV16WebClient(
       language: "typescript",
       content: pageCode,
     });
-
-    if (!pageMeta.isRoot) {
-      files.push({
-        filename: `app/${groupFolder}/${pageMeta.slug}/layout.tsx`,
-        language: "typescript",
-        content: generatePageLayout(pageMeta.slug),
-      });
-    }
   });
 
   if (!hasExplicitRoot) {
@@ -425,6 +525,12 @@ export function compileNextjsV16WebClient(
           </Link>`,
       )
       .join("\n");
+
+    files.push({
+      filename: "app/(public)/_components/WebClientIndexHeader.tsx",
+      language: "typescript",
+      content: generateRootIndexHeaderComponent(projectName),
+    });
 
     files.push({
       filename: "app/(public)/page.tsx",

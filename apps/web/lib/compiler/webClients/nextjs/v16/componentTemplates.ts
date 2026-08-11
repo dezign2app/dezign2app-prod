@@ -12,7 +12,6 @@ export interface EventComponentMeta {
 export {
   generateRootLayout,
   generateSectionLayout,
-  generatePageLayout,
 } from "./layoutGenerators";
 
 export function generateEventComponent(
@@ -47,14 +46,85 @@ export default ${componentName};
 `;
 }
 
+export function generatePageHeaderComponent(
+  pageMeta: PageInfo,
+): string {
+  const compName = `${pageMeta.componentName}Header`;
+  return `"use client";
+
+import React from "react";
+import Link from "next/link";
+import { Badge } from "@workspace/ui/components/badge";
+
+export function ${compName}() {
+  return (
+    <header className="border-b border-border pb-6 flex items-center justify-between">
+      <div>
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">${pageMeta.label}</h1>
+          <Badge variant="outline">
+            Next.js Page
+          </Badge>
+          <Badge variant="secondary">
+            ${pageMeta.accessType ? pageMeta.accessType.toUpperCase() : "PUBLIC"}
+          </Badge>
+        </div>
+        <p className="text-muted-foreground text-sm mt-1">
+          ${pageMeta.description || "Interactive Next.js page generated for WebClient canvas node."}
+        </p>
+      </div>
+      <Link href="/" className="text-xs text-muted-foreground hover:text-foreground transition-colors font-medium border border-border px-3 py-1.5 rounded-lg bg-muted/50 hover:bg-muted">
+        &larr; Back to Index
+      </Link>
+    </header>
+  );
+}
+
+export default ${compName};
+`;
+}
+
+export function generateRootIndexHeaderComponent(
+  projectName: string,
+): string {
+  return `"use client";
+
+import React from "react";
+import { Badge } from "@workspace/ui/components/badge";
+
+export function WebClientIndexHeader() {
+  return (
+    <header className="border-b border-border pb-6">
+      <div className="flex items-center gap-3 mb-2">
+        <h1 className="text-3xl font-extrabold tracking-tight text-foreground">${projectName} Web Client</h1>
+        <Badge variant="secondary">
+          Next.js App
+        </Badge>
+      </div>
+      <p className="text-muted-foreground text-sm">
+        Select a WebClient page below to interact with API trigger buttons and stringified JSON page load data.
+      </p>
+    </header>
+  );
+}
+
+export default WebClientIndexHeader;
+`;
+}
+
+
 export function generatePageCode(
   pageMeta: PageInfo,
   pageLoadFetchStatements: string,
   eventComponents: EventComponentMeta[],
 ): string {
-  const eventImports = eventComponents
-    .map((c) => `import { ${c.componentName} } from "./_components/${c.componentName}";`)
-    .join("\n");
+  const headerCompName = `${pageMeta.componentName}Header`;
+  const allImports = [
+    `import { ${headerCompName} } from "./_components/${headerCompName}";`,
+    ...eventComponents.map(
+      (c) => `import { ${c.componentName} } from "./_components/${c.componentName}";`
+    ),
+  ].join("\n");
 
   const actionButtonsJsx =
     eventComponents.length === 0
@@ -70,7 +140,7 @@ import Link from "next/link";
 import { Button } from "@workspace/ui/components/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@workspace/ui/components/card";
 import { Badge } from "@workspace/ui/components/badge";
-${eventImports ? `${eventImports}\n` : ""}
+${allImports ? `${allImports}\n` : ""}
 export default function ${pageMeta.componentName}() {
   const [pageLoadData, setPageLoadData] = useState<Record<string, Record<string, string | number | boolean | null>> | null>(null);
   const [pageLoadLoading, setPageLoadLoading] = useState<boolean>(false);
@@ -162,25 +232,7 @@ export default function ${pageMeta.componentName}() {
       <div className="max-w-5xl mx-auto space-y-8">
         
         {/* Page Header */}
-        <header className="border-b border-border pb-6 flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-extrabold tracking-tight text-foreground">${pageMeta.label}</h1>
-              <Badge variant="outline">
-                Next.js Page
-              </Badge>
-              <Badge variant="secondary">
-                ${pageMeta.accessType ? pageMeta.accessType.toUpperCase() : "PUBLIC"}
-              </Badge>
-            </div>
-            <p className="text-muted-foreground text-sm mt-1">
-              ${pageMeta.description || "Interactive Next.js page generated for WebClient canvas node."}
-            </p>
-          </div>
-          <Link href="/" className="text-xs text-muted-foreground hover:text-foreground transition-colors font-medium border border-border px-3 py-1.5 rounded-lg bg-muted/50 hover:bg-muted">
-            &larr; Back to Index
-          </Link>
-        </header>
+        <${headerCompName} />
 
         {/* Section 1: Page Load Data */}
         <Card className="border-border shadow-sm">
@@ -289,23 +341,13 @@ export function generateRootIndexPage(
   indexCards: string,
 ): string {
   return `import Link from "next/link";
-import { Badge } from "@workspace/ui/components/badge";
+import { WebClientIndexHeader } from "./_components/WebClientIndexHeader";
 
 export default function WebClientIndexPage() {
   return (
     <main className="min-h-screen bg-background text-foreground p-6 md:p-10 font-sans">
       <div className="max-w-5xl mx-auto space-y-8">
-        <header className="border-b border-border pb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-3xl font-extrabold tracking-tight text-foreground">${projectName} Web Client</h1>
-            <Badge variant="secondary">
-              Next.js App
-            </Badge>
-          </div>
-          <p className="text-muted-foreground text-sm">
-            Select a WebClient page below to interact with API trigger buttons and stringified JSON page load data.
-          </p>
-        </header>
+        <WebClientIndexHeader />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           ${indexCards}
