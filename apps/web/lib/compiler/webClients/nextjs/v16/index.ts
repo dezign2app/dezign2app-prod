@@ -413,13 +413,13 @@ export function compileNextjsV16WebClient(
     const indexCards = pagesInfo
       .map(
         (p) => `
-          <Link href="${p.routePath}" className="block bg-slate-900/80 border border-slate-800 hover:border-indigo-500/50 rounded-xl p-6 transition-all hover:shadow-lg group">
+          <Link href="${p.routePath}" className="block bg-card text-card-foreground border border-border hover:border-primary/50 rounded-xl p-6 transition-all hover:shadow-lg group">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xl font-bold text-white group-hover:text-indigo-400 transition-colors">${p.label}</h2>
-              <span className="text-xs px-2 py-1 rounded bg-slate-800 text-slate-400 font-mono">${p.routePath}</span>
+              <h2 className="text-xl font-bold text-card-foreground group-hover:text-primary transition-colors">${p.label}</h2>
+              <span className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground font-mono">${p.routePath}</span>
             </div>
-            <p className="text-slate-400 text-sm mb-4">${p.description || "Interactive Next.js page"}</p>
-            <div className="flex items-center text-xs text-indigo-400 font-semibold group-hover:translate-x-1 transition-transform">
+            <p className="text-muted-foreground text-sm mb-4">${p.description || "Interactive Next.js page"}</p>
+            <div className="flex items-center text-xs text-primary font-semibold group-hover:translate-x-1 transition-transform">
               Open Page &rarr;
             </div>
           </Link>`,

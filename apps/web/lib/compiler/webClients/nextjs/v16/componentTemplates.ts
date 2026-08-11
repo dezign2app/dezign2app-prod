@@ -35,7 +35,7 @@ export function ${componentName}({ onTrigger }: ${componentName}Props) {
   return (
     <Button
       onClick={() => onTrigger("${eventName}", "${eventType}", "${url}", "${method}")}
-      className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-sm transition-all flex items-center gap-2 cursor-pointer border border-indigo-500/30"
+      className="flex items-center gap-2 cursor-pointer"
     >
       <span>${eventName}</span>
       <span className="text-xs opacity-75 font-mono">(${eventType})</span>
@@ -58,7 +58,7 @@ export function generatePageCode(
 
   const actionButtonsJsx =
     eventComponents.length === 0
-      ? `<p className="text-slate-500 text-sm italic">No click or trigger events configured for this page node.</p>`
+      ? `<p className="text-muted-foreground text-sm italic">No click or trigger events configured for this page node.</p>`
       : `<div className="flex flex-wrap gap-3">\n${eventComponents
           .map((c) => `            <${c.componentName} onTrigger={handleTriggerAction} />`)
           .join("\n")}\n          </div>`;
@@ -158,45 +158,45 @@ export default function ${pageMeta.componentName}() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans">
+    <main className="min-h-screen bg-background text-foreground p-6 md:p-10 font-sans">
       <div className="max-w-5xl mx-auto space-y-8">
         
         {/* Page Header */}
-        <header className="border-b border-slate-800 pb-6 flex items-center justify-between">
+        <header className="border-b border-border pb-6 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-extrabold tracking-tight text-white">${pageMeta.label}</h1>
-              <Badge variant="outline" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20">
+              <h1 className="text-3xl font-extrabold tracking-tight text-foreground">${pageMeta.label}</h1>
+              <Badge variant="outline">
                 Next.js Page
               </Badge>
-              <Badge variant="outline" className="${pageMeta.accessType === "private" ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40" : pageMeta.accessType === "role-gated" ? "bg-purple-500/20 text-purple-300 border-purple-500/40" : pageMeta.accessType === "payment-gated" ? "bg-amber-500/20 text-amber-300 border-amber-500/40" : pageMeta.accessType === "org-gated" ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"}">
+              <Badge variant="secondary">
                 ${pageMeta.accessType ? pageMeta.accessType.toUpperCase() : "PUBLIC"}
               </Badge>
             </div>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-muted-foreground text-sm mt-1">
               ${pageMeta.description || "Interactive Next.js page generated for WebClient canvas node."}
             </p>
           </div>
-          <Link href="/" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors font-medium border border-indigo-500/30 px-3 py-1.5 rounded-lg bg-indigo-500/10">
+          <Link href="/" className="text-xs text-muted-foreground hover:text-foreground transition-colors font-medium border border-border px-3 py-1.5 rounded-lg bg-muted/50 hover:bg-muted">
             &larr; Back to Index
           </Link>
         </header>
 
         {/* Section 1: Page Load Data */}
-        <Card className="bg-slate-900/60 border-slate-800 shadow-sm">
+        <Card className="border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <div>
-              <CardTitle className="text-lg font-bold text-slate-200">Page Load Data</CardTitle>
-              <CardDescription className="text-xs text-slate-400">
+              <CardTitle className="text-lg font-bold text-card-foreground">Page Load Data</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
                 Stringified JSON data loaded automatically on page mount
               </CardDescription>
             </div>
-            <Badge variant="secondary" className="bg-slate-800 text-emerald-400 font-mono border-slate-700">
+            <Badge variant="secondary" className="font-mono">
               {pageLoadLoading ? "Loading..." : pageLoadError ? "Error" : "pageLoad"}
             </Badge>
           </CardHeader>
           <CardContent>
-            <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 font-mono text-sm text-emerald-400 overflow-x-auto shadow-inner min-h-[120px]">
+            <div className="bg-muted/50 border border-border rounded-lg p-4 font-mono text-sm text-foreground overflow-x-auto shadow-inner min-h-[120px]">
               <pre className="whitespace-pre-wrap font-mono">
                 {pageLoadLoading
                   ? "// Loading page data from API endpoint..."
@@ -211,10 +211,10 @@ export default function ${pageMeta.componentName}() {
         </Card>
 
         {/* Section 2: Page Buttons & Action Triggers */}
-        <Card className="bg-slate-900/60 border-slate-800 shadow-sm">
+        <Card className="border-border shadow-sm">
           <CardHeader>
-            <CardTitle className="text-lg font-bold text-slate-200">Page Actions & Triggers</CardTitle>
-            <CardDescription className="text-xs text-slate-400">
+            <CardTitle className="text-lg font-bold text-card-foreground">Page Actions & Triggers</CardTitle>
+            <CardDescription className="text-xs text-muted-foreground">
               Click buttons to trigger API requests and event handlers
             </CardDescription>
           </CardHeader>
@@ -224,11 +224,11 @@ export default function ${pageMeta.componentName}() {
         </Card>
 
         {/* Section 3: Trigger Output Logs */}
-        <Card className="bg-slate-900/60 border-slate-800 shadow-sm">
+        <Card className="border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <div>
-              <CardTitle className="text-lg font-bold text-slate-200">Trigger Results Log</CardTitle>
-              <CardDescription className="text-xs text-slate-400">
+              <CardTitle className="text-lg font-bold text-card-foreground">Trigger Results Log</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
                 Real-time output logs from user clicks and actions
               </CardDescription>
             </div>
@@ -237,7 +237,7 @@ export default function ${pageMeta.componentName}() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setTriggerLogs([])}
-                className="text-xs text-slate-400 hover:text-slate-200"
+                className="text-xs text-muted-foreground hover:text-foreground"
               >
                 Clear logs
               </Button>
@@ -245,28 +245,28 @@ export default function ${pageMeta.componentName}() {
           </CardHeader>
           <CardContent>
             {triggerLogs.length === 0 ? (
-              <div className="text-slate-500 text-sm italic py-6 text-center border border-dashed border-slate-800 rounded-lg">
+              <div className="text-muted-foreground text-sm italic py-6 text-center border border-dashed border-border rounded-lg">
                 No actions triggered yet. Click a button above to execute trigger logic.
               </div>
             ) : (
               <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
                 {triggerLogs.map((log) => (
-                  <div key={log.id} className="bg-slate-950 border border-slate-800 rounded-lg p-4 font-mono text-xs space-y-2">
-                    <div className="flex items-center justify-between text-slate-400 border-b border-slate-800/80 pb-2">
-                      <span className="font-semibold text-indigo-400">{log.eventName} ({log.eventType})</span>
+                  <div key={log.id} className="bg-muted/40 border border-border rounded-lg p-4 font-mono text-xs space-y-2">
+                    <div className="flex items-center justify-between text-muted-foreground border-b border-border pb-2">
+                      <span className="font-semibold text-foreground">{log.eventName} ({log.eventType})</span>
                       <span>{log.timestamp}</span>
                     </div>
                     <div className="flex items-center gap-2 text-[11px]">
-                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-emerald-400 font-bold">{log.method}</span>
-                      <span className="text-slate-300 truncate">{log.url}</span>
-                      {log.status && <span className="ml-auto text-slate-400">HTTP {log.status}</span>}
+                      <span className="px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-bold">{log.method}</span>
+                      <span className="text-foreground/90 truncate">{log.url}</span>
+                      {log.status && <span className="ml-auto text-muted-foreground">HTTP {log.status}</span>}
                     </div>
                     {log.error ? (
-                      <div className="text-rose-400 bg-rose-950/40 p-2 rounded border border-rose-900/50">
+                      <div className="text-destructive bg-destructive/10 p-2 rounded border border-destructive/20">
                         Error: {log.error}
                       </div>
                     ) : (
-                      <pre className="text-slate-300 bg-slate-900/80 p-3 rounded overflow-x-auto whitespace-pre-wrap">
+                      <pre className="text-foreground/90 bg-background/80 p-3 rounded border border-border/50 overflow-x-auto whitespace-pre-wrap">
                         {JSON.stringify(log.data, null, 2)}
                       </pre>
                     )}
@@ -293,16 +293,16 @@ import { Badge } from "@workspace/ui/components/badge";
 
 export default function WebClientIndexPage() {
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans">
+    <main className="min-h-screen bg-background text-foreground p-6 md:p-10 font-sans">
       <div className="max-w-5xl mx-auto space-y-8">
-        <header className="border-b border-slate-800 pb-6">
+        <header className="border-b border-border pb-6">
           <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-3xl font-extrabold tracking-tight text-white">${projectName} Web Client</h1>
-            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+            <h1 className="text-3xl font-extrabold tracking-tight text-foreground">${projectName} Web Client</h1>
+            <Badge variant="secondary">
               Next.js App
             </Badge>
           </div>
-          <p className="text-slate-400 text-sm">
+          <p className="text-muted-foreground text-sm">
             Select a WebClient page below to interact with API trigger buttons and stringified JSON page load data.
           </p>
         </header>
