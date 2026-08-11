@@ -29,7 +29,7 @@ import {
   getOffsetPosition,
   useCanvasHandlers,
 } from "./hooks/useCanvasHandlers";
-import { useAutoLayout } from "./hooks/useAutoLayout";
+import { useSchemaAutoLayout } from "./hooks/useAutoLayout";
 
 const edgeTypes = {
   "foreign-key": ForeignKeyEdge,
@@ -61,7 +61,7 @@ export function SchemaView({ projectId }: SchemaViewProps) {
       e.type === "connection",
   );
 
-  const { handleLayout } = useAutoLayout({
+  const { handleLayout } = useSchemaAutoLayout({
     nodes: schemaNodes,
     edges: schemaEdges,
   });

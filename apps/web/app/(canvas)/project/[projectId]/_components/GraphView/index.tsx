@@ -21,7 +21,7 @@ import {
   getOffsetPosition,
   useCanvasHandlers,
 } from "../hooks/useCanvasHandlers";
-import { useAutoLayout } from "../hooks/useAutoLayout";
+import { useGraphAutoLayout } from "../hooks/useAutoLayout";
 import { createGraphNodeData } from "./utils";
 import { NodePalettePanel } from "./NodePalettePanel";
 import { TopToolbarPanel } from "./TopToolbarPanel";
@@ -57,7 +57,6 @@ export function GraphView({ projectId }: GraphViewProps) {
     "graph",
   );
   const { screenToFlowPosition, fitView } = useReactFlow();
-  const { handleLayout } = useAutoLayout();
 
   const graphNodes = nodes.filter(
     (n) => n.type !== "group" && n.type !== "entity" && n.type !== "database",
@@ -66,6 +65,11 @@ export function GraphView({ projectId }: GraphViewProps) {
   const graphEdges = edges.filter(
     (e) => e.type !== "database-connection" && e.type !== "foreign-key",
   );
+
+  const { handleLayout } = useGraphAutoLayout({
+    nodes: graphNodes,
+    edges: graphEdges,
+  });
 
   const hasFitted = useRef(false);
   useEffect(() => {

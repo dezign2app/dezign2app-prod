@@ -24,6 +24,10 @@ export interface UseAutoLayoutOptions {
   onNodesChange?: (changes: PositionNodeChange[]) => void;
 }
 
+export type UseGraphAutoLayoutOptions = UseAutoLayoutOptions;
+export type UseSchemaAutoLayoutOptions = UseAutoLayoutOptions;
+export type UseLangGraphAutoLayoutOptions = UseAutoLayoutOptions;
+
 export interface NodeHandleData {
   endpoints?: Array<{ id?: string; _id?: string }>;
   events?: Array<{ id?: string; _id?: string }>;

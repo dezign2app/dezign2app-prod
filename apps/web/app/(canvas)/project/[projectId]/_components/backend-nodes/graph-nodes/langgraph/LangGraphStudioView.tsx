@@ -13,7 +13,7 @@ import { Layout } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import type { BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { useAutoLayout } from "../../../hooks/useAutoLayout";
+import { useLangGraphAutoLayout } from "../../../hooks/useAutoLayout";
 import { langGraphCanvasNodeTypes } from "./langgraph-canvas/nodes";
 import { useLangGraphCanvasState } from "./langgraph-canvas/hooks/useLangGraphCanvasState";
 import { LangGraphCanvasHeader } from "./langgraph-canvas/components/LangGraphCanvasHeader";
@@ -105,7 +105,7 @@ export function LangGraphStudioView({
     setShowCompileModal,
   } = useLangGraphCanvasState({ node, updateNode, onClose });
 
-  const { handleLayout } = useAutoLayout({ nodes, edges, onNodesChange });
+  const { handleLayout } = useLangGraphAutoLayout({ nodes, edges, onNodesChange });
 
   const connectedLLMId = useMemo(() => {
     if (!selectedNodeId) return null;
