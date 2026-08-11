@@ -6,7 +6,6 @@ import {
   Settings,
   ShieldCheck,
   Plus,
-  SlidersHorizontal,
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { WebAppZone } from "@workspace/canvas/types";
@@ -245,7 +244,7 @@ export const WebAppNode = ({
                         nodeId: id,
                       })
                     }
-                    className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     title={`Configure rules for ${zone.name}`}
                   >
                     <Settings className="w-3 h-3" />
