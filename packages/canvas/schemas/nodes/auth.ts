@@ -118,10 +118,18 @@ export const orgInvitationsConfigSchema = z.object({
 export type OrgInvitationsConfig = z.infer<typeof orgInvitationsConfigSchema>;
 
 export const redirectsConfigSchema = z.object({
+  signInPageUrl: z.string().optional(),
+  signInPageNodeId: z.string().optional(),
+  signUpPageUrl: z.string().optional(),
+  signUpPageNodeId: z.string().optional(),
   signInRedirectUrl: z.string().optional(),
+  signInRedirectNodeId: z.string().optional(),
   signUpRedirectUrl: z.string().optional(),
+  signUpRedirectNodeId: z.string().optional(),
   signOutRedirectUrl: z.string().optional(),
+  signOutRedirectNodeId: z.string().optional(),
   callbackUrl: z.string().optional(),
+  callbackNodeId: z.string().optional(),
 });
 export type RedirectsConfig = z.infer<typeof redirectsConfigSchema>;
 
