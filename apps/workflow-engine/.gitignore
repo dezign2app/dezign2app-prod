@@ -1,9 +1,0 @@
-node_modules
-.env
-
-# Build output
-build/
-dist/
-
-# OS files
-.DS_Store
