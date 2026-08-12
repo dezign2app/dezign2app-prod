@@ -8,8 +8,11 @@ export function generateProjectConfigFiles(appSlug: string = "web-app"): Compile
       type: "module",
       private: true,
       scripts: {
+        "db:migrate": "npx @better-auth/cli migrate -y",
+        predev: "pnpm db:migrate",
         dev: "next dev",
         build: "next build",
+        prestart: "pnpm db:migrate",
         start: "next start",
         lint: "next lint",
         typecheck: "tsc --noEmit",
@@ -20,7 +23,7 @@ export function generateProjectConfigFiles(appSlug: string = "web-app"): Compile
         "@workspace/db": "workspace:*",
         "@workspace/logger": "workspace:*",
         "@workspace/ui": "workspace:*",
-        "better-auth": "^1.6.0",
+        "better-auth": "^1.4.21",
         "better-sqlite3": "^12.0.0",
         "lucide-react": "^0.475.0",
         next: "^16.0.0",
@@ -29,6 +32,7 @@ export function generateProjectConfigFiles(appSlug: string = "web-app"): Compile
         zod: "^4.4.3",
       },
       devDependencies: {
+        "@better-auth/cli": "^1.4.21",
         "@tailwindcss/postcss": "^4.0.0",
         "@types/better-sqlite3": "^7.6.12",
         "@types/node": "^20.19.0",

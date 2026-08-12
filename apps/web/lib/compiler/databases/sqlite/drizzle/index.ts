@@ -219,29 +219,7 @@ export function compileSqliteDrizzleDatabase(
   const files: CompiledFile[] = [];
   const schemaExports: string[] = [];
 
-  if (enrichedTables.length === 0) {
-    const defaultTable: BackendNode = {
-      id: "default_entity",
-      type: "entity",
-      fractionalIndex: "a0",
-      position: { x: 0, y: 0 },
-      data: {
-        label: "users",
-        columns: [
-          { name: "id", type: "string", isPrimaryKey: true },
-          { name: "name", type: "string", isNotNull: true },
-          { name: "created_at", type: "string" },
-        ],
-      },
-    };
-    const schemaCode = generateDrizzleTableSchema(defaultTable, [defaultTable]);
-    files.push({
-      filename: "schema/users.ts",
-      language: "typescript",
-      content: schemaCode,
-    });
-    schemaExports.push(`export * from "./users";`);
-  } else {
+  if (enrichedTables.length > 0) {
     enrichedTables.forEach((table) => {
       const tableName = toTableName(table.data.label || "table");
       const tableVarName = toVarName(tableName);

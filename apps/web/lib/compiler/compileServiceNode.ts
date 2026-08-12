@@ -42,6 +42,8 @@ export function compileServiceNode(
         allNodes,
         allEdges,
         testCases,
+        dbFunctions,
+        kafkaFunctions,
       );
     case "express":
     default:

@@ -290,52 +290,58 @@ export function compileRawSqliteDatabase(
   const files: CompiledFile[] = [];
   const allReusableFunctions: ReusableFunction[] = [];
 
-  // ── index.ts ──────────────────────────────────────────────────────────────
+  const tables: BackendNode[] = entityNodes;
+
+  const ddlStatements = tables.map((tableNode) => {
+    const tableName = toTableName(tableNode.data.label || "table");
+    const cols = getColumns(tableNode);
+    const colDefs = cols.map((c) => {
+      let colType = "TEXT";
+      const t = (c.type || "").toLowerCase();
+      if (["int", "integer", "bigint", "number"].includes(t)) {
+        colType = "INTEGER";
+      } else if (["boolean", "bool"].includes(t)) {
+        colType = "INTEGER";
+      }
+      let constraints = "";
+      if (c.isPrimaryKey) constraints += " PRIMARY KEY";
+      if (c.isUnique) constraints += " UNIQUE";
+      return `    "${c.name}" ${colType}${constraints}`;
+    });
+    return `  CREATE TABLE IF NOT EXISTS "${tableName}" (\n${colDefs.join(",\n")}\n  );`;
+  });
+
+  const sqlStatementsString = JSON.stringify(ddlStatements.join("\n\n"));
+  const ddlBlock =
+    ddlStatements.length > 0
+      ? `\n// Ensure all entity & auth tables exist on database initialization\ndb.exec(${sqlStatementsString});\n`
+      : "";
+
+  const indexContent = [
+    "/**",
+    " * packages/db — Raw SQLite connection via better-sqlite3",
+    " *",
+    " * Use the helpers in ./helpers/ instead of calling db directly.",
+    " */",
+    'import Database from "better-sqlite3";',
+    'import path from "path";',
+    "",
+    'const dbPath = process.env.DATABASE_PATH || path.join(__dirname, "sqlite.db");',
+    "",
+    "/** Singleton synchronous SQLite connection. */",
+    "export const db: Database.Database = new Database(dbPath);",
+    "",
+    "// Recommended pragmas for correctness and performance",
+    'db.pragma("journal_mode = WAL");',
+    'db.pragma("foreign_keys = ON");',
+    ddlBlock,
+  ].join("\n");
+
   files.push({
     filename: "index.ts",
     language: "typescript",
-    content: [
-      `/**`,
-      ` * packages/db — Raw SQLite connection via better-sqlite3`,
-      ` *`,
-      ` * Use the helpers in ./helpers/ instead of calling db directly.`,
-      ` */`,
-      `import Database from "better-sqlite3";`,
-      `import path from "path";`,
-      ``,
-      `const dbPath = process.env.DATABASE_PATH || path.join(__dirname, "sqlite.db");`,
-      ``,
-      `/** Singleton synchronous SQLite connection. */`,
-      `export const db: Database.Database = new Database(dbPath);`,
-      ``,
-      `// Recommended pragmas for correctness and performance`,
-      `db.pragma("journal_mode = WAL");`,
-      `db.pragma("foreign_keys = ON");`,
-      ``,
-    ].join("\n"),
+    content: indexContent,
   });
-
-  // ── helpers/<table>.ts ────────────────────────────────────────────────────
-  const tables: BackendNode[] =
-    entityNodes.length > 0
-      ? entityNodes
-      : [
-          {
-            id: "default",
-            type: "entity",
-            fractionalIndex: "a0",
-            position: { x: 0, y: 0 },
-            data: {
-              label: "users",
-              columns: [
-                { name: "id", type: "string", isPrimaryKey: true },
-                { name: "name", type: "string", isNotNull: true },
-                { name: "email", type: "string", isUnique: true },
-                { name: "created_at", type: "string" },
-              ],
-            },
-          } as BackendNode,
-        ];
 
   const helperBarrel: string[] = [];
   const seenExportedSymbols = new Set<string>();
