@@ -1,5 +1,5 @@
 import { BackendNode, BackendEdge, SimulationTestCase } from "@/types/canvas";
-import { Endpoint, AnyMessagingResource, CompiledFile, CompiledServiceResult } from "@workspace/canvas/types";
+import { Endpoint, AnyMessagingResource, CompiledFile, CompiledServiceResult, ReusableFunction } from "@workspace/canvas/types";
 import { generateCoreFiles } from "./coreGenerator";
 import { generateRoutes } from "./routeGenerator";
 import { generateEventConsumersAndProducers } from "./eventGenerators";
@@ -19,10 +19,9 @@ export function compileFastAPIService(
   allNodes: BackendNode[] = [],
   allEdges: BackendEdge[] = [],
   testCases: SimulationTestCase[] = [],
+  _dbFunctions: ReusableFunction[] = [],
+  _kafkaFunctions: ReusableFunction[] = [],
 ): CompiledServiceResult {
-  if (node.type === "auth") {
-    return compileAuthNode(node, allNodes, allEdges);
-  }
   const serviceName = node.data.label || "Service";
   const sanitizedName =
     serviceName

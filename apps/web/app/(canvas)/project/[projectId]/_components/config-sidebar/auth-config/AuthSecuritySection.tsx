@@ -337,18 +337,22 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
                 }
               />
 
-              <RedirectRouteSelector
-                label="OAuth Callback URL"
-                placeholder="/api/auth/callback"
-                value={redirects.callbackUrl || ""}
-                nodeIdValue={redirects.callbackNodeId}
-                configuredPages={configuredPages}
-                onChange={(val, nodeId) =>
-                  updateData({
-                    redirects: { ...redirects, callbackUrl: val, callbackNodeId: nodeId },
-                  })
-                }
-              />
+              <div className="flex flex-col gap-1">
+                <Label className="text-[11px] text-muted-foreground font-medium">OAuth Callback Base Route</Label>
+                <Input
+                  className="h-7 text-xs font-mono bg-background"
+                  placeholder="/api/auth/callback"
+                  value={redirects.callbackUrl || "/api/auth/callback"}
+                  onChange={(e) =>
+                    updateData({
+                      redirects: { ...redirects, callbackUrl: e.target.value },
+                    })
+                  }
+                />
+                <span className="text-[10px] text-muted-foreground leading-tight px-0.5">
+                  Backend API route prefix. Better Auth automatically appends <code className="font-mono text-[9px] text-primary">/[provider]</code>.
+                </span>
+              </div>
             </div>
           </div>
 

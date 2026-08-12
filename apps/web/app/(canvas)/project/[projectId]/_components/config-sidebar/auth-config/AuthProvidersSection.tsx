@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Checkbox } from "@workspace/ui/components/checkbox";
@@ -15,7 +15,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@workspace/ui/components/accordion";
-import { Key, Plus, Trash2, Lock, ShieldCheck, GitMerge, ShieldAlert } from "lucide-react";
+import { Key, Plus, Trash2, Lock, ShieldCheck, GitMerge, ShieldAlert, Copy, Check, Info } from "lucide-react";
 import {
   AUTH_FRAMEWORK_OPTIONS,
   BETTER_AUTH_VERSIONS,
@@ -32,6 +32,15 @@ export const AuthProvidersSection: React.FC<AuthConfigSectionProps> = ({
   data,
   updateData,
 }) => {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyCallback = (id: string, providerName: string) => {
+    const url = `/api/auth/callback/${providerName}`;
+    navigator.clipboard.writeText(url);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   const selectedFramework = data.framework || DEFAULT_AUTH_FRAMEWORK;
   const selectedVersion = data.version || DEFAULT_BETTER_AUTH_VERSION;
 
@@ -522,7 +531,15 @@ export const AuthProvidersSection: React.FC<AuthConfigSectionProps> = ({
 
             {isSocialEnabled ? (
               <div className="flex flex-col gap-3 pt-1">
-                <div className="flex items-center justify-between">
+                {/* Better Auth Callback Info Notice */}
+                <div className="text-[11px] text-muted-foreground p-2.5 rounded-md bg-muted/40 border border-border/40 flex items-start gap-2 leading-relaxed">
+                  <Info className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                  <div>
+                    <strong>OAuth Callback Routing:</strong> Better Auth handles provider responses at <code className="text-primary font-mono text-[10px] bg-background px-1 py-0.5 rounded border border-border/40">/api/auth/callback/[provider]</code>. Register the specific callback URL below in each provider&apos;s Developer Portal.
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
                   <span className="text-[11px] text-muted-foreground font-medium">Configured Providers</span>
                   <Button
                     variant="outline"
@@ -553,71 +570,99 @@ export const AuthProvidersSection: React.FC<AuthConfigSectionProps> = ({
                 </div>
 
                 {providers.oauth && providers.oauth.length > 0 ? (
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-2.5">
                     {providers.oauth.map((oa: OAuthProviderConfig) => (
                       <div
                         key={oa.id}
-                        className="grid grid-cols-12 gap-2 items-center p-2 rounded bg-background border border-border/50 text-xs"
+                        className="flex flex-col gap-2 p-2.5 rounded-lg bg-background border border-border/50 text-xs shadow-xs"
                       >
-                        <div className="col-span-3">
-                          <Select
-                            value={oa.provider}
-                            onValueChange={(val) => {
-                              const updated = (providers.oauth || []).map((o) =>
-                                o.id === oa.id ? { ...o, provider: val } : o,
-                              );
-                              updateData({ providers: { ...providers, oauth: updated } });
-                            }}
-                          >
-                            <SelectTrigger className="h-7 text-xs font-medium capitalize bg-background">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {["google", "github", "discord", "apple", "twitter", "microsoft"].map((p) => (
-                                <SelectItem key={p} value={p} className="text-xs capitalize">
-                                  {p}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                        <div className="grid grid-cols-12 gap-2 items-center">
+                          <div className="col-span-3">
+                            <Select
+                              value={oa.provider}
+                              onValueChange={(val) => {
+                                const updated = (providers.oauth || []).map((o) =>
+                                  o.id === oa.id ? { ...o, provider: val } : o,
+                                );
+                                updateData({ providers: { ...providers, oauth: updated } });
+                              }}
+                            >
+                              <SelectTrigger className="h-7 text-xs font-medium capitalize bg-background">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {["google", "github", "discord", "apple", "twitter", "microsoft"].map((p) => (
+                                  <SelectItem key={p} value={p} className="text-xs capitalize">
+                                    {p}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="col-span-4 relative flex items-center">
+                            <Input
+                              className="h-7 text-xs font-mono bg-background pr-6"
+                              value={oa.clientIdEnv}
+                              placeholder="CLIENT_ID_ENV"
+                              onChange={(e) => {
+                                const updated = (providers.oauth || []).map((o) =>
+                                  o.id === oa.id ? { ...o, clientIdEnv: e.target.value } : o,
+                                );
+                                updateData({ providers: { ...providers, oauth: updated } });
+                              }}
+                            />
+                            <Lock className="w-3 h-3 text-muted-foreground absolute right-2 pointer-events-none" />
+                          </div>
+                          <div className="col-span-4 relative flex items-center">
+                            <Input
+                              className="h-7 text-xs font-mono bg-background pr-6"
+                              value={oa.clientSecretEnv}
+                              placeholder="CLIENT_SECRET_ENV"
+                              onChange={(e) => {
+                                const updated = (providers.oauth || []).map((o) =>
+                                  o.id === oa.id ? { ...o, clientSecretEnv: e.target.value } : o,
+                                );
+                                updateData({ providers: { ...providers, oauth: updated } });
+                              }}
+                            />
+                            <Lock className="w-3 h-3 text-muted-foreground absolute right-2 pointer-events-none" />
+                          </div>
+                          <div className="col-span-1 flex justify-end">
+                            <button
+                              onClick={() => {
+                                const updated = (providers.oauth || []).filter((o) => o.id !== oa.id);
+                                updateData({ providers: { ...providers, oauth: updated } });
+                              }}
+                              className="p-1 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                              title="Remove provider"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="col-span-4 relative flex items-center">
-                          <Input
-                            className="h-7 text-xs font-mono bg-background pr-6"
-                            value={oa.clientIdEnv}
-                            placeholder="CLIENT_ID_ENV"
-                            onChange={(e) => {
-                              const updated = (providers.oauth || []).map((o) =>
-                                o.id === oa.id ? { ...o, clientIdEnv: e.target.value } : o,
-                              );
-                              updateData({ providers: { ...providers, oauth: updated } });
-                            }}
-                          />
-                          <Lock className="w-3 h-3 text-muted-foreground absolute right-2 pointer-events-none" />
-                        </div>
-                        <div className="col-span-4 relative flex items-center">
-                          <Input
-                            className="h-7 text-xs font-mono bg-background pr-6"
-                            value={oa.clientSecretEnv}
-                            placeholder="CLIENT_SECRET_ENV"
-                            onChange={(e) => {
-                              const updated = (providers.oauth || []).map((o) =>
-                                o.id === oa.id ? { ...o, clientSecretEnv: e.target.value } : o,
-                              );
-                              updateData({ providers: { ...providers, oauth: updated } });
-                            }}
-                          />
-                          <Lock className="w-3 h-3 text-muted-foreground absolute right-2 pointer-events-none" />
-                        </div>
-                        <div className="col-span-1 flex justify-end">
+
+                        {/* Per-Provider Callback URL Badge & Copy Button */}
+                        <div className="flex items-center justify-between text-[11px] bg-muted/25 px-2.5 py-1 rounded border border-border/30 font-mono text-muted-foreground">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="text-[10px] text-muted-foreground/70 uppercase font-sans font-semibold shrink-0">Callback:</span>
+                            <code className="text-primary truncate">/api/auth/callback/{oa.provider}</code>
+                          </div>
                           <button
-                            onClick={() => {
-                              const updated = (providers.oauth || []).filter((o) => o.id !== oa.id);
-                              updateData({ providers: { ...providers, oauth: updated } });
-                            }}
-                            className="p-1 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleCopyCallback(oa.id, oa.provider)}
+                            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground shrink-0 ml-2 font-sans bg-background px-2 py-0.5 rounded border border-border/50 transition-colors cursor-pointer"
+                            title="Copy path for provider console"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            {copiedId === oa.id ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-500" />
+                                <span className="text-emerald-500 font-medium">Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3 text-muted-foreground" />
+                                <span>Copy Path</span>
+                              </>
+                            )}
                           </button>
                         </div>
                       </div>
