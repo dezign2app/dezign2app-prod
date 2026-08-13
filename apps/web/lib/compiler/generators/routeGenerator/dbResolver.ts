@@ -2,6 +2,19 @@ import { Endpoint, TargetDbOperation, ReusableFunction } from "@workspace/canvas
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 
+function isValidDbOpKind(kind: string): kind is ReusableFunction["kind"] {
+  return (
+    kind === "custom" ||
+    kind === "create" ||
+    kind === "update" ||
+    kind === "delete" ||
+    kind === "findAll" ||
+    kind === "findById" ||
+    kind === "publish" ||
+    kind === "consume"
+  );
+}
+
 export interface EndpointWithNodeId extends Endpoint {
   nodeId?: string;
 }
@@ -45,8 +58,7 @@ export function pickDbFunctionsForEndpoint(
         if (
           candidateNode &&
           (candidateNode.type === "entity" ||
-            candidateNode.type === "db_ref" ||
-            candidateNode.type === "database")
+            candidateNode.type === "db_ref")
         ) {
           edgeDbNodeIds.push(candidateId);
         }
@@ -54,21 +66,9 @@ export function pickDbFunctionsForEndpoint(
     });
   }
 
-  let targetNodeIds = Array.from(
+  const targetNodeIds = Array.from(
     new Set([...nodeDbNodeIds, ...crudDbNodeIds, ...edgeDbNodeIds]),
   );
-
-  if (targetNodeIds.length === 0) {
-    const dbNodesInCanvas = allNodes.filter(
-      (n) =>
-        n.type === "entity" ||
-        n.type === "db_ref" ||
-        n.type === "database",
-    );
-    if (dbNodesInCanvas.length > 0) {
-      targetNodeIds = dbNodesInCanvas.map((n) => n.id);
-    }
-  }
 
   if (targetNodeIds.length === 0) {
     return [];
@@ -105,12 +105,15 @@ export function pickDbFunctionsForEndpoint(
       const importPath = `@workspace/db/helpers/${varName}`;
       ops.forEach((op) => {
         if (op.enabled !== false) {
+          const resolvedKind: ReusableFunction["kind"] = isValidDbOpKind(op.kind)
+            ? op.kind
+            : "custom";
           entityCustomFns.push({
             name: op.name,
             importPath,
-            signature: op.signature || `${op.name}(): any`,
+            signature: op.signature || `${op.name}(): void`,
             targetName: rawTableName,
-            kind: op.kind === "fetchByIndex" ? "custom" : (op.kind as any),
+            kind: resolvedKind,
           });
         }
       });
@@ -129,21 +132,13 @@ export function pickDbFunctionsForEndpoint(
       }),
     ];
 
-    const fnsToUse = tableFns.length > 0 ? tableFns : dbFunctions;
+    const fnsToUse = tableFns;
 
     const rawOps = ep.crudOperations?.[tableNodeId];
     const selectedOps: string[] =
       Array.isArray(rawOps) && rawOps.length > 0
         ? rawOps
-        : [
-            method === "post"
-              ? "create"
-              : method === "put" || method === "patch"
-                ? "update"
-                : method === "delete"
-                  ? "delete"
-                  : "read",
-          ];
+        : [];
 
     for (const op of selectedOps) {
       let fn: ReusableFunction | undefined = fnsToUse.find(

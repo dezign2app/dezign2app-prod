@@ -338,16 +338,18 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
         />
 
         {/* ── 3. TARGET PAGE NAVIGATION ── */}
-        <EventNavigationSection
-          eventId={id}
-          nodeId={nodeId}
-          eventName={eventName}
-          eventType={eventType}
-          customEvent={customEvent}
-          eventSchema={eventSchema}
-          item={item}
-          handleUpdateEvent={handleUpdateEvent}
-        />
+        {isNavigateToPage && (
+          <EventNavigationSection
+            eventId={id}
+            nodeId={nodeId}
+            eventName={eventName}
+            eventType={eventType}
+            customEvent={customEvent}
+            eventSchema={eventSchema}
+            item={item}
+            handleUpdateEvent={handleUpdateEvent}
+          />
+        )}
       </Accordion>
     </div>
   );

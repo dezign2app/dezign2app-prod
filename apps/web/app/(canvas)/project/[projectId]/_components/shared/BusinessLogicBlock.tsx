@@ -35,6 +35,8 @@ export function BusinessLogicBlock({
   publishedEvents = [],
   endpointMethod = "POST",
   endpointPath = "/",
+  serviceNodeId,
+  endpointId,
 }: BusinessLogicBlockProps) {
   const [internalMode, setInternalMode] = useState<LogicMode>(mode);
   const [internalIsGenerating, setInternalIsGenerating] = useState(false);
@@ -96,6 +98,8 @@ export function BusinessLogicBlock({
           onCrudConfigChange={onCrudConfigChange}
           availableTableNodes={availableTableNodes}
           allNodes={allNodes}
+          serviceNodeId={serviceNodeId}
+          endpointId={endpointId}
         />
       )}
 
