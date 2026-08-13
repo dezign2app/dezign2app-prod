@@ -24,10 +24,16 @@ function toPascal(str: string): string {
 
 function getColumns(
   tableNode: BackendNode,
-): { name: string; type: string; isPrimaryKey?: boolean; isUnique?: boolean; isForeignKey?: boolean }[] {
-  const cols = tableNode.data.columns;
+): { name: string; type: string; isPrimaryKey?: boolean; isUnique?: boolean; isForeignKey?: boolean; isNotNull?: boolean }[] {
+  const d = tableNode.data as any;
+  const cols =
+    d?.columns ||
+    d?.schema ||
+    d?.fields ||
+    d?.payload ||
+    d?.properties;
   if (cols && Array.isArray(cols) && cols.length > 0) {
-    return cols.map((c) => ({
+    return cols.map((c: any) => ({
       ...c,
       name: toSqlIdentifier(c.name || "col", "col"),
     }));
@@ -77,7 +83,16 @@ function generateTableHelpers(
   const insertPlaceholders = writableColNames.map(() => "?").join(", ");
 
   const recordFields = writableCols
-    .map((c) => `  ${toVarName(c.name)}: ${toTsType(c.type)};`)
+    .map((c) => {
+      const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const isTimestampCol =
+        nameLower === "createdat" ||
+        nameLower === "updatedat" ||
+        nameLower === "created_at" ||
+        nameLower === "updated_at";
+      const isOptional = !c.isNotNull || isTimestampCol;
+      return `  ${toVarName(c.name)}${isOptional ? "?" : ""}: ${toTsType(c.type)};`;
+    })
     .join("\n");
   const dataType =
     writableCols.length > 0 ? `{\n${recordFields}\n}` : `Record<string, never>`;
@@ -91,7 +106,7 @@ function generateTableHelpers(
   code += ` * ALL queries use prepared statements — safe from SQL injection.\n`;
   code += ` * Never concatenate user-supplied values into query strings.\n`;
   code += ` */\n`;
-  code += `import { db } from "../index";\n\n`;
+  code += `import { db } from "../connection";\n\n`;
 
   // Types
   code += `// ── Types ────────────────────────────────────────────────────────────────────\n\n`;
@@ -159,7 +174,17 @@ function generateTableHelpers(
   code += `\n`;
 
   const insertBindTypes = writableCols
-    .map((c) => `${toVarName(c.name)}: ${toTsType(c.type)}`)
+    .map((c) => {
+      const varName = toVarName(c.name);
+      const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const isTimestampCol =
+        nameLower === "createdat" ||
+        nameLower === "updatedat" ||
+        nameLower === "created_at" ||
+        nameLower === "updated_at";
+      const isOptional = !c.isNotNull || isTimestampCol;
+      return `${varName}: ${toTsType(c.type)}${isOptional ? " | null | undefined" : ""}`;
+    })
     .join(", ");
 
   // ── Prepared Statements (created once at module load) ────────────────────────
@@ -244,9 +269,28 @@ function generateTableHelpers(
     } else if (op.kind === "create" && writableCols.length > 0) {
       code += `/** ${op.description || `Create a new record in ${tableName}`} */\n`;
       code += `export function ${effectiveName}(data: Create${Pascal}Data): ${Pascal}Row {\n`;
-      code += `  const info = stmtInsert.run(${writableCols.map((c) => `data.${toVarName(c.name)}`).join(", ")});\n`;
+      code += `  const now = new Date().toISOString();\n`;
+      code += `  const info = stmtInsert.run(${writableCols.map((c) => {
+        const varName = toVarName(c.name);
+        const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (
+          nameLower === "createdat" ||
+          nameLower === "updatedat" ||
+          nameLower === "created_at" ||
+          nameLower === "updated_at"
+        ) {
+          return `data.${varName} ?? now`;
+        }
+        return `data.${varName} ?? null`;
+      }).join(", ")});\n`;
       code += `  const _rowId = typeof info.lastInsertRowid === "bigint" ? info.lastInsertRowid.toString() : String(info.lastInsertRowid);\n`;
-      code += `  return { ${pkColName}: _rowId, ...data } as ${Pascal}Row;\n`;
+      code += `  return { ${pkColName}: _rowId, ...data, ${writableCols.filter((c) => {
+        const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+        return nameLower === "createdat" || nameLower === "updatedat" || nameLower === "created_at" || nameLower === "updated_at";
+      }).map((c) => {
+        const varName = toVarName(c.name);
+        return `${varName}: data.${varName} ?? now`;
+      }).join(", ")} } as ${Pascal}Row;\n`;
       code += `}\n\n`;
     } else if (op.kind === "update" && writableCols.length > 0) {
       code += `/** ${op.description || `Update a ${tableName} row by primary key`} */\n`;
@@ -297,7 +341,13 @@ export function compileRawSqliteDatabase(
   const files: CompiledFile[] = [];
   const allReusableFunctions: ReusableFunction[] = [];
 
-  const tables: BackendNode[] = entityNodes;
+  const seenTableNames = new Set<string>();
+  const tables: BackendNode[] = entityNodes.filter((node) => {
+    const name = toTableName(node.data.label || node.data.tableRef || "table");
+    if (seenTableNames.has(name)) return false;
+    seenTableNames.add(name);
+    return true;
+  });
 
   const ddlStatements = tables.map((tableNode) => {
     const tableName = toTableName(tableNode.data.label || "table");
@@ -375,16 +425,51 @@ export function compileRawSqliteDatabase(
     fallbackTypeExports.push("export type EntityRow = Record<string, unknown>;");
   }
 
-  const indexContent = [
+  const connectionContent = [
     "/**",
-    " * packages/db — Raw SQLite connection via better-sqlite3",
-    " *",
-    " * Use the helpers in ./helpers/ instead of calling db directly.",
+    " * packages/db/connection.ts — Centralized raw SQLite connection via better-sqlite3",
     " */",
     'import Database from "better-sqlite3";',
     'import path from "path";',
+    'import fs from "fs";',
     "",
-    'const dbPath = process.env.DATABASE_PATH || path.join(__dirname, "sqlite.db");',
+    "/**",
+    " * Resolves the centralized SQLite database file path.",
+    " * Ensures all services, web clients, and packages connect to the exact same database instance.",
+    " */",
+    "export function resolveDatabasePath(): string {",
+    '  const envPath = process.env.DATABASE_PATH || process.env.DATABASE_URL;',
+    "  if (envPath) {",
+    '    const clean = envPath.replace(/^file:/, "");',
+    "    if (path.isAbsolute(clean)) {",
+    "      return clean;",
+    "    }",
+    "    return path.resolve(process.cwd(), clean);",
+    "  }",
+    "",
+    "  // 1. Try to find monorepo root by traversing upward from process.cwd()",
+    "  let searchDir = process.cwd();",
+    "  while (searchDir && searchDir !== path.dirname(searchDir)) {",
+    '    if (fs.existsSync(path.join(searchDir, "pnpm-workspace.yaml")) || fs.existsSync(path.join(searchDir, "turbo.json"))) {',
+    '      const target = path.join(searchDir, "packages", "db", "sqlite.db");',
+    "      return target;",
+    "    }",
+    "    searchDir = path.dirname(searchDir);",
+    "  }",
+    "",
+    "  // 2. Fallback for nested apps/services",
+    '  if (process.cwd().includes("apps") || process.cwd().includes("packages")) {',
+    '    return path.resolve(process.cwd(), "..", "..", "packages", "db", "sqlite.db");',
+    "  }",
+    "",
+    '  return path.resolve(process.cwd(), "packages", "db", "sqlite.db");',
+    "}",
+    "",
+    "const dbPath = resolveDatabasePath();",
+    "const dbDir = path.dirname(dbPath);",
+    "if (!fs.existsSync(dbDir)) {",
+    "  fs.mkdirSync(dbDir, { recursive: true });",
+    "}",
     "",
     "/** Singleton synchronous SQLite connection. */",
     "export const db: Database.Database = new Database(dbPath);",
@@ -393,7 +478,21 @@ export function compileRawSqliteDatabase(
     'db.pragma("journal_mode = WAL");',
     'db.pragma("foreign_keys = ON");',
     ddlBlock,
-    "",
+  ].join("\n");
+
+  files.push({
+    filename: "connection.ts",
+    language: "typescript",
+    content: connectionContent,
+  });
+
+  const indexContent = [
+    "/**",
+    " * packages/db — Raw SQLite connection via better-sqlite3",
+    " *",
+    " * Use the helpers in ./helpers/ instead of calling db directly.",
+    " */",
+    'export * from "./connection";',
     'export * from "./helpers";',
     ...(fallbackTypeExports.length > 0 ? ["", ...fallbackTypeExports] : []),
   ].join("\n");
@@ -418,6 +517,7 @@ export function compileRawSqliteDatabase(
         types: "index.ts",
         exports: {
           ".": "./index.ts",
+          "./connection": "./connection.ts",
           "./helpers": "./helpers/index.ts",
           "./helpers/*": "./helpers/*.ts",
         },
@@ -443,7 +543,7 @@ export function compileRawSqliteDatabase(
       {
         extends: "@workspace/typescript-config/base.json",
         compilerOptions: { outDir: "dist" },
-        include: ["index.ts", "helpers/**/*"],
+        include: ["index.ts", "connection.ts", "helpers/**/*"],
       },
       null,
       2,

@@ -17,7 +17,7 @@ export function generateProjectConfigFiles(appSlug: string = "web-app"): Compile
         lint: "next lint",
         typecheck: "tsc --noEmit",
         test: "vitest run",
-        postinstall: "pnpm rebuild better-sqlite3",
+        postinstall: "prebuild-install || node -e \"try { const p = require('path').dirname(require.resolve('better-sqlite3/package.json')); require('child_process').execSync('npx prebuild-install', {cwd: p, stdio: 'inherit'}); } catch (e) {}\"",
       },
       dependencies: {
         "@libsql/client": "^0.14.0",
@@ -40,6 +40,7 @@ export function generateProjectConfigFiles(appSlug: string = "web-app"): Compile
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
         "@workspace/typescript-config": "workspace:*",
+        "prebuild-install": "^7.1.3",
         tailwindcss: "^4.0.0",
         typescript: "^5.9.0",
         vitest: "^1.6.0",
@@ -75,7 +76,7 @@ export function generateProjectConfigFiles(appSlug: string = "web-app"): Compile
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@workspace/ui", "@workspace/logger"],
-  serverExternalPackages: ["better-sqlite3", "better-auth"],
+  serverExternalPackages: ["better-sqlite3", "better-auth", "@workspace/db"],
 };
 
 export default nextConfig;
@@ -90,7 +91,18 @@ export default nextConfig;
     {
       filename: ".env",
       language: "dotenv",
-      content: `NEXT_PUBLIC_LOG_LEVEL=info\n`,
+      content: `DATABASE_PATH=../../packages/db/sqlite.db
+DATABASE_URL=../../packages/db/sqlite.db
+NEXT_PUBLIC_LOG_LEVEL=info
+`,
+    },
+    {
+      filename: ".env.example",
+      language: "dotenv",
+      content: `DATABASE_PATH=../../packages/db/sqlite.db
+DATABASE_URL=../../packages/db/sqlite.db
+NEXT_PUBLIC_LOG_LEVEL=info
+`,
     },
     {
       filename: "postcss.config.mjs",

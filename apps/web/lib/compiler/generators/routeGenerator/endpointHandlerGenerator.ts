@@ -1,6 +1,13 @@
 import { Endpoint, AnyMessagingResource, CompiledFile, ReusableFunction } from "@workspace/canvas/types";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { parseSchemaJson, toVarName, toPascalCase, toEnvVarName } from "../../utils";
+
+function toTsType(colType: string): string {
+  const t = (colType || "string").toLowerCase();
+  if (["int", "integer", "bigint", "number"].includes(t)) return "number";
+  if (["boolean", "bool"].includes(t)) return "boolean";
+  return "string";
+}
 import {
   INTER_SERVICE_PROTOCOL_GRPC,
   GRPC_DEFAULT_PORT,
@@ -210,24 +217,56 @@ export async function ${handlerName}(
   // Validate Auth Token if required by caller zone or endpoint config
   const isCallerProtected = trace.incoming.some((inc) => inc.isProtected);
   const requiresAuth =
-    isCallerProtected ||
-    Boolean(ep.authRuleId) ||
-    Boolean(ep.requiredRoles && ep.requiredRoles.length > 0) ||
-    Boolean(ep.requiredScopes && ep.requiredScopes.length > 0);
+    ep.requireAuth !== false &&
+    (isCallerProtected ||
+      Boolean(ep.authRuleId) ||
+      Boolean(ep.requiredRoles && ep.requiredRoles.length > 0) ||
+      Boolean(ep.requiredScopes && ep.requiredScopes.length > 0));
 
   if (requiresAuth) {
-    routeHandlerCode += `    // Validate Auth Token / Authorization Header\n`;
+    routeHandlerCode += `    // Validate Auth Token / Authorization Header against Auth Server (via JWKS or session API)\n`;
     routeHandlerCode += `    const authHeader = req.headers.authorization;\n`;
     routeHandlerCode += `    if (!authHeader || !authHeader.startsWith("Bearer ")) {\n`;
     routeHandlerCode += `      logger.warn("Authentication failed: Missing or invalid Authorization header");\n`;
     routeHandlerCode += `      return res.status(401).json({ error: "Unauthorized: Missing Bearer token" });\n`;
     routeHandlerCode += `    }\n`;
     routeHandlerCode += `    const authToken = authHeader.substring(7);\n`;
+    routeHandlerCode += `    const authServerUrl = process.env.AUTH_SERVER_URL || process.env.BETTER_AUTH_URL || "http://localhost:3000";\n`;
+    routeHandlerCode += `    let authSession: { user?: { id?: string; role?: string } } | null = null;\n`;
+    routeHandlerCode += `    try {\n`;
+    routeHandlerCode += `      // 1. Try stateless JWKS verification (Recommended for disconnected microservices)\n`;
+    routeHandlerCode += `      const { jwtVerify, createRemoteJWKSet } = await import("jose");\n`;
+    routeHandlerCode += `      const JWKS = createRemoteJWKSet(new URL(\`\${authServerUrl}/api/auth/jwks\`));\n`;
+    routeHandlerCode += `      const { payload } = await jwtVerify(authToken, JWKS);\n`;
+    routeHandlerCode += `      if (payload && (payload.sub || payload.id || payload.userId)) {\n`;
+    routeHandlerCode += `        authSession = { user: { id: String(payload.sub || payload.id || payload.userId), role: String(payload.role || "user") } };\n`;
+    routeHandlerCode += `      }\n`;
+    routeHandlerCode += `    } catch (jwksErr) {\n`;
+    routeHandlerCode += `      logger.debug("JWKS token verification failed or fallback needed", { error: jwksErr });\n`;
+    routeHandlerCode += `      // 2. Fallback to /api/auth/get-session HTTP check\n`;
+    routeHandlerCode += `      try {\n`;
+    routeHandlerCode += `        const authRes = await fetch(\`\${authServerUrl}/api/auth/get-session\`, {\n`;
+    routeHandlerCode += `          headers: { authorization: authHeader },\n`;
+    routeHandlerCode += `        });\n`;
+    routeHandlerCode += `        if (authRes.ok) {\n`;
+    routeHandlerCode += `          authSession = (await authRes.json()) as { user?: { id?: string; role?: string } };\n`;
+    routeHandlerCode += `        } else {\n`;
+    routeHandlerCode += `          logger.warn(\`Auth server returned non-OK status: \${authRes.status}\`);\n`;
+    routeHandlerCode += `        }\n`;
+    routeHandlerCode += `      } catch (fetchErr) {\n`;
+    routeHandlerCode += `        logger.error("Failed to connect to Auth server for session verification", { error: fetchErr });\n`;
+    routeHandlerCode += `      }\n`;
+    routeHandlerCode += `    }\n`;
+    routeHandlerCode += `    if (!authSession || !authSession.user || !authSession.user.id) {\n`;
+    routeHandlerCode += `      logger.warn("Authentication failed: Invalid token or user not found");\n`;
+    routeHandlerCode += `      return res.status(401).json({ error: "Unauthorized: Invalid or expired token" });\n`;
+    routeHandlerCode += `    }\n`;
     if (ep.requiredRoles && ep.requiredRoles.length > 0) {
-      routeHandlerCode += `    // Required roles: ${ep.requiredRoles.join(", ")}\n`;
-    }
-    if (ep.requiredScopes && ep.requiredScopes.length > 0) {
-      routeHandlerCode += `    // Required scopes: ${ep.requiredScopes.join(", ")}\n`;
+      routeHandlerCode += `    const userRole = authSession.user.role || "user";\n`;
+      routeHandlerCode += `    const allowedRoles = ${JSON.stringify(ep.requiredRoles)};\n`;
+      routeHandlerCode += `    if (!allowedRoles.includes(userRole)) {\n`;
+      routeHandlerCode += `      return res.status(403).json({ error: "Forbidden: Insufficient role permissions" });\n`;
+      routeHandlerCode += `    }\n`;
     }
     routeHandlerCode += `\n`;
   }
@@ -318,6 +357,52 @@ export async function ${handlerName}(
           }
         }
       }
+    }
+
+    // Embed detailed database entity type definitions and schemas for AI coding agents
+    const targetDbNodeIds = new Set<string>([
+      ...(ep.databaseNodeIds || []),
+      ...(ep.databaseNodeId && ep.databaseNodeId !== "none" ? [ep.databaseNodeId] : []),
+      ...(ep.crudOperations ? Object.keys(ep.crudOperations) : []),
+      ...pickedDbOps.map((op) => op.tableNodeId).filter(Boolean) as string[],
+    ]);
+
+    if (targetDbNodeIds.size > 0) {
+      routeHandlerCode += `    //\n    // DATABASE SCHEMAS & FULL TYPE DEFINITIONS (from @workspace/db):\n`;
+      targetDbNodeIds.forEach((tableId) => {
+        const tableNode = allNodes.find((n) => n.id === tableId);
+        if (!tableNode) return;
+        const entityNode = tableNode.type === "db_ref" && tableNode.data?.tableRef
+          ? allNodes.find((n) => n.id === tableNode.data?.tableRef)
+          : tableNode;
+        if (!entityNode) return;
+
+        const tableName = entityNode.data?.label || "Table";
+        const cleanTableName = toVarName(tableName.toLowerCase().replace(/[^a-z0-9_]/g, "_"));
+        const Pascal = toPascalCase(cleanTableName);
+
+        const cols = entityNode.data?.columns && Array.isArray(entityNode.data.columns)
+          ? entityNode.data.columns
+          : [];
+
+        if (cols.length > 0) {
+          const allColFields = cols.map((c: any) => `${c.name || "col"}: ${toTsType(c.type || "string")}`).join("; ");
+          const writableColFields = cols.filter((c: any) => !c.isPrimaryKey).map((c: any) => `${c.name || "col"}: ${toTsType(c.type || "string")}`).join("; ");
+
+          routeHandlerCode += `    // - Table: "${tableName}"\n`;
+          routeHandlerCode += `    //   type ${Pascal}Row = { ${allColFields} };\n`;
+          routeHandlerCode += `    //   type Create${Pascal}Data = { ${writableColFields} };\n`;
+          routeHandlerCode += `    //   type Update${Pascal}Data = Partial<Create${Pascal}Data>;\n`;
+        }
+
+        const tablePickedFns = pickedDbOps.filter((op) => op.tableNodeId === tableId || (op.fn.targetName || "").toLowerCase() === tableName.toLowerCase());
+        if (tablePickedFns.length > 0) {
+          routeHandlerCode += `    //   Available Helper Functions:\n`;
+          tablePickedFns.forEach((op) => {
+            routeHandlerCode += `    //     * ${op.fn.signature || op.fn.name}\n`;
+          });
+        }
+      });
     }
 
     routeHandlerCode += `    // =========================================================================\n`;

@@ -65,7 +65,8 @@ export function generateEnvExample(data: AuthNodeData): string {
 PORT=3001
 BETTER_AUTH_SECRET=your_super_secret_key_change_in_production
 BETTER_AUTH_URL=http://localhost:3001
-DATABASE_URL=sqlite.db
+DATABASE_PATH=../../packages/db/sqlite.db
+DATABASE_URL=../../packages/db/sqlite.db
 ${oauthEnvs}
 `;
 }

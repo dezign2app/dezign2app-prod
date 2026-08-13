@@ -4,17 +4,16 @@ import {
   BETTER_AUTH_TABLE_DEFINITIONS,
   isBetterAuthTableRequired,
 } from "@workspace/canvas";
+import { toTableName, toSingular, toPlural } from "./utils";
 import { compileRawSqliteDatabase } from "./databases/sqlite/raw";
+import { compileSqliteDrizzleDatabase } from "./databases/sqlite/drizzle";
 
 /**
- * Compiles database nodes into packages/db using raw SQL prepared statements.
- * ORM-free by design — see databases/sqlite/raw/index.ts.
+ * Compiles database nodes into packages/db using raw SQL prepared statements (or Drizzle if configured).
  *
- * When no entity nodes are present on the canvas, this function checks for an
- * auth node and synthesizes entity nodes from the BetterAuth table definitions
- * matching the auth node's configured plugins and settings. This ensures the
- * db package always reflects the auth configuration even when the user hasn't
- * manually added entity nodes to the schema canvas.
+ * When an auth node is present, this function checks for BetterAuth table definitions
+ * matching the auth node's configured plugins and settings, synthesizing any missing
+ * entity nodes so that the db package always reflects the auth configuration.
  */
 export function compileDatabaseNodes(
   allNodes: BackendNode[],
@@ -33,11 +32,16 @@ export function compileDatabaseNodes(
     const isOrgEnabled: boolean =
       authNode.data?.organization?.enabled ?? true;
 
-    const existingEntityNames = new Set(
-      entityNodes
-        .map((n) => (n.data?.label || n.data?.tableRef || "").toLowerCase())
-        .filter(Boolean),
-    );
+    const existingEntityNames = new Set<string>();
+    entityNodes.forEach((n) => {
+      const raw = n.data?.label || n.data?.tableRef || "";
+      if (!raw) return;
+      const clean = toTableName(raw);
+      existingEntityNames.add(clean.toLowerCase());
+      existingEntityNames.add(toSingular(clean).toLowerCase());
+      existingEntityNames.add(toPlural(clean).toLowerCase());
+      existingEntityNames.add(raw.toLowerCase());
+    });
 
     const syntheticEntities: BackendNode[] = BETTER_AUTH_TABLE_DEFINITIONS.filter(
       (def) =>
@@ -45,7 +49,10 @@ export function compileDatabaseNodes(
           isOrgEnabled,
           enabledPlugins,
           providers: authNode.data?.providers,
-        }) && !existingEntityNames.has(def.name.toLowerCase()),
+        }) &&
+        !existingEntityNames.has(def.name.toLowerCase()) &&
+        !existingEntityNames.has(toSingular(def.name).toLowerCase()) &&
+        !existingEntityNames.has(toPlural(def.name).toLowerCase()),
     ).map((def) => ({
       id: `synthetic-auth-${def.key}`,
       type: "entity",
@@ -59,10 +66,15 @@ export function compileDatabaseNodes(
     }));
 
     if (syntheticEntities.length > 0) {
-      // Merge synthetic entity nodes into allNodes so the raw compiler can
-      // pick them up via its own internal entity filter
       effectiveNodes = [...allNodes, ...syntheticEntities];
     }
+  }
+
+  const dbNode = allNodes.find((n) => n.type === "database" || (n.data as any)?.isDatabase);
+  const orm = (dbNode?.data as any)?.orm || (dbNode?.data as any)?.dbAdapter || (dbNode?.data as any)?.adapter;
+
+  if (orm === "drizzle") {
+    return compileSqliteDrizzleDatabase(effectiveNodes, allEdges);
   }
 
   return compileRawSqliteDatabase(effectiveNodes, allEdges);

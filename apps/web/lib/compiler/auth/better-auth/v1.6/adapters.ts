@@ -1,8 +1,8 @@
 import { AdapterConfig } from "./types";
 
 export const DEFAULT_SQLITE_CONFIG: AdapterConfig = {
-  importStatement: `import Database from "better-sqlite3";\n`,
-  adapterCall: `new Database(process.env.DATABASE_URL || "sqlite.db") as any`,
+  importStatement: `import { db } from "@workspace/db";\n`,
+  adapterCall: `db as any`,
 };
 
 export const ADAPTER_REGISTRY: Record<string, Record<string, AdapterConfig>> = {

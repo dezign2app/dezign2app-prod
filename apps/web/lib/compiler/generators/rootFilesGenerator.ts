@@ -18,6 +18,7 @@ export function generateRootFiles(projectName: string): CompiledFile[] {
         lint: "turbo lint",
         "check-types": "turbo check-types",
         format: 'prettier --write "**/*.{ts,tsx,md}"',
+        postinstall: 'node -e "try { const p = require(\'path\').dirname(require.resolve(\'better-sqlite3/package.json\', { paths: [\'./packages/db\'] })); require(\'child_process\').execSync(\'npx prebuild-install\', { cwd: p, stdio: \'inherit\' }); } catch (e) {}"',
       },
       devDependencies: {
         "@workspace/typescript-config": "workspace:*",
@@ -27,13 +28,6 @@ export function generateRootFiles(projectName: string): CompiledFile[] {
         vitest: "^1.6.0",
       },
       packageManager: "pnpm@10.4.1",
-      pnpm: {
-        onlyBuiltDependencies: [
-          "better-sqlite3",
-          "esbuild",
-          "@prisma/client"
-        ]
-      },
       engines: {
         node: ">=20",
       },
@@ -99,6 +93,12 @@ dist
 .env
 *.log
 .DS_Store
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
 `;
   files.push({
     filename: ".gitignore",
@@ -199,10 +199,23 @@ export function generateTypescriptConfigPackage(): CompiledFile[] {
     null,
     2,
   );
-  files.push({
+    files.push({
     filename: "packages/typescript-config/react-library.json",
     language: "json",
     content: tsConfigReactLibrary,
+  });
+
+  files.push({
+    filename: "packages/typescript-config/tsconfig.json",
+    language: "json",
+    content: JSON.stringify(
+      {
+        extends: "./base.json",
+        files: [],
+      },
+      null,
+      2,
+    ),
   });
 
   return files;

@@ -409,9 +409,8 @@ export function compileMonorepo(
     });
   }
 
-  // 7. Generate Root tsconfig.json (referencing packages and apps)
+  // 7. Generate Root tsconfig.json (referencing packages and apps with valid tsconfig.json)
   const rawRootPaths = [
-    "packages/typescript-config",
     "packages/ui",
     "packages/db",
     "packages/logger",
@@ -422,7 +421,9 @@ export function compileMonorepo(
     ...servicesInfo.map((s) => `apps/${s.folderName}`),
     ...webClientsInfo.map((w) => `apps/${w.folderName}`),
   ];
-  const rootReferences = Array.from(new Set(rawRootPaths)).map((p) => ({ path: p }));
+  const rootReferences = Array.from(new Set(rawRootPaths))
+    .filter((p) => files.some((f) => f.filename === `${p}/tsconfig.json`))
+    .map((p) => ({ path: p }));
 
   const rootTsconfig = JSON.stringify(
     {

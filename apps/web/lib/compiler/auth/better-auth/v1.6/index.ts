@@ -29,47 +29,55 @@ export function compileBetterAuthV16Service(
 
   const files: CompiledFile[] = [
     {
-      filename: "auth-server/src/auth.ts",
+      filename: "src/auth.ts",
       language: "typescript",
       content: generateAuthConfig(data),
     },
     {
-      filename: "auth-server/src/lib/auth.ts",
-      language: "typescript",
-      content: `export { auth } from "../auth";\n`,
-    },
-    {
-      filename: "auth-server/src/app/api/auth/[...all]/route.ts",
-      language: "typescript",
-      content: generateNextJsRouteHandler(data),
-    },
-    {
-      filename: "auth-server/src/index.ts",
+      filename: "src/index.ts",
       language: "typescript",
       content: generateAuthIndex(data),
     },
     {
-      filename: "auth-server/package.json",
+      filename: "package.json",
       language: "json",
       content: generateAuthPackageJson(data),
     },
     {
-      filename: "auth-server/.env",
+      filename: "tsconfig.json",
+      language: "json",
+      content: JSON.stringify(
+        {
+          extends: "@workspace/typescript-config/base.json",
+          compilerOptions: {
+            outDir: "./dist",
+            rootDir: "./src",
+            declaration: false,
+            declarationMap: false,
+          },
+          include: ["src/**/*"],
+        },
+        null,
+        2,
+      ),
+    },
+    {
+      filename: ".env",
       language: "env",
       content: generateEnvExample(data),
     },
     {
-      filename: "auth-server/.env.example",
+      filename: ".env.example",
       language: "env",
       content: generateEnvExample(data),
     },
     {
-      filename: "auth-server/README.md",
+      filename: "README.md",
       language: "markdown",
       content: generateReadme(data),
     },
     {
-      filename: "fastapi-service/auth_middleware.py",
+      filename: "auth_middleware.py",
       language: "python",
       content: generateFastApiMiddleware(data),
     },

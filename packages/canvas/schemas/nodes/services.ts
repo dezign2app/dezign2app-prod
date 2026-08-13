@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { schemaModelSchema } from "../shared";
+import {
+  schemaModelSchema,
+  schemaModelInputSchema,
+  parameterSchema,
+  parameterInputSchema,
+} from "../shared";
 import { endpointSchema, endpointInputSchema } from "../endpoints";
 import {
   consumedEventSchema,
@@ -95,6 +100,13 @@ export const webClientDataSchema = simpleDataSchema.extend({
   redirectTo: z.string().optional().describe("Route path to redirect unauthorized users"),
   isAuthPage: z.boolean().optional().describe("Whether this page is the auth/login page"),
   authNodeId: z.string().optional().describe("Connected AuthNode ID"),
+  headers: z.array(parameterSchema).optional().describe("Custom request headers sent by this web client page"),
+  pathParams: z.array(parameterSchema).optional().describe("URL path parameters for API requests"),
+  queryParams: z.array(parameterSchema).optional().describe("URL query parameters for API requests"),
+  requestBody: schemaModelSchema.optional().describe("Request body schema for API calls"),
+  requestBodyMode: z.enum(["field_builder", "raw_json"]).optional().describe("UI mode for request body schema"),
+  summary: z.string().optional().describe("Summary description of client API call"),
+  requireAuth: z.boolean().optional().describe("Whether Authorization: Bearer <token> is forwarded automatically (defaults to true)"),
   events: z
     .array(
       z.object({
@@ -145,6 +157,13 @@ export const webClientDataInputSchema = baseNodeDataSchema.extend({
   redirectTo: z.string().optional(),
   isAuthPage: z.boolean().optional(),
   authNodeId: z.string().optional(),
+  headers: z.array(parameterInputSchema).optional(),
+  pathParams: z.array(parameterInputSchema).optional(),
+  queryParams: z.array(parameterInputSchema).optional(),
+  requestBody: schemaModelInputSchema.optional(),
+  requestBodyMode: z.enum(["field_builder", "raw_json"]).optional(),
+  summary: z.string().optional(),
+  requireAuth: z.boolean().optional(),
   events: z.array(clientEventInputSchema).optional(),
 });
 

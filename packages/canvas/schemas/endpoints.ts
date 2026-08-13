@@ -61,6 +61,7 @@ export const endpointSchema = z.object({
     .enum([INTER_SERVICE_PROTOCOL_HTTP, INTER_SERVICE_PROTOCOL_GRPC])
     .optional(),
   requestBodyMode: z.enum(["field_builder", "raw_json"]).optional(),
+  requireAuth: z.boolean().optional(),
 });
 export type Endpoint = z.infer<typeof endpointSchema>;
 
@@ -237,4 +238,8 @@ export const endpointInputSchema: z.ZodType<EndpointInputType> = z.object({
     .enum(["field_builder", "raw_json"])
     .optional()
     .describe("UI mode for editing the request body schema: field_builder (structured fields) or raw_json (JSON textarea)."),
+  requireAuth: z
+    .boolean()
+    .optional()
+    .describe("Whether Authorization: Bearer <token> header validation/forwarding is enabled for this endpoint (defaults to true). Set to false to disable auth for internal/unauthenticated calls."),
 }) as z.ZodType<EndpointInputType>;

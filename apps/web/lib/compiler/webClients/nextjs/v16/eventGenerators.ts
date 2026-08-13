@@ -6,6 +6,10 @@ export interface EventComponentMeta {
   method: string;
   targetRoute?: string;
   targetPageLabel?: string;
+  requireAuth?: boolean;
+  customHeaders?: Record<string, string>;
+  queryParams?: Record<string, string>;
+  requestBody?: unknown;
 }
 
 export function generateEventComponent(
@@ -16,6 +20,10 @@ export function generateEventComponent(
   componentName: string,
   targetRoute?: string,
   targetPageLabel?: string,
+  requireAuth: boolean = true,
+  customHeaders?: Record<string, string>,
+  queryParams?: Record<string, string>,
+  requestBody?: unknown,
 ): string {
   if (eventType === "navigateToPage") {
     const route = targetRoute || "/";
@@ -26,7 +34,16 @@ import React from "react";
 import Link from "next/link";
 
 interface ${componentName}Props {
-  onTrigger?: (eventName: string, eventType: string, url: string, method: string) => void;
+  onTrigger?: (
+    eventName: string,
+    eventType: string,
+    url: string,
+    method: string,
+    requireAuth?: boolean,
+    customHeaders?: Record<string, string>,
+    queryParams?: Record<string, string>,
+    requestBody?: unknown,
+  ) => void;
 }
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
@@ -45,13 +62,26 @@ export default ${componentName};
 `;
   }
 
+  const headersJson = customHeaders ? JSON.stringify(customHeaders) : "undefined";
+  const paramsJson = queryParams ? JSON.stringify(queryParams) : "undefined";
+  const bodyJson = requestBody ? JSON.stringify(requestBody) : "undefined";
+
   return `"use client";
 
 import React from "react";
 import { Button } from "@workspace/ui/components/button";
 
 interface ${componentName}Props {
-  onTrigger: (eventName: string, eventType: string, url: string, method: string) => void;
+  onTrigger: (
+    eventName: string,
+    eventType: string,
+    url: string,
+    method: string,
+    requireAuth?: boolean,
+    customHeaders?: Record<string, string>,
+    queryParams?: Record<string, string>,
+    requestBody?: unknown,
+  ) => void;
 }
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
@@ -60,7 +90,16 @@ export function ${componentName}({ onTrigger }: ${componentName}Props) {
       type="button"
       onClick={(e) => {
         e.preventDefault();
-        onTrigger("${eventName}", "${eventType}", "${url}", "${method}");
+        onTrigger(
+          "${eventName}",
+          "${eventType}",
+          "${url}",
+          "${method}",
+          ${Boolean(requireAuth)},
+          ${headersJson},
+          ${paramsJson},
+          ${bodyJson}
+        );
       }}
       className="flex items-center gap-2 cursor-pointer"
     >

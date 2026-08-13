@@ -38,6 +38,7 @@ import Link from "next/link";
 import { Button } from "@workspace/ui/components/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@workspace/ui/components/card";
 import { Badge } from "@workspace/ui/components/badge";
+import { getAuthBearerToken } from "@/lib/auth-token";
 ${allImports ? `${allImports}\n` : ""}
 export default function ${pageMeta.componentName}() {
   const [pageLoadData, setPageLoadData] = useState<Record<string, Record<string, string | number | boolean | null>> | null>(null);
@@ -63,27 +64,65 @@ export default function ${pageMeta.componentName}() {
     loadPageData();
   }, []);
 
-  const handleTriggerAction = async (eventName: string, eventType: string, url: string, method: string) => {
+  const handleTriggerAction = async (
+    eventName: string,
+    eventType: string,
+    url: string,
+    method: string,
+    requireAuth?: boolean,
+    customHeaders?: Record<string, string>,
+    queryParams?: Record<string, string>,
+    requestBody?: unknown,
+  ) => {
     const timestamp = new Date().toLocaleTimeString();
     const logId = Math.random().toString(36).substring(2, 9);
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(customHeaders || {}),
+      };
+
+      if (requireAuth !== false) {
+        try {
+          const token = await getAuthBearerToken();
+          if (token) {
+            headers["Authorization"] = token;
+          }
+        } catch (_tokenErr) {}
+      }
+
+      let targetUrl = url;
+      if (queryParams && Object.keys(queryParams).length > 0 && targetUrl && targetUrl !== "#") {
+        try {
+          const urlObj = new URL(targetUrl, typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
+          Object.entries(queryParams).forEach(([k, v]) => {
+            if (v !== undefined && v !== null) urlObj.searchParams.set(k, String(v));
+          });
+          targetUrl = urlObj.toString();
+        } catch (_urlErr) {}
+      }
+
       const options: RequestInit = {
         method: method || "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
       };
       if (method === "POST" || method === "PUT" || method === "PATCH") {
-        options.body = JSON.stringify({
-          triggeredAt: new Date().toISOString(),
-          eventName,
-          eventType,
-        });
+        options.body = JSON.stringify(
+          requestBody !== undefined
+            ? requestBody
+            : {
+                triggeredAt: new Date().toISOString(),
+                eventName,
+                eventType,
+              }
+        );
       }
 
       let resData: Record<string, string | number | boolean | null> | null = null;
       let status: number | undefined = undefined;
 
-      if (url && url !== "#") {
-        const res = await fetch(url, options);
+      if (targetUrl && targetUrl !== "#") {
+        const res = await fetch(targetUrl, options);
         status = res.status;
         resData = await res.json().catch(() => ({ statusText: res.statusText }));
       } else {
@@ -100,7 +139,7 @@ export default function ${pageMeta.componentName}() {
           eventName,
           eventType,
           timestamp,
-          url: url || "N/A",
+          url: targetUrl || "N/A",
           method: method || "TRIGGER",
           status,
           data: resData,
