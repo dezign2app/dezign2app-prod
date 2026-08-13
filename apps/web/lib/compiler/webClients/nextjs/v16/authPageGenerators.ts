@@ -28,6 +28,12 @@ export function generateAuthPageCode(
   const signInRedirectUrl = redirects.signInRedirectUrl || (pageMeta.redirectTo && pageMeta.redirectTo !== pageMeta.routePath ? pageMeta.redirectTo : "/");
   const signUpRedirectUrl = redirects.signUpRedirectUrl || signInRedirectUrl;
 
+  const rawSignInPage = redirects.signInPageUrl || "/login";
+  const signInPageUrl = rawSignInPage.startsWith("/") ? rawSignInPage : `/${rawSignInPage}`;
+
+  const rawSignUpPage = redirects.signUpPageUrl || "/register";
+  const signUpPageUrl = rawSignUpPage.startsWith("/") ? rawSignUpPage : `/${rawSignUpPage}`;
+
   // ONLY generate configured social providers if social is enabled for this login/register page; do not show unconfigured fallbacks
   const oauthList: OAuthProviderConfig[] = (showSocial && Array.isArray(providers.oauth) && providers.oauth.length > 0)
     ? providers.oauth
@@ -44,7 +50,7 @@ export function generateAuthPageCode(
               variant="outline"
               type="button"
               disabled={loading}
-              onClick={() => handleSocialSignIn("${p}")}
+              onClick={(e) => handleSocialSignIn(e, "${p}")}
               className="w-full flex items-center justify-center gap-2 h-10 border-border hover:bg-muted font-medium text-xs cursor-pointer"
             >
               ${svg}
@@ -107,9 +113,13 @@ ${socialButtonsJsx}
               <div className="flex items-center justify-between">
                 <Label htmlFor="password" className="text-xs font-medium">Password</Label>
                 {!isSignUp && (
-                  <span className="text-[11px] text-primary hover:underline cursor-pointer">
+                  <button
+                    type="button"
+                    onClick={(e) => e.preventDefault()}
+                    className="text-[11px] text-primary hover:underline cursor-pointer bg-transparent border-0 p-0"
+                  >
                     Forgot password?
-                  </span>
+                  </button>
                 )}
               </div>
               <Input
@@ -135,7 +145,8 @@ ${socialButtonsJsx}
     : `<div className="text-xs text-muted-foreground text-center py-2">Email & password sign-in is disabled. Please use one of the social providers above.</div>`;
 
   const socialHandlerCode = oauthList.length > 0
-    ? `\n  const handleSocialSignIn = async (provider: "google" | "github" | "discord" | "apple" | "twitter" | "microsoft") => {
+    ? `\n  const handleSocialSignIn = async (e: React.MouseEvent, provider: "google" | "github" | "discord" | "apple" | "twitter" | "microsoft") => {
+    e.preventDefault();
     setLoading(true);
     setError(null);
     setSuccessMsg(null);
@@ -269,24 +280,32 @@ function ${pageMeta.componentName}Form() {
         {isSignUp ? (
           <p>
             Already have an account?{" "}
-            <button
-              type="button"
-              onClick={() => { setIsSignUp(false); setError(null); setSuccessMsg(null); }}
+            <Link
+              href="${signInPageUrl}"
+              onClick={() => {
+                setIsSignUp(false);
+                setError(null);
+                setSuccessMsg(null);
+              }}
               className="text-primary font-semibold hover:underline cursor-pointer"
             >
               Sign In
-            </button>
+            </Link>
           </p>
         ) : (
           <p>
             Don&apos;t have an account?{" "}
-            <button
-              type="button"
-              onClick={() => { setIsSignUp(true); setError(null); setSuccessMsg(null); }}
+            <Link
+              href="${signUpPageUrl}"
+              onClick={() => {
+                setIsSignUp(true);
+                setError(null);
+                setSuccessMsg(null);
+              }}
               className="text-primary font-semibold hover:underline cursor-pointer"
             >
               Sign Up
-            </button>
+            </Link>
           </p>
         )}
       </CardFooter>
