@@ -186,7 +186,10 @@ export default function ${pageMeta.componentName}() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setTriggerLogs([])}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setTriggerLogs([]);
+                }}
                 className="text-xs text-muted-foreground hover:text-foreground"
               >
                 Clear logs

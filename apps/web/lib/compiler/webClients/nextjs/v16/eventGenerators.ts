@@ -58,7 +58,10 @@ export function ${componentName}({ onTrigger }: ${componentName}Props) {
   return (
     <Button
       type="button"
-      onClick={() => onTrigger("${eventName}", "${eventType}", "${url}", "${method}")}
+      onClick={(e) => {
+        e.preventDefault();
+        onTrigger("${eventName}", "${eventType}", "${url}", "${method}");
+      }}
       className="flex items-center gap-2 cursor-pointer"
     >
       <span>${eventName}</span>
