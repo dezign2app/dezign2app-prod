@@ -74,10 +74,8 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const sessionCookie = getSessionCookie(request);
 
-  // Redirect authenticated user away from sign-in/sign-up page to default post-auth redirect
-  if (sessionCookie && AUTH_PAGES.includes(pathname)) {
-    return NextResponse.redirect(new URL(DEFAULT_AUTH_REDIRECT, request.url));
-  }
+  // Note: Session DB record verification is handled dynamically by page components and requireSession helper
+  // to avoid redirect loops when a session cookie exists but the user record in the DB has been deleted/invalidated.
 
   const matchedRule = PROTECTED_ROUTES.find((rule) => 
     rule.path === "/" ? pathname === "/" : pathname.startsWith(rule.path)

@@ -175,7 +175,7 @@ ${socialButtonsJsx}
 
   return `"use client";
 
-import React, { useState, Suspense } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
@@ -199,6 +199,22 @@ function ${pageMeta.componentName}Form() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function checkExistingSession() {
+      try {
+        const res = await authClient.getSession();
+        if (res?.data && res.data.user && res.data.user.id) {
+          const targetRedirect = isSignUp ? effectiveSignUpRedirect : effectiveSignInRedirect;
+          const cleanRedirect = targetRedirect === window.location.pathname ? "/" : targetRedirect;
+          router.push(cleanRedirect);
+        }
+      } catch (_err) {
+        // Stale or missing session token / DB record; stay on login or register page
+      }
+    }
+    checkExistingSession();
+  }, [isSignUp, effectiveSignInRedirect, effectiveSignUpRedirect, router]);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();

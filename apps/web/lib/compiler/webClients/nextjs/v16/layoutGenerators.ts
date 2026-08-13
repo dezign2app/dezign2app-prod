@@ -91,7 +91,12 @@ export default async function ${componentName}({
     const { requireSession } = await import("@/lib/auth/require-session");
     session = await requireSession("/login");
   } catch (err) {
-    session = null;
+    const isRedirect = err && typeof err === "object" && "digest" in err && String((err as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT");
+    if (isRedirect) {
+      throw err;
+    }
+    const { redirect } = await import("next/navigation");
+    redirect("/login");
   }
 
   return (

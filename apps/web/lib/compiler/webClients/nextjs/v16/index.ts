@@ -310,10 +310,43 @@ export async function requireSession(redirectTo: string = "/login") {
       headers: await headers(),
     });
   } catch (err) {
+    const isRedirect = err && typeof err === "object" && "digest" in err && String((err as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT");
+    if (isRedirect) {
+      throw err;
+    }
     session = null;
   }
 
-  if (!session) {
+  if (!session || !session.user || !session.user.id) {
+    redirect(redirectTo);
+  }
+
+  // Deep DB Record Validation: Verify user record exists in the database table
+  try {
+    const userId = session.user.id;
+    let userExistsInDb = false;
+
+    try {
+      const Database = (await import("better-sqlite3")).default;
+      const db = new Database(process.env.DATABASE_URL || "sqlite.db");
+      const row = db.prepare("SELECT id FROM user WHERE id = ?").get(userId);
+      db.close();
+      if (row && (row as { id: string }).id) {
+        userExistsInDb = true;
+      }
+    } catch (_dbErr) {
+      // Fallback if sqlite is not used directly
+      userExistsInDb = Boolean(session && session.user && session.user.id);
+    }
+
+    if (!userExistsInDb) {
+      redirect(redirectTo);
+    }
+  } catch (err) {
+    const isRedirect = err && typeof err === "object" && "digest" in err && String((err as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT");
+    if (isRedirect) {
+      throw err;
+    }
     redirect(redirectTo);
   }
 

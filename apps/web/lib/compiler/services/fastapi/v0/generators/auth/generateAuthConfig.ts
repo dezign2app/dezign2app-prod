@@ -1,18 +1,53 @@
 import {
+  CanvasAuthNodeData,
   DEFAULT_BETTER_AUTH_VERSION,
   EndpointHookConfig,
   DbHookConfig,
   AuthHookConfig,
   SessionClaimConfig,
 } from "@workspace/canvas";
-import { BetterAuthV16NodeData } from "../types";
-import { getAdapterConfig } from "../adapters";
-import { resolveOAuthProviders } from "../providers";
+
+export interface AdapterConfig {
+  importStatement: string;
+  adapterCall: string;
+}
+
+export const DEFAULT_SQLITE_CONFIG: AdapterConfig = {
+  importStatement: `import Database from "better-sqlite3";\n`,
+  adapterCall: `new Database(process.env.DATABASE_URL || "sqlite.db")`,
+};
+
+export const ADAPTER_REGISTRY: Record<string, Record<string, AdapterConfig>> = {
+  default: {
+    "sqlite-raw": DEFAULT_SQLITE_CONFIG,
+    drizzle: {
+      importStatement: `import { drizzleAdapter } from "better-auth/adapters/drizzle";\nimport { db } from "./db";`,
+      adapterCall: `drizzleAdapter(db, {\n    provider: "pg",\n  })`,
+    },
+    prisma: {
+      importStatement: `import { prismaAdapter } from "better-auth/adapters/prisma";\nimport { PrismaClient } from "@prisma/client";\nconst prisma = new PrismaClient();`,
+      adapterCall: `prismaAdapter(prisma, {\n    provider: "postgresql",\n  })`,
+    },
+    custom: {
+      importStatement: `// Custom database adapter configuration`,
+      adapterCall: `/* custom DB adapter */`,
+    },
+  },
+};
+
+export function getAdapterConfig(version: string, adapterKey: string): AdapterConfig {
+  const majorVersion = version.split(".")[0] + ".x";
+  const versionRegistry = ADAPTER_REGISTRY[majorVersion] || ADAPTER_REGISTRY.default;
+  const config = (versionRegistry && versionRegistry[adapterKey]) || DEFAULT_SQLITE_CONFIG;
+  return config;
+}
+
+export type AuthNodeData = CanvasAuthNodeData & { label?: string };
 
 /**
  * Generates the core `src/auth.ts` file for Better Auth
  */
-export function generateAuthConfig(data: BetterAuthV16NodeData): string {
+export function generateAuthConfig(data: AuthNodeData): string {
   const version = data.version || DEFAULT_BETTER_AUTH_VERSION;
   const dbAdapterKey = data.dbAdapter || "sqlite-raw";
   const adapterConfig = getAdapterConfig(version, dbAdapterKey);
@@ -197,7 +232,7 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
   }
 
   // OAuth Social Providers
-  const oauthProviders = resolveOAuthProviders(data);
+  const oauthProviders = data.providers?.oauth || [];
   let socialProvidersBlock = "";
   if (oauthProviders.length > 0) {
     const providersList = oauthProviders.map((p) => {
@@ -215,7 +250,7 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
   if (accountLinking) {
     const policy = accountLinking.policy || "merge";
     if (policy === "prompt") {
-      accountLinkingBlock = `\n  account: {\n    accountLinking: {\n      enabled: true,\n      requireEmailVerification: false,\n      disableImplicitLinking: true,\n    },\n  },`;
+      accountLinkingBlock = `\n  account: {\n    accountLinking: {\n      enabled: true,\n      disableImplicitLinking: true,\n    },\n  },`;
     } else if (policy === "block") {
       accountLinkingBlock = `\n  account: {\n    accountLinking: {\n      enabled: false,\n    },\n  },`;
     } else {
@@ -240,22 +275,15 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
   const trustedOrigins = data.trustedOrigins || ["http://localhost:3000", "http://localhost:5173"];
   const trustedOriginsBlock = `\n  trustedOrigins: ${JSON.stringify(trustedOrigins)},`;
 
-  // Secret Key & Base URL
+  // Secret Key
   const secretBlock = `\n  secret: process.env.BETTER_AUTH_SECRET || "default_super_secret_key_change_in_production",`;
-  const baseUrlBlock = `\n  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",`;
+  const baseUrlBlock = `\n  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3001",`;
+  const basePathBlock = `\n  basePath: "/api/auth",`;
 
-  const customCallback = data.redirects?.callbackUrl;
-  let basePathBlock = "";
-  if (customCallback) {
-    const cleanPath = customCallback.replace(/\/callback\/?$/, "").replace(/\/$/, "");
-    if (cleanPath && cleanPath !== "/api/auth") {
-      basePathBlock = `\n  basePath: "${cleanPath}",`;
-    }
-  }
-
-  // Imports
-  const pluginImportStr = pluginImports.size > 0
-    ? `import { ${Array.from(pluginImports).join(", ")} } from "better-auth/plugins";\n`
+  // Build Plugin Import Statements
+  const pluginImportArr = Array.from(pluginImports);
+  const pluginImportStr = pluginImportArr.length > 0
+    ? `import { ${pluginImportArr.join(", ")} } from "better-auth/plugins";\n`
     : "";
 
   const createMiddlewareImport = (beforeMiddleware || afterMiddleware)
@@ -263,16 +291,13 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
     : "";
 
   return `import { betterAuth } from "better-auth";
-import { nextCookies } from "better-auth/next-js";
 ${adapterConfig.importStatement}
 ${createMiddlewareImport}${pluginImportStr}
 export const auth = betterAuth({
   database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}
   plugins: [
-    ${pluginCalls.join(",\n    ")},
-    nextCookies(),
+    ${pluginCalls.join(",\n    ")}
   ],
 });
 `;
 }
-
