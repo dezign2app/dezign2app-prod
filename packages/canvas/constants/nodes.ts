@@ -29,6 +29,7 @@ export const BACKEND_NODE_AUTH = "auth" as const;
 export const BACKEND_NODE_PAYMENTS = "payments" as const;
 export const BACKEND_NODE_LANGGRAPH = "langgraph" as const;
 export const BACKEND_NODE_LANGGRAPH_STEP = "langgraph_step" as const;
+export const BACKEND_NODE_PAGE_REF = "page_ref" as const;
 
 export const NODE_TYPE_TO_RESOURCE_KIND: Record<string, string | undefined> = {
   kafka: "kafka",
@@ -82,6 +83,7 @@ export const BACKEND_NODE_TYPES = {
   PAYMENTS: BACKEND_NODE_PAYMENTS,
   LANGGRAPH: BACKEND_NODE_LANGGRAPH,
   LANGGRAPH_STEP: BACKEND_NODE_LANGGRAPH_STEP,
+  PAGE_REF: BACKEND_NODE_PAGE_REF,
 } as const;
 
 // ─── Backend Canvas Main Edge Types ───────────────────────────────────────────

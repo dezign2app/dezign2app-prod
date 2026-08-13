@@ -13,6 +13,7 @@ import {
   ExternalNode,
   WebAppNode,
   WebClientNode,
+  PageRefNode,
   WorkerNode,
   ServerlessNode,
   SearchIndexNode,
@@ -50,6 +51,7 @@ export const nodeTypes = {
   external: ExternalNode,
   webApp: WebAppNode,
   webClient: WebClientNode,
+  page_ref: PageRefNode,
   group: SchemaGroupNode,
   webAppGroup: WebAppGroupNode,
   // New nodes

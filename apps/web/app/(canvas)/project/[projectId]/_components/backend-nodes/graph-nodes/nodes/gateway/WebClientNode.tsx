@@ -193,13 +193,37 @@ const WebClientEventList = ({
   };
 
   const handleUpdate = (id: string, name: string, event: string) => {
+    const defaultNavType: "link" | "router" = "link";
     const newItems = items.map((item) =>
-      item.id === id ? { ...item, name, event } : item,
+      item.id === id
+        ? {
+            ...item,
+            name,
+            event,
+            ...(event === "navigateToPage" ? { navigationType: defaultNavType } : {}),
+          }
+        : item,
     );
     updateNode(nodeId, { data: { ...data, events: newItems } });
   };
 
   const handleDelete = (id: string) => {
+    const store = useBackendCanvasStore.getState();
+    const existingEdge = store.edges.find(
+      (e) => e.source === nodeId && e.sourceHandle === `events-${id}`,
+    );
+    if (existingEdge) {
+      const targetNode = store.nodes.find((n) => n.id === existingEdge.target);
+      store.deleteEdge(existingEdge.id);
+      if (targetNode && targetNode.type === "page_ref") {
+        const remainingEdges = store.edges.filter(
+          (e) => e.target === targetNode.id && e.id !== existingEdge.id,
+        );
+        if (remainingEdges.length === 0) {
+          store.deleteNode(targetNode.id);
+        }
+      }
+    }
     const newItems = items.filter((item) => item.id !== id);
     updateNode(nodeId, { data: { ...data, events: newItems } });
   };
@@ -207,8 +231,55 @@ const WebClientEventList = ({
   const saveEvent = (id: string) => {
     const finalEvent = editEvent === "other" ? customEvent : editEvent;
     const finalName = editName.trim() || "Unnamed Action";
-    handleUpdate(id, finalName, finalEvent.trim());
+    const trimmedEvent = finalEvent.trim();
+    handleUpdate(id, finalName, trimmedEvent);
     setEditingId(null);
+
+    const store = useBackendCanvasStore.getState();
+    const existingEdge = store.edges.find(
+      (e) => e.source === nodeId && e.sourceHandle === `events-${id}`,
+    );
+
+    if (trimmedEvent === "navigateToPage") {
+      if (!existingEdge) {
+        const currentNode = store.nodes.find((n) => n.id === nodeId);
+        const pos = currentNode?.position || { x: 100, y: 100 };
+        const newRefId = crypto.randomUUID();
+
+        store.addNode({
+          id: newRefId,
+          type: "page_ref",
+          position: { x: pos.x + 320, y: pos.y + 50 },
+          data: {
+            label: "Page Ref",
+            description: "Target page reference for navigation",
+          },
+        });
+
+        store.addEdge({
+          id: `edge-${Date.now()}`,
+          source: nodeId,
+          target: newRefId,
+          sourceHandle: `events-${id}`,
+          targetHandle: "page-ref-in",
+          type: "connection",
+        });
+      }
+    } else {
+      // If event type changed away from navigateToPage, remove connected page_ref node & edge
+      if (existingEdge) {
+        const targetNode = store.nodes.find((n) => n.id === existingEdge.target);
+        store.deleteEdge(existingEdge.id);
+        if (targetNode && targetNode.type === "page_ref") {
+          const remainingEdges = store.edges.filter(
+            (e) => e.target === targetNode.id && e.id !== existingEdge.id,
+          );
+          if (remainingEdges.length === 0) {
+            store.deleteNode(targetNode.id);
+          }
+        }
+      }
+    }
   };
 
   if (!items.length && !editingId) {

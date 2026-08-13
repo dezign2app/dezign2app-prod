@@ -57,6 +57,7 @@ export type HandleKind =
   | "page-out"
   | "page-in"
   | "page-section-in"
+  | "page-ref-in"
 
   // --- Fallback ---
   | "unknown";

@@ -23,6 +23,14 @@ export const externalDataSchema = simpleDataSchema.extend({
   actions: z.array(resourceItemSchema).optional(),
 });
 
+export const pageRefDataSchema = simpleDataSchema.extend({
+  pageRefId: z.string().optional(),
+  targetPageId: z.string().optional(),
+  targetPageLabel: z.string().optional(),
+  targetPageSlug: z.string().optional(),
+});
+export type PageRefNodeData = z.infer<typeof pageRefDataSchema>;
+
 export const clientEventInputSchema = z.object({
   id: z.string().optional().describe("Unique identifier for this event"),
   name: z
@@ -30,6 +38,17 @@ export const clientEventInputSchema = z.object({
     .describe("Logical name of the action (e.g., 'sendMessage', 'fetchData')"),
   event: z.string().optional().describe("The DOM event that triggers it"),
   schema: z.string().optional().describe("Input schema for the API call"),
+  navigationType: z
+    .enum(["link", "router"])
+    .optional()
+    .describe("Whether navigation uses declarative <Link> or programmatic useRouter().push()"),
+  navigationCondition: z
+    .enum(["direct", "on_success", "on_condition", "on_error"])
+    .optional()
+    .describe("Routing strategy condition"),
+  targetRoute: z.string().optional().describe("Target URL route path"),
+  targetPageId: z.string().optional().describe("ID of the target WebClient page node"),
+  conditionCode: z.string().optional().describe("Expression or code for conditional router navigation"),
   targetNodeId: z
     .string()
     .optional()
@@ -83,6 +102,13 @@ export const webClientDataSchema = simpleDataSchema.extend({
         name: z.string(),
         event: z.string().optional(),
         schema: z.string().optional(),
+        navigationType: z.enum(["link", "router"]).optional(),
+        navigationCondition: z
+          .enum(["direct", "on_success", "on_condition", "on_error"])
+          .optional(),
+        targetRoute: z.string().optional(),
+        targetPageId: z.string().optional(),
+        conditionCode: z.string().optional(),
         simulationCases: z
           .array(
             z.object({

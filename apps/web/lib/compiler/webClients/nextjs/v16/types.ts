@@ -9,6 +9,12 @@ export interface LinkedEndpointInfo {
   fullUrl: string;
 }
 
+export interface LinkedPageRefInfo {
+  targetNodeId: string;
+  targetNodeName: string;
+  targetRoute: string;
+}
+
 export interface PageInfo {
   nodeId: string;
   label: string;

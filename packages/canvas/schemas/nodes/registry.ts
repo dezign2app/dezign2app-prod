@@ -12,6 +12,7 @@ import { storageDataSchema } from "./storage";
 import {
   externalDataSchema,
   webClientDataSchema,
+  pageRefDataSchema,
   serviceDataSchema,
   workerDataSchema,
   serverlessDataSchema,
@@ -46,6 +47,7 @@ export const nodeDataSchemas: Record<string, z.ZodSchema> = {
   service: serviceDataSchema,
   db_ref: dbRefDataSchema,
   webClient: webClientDataSchema,
+  page_ref: pageRefDataSchema,
   external: externalDataSchema,
   group: simpleDataSchema,
   storage: storageDataSchema,
