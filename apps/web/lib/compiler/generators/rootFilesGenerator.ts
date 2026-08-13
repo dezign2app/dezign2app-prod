@@ -28,7 +28,11 @@ export function generateRootFiles(projectName: string): CompiledFile[] {
       },
       packageManager: "pnpm@10.4.1",
       pnpm: {
-        onlyBuiltDependencies: ["better-sqlite3"],
+        onlyBuiltDependencies: [
+          "better-sqlite3",
+          "esbuild",
+          "@prisma/client"
+        ]
       },
       engines: {
         node: ">=20",
@@ -46,7 +50,16 @@ export function generateRootFiles(projectName: string): CompiledFile[] {
   files.push({
     filename: "pnpm-workspace.yaml",
     language: "yaml",
-    content: `packages:\n  - "apps/*"\n  - "packages/*"\n  - "packages/grpc/*"\n`,
+    content: `packages:
+  - "apps/*"
+  - "packages/*"
+  - "packages/grpc/*"
+
+onlyBuiltDependencies:
+  - better-sqlite3
+  - esbuild
+  - "@prisma/client"
+`,
   });
 
 

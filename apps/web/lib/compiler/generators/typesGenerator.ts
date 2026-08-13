@@ -117,6 +117,7 @@ export function generateTypesPackage(
         zod: "^3.24.2",
       },
       devDependencies: {
+        "@workspace/db": "workspace:*",
         "@workspace/typescript-config": "workspace:*",
         typescript: "^5.3.3",
       },

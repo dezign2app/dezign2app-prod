@@ -200,8 +200,8 @@ const logger = createLogger("${serviceName}:${routeFileName}");
  * ${summary}
  */
 export async function ${handlerName}(
-  req: Request<${pascalName}Params, ${pascalName}Response | { error: string; details?: string }, ${pascalName}Body, ${pascalName}Query>,
-  res: Response<${pascalName}Response | { error: string; details?: string }>
+  req: Request<${pascalName}Params, ${pascalName}Response | { error: string; details?: unknown }, ${pascalName}Body, ${pascalName}Query>,
+  res: Response<${pascalName}Response | { error: string; details?: unknown }>
 ) {
   try {
     logger.info("Handling ${ep.type || "GET"} ${path}");

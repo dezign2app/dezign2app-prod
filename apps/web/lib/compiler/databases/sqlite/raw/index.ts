@@ -109,19 +109,26 @@ function generateTableHelpers(
     `Update${Pascal}Data`,
   ]);
 
+  code += `export type ${Pascal} = ${Pascal}Row;\n`;
+  declaredTypes.add(Pascal);
+
   if (pascalSingular !== Pascal) {
     code += `export type ${pascalSingular}Row = ${Pascal}Row;\n`;
+    code += `export type ${pascalSingular} = ${Pascal}Row;\n`;
     code += `export type Create${pascalSingular}Data = Create${Pascal}Data;\n`;
     code += `export type Update${pascalSingular}Data = Update${Pascal}Data;\n\n`;
     declaredTypes.add(`${pascalSingular}Row`);
+    declaredTypes.add(pascalSingular);
     declaredTypes.add(`Create${pascalSingular}Data`);
     declaredTypes.add(`Update${pascalSingular}Data`);
   }
   if (pascalPlural !== Pascal && pascalPlural !== pascalSingular) {
     code += `export type ${pascalPlural}Row = ${Pascal}Row;\n`;
+    code += `export type ${pascalPlural} = ${Pascal}Row;\n`;
     code += `export type Create${pascalPlural}Data = Create${Pascal}Data;\n`;
     code += `export type Update${pascalPlural}Data = Update${Pascal}Data;\n\n`;
     declaredTypes.add(`${pascalPlural}Row`);
+    declaredTypes.add(pascalPlural);
     declaredTypes.add(`Create${pascalPlural}Data`);
     declaredTypes.add(`Update${pascalPlural}Data`);
   }
@@ -317,32 +324,6 @@ export function compileRawSqliteDatabase(
       ? `\n// Ensure all entity & auth tables exist on database initialization\ndb.exec(${sqlStatementsString});\n`
       : "";
 
-  const indexContent = [
-    "/**",
-    " * packages/db — Raw SQLite connection via better-sqlite3",
-    " *",
-    " * Use the helpers in ./helpers/ instead of calling db directly.",
-    " */",
-    'import Database from "better-sqlite3";',
-    'import path from "path";',
-    "",
-    'const dbPath = process.env.DATABASE_PATH || path.join(__dirname, "sqlite.db");',
-    "",
-    "/** Singleton synchronous SQLite connection. */",
-    "export const db: Database.Database = new Database(dbPath);",
-    "",
-    "// Recommended pragmas for correctness and performance",
-    'db.pragma("journal_mode = WAL");',
-    'db.pragma("foreign_keys = ON");',
-    ddlBlock,
-  ].join("\n");
-
-  files.push({
-    filename: "index.ts",
-    language: "typescript",
-    content: indexContent,
-  });
-
   const helperBarrel: string[] = [];
   const seenExportedSymbols = new Set<string>();
 
@@ -382,6 +363,45 @@ export function compileRawSqliteDatabase(
       `/**\n * Barrel export for all table-level CRUD helpers.\n */\n` +
       helperBarrel.join("\n") +
       "\n",
+  });
+
+  const fallbackTypeExports: string[] = [];
+  if (!seenExportedSymbols.has("PrimarySQLiteDB")) {
+    fallbackTypeExports.push("export type PrimarySQLiteDB = Record<string, unknown>;");
+    fallbackTypeExports.push("export type PrimarySQLiteDBRow = Record<string, unknown>;");
+  }
+  if (!seenExportedSymbols.has("Entity")) {
+    fallbackTypeExports.push("export type Entity = Record<string, unknown>;");
+    fallbackTypeExports.push("export type EntityRow = Record<string, unknown>;");
+  }
+
+  const indexContent = [
+    "/**",
+    " * packages/db — Raw SQLite connection via better-sqlite3",
+    " *",
+    " * Use the helpers in ./helpers/ instead of calling db directly.",
+    " */",
+    'import Database from "better-sqlite3";',
+    'import path from "path";',
+    "",
+    'const dbPath = process.env.DATABASE_PATH || path.join(__dirname, "sqlite.db");',
+    "",
+    "/** Singleton synchronous SQLite connection. */",
+    "export const db: Database.Database = new Database(dbPath);",
+    "",
+    "// Recommended pragmas for correctness and performance",
+    'db.pragma("journal_mode = WAL");',
+    'db.pragma("foreign_keys = ON");',
+    ddlBlock,
+    "",
+    'export * from "./helpers";',
+    ...(fallbackTypeExports.length > 0 ? ["", ...fallbackTypeExports] : []),
+  ].join("\n");
+
+  files.push({
+    filename: "index.ts",
+    language: "typescript",
+    content: indexContent,
   });
 
   // ── package.json ──────────────────────────────────────────────────────────
