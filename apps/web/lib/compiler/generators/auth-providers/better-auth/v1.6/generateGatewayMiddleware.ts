@@ -25,6 +25,10 @@ export async function betterAuthMiddleware(request: NextRequest) {
     }
 
     const session = await res.json();
+    if (!session || !session.user || !session.user.id) {
+      return NextResponse.json({ error: "User record not found in database" }, { status: 401 });
+    }
+
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set("x-user-id", session.user.id);
     requestHeaders.set("x-user-email", session.user.email);

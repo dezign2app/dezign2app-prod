@@ -402,5 +402,18 @@ export interface AuthOrganizationConfig {
   additionalTables?: AdditionalAuthTableConfig[];
 }
 
+import type { CanvasAuthNodeData } from "./nodes";
+
+export interface AdapterConfig {
+  importStatement: string;
+  adapterCall: string;
+}
+
+export type BetterAuthV16NodeData = CanvasAuthNodeData & {
+  label?: string;
+  port?: string;
+  baseUrl?: string;
+};
+
 
 

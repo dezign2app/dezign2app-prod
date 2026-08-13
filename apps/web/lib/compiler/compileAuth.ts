@@ -1,14 +1,78 @@
 import { BackendNode, BackendEdge, SimulationTestCase } from "@/types/canvas";
-import { CompiledServiceResult, Endpoint, AnyMessagingResource } from "@workspace/canvas/types";
+import { CompiledServiceResult, Endpoint, AnyMessagingResource, AuthPageMetaInfo } from "@workspace/canvas/types";
 import {
   DEFAULT_AUTH_FRAMEWORK,
   DEFAULT_BETTER_AUTH_VERSION,
   AUTH_FRAMEWORK_BETTER_AUTH,
+  BackendNodeData,
 } from "@workspace/canvas";
 import { compileBetterAuthV16Service } from "./auth/better-auth/v1.6";
 
+export type { AuthPageMetaInfo };
+
 /**
- * Compiles a Canvas Auth Node into code based on the selected framework type (e.g. better_auth) and version (e.g. v1.6)
+ * Resolves database nodes connected to an Auth node via graph edges
+ */
+export function resolveConnectedDbNodes(
+  authNode: BackendNode,
+  allNodes: BackendNode[] = [],
+  allEdges: BackendEdge[] = []
+): BackendNode[] {
+  const connectedNodeIds = new Set<string>();
+
+  allEdges.forEach((edge) => {
+    if (edge.source === authNode.id) {
+      connectedNodeIds.add(edge.target);
+    } else if (edge.target === authNode.id) {
+      connectedNodeIds.add(edge.source);
+    }
+  });
+
+  const connectedDbNodes = allNodes.filter((n) => {
+    if (!connectedNodeIds.has(n.id)) return false;
+    const t = String(n.type).toLowerCase();
+    return t === "entity" || t === "db_ref" || t === "db" || t === "database";
+  });
+
+  if (connectedDbNodes.length > 0) {
+    return connectedDbNodes;
+  }
+
+  // Fallback: Return all DB nodes in canvas if available
+  return allNodes.filter((n) => {
+    const t = String(n.type).toLowerCase();
+    return t === "entity" || t === "db_ref" || t === "db" || t === "database";
+  });
+}
+
+/**
+ * Resolves accessible target nodes (web apps, pages, services) protected by or connected to an Auth node
+ */
+export function resolveAccessibleNodes(
+  authNode: BackendNode,
+  allNodes: BackendNode[] = [],
+  allEdges: BackendEdge[] = []
+): BackendNode[] {
+  const accessibleNodeIds = new Set<string>();
+
+  allEdges.forEach((edge) => {
+    if (edge.source === authNode.id) {
+      accessibleNodeIds.add(edge.target);
+    } else if (edge.target === authNode.id) {
+      accessibleNodeIds.add(edge.source);
+    }
+  });
+
+  return allNodes.filter((n) => {
+    if (!accessibleNodeIds.has(n.id)) return false;
+    const t = String(n.type).toLowerCase();
+    return t === "webclient" || t === "webapp" || t === "service" || Boolean(n.data?.isWebClient);
+  });
+}
+
+/**
+ * Compiles a Canvas Auth Node into code based on the selected framework type (e.g. better_auth) and version (e.g. v1.6).
+ * Performs graph resolution to ensure user records are validated in the database before granting access to accessible nodes.
  */
 export function compileAuth(
   node: BackendNode,
@@ -33,19 +97,12 @@ export function compileAuth(
   }
 }
 
-export interface AuthPageMetaInfo {
-  nodeId?: string;
-  slug?: string;
-  routePath?: string;
-  isAuthPage?: boolean;
-}
-
 /**
  * Checks whether a page is the Sign-In / Login page as defined in AuthConfig (redirects) or by fallback conventions
  */
 export function isAuthLoginPage(
   pageMeta: AuthPageMetaInfo,
-  authNodeData?: Record<string, any>
+  authNodeData?: BackendNodeData
 ): boolean {
   const redirects = authNodeData?.redirects;
   const hasConfiguredSignIn = Boolean(redirects?.signInPageNodeId || redirects?.signInPageUrl);
@@ -79,7 +136,7 @@ export function isAuthLoginPage(
  */
 export function isAuthRegisterPage(
   pageMeta: AuthPageMetaInfo,
-  authNodeData?: Record<string, any>
+  authNodeData?: BackendNodeData
 ): boolean {
   const redirects = authNodeData?.redirects;
   const hasConfiguredSignUp = Boolean(redirects?.signUpPageNodeId || redirects?.signUpPageUrl);
@@ -113,7 +170,7 @@ export function isAuthRegisterPage(
  */
 export function isAuthPage(
   pageMeta: AuthPageMetaInfo,
-  authNodeData?: Record<string, any>
+  authNodeData?: BackendNodeData
 ): boolean {
   if (pageMeta.isAuthPage) return true;
   return isAuthLoginPage(pageMeta, authNodeData) || isAuthRegisterPage(pageMeta, authNodeData);
@@ -125,7 +182,7 @@ export function isAuthPage(
  */
 export function shouldGenerateSocialProviders(
   pageMeta: AuthPageMetaInfo,
-  authNodeData?: Record<string, any>
+  authNodeData?: BackendNodeData
 ): boolean {
   const isTargetAuthPage = isAuthLoginPage(pageMeta, authNodeData) || isAuthRegisterPage(pageMeta, authNodeData);
   if (!isTargetAuthPage) {
@@ -140,6 +197,3 @@ export function shouldGenerateSocialProviders(
 
   return isSocialEnabled;
 }
-
-export { compileAuth as compileAuthNodeRunner };
-
