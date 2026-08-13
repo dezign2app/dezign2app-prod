@@ -236,10 +236,18 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
   const trustedOrigins = data.trustedOrigins || ["http://localhost:3000", "http://localhost:5173"];
   const trustedOriginsBlock = `\n  trustedOrigins: ${JSON.stringify(trustedOrigins)},`;
 
-  // Secret Key
   // Secret Key & Base URL
   const secretBlock = `\n  secret: process.env.BETTER_AUTH_SECRET || "default_super_secret_key_change_in_production",`;
   const baseUrlBlock = `\n  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",`;
+
+  const customCallback = data.redirects?.callbackUrl;
+  let basePathBlock = "";
+  if (customCallback) {
+    const cleanPath = customCallback.replace(/\/callback\/?$/, "").replace(/\/$/, "");
+    if (cleanPath && cleanPath !== "/api/auth") {
+      basePathBlock = `\n  basePath: "${cleanPath}",`;
+    }
+  }
 
   // Imports
   const pluginImportStr = pluginImports.size > 0
@@ -255,7 +263,7 @@ import { nextCookies } from "better-auth/next-js";
 ${adapterConfig.importStatement}
 ${createMiddlewareImport}${pluginImportStr}
 export const auth = betterAuth({
-  database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}
+  database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}
   plugins: [
     ${pluginCalls.join(",\n    ")},
     nextCookies(),

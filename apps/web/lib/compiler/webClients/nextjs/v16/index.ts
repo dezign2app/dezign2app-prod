@@ -57,6 +57,8 @@ export function compileNextjsV16WebClient(
     "web-app";
 
   const webAppNode = allNodes.find((n) => n.type === "webApp");
+  const authNode = allNodes.find((n) => n.type === "auth");
+  const defaultSignInPage = authNode?.data?.redirects?.signInPageUrl || "/login";
 
   const defaultZones: WebAppZone[] = [
     {
@@ -68,7 +70,7 @@ export function compileNextjsV16WebClient(
         id: "rule-public",
         scope: "zone",
         conditions: { kind: "leaf", condition: { type: "auth", op: "signedOut" } },
-        redirects: { default: "/login" },
+        redirects: { default: defaultSignInPage },
       },
     },
     {
@@ -80,7 +82,7 @@ export function compileNextjsV16WebClient(
         id: "rule-private",
         scope: "zone",
         conditions: { kind: "leaf", condition: { type: "auth", op: "signedIn" } },
-        redirects: { "no-auth": "/login", default: "/login" },
+        redirects: { "no-auth": defaultSignInPage, default: defaultSignInPage },
       },
     },
   ];
@@ -104,7 +106,13 @@ export function compileNextjsV16WebClient(
       node.data.isRoot === true ||
       cleanLabel === "home" ||
       cleanLabel === "index" ||
-      cleanLabel === "/";
+      cleanLabel === "/" ||
+      cleanLabel === "landing" ||
+      cleanLabel === "landing page" ||
+      cleanLabel === "landingpage" ||
+      cleanLabel === "/landing" ||
+      cleanLabel === "root" ||
+      cleanLabel === "/root";
     const routePath = isRoot ? "/" : `/${slug}`;
     const componentName = slugToComponentName(slug);
 
@@ -131,7 +139,7 @@ export function compileNextjsV16WebClient(
     }
 
     let accessType: "public" | "private" | "role-gated" | "payment-gated" | "org-gated" = "public";
-    let redirectTo = node.data.redirectTo || "/login";
+    let redirectTo = node.data.redirectTo || defaultSignInPage;
     let allowedOrgRoles: string[] = node.data.allowedOrgRoles || [];
     let requiredPlans: string[] = node.data.requiredPlans || [];
 
@@ -145,7 +153,7 @@ export function compileNextjsV16WebClient(
           redirectTo =
             matchedZone.rule.redirects["no-auth"] ||
             matchedZone.rule.redirects["default"] ||
-            "/login";
+            defaultSignInPage;
         }
 
         if (matchedZone.rule?.conditions) {
@@ -213,7 +221,6 @@ export function compileNextjsV16WebClient(
   files.push(...generateProjectConfigFiles(effectiveAppSlug));
 
   // Check if an AuthNode is explicitly connected to this WebClient/WebApp via an edge or authNodeId reference
-  const authNode = allNodes.find((n) => n.type === "auth");
   const authPort = authNode?.data?.port || "3000";
   const authBaseUrl = authNode?.data?.baseUrl || `http://localhost:${authPort}`;
 
@@ -471,7 +478,7 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
   files.push({
     filename: "proxy.ts",
     language: "typescript",
-    content: generateProxy(pagesInfo),
+    content: generateProxy(pagesInfo, authNode?.data),
   });
 
   // Generate pages, individual event components, and page load fetch statements
