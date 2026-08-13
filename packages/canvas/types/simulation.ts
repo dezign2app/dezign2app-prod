@@ -32,6 +32,11 @@ export type UIEventItem = {
   name: string;
   event?: string;
   schema?: string;
+  navigationType?: "link" | "router";
+  navigationCondition?: "direct" | "on_success" | "on_condition" | "on_error";
+  targetRoute?: string;
+  targetPageId?: string;
+  conditionCode?: string;
   testCases?: SimulationTestCase[];
 };
 

@@ -228,3 +228,78 @@ export function resolveLinkedEndpoint(
 
   return null;
 }
+
+export interface LinkedPageRefInfo {
+  targetNodeId: string;
+  targetNodeName: string;
+  targetRoute: string;
+}
+
+export function resolvePageRefLink(
+  fromNodeId: string,
+  eventId: string,
+  allNodes: BackendNode[],
+  allEdges: BackendEdge[],
+  targetPageId?: string,
+  targetRoute?: string,
+): LinkedPageRefInfo {
+  // Check if connected to a PageRef node via an edge
+  const edge = allEdges.find(
+    (e) =>
+      e.source === fromNodeId &&
+      (e.sourceHandle === `events-${eventId}` ||
+        e.sourceHandle === eventId ||
+        e.sourceHandle?.endsWith(eventId)),
+  );
+
+  let refTargetPageId = targetPageId;
+  let customRoute = targetRoute;
+
+  if (edge && edge.target) {
+    const targetNode = allNodes.find((n) => n.id === edge.target);
+    if (targetNode && targetNode.type === "page_ref") {
+      refTargetPageId =
+        (targetNode.data?.targetPageId as string | undefined) ||
+        (targetNode.data?.pageRefId as string | undefined) ||
+        refTargetPageId;
+    }
+  }
+
+  if (refTargetPageId) {
+    const targetPageNode = allNodes.find((n) => n.id === refTargetPageId);
+    if (targetPageNode) {
+      const pageLabel = targetPageNode.data?.label || "Page";
+      const cleanLabel = pageLabel.trim().toLowerCase();
+      const isRoot =
+        targetPageNode.data?.isRoot === true ||
+        cleanLabel === "/" ||
+        cleanLabel === "home" ||
+        cleanLabel === "index" ||
+        cleanLabel === "landing" ||
+        cleanLabel === "root";
+      const slug = isRoot
+        ? "/"
+        : `/${cleanLabel.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
+
+      return {
+        targetNodeId: targetPageNode.id,
+        targetNodeName: pageLabel,
+        targetRoute: slug,
+      };
+    }
+  }
+
+  if (customRoute) {
+    return {
+      targetNodeId: "",
+      targetNodeName: customRoute,
+      targetRoute: customRoute.startsWith("/") ? customRoute : `/${customRoute}`,
+    };
+  }
+
+  return {
+    targetNodeId: "",
+    targetNodeName: "Home",
+    targetRoute: "/",
+  };
+}

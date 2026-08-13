@@ -4,6 +4,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import {
   Globe,
+  Compass,
   Server,
   Waves,
   Database,
@@ -48,6 +49,15 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
       >
         <Globe className="w-3.5 h-3.5 mr-2 shrink-0" />
         Page Client
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 border-indigo-500/20"
+        onClick={() => onAddNode("page_ref" as GraphNodeType, "Page Ref")}
+      >
+        <Compass className="w-3.5 h-3.5 mr-2 text-indigo-500 shrink-0" />
+        Page Ref
       </Button>
       <Button
         variant="outline"

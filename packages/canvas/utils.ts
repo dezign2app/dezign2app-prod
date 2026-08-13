@@ -35,6 +35,7 @@ const ALL_BACKEND_NODE_TYPES = [
   "payments",
   "langgraph",
   "langgraph_step",
+  "page_ref",
 ] as const;
 
 export function isBackendNode(type: string): type is BackendNodeType {
@@ -179,6 +180,8 @@ export function classifyHandle(
     return "payments-plugin-in";
   if (id === "page-out" || id.startsWith("page-out-")) return "page-out";
   if (id === "page-in" || id.startsWith("page-in")) return "page-in";
+  if (id === "page-ref-in" || id.startsWith("page-ref-in")) return "page-ref-in";
+  if (nodeType === "page_ref" && handleDirection === "target") return "page-ref-in";
   if (nodeType === "webApp") {
     if (id === "auth-in" || id.startsWith("auth-in")) {
       return handleDirection === "source" ? "auth-out" : "auth-in";

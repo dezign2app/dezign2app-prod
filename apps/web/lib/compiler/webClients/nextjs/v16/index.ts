@@ -9,8 +9,8 @@ import {
 } from "@workspace/canvas/types";
 import { generateWebClientE2ETests } from "../../../generators/testGenerator";
 
-import { LinkedEndpointInfo, PageInfo } from "./types";
-import { getServicePort, resolveLinkedEndpoint } from "./endpointResolver";
+import { LinkedEndpointInfo, LinkedPageRefInfo, PageInfo } from "./types";
+import { getServicePort, resolveLinkedEndpoint, resolvePageRefLink } from "./endpointResolver";
 import { labelToSlug, slugToComponentName } from "./slugUtils";
 import { generateProjectConfigFiles } from "./configTemplates";
 import {
@@ -27,8 +27,8 @@ import { generateProxy } from "./middlewareTemplate";
 import { generateAuthClient } from "../../../generators/auth-providers/better-auth/v1.6/generateAuthClient";
 import { compileAuth } from "../../../compileAuth";
 
-export type { LinkedEndpointInfo };
-export { getServicePort, resolveLinkedEndpoint };
+export type { LinkedEndpointInfo, LinkedPageRefInfo };
+export { getServicePort, resolveLinkedEndpoint, resolvePageRefLink };
 
 /**
  * Compiles WebClient nodes into Next.js App Router (v16.x) project structure
@@ -540,18 +540,37 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
     const eventComponentsMeta: EventComponentMeta[] = [];
 
     actionEvents.forEach((evt, evtIdx) => {
-      const link = resolveLinkedEndpoint(
-        node.id,
-        evt.id,
-        allNodes,
-        allEdges,
-        endpoints,
-      );
-      const url = link ? link.fullUrl : "";
-      const method = link ? link.method : "POST";
       const evtName = evt.name || `Action ${evtIdx + 1}`;
       const evtType = evt.event || "click";
       const compName = slugToComponentName(labelToSlug(evtName, evtIdx)).replace(/Page$/, "Action");
+
+      let url = "";
+      let method = "POST";
+      let targetRoute: string | undefined = undefined;
+      let targetPageLabel: string | undefined = undefined;
+
+      if (evtType === "navigateToPage") {
+        const pageRefLink = resolvePageRefLink(
+          node.id,
+          evt.id,
+          allNodes,
+          allEdges,
+          evt.targetPageId,
+          evt.targetRoute,
+        );
+        targetRoute = pageRefLink.targetRoute;
+        targetPageLabel = pageRefLink.targetNodeName;
+      } else {
+        const link = resolveLinkedEndpoint(
+          node.id,
+          evt.id,
+          allNodes,
+          allEdges,
+          endpoints,
+        );
+        url = link ? link.fullUrl : "";
+        method = link ? link.method : "POST";
+      }
 
       eventComponentsMeta.push({
         componentName: compName,
@@ -559,6 +578,8 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
         eventType: evtType,
         url,
         method,
+        targetRoute,
+        targetPageLabel,
       });
 
       const groupFolder = pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)";
@@ -569,7 +590,15 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
       files.push({
         filename: componentFilePath,
         language: "typescript",
-        content: generateEventComponent(evtName, evtType, url, method, compName),
+        content: generateEventComponent(
+          evtName,
+          evtType,
+          url,
+          method,
+          compName,
+          targetRoute,
+          targetPageLabel,
+        ),
       });
     });
 

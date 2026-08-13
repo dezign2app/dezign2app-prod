@@ -69,7 +69,8 @@ export type BackendNodeType =
   | "webAppGroup"
   | "payments"
   | "langgraph"
-  | "langgraph_step";
+  | "langgraph_step"
+  | "page_ref";
 
 /** Core fields present on every canvas node. */
 export interface BaseNodeData {
@@ -383,6 +384,14 @@ export interface CanvasPaymentsNodeData {
   webhookSecretEnv?: string;
 }
 
+/** Page Reference node fields (canvas type). */
+export interface CanvasPageRefNodeData {
+  pageRefId?: string;
+  targetPageId?: string;
+  targetPageLabel?: string;
+  targetPageSlug?: string;
+}
+
 /**
  * Composite data payload for every BackendNode.
  * All domain-specific fields are optional; only `BaseNodeData.label` is required.
@@ -405,7 +414,8 @@ export type BackendNodeData = BaseNodeData &
       CanvasAuthNodeData &
       CanvasPaymentsNodeData &
       CanvasLangGraphNodeData &
-      CanvasLangGraphStepNodeData
+      CanvasLangGraphStepNodeData &
+      CanvasPageRefNodeData
   >;
 
 export type BackendNode = {

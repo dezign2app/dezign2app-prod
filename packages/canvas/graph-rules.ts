@@ -1,11 +1,18 @@
 import type { HandleKind } from "./types";
 
 export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
-  "event-source": ["endpoint-in", "pageload-in", "sse-in", "websocket-in"],
+  "event-source": [
+    "endpoint-in",
+    "pageload-in",
+    "sse-in",
+    "websocket-in",
+    "page-ref-in",
+  ],
   "endpoint-in": [],
   "pageload-in": [],
   "sse-in": [],
   "websocket-in": [],
+  "page-ref-in": [],
   "endpoint-out": [
     "database-target",
     "action-target",
@@ -78,7 +85,7 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
   "auth-in": [],
   "injects-plugin-out": ["payments-plugin-in", "auth-in"],
   "payments-plugin-in": [],
-  "page-out": ["page-section-in", "endpoint-in", "page-in"],
+  "page-out": ["page-section-in", "endpoint-in", "page-in", "page-ref-in"],
   "page-in": [],
   "page-section-in": ["page-in", "endpoint-in", "page-out"],
   unknown: [],
@@ -112,6 +119,8 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   "page-out→page-section-in": "connection",
   "page-section-in→page-in": "connection",
   "page-out→page-in": "connection",
+  "event-source→page-ref-in": "connection",
+  "page-out→page-ref-in": "connection",
 };
 
 export const WEB_CLIENT_EVENTS = [
@@ -130,5 +139,6 @@ export const WEB_CLIENT_EVENTS = [
   "mouseleave",
   "sse",
   "websocket",
+  "navigateToPage",
   "other",
 ] as const;
