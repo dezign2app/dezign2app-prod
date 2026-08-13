@@ -2,9 +2,7 @@ import React from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   ParameterEditor,
-  SchemaEditor,
 } from "../backend-nodes/graph-nodes/Editors";
-import { ResponseSchemaEditor } from "./ResponseSchemaEditor";
 import {
   MessagingResourceList,
   LocalInput,
@@ -36,6 +34,10 @@ import {
   DEFAULT_INTER_SERVICE_PROTOCOL,
   GRPC_DEFAULT_PORT,
 } from "@workspace/canvas";
+import { useCallerWebClientZone } from "./hooks/useCallerWebClientZone";
+import { AuthAwarenessBanner } from "./AuthAwarenessBanner";
+import { RequestBodyEditor } from "./RequestBodyEditor";
+import { ResponseBodyEditor } from "./ResponseBodyEditor";
 
 interface EndpointConfigProps {
   id: string;
@@ -62,6 +64,9 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
 
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const allEdges = useBackendCanvasStore((s) => s.edges);
+
+  // Must be called before any early returns (rules of hooks)
+  const { isProtected, zoneName } = useCallerWebClientZone(nodeId, id);
 
   const item = endpoints.find((e) => e.id === id);
   if (!item) return null;
@@ -133,6 +138,9 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
           Configure endpoint details and behavior.
         </span>
       </div>
+
+      {/* Auth awareness banner — shown when caller page is in a protected zone */}
+      {isProtected && <AuthAwarenessBanner zoneName={zoneName} />}
 
       {node?.type === "api_gateway" && (
         <div className="flex flex-col gap-4 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
@@ -254,10 +262,18 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         parameters={item.queryParams || []}
         onChange={(queryParams) => updateEndpoint(item.id, { queryParams })}
       />
-      <SchemaEditor
-        title="Request Body Schema"
+      <RequestBodyEditor
+        mode={
+          item.requestBodyMode ??
+          (item.requestBody?.rawJson ? "raw_json" : "field_builder")
+        }
+        onModeChange={(requestBodyMode) =>
+          updateEndpoint(item.id, { requestBodyMode })
+        }
         schema={item.requestBody}
-        onChange={(requestBody) => updateEndpoint(item.id, { requestBody })}
+        onSchemaChange={(requestBody) =>
+          updateEndpoint(item.id, { requestBody })
+        }
       />
       <BusinessLogicBlock
         mode={item.logicMode || "natural_language"}
@@ -313,16 +329,27 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         />
       </div>
 
-      <ResponseSchemaEditor
-        mode={item.responseMode || "schema_builder"}
-        onModeChange={(responseMode) => updateEndpoint(item.id, { responseMode })}
-        fields={item.responseFields || []}
-        onFieldsChange={(responseFields) => updateEndpoint(item.id, { responseFields })}
+      <ResponseBodyEditor
+        mode={
+          (item.responseMode as any) === "custom_expression"
+            ? "custom_expression"
+            : item.responseMode === "raw_json" || item.responseBody?.rawJson
+            ? "raw_json"
+            : "field_builder"
+        }
+        onModeChange={(responseMode) =>
+          updateEndpoint(item.id, { responseMode: responseMode as any })
+        }
+        schema={item.responseBody}
+        onSchemaChange={(responseBody) =>
+          updateEndpoint(item.id, { responseBody })
+        }
         expression={item.responseExpression || ""}
-        onExpressionChange={(responseExpression) => updateEndpoint(item.id, { responseExpression })}
+        onExpressionChange={(responseExpression) =>
+          updateEndpoint(item.id, { responseExpression })
+        }
         availableTableNodes={availableTableNodes}
         allNodes={allNodes}
-        endpointMethod={item.type}
       />
     </div>
   );
