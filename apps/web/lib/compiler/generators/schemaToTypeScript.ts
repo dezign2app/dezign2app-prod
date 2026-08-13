@@ -11,6 +11,8 @@ export interface SchemaItem {
   rawJson?: string;
   fields?: ParameterItem[];
   id?: string;
+  requestBodyMode?: "field_builder" | "raw_json";
+  mode?: "field_builder" | "raw_json";
 }
 
 function typeStrToTsAndZod(typeStr: string): { ts: string; zod: string } {
@@ -195,6 +197,12 @@ export function schemaToTsInterface(
     };
   }
 
+  const effectiveMode = schema.requestBodyMode || schema.mode;
+
+  if (effectiveMode === "field_builder" && schema.fields && schema.fields.length > 0) {
+    return parametersToTsInterface(interfaceName, schema.fields, true);
+  }
+
   const parsedJson = parseSchemaJson(schema.rawJson);
   if (parsedJson && typeof parsedJson === "object") {
     const res = valToTsAndZod(parsedJson);
@@ -235,6 +243,12 @@ export function schemaToZodSchema(
       code: `export const ${schemaName} = z.record(z.unknown());\n`,
       hasContent: false,
     };
+  }
+
+  const effectiveMode = schema.requestBodyMode || schema.mode;
+
+  if (effectiveMode === "field_builder" && schema.fields && schema.fields.length > 0) {
+    return parametersToZodSchema(schemaName, schema.fields, true);
   }
 
   const parsedJson = parseSchemaJson(schema.rawJson);

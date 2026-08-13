@@ -11,6 +11,7 @@ export interface NodeConnectionDetail {
   nodeType: string;
   detail: string;
   dataContext?: string;
+  isProtected?: boolean;
 }
 
 export interface EndpointTraceResult {
@@ -257,11 +258,56 @@ export function resolveEndpointTrace(
         eventDetail = `Trigger Event "${matchedEvt.name || "Action"}" (${matchedEvt.event || "click"})`;
       }
 
+      // Check if WebClient page is in a protected zone
+      let isProtected = false;
+      const wcData = srcNode.data as any;
+      if (wcData?.useZoneDefault === false && wcData?.protectionOverride) {
+        isProtected = wcData.protectionOverride.accessType === "protected";
+      } else {
+        const webAppEdge = allEdges.find(
+          (e) =>
+            (e.target === srcNode.id || e.source === srcNode.id) &&
+            allNodes.find(
+              (n) =>
+                n.id === (e.target === srcNode.id ? e.source : e.target) &&
+                n.type === "webApp",
+            ),
+        );
+        if (webAppEdge) {
+          const webAppNode = allNodes.find(
+            (n) =>
+              n.type === "webApp" &&
+              (n.id === webAppEdge.source || n.id === webAppEdge.target),
+          );
+          const handleId =
+            webAppEdge.source === webAppNode?.id
+              ? webAppEdge.sourceHandle
+              : webAppEdge.targetHandle;
+          const zones = (webAppNode?.data as any)?.zones || [
+            { handleId: "public-in", name: "Public Section", accessType: "public" },
+            { handleId: "private-in", name: "Private Section", accessType: "protected" },
+          ];
+          const matchedZone = zones.find((z: any) => z.handleId === handleId);
+          if (matchedZone) {
+            isProtected =
+              matchedZone.accessType === "protected" ||
+              matchedZone.handleId === "private-in";
+          } else if (handleId === "private-in") {
+            isProtected = true;
+          }
+        }
+      }
+
+      if (isProtected) {
+        eventDetail += " (Protected Page - Requires Auth Token)";
+      }
+
       incoming.push({
         nodeId: srcNode.id,
         nodeName: srcName,
         nodeType: "WebClient Page",
         detail: eventDetail,
+        isProtected,
         dataContext: formatEndpointPayloadContext(endpoint),
       });
     }

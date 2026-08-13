@@ -15,6 +15,7 @@ export type Parameter = {
 
 export type Schema = {
   id: string;
+  fields?: Parameter[];
   rawJson?: string;
 };
 
@@ -163,8 +164,8 @@ export interface EndpointInputType {
   headers?: ParameterInputType[];
   pathParams?: ParameterInputType[];
   queryParams?: ParameterInputType[];
-  requestBody?: { fields: ParameterInputType[] };
-  responseBody?: { fields: ParameterInputType[] };
+  requestBody?: { fields: ParameterInputType[]; rawJson?: string };
+  responseBody?: { fields: ParameterInputType[]; rawJson?: string };
   simulationOutput?: unknown;
   processingSteps?: {
     id?: string;
@@ -181,4 +182,7 @@ export interface EndpointInputType {
   databaseNodeIds?: string[];
   databaseNodeId?: string;
   publishedEvents?: PublishedEventInputType[];
+  requestBodyMode?: "field_builder" | "raw_json";
+  responseMode?: "field_builder" | "raw_json" | "custom_expression" | "schema_builder" | "inferred";
+  responseExpression?: string;
 }

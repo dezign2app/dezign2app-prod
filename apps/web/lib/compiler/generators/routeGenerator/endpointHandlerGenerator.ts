@@ -205,9 +205,32 @@ export async function ${handlerName}(
 ) {
   try {
     logger.info("Handling ${ep.type || "GET"} ${path}");
-    logger.debug("Request details", { params: req.params, query: req.query, body: req.body });
+    logger.debug("Request details", { params: req.params, query: req.query, body: req.body });\n\n`;
 
-`;
+  // Validate Auth Token if required by caller zone or endpoint config
+  const isCallerProtected = trace.incoming.some((inc) => inc.isProtected);
+  const requiresAuth =
+    isCallerProtected ||
+    Boolean(ep.authRuleId) ||
+    Boolean(ep.requiredRoles && ep.requiredRoles.length > 0) ||
+    Boolean(ep.requiredScopes && ep.requiredScopes.length > 0);
+
+  if (requiresAuth) {
+    routeHandlerCode += `    // Validate Auth Token / Authorization Header\n`;
+    routeHandlerCode += `    const authHeader = req.headers.authorization;\n`;
+    routeHandlerCode += `    if (!authHeader || !authHeader.startsWith("Bearer ")) {\n`;
+    routeHandlerCode += `      logger.warn("Authentication failed: Missing or invalid Authorization header");\n`;
+    routeHandlerCode += `      return res.status(401).json({ error: "Unauthorized: Missing Bearer token" });\n`;
+    routeHandlerCode += `    }\n`;
+    routeHandlerCode += `    const authToken = authHeader.substring(7);\n`;
+    if (ep.requiredRoles && ep.requiredRoles.length > 0) {
+      routeHandlerCode += `    // Required roles: ${ep.requiredRoles.join(", ")}\n`;
+    }
+    if (ep.requiredScopes && ep.requiredScopes.length > 0) {
+      routeHandlerCode += `    // Required scopes: ${ep.requiredScopes.join(", ")}\n`;
+    }
+    routeHandlerCode += `\n`;
+  }
 
   // 1. Validation Checks
   const hasValidatedBody = isBodyMethod && bodyTypeRes.hasContent;
