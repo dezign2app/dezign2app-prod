@@ -48,6 +48,40 @@ export function generatePageAndComponentFiles({
       hasExplicitRoot = true;
     }
 
+    const nodeHeaders: Record<string, string> = {};
+    (node.data?.headers || []).forEach((h: any) => {
+      const hKey = h.key || h.name;
+      const hVal = h.value || h.defaultValue || "";
+      if (hKey) {
+        nodeHeaders[hKey] = hVal;
+      }
+    });
+
+    const nodeQueryParams: Record<string, string> = {};
+    (node.data?.queryParams || []).forEach((p: any) => {
+      const pKey = p.key || p.name;
+      const pVal = p.value || p.defaultValue || "";
+      if (pKey) {
+        nodeQueryParams[pKey] = pVal;
+      }
+    });
+
+    let nodeRequestBody: unknown = undefined;
+    if (node.data?.requestBody?.rawJson) {
+      try {
+        nodeRequestBody = JSON.parse(node.data.requestBody.rawJson);
+      } catch {}
+    } else if (node.data?.requestBody?.fields && node.data.requestBody.fields.length > 0) {
+      const bodyObj: Record<string, any> = {};
+      node.data.requestBody.fields.forEach((f: any) => {
+        const fKey = f.name || f.key;
+        if (fKey) {
+          bodyObj[fKey] = f.value ?? f.defaultValue ?? (f.type === "number" ? 0 : f.type === "boolean" ? true : `sample_${fKey}`);
+        }
+      });
+      nodeRequestBody = bodyObj;
+    }
+
     const nodeEvents: UIEventItem[] = node.data?.events || [];
     const pageLoadEvents = nodeEvents.filter(
       (e) => (e.event as string) === "pageLoad" || e.name === "pageLoad",
@@ -69,7 +103,24 @@ export function generatePageAndComponentFiles({
         );
         const evtKey = evt.name || "pageLoad";
         if (link) {
-          statements.push(`const res_${link.targetNodeId} = await fetch("${link.fullUrl}", { headers: { "Content-Type": "application/json" } });
+          const requireAuth = link.requireAuth !== false;
+          const headersEntries = Object.entries(nodeHeaders)
+            .map(([k, v]) => `"${k}": "${v}",`)
+            .join("\n          ");
+
+          statements.push(`const headers_${link.targetNodeId}: Record<string, string> = {
+          "Content-Type": "application/json",
+          ${headersEntries}
+        };
+        ${requireAuth ? `const token_${link.targetNodeId} = await getAuthBearerToken();
+        if (token_${link.targetNodeId}) {
+          headers_${link.targetNodeId}["Authorization"] = token_${link.targetNodeId};
+        }` : ""}
+        const res_${link.targetNodeId} = await fetch("${link.fullUrl}", {
+          method: "${link.method || "GET"}",
+          headers: headers_${link.targetNodeId},
+          ${link.method === "POST" || link.method === "PUT" || link.method === "PATCH" ? `body: JSON.stringify(${nodeRequestBody !== undefined ? JSON.stringify(nodeRequestBody) : `{ eventName: "${evt.name || "pageLoad"}", eventType: "pageLoad" }`}),` : ""}
+        });
         if (res_${link.targetNodeId}.ok) {
           results["${evtKey}"] = await res_${link.targetNodeId}.json();
         } else {
@@ -106,6 +157,7 @@ export function generatePageAndComponentFiles({
       let method = "POST";
       let targetRoute: string | undefined = undefined;
       let targetPageLabel: string | undefined = undefined;
+      let requireAuth = true;
 
       if (evtType === "navigateToPage") {
         const pageRefLink = resolvePageRefLink(
@@ -128,6 +180,7 @@ export function generatePageAndComponentFiles({
         );
         url = link ? link.fullUrl : "";
         method = link ? link.method : "POST";
+        requireAuth = link ? link.requireAuth !== false : true;
       }
 
       eventComponentsMeta.push({
@@ -138,6 +191,10 @@ export function generatePageAndComponentFiles({
         method,
         targetRoute,
         targetPageLabel,
+        requireAuth,
+        customHeaders: Object.keys(nodeHeaders).length > 0 ? nodeHeaders : undefined,
+        queryParams: Object.keys(nodeQueryParams).length > 0 ? nodeQueryParams : undefined,
+        requestBody: nodeRequestBody,
       });
 
       const groupFolder = pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)";
@@ -156,6 +213,10 @@ export function generatePageAndComponentFiles({
           compName,
           targetRoute,
           targetPageLabel,
+          requireAuth,
+          Object.keys(nodeHeaders).length > 0 ? nodeHeaders : undefined,
+          Object.keys(nodeQueryParams).length > 0 ? nodeQueryParams : undefined,
+          nodeRequestBody,
         ),
       });
     });

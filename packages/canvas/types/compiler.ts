@@ -61,6 +61,7 @@ export interface LinkedEndpointInfo {
   method: string;
   path: string;
   fullUrl: string;
+  requireAuth?: boolean;
 }
 
 export interface LinkedPageRefInfo {

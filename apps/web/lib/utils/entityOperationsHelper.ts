@@ -379,22 +379,55 @@ export function generateDefaultDbOperations(
     if (col.isPrimaryKey) return;
     if (
       col.isForeignKey ||
-      (col.name.toLowerCase().endsWith("_id") &&
+      (col.name.toLowerCase().endsWith("id") &&
         col.name.toLowerCase() !== "id" &&
         col.name.toLowerCase() !== "_id")
     ) {
-      const targetBase = col.name.replace(/_id$/i, "");
-      const targetPascal = toPascal(targetBase);
-      const targetPascalSingular = toSingular(targetPascal);
-      const targetPascalPlural = toPlural(targetPascal);
-      const targetTableName = toSqlIdentifier(targetPascalPlural.toLowerCase(), "table");
+      const rawBase = col.name.replace(/(_id|id)$/i, "");
+      let targetTableName = "";
+      let targetPascalSingular = "";
+
+      const roleMap: Record<string, string> = {
+        userId: "user",
+        user_id: "user",
+        inviterId: "user",
+        inviter_id: "user",
+        organizationId: "organization",
+        organization_id: "organization",
+        teamId: "team",
+        team_id: "team",
+      };
+
+      const matchedNode = entityNodes.find((n) => {
+        const lbl = (n.data?.label || n.data?.tableRef || "").toLowerCase();
+        return (
+          lbl === rawBase.toLowerCase() ||
+          toSingular(lbl) === toSingular(rawBase.toLowerCase())
+        );
+      });
+
+      if ((col as any).references?.table) {
+        targetTableName = toTableName((col as any).references.table);
+        targetPascalSingular = toSingular(toPascal(targetTableName));
+      } else if (matchedNode) {
+        const matchedLabel = matchedNode.data?.label || matchedNode.data?.tableRef || rawBase;
+        targetTableName = toTableName(matchedLabel);
+        targetPascalSingular = toSingular(toPascal(targetTableName));
+      } else if (roleMap[col.name]) {
+        targetTableName = roleMap[col.name]!;
+        targetPascalSingular = toSingular(toPascal(targetTableName));
+      } else {
+        // Do not generate a join on columns without an existing table
+        return;
+      }
       const targetVarSingular = toCamel(targetPascalSingular);
+      const targetPkColName = matchedNode?.data?.columns?.find((c: any) => c.isPrimaryKey)?.name || "id";
 
       const fnName = `find${pascalSingular}ByIdWith${targetPascalSingular}`;
       const opId = `auto-join-${tableName}-with-${targetTableName}`;
 
       if (!ops.some((o) => o.name === fnName)) {
-        const joinCode = `const stmtFind${pascalSingular}ByIdWith${targetPascalSingular} = db.prepare<[${pkVarName}: ${pkType}]>(\n  "SELECT t.*, json_object('${pkColName}', r.${pkColName}) AS ${targetVarSingular} FROM ${tableName} t LEFT JOIN ${targetTableName} r ON t.${col.name} = r.${pkColName} WHERE t.${pkColName} = ?"\n);\n\nexport function ${fnName}(${pkVarName}: ${pkType}): ${pascalSingular}With${targetPascalSingular}Row | undefined {\n  const row = stmtFind${pascalSingular}ByIdWith${targetPascalSingular}.get(${pkVarName}) as (${pascalSingular}With${targetPascalSingular}Row & Record<string, unknown>) | undefined;\n  if (!row) return undefined;\n  if (typeof row.${targetVarSingular} === "string") {\n    try { (row as Record<string, unknown>).${targetVarSingular} = JSON.parse(row.${targetVarSingular}); } catch {}\n  }\n  return row;\n}`;
+        const joinCode = `const stmtFind${pascalSingular}ByIdWith${targetPascalSingular} = db.prepare<[${pkVarName}: ${pkType}]>(\n  "SELECT t.*, json_object('${targetPkColName}', r.${targetPkColName}) AS ${targetVarSingular} FROM ${tableName} t LEFT JOIN ${targetTableName} r ON t.${col.name} = r.${targetPkColName} WHERE t.${pkColName} = ?"\n);\n\nexport function ${fnName}(${pkVarName}: ${pkType}): ${pascalSingular}With${targetPascalSingular}Row | undefined {\n  const row = stmtFind${pascalSingular}ByIdWith${targetPascalSingular}.get(${pkVarName}) as (${pascalSingular}With${targetPascalSingular}Row & Record<string, unknown>) | undefined;\n  if (!row) return undefined;\n  if (typeof row.${targetVarSingular} === "string") {\n    try { (row as Record<string, unknown>).${targetVarSingular} = JSON.parse(row.${targetVarSingular}); } catch {}\n  }\n  return row;\n}`;
 
         ops.push({
           id: opId,
@@ -421,22 +454,27 @@ export function generateDefaultDbOperations(
     const otherTableName = toTableName(otherLabel);
     if (otherTableName === tableName) return;
 
-    const otherCols: { name: string; type: string; isPrimaryKey?: boolean; isForeignKey?: boolean }[] =
+    const otherCols: { name: string; type: string; isPrimaryKey?: boolean; isForeignKey?: boolean; references?: { table?: string; column?: string } }[] =
       otherNode.data?.columns || [];
 
     const otherPascal = toPascal(otherTableName);
     const otherPascalSingular = toSingular(otherPascal);
     const otherPascalPlural = toPlural(otherPascal);
     const otherVarPlural = toCamel(otherPascalPlural);
+    const otherPkCol = otherCols.find((c) => c.isPrimaryKey) || otherCols[0];
+    const otherPkColName = otherPkCol?.name || "id";
 
     const otherFkCol = otherCols.find((c) => {
       if (c.isPrimaryKey) return false;
       const cName = (c.name || "").toLowerCase();
       return (
-        c.isForeignKey ||
+        (c.references?.table && toTableName(c.references.table) === tableName) ||
         cName === `${toCamel(pascalSingular)}_id` ||
         cName === `${toSingular(tableName).toLowerCase()}_id` ||
-        cName === `${tableName.toLowerCase()}_id`
+        cName === `${tableName.toLowerCase()}_id` ||
+        cName === `${toCamel(pascalSingular)}id` ||
+        cName === `${toSingular(tableName).toLowerCase()}id` ||
+        cName === `${tableName.toLowerCase()}id`
       );
     });
 
@@ -445,7 +483,7 @@ export function generateDefaultDbOperations(
       const opId = `auto-join-${tableName}-with-${otherTableName}-list`;
 
       if (!ops.some((o) => o.name === fnName)) {
-        const joinCode = `const stmtFind${pascalSingular}ByIdWith${otherPascalPlural} = db.prepare<[${pkVarName}: ${pkType}]>(\n  "SELECT t.*, json_group_array(json_object('${pkColName}', r.${pkColName})) AS ${otherVarPlural} FROM ${tableName} t LEFT JOIN ${otherTableName} r ON t.${pkColName} = r.${otherFkCol.name} WHERE t.${pkColName} = ? GROUP BY t.${pkColName}"\n);\n\nexport function ${fnName}(${pkVarName}: ${pkType}): ${pascalSingular}With${otherPascalPlural}Row | undefined {\n  const row = stmtFind${pascalSingular}ByIdWith${otherPascalPlural}.get(${pkVarName}) as (${pascalSingular}With${otherPascalPlural}Row & Record<string, unknown>) | undefined;\n  if (!row) return undefined;\n  if (typeof row.${otherVarPlural} === "string") {\n    try { (row as Record<string, unknown>).${otherVarPlural} = JSON.parse(row.${otherVarPlural}); } catch {}\n  }\n  return row;\n}`;
+        const joinCode = `const stmtFind${pascalSingular}ByIdWith${otherPascalPlural} = db.prepare<[${pkVarName}: ${pkType}]>(\n  "SELECT t.*, json_group_array(json_object('${otherPkColName}', r.${otherPkColName})) AS ${otherVarPlural} FROM ${tableName} t LEFT JOIN ${otherTableName} r ON t.${pkColName} = r.${otherFkCol.name} WHERE t.${pkColName} = ? GROUP BY t.${pkColName}"\n);\n\nexport function ${fnName}(${pkVarName}: ${pkType}): ${pascalSingular}With${otherPascalPlural}Row | undefined {\n  const row = stmtFind${pascalSingular}ByIdWith${otherPascalPlural}.get(${pkVarName}) as (${pascalSingular}With${otherPascalPlural}Row & Record<string, unknown>) | undefined;\n  if (!row) return undefined;\n  if (typeof row.${otherVarPlural} === "string") {\n    try { (row as Record<string, unknown>).${otherVarPlural} = JSON.parse(row.${otherVarPlural}); } catch {}\n  }\n  return row;\n}`;
 
         ops.push({
           id: opId,

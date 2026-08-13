@@ -25,6 +25,7 @@ export interface NodeHeaderProps {
   title?: string;
   colorClass?: string;
   selected?: boolean;
+  rightElement?: React.ReactNode;
 }
 
 export const NodeHeader = ({
@@ -35,6 +36,7 @@ export const NodeHeader = ({
   title,
   colorClass,
   selected,
+  rightElement,
 }: NodeHeaderProps) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
@@ -103,6 +105,7 @@ export const NodeHeader = ({
             </div>
           )}
         </div>
+        {rightElement}
         <div
           className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-black/10 transition-all cursor-pointer ml-1 shrink-0"
           onClick={(e) => {

@@ -138,6 +138,8 @@ export function resolveLinkedEndpoint(
 
     const fullUrl = `http://localhost:${targetPort}${path}`;
 
+    const requireAuth = ep ? ep.requireAuth !== false : true;
+
     return {
       targetNodeId: targetNode.id,
       targetNodeName: targetServiceName,
@@ -147,6 +149,7 @@ export function resolveLinkedEndpoint(
       method,
       path,
       fullUrl,
+      requireAuth,
     };
   }
 
@@ -179,6 +182,7 @@ export function resolveLinkedEndpoint(
           method: "GET",
           path: "/api/v1",
           fullUrl: `http://localhost:${downstreamPort}/api/v1`,
+          requireAuth: true,
         };
       }
     }
@@ -191,6 +195,7 @@ export function resolveLinkedEndpoint(
       method: "GET",
       path: "/api/gateway",
       fullUrl: `http://localhost:${gatewayPort}/api/gateway`,
+      requireAuth: true,
     };
   }
 
@@ -223,6 +228,7 @@ export function resolveLinkedEndpoint(
       method: "POST",
       path,
       fullUrl,
+      requireAuth: false,
     };
   }
 

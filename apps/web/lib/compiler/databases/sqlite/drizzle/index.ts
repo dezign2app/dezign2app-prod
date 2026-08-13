@@ -246,10 +246,43 @@ export function compileSqliteDrizzleDatabase(
   const dbIndexCode = `import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
 import path from "path";
+import fs from "fs";
 import * as schema from "./schema";
 
-const dbPath = process.env.DATABASE_PATH || path.join(__dirname, "sqlite.db");
+export function resolveDatabasePath(): string {
+  const envPath = process.env.DATABASE_PATH || process.env.DATABASE_URL;
+  if (envPath) {
+    const clean = envPath.replace(/^file:/, "");
+    if (path.isAbsolute(clean)) {
+      return clean;
+    }
+    return path.resolve(process.cwd(), clean);
+  }
+
+  let searchDir = process.cwd();
+  while (searchDir && searchDir !== path.dirname(searchDir)) {
+    if (fs.existsSync(path.join(searchDir, "pnpm-workspace.yaml")) || fs.existsSync(path.join(searchDir, "turbo.json"))) {
+      return path.join(searchDir, "packages", "db", "sqlite.db");
+    }
+    searchDir = path.dirname(searchDir);
+  }
+
+  if (process.cwd().includes("apps") || process.cwd().includes("packages")) {
+    return path.resolve(process.cwd(), "..", "..", "packages", "db", "sqlite.db");
+  }
+
+  return path.resolve(process.cwd(), "packages", "db", "sqlite.db");
+}
+
+const dbPath = resolveDatabasePath();
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
 export const sqlite: Database.Database = new Database(dbPath);
+sqlite.pragma("journal_mode = WAL");
+sqlite.pragma("foreign_keys = ON");
 
 export const db = drizzle(sqlite, { schema });
 export { schema };

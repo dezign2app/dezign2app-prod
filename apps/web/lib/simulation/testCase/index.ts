@@ -133,6 +133,37 @@ export async function simulateTestCase(args: {
     visited.add(`${step.service.id}:${step.endpoint.id}`);
     const isFirst = visited.size === 1;
 
+    // Merge client node configured headers and test case headers
+    const clientHeaders: Record<string, string> = {};
+    (args.client.data?.headers || []).forEach((h: any) => {
+      const hKey = (h.key || h.name || "").toLowerCase();
+      const hVal = h.value || h.defaultValue || "";
+      if (hKey) clientHeaders[hKey] = hVal;
+    });
+
+    const mergedHeaders: Record<string, string> = {
+      ...clientHeaders,
+      ...(args.testCase.request?.headers ?? {}),
+    };
+
+    // If target endpoint requires auth, ensure Authorization: Bearer <token> is present
+    if (step.endpoint.requireAuth !== false && !mergedHeaders["authorization"]) {
+      mergedHeaders["authorization"] = "Bearer simulated-client-jwt-token";
+    }
+
+    // Merge client node query params and test case params
+    const clientParams: Record<string, string> = {};
+    (args.client.data?.queryParams || []).forEach((p: any) => {
+      const pKey = p.key || p.name;
+      const pVal = p.value || p.defaultValue || "";
+      if (pKey) clientParams[pKey] = pVal;
+    });
+
+    const mergedParams: Record<string, string> = {
+      ...clientParams,
+      ...(args.testCase.request?.params ?? {}),
+    };
+
     result = await simulateEndpoint({
       service: step.service,
       endpoint: step.endpoint,
@@ -141,8 +172,8 @@ export async function simulateTestCase(args: {
       request: {
         method: step.endpoint.type || "GET",
         path: step.endpoint.name || "/",
-        headers: args.testCase.request?.headers ?? {},
-        params: args.testCase.request?.params ?? {},
+        headers: mergedHeaders,
+        params: mergedParams,
         body,
       },
       // First hop: use sourceNodeId/sourceEventId so simulateEndpoint derives the

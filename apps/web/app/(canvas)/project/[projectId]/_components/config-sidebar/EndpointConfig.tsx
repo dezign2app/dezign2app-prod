@@ -139,8 +139,15 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         </span>
       </div>
 
-      {/* Auth awareness banner — shown when caller page is in a protected zone */}
-      {isProtected && <AuthAwarenessBanner zoneName={zoneName} />}
+      {/* Auth awareness banner & Bearer token switch */}
+      <AuthAwarenessBanner
+        zoneName={zoneName}
+        isProtected={isProtected}
+        requireAuth={item.requireAuth !== false}
+        onRequireAuthChange={(requireAuth) =>
+          updateEndpoint(item.id, { requireAuth })
+        }
+      />
 
       {node?.type === "api_gateway" && (
         <div className="flex flex-col gap-4 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">

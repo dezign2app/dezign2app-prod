@@ -30,6 +30,9 @@ import {
 } from "lucide-react";
 import { WEB_CLIENT_EVENTS } from "@workspace/canvas";
 import { UIEventItem } from "@/types/canvas";
+import { ParameterEditor } from "../backend-nodes/graph-nodes/Editors";
+import { AuthAwarenessBanner } from "./AuthAwarenessBanner";
+import { RequestBodyEditor } from "./RequestBodyEditor";
 
 const EVENT_OPTIONS = [...WEB_CLIENT_EVENTS];
 
@@ -106,6 +109,17 @@ export const WebClientConfig = ({
       connectedZoneName = matchedZone.name;
     }
   }
+
+  const isProtected =
+    data.useZoneDefault === false
+      ? data.accessType !== "public"
+      : Boolean(
+          connectedZoneName?.toLowerCase().includes("private") ||
+            connectedZoneName?.toLowerCase().includes("protected") ||
+            incomingEdge?.sourceHandle === "private-in" ||
+            incomingEdge?.targetHandle === "private-in" ||
+            (data.accessType && data.accessType !== "public"),
+        );
 
   const handleAddEvent = () => {
     const newEvent: UIEventItem = {
@@ -188,9 +202,60 @@ export const WebClientConfig = ({
           </span>
         </div>
         <p className="text-xs text-muted-foreground">
-          Configure frontend page details, protection rule inheritance, and client routing & navigation conditions.
+          Configure frontend page details, client API parameters, and navigation routing.
         </p>
       </div>
+
+      {/* Auth awareness banner & Bearer token switch */}
+      <AuthAwarenessBanner
+        zoneName={connectedZoneName}
+        isProtected={isProtected}
+        requireAuth={data.requireAuth !== false}
+        onRequireAuthChange={(requireAuth) => updateData({ requireAuth })}
+      />
+
+      <div className="flex flex-col gap-2">
+        <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+          Summary
+        </Label>
+        <Input
+          className="bg-background/50 text-xs"
+          placeholder="e.g. Fetches or submits client data."
+          value={data.summary || data.description || ""}
+          onChange={(e) =>
+            updateData({ summary: e.target.value, description: e.target.value })
+          }
+        />
+      </div>
+
+      <ParameterEditor
+        title="Headers"
+        parameters={data.headers || []}
+        onChange={(headers) => updateData({ headers })}
+      />
+      <ParameterEditor
+        title="Path Params"
+        parameters={data.pathParams || []}
+        onChange={(pathParams) => updateData({ pathParams })}
+      />
+      <ParameterEditor
+        title="Query Params"
+        parameters={data.queryParams || []}
+        onChange={(queryParams) => updateData({ queryParams })}
+      />
+      <RequestBodyEditor
+        mode={
+          data.requestBodyMode ??
+          (data.requestBody?.rawJson ? "raw_json" : "field_builder")
+        }
+        onModeChange={(requestBodyMode) =>
+          updateData({ requestBodyMode })
+        }
+        schema={data.requestBody}
+        onSchemaChange={(requestBody) =>
+          updateData({ requestBody })
+        }
+      />
 
       {/* App & Zone Membership Section */}
       <div className="flex flex-col gap-4 p-4 rounded-xl bg-card border border-border/60 shadow-sm">

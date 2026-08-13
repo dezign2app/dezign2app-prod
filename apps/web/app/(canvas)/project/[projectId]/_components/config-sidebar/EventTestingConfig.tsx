@@ -137,13 +137,29 @@ export const EventTestingConfig: React.FC<EventTestingConfigProps> = ({
     if (selectedGlobalCaseId !== "none") {
       const testCase = testCases.find((tc) => tc.id === selectedGlobalCaseId);
       if (testCase) {
-        setHeaders(
+        const tcHeaders =
           endpoint.headers?.map((h) => ({
             ...h,
             key: h.key ?? h.name,
             value: testCase.request?.headers?.[h.name] ?? h.defaultValue ?? "",
-          })) || [],
-        );
+          })) || [];
+
+        if (
+          endpoint.requireAuth !== false &&
+          !tcHeaders.some((h) => (h.key ?? h.name).toLowerCase() === "authorization")
+        ) {
+          tcHeaders.unshift({
+            id: "auth-bearer",
+            name: "Authorization",
+            key: "Authorization",
+            type: "string",
+            required: true,
+            value: testCase.request?.headers?.["authorization"] ?? "Bearer simulated-jwt-token",
+            defaultValue: "Bearer simulated-jwt-token",
+          });
+        }
+
+        setHeaders(tcHeaders);
         setParams(
           endpointInputParams(endpoint).map((param) => ({
             ...param,
@@ -163,29 +179,74 @@ export const EventTestingConfig: React.FC<EventTestingConfigProps> = ({
       }
     }
 
-    setHeaders(
+    const defaultHeaders =
       endpoint.headers?.map((h) => ({
         ...h,
         key: h.key ?? h.name,
         value: h.value ?? h.defaultValue ?? "",
-      })) || [],
-    );
+      })) || [];
+
+    // Include client node configured headers
+    (parentNode?.data?.headers || []).forEach((ch) => {
+      const chKey = ch.key ?? ch.name;
+      if (chKey && !defaultHeaders.some((h) => (h.key ?? h.name) === chKey)) {
+        defaultHeaders.push({
+          ...ch,
+          key: chKey,
+          value: ch.value ?? ch.defaultValue ?? "",
+        });
+      }
+    });
+
+    // If endpoint requires auth, ensure Authorization header is present by default
+    if (
+      endpoint.requireAuth !== false &&
+      !defaultHeaders.some((h) => (h.key ?? h.name).toLowerCase() === "authorization")
+    ) {
+      defaultHeaders.unshift({
+        id: "auth-bearer",
+        name: "Authorization",
+        key: "Authorization",
+        type: "string",
+        required: true,
+        value: "Bearer simulated-jwt-token",
+        defaultValue: "Bearer simulated-jwt-token",
+      });
+    }
+
+    setHeaders(defaultHeaders);
     setParams(endpointInputParams(endpoint));
     setBody(getInitialBody(endpoint));
     setResponse(null);
-  }, [endpoint, selectedGlobalCaseId, testCases]);
+  }, [endpoint, selectedGlobalCaseId, testCases, parentNode?.data?.headers]);
 
   const loadCase = (caseId: string) => {
     selectTestCase(caseId === "none" ? undefined : caseId);
     const testCase = testCases.find((item) => item.id === caseId);
     if (!testCase || !endpoint) return;
-    setHeaders(
+    const tcHeaders =
       endpoint.headers?.map((h) => ({
         ...h,
         key: h.key ?? h.name,
         value: testCase.request?.headers?.[h.name] ?? h.defaultValue ?? "",
-      })) || [],
-    );
+      })) || [];
+
+    if (
+      endpoint.requireAuth !== false &&
+      !tcHeaders.some((h) => (h.key ?? h.name).toLowerCase() === "authorization")
+    ) {
+      tcHeaders.unshift({
+        id: "auth-bearer",
+        name: "Authorization",
+        key: "Authorization",
+        type: "string",
+        required: true,
+        value: testCase.request?.headers?.["authorization"] ?? "Bearer simulated-jwt-token",
+        defaultValue: "Bearer simulated-jwt-token",
+      });
+    }
+
+    setHeaders(tcHeaders);
     setParams(
       endpointInputParams(endpoint).map((param) => ({
         ...param,

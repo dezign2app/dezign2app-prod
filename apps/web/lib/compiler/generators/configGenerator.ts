@@ -163,6 +163,7 @@ export function generateConfigFiles(
     cors: "^2.8.5",
     dotenv: "^16.4.5",
     zod: "^3.24.2",
+    jose: "^5.9.6",
   };
 
   if (grpcEnabled) {
@@ -205,6 +206,8 @@ export function generateConfigFiles(
       compilerOptions: {
         outDir: "./dist",
         rootDir: "./src",
+        declaration: false,
+        declarationMap: false,
       },
       include: ["src/**/*"],
     },
@@ -245,6 +248,7 @@ GRPC_PORT=${grpcPort}
 NODE_ENV=development
 LOG_LEVEL=info
 DATABASE_PATH=../../packages/db/sqlite.db
+DATABASE_URL=../../packages/db/sqlite.db
 ${connectedServiceEnvLines.length > 0 ? connectedServiceEnvLines.join("\n") + "\n" : ""}`;
 
 

@@ -8,8 +8,7 @@ import type {
 } from "../techStack";
 import type { Endpoint, WorkerTask, SearchSource } from "../schemas";
 import type { InterServiceProtocol } from "../constants";
-
-import type { UIEventItem } from "./simulation";
+import type { UIEventItem, Parameter, Schema } from "./simulation";
 import type { MessagingNodeData } from "./messaging";
 import type {
   GatewayRoute,
@@ -373,6 +372,13 @@ export interface CanvasWebClientNodeData {
   useZoneDefault?: boolean;
   protectionOverride?: ProtectionRule;
   events?: UIEventItem[];
+  headers?: Parameter[];
+  pathParams?: Parameter[];
+  queryParams?: Parameter[];
+  requestBody?: Schema;
+  requestBodyMode?: "field_builder" | "raw_json";
+  summary?: string;
+  requireAuth?: boolean;
 }
 
 /** Payments node fields (canvas type). */

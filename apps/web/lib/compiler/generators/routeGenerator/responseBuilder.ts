@@ -95,13 +95,32 @@ export function buildResponsePayloadCode(
         const cols: string[] = f.selectedColumns || [];
 
         if (targetVar) {
+          const isArrayCategory = category === "array" || category === "partial_array";
+          const isSingleCategory = category === "single" || category === "partial_single";
+
           if (isPartial && cols.length > 0) {
             const pickProps = cols.map((c) => `${c}: item.${c}`).join(", ");
-            fieldEntries.push(
-              `      ${fieldName}: Array.isArray(${targetVar}) ? ${targetVar}.map((item) => ({ ${pickProps} })) : ${targetVar} ? ({ ${cols.map((c) => `${c}: ${targetVar}.${c}`).join(", ")} }) : null`,
-            );
+            if (isArrayCategory) {
+              fieldEntries.push(
+                `      ${fieldName}: (Array.isArray(${targetVar}) ? ${targetVar} : ${targetVar} ? [${targetVar}] : []).map((item: any) => ({ ${pickProps} }))`,
+              );
+            } else {
+              fieldEntries.push(
+                `      ${fieldName}: ${targetVar} ? ({ ${cols.map((c) => `${c}: (${targetVar} as any).${c}`).join(", ")} }) : null`,
+              );
+            }
           } else {
-            fieldEntries.push(`      ${fieldName}: ${targetVar}`);
+            if (isArrayCategory) {
+              fieldEntries.push(
+                `      ${fieldName}: Array.isArray(${targetVar}) ? ${targetVar} : ${targetVar} ? [${targetVar}] : []`,
+              );
+            } else if (isSingleCategory) {
+              fieldEntries.push(
+                `      ${fieldName}: Array.isArray(${targetVar}) ? ${targetVar}[0] : ${targetVar}`,
+              );
+            } else {
+              fieldEntries.push(`      ${fieldName}: ${targetVar}`);
+            }
           }
         } else {
           if (category === "array" || category === "partial_array") {

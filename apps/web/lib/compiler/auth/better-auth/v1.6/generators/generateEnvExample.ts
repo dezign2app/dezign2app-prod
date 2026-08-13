@@ -45,7 +45,8 @@ BETTER_AUTH_URL=${baseUrl}
 NEXT_PUBLIC_BETTER_AUTH_URL=${baseUrl}
 NEXT_PUBLIC_AUTH_BASE_URL=${baseUrl}
 
-# Database Connection URL (used by better-sqlite3)
-DATABASE_URL=sqlite.db${oauthEnvs}
+# Centralized Database Connection (points to packages/db/sqlite.db)
+DATABASE_PATH=../../packages/db/sqlite.db
+DATABASE_URL=../../packages/db/sqlite.db${oauthEnvs}
 `;
 }

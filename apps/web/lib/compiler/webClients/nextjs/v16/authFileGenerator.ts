@@ -70,14 +70,17 @@ export function generateAuthFilesAndDependencies({
       });
     }
 
-    const routeFile = compiledAuth.files.find((f) => f.filename.endsWith("route.ts"));
-    if (routeFile) {
-      files.push({
-        filename: "app/api/auth/[...all]/route.ts",
-        language: "typescript",
-        content: routeFile.content,
-      });
-    }
+    files.push({
+      filename: "app/api/auth/[...all]/route.ts",
+      language: "typescript",
+      content: `import { auth } from "@/lib/auth";
+import { toNextJsHandler } from "better-auth/next-js";
+
+export const dynamic = "force-dynamic";
+
+export const { POST, GET } = toNextJsHandler(auth);
+`,
+    });
 
     const envFile = compiledAuth.files.find((f) => f.filename.endsWith(".env"));
     if (envFile) {
@@ -140,15 +143,13 @@ export async function requireSession(redirectTo: string = "/login") {
     let userExistsInDb = false;
 
     try {
-      const Database = (await import("better-sqlite3")).default;
-      const db = new Database(process.env.DATABASE_URL || "sqlite.db");
-      const row = db.prepare("SELECT id FROM user WHERE id = ?").get(userId);
-      db.close();
-      if (row && (row as { id: string }).id) {
+      const { findUserById } = await import("@workspace/db");
+      const user = findUserById(userId);
+      if (user && user.id) {
         userExistsInDb = true;
       }
     } catch (_dbErr) {
-      // Fallback if sqlite is not used directly
+      // Fallback if db is not directly queried
       userExistsInDb = Boolean(session && session.user && session.user.id);
     }
 
@@ -251,10 +252,8 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
           pkgObj.dependencies["@libsql/client"] = "^0.14.0";
           pkgObj.devDependencies["@types/better-sqlite3"] = "^7.6.12";
           pkgObj.scripts = pkgObj.scripts || {};
-          pkgObj.scripts["postinstall"] = "node -e \"try { const p = require('path').dirname(require.resolve('better-sqlite3/package.json')); require('child_process').execSync('npx prebuild-install', {cwd: p, stdio: 'inherit'}); } catch (e) {}\"";
           pkgObj.devDependencies["prebuild-install"] = "^7.1.3";
-          pkgObj.scripts = pkgObj.scripts || {};
-          pkgObj.scripts["postinstall"] = "prebuild-install || pnpm rebuild better-sqlite3";
+          pkgObj.scripts["postinstall"] = "prebuild-install || node -e \"try { const p = require('path').dirname(require.resolve('better-sqlite3/package.json')); require('child_process').execSync('npx prebuild-install', {cwd: p, stdio: 'inherit'}); } catch (e) {}\"";
         } else if (dbAdapterKey === "drizzle") {
           pkgObj.dependencies["drizzle-orm"] = "^0.30.0";
         } else if (dbAdapterKey === "prisma") {
@@ -296,6 +295,50 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
       }
     }
   }
+
+  // Always generate client auth token helper for API calls
+  files.push({
+    filename: "lib/auth-token.ts",
+    language: "typescript",
+    content: `/**
+ * Helper to retrieve the Bearer authorization token for client API requests.
+ * Checks localStorage, sessionStorage, or active Better Auth session.
+ */
+export async function getAuthBearerToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+
+  // 1. Check browser storage
+  const stored =
+    localStorage.getItem("auth_token") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("bearer_token") ||
+    sessionStorage.getItem("auth_token") ||
+    sessionStorage.getItem("token");
+
+  if (stored) {
+    return stored.startsWith("Bearer ") ? stored : \`Bearer \${stored}\`;
+  }
+
+  // 2. Check active Better Auth client session
+  try {
+    const { authClient } = await import("@/lib/auth-client");
+    if (authClient && typeof authClient.getSession === "function") {
+      const sessionRes = await authClient.getSession();
+      const token =
+        sessionRes?.data?.session?.token ||
+        (sessionRes?.data as { token?: string })?.token;
+      if (token) {
+        return token.startsWith("Bearer ") ? token : \`Bearer \${token}\`;
+      }
+    }
+  } catch (_e) {
+    // Auth client not available or session uninitialized
+  }
+
+  return null;
+}
+`,
+  });
 }
 
 /**
