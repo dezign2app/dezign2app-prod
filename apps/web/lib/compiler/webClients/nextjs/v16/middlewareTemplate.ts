@@ -1,15 +1,21 @@
 import { PageInfo } from "./types";
+import { BackendNodeData } from "@workspace/canvas";
 
 /**
  * Generates Next.js 16 proxy.ts for route protection (replaces deprecated middleware.ts)
  * Implements Tier 1: Lightweight optimistic session cookie redirect using getSessionCookie(request)
  */
-export function generateProxy(pagesInfo: PageInfo[]): string {
+export function generateProxy(pagesInfo: PageInfo[], authNodeData?: BackendNodeData): string {
   const protectedPages = pagesInfo.filter(
     (p) => p.accessType && p.accessType !== "public",
   );
 
-  if (protectedPages.length === 0) {
+  const redirects = authNodeData?.redirects || {};
+  const signInPageUrl = redirects.signInPageUrl || "/login";
+  const signUpPageUrl = redirects.signUpPageUrl || "/register";
+  const signInRedirectUrl = redirects.signInRedirectUrl || "/";
+
+  if (protectedPages.length === 0 && !authNodeData) {
     return `import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
@@ -26,7 +32,7 @@ export const config = {
   const routeRules = protectedPages.map((p) => {
     const route = p.routePath;
     const accessType = p.accessType;
-    const redirect = p.redirectTo || (accessType === "payment-gated" ? "/pricing" : accessType === "org-gated" ? "/select-org" : "/login");
+    const redirect = p.redirectTo || (accessType === "payment-gated" ? "/pricing" : accessType === "org-gated" ? "/select-org" : signInPageUrl);
     const roles = JSON.stringify(p.allowedRoles || []);
     const plans = JSON.stringify(p.requiredPlans || []);
     const orgRoles = JSON.stringify(p.allowedOrgRoles || []);
@@ -57,13 +63,22 @@ const PROTECTED_ROUTES: RouteRule[] = [
 ${routeRules.join(",\n")}
 ];
 
+const AUTH_PAGES = [${JSON.stringify(signInPageUrl)}, ${JSON.stringify(signUpPageUrl)}];
+const DEFAULT_AUTH_REDIRECT = ${JSON.stringify(signInRedirectUrl)};
+
 /**
  * Next.js 16 Proxy / Middleware
  * Tier 1: Lightweight optimistic UX redirect check for session cookie presence
  */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
+  const sessionCookie = getSessionCookie(request);
+
+  // Redirect authenticated user away from sign-in/sign-up page to default post-auth redirect
+  if (sessionCookie && AUTH_PAGES.includes(pathname)) {
+    return NextResponse.redirect(new URL(DEFAULT_AUTH_REDIRECT, request.url));
+  }
+
   const matchedRule = PROTECTED_ROUTES.find((rule) => 
     rule.path === "/" ? pathname === "/" : pathname.startsWith(rule.path)
   );
@@ -73,10 +88,8 @@ export function proxy(request: NextRequest) {
   }
 
   // Tier 1 Optimistic Check using Better Auth cookie helper
-  const sessionCookie = getSessionCookie(request);
-
   if (!sessionCookie) {
-    const loginUrl = new URL(matchedRule.redirectTo || "/login", request.url);
+    const loginUrl = new URL(matchedRule.redirectTo || ${JSON.stringify(signInPageUrl)}, request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
@@ -92,6 +105,7 @@ export const config = {
 }
 
 export const generateMiddleware = generateProxy;
+
 
 
 

@@ -494,6 +494,17 @@ export const WebClientNode = ({
     data.useZoneDefault === false || data.protectionOverride,
   );
 
+  const cleanLabel = (data.label || "").trim().toLowerCase();
+  const isLandingPage =
+    data.isRoot === true ||
+    cleanLabel === "/" ||
+    cleanLabel === "home" ||
+    cleanLabel === "index" ||
+    cleanLabel === "landing" ||
+    cleanLabel === "landing page" ||
+    cleanLabel === "landingpage" ||
+    cleanLabel === "root";
+
   return (
     <div
       className={cn(
@@ -516,7 +527,7 @@ export const WebClientNode = ({
         data={data}
         nodeType="webClient"
         icon={Globe}
-        title="Web Client(page)"
+        title={isLandingPage ? "Web Client (Landing Page /)" : "Web Client (page)"}
         selected={selected}
       />
 

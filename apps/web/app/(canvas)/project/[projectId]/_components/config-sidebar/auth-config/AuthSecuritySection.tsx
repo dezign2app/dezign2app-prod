@@ -40,12 +40,14 @@ const getConfiguredPages = (allNodes: BackendNode[]): ConfiguredPage[] => {
 
   webClientNodes.forEach((node, idx) => {
     const rawLabel = node.data?.label || `Page ${idx + 1}`;
+    const cleanLabel = rawLabel.trim().toLowerCase();
     let path: string | undefined = node.data?.path || node.data?.pageSlug || node.data?.route;
-    if (!path) {
+    if (!path || cleanLabel === "/" || cleanLabel === "home" || cleanLabel === "landing" || cleanLabel === "root") {
       const slug = labelToSlug(rawLabel, idx);
       path = slug === "home" ? "/" : `/${slug}`;
     }
     if (!path.startsWith("/")) path = `/${path}`;
+    if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
 
     pagesList.push({
       id: node.id,

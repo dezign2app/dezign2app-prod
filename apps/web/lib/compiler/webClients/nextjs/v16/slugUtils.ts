@@ -4,6 +4,12 @@ export function labelToSlug(label: string, index: number): string {
     clean === "home" ||
     clean === "index" ||
     clean === "/" ||
+    clean === "landing" ||
+    clean === "landing page" ||
+    clean === "landingpage" ||
+    clean === "/landing" ||
+    clean === "root" ||
+    clean === "/root" ||
     clean === "web client" ||
     clean === "web client (page)" ||
     clean === "web client(page)" ||
@@ -23,3 +29,4 @@ export function slugToComponentName(slug: string): string {
   const camel = slug.replace(/-([a-z0-9])/g, (_, char) => char.toUpperCase());
   return camel.charAt(0).toUpperCase() + camel.slice(1) + "Page";
 }
+
