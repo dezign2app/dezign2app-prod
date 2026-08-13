@@ -134,7 +134,7 @@ export function resolveLinkedEndpoint(
     const rawPath = ep?.name || "data";
     let path = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
 
-    path = path.replace(/:\w+|\{\w+\}/g, "1");
+    path = path.replace(/\s+/g, "-").replace(/:\w+|\{\w+\}/g, "1");
 
     const fullUrl = `http://localhost:${targetPort}${path}`;
 

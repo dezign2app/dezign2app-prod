@@ -65,7 +65,7 @@ async def health_handler():
       const handlerName = `${routeFileName}_handler`;
       const pascalName = toPascalCase(rawName);
       const rawPath = ep.name?.startsWith("/") ? ep.name : `/${ep.name || ""}`;
-      const path = convertPathParams(rawPath);
+      const path = convertPathParams(rawPath).replace(/\s+/g, "-");
       const summary = ep.summary || `Handler for ${ep.type || "GET"} ${path}`;
 
       const parsedResSchema = parseSchemaJson(ep.responseBody?.rawJson);

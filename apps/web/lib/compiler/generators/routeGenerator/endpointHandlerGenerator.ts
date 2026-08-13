@@ -68,7 +68,8 @@ export function generateEndpointRouteHandler(
   const handlerName = `${routeFileName}Handler`;
   const pascalName = `${pascalServiceName}${toPascalCase(routeFileName)}`;
   const schemaVarPrefix = `${serviceFolderName}${toPascalCase(routeFileName)}`;
-  const path = ep.name?.startsWith("/") ? ep.name : `/${ep.name || ""}`;
+  const rawPath = ep.name?.startsWith("/") ? ep.name : `/${ep.name || ""}`;
+  const path = rawPath.replace(/\s+/g, "-");
   const summary = ep.summary || `Handler for ${ep.type || "GET"} ${path}`;
 
   const parsedResSchema = parseSchemaJson(ep.responseBody?.rawJson);
