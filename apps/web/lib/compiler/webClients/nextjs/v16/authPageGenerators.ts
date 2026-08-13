@@ -15,7 +15,7 @@ const socialSvgIcons: Record<string, string> = {
   fallback: `<svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 0121 9z"/></svg>`,
 };
 
-export function generateAuthPageCode(
+export function generateAuthFormComponent(
   pageMeta: PageInfo,
   authNodeData?: BackendNodeData,
 ): string {
@@ -40,6 +40,9 @@ export function generateAuthPageCode(
     : [];
 
   const emailPasswordEnabled = providers.emailPassword?.enabled !== false;
+
+  const baseName = pageMeta.componentName.replace(/Page$/, "");
+  const formCompName = baseName.endsWith("Form") ? baseName : `${baseName}Form`;
 
   const socialButtonsJsx = oauthList
     .map((oa: OAuthProviderConfig) => {
@@ -175,7 +178,7 @@ ${socialButtonsJsx}
 
   return `"use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
@@ -183,9 +186,8 @@ import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@workspace/ui/components/card";
-import { Badge } from "@workspace/ui/components/badge";
 
-function ${pageMeta.componentName}Form() {
+export function ${formCompName}() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectParam = searchParams ? searchParams.get("redirect") : null;
@@ -328,6 +330,23 @@ function ${pageMeta.componentName}Form() {
     </Card>
   );
 }
+`;
+}
+
+export function generateAuthPageCode(
+  pageMeta: PageInfo,
+  _authNodeData?: BackendNodeData,
+): string {
+  const baseName = pageMeta.componentName.replace(/Page$/, "");
+  const formCompName = baseName.endsWith("Form") ? baseName : `${baseName}Form`;
+
+  return `"use client";
+
+import React, { Suspense } from "react";
+import Link from "next/link";
+import { Badge } from "@workspace/ui/components/badge";
+import { Card } from "@workspace/ui/components/card";
+import { ${formCompName} } from "./_components/${formCompName}";
 
 export default function ${pageMeta.componentName}() {
   return (
@@ -349,7 +368,7 @@ export default function ${pageMeta.componentName}() {
             Loading authentication form...
           </Card>
         }>
-          <${pageMeta.componentName}Form />
+          <${formCompName} />
         </Suspense>
       </div>
     </main>

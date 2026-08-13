@@ -8,7 +8,10 @@ export {
   generatePageHeaderComponent,
   generateRootIndexHeaderComponent,
 } from "./headerGenerators";
-export { generateAuthPageCode } from "./authPageGenerators";
+export {
+  generateAuthPageCode,
+  generateAuthFormComponent,
+} from "./authPageGenerators";
 export {
   generatePageCode,
   generateRootIndexPage,
