@@ -60,7 +60,8 @@ describe("${serviceName} Unit Test: healthRoute", () => {
     usedFileNames.add(routeFileName);
 
     const handlerName = `${routeFileName}Handler`;
-    const path = ep.name?.startsWith("/") ? ep.name : `/${ep.name || ""}`;
+    const rawPath = ep.name?.startsWith("/") ? ep.name : `/${ep.name || ""}`;
+    const path = rawPath.replace(/\s+/g, "-");
     const expectedStatus = method === "post" ? 201 : 200;
 
     // Match any simulation test cases defined for this endpoint

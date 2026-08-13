@@ -132,10 +132,9 @@ def test_health_route():
 
       const testFilename = `tests/unit/test_${routeFileName}.py`;
       const rawPath = ep.name?.startsWith("/") ? ep.name : `/${ep.name || ""}`;
-      const path = convertPathParams(rawPath).replace(
-        /\{([a-zA-Z0-9_]+)\}/g,
-        "1",
-      );
+      const path = convertPathParams(rawPath)
+        .replace(/\s+/g, "-")
+        .replace(/\{([a-zA-Z0-9_]+)\}/g, "1");
       const expectedStatus = method === "post" ? 201 : 200;
 
       let testContent = `from fastapi.testclient import TestClient
