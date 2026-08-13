@@ -39,7 +39,7 @@ export function layoutSchemaRanks({
 
   // Spacing & Gap Constants
   const subColGapX = 90; // Horizontal offset to push staggered sub-columns/lines
-  const nodeGapY = 70; // Vertical gap between stacked tables within a sub-column
+  const nodeGapY = 45; // Vertical gap between stacked tables within a sub-column
   const minRankSep = 260; // Minimum horizontal gap between consecutive ranks
 
   let currentRankStartX = 120; // Initial margin for rank 0

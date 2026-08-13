@@ -55,7 +55,7 @@ export function performLangGraphLayout({
     marginx: 80,
     marginy: 80,
     ranksep: isHorizontal ? 220 : 160,
-    nodesep: 120,
+    nodesep: 50,
   });
 
   mainFlowNodes.forEach((node: LayoutNode) => {

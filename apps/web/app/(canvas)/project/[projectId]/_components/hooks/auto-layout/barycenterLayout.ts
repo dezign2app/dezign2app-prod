@@ -283,8 +283,8 @@ export function runBarycenterRefinement({
     return total;
   };
 
-  // Use wider gaps for entity/schema views so edges have room to breathe
-  const nodeGap = hasEntityNodesLocal ? 200 : 160;
+  // Use compact gaps so vertical Y-axis spacing remains tight and readable
+  const nodeGap = hasEntityNodesLocal ? 60 : 45;
   const minRankGap = hasEntityNodesLocal ? 200 : 160;
 
   const reapplyRankPositions = () => {
@@ -310,7 +310,7 @@ export function runBarycenterRefinement({
         });
 
         const subGapX = 80;
-        const subGapY = 80;
+        const subGapY = 40;
 
         const gridTotalWidth =
           numCols * maxNodeWidth + (numCols - 1) * subGapX;
@@ -578,8 +578,8 @@ export function runBarycenterRefinement({
 
           if (isConnectedToSkipEdge || overlapsEdge) {
             // Choose the direction that requires less movement
-            const pushUpY = yEdgeAtRank - nH - 90;
-            const pushDownY = yEdgeAtRank + 90;
+            const pushUpY = yEdgeAtRank - nH - 45;
+            const pushDownY = yEdgeAtRank + 45;
             const nodeCenterY = nPos.y + nH / 2;
             const distUp = Math.abs(nodeCenterY - (pushUpY + nH / 2));
             const distDown = Math.abs(nodeCenterY - (pushDownY + nH / 2));
@@ -611,7 +611,7 @@ export function runBarycenterRefinement({
   // ---------------------------------------------------------------------------
   const resolveNodeEdgeOverlaps = () => {
     const BEZIER_SAMPLES = 14;
-    const clearance = hasEntityNodesLocal ? 100 : 70;
+    const clearance = hasEntityNodesLocal ? 40 : 30;
     const maxPasses = 6;
 
     for (let pass = 0; pass < maxPasses; pass++) {
@@ -754,7 +754,7 @@ export function runBarycenterRefinement({
 
   // --- Final AABB Overlap Resolution Pass ---
   const resolveNodeOverlaps = () => {
-    const padding = hasEntityNodesLocal ? 80 : 70;
+    const padding = hasEntityNodesLocal ? 35 : 25;
     let hasOverlaps = true;
     let iterations = 0;
     const maxIterations = 20;

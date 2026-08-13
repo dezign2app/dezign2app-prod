@@ -17,6 +17,66 @@ export const MiddlewareCodePreviewSection = ({
   rule,
   leaves,
 }: MiddlewareCodePreviewSectionProps) => {
+  const generateLeafCode = (leaf: ConditionPrimitive): string => {
+    if (leaf.type === "auth") {
+      if (leaf.op === "signedOut") {
+        return `  if (claims.userId) return { allowed: false, redirect: "${rule.redirects?.["no-auth"] || "/login"}" };`;
+      }
+      return `  if (!claims.userId) return { allowed: false, redirect: "${rule.redirects?.["no-auth"] || "/login"}" };`;
+    }
+
+    if (leaf.type === "orgRole") {
+      const vals = (leaf.values || ["owner", "admin"]).map((v) => `"${v}"`).join(", ");
+      const isNotIn = leaf.op === "notIn";
+      return `  if (!claims.orgRole || ${isNotIn ? "" : "!"}[${vals}].includes(claims.orgRole)) return { allowed: false, redirect: "${rule.redirects?.["wrong-role"] || "/unauthorized"}" };`;
+    }
+
+    if (leaf.type === "plan") {
+      const vals = (leaf.values || ["pro", "enterprise"]).map((v) => `"${v}"`).join(", ");
+      const isNotIn = leaf.op === "notIn";
+      return `  if (!claims.planId || ${isNotIn ? "" : "!"}[${vals}].includes(claims.planId)) return { allowed: false, redirect: "${rule.redirects?.["wrong-plan"] || "/pricing"}" };`;
+    }
+
+    if (leaf.type === "subscriptionStatus") {
+      const vals = (leaf.values || ["active", "trialing"]).map((v) => `"${v}"`).join(", ");
+      const isNotIn = leaf.op === "statusNotIn";
+      return `  if (!claims.subscriptionStatus || ${isNotIn ? "" : "!"}[${vals}].includes(claims.subscriptionStatus)) return { allowed: false, redirect: "${rule.redirects?.["no-access"] || "/pricing"}" };`;
+    }
+
+    if (leaf.type === "access") {
+      const notGranted = leaf.op === "notGranted";
+      return `  if (${notGranted ? "claims.hasAccess" : "!claims.hasAccess"}) return { allowed: false, redirect: "${rule.redirects?.["no-access"] || "/pricing"}" };`;
+    }
+
+    if (leaf.type === "org") {
+      return `  if (!claims.orgId) return { allowed: false, redirect: "${rule.redirects?.["no-org"] || "/select-org"}" };`;
+    }
+
+    if (leaf.type === "customClaim") {
+      const key = leaf.key;
+      if (leaf.op === "in" || leaf.op === "notIn") {
+        const vals = ((leaf.values && leaf.values.length > 0) ? leaf.values : [String(leaf.value ?? "active")]).map((v) => `"${v}"`).join(", ");
+        const isNotIn = leaf.op === "notIn";
+        return `  if (!claims["${key}"] || ${isNotIn ? "" : "!"}[${vals}].includes(String(claims["${key}"]))) return { allowed: false, redirect: "${rule.redirects?.default || "/login"}" };`;
+      }
+      if (leaf.op === "eq") {
+        return `  if (claims["${key}"] !== "${leaf.value || ""}") return { allowed: false, redirect: "${rule.redirects?.default || "/login"}" };`;
+      }
+      if (leaf.op === "neq") {
+        return `  if (claims["${key}"] === "${leaf.value || ""}") return { allowed: false, redirect: "${rule.redirects?.default || "/login"}" };`;
+      }
+      if (leaf.op === "truthy") {
+        return `  if (!claims["${key}"]) return { allowed: false, redirect: "${rule.redirects?.default || "/login"}" };`;
+      }
+      if (leaf.op === "falsy") {
+        return `  if (claims["${key}"]) return { allowed: false, redirect: "${rule.redirects?.default || "/login"}" };`;
+      }
+    }
+    return "";
+  };
+
+  const codeLines = leaves.map(generateLeafCode).filter(Boolean);
+
   return (
     <div className="flex flex-col gap-4 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
       <div
@@ -47,8 +107,7 @@ export const MiddlewareCodePreviewSection = ({
           <pre className="p-3 bg-muted/80 rounded-lg text-[11px] font-mono border border-border/60 overflow-x-auto text-foreground">
 {`// Evaluated deterministically in proxy.ts
 export function evaluateZone_${currentZone.id.replace(/[^a-zA-Z0-9]/g, "_")}(claims: SessionClaims) {
-  if (!claims.userId) return { allowed: false, redirect: "${rule.redirects?.["no-auth"] || "/login"}" };
-${leaves.some((l) => l.type === "orgRole") ? `  if (!claims.orgRole || !["owner", "admin"].includes(claims.orgRole)) return { allowed: false, redirect: "${rule.redirects?.["wrong-role"] || "/unauthorized"}" };\n` : ""}${leaves.some((l) => l.type === "access") ? `  if (!claims.hasAccess) return { allowed: false, redirect: "${rule.redirects?.["no-access"] || "/pricing"}" };\n` : ""}  return { allowed: true };
+${codeLines.length > 0 ? codeLines.join("\n") + "\n" : '  if (!claims.userId) return { allowed: false, redirect: "/login" };\n'}  return { allowed: true };
 }`}
           </pre>
         </div>

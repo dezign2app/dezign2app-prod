@@ -298,6 +298,25 @@ export const ZoneConfig = ({
     });
   };
 
+  const handleUpdateCondition = (index: number, updatedCondition: ConditionPrimitive) => {
+    const initialChildren: ConditionNode[] =
+      rule.conditions.kind === "group"
+        ? rule.conditions.children
+        : [{ kind: "leaf", condition: rule.conditions.condition }];
+
+    const updatedChildren = initialChildren.map((child, idx) => {
+      if (idx === index) {
+        return { kind: "leaf" as const, condition: updatedCondition };
+      }
+      return child;
+    });
+
+    updateZoneRule({
+      ...rule,
+      conditions: { kind: "group", op: "AND", children: updatedChildren },
+    });
+  };
+
   // Redirect Map CRUD handlers
   const DEFAULT_REDIRECT_MAP: Record<string, string> = {
     "no-auth": "/login",
@@ -388,8 +407,10 @@ export const ZoneConfig = ({
           authClaims={authClaims}
           authNodeLabel={authNodeLabel}
           isAuthConnected={isAuthConnected}
+          allNodes={nodes}
           onAddCondition={handleAddCondition}
           onRemoveCondition={handleRemoveCondition}
+          onUpdateCondition={handleUpdateCondition}
         />
 
         <RedirectMapSection

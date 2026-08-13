@@ -264,8 +264,9 @@ export type ConditionPrimitive =
   | {
       type: "customClaim";
       key: string;
-      op: "eq" | "neq" | "truthy" | "falsy";
+      op: "eq" | "neq" | "in" | "notIn" | "truthy" | "falsy";
       value?: string | number | boolean;
+      values?: string[];
     };
 
 export type ConditionNode =
