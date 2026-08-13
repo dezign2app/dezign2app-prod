@@ -20,6 +20,7 @@ export function generateProjectConfigFiles(appSlug: string = "web-app"): Compile
         postinstall: "pnpm rebuild better-sqlite3",
       },
       dependencies: {
+        "@libsql/client": "^0.14.0",
         "@workspace/db": "workspace:*",
         "@workspace/logger": "workspace:*",
         "@workspace/ui": "workspace:*",

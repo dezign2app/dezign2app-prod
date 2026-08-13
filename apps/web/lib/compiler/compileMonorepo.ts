@@ -131,10 +131,34 @@ export function compileMonorepo(
   });
 
 
+  // Helper to resolve unique folder name for services
+  const getUniqueServiceFolder = (label: string, defaultName: string) => {
+    const base = (label || defaultName).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || defaultName;
+    let folderName = base;
+    let counter = 1;
+    while (servicesInfo.some((s) => s.folderName === folderName)) {
+      counter++;
+      folderName = `${base}-${counter}`;
+    }
+    return folderName;
+  };
+
+  // Helper to resolve unique folder name for web clients
+  const getUniqueWebClientFolder = (slug: string, defaultName: string) => {
+    const base = (slug || defaultName).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || defaultName;
+    let folderName = base;
+    let counter = 1;
+    while (webClientsInfo.some((w) => w.folderName === folderName)) {
+      counter++;
+      folderName = `${base}-${counter}`;
+    }
+    return folderName;
+  };
+
   // 5. Generate Apps: apps/<sanitizedName> for Service Nodes
   serviceNodes.forEach((srvNode) => {
-    const rawName = srvNode.data.label || "Service";
-    const folderName = rawName.toLowerCase().replace(/[^a-z0-9]/g, "-");
+    const rawName = srvNode.data?.label || "Service";
+    const folderName = getUniqueServiceFolder(rawName, "service");
     servicesInfo.push({
       id: srvNode.id,
       name: rawName,
@@ -163,11 +187,7 @@ export function compileMonorepo(
   // 5.5. Generate Apps: apps/<sanitizedName> for LangGraph Service Nodes
   langGraphNodes.forEach((lgNode) => {
     const rawName = lgNode.data?.label || "LangGraph Service";
-    let folderName =
-      rawName.toLowerCase().replace(/[^a-z0-9]/g, "-") || "langgraph-service";
-    if (servicesInfo.some((s) => s.folderName === folderName)) {
-      folderName = `${folderName}-agent`;
-    }
+    const folderName = getUniqueServiceFolder(rawName, "langgraph-service");
     servicesInfo.push({
       id: lgNode.id,
       name: rawName,
@@ -199,8 +219,7 @@ export function compileMonorepo(
     if (isConnected) {
       const authResult = compileAuth(authNode, endpoints, events, nodes, edges, testCases);
       const rawName = authNode.data?.label || "Auth Server";
-      const folderName =
-        rawName.toLowerCase().replace(/[^a-z0-9]/g, "-") || "auth-server";
+      const folderName = getUniqueServiceFolder(rawName, "auth-server");
       servicesInfo.push({
         id: authNode.id,
         name: rawName,
@@ -224,24 +243,26 @@ export function compileMonorepo(
 
     // Process explicit WebApp nodes
     webAppNodes.forEach((appNode) => {
-      const appName = appNode.data.label || "Web Application";
+      const appName = appNode.data?.label || "Web Application";
       const appSlug =
-        appNode.data.appSlug ||
+        appNode.data?.appSlug ||
         appName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
-      appMap.set(appSlug, {
-        appName,
-        appSlug,
-        webAppNode: appNode,
-        pageNodes: [],
-      });
+      if (!appMap.has(appSlug)) {
+        appMap.set(appSlug, {
+          appName,
+          appSlug,
+          webAppNode: appNode,
+          pageNodes: [],
+        });
+      }
     });
 
     // Default app slug from first WebApp node or fallback "web-app"
     const defaultAppSlug =
       webAppNodes.length > 0
-        ? (webAppNodes[0]!.data.appSlug ||
-           (webAppNodes[0]!.data.label || "web-app").toLowerCase().replace(/[^a-z0-9]+/g, "-"))
+        ? (webAppNodes[0]!.data?.appSlug ||
+           (webAppNodes[0]!.data?.label || "web-app").toLowerCase().replace(/[^a-z0-9]+/g, "-"))
         : "web-app";
 
     if (webAppNodes.length === 0 && !appMap.has(defaultAppSlug)) {
@@ -270,8 +291,8 @@ export function compileMonorepo(
         const targetAppNode = webAppNodes.find((n) => n.id === targetAppId);
         if (targetAppNode) {
           targetAppSlug =
-            targetAppNode.data.appSlug ||
-            (targetAppNode.data.label || "web-app")
+            targetAppNode.data?.appSlug ||
+            (targetAppNode.data?.label || "web-app")
               .toLowerCase()
               .replace(/[^a-z0-9]+/g, "-");
 
@@ -313,25 +334,25 @@ export function compileMonorepo(
             routeGroup = cleanHandle ? cleanHandle.toLowerCase().replace(/[^a-z0-9]+/g, "-") : "public";
           }
         }
-      } else if (pageNode.data.appSlug && appMap.has(pageNode.data.appSlug)) {
+      } else if (pageNode.data?.appSlug) {
         targetAppSlug = pageNode.data.appSlug;
         routeGroup =
           pageNode.data.routeGroup ||
           (pageNode.data.accessType && pageNode.data.accessType !== "public" ? "private" : "public");
-      } else if (webAppNodes.length === 0) {
+      } else {
         targetAppSlug = defaultAppSlug;
         routeGroup =
-          pageNode.data.routeGroup ||
-          (pageNode.data.accessType && pageNode.data.accessType !== "public" ? "private" : "public");
+          pageNode.data?.routeGroup ||
+          (pageNode.data?.accessType && pageNode.data?.accessType !== "public" ? "private" : "public");
       }
 
-      if (!targetAppSlug || !appMap.has(targetAppSlug)) {
+      if (!targetAppSlug) {
         return;
       }
 
       if (!appMap.has(targetAppSlug)) {
         appMap.set(targetAppSlug, {
-          appName: pageNode.data.appName || targetAppSlug,
+          appName: pageNode.data?.appName || targetAppSlug,
           appSlug: targetAppSlug,
           pageNodes: [],
         });
@@ -348,22 +369,23 @@ export function compileMonorepo(
           appSlug: targetAppSlug,
           appName: targetAppObj.appName,
           routeGroup,
-          accessType: accessTypeOverride || pageNode.data.accessType || "public",
-          allowedRoles: pageNode.data.allowedRoles || appNodeData?.allowedRoles,
-          requiredPlans: pageNode.data.requiredPlans || appNodeData?.requiredPlans,
-          allowedOrgRoles: pageNode.data.allowedOrgRoles || appNodeData?.allowedOrgRoles,
-          authNodeId: pageNode.data.authNodeId || appNodeData?.authNodeId,
+          accessType: accessTypeOverride || pageNode.data?.accessType || "public",
+          allowedRoles: pageNode.data?.allowedRoles || appNodeData?.allowedRoles,
+          requiredPlans: pageNode.data?.requiredPlans || appNodeData?.requiredPlans,
+          allowedOrgRoles: pageNode.data?.allowedOrgRoles || appNodeData?.allowedOrgRoles,
+          authNodeId: pageNode.data?.authNodeId || appNodeData?.authNodeId,
         },
       };
 
       targetAppObj.pageNodes.push(enrichedPageNode);
     });
 
-    appMap.forEach(({ appName, appSlug, pageNodes }, slug) => {
+    appMap.forEach(({ appName, appSlug, pageNodes }) => {
+      const folderName = getUniqueWebClientFolder(appSlug, "web-app");
       webClientsInfo.push({
-        id: `web-app-${slug}`,
+        id: `web-app-${appSlug}`,
         name: appName,
-        folderName: slug,
+        folderName,
       });
 
       const webClientResult = compileWebClientNodes(
@@ -379,7 +401,7 @@ export function compileMonorepo(
 
       webClientResult.files.forEach((f) => {
         files.push({
-          filename: `apps/${slug}/${f.filename}`,
+          filename: `apps/${folderName}/${f.filename}`,
           language: f.language,
           content: f.content,
         });
@@ -388,18 +410,20 @@ export function compileMonorepo(
   }
 
   // 7. Generate Root tsconfig.json (referencing packages and apps)
-  const rootReferences = [
-    { path: "packages/typescript-config" },
-    { path: "packages/ui" },
-    { path: "packages/db" },
-    { path: "packages/logger" },
-    { path: "packages/types" },
-    ...(compiledKafka.files.length > 0 ? [{ path: `packages/${compiledKafka.packageFolder}` }] : []),
-    ...(compiledRedis.files.length > 0 ? [{ path: "packages/redis" }] : []),
-    ...grpcPackageFolders.map((folder) => ({ path: folder })),
-    ...servicesInfo.map((s) => ({ path: `apps/${s.folderName}` })),
-    ...webClientsInfo.map((w) => ({ path: `apps/${w.folderName}` })),
+  const rawRootPaths = [
+    "packages/typescript-config",
+    "packages/ui",
+    "packages/db",
+    "packages/logger",
+    "packages/types",
+    ...(compiledKafka.files.length > 0 ? [`packages/${compiledKafka.packageFolder}`] : []),
+    ...(compiledRedis.files.length > 0 ? ["packages/redis"] : []),
+    ...grpcPackageFolders,
+    ...servicesInfo.map((s) => `apps/${s.folderName}`),
+    ...webClientsInfo.map((w) => `apps/${w.folderName}`),
   ];
+  const rootReferences = Array.from(new Set(rawRootPaths)).map((p) => ({ path: p }));
+
   const rootTsconfig = JSON.stringify(
     {
       files: [],
@@ -418,7 +442,7 @@ export function compileMonorepo(
   files.push(
     generateRootReadme(
       projectName,
-      serviceNodes.length,
+      servicesInfo.length,
       webClientNodes.length,
       entityNodes.length,
       servicesInfo,
@@ -428,9 +452,16 @@ export function compileMonorepo(
     ),
   );
 
+  // Deduplicate files by filename (keeping the latest definition for any duplicated file path)
+  const uniqueFilesMap = new Map<string, CompiledFile>();
+  files.forEach((file) => {
+    uniqueFilesMap.set(file.filename, file);
+  });
+  const finalFiles = Array.from(uniqueFilesMap.values());
+
   return {
     projectName,
-    files,
+    files: finalFiles,
     services: servicesInfo,
     webClients: webClientsInfo,
   };

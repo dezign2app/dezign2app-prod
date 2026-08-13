@@ -248,7 +248,13 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
           dbAdapterKey === "default"
         ) {
           pkgObj.dependencies["better-sqlite3"] = "^12.0.0";
+          pkgObj.dependencies["@libsql/client"] = "^0.14.0";
           pkgObj.devDependencies["@types/better-sqlite3"] = "^7.6.12";
+          pkgObj.scripts = pkgObj.scripts || {};
+          pkgObj.scripts["postinstall"] = "node -e \"try { const p = require('path').dirname(require.resolve('better-sqlite3/package.json')); require('child_process').execSync('npx prebuild-install', {cwd: p, stdio: 'inherit'}); } catch (e) {}\"";
+          pkgObj.devDependencies["prebuild-install"] = "^7.1.3";
+          pkgObj.scripts = pkgObj.scripts || {};
+          pkgObj.scripts["postinstall"] = "prebuild-install || pnpm rebuild better-sqlite3";
         } else if (dbAdapterKey === "drizzle") {
           pkgObj.dependencies["drizzle-orm"] = "^0.30.0";
         } else if (dbAdapterKey === "prisma") {

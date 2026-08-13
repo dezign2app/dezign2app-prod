@@ -89,6 +89,8 @@ export function buildResponsePayloadCode(
       }
 
       if (f.type && f.type.startsWith("db:")) {
+        const parts = f.type.split(":");
+        const category = parts[2] || "single";
         const isPartial = f.type.includes(":partial");
         const cols: string[] = f.selectedColumns || [];
 
@@ -102,7 +104,11 @@ export function buildResponsePayloadCode(
             fieldEntries.push(`      ${fieldName}: ${targetVar}`);
           }
         } else {
-          fieldEntries.push(`      ${fieldName}: null`);
+          if (category === "array" || category === "partial_array") {
+            fieldEntries.push(`      ${fieldName}: []`);
+          } else {
+            fieldEntries.push(`      ${fieldName}: {} as any`);
+          }
         }
         continue;
       }
@@ -129,7 +135,7 @@ export function buildResponsePayloadCode(
           fieldEntries.push(`      ${fieldName}: {}`);
           break;
         default:
-          fieldEntries.push(`      ${fieldName}: null`);
+          fieldEntries.push(`      ${fieldName}: {} as any`);
       }
     }
 
