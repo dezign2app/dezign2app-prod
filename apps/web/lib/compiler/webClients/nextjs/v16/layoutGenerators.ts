@@ -1,3 +1,5 @@
+import { PageInfo } from "./types";
+import { CompiledFile } from "@workspace/canvas/types";
 import { slugToComponentName } from "./slugUtils";
 
 export function generateRootLayout(
@@ -117,5 +119,28 @@ export default async function ${componentName}({
 }
 `;
 }
+
+/**
+ * Generates section layout files for all route groups present in pagesInfo
+ */
+export function generateRouteGroupLayouts(pagesInfo: PageInfo[]): CompiledFile[] {
+  const files: CompiledFile[] = [];
+  const routeGroups = new Set<string>();
+  pagesInfo.forEach((p) => {
+    if (p.routeGroup) routeGroups.add(p.routeGroup);
+  });
+  if (routeGroups.size === 0) routeGroups.add("public");
+
+  routeGroups.forEach((groupName) => {
+    files.push({
+      filename: `app/(${groupName})/layout.tsx`,
+      language: "typescript",
+      content: generateSectionLayout(groupName),
+    });
+  });
+
+  return files;
+}
+
 
 
