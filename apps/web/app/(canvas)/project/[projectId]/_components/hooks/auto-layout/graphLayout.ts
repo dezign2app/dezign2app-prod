@@ -92,7 +92,7 @@ export function performGraphLayout({
     marginx: 80,
     marginy: 80,
     ranksep: isHorizontal ? 200 : 150,
-    nodesep: 110,
+    nodesep: 50,
   });
 
   mainGraphNodes.forEach((node: LayoutNode) => {

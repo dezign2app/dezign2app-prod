@@ -58,7 +58,7 @@ export function performSchemaLayout({
     marginx: 120,
     marginy: 120,
     ranksep: 320,
-    nodesep: 80,
+    nodesep: 50,
   });
 
   entityFlowNodes.forEach((node: LayoutNode) => {
