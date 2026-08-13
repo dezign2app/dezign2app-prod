@@ -338,89 +338,91 @@ export const WebClientConfig = ({
                   </div>
 
                   {/* Target Page Selection */}
-                  <div className="flex flex-col gap-2 pt-1 border-t border-border/40">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                        <Globe size={10} className="text-indigo-500" /> Target Page / Route
-                      </Label>
-                      {connectedPageRefNode && (
-                        <Badge variant="outline" className="text-[9px] font-mono bg-indigo-500/15 border-indigo-500/30 text-indigo-600 dark:text-indigo-400 shrink-0 flex items-center gap-1">
-                          <CheckCircle2 size={10} /> Connected PageRef
-                        </Badge>
-                      )}
-                    </div>
+                  {(ev.event === "navigateToPage" || !ev.event) && (
+                    <div className="flex flex-col gap-2 pt-1 border-t border-border/40">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                          <Globe size={10} className="text-indigo-500" /> Target Page / Route
+                        </Label>
+                        {connectedPageRefNode && (
+                          <Badge variant="outline" className="text-[9px] font-mono bg-indigo-500/15 border-indigo-500/30 text-indigo-600 dark:text-indigo-400 shrink-0 flex items-center gap-1">
+                            <CheckCircle2 size={10} /> Connected PageRef
+                          </Badge>
+                        )}
+                      </div>
 
-                    <div className="flex items-center gap-2">
-                      <Select
-                        value={
-                          ev.targetPageId ||
-                          connectedPageRefNode?.data?.targetPageId ||
-                          connectedPageRefNode?.data?.pageRefId ||
-                          ev.targetRoute ||
-                          ""
-                        }
-                        onValueChange={(v) => {
-                          const selectedP = pageNodes.find((p) => p.id === v);
-                          const pageLabel = selectedP?.data?.label || "Page";
-                          const cleanLabel = pageLabel.trim().toLowerCase();
-                          const isRoot =
-                            selectedP?.data?.isRoot === true ||
-                            cleanLabel === "/" ||
-                            cleanLabel === "home" ||
-                            cleanLabel === "index" ||
-                            cleanLabel === "landing";
-                          const path = selectedP
-                            ? isRoot
-                              ? "/"
-                              : `/${cleanLabel.replace(/\s+/g, "-")}`
-                            : v;
-
-                          handleUpdateEvent(ev.id, {
-                            targetPageId: selectedP ? v : undefined,
-                            targetRoute: path,
-                          });
-
-                          if (connectedPageRefNode) {
-                            updateNode(connectedPageRefNode.id, {
-                              data: {
-                                ...connectedPageRefNode.data,
-                                targetPageId: v,
-                                pageRefId: v,
-                                targetPageLabel: pageLabel,
-                                label: `Ref: ${isRoot ? "/" : pageLabel}`,
-                              },
-                            });
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={
+                            ev.targetPageId ||
+                            connectedPageRefNode?.data?.targetPageId ||
+                            connectedPageRefNode?.data?.pageRefId ||
+                            ev.targetRoute ||
+                            ""
                           }
-                        }}
-                      >
-                        <SelectTrigger className="h-8 text-xs bg-background flex-1">
-                          <SelectValue placeholder="Select target web page..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {pageNodes.map((p) => {
-                            const label = p.data?.label || "Untitled Page";
-                            return (
-                              <SelectItem key={p.id} value={p.id} className="text-xs">
-                                📄 {label}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
+                          onValueChange={(v) => {
+                            const selectedP = pageNodes.find((p) => p.id === v);
+                            const pageLabel = selectedP?.data?.label || "Page";
+                            const cleanLabel = pageLabel.trim().toLowerCase();
+                            const isRoot =
+                              selectedP?.data?.isRoot === true ||
+                              cleanLabel === "/" ||
+                              cleanLabel === "home" ||
+                              cleanLabel === "index" ||
+                              cleanLabel === "landing";
+                            const path = selectedP
+                              ? isRoot
+                                ? "/"
+                                : `/${cleanLabel.replace(/\s+/g, "-")}`
+                              : v;
 
-                      {!connectedPageRefNode && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-xs border-indigo-500/30 text-indigo-600 dark:text-indigo-400 shrink-0"
-                          onClick={() => handleSpawnPageRefNode(ev.id)}
-                          title="Spawn & Connect PageRef node on canvas"
+                            handleUpdateEvent(ev.id, {
+                              targetPageId: selectedP ? v : undefined,
+                              targetRoute: path,
+                            });
+
+                            if (connectedPageRefNode) {
+                              updateNode(connectedPageRefNode.id, {
+                                data: {
+                                  ...connectedPageRefNode.data,
+                                  targetPageId: v,
+                                  pageRefId: v,
+                                  targetPageLabel: pageLabel,
+                                  label: `Ref: ${isRoot ? "/" : pageLabel}`,
+                                },
+                              });
+                            }
+                          }}
                         >
-                          <Plus size={11} className="mr-1" /> Connect PageRef
-                        </Button>
-                      )}
+                          <SelectTrigger className="h-8 text-xs bg-background flex-1">
+                            <SelectValue placeholder="Select target web page..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {pageNodes.map((p) => {
+                              const label = p.data?.label || "Untitled Page";
+                              return (
+                                <SelectItem key={p.id} value={p.id} className="text-xs">
+                                  📄 {label}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+
+                        {!connectedPageRefNode && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs border-indigo-500/30 text-indigo-600 dark:text-indigo-400 shrink-0"
+                            onClick={() => handleSpawnPageRefNode(ev.id)}
+                            title="Spawn & Connect PageRef node on canvas"
+                          >
+                            <Plus size={11} className="mr-1" /> Connect PageRef
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               );
             })}

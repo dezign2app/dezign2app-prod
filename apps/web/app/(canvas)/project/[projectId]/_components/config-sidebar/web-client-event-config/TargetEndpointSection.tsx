@@ -89,7 +89,7 @@ export const TargetEndpointSection: React.FC<TargetEndpointSectionProps> = ({
                   value="none"
                   className="text-xs text-muted-foreground"
                 >
-                  — None (Unconnected) —
+                  None
                 </SelectItem>
                 {serviceNodes.map((sn) => (
                   <SelectItem key={sn.id} value={sn.id} className="text-xs">
@@ -141,7 +141,7 @@ export const TargetEndpointSection: React.FC<TargetEndpointSectionProps> = ({
                   value="none"
                   className="text-xs text-muted-foreground"
                 >
-                  — None —
+                  None
                 </SelectItem>
                 {availableEndpoints.map((ep) => (
                   <SelectItem key={ep.id} value={ep.id} className="text-xs">

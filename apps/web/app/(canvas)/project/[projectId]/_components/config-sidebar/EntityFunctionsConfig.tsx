@@ -196,7 +196,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
 
   // Available table nodes for BusinessLogicBlock context
   const availableTableNodes = allNodes
-    .filter((n) => n?.type === "entity" || n?.type === "db_ref" || n?.type === "database")
+    .filter((n) => n?.type === "entity")
     .map((n) => ({
       id: n.id,
       label: n.data?.label || "Table",

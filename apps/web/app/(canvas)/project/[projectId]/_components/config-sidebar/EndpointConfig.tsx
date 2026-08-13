@@ -74,10 +74,10 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
   );
 
   const availableTableNodes = allNodes
-    .filter((n) => n?.type === "db_ref" || n?.type === "database")
+    .filter((n) => n?.type === "entity")
     .map((n) => ({
       id: n.id,
-      label: n.data?.label || n.data?.tableRef || "Table Reference",
+      label: n.data?.label || "Table",
     }));
 
   const databaseNodeIds =
@@ -89,7 +89,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
     const rawOps = item.crudOperations?.[tableNodeId];
     const operations: CrudOperation[] = Array.isArray(rawOps)
       ? rawOps
-      : ["read"];
+      : [];
     const explanations = item.crudExplanations?.[tableNodeId] as
       | Record<CrudOperation, string>
       | undefined;
@@ -276,6 +276,8 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         onCrudConfigChange={handleCrudConfigChange}
         availableTableNodes={availableTableNodes}
         allNodes={allNodes}
+        serviceNodeId={nodeId}
+        endpointId={item.id}
         publishedEvents={item.publishedEvents || []}
         endpointMethod={item.type || "POST"}
         endpointPath={item.name || "/"}

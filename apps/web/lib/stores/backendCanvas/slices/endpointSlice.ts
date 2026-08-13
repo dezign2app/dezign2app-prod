@@ -121,8 +121,17 @@ export const createEndpointSlice = (
             const targetNode = get().nodes.find((n) => n?.id === edge.target);
             const isDbNode =
               targetNode &&
-              (targetNode.type === "db_ref" || targetNode.type === "database");
-            if (isDbNode && !targetDbNodeIds.has(edge.target)) {
+              (targetNode.type === "db_ref" ||
+                targetNode.type === "database" ||
+                targetNode.type === "entity");
+
+            const isTargetInConfig =
+              targetDbNodeIds.has(edge.target) ||
+              (targetNode?.type === "db_ref" &&
+                targetNode.data?.tableRef &&
+                targetDbNodeIds.has(targetNode.data.tableRef));
+
+            if (isDbNode && !isTargetInConfig) {
               nextEdges = nextEdges.filter((e) => e && e.id !== edge.id);
               removedEdgeIds.push(edge.id);
             }
@@ -131,25 +140,32 @@ export const createEndpointSlice = (
 
         // 2. Add missing edges for DB nodes in targetDbNodeIds
         targetDbNodeIds.forEach((targetDbId) => {
+          const dbRefNode = get().nodes.find(
+            (n) => n?.type === "db_ref" && n.data?.tableRef === targetDbId,
+          );
+          const actualTargetId = dbRefNode ? dbRefNode.id : targetDbId;
+
           const hasEdge = nextEdges.some(
             (e) =>
               e &&
               e.source === updated.nodeId &&
               e.sourceHandle === epSourceHandle &&
-              e.target === targetDbId,
+              (e.target === actualTargetId || e.target === targetDbId),
           );
-          const targetNode = get().nodes.find((n) => n?.id === targetDbId);
+          const targetNode = get().nodes.find((n) => n?.id === actualTargetId);
           if (
             !hasEdge &&
             targetNode &&
-            (targetNode.type === "db_ref" || targetNode.type === "database")
+            (targetNode.type === "db_ref" ||
+              targetNode.type === "database" ||
+              targetNode.type === "entity")
           ) {
             const lastEdgeIndex = getLastIndex(nextEdges);
             const fractionalIndex = generateKeyBetween(lastEdgeIndex, null);
             const newEdge: BackendEdge = {
-              id: `edge-${Date.now()}-${updated.id}-${targetDbId}`,
+              id: `edge-${Date.now()}-${updated.id}-${actualTargetId}`,
               source: updated.nodeId,
-              target: targetDbId,
+              target: actualTargetId,
               type: "connection",
               sourceHandle: epSourceHandle,
               targetHandle: "database-target",

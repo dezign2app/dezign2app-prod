@@ -1,3 +1,5 @@
+import { BackendNode } from "@/types/canvas";
+
 export type LogicMode = "natural_language" | "code";
 
 export type CrudOperation = "create" | "read" | "update" | "delete" | string;
@@ -34,7 +36,9 @@ export interface BusinessLogicBlockProps {
   crudConfig?: TableCrudConfig[];
   onCrudConfigChange?: (config: TableCrudConfig[]) => void;
   availableTableNodes?: { id: string; label: string }[];
-  allNodes?: any[];
+  allNodes?: BackendNode[];
+  serviceNodeId?: string;
+  endpointId?: string;
 
   // Messaging & Endpoint Context Props
   publishedEvents?: PublishedEventInfo[];
