@@ -1,0 +1,4 @@
+dist-electron/
+release/
+.next/
+node_modules/

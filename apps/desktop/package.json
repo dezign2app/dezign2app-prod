@@ -1,0 +1,92 @@
+{
+  "name": "desktop",
+  "version": "0.0.1",
+  "private": true,
+  "author": "Dezign2App Team",
+  "description": "Dezign2App desktop app powered by Electron",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "wait-on http://localhost:3000 && tsc -p tsconfig.electron.json && electron .",
+    "build:electron": "tsc -p tsconfig.electron.json && electron-builder --dir",
+    "rebuild:native": "electron-rebuild -f -w node-pty",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
+    "@types/node": "^20.19.30",
+    "@types/react": "^19.2.10",
+    "@types/react-dom": "^19.2.3",
+    "@workspace/typescript-config": "workspace:*",
+    "concurrently": "^9.1.2",
+    "cross-env": "^10.1.0",
+    "electron": "^34.5.1",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.9.3",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.dezign2app.desktop",
+    "productName": "Dezign2App",
+    "asar": false,
+    "npmRebuild": false,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "subhash131",
+        "repo": "blueprint"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "extraResources": [
+      {
+        "from": "../web/.next",
+        "to": "web/.next"
+      },
+      {
+        "from": "../web/public",
+        "to": "web/public"
+      },
+      {
+        "from": "../web/package.json",
+        "to": "web/package.json"
+      },
+      {
+        "from": "../web/.env",
+        "to": "web/.env"
+      },
+      {
+        "from": "../web/node_modules",
+        "to": "web/node_modules",
+        "filter": [
+          "!**/*.map"
+        ]
+      }
+    ],
+    "files": [
+      "dist-electron/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/favicon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "public/favicon.ico"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}
