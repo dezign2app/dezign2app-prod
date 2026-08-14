@@ -33,6 +33,11 @@ export type UIEventItem = {
   name: string;
   event?: string;
   schema?: string;
+  headers?: Parameter[];
+  pathParams?: Parameter[];
+  queryParams?: Parameter[];
+  requestBody?: Schema;
+  requestBodyMode?: "field_builder" | "raw_json";
   navigationType?: "link" | "router";
   navigationCondition?: "direct" | "on_success" | "on_condition" | "on_error";
   targetRoute?: string;

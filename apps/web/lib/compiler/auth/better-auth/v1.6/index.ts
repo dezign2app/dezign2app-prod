@@ -4,12 +4,10 @@ import { BetterAuthV16NodeData } from "./types";
 import {
   generateAuthConfig,
   generateNextJsRouteHandler,
-  generateAuthIndex,
-  generateAuthPackageJson,
   generateEnvExample,
-  generateReadme,
   generateFastApiMiddleware,
 } from "./generators";
+import { generateAuthClient } from "../../../generators/auth-providers/better-auth/v1.6/generateAuthClient";
 
 export * from "./types";
 export * from "./adapters";
@@ -17,49 +15,37 @@ export * from "./providers";
 export * from "./generators";
 
 /**
- * Compiles a Canvas Auth Node into a complete `CompiledServiceResult` using Better Auth v1.6
+ * Compiles a Canvas Auth Node into integrated monorepo auth artifacts (Better Auth config,
+ * client SDK, Next.js route handler, FastAPI middleware, and environment variables).
  */
-export function compileBetterAuthV16Service(
+export function compileBetterAuthV16(
   node: BackendNode,
   _allNodes: BackendNode[] = [],
   _allEdges: BackendEdge[] = []
-): CompiledServiceResult {
+): CompiledServiceResult & { authNodeId: string } {
   const data = (node.data || {}) as BetterAuthV16NodeData;
-  const serviceName = data.label || "Auth Server";
+  const serviceName = data.label || "Auth";
+  const authPort = data.port || "3000";
+  const authBaseUrl = data.baseUrl || `http://localhost:${authPort}`;
 
   const files: CompiledFile[] = [
     {
-      filename: "src/auth.ts",
+      filename: "auth.ts",
       language: "typescript",
       content: generateAuthConfig(data),
     },
     {
-      filename: "src/index.ts",
+      filename: "auth-client.ts",
       language: "typescript",
-      content: generateAuthIndex(data),
+      content: generateAuthClient({
+        baseUrl: authBaseUrl,
+        plugins: ["adminClient", "organizationClient"],
+      }),
     },
     {
-      filename: "package.json",
-      language: "json",
-      content: generateAuthPackageJson(data),
-    },
-    {
-      filename: "tsconfig.json",
-      language: "json",
-      content: JSON.stringify(
-        {
-          extends: "@workspace/typescript-config/base.json",
-          compilerOptions: {
-            outDir: "./dist",
-            rootDir: "./src",
-            declaration: false,
-            declarationMap: false,
-          },
-          include: ["src/**/*"],
-        },
-        null,
-        2,
-      ),
+      filename: "route.ts",
+      language: "typescript",
+      content: generateNextJsRouteHandler(data),
     },
     {
       filename: ".env",
@@ -72,11 +58,6 @@ export function compileBetterAuthV16Service(
       content: generateEnvExample(data),
     },
     {
-      filename: "README.md",
-      language: "markdown",
-      content: generateReadme(data),
-    },
-    {
       filename: "auth_middleware.py",
       language: "python",
       content: generateFastApiMiddleware(data),
@@ -84,8 +65,12 @@ export function compileBetterAuthV16Service(
   ];
 
   return {
+    authNodeId: node.id,
     serviceId: node.id,
     serviceName,
     files,
   };
 }
+
+export const compileBetterAuthV16Service = compileBetterAuthV16;
+

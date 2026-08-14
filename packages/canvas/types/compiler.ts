@@ -1,4 +1,5 @@
 import type { ReusableFunction } from "./nodes";
+import type { Endpoint } from "../schemas";
 
 export interface CompiledFile {
   filename: string;
@@ -62,6 +63,7 @@ export interface LinkedEndpointInfo {
   path: string;
   fullUrl: string;
   requireAuth?: boolean;
+  endpoint?: Endpoint;
 }
 
 export interface LinkedPageRefInfo {

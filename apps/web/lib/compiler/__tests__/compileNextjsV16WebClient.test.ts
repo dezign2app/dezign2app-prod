@@ -76,6 +76,7 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
         sourceHandle: "events-evt-load-1",
         targetHandle: "endpoint-in-ep-get-orders",
         type: "connection",
+        fractionalIndex: "a0",
       },
       {
         id: "edge-2",
@@ -84,6 +85,7 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
         sourceHandle: "events-evt-btn-1",
         targetHandle: "endpoint-in-ep-post-order",
         type: "connection",
+        fractionalIndex: "a1",
       },
     ];
 
@@ -164,6 +166,7 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
         sourceHandle: "events-evt-btn-2",
         targetHandle: "endpoint-in-ep-ping",
         type: "connection",
+        fractionalIndex: "a0",
       },
     ];
 

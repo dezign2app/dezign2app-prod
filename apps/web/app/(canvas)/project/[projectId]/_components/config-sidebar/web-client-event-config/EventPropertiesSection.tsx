@@ -1,5 +1,4 @@
 import React from "react";
-import { JsonPayloadEditor } from "../../backend-nodes/graph-nodes/Editors";
 import {
   Select,
   SelectContent,
@@ -14,22 +13,20 @@ import {
 } from "@workspace/ui/components/accordion";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
+import { Sparkles } from "lucide-react";
 
 interface EventPropertiesSectionProps {
   eventName: string;
   eventType: string;
   customEvent: string;
-  eventSchema: string;
   eventOptions: readonly string[];
   isNavigateToPage: boolean;
   setEventName: (val: string) => void;
   setEventType: (val: string) => void;
   setCustomEvent: (val: string) => void;
-  setEventSchema: (val: string) => void;
   handleUpdateEvent: (
     name: string,
     finalEvent: string,
-    schema: string,
   ) => void;
 }
 
@@ -37,13 +34,10 @@ export const EventPropertiesSection: React.FC<EventPropertiesSectionProps> = ({
   eventName,
   eventType,
   customEvent,
-  eventSchema,
   eventOptions,
-  isNavigateToPage,
   setEventName,
   setEventType,
   setCustomEvent,
-  setEventSchema,
   handleUpdateEvent,
 }) => {
   return (
@@ -52,14 +46,17 @@ export const EventPropertiesSection: React.FC<EventPropertiesSectionProps> = ({
       className="border rounded-xl overflow-hidden bg-card"
     >
       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-secondary/20 transition-colors [&>svg]:shrink-0">
-        <span className="text-xs font-semibold">Event Properties & Schema</span>
+        <div className="flex items-center gap-2">
+          <Sparkles size={14} className="text-primary" />
+          <span className="text-xs font-semibold">Event Properties</span>
+        </div>
       </AccordionTrigger>
       <AccordionContent className="px-4 pb-4 pt-2">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-3 p-3 bg-secondary/10 border rounded-lg">
             <div className="grid gap-1">
               <Label className="text-xs font-mono text-muted-foreground">
-                Name
+                Action Name
               </Label>
               <Input
                 className="h-8 text-xs bg-background"
@@ -69,15 +66,15 @@ export const EventPropertiesSection: React.FC<EventPropertiesSectionProps> = ({
                   handleUpdateEvent(
                     eventName,
                     eventType === "other" ? customEvent : eventType,
-                    eventSchema,
                   )
                 }
+                placeholder="e.g. submitOrder, fetchUserProfile"
               />
             </div>
 
             <div className="grid gap-1">
               <Label className="text-xs font-mono text-muted-foreground">
-                Type
+                Trigger Event Type
               </Label>
               <div className="flex flex-col gap-1">
                 <Select
@@ -87,7 +84,6 @@ export const EventPropertiesSection: React.FC<EventPropertiesSectionProps> = ({
                     handleUpdateEvent(
                       eventName,
                       v === "other" ? customEvent : v,
-                      eventSchema,
                     );
                   }}
                 >
@@ -111,7 +107,6 @@ export const EventPropertiesSection: React.FC<EventPropertiesSectionProps> = ({
                       handleUpdateEvent(
                         eventName,
                         customEvent,
-                        eventSchema,
                       )
                     }
                     placeholder="Custom event"
@@ -120,36 +115,6 @@ export const EventPropertiesSection: React.FC<EventPropertiesSectionProps> = ({
                 )}
               </div>
             </div>
-
-            {!isNavigateToPage && (
-              <div className="pt-2 flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Input Schema
-                  </Label>
-                </div>
-                <JsonPayloadEditor
-                  title="Schema"
-                  value={(() => {
-                    if (!eventSchema) return undefined;
-                    try {
-                      return JSON.parse(eventSchema);
-                    } catch {
-                      return undefined;
-                    }
-                  })()}
-                  onChange={(val) => {
-                    const strVal = JSON.stringify(val);
-                    setEventSchema(strVal);
-                    handleUpdateEvent(
-                      eventName,
-                      eventType === "other" ? customEvent : eventType,
-                      strVal,
-                    );
-                  }}
-                />
-              </div>
-            )}
           </div>
         </div>
       </AccordionContent>

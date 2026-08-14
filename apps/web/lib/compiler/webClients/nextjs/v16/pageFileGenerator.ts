@@ -158,6 +158,7 @@ export function generatePageAndComponentFiles({
       let targetRoute: string | undefined = undefined;
       let targetPageLabel: string | undefined = undefined;
       let requireAuth = true;
+      let link: ReturnType<typeof resolveLinkedEndpoint> = null;
 
       if (evtType === "navigateToPage") {
         const pageRefLink = resolvePageRefLink(
@@ -171,7 +172,7 @@ export function generatePageAndComponentFiles({
         targetRoute = pageRefLink.targetRoute;
         targetPageLabel = pageRefLink.targetNodeName;
       } else {
-        const link = resolveLinkedEndpoint(
+        link = resolveLinkedEndpoint(
           node.id,
           evt.id,
           allNodes,
@@ -195,6 +196,8 @@ export function generatePageAndComponentFiles({
         customHeaders: Object.keys(nodeHeaders).length > 0 ? nodeHeaders : undefined,
         queryParams: Object.keys(nodeQueryParams).length > 0 ? nodeQueryParams : undefined,
         requestBody: nodeRequestBody,
+        eventItem: evt,
+        endpoint: link?.endpoint,
       });
 
       const groupFolder = pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)";
@@ -217,6 +220,8 @@ export function generatePageAndComponentFiles({
           Object.keys(nodeHeaders).length > 0 ? nodeHeaders : undefined,
           Object.keys(nodeQueryParams).length > 0 ? nodeQueryParams : undefined,
           nodeRequestBody,
+          evt,
+          link?.endpoint,
         ),
       });
     });

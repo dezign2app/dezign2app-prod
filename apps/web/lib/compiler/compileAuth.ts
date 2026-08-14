@@ -1,14 +1,21 @@
 import { BackendNode, BackendEdge, SimulationTestCase } from "@/types/canvas";
-import { CompiledServiceResult, Endpoint, AnyMessagingResource, AuthPageMetaInfo } from "@workspace/canvas/types";
+import { CompiledFile, CompiledServiceResult, Endpoint, AnyMessagingResource, AuthPageMetaInfo } from "@workspace/canvas/types";
 import {
   DEFAULT_AUTH_FRAMEWORK,
   DEFAULT_BETTER_AUTH_VERSION,
   AUTH_FRAMEWORK_BETTER_AUTH,
   BackendNodeData,
 } from "@workspace/canvas";
-import { compileBetterAuthV16Service } from "./auth/better-auth/v1.6";
+import { compileBetterAuthV16 } from "./auth/better-auth/v1.6";
 
 export type { AuthPageMetaInfo };
+
+export interface CompiledAuthResult {
+  authNodeId: string;
+  serviceId?: string;
+  serviceName?: string;
+  files: CompiledFile[];
+}
 
 /**
  * Resolves database nodes connected to an Auth node via graph edges
@@ -72,7 +79,8 @@ export function resolveAccessibleNodes(
 
 /**
  * Compiles a Canvas Auth Node into code based on the selected framework type (e.g. better_auth) and version (e.g. v1.6).
- * Performs graph resolution to ensure user records are validated in the database before granting access to accessible nodes.
+ * Auth is compiled as an integrated monorepo security component (Better Auth configuration, Next.js handler,
+ * client SDK, FastAPI middleware, and environment variables) rather than an independent standalone app.
  */
 export function compileAuth(
   node: BackendNode,
@@ -84,7 +92,7 @@ export function compileAuth(
   allNodes: BackendNode[] = [],
   allEdges: BackendEdge[] = [],
   _testCases: SimulationTestCase[] = []
-): CompiledServiceResult {
+): CompiledAuthResult {
   const framework = node.data?.framework || DEFAULT_AUTH_FRAMEWORK;
   const _version = node.data?.version || DEFAULT_BETTER_AUTH_VERSION;
 
@@ -92,7 +100,7 @@ export function compileAuth(
     case AUTH_FRAMEWORK_BETTER_AUTH:
     case "better_auth":
     default: {
-      return compileBetterAuthV16Service(node, allNodes, allEdges);
+      return compileBetterAuthV16(node, allNodes, allEdges);
     }
   }
 }

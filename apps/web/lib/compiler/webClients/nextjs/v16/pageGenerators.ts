@@ -53,6 +53,7 @@ export default function ${pageMeta.componentName}() {
     url: string;
     method: string;
     status?: number;
+    payload?: unknown;
     data: Record<string, string | number | boolean | null> | null;
     error?: string;
   }>>([]);
@@ -106,16 +107,15 @@ export default function ${pageMeta.componentName}() {
         method: method || "POST",
         headers,
       };
-      if (method === "POST" || method === "PUT" || method === "PATCH") {
-        options.body = JSON.stringify(
-          requestBody !== undefined
-            ? requestBody
-            : {
-                triggeredAt: new Date().toISOString(),
-                eventName,
-                eventType,
-              }
-        );
+      if (
+        method === "POST" ||
+        method === "PUT" ||
+        method === "PATCH" ||
+        (method === "DELETE" && requestBody !== undefined)
+      ) {
+        if (requestBody !== undefined) {
+          options.body = typeof requestBody === "string" ? requestBody : JSON.stringify(requestBody);
+        }
       }
 
       let resData: Record<string, string | number | boolean | null> | null = null;
@@ -142,6 +142,7 @@ export default function ${pageMeta.componentName}() {
           url: targetUrl || "N/A",
           method: method || "TRIGGER",
           status,
+          payload: requestBody,
           data: resData,
         },
         ...prev,
@@ -253,6 +254,12 @@ export default function ${pageMeta.componentName}() {
                       <span className="text-foreground/90 truncate">{log.url}</span>
                       {log.status && <span className="ml-auto text-muted-foreground">HTTP {log.status}</span>}
                     </div>
+                    {log.payload !== undefined && (
+                      <div className="text-[10px] text-muted-foreground bg-muted/60 p-2 rounded border border-border/40 space-y-1">
+                        <div className="font-semibold uppercase tracking-wider text-[9px] text-muted-foreground/80">Request Payload Sent</div>
+                        <pre className="overflow-x-auto whitespace-pre-wrap font-mono">{typeof log.payload === "string" ? log.payload : JSON.stringify(log.payload, null, 2)}</pre>
+                      </div>
+                    )}
                     {log.error ? (
                       <div className="text-destructive bg-destructive/10 p-2 rounded border border-destructive/20">
                         Error: {log.error}
