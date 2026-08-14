@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { Accordion } from "@workspace/ui/components/accordion";
-import { BackendNode, UIEventItem } from "@/types/canvas";
+import { BackendNode, UIEventItem, Parameter, Schema } from "@/types/canvas";
 import { Endpoint, WEB_CLIENT_EVENTS } from "@workspace/canvas";
 import {
   TargetEndpointSection,
   EventPropertiesSection,
   EventNavigationSection,
+  RequestConfigSection,
 } from "./web-client-event-config";
+import { RequestBodyMode } from "./RequestBodyEditor";
+import { generateId } from "../backend-nodes/graph-nodes/common";
 
 const EVENT_OPTIONS = [...WEB_CLIENT_EVENTS];
 
@@ -75,7 +78,6 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
   const [customEvent, setCustomEvent] = useState(
     isStandard ? "" : initialEvent,
   );
-  const [eventSchema, setEventSchema] = useState(item?.schema || "");
   const [navType, setNavType] = useState<"link" | "router">(
     item?.navigationType || "link",
   );
@@ -91,7 +93,6 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
       const isStd = EVENT_OPTIONS.some((opt) => opt === evt);
       setEventType(isStd ? evt : evt ? "other" : "click");
       setCustomEvent(isStd ? "" : evt);
-      setEventSchema(item.schema || "");
       setNavType(item.navigationType || "link");
       setNavCond(item.navigationCondition || "direct");
       setCondCode(item.conditionCode || "");
@@ -101,7 +102,6 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
   const handleUpdateEvent = (
     name: string,
     finalEvent: string,
-    schema: string,
     extraChanges?: Partial<UIEventItem>,
   ) => {
     if (!parentNode) return;
@@ -112,7 +112,6 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
             ...e,
             name,
             event: finalEvent,
-            schema,
             navigationType:
               finalEvent === "navigateToPage"
                 ? "link"
@@ -168,6 +167,15 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
         type: "connection",
       });
     }
+  };
+
+  const updateEventFields = (changes: Partial<UIEventItem>) => {
+    if (!parentNode) return;
+    const currentNodeEvents = parentNode.data.events || [];
+    const newEvents: UIEventItem[] = currentNodeEvents.map((e) =>
+      e.id === id ? { ...e, ...changes } : e,
+    );
+    updateNode(nodeId, { data: { ...parentNode.data, events: newEvents } });
   };
 
   // Find linked endpoint via existing edge
@@ -260,42 +268,48 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
     });
   };
 
+  // Sync endpoint parameters to event
+  const syncWithEndpoint = (targetEndpoint: Endpoint) => {
+    updateEventFields({
+      headers: targetEndpoint.headers ? [...targetEndpoint.headers] : [],
+      pathParams: targetEndpoint.pathParams ? [...targetEndpoint.pathParams] : [],
+      queryParams: targetEndpoint.queryParams ? [...targetEndpoint.queryParams] : [],
+      requestBody: targetEndpoint.requestBody
+        ? { ...targetEndpoint.requestBody }
+        : { id: generateId() },
+      requestBodyMode:
+        targetEndpoint.requestBodyMode ??
+        (targetEndpoint.requestBody?.rawJson ? "raw_json" : "field_builder"),
+    });
+  };
+
+  // When endpoint changes or is newly linked and event has no configured params, initialize from endpoint
   useEffect(() => {
     if (!endpoint) return;
-    const inferred: Record<string, string> = {};
+    const hasConfiguredParams =
+      item?.headers !== undefined ||
+      item?.pathParams !== undefined ||
+      item?.queryParams !== undefined ||
+      item?.requestBody !== undefined;
 
-    if (endpoint.pathParams)
-      endpoint.pathParams.forEach((p) => {
-        if (p.name) inferred[p.name] = p.type || "string";
-      });
-    if (endpoint.queryParams)
-      endpoint.queryParams.forEach((p) => {
-        if (p.name) inferred[p.name] = p.type || "string";
-      });
-    if (endpoint.headers)
-      endpoint.headers.forEach((h) => {
-        if (h.name) inferred[h.name] = h.type || "string";
-      });
-
-    if (endpoint.requestBody?.rawJson) {
-      try {
-        const parsed = JSON.parse(endpoint.requestBody.rawJson);
-        Object.assign(inferred, parsed);
-      } catch {}
+    if (!hasConfiguredParams) {
+      syncWithEndpoint(endpoint);
     }
-
-    const strVal = JSON.stringify(inferred, null, 2);
-    setEventSchema(strVal);
-    handleUpdateEvent(
-      eventName,
-      eventType === "other" ? customEvent : eventType,
-      strVal,
-    );
   }, [endpoint?.id]);
 
   if (!item) return null;
 
   const isNavigateToPage = eventType === "navigateToPage";
+  const headers: Parameter[] = item.headers ?? endpoint?.headers ?? [];
+  const pathParams: Parameter[] = item.pathParams ?? endpoint?.pathParams ?? [];
+  const queryParams: Parameter[] = item.queryParams ?? endpoint?.queryParams ?? [];
+  const requestBody: Schema =
+    item.requestBody ??
+    endpoint?.requestBody ?? { id: generateId(), fields: [] };
+  const requestBodyMode: RequestBodyMode =
+    item.requestBodyMode ??
+    endpoint?.requestBodyMode ??
+    (requestBody.rawJson ? "raw_json" : "field_builder");
 
   return (
     <div className="flex flex-col gap-5 font-sans">
@@ -304,7 +318,7 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
         defaultValue={
           isNavigateToPage
             ? ["navigation", "settings"]
-            : ["connection", "settings"]
+            : ["connection", "settings", "request_config"]
         }
         className="w-full flex flex-col gap-3 border-none"
       >
@@ -322,22 +336,48 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
           />
         )}
 
-        {/* ── 2. EVENT PROPERTIES & SCHEMA ── */}
+        {/* ── 2. EVENT PROPERTIES ── */}
         <EventPropertiesSection
           eventName={eventName}
           eventType={eventType}
           customEvent={customEvent}
-          eventSchema={eventSchema}
           eventOptions={EVENT_OPTIONS}
           isNavigateToPage={isNavigateToPage}
           setEventName={setEventName}
           setEventType={setEventType}
           setCustomEvent={setCustomEvent}
-          setEventSchema={setEventSchema}
           handleUpdateEvent={handleUpdateEvent}
         />
 
-        {/* ── 3. TARGET PAGE NAVIGATION ── */}
+        {/* ── 3. REQUEST CONFIGURATION (MATCHES ENDPOINT CONFIG) ── */}
+        {!isNavigateToPage && (
+          <RequestConfigSection
+            headers={headers}
+            pathParams={pathParams}
+            queryParams={queryParams}
+            requestBody={requestBody}
+            requestBodyMode={requestBodyMode}
+            connectedEndpoint={endpoint}
+            onHeadersChange={(newHeaders) =>
+              updateEventFields({ headers: newHeaders })
+            }
+            onPathParamsChange={(newPathParams) =>
+              updateEventFields({ pathParams: newPathParams })
+            }
+            onQueryParamsChange={(newQueryParams) =>
+              updateEventFields({ queryParams: newQueryParams })
+            }
+            onRequestBodyChange={(newRequestBody) =>
+              updateEventFields({ requestBody: newRequestBody })
+            }
+            onRequestBodyModeChange={(newMode) =>
+              updateEventFields({ requestBodyMode: newMode })
+            }
+            onSyncWithEndpoint={endpoint ? () => syncWithEndpoint(endpoint) : undefined}
+          />
+        )}
+
+        {/* ── 4. TARGET PAGE NAVIGATION ── */}
         {isNavigateToPage && (
           <EventNavigationSection
             eventId={id}
@@ -345,7 +385,6 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
             eventName={eventName}
             eventType={eventType}
             customEvent={customEvent}
-            eventSchema={eventSchema}
             item={item}
             handleUpdateEvent={handleUpdateEvent}
           />

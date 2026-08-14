@@ -74,12 +74,14 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
         source: "node-auth-1",
         target: "node-web-1",
         type: "connection",
+        fractionalIndex: "a0",
       },
       {
         id: "edge-web-service",
         source: "node-web-1",
         target: "node-service-1",
         type: "connection",
+        fractionalIndex: "a1",
       },
     ];
 
@@ -127,13 +129,15 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     expect(serviceEnvFile?.content).toContain("DATABASE_PATH=../../packages/db/sqlite.db");
     expect(serviceEnvFile?.content).toContain("DATABASE_URL=../../packages/db/sqlite.db");
 
-    // 4. Verify Auth Server .env points to centralized packages/db/sqlite.db
-    const authEnvFile = result.files.find(
-      (f) => f.filename === "apps/authserver/.env",
+    // 4. Verify Auth is NOT compiled as a separate service app in apps/
+    expect(result.services).toHaveLength(1);
+    expect(result.services[0]?.name).toBe("OrderService");
+    expect(result.services[0]?.folderName).toBe("orderservice");
+
+    const authStandaloneFiles = result.files.filter(
+      (f) => f.filename.startsWith("apps/authserver/") || f.filename.startsWith("apps/auth-server/"),
     );
-    expect(authEnvFile).toBeDefined();
-    expect(authEnvFile?.content).toContain("DATABASE_PATH=../../packages/db/sqlite.db");
-    expect(authEnvFile?.content).toContain("DATABASE_URL=../../packages/db/sqlite.db");
+    expect(authStandaloneFiles).toHaveLength(0);
 
     // 5. Verify root .gitignore ignores sqlite database artifacts
     const gitignoreFile = result.files.find((f) => f.filename === ".gitignore");
@@ -143,11 +147,6 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     expect(gitignoreFile?.content).toContain("*.db-wal");
 
     // 6. Verify all apps and packages have valid tsconfig.json files
-    const authTsconfigFile = result.files.find(
-      (f) => f.filename === "apps/authserver/tsconfig.json",
-    );
-    expect(authTsconfigFile).toBeDefined();
-
     const rootTsconfigFile = result.files.find(
       (f) => f.filename === "tsconfig.json",
     );
@@ -161,39 +160,7 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
       expect(targetTsconfig).toBeDefined();
     });
 
-    // 7. Verify standalone auth server contains only backend files (no Next.js route handlers)
-    const authRouteHandler = result.files.find(
-      (f) => f.filename === "apps/authserver/src/app/api/auth/[...all]/route.ts",
-    );
-    expect(authRouteHandler).toBeUndefined();
-
-    const authLibFile = result.files.find(
-      (f) => f.filename === "apps/authserver/src/lib/auth.ts",
-    );
-    expect(authLibFile).toBeUndefined();
-
-    const authServerIndex = result.files.find(
-      (f) => f.filename === "apps/authserver/src/index.ts",
-    );
-    expect(authServerIndex).toBeDefined();
-    expect(authServerIndex?.content).toContain("Hono");
-
-    const authServerConfig = result.files.find(
-      (f) => f.filename === "apps/authserver/src/auth.ts",
-    );
-    expect(authServerConfig).toBeDefined();
-    expect(authServerConfig?.content).toContain("betterAuth");
-
-    const authServerPackageJson = result.files.find(
-      (f) => f.filename === "apps/authserver/package.json",
-    );
-    expect(authServerPackageJson).toBeDefined();
-    const authPkg = JSON.parse(authServerPackageJson!.content);
-    expect(authPkg.type).toBeUndefined();
-    expect(authPkg.dependencies?.["@workspace/db"]).toBe("workspace:*");
-    expect(authPkg.devDependencies?.["@workspace/typescript-config"]).toBe("workspace:*");
-
-    // 8. Verify Next.js web client has its own auth route handler and auth.ts
+    // 7. Verify Next.js web client has its own integrated auth route handler, auth client, and auth.ts
     const nextAuthRoute = result.files.find(
       (f) => f.filename === "apps/customer-portal/app/api/auth/[...all]/route.ts",
     );
@@ -205,5 +172,11 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     );
     expect(nextAuthLib).toBeDefined();
     expect(nextAuthLib?.content).toContain("betterAuth");
+
+    const nextAuthClient = result.files.find(
+      (f) => f.filename === "apps/customer-portal/lib/auth-client.ts",
+    );
+    expect(nextAuthClient).toBeDefined();
+    expect(nextAuthClient?.content).toContain("createAuthClient");
   });
 });

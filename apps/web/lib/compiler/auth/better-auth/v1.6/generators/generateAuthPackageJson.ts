@@ -18,7 +18,7 @@ export function generateAuthPackageJson(data: BetterAuthV16NodeData): string {
       name: `@workspace/${name}`,
       version: "0.0.0",
       private: true,
-      description: data.description || `Authentication service for ${name}`,
+      description: `Authentication service for ${name}`,
       main: "dist/index.js",
       scripts: {
         build: "tsc",

@@ -150,6 +150,7 @@ export function resolveLinkedEndpoint(
       path,
       fullUrl,
       requireAuth,
+      endpoint: ep,
     };
   }
 

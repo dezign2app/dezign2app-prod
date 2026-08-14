@@ -220,6 +220,7 @@ export function ${formCompName}() {
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setLoading(true);
     setError(null);
     setSuccessMsg(null);
@@ -231,14 +232,19 @@ export function ${formCompName}() {
         const res = await authClient.signUp.email({
           email,
           password,
-          name,
+          name: name.trim() || email.split("@")[0] || "User",
         });
         if (res?.error) {
           setError(res.error.message || "Failed to create account");
         } else {
           setSuccessMsg("Account created successfully! Redirecting...");
           setTimeout(() => {
-            router.push(targetRedirect);
+            if (targetRedirect.startsWith("/")) {
+              router.push(targetRedirect);
+              router.refresh();
+            } else {
+              window.location.href = targetRedirect;
+            }
           }, 800);
         }
       } else {
@@ -253,7 +259,12 @@ export function ${formCompName}() {
         } else {
           setSuccessMsg("Signed in successfully! Redirecting...");
           setTimeout(() => {
-            router.push(targetRedirect);
+            if (targetRedirect.startsWith("/")) {
+              router.push(targetRedirect);
+              router.refresh();
+            } else {
+              window.location.href = targetRedirect;
+            }
           }, 800);
         }
       }
@@ -300,7 +311,8 @@ export function ${formCompName}() {
             Already have an account?{" "}
             <Link
               href="${signInPageUrl}"
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
                 setIsSignUp(false);
                 setError(null);
                 setSuccessMsg(null);
@@ -315,7 +327,8 @@ export function ${formCompName}() {
             Don&apos;t have an account?{" "}
             <Link
               href="${signUpPageUrl}"
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
                 setIsSignUp(true);
                 setError(null);
                 setSuccessMsg(null);
