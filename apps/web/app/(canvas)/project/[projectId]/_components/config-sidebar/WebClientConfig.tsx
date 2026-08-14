@@ -5,7 +5,6 @@ import { Label } from "@workspace/ui/components/label";
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
-import { Textarea } from "@workspace/ui/components/textarea";
 import {
   Select,
   SelectContent,
@@ -15,24 +14,19 @@ import {
 } from "@workspace/ui/components/select";
 import {
   Globe,
-  Lock,
   Layers,
   ShieldCheck,
   Compass,
-  Link2,
-  ArrowRight,
   Plus,
   Trash2,
-  Code2,
   CheckCircle2,
   Route,
-  CornerDownRight,
 } from "lucide-react";
-import { WEB_CLIENT_EVENTS } from "@workspace/canvas";
-import { UIEventItem } from "@/types/canvas";
+import { WEB_CLIENT_EVENTS, Endpoint } from "@workspace/canvas";
+import { UIEventItem, Parameter, Schema } from "@/types/canvas";
 import { ParameterEditor } from "../backend-nodes/graph-nodes/Editors";
 import { AuthAwarenessBanner } from "./AuthAwarenessBanner";
-import { RequestBodyEditor } from "./RequestBodyEditor";
+import { RequestBodyEditor, RequestBodyMode } from "./RequestBodyEditor";
 
 const EVENT_OPTIONS = [...WEB_CLIENT_EVENTS];
 
@@ -120,6 +114,146 @@ export const WebClientConfig = ({
             incomingEdge?.targetHandle === "private-in" ||
             (data.accessType && data.accessType !== "public"),
         );
+
+  // Find connected service endpoint via any edge connected to this WebClient node
+  const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
+  const connectedServiceEdge = allEdges.find(
+    (e) =>
+      (e.source === nodeId &&
+        allNodes.some((n) => n.id === e.target && n.type === "service")) ||
+      (e.target === nodeId &&
+        allNodes.some((n) => n.id === e.source && n.type === "service")),
+  );
+
+  let connectedEndpoint: Endpoint | null = null;
+  if (connectedServiceEdge) {
+    const isSource = connectedServiceEdge.source === nodeId;
+    const targetNodeId = isSource
+      ? connectedServiceEdge.target
+      : connectedServiceEdge.source;
+    const targetHandle = isSource
+      ? connectedServiceEdge.targetHandle
+      : connectedServiceEdge.sourceHandle;
+    const targetNode = allNodes.find((n) => n.id === targetNodeId);
+
+    if (targetNode) {
+      let endpointId = targetHandle
+        ? targetHandle.replace(
+            /^(endpoint-in-|endpoint-out-|endpoints-in-|endpoints-out-|events-in-|events-out-)/,
+            "",
+          )
+        : undefined;
+
+      if (endpointId && endpointId.includes("-in-")) {
+        const parts = endpointId.split("-in-");
+        endpointId = parts[parts.length - 1];
+      }
+
+      if (endpointId) {
+        connectedEndpoint =
+          allEndpoints.find(
+            (ep) =>
+              ep.nodeId === targetNode.id &&
+              (ep.id === endpointId || ep.name === endpointId),
+          ) ||
+          (targetNode.data?.endpoints as Endpoint[] | undefined)?.find(
+            (ep) => ep.id === endpointId || ep.name === endpointId,
+          ) ||
+          null;
+      }
+
+      if (!connectedEndpoint) {
+        const srvEndpoints = allEndpoints.filter(
+          (ep) => ep.nodeId === targetNode.id,
+        );
+        if (srvEndpoints.length > 0 && srvEndpoints[0]) {
+          connectedEndpoint = srvEndpoints[0];
+        } else if (
+          targetNode.data?.endpoints &&
+          (targetNode.data.endpoints as Endpoint[]).length > 0
+        ) {
+          connectedEndpoint = (targetNode.data.endpoints as Endpoint[])[0] || null;
+        }
+      }
+    }
+  }
+
+  // Resolve live page-level parameters and request body
+  const resolvedPageEndpointRequestBody: Schema | undefined = connectedEndpoint?.requestBody
+    ? {
+        id: connectedEndpoint.requestBody.id || crypto.randomUUID(),
+        fields:
+          connectedEndpoint.requestBody.fields && connectedEndpoint.requestBody.fields.length > 0
+            ? connectedEndpoint.requestBody.fields
+            : connectedEndpoint.params && connectedEndpoint.params.length > 0
+            ? [...connectedEndpoint.params]
+            : [],
+        rawJson: connectedEndpoint.requestBody.rawJson || connectedEndpoint.body || "",
+      }
+    : connectedEndpoint?.body
+    ? { id: connectedEndpoint.id || crypto.randomUUID(), rawJson: connectedEndpoint.body, fields: [] }
+    : connectedEndpoint?.params && connectedEndpoint.params.length > 0
+    ? { id: connectedEndpoint.id || crypto.randomUUID(), fields: [...connectedEndpoint.params] }
+    : undefined;
+
+  const hasCustomPageRequestBody = Boolean(
+    data.requestBody &&
+      ((data.requestBody.fields && data.requestBody.fields.length > 0) ||
+        Boolean(data.requestBody.rawJson?.trim())),
+  );
+
+  const effectiveRequestBody: Schema = hasCustomPageRequestBody
+    ? (data.requestBody as Schema)
+    : resolvedPageEndpointRequestBody || data.requestBody || { id: crypto.randomUUID(), fields: [] };
+
+  const isAuthEnabled = data.requireAuth !== false;
+
+  const effectiveHeaders: Parameter[] = React.useMemo(() => {
+    let baseHeaders =
+      data.headers && data.headers.length > 0
+        ? [...data.headers]
+        : connectedEndpoint?.headers
+        ? [...connectedEndpoint.headers]
+        : [];
+
+    if (isAuthEnabled) {
+      if (!baseHeaders.some((h) => h.name.toLowerCase() === "authorization")) {
+        baseHeaders = [
+          {
+            id: "auth-bearer-header",
+            name: "Authorization",
+            type: "string",
+            required: true,
+            description: "Bearer <token>",
+            defaultValue: "Bearer <token>",
+            key: "Authorization",
+            value: "Bearer <token>",
+          },
+          ...baseHeaders,
+        ];
+      }
+    } else {
+      baseHeaders = baseHeaders.filter(
+        (h) => h.name.toLowerCase() !== "authorization",
+      );
+    }
+    return baseHeaders;
+  }, [data.headers, connectedEndpoint?.headers, isAuthEnabled]);
+
+  const effectivePathParams: Parameter[] =
+    data.pathParams && data.pathParams.length > 0
+      ? data.pathParams
+      : connectedEndpoint?.pathParams || [];
+
+  const effectiveQueryParams: Parameter[] =
+    data.queryParams && data.queryParams.length > 0
+      ? data.queryParams
+      : connectedEndpoint?.queryParams || [];
+
+  const effectiveRequestBodyMode: RequestBodyMode =
+    data.requestBodyMode ??
+    connectedEndpoint?.requestBodyMode ??
+    (effectiveRequestBody.rawJson ? "raw_json" : "field_builder");
 
   const handleAddEvent = () => {
     const newEvent: UIEventItem = {
@@ -228,30 +362,41 @@ export const WebClientConfig = ({
         />
       </div>
 
+      {connectedEndpoint && (
+        <div className="flex items-center justify-between p-2.5 rounded-lg bg-secondary/30 border border-border/50 text-xs">
+          <span className="text-[11px] text-muted-foreground">
+            synced with{" "}
+            <span className="font-mono font-medium text-foreground">
+              {connectedEndpoint.type || "GET"} {connectedEndpoint.name}
+            </span>
+          </span>
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+            Synced
+          </span>
+        </div>
+      )}
+
       <ParameterEditor
         title="Headers"
-        parameters={data.headers || []}
+        parameters={effectiveHeaders}
         onChange={(headers) => updateData({ headers })}
       />
       <ParameterEditor
         title="Path Params"
-        parameters={data.pathParams || []}
+        parameters={effectivePathParams}
         onChange={(pathParams) => updateData({ pathParams })}
       />
       <ParameterEditor
         title="Query Params"
-        parameters={data.queryParams || []}
+        parameters={effectiveQueryParams}
         onChange={(queryParams) => updateData({ queryParams })}
       />
       <RequestBodyEditor
-        mode={
-          data.requestBodyMode ??
-          (data.requestBody?.rawJson ? "raw_json" : "field_builder")
-        }
+        mode={effectiveRequestBodyMode}
         onModeChange={(requestBodyMode) =>
           updateData({ requestBodyMode })
         }
-        schema={data.requestBody}
+        schema={effectiveRequestBody}
         onSchemaChange={(requestBody) =>
           updateData({ requestBody })
         }

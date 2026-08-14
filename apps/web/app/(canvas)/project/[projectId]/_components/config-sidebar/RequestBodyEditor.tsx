@@ -75,10 +75,12 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
     catch (err) { setJsonError(err instanceof Error ? err.message : String(err)); }
   };
 
-  // Reset local raw state when schema changes externally (e.g. mode switch)
+  // Reset local raw state when schema changes externally (e.g. mode switch or live sync)
+  const prevRawRef = React.useRef(schema?.rawJson);
   const prevModeRef = React.useRef(mode);
-  if (prevModeRef.current !== mode) {
+  if (prevModeRef.current !== mode || prevRawRef.current !== schema?.rawJson) {
     prevModeRef.current = mode;
+    prevRawRef.current = schema?.rawJson;
     setRawInput(undefined);
     setJsonError(null);
   }

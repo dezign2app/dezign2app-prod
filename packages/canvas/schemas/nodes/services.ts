@@ -36,6 +36,38 @@ export const pageRefDataSchema = simpleDataSchema.extend({
 });
 export type PageRefNodeData = z.infer<typeof pageRefDataSchema>;
 
+export const protectionRuleSchema = z.object({
+  id: z.string().optional(),
+  scope: z.enum(["zone", "page"]).optional(),
+  conditions: z
+    .record(z.union([z.string(), z.number(), z.boolean(), z.null()]))
+    .optional(),
+  redirects: z.record(z.string()).optional(),
+  customLogic: z
+    .object({
+      mode: z.enum(["naturalLanguage", "code"]),
+      prompt: z.string().optional(),
+      code: z.string().optional(),
+    })
+    .optional(),
+});
+export type WebClientProtectionRule = z.infer<typeof protectionRuleSchema>;
+
+export const simulationCaseSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(),
+  request: z
+    .object({
+      headers: z.record(z.string()).optional(),
+      params: z.record(z.string()).optional(),
+      body: z.union([z.string(), z.number(), z.boolean(), z.null(), z.record(z.string())]).optional(),
+    })
+    .optional(),
+  expectedStatus: z.number().optional(),
+  expectedBody: z.union([z.string(), z.number(), z.boolean(), z.null(), z.record(z.string())]).optional(),
+  enabled: z.boolean().optional(),
+});
+
 export const clientEventInputSchema = z.object({
   id: z.string().optional().describe("Unique identifier for this event"),
   name: z
@@ -66,23 +98,13 @@ export const clientEventInputSchema = z.object({
     .describe(
       "If this event triggers an API call, specify the target endpoint ID on the service node to AUTOMATICALLY create an edge",
     ),
+  headers: z.array(parameterSchema).optional(),
+  pathParams: z.array(parameterSchema).optional(),
+  queryParams: z.array(parameterSchema).optional(),
+  requestBody: schemaModelSchema.optional(),
+  requestBodyMode: z.enum(["field_builder", "raw_json"]).optional(),
   simulationCases: z
-    .array(
-      z.object({
-        id: z.string().optional(),
-        name: z.string(),
-        request: z
-          .object({
-            headers: z.record(z.string()).optional(),
-            params: z.record(z.string()).optional(),
-            body: z.unknown().optional(),
-          })
-          .optional(),
-        expectedStatus: z.number().optional(),
-        expectedBody: z.unknown().optional(),
-        enabled: z.boolean().optional(),
-      }),
-    )
+    .array(simulationCaseSchema)
     .optional()
     .describe("Named repeatable inputs for client-triggered simulations"),
 });
@@ -100,6 +122,16 @@ export const webClientDataSchema = simpleDataSchema.extend({
   redirectTo: z.string().optional().describe("Route path to redirect unauthorized users"),
   isAuthPage: z.boolean().optional().describe("Whether this page is the auth/login page"),
   authNodeId: z.string().optional().describe("Connected AuthNode ID"),
+  zoneId: z.string().optional().describe("Connected WebApp zone ID"),
+  useZoneDefault: z.boolean().optional().describe("Whether to inherit zone rules or custom override"),
+  protectionOverride: protectionRuleSchema.optional().describe("Protection rule override"),
+  isWebClient: z.boolean().optional(),
+  isRoot: z.boolean().optional(),
+  pageSlug: z.string().optional(),
+  path: z.string().optional(),
+  route: z.string().optional(),
+  targetServerId: z.string().optional(),
+  targetRouteId: z.string().optional(),
   headers: z.array(parameterSchema).optional().describe("Custom request headers sent by this web client page"),
   pathParams: z.array(parameterSchema).optional().describe("URL path parameters for API requests"),
   queryParams: z.array(parameterSchema).optional().describe("URL query parameters for API requests"),
@@ -121,24 +153,14 @@ export const webClientDataSchema = simpleDataSchema.extend({
         targetRoute: z.string().optional(),
         targetPageId: z.string().optional(),
         conditionCode: z.string().optional(),
-        simulationCases: z
-          .array(
-            z.object({
-              id: z.string(),
-              name: z.string(),
-              request: z
-                .object({
-                  headers: z.record(z.string()).optional(),
-                  params: z.record(z.string()).optional(),
-                  body: z.unknown().optional(),
-                })
-                .optional(),
-              expectedStatus: z.number().optional(),
-              expectedBody: z.unknown().optional(),
-              enabled: z.boolean().optional(),
-            }),
-          )
-          .optional(),
+        targetNodeId: z.string().optional(),
+        targetEndpointId: z.string().optional(),
+        headers: z.array(parameterSchema).optional(),
+        pathParams: z.array(parameterSchema).optional(),
+        queryParams: z.array(parameterSchema).optional(),
+        requestBody: schemaModelSchema.optional(),
+        requestBodyMode: z.enum(["field_builder", "raw_json"]).optional(),
+        simulationCases: z.array(simulationCaseSchema).optional(),
       }),
     )
     .optional(),
@@ -157,6 +179,8 @@ export const webClientDataInputSchema = baseNodeDataSchema.extend({
   redirectTo: z.string().optional(),
   isAuthPage: z.boolean().optional(),
   authNodeId: z.string().optional(),
+  zoneId: z.string().optional(),
+  useZoneDefault: z.boolean().optional(),
   headers: z.array(parameterInputSchema).optional(),
   pathParams: z.array(parameterInputSchema).optional(),
   queryParams: z.array(parameterInputSchema).optional(),

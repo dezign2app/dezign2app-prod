@@ -47,6 +47,153 @@ export const backendTestCaseDataValidator = zodToConvex(
 // Edge Data Validator
 export const backendEdgeDataValidator = zodToConvex(edgeDataSchema);
 
+// Parameter Validator (Headers, Query Params, Path Params, Field Builder)
+export const backendParameterValidator = v.object({
+  id: v.optional(v.string()),
+  name: v.optional(v.string()),
+  type: v.optional(v.string()),
+  required: v.optional(v.boolean()),
+  description: v.optional(v.string()),
+  defaultValue: v.optional(v.string()),
+  key: v.optional(v.string()),
+  value: v.optional(v.string()),
+});
+
+// Request Body / Schema Model Validator
+export const backendRequestBodyValidator = v.object({
+  id: v.optional(v.string()),
+  fields: v.optional(v.array(backendParameterValidator)),
+  rawJson: v.optional(v.string()),
+});
+
+// Simulation Case Validator
+export const webClientSimulationCaseValidator = v.object({
+  id: v.optional(v.string()),
+  name: v.string(),
+  request: v.optional(
+    v.object({
+      headers: v.optional(v.record(v.string(), v.string())),
+      params: v.optional(v.record(v.string(), v.string())),
+      body: v.optional(
+        v.union(v.string(), v.number(), v.boolean(), v.null(), v.record(v.string(), v.string())),
+      ),
+    }),
+  ),
+  expectedStatus: v.optional(v.number()),
+  expectedBody: v.optional(
+    v.union(v.string(), v.number(), v.boolean(), v.null(), v.record(v.string(), v.string())),
+  ),
+  enabled: v.optional(v.boolean()),
+});
+
+// UI Event Item Validator
+export const webClientEventConvexValidator = v.object({
+  id: v.optional(v.string()),
+  name: v.string(),
+  event: v.optional(v.string()),
+  schema: v.optional(v.string()),
+  navigationType: v.optional(v.union(v.literal("link"), v.literal("router"))),
+  navigationCondition: v.optional(
+    v.union(
+      v.literal("direct"),
+      v.literal("on_success"),
+      v.literal("on_condition"),
+      v.literal("on_error"),
+    ),
+  ),
+  targetRoute: v.optional(v.string()),
+  targetPageId: v.optional(v.string()),
+  conditionCode: v.optional(v.string()),
+  targetNodeId: v.optional(v.string()),
+  targetEndpointId: v.optional(v.string()),
+  headers: v.optional(v.array(backendParameterValidator)),
+  pathParams: v.optional(v.array(backendParameterValidator)),
+  queryParams: v.optional(v.array(backendParameterValidator)),
+  requestBody: v.optional(backendRequestBodyValidator),
+  requestBodyMode: v.optional(
+    v.union(v.literal("field_builder"), v.literal("raw_json")),
+  ),
+  simulationCases: v.optional(v.array(webClientSimulationCaseValidator)),
+});
+
+// Protection Rule Validator
+export const protectionRuleConvexValidator = v.object({
+  id: v.optional(v.string()),
+  scope: v.optional(v.union(v.literal("zone"), v.literal("page"))),
+  conditions: v.optional(
+    v.record(
+      v.string(),
+      v.union(v.string(), v.number(), v.boolean(), v.null()),
+    ),
+  ),
+  redirects: v.optional(v.record(v.string(), v.string())),
+  customLogic: v.optional(
+    v.object({
+      mode: v.union(v.literal("naturalLanguage"), v.literal("code")),
+      prompt: v.optional(v.string()),
+      code: v.optional(v.string()),
+    }),
+  ),
+});
+
+// Web Client Page Node Data Validator
+export const webClientConvexDataValidator = v.object({
+  label: v.optional(v.string()),
+  description: v.optional(v.string()),
+  summary: v.optional(v.string()),
+  appName: v.optional(v.string()),
+  appSlug: v.optional(v.string()),
+  accessType: v.optional(
+    v.union(
+      v.literal("public"),
+      v.literal("private"),
+      v.literal("role-gated"),
+      v.literal("payment-gated"),
+      v.literal("org-gated"),
+    ),
+  ),
+  allowedRoles: v.optional(v.array(v.string())),
+  requiredPlans: v.optional(v.array(v.string())),
+  allowedOrgRoles: v.optional(v.array(v.string())),
+  redirectTo: v.optional(v.string()),
+  isAuthPage: v.optional(v.boolean()),
+  authNodeId: v.optional(v.string()),
+  zoneId: v.optional(v.string()),
+  useZoneDefault: v.optional(v.boolean()),
+  requireAuth: v.optional(v.boolean()),
+  color: v.optional(v.string()),
+  parentId: v.optional(v.string()),
+  position: v.optional(v.object({ x: v.number(), y: v.number() })),
+  style: v.optional(
+    v.record(
+      v.string(),
+      v.union(v.string(), v.number(), v.boolean(), v.null()),
+    ),
+  ),
+  width: v.optional(v.number()),
+  height: v.optional(v.number()),
+  techStack: v.optional(v.string()),
+  techVersion: v.optional(v.string()),
+  isWebClient: v.optional(v.boolean()),
+  isRoot: v.optional(v.boolean()),
+  pageSlug: v.optional(v.string()),
+  path: v.optional(v.string()),
+  route: v.optional(v.string()),
+  targetServerId: v.optional(v.string()),
+  targetRouteId: v.optional(v.string()),
+  headers: v.optional(v.array(backendParameterValidator)),
+  pathParams: v.optional(v.array(backendParameterValidator)),
+  queryParams: v.optional(v.array(backendParameterValidator)),
+  requestBody: v.optional(backendRequestBodyValidator),
+  requestBodyMode: v.optional(
+    v.union(v.literal("field_builder"), v.literal("raw_json")),
+  ),
+  events: v.optional(v.array(webClientEventConvexValidator)),
+  protectionOverride: v.optional(protectionRuleConvexValidator),
+});
+
+export const backendWebClientDataValidator = webClientConvexDataValidator;
+
 export const langgraphConvexDataValidator = v.object({
   label: v.optional(v.string()),
   description: v.optional(v.string()),
@@ -87,6 +234,7 @@ export const langgraphConvexDataValidator = v.object({
 export const backendNodeDataValidator = v.union(
   zodToConvex(serviceDataSchema),
   zodToConvex(dbRefDataSchema),
+  webClientConvexDataValidator,
   zodToConvex(webClientDataSchema),
   zodToConvex(pageRefDataSchema),
   zodToConvex(webAppDataSchema),

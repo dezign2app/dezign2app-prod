@@ -83,7 +83,9 @@ export default function ${pageMeta.componentName}() {
         ...(customHeaders || {}),
       };
 
-      if (requireAuth !== false) {
+      if (customHeaders?.["Authorization"] && customHeaders["Authorization"].trim() && customHeaders["Authorization"] !== "Bearer <token>") {
+        headers["Authorization"] = customHeaders["Authorization"].trim();
+      } else if (requireAuth !== false) {
         try {
           const token = await getAuthBearerToken();
           if (token) {
@@ -106,6 +108,7 @@ export default function ${pageMeta.componentName}() {
       const options: RequestInit = {
         method: method || "POST",
         headers,
+        credentials: "include",
       };
       if (
         method === "POST" ||

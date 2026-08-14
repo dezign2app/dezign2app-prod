@@ -57,8 +57,8 @@ export function generateAuthFilesAndDependencies({
 
   const hasProtectedRoutes = pagesInfo.some((p) => p.accessType && p.accessType !== "public");
 
-  // ONLY generate Auth server files if an AuthNode is explicitly CONNECTED to this Web App
-  if (isAuthNodeConnected && authNode) {
+  // Generate Better Auth server files whenever an AuthNode is present in the project
+  if (authNode) {
     const compiledAuth = compileAuth(authNode, endpoints, events, allNodes, allEdges, testCases);
 
     const authFile = compiledAuth.files.find((f) => f.filename.endsWith("auth.ts"));
@@ -266,32 +266,30 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
         // preserve existing content on parse failure
       }
     }
-  } else if (hasProtectedRoutes || authNode) {
-    // If protected routes exist or an AuthNode is on canvas but NOT connected to this app, only generate client helper if needed
-    if (hasProtectedRoutes) {
-      files.push({
-        filename: "lib/auth-client.ts",
-        language: "typescript",
-        content: generateAuthClient({
-          baseUrl: authBaseUrl,
-          plugins: ["adminClient", "organizationClient"],
-        }),
-      });
+  } else if (hasProtectedRoutes) {
+    // If protected routes exist without an AuthNode, generate client helper
+    files.push({
+      filename: "lib/auth-client.ts",
+      language: "typescript",
+      content: generateAuthClient({
+        baseUrl: authBaseUrl,
+        plugins: ["adminClient", "organizationClient"],
+      }),
+    });
 
-      const pkgFileIdx = files.findIndex((f) => f.filename === "package.json");
-      if (pkgFileIdx !== -1) {
-        try {
-          const pkgObj = JSON.parse(files[pkgFileIdx]!.content);
-          pkgObj.dependencies = pkgObj.dependencies || {};
-          const rawVersion = authNode?.data?.version || DEFAULT_BETTER_AUTH_VERSION;
-          const cleanVersion = rawVersion.replace(/^v/, "");
-          const semverVersion = cleanVersion.split(".").length === 2 ? `${cleanVersion}.0` : cleanVersion;
-          pkgObj.dependencies["better-auth"] = `^${semverVersion}`;
-          pkgObj.dependencies["zod"] = "^4.4.3";
-          files[pkgFileIdx]!.content = JSON.stringify(pkgObj, null, 2);
-        } catch (err) {
-          // preserve
-        }
+    const pkgFileIdx = files.findIndex((f) => f.filename === "package.json");
+    if (pkgFileIdx !== -1) {
+      try {
+        const pkgObj = JSON.parse(files[pkgFileIdx]!.content);
+        pkgObj.dependencies = pkgObj.dependencies || {};
+        const rawVersion = DEFAULT_BETTER_AUTH_VERSION;
+        const cleanVersion = rawVersion.replace(/^v/, "");
+        const semverVersion = cleanVersion.split(".").length === 2 ? `${cleanVersion}.0` : cleanVersion;
+        pkgObj.dependencies["better-auth"] = `^${semverVersion}`;
+        pkgObj.dependencies["zod"] = "^4.4.3";
+        files[pkgFileIdx]!.content = JSON.stringify(pkgObj, null, 2);
+      } catch (err) {
+        // preserve
       }
     }
   }
@@ -302,24 +300,12 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
     language: "typescript",
     content: `/**
  * Helper to retrieve the Bearer authorization token for client API requests.
- * Checks localStorage, sessionStorage, or active Better Auth session.
+ * Checks active Better Auth session, cookies, localStorage, and sessionStorage.
  */
 export async function getAuthBearerToken(): Promise<string | null> {
   if (typeof window === "undefined") return null;
 
-  // 1. Check browser storage
-  const stored =
-    localStorage.getItem("auth_token") ||
-    localStorage.getItem("token") ||
-    localStorage.getItem("bearer_token") ||
-    sessionStorage.getItem("auth_token") ||
-    sessionStorage.getItem("token");
-
-  if (stored) {
-    return stored.startsWith("Bearer ") ? stored : \`Bearer \${stored}\`;
-  }
-
-  // 2. Check active Better Auth client session
+  // 1. Check active Better Auth client session
   try {
     const { authClient } = await import("@/lib/auth-client");
     if (authClient && typeof authClient.getSession === "function") {
@@ -331,8 +317,40 @@ export async function getAuthBearerToken(): Promise<string | null> {
         return token.startsWith("Bearer ") ? token : \`Bearer \${token}\`;
       }
     }
-  } catch (_e) {
-    // Auth client not available or session uninitialized
+  } catch (_e) {}
+
+  // 2. Check cookies for Better Auth session token (better-auth.session_token)
+  try {
+    const cookies = document.cookie.split(";");
+    for (const c of cookies) {
+      const trimmed = c.trim();
+      if (
+        trimmed.startsWith("better-auth.session_token=") ||
+        trimmed.startsWith("__Secure-better-auth.session_token=")
+      ) {
+        const val = trimmed.split("=")[1];
+        if (val) {
+          const decoded = decodeURIComponent(val);
+          return decoded.startsWith("Bearer ") ? decoded : \`Bearer \${decoded}\`;
+        }
+      }
+    }
+  } catch (_cErr) {}
+
+  // 3. Check browser localStorage & sessionStorage
+  const tokenKeys = [
+    "better-auth.session_token",
+    "auth_token",
+    "access_token",
+    "token",
+    "bearer_token",
+  ];
+
+  for (const k of tokenKeys) {
+    const stored = localStorage.getItem(k) || sessionStorage.getItem(k);
+    if (stored) {
+      return stored.startsWith("Bearer ") ? stored : \`Bearer \${stored}\`;
+    }
   }
 
   return null;

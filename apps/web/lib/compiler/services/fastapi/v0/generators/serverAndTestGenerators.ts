@@ -48,7 +48,16 @@ app = FastAPI(
 
 ${
   cors
-    ? `app.add_middleware(
+    ? corsOrigins === "*"
+      ? `app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"https?://.*",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+`
+      : `app.add_middleware(
     CORSMiddleware,
     allow_origins=${originsList},
     allow_credentials=True,

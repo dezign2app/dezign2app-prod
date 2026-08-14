@@ -3,7 +3,11 @@ import { Endpoint } from "@workspace/canvas/types";
 import { LinkedEndpointInfo } from "./types";
 
 export function getServicePort(targetNode: BackendNode): string {
-  return targetNode.data?.port?.trim() || "8080";
+  if (targetNode.data?.port) return targetNode.data.port.toString().trim();
+  const fw = targetNode.data?.framework?.toString().toLowerCase();
+  if (fw === "fastapi" || fw === "python" || fw === "flask") return "8000";
+  if (fw === "express" || fw === "node" || fw === "hono" || fw === "nest") return "3000";
+  return "8000";
 }
 
 export function resolveLinkedEndpoint(
@@ -133,8 +137,7 @@ export function resolveLinkedEndpoint(
     const method = (ep?.type || "GET").toUpperCase();
     const rawPath = ep?.name || "data";
     let path = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
-
-    path = path.replace(/\s+/g, "-").replace(/:\w+|\{\w+\}/g, "1");
+    path = path.replace(/\s+/g, "-");
 
     const fullUrl = `http://localhost:${targetPort}${path}`;
 

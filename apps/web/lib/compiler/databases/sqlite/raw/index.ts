@@ -106,7 +106,9 @@ function generateTableHelpers(
   code += ` * ALL queries use prepared statements — safe from SQL injection.\n`;
   code += ` * Never concatenate user-supplied values into query strings.\n`;
   code += ` */\n`;
-  code += `import { db } from "../connection";\n\n`;
+  code += `import { db } from "../connection";\n`;
+  code += `import { createLogger } from "@workspace/logger";\n\n`;
+  code += `const logger = createLogger("db:${tableName}");\n\n`;
 
   // Types
   code += `// ── Types ────────────────────────────────────────────────────────────────────\n\n`;
@@ -259,16 +261,23 @@ function generateTableHelpers(
     } else if (op.kind === "findAll") {
       code += `/** ${op.description || `Retrieve all rows from ${tableName}`} */\n`;
       code += `export function ${effectiveName}(limit: number = 20, offset: number = 0): ${Pascal}Row[] {\n`;
-      code += `  return stmtFindAll.all(limit, offset) as ${Pascal}Row[];\n`;
+      code += `  logger.debug("findAll query on ${tableName}", { limit, offset });\n`;
+      code += `  const rows = stmtFindAll.all(limit, offset) as ${Pascal}Row[];\n`;
+      code += `  logger.debug("findAll result count", { count: rows.length });\n`;
+      code += `  return rows;\n`;
       code += `}\n\n`;
     } else if (op.kind === "findById") {
       code += `/** ${op.description || `Find a ${tableName} row by primary key`} */\n`;
       code += `export function ${effectiveName}(${pkVarName}: ${pkTs}): ${Pascal}Row | undefined {\n`;
-      code += `  return stmtFindById.get(${pkVarName}) as ${Pascal}Row | undefined;\n`;
+      code += `  logger.debug("findById query on ${tableName}", { ${pkVarName} });\n`;
+      code += `  const row = stmtFindById.get(${pkVarName}) as ${Pascal}Row | undefined;\n`;
+      code += `  logger.debug("findById result", { found: Boolean(row) });\n`;
+      code += `  return row;\n`;
       code += `}\n\n`;
     } else if (op.kind === "create" && writableCols.length > 0) {
       code += `/** ${op.description || `Create a new record in ${tableName}`} */\n`;
       code += `export function ${effectiveName}(data: Create${Pascal}Data): ${Pascal}Row {\n`;
+      code += `  logger.info("Inserting record into ${tableName}...", { data });\n`;
       code += `  const now = new Date().toISOString();\n`;
       code += `  const info = stmtInsert.run(${writableCols.map((c) => {
         const varName = toVarName(c.name);
@@ -284,6 +293,7 @@ function generateTableHelpers(
         return `data.${varName} ?? null`;
       }).join(", ")});\n`;
       code += `  const _rowId = typeof info.lastInsertRowid === "bigint" ? info.lastInsertRowid.toString() : String(info.lastInsertRowid);\n`;
+      code += `  logger.info("✓ Record created in ${tableName}", { ${pkColName}: _rowId });\n`;
       code += `  return { ${pkColName}: _rowId, ...data, ${writableCols.filter((c) => {
         const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
         return nameLower === "createdat" || nameLower === "updatedat" || nameLower === "created_at" || nameLower === "updated_at";
@@ -295,16 +305,23 @@ function generateTableHelpers(
     } else if (op.kind === "update" && writableCols.length > 0) {
       code += `/** ${op.description || `Update a ${tableName} row by primary key`} */\n`;
       code += `export function ${effectiveName}(${pkVarName}: ${pkTs}, data: Update${Pascal}Data): ${Pascal}Row | undefined {\n`;
+      code += `  logger.info("Updating record in ${tableName}...", { ${pkVarName}, data });\n`;
       code += `  const current = find${toPascal(tableName)}ById(${pkVarName});\n`;
-      code += `  if (!current) return undefined;\n`;
+      code += `  if (!current) {\n`;
+      code += `    logger.warn("Update failed: ${tableName} record not found", { ${pkVarName} });\n`;
+      code += `    return undefined;\n`;
+      code += `  }\n`;
       code += `  const updated = { ...current, ...data };\n`;
       code += `  stmtUpdate.run(${writableCols.map((c) => `updated.${toVarName(c.name)}`).join(", ")}, ${pkVarName});\n`;
+      code += `  logger.info("✓ Record updated in ${tableName}", { ${pkVarName} });\n`;
       code += `  return find${toPascal(tableName)}ById(${pkVarName});\n`;
       code += `}\n\n`;
     } else if (op.kind === "delete") {
       code += `/** ${op.description || `Delete a ${tableName} row by primary key`} */\n`;
       code += `export function ${effectiveName}(${pkVarName}: ${pkTs}): void {\n`;
+      code += `  logger.info("Deleting record from ${tableName}...", { ${pkVarName} });\n`;
       code += `  stmtDelete.run(${pkVarName});\n`;
+      code += `  logger.info("✓ Record deleted from ${tableName}", { ${pkVarName} });\n`;
       code += `}\n\n`;
     }
   });
@@ -522,7 +539,10 @@ export function compileRawSqliteDatabase(
           "./helpers/*": "./helpers/*.ts",
         },
         scripts: { build: "tsc", "check-types": "tsc --noEmit" },
-        dependencies: { "better-sqlite3": "^12.0.0" },
+        dependencies: {
+          "@workspace/logger": "workspace:*",
+          "better-sqlite3": "^12.0.0",
+        },
         devDependencies: {
           "@workspace/typescript-config": "workspace:*",
           "@types/better-sqlite3": "^7.6.12",

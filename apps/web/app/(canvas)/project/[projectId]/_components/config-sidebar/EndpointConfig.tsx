@@ -144,9 +144,31 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         zoneName={zoneName}
         isProtected={isProtected}
         requireAuth={item.requireAuth !== false}
-        onRequireAuthChange={(requireAuth) =>
-          updateEndpoint(item.id, { requireAuth })
-        }
+        onRequireAuthChange={(requireAuth) => {
+          let updatedHeaders = [...(item.headers || [])];
+          if (requireAuth) {
+            if (!updatedHeaders.some((h) => h.name.toLowerCase() === "authorization")) {
+              updatedHeaders = [
+                {
+                  id: "auth-bearer-header",
+                  name: "Authorization",
+                  type: "string",
+                  required: true,
+                  description: "Bearer <token>",
+                  defaultValue: "Bearer <token>",
+                  key: "Authorization",
+                  value: "Bearer <token>",
+                },
+                ...updatedHeaders,
+              ];
+            }
+          } else {
+            updatedHeaders = updatedHeaders.filter(
+              (h) => h.name.toLowerCase() !== "authorization",
+            );
+          }
+          updateEndpoint(item.id, { requireAuth, headers: updatedHeaders });
+        }}
       />
 
       {node?.type === "api_gateway" && (
@@ -256,7 +278,30 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
 
       <ParameterEditor
         title="Headers"
-        parameters={item.headers || []}
+        parameters={(() => {
+          let h = item.headers || [];
+          const isAuthEnabled = item.requireAuth !== false;
+          if (isAuthEnabled) {
+            if (!h.some((x) => x.name.toLowerCase() === "authorization")) {
+              h = [
+                {
+                  id: "auth-bearer-header",
+                  name: "Authorization",
+                  type: "string",
+                  required: true,
+                  description: "Bearer <token>",
+                  defaultValue: "Bearer <token>",
+                  key: "Authorization",
+                  value: "Bearer <token>",
+                },
+                ...h,
+              ];
+            }
+          } else {
+            h = h.filter((x) => x.name.toLowerCase() !== "authorization");
+          }
+          return h;
+        })()}
         onChange={(headers) => updateEndpoint(item.id, { headers })}
       />
       <ParameterEditor
@@ -277,7 +322,14 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         onModeChange={(requestBodyMode) =>
           updateEndpoint(item.id, { requestBodyMode })
         }
-        schema={item.requestBody}
+        schema={
+          item.requestBody ||
+          (item.params && item.params.length > 0
+            ? { id: item.id, fields: item.params, rawJson: item.body || "" }
+            : item.body
+            ? { id: item.id, rawJson: item.body, fields: [] }
+            : { id: item.id, fields: [] })
+        }
         onSchemaChange={(requestBody) =>
           updateEndpoint(item.id, { requestBody })
         }
