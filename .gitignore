@@ -35,6 +35,12 @@ build
 dist
 .source/
 
+# Electron build outputs (never commit these — they go to GitHub Releases via CI)
+dist-electron/
+apps/desktop/release/
+apps/desktop/dist-electron/
+
+
 
 # Debug
 npm-debug.log*

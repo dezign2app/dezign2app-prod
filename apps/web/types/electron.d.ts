@@ -1,0 +1,49 @@
+/**
+ * Global type augmentation for window.electronAPI.
+ * Injected by the Electron preload script when running inside the desktop app.
+ * Undefined when running in a regular browser.
+ */
+
+export interface ElectronCompiledFile {
+  filename: string;
+  content: string;
+}
+
+export interface ElectronAPI {
+  isElectron: true;
+  platform(): Promise<NodeJS.Platform>;
+
+  fs: {
+    pickDirectory(): Promise<string | null>;
+    writeProject(
+      outputDir: string,
+      files: ElectronCompiledFile[]
+    ): Promise<{ success: boolean; path: string }>;
+  };
+
+  docker: {
+    up(projectDir: string): void;
+    down(projectDir: string): void;
+    onLog(cb: (line: string) => void): () => void;
+  };
+
+  terminal: {
+    create(
+      id: string,
+      cwd: string,
+      cols: number,
+      rows: number
+    ): Promise<{ success: boolean }>;
+    write(id: string, data: string): void;
+    resize(id: string, cols: number, rows: number): void;
+    kill(id: string): void;
+    onData(id: string, cb: (data: string) => void): () => void;
+    onExit(id: string, cb: (code: number) => void): () => void;
+  };
+}
+
+declare global {
+  interface Window {
+    electronAPI?: ElectronAPI;
+  }
+}

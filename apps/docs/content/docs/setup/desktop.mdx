@@ -1,0 +1,64 @@
+---
+title: Desktop App Setup
+description: Step-by-step guide to setting up and running the Electron desktop environment locally.
+---
+
+# Desktop App Setup
+
+Follow these steps to configure, run, and package the Dezign2App desktop application.
+
+---
+
+## 1. Prerequisites
+
+- **Node.js** >= 20.0
+- **pnpm** >= 10.4.1
+- **Docker Desktop** (running, for local container execution)
+- **Windows Build Tools** (on Windows, for `node-pty` native compilation):
+  ```powershell
+  npm install --global windows-build-tools
+  ```
+
+---
+
+## 2. Install Workspace Dependencies
+
+From the workspace root:
+
+```bash
+pnpm install
+```
+
+---
+
+## 3. Running in Development
+
+To start both the Next.js dev server and the Electron shell:
+
+```bash
+pnpm desktop:dev
+```
+
+Alternatively, run in two separate terminals:
+```bash
+# Terminal 1: Start web app on port 3000
+pnpm --filter web dev
+
+# Terminal 2: Start Electron window
+pnpm --filter desktop dev
+```
+
+---
+
+## 4. Packaging for Production
+
+To compile Next.js in production mode and package the Electron `.exe`:
+
+```bash
+pnpm build:desktop
+```
+
+The packaged executable will be generated at:
+```
+apps/desktop/release/win-unpacked/Dezign2App.exe
+```

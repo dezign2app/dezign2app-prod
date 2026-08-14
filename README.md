@@ -24,6 +24,7 @@ This repository is powered by a high-performance **pnpm Workspace** and **Turbor
 | App Directory                                                  | Core Stack                                                                                               | Port     | Description                                                                                                                                                                                                                        |
 | :------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------- | :------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [**`apps/web`**](./apps/web)                                   | Next.js 16 (Turbopack), React 19, Tailwind v4, `@xyflow/react`, Tldraw, Clerk, Creem, Framer Motion      | `3000`   | **Interactive Frontend Canvas & App Portal**: Multi-tenant protected user portal with workspace folders, drag-and-drop system design canvas using React Flow & Tldraw, embedded AI chat panel, and API Key/billing administration. |
+| [**`apps/desktop`**](./apps/desktop)                           | Electron 34, node-pty, electron-builder                                                                  | —        | **Native Desktop App**: Wraps the web app in an Electron shell, adds a real PTY terminal (PowerShell/bash), local Docker Compose runner for executing generated monorepos, and native file-system access.                         |
 | [**`apps/system-design-engine`**](./apps/system-design-engine) | Express.js, `@langchain/langgraph`, LangChain Core, MCP SDK, Groq SDK, Convex Client                     | Custom   | **High-Performance AI System Design Engine**: Computes system design analysis using LangGraph state machines, coordinates architecture node generation, MCP tools, and custom API limiters.                                        |
 | [**`apps/workflow-engine`**](./apps/workflow-engine)           | Express.js, `@langchain/langgraph`, LangChain Core, Inngest SDK, Upstash Redis & Realtime, Convex Client | `3001`   | **Secondary Background Orchestration Service**: Handles background job execution, event queues, and Redis state streaming.                                                                                                         |
 | [**`apps/docs`**](./apps/docs)                                 | Next.js 16, React 19, Fumadocs UI / Core / MDX, Tailwind v4                                              | `3500`   | **Technical Documentation Portal**: Integrated developer documentation site covering system design architecture, setup guides, and monorepo scripts.                                                                               |
@@ -129,6 +130,103 @@ This command spins up:
 - AI System Design Engine (`http://localhost:3001`)
 - Technical Documentation Portal (`http://localhost:3500`)
 - MCP Inspector UI Console & Convex backend
+
+---
+
+## 🖥️ Desktop App (`apps/desktop`)
+
+Dezign2App ships as a native desktop application powered by **Electron 34**. The desktop app wraps the existing Next.js web app and adds:
+
+- 🖥️ **Native PTY terminal** — real PowerShell (Windows) / bash/zsh (macOS & Linux) via `node-pty`
+- 🐳 **Docker Compose runner** — write the generated monorepo to disk and spin it up locally
+- 📁 **Native file-system access** — pick an output folder, write generated project files directly
+- 🔌 **`window.electronAPI` bridge** — typed IPC API available to the web app renderer
+
+### Running in development
+
+> The Electron window loads the web app at `http://localhost:3000`. Start both together:
+
+```bash
+# Option A — both together from root
+pnpm desktop:dev
+
+# Option B — separately (two terminals)
+pnpm --filter web dev          # Terminal 1
+pnpm --filter desktop dev      # Terminal 2 (waits for port 3000 then opens Electron)
+```
+
+### Building the `.exe` / `.dmg` / `.AppImage`
+
+#### Prerequisites
+
+| Requirement | Notes |
+| :---------- | :---- |
+| **Node.js ≥ 20** | Already required by the web app |
+| **Docker Desktop** | Required at runtime for the "Run Locally" feature |
+| **Windows Build Tools** | Required for `node-pty` native compilation (`npm install --global windows-build-tools` or Visual Studio C++) |
+
+#### One-time Windows fix (first build only)
+
+On Windows, `electron-builder` downloads a `winCodeSign` archive containing macOS symlinks that can't be extracted without Developer Mode enabled. Run this **once** to pre-populate the cache:
+
+```powershell
+$url = "https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z"
+$cacheDir = "$env:LOCALAPPDATA\electron-builder\Cache\winCodeSign\winCodeSign-2.6.0"
+$tmpFile = "$env:TEMP\winCodeSign-2.6.0.7z"
+$7za = "$PSScriptRoot\node_modules\.pnpm\7zip-bin@5.2.0\node_modules\7zip-bin\win\x64\7za.exe"
+
+Invoke-WebRequest -Uri $url -OutFile $tmpFile -UseBasicParsing
+New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+& $7za x $tmpFile "-snl-" -bd "-o$cacheDir" -y
+```
+
+> **Alternative**: Enable **Windows Developer Mode** (`Settings → For Developers → Developer Mode ON`) — this permanently allows symlink creation and skips the step above.
+
+#### Build command
+
+```bash
+# Builds Next.js + packages Electron (all platforms on CI, current platform locally)
+pnpm build:desktop
+```
+
+Output location:
+
+```
+apps/desktop/release/
+└── win-unpacked/
+    └── Dezign2App.exe        ← Windows portable executable (~180 MB)
+```
+
+#### Distributing
+
+- **Local / manual**: Zip the entire `win-unpacked/` folder and share it. Users extract and double-click `Dezign2App.exe`.
+- **GitHub Releases (CI)**: Push a version tag — GitHub Actions builds all three platforms automatically and uploads them as release assets:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+This triggers [`.github/workflows/release-desktop.yml`](.github/workflows/release-desktop.yml) and attaches:
+
+| File | Platform |
+| :--- | :------- |
+| `Dezign2App-Setup-1.0.0.exe` | Windows (NSIS installer) |
+| `Dezign2App-1.0.0.dmg` | macOS |
+| `Dezign2App-1.0.0.AppImage` | Linux |
+
+#### Required GitHub Secrets
+
+Before CI can build, add these in **GitHub → Settings → Secrets → Actions**:
+
+| Secret | Description |
+| :----- | :---------- |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk frontend key |
+| `CLERK_SECRET_KEY` | Clerk backend key |
+| `NEXT_PUBLIC_CONVEX_URL` | Convex deployment URL |
+| `GROQ_API_KEY` | Groq AI API key |
+| `GOOGLE_API_KEY` | Google AI API key |
+| `GITHUB_TOKEN` | Auto-provided by GitHub — no setup needed |
 
 ---
 
