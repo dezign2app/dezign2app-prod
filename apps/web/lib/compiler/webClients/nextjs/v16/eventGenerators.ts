@@ -28,17 +28,29 @@ const METHOD_BADGE_CLASSES: Record<string, string> = {
 };
 
 /**
- * Extracts all path parameter names from a URL path template (e.g. /users/:id or /orgs/{orgId})
+ * Extracts only valid path parameter names from a URL pathname (e.g. /users/:id or /orgs/{orgId})
+ * Ignores host:port (e.g. :8080 or :3000) and only matches parameter names starting with a letter or underscore.
  */
 function extractPathPlaceholders(pathStr: string): string[] {
   const matches = new Set<string>();
-  const colonRegex = /:([a-zA-Z0-9_]+)/g;
+  let pathname = pathStr;
+  try {
+    if (pathStr.includes("://")) {
+      const parsed = new URL(pathStr);
+      pathname = parsed.pathname;
+    }
+  } catch {
+    pathname = pathStr.replace(/^[a-zA-Z]+:\/\/[^/]+/, "");
+  }
+
+  // Regex for :paramName (must start with letter or underscore, not numbers)
+  const colonRegex = /:([a-zA-Z_][a-zA-Z0-9_]*)/g;
   let m: RegExpExecArray | null;
-  while ((m = colonRegex.exec(pathStr)) !== null) {
+  while ((m = colonRegex.exec(pathname)) !== null) {
     if (m[1]) matches.add(m[1]);
   }
-  const braceRegex = /\{([a-zA-Z0-9_]+)\}/g;
-  while ((m = braceRegex.exec(pathStr)) !== null) {
+  const braceRegex = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
+  while ((m = braceRegex.exec(pathname)) !== null) {
     if (m[1]) matches.add(m[1]);
   }
   return Array.from(matches);
@@ -124,7 +136,7 @@ export default ${componentName};
     METHOD_BADGE_CLASSES[upperMethod] ||
     "bg-secondary/40 text-secondary-foreground border-border";
 
-  // Path Parameters
+  // Path Parameters (from pathname only, never ports)
   const configuredPathParams: Parameter[] =
     eventItem?.pathParams?.length
       ? eventItem.pathParams
@@ -165,21 +177,33 @@ export default ${componentName};
     });
   }
 
-  // Headers
+  // Headers (include Authorization if requireAuth !== false)
   const configuredHeaders: Parameter[] =
     eventItem?.headers?.length ? eventItem.headers : endpoint?.headers || [];
 
   const mergedHeaders: Parameter[] = configuredHeaders.filter(
-    (h) =>
-      h.name.toLowerCase() !== "content-type" &&
-      h.name.toLowerCase() !== "authorization",
+    (h) => h.name.toLowerCase() !== "content-type",
   );
+
+  if (
+    requireAuth !== false &&
+    !mergedHeaders.some((h) => h.name.toLowerCase() === "authorization")
+  ) {
+    mergedHeaders.unshift({
+      id: "auth-header",
+      name: "Authorization",
+      type: "string",
+      required: true,
+      defaultValue: "",
+      description: "Bearer authentication token",
+    });
+  }
+
   if (customHeaders) {
     Object.entries(customHeaders).forEach(([k, v]) => {
       if (
         k.toLowerCase() !== "content-type" &&
-        k.toLowerCase() !== "authorization" &&
-        !mergedHeaders.some((h) => h.name === k)
+        !mergedHeaders.some((h) => h.name.toLowerCase() === k.toLowerCase())
       ) {
         mergedHeaders.push({
           id: k,
@@ -227,8 +251,6 @@ export default ${componentName};
   const hasHeaders = mergedHeaders.length > 0;
   const hasBodyFields = bodyFields.length > 0;
   const hasRawJson = Boolean(rawJsonTemplate);
-  const hasAnyInputs =
-    hasPathParams || hasQueryParams || hasHeaders || hasBodyFields || hasRawJson;
 
   // 3. Generate TypeScript Interfaces
   const typeDefs: string[] = [];
@@ -359,94 +381,56 @@ ${hasPathParams ? `  pathParams?: ${componentName}PathParams;\n` : ""}${hasQuery
     rawJsonTemplate || "{\n  \n}",
   );
 
-  // If no inputs exist, render a clean compact card
-  if (!hasAnyInputs) {
-    return `"use client";
-
-import React, { useState } from "react";
-import { Button } from "@workspace/ui/components/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@workspace/ui/components/card";
-import { Badge } from "@workspace/ui/components/badge";
-
-${typeDefs.join("\n\n")}
-
-export function ${componentName}({ onTrigger }: ${componentName}Props) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      await onTrigger(
-        "${eventName}",
-        "${eventType}",
-        "${url}",
-        "${upperMethod}",
-        ${Boolean(requireAuth)},
-        undefined,
-        undefined,
-        undefined,
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <Card className="w-full border-border shadow-sm">
-      <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-        <div className="space-y-1">
-          <CardTitle className="text-sm font-semibold text-card-foreground">
-            ${eventName}
-          </CardTitle>
-          <CardDescription className="text-xs font-mono text-muted-foreground flex items-center gap-2">
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold border ${methodBadgeClass}">
-              ${upperMethod}
-            </span>
-            <span className="truncate max-w-[300px]">${url}</span>
-          </CardDescription>
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          disabled={isSubmitting}
-          onClick={handleSend}
-          className="cursor-pointer"
-        >
-          {isSubmitting ? "Sending..." : "Execute ${upperMethod}"}
-        </Button>
-      </CardHeader>
-    </Card>
-  );
-}
-
-export default ${componentName};
-`;
-  }
-
-  // 4. Rich Interactive Component with Form Inputs
+  // 4. Fully Interactive Component with Editable URL, Parameters, Headers, & Body
   return `"use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@workspace/ui/components/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@workspace/ui/components/card";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import { Textarea } from "@workspace/ui/components/textarea";
+import { getAuthBearerToken } from "@/lib/auth-token";
 
 ${typeDefs.join("\n\n")}
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [targetUrl, setTargetUrl] = useState<string>("${url}");
 ${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, any>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
+${hasHeaders && mergedHeaders.some((h) => h.name.toLowerCase() === "authorization") ? `  useEffect(() => {
+    async function autoFetchToken() {
+      try {
+        const token = await getAuthBearerToken();
+        if (token) {
+          setCustomHeaders((prev) => {
+            if (!prev["Authorization"] || prev["Authorization"] === "Bearer <token>") {
+              return { ...prev, Authorization: token };
+            }
+            return prev;
+          });
+        }
+      } catch (_err) {}
+    }
+    autoFetchToken();
+  }, []);
+` : ""}
   const computeFinalUrl = (): string => {
-    let target = "${url}";
+    let currentUrl = targetUrl.trim() || "${url}";
+    let origin = "";
+    let pathnameAndRest = currentUrl;
+    const matchOrigin = currentUrl.match(/^([a-zA-Z]+:\\/\\/[^/]+)(.*)$/);
+    if (matchOrigin) {
+      origin = matchOrigin[1] || "";
+      pathnameAndRest = matchOrigin[2] || "";
+    }
 ${hasPathParams ? `    Object.entries(pathParams).forEach(([key, val]) => {
       if (val !== undefined && val !== "") {
-        target = target.replace(new RegExp(":" + key + "\\\\b|\\\\{" + key + "\\\\}", "g"), encodeURIComponent(String(val)));
+        pathnameAndRest = pathnameAndRest.replace(new RegExp(":" + key + "\\\\b|\\\\{" + key + "\\\\}", "g"), encodeURIComponent(String(val)));
       }
-    });\n` : ""}${hasQueryParams ? `    const search = new URLSearchParams();
+    });\n` : ""}    let finalUrl = origin + pathnameAndRest;
+${hasQueryParams ? `    const search = new URLSearchParams();
     Object.entries(queryParams).forEach(([key, val]) => {
       if (val !== undefined && val !== "") {
         search.append(key, String(val));
@@ -454,8 +438,8 @@ ${hasPathParams ? `    Object.entries(pathParams).forEach(([key, val]) => {
     });
     const qs = search.toString();
     if (qs) {
-      target += (target.includes("?") ? "&" : "?") + qs;
-    }\n` : ""}    return target;
+      finalUrl += (finalUrl.includes("?") ? "&" : "?") + qs;
+    }\n` : ""}    return finalUrl;
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -518,7 +502,34 @@ ${hasBodyFields ? `      // Form fields payload
 
       <form onSubmit={handleFormSubmit}>
         <CardContent className="p-4 space-y-4 text-xs">
-${hasPathParams ? `          {/* 1. Path Parameters */}
+          {/* 1. Endpoint URL Input */}
+          <div className="space-y-1.5 p-3 rounded-lg bg-background/60 border border-border/40">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <span>Endpoint URL</span>
+              </Label>
+              <button
+                type="button"
+                onClick={() => setTargetUrl("${url}")}
+                className="text-[10px] text-muted-foreground hover:text-foreground underline cursor-pointer"
+              >
+                Reset to default
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-1 rounded text-[10px] font-mono font-bold border ${methodBadgeClass} shrink-0">
+                ${upperMethod}
+              </span>
+              <Input
+                className="h-8 text-xs font-mono bg-background flex-1"
+                placeholder="${url || "http://localhost:8000/api"}"
+                value={targetUrl}
+                onChange={(e) => setTargetUrl(e.target.value)}
+              />
+            </div>
+          </div>
+${hasPathParams ? `
+          {/* 2. Path Parameters */}
           <div className="space-y-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Path Parameters
@@ -540,7 +551,8 @@ ${mergedPathParams.map((p) => `              <div key="${p.name}" className="spa
               </div>`).join("\n")}
             </div>
           </div>
-` : ""}${hasQueryParams ? `          {/* 2. Query Parameters */}
+` : ""}${hasQueryParams ? `
+          {/* 3. Query Parameters */}
           <div className="space-y-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Query Parameters
@@ -563,13 +575,50 @@ ${mergedQueryParams.map((q) => `              <div key="${q.name}" className="sp
               </div>`).join("\n")}
             </div>
           </div>
-` : ""}${hasHeaders ? `          {/* 3. Custom Headers */}
+` : ""}${hasHeaders ? `
+          {/* 4. Headers */}
           <div className="space-y-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Headers
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-${mergedHeaders.map((h) => `              <div key="${h.name}" className="space-y-1">
+${mergedHeaders.map((h) => {
+  if (h.name.toLowerCase() === "authorization") {
+    return `              <div key="${h.name}" className="space-y-1 sm:col-span-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] font-mono text-muted-foreground flex items-center gap-1.5">
+                    <span>${h.name}</span>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                      Bearer Token
+                    </span>
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const token = await getAuthBearerToken();
+                      if (token) {
+                        setCustomHeaders((prev) => ({ ...prev, Authorization: token }));
+                      }
+                    }}
+                    className="text-[10px] text-primary hover:underline cursor-pointer font-mono"
+                  >
+                    Refresh from session
+                  </button>
+                </div>
+                <Input
+                  className="h-8 text-xs bg-background font-mono"
+                  placeholder="Bearer <auto-fetched from better-auth.session_token>"
+                  value={customHeaders["${h.name}"] ?? ""}
+                  onChange={(e) =>
+                    setCustomHeaders((prev) => ({ ...prev, "${h.name}": e.target.value }))
+                  }
+                />
+                <span className="text-[10px] text-muted-foreground">
+                  Auto-fetched from active session token (<code className="text-primary font-semibold">better-auth.session_token</code>) or cookies.
+                </span>
+              </div>`;
+  }
+  return `              <div key="${h.name}" className="space-y-1">
                 <Label className="text-[11px] font-mono text-muted-foreground">
                   ${h.name}
                 </Label>
@@ -581,10 +630,12 @@ ${mergedHeaders.map((h) => `              <div key="${h.name}" className="space-
                     setCustomHeaders((prev) => ({ ...prev, "${h.name}": e.target.value }))
                   }
                 />
-              </div>`).join("\n")}
+              </div>`;
+}).join("\n")}
             </div>
           </div>
-` : ""}${hasBodyFields ? `          {/* 4. Request Body Fields */}
+` : ""}${hasBodyFields ? `
+          {/* 5. Request Body Fields */}
           <div className="space-y-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Request Body
@@ -650,7 +701,8 @@ ${bodyFields.map((f) => {
 }).join("\n")}
             </div>
           </div>
-` : ""}${hasRawJson ? `          {/* 4. Raw JSON Body */}
+` : ""}${hasRawJson ? `
+          {/* 6. Raw JSON Body */}
           <div className="space-y-1.5">
             <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Request Body (JSON)

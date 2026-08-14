@@ -7,8 +7,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@workspace/ui/components/accordion";
-import { SlidersHorizontal, RefreshCw } from "lucide-react";
-import { Button } from "@workspace/ui/components/button";
+import { SlidersHorizontal } from "lucide-react";
 import { Endpoint } from "@workspace/canvas";
 
 interface RequestConfigSectionProps {
@@ -23,7 +22,6 @@ interface RequestConfigSectionProps {
   onQueryParamsChange: (queryParams: Parameter[]) => void;
   onRequestBodyChange: (schema: Schema) => void;
   onRequestBodyModeChange: (mode: RequestBodyMode) => void;
-  onSyncWithEndpoint?: () => void;
 }
 
 export const RequestConfigSection: React.FC<RequestConfigSectionProps> = ({
@@ -38,7 +36,6 @@ export const RequestConfigSection: React.FC<RequestConfigSectionProps> = ({
   onQueryParamsChange,
   onRequestBodyChange,
   onRequestBodyModeChange,
-  onSyncWithEndpoint,
 }) => {
   return (
     <AccordionItem
@@ -55,25 +52,17 @@ export const RequestConfigSection: React.FC<RequestConfigSectionProps> = ({
       </AccordionTrigger>
       <AccordionContent className="px-4 pb-5 pt-2">
         <div className="flex flex-col gap-4">
-          {connectedEndpoint && onSyncWithEndpoint && (
+          {connectedEndpoint && (
             <div className="flex items-center justify-between p-2.5 rounded-lg bg-secondary/30 border border-border/50 text-xs">
               <span className="text-[11px] text-muted-foreground">
-                Configured for{" "}
+                synced with{" "}
                 <span className="font-mono font-medium text-foreground">
                   {connectedEndpoint.type || "GET"} {connectedEndpoint.name}
                 </span>
               </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-6 text-[10px] gap-1 px-2 text-primary hover:text-primary hover:bg-primary/10"
-                onClick={onSyncWithEndpoint}
-                title="Reset/sync parameters and body from connected endpoint"
-              >
-                <RefreshCw size={10} />
-                Sync Endpoint
-              </Button>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                Synced
+              </span>
             </div>
           )}
 

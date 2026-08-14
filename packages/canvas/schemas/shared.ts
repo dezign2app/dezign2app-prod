@@ -14,6 +14,9 @@ export const parameterSchema = z.object({
 
 export const parameterInputSchema = parameterSchema.extend({
   id: z.string().optional(),
+  name: z.string().optional(),
+  type: z.string().optional(),
+  required: z.boolean().optional(),
 });
 
 export const responseFieldSchema = parameterSchema.extend({

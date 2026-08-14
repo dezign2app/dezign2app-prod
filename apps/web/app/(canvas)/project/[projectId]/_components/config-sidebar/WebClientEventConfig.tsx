@@ -60,6 +60,7 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
   const edges = useBackendCanvasStore((s) => s.edges);
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const updateEndpoint = useBackendCanvasStore((s) => s.updateEndpoint);
   const onConnect = useBackendCanvasStore((s) => s.onConnect);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
 
@@ -180,32 +181,120 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
 
   // Find linked endpoint via existing edge
   const existingEdge = edges.find(
-    (e) => e.source === nodeId && e.sourceHandle === `events-${id}`,
+    (e) =>
+      (e.source === nodeId &&
+        (e.sourceHandle === `events-${id}` ||
+          e.sourceHandle === id ||
+          e.sourceHandle?.endsWith(id))) ||
+      (e.target === nodeId &&
+        (e.targetHandle === `events-${id}` ||
+          e.targetHandle === id ||
+          e.targetHandle?.endsWith(id))),
   );
 
   const getLinkedEndpoint = () => {
-    if (!existingEdge || !existingEdge.targetHandle) return null;
-    const targetNode = nodes.find((n) => n.id === existingEdge.target);
-    if (!targetNode) return null;
-    const parts = existingEdge.targetHandle.split("-in-");
-    const endpointId = parts[parts.length - 1];
-    if (!endpointId) return null;
+    let targetNodeId: string | undefined;
+    let endpointId: string | undefined;
 
-    let endpoint: Endpoint | undefined = endpoints.find(
-      (ep) => ep.nodeId === targetNode.id && ep.id === endpointId,
-    );
-    if (!endpoint)
-      endpoint = targetNode.data?.endpoints?.find(
-        (ep: Endpoint) => ep.id === endpointId,
-      );
-    if (!endpoint && targetNode.data?.routeGroups) {
-      for (const group of targetNode.data.routeGroups) {
-        endpoint = group.endpoints?.find(
-          (ep: Endpoint) => ep.id === endpointId,
+    if (existingEdge) {
+      const isSource = existingEdge.source === nodeId;
+      targetNodeId = isSource ? existingEdge.target : existingEdge.source;
+      const handle = isSource
+        ? existingEdge.targetHandle
+        : existingEdge.sourceHandle;
+      if (handle) {
+        endpointId = handle.replace(
+          /^(endpoint-in-|endpoint-out-|endpoints-in-|endpoints-out-|events-in-|events-out-)/,
+          "",
         );
-        if (endpoint) break;
+        if (endpointId.includes("-in-")) {
+          const parts = endpointId.split("-in-");
+          endpointId = parts[parts.length - 1];
+        } else if (endpointId.includes("-out-")) {
+          const parts = endpointId.split("-out-");
+          endpointId = parts[parts.length - 1];
+        }
       }
     }
+
+    if (!endpointId && item?.targetRoute) {
+      endpointId = item.targetRoute;
+    }
+
+    if (!targetNodeId) {
+      const anyServiceEdge = edges.find(
+        (e) =>
+          (e.source === nodeId &&
+            nodes.some(
+              (n) => n.id === e.target && SERVER_NODE_TYPES.includes(n.type),
+            )) ||
+          (e.target === nodeId &&
+            nodes.some(
+              (n) => n.id === e.source && SERVER_NODE_TYPES.includes(n.type),
+            )),
+      );
+      if (anyServiceEdge) {
+        const isSource = anyServiceEdge.source === nodeId;
+        targetNodeId = isSource ? anyServiceEdge.target : anyServiceEdge.source;
+        const handle = isSource
+          ? anyServiceEdge.targetHandle
+          : anyServiceEdge.sourceHandle;
+        if (handle && !endpointId) {
+          endpointId = handle.replace(
+            /^(endpoint-in-|endpoint-out-|endpoints-in-|endpoints-out-|events-in-|events-out-)/,
+            "",
+          );
+          if (endpointId.includes("-in-")) {
+            const parts = endpointId.split("-in-");
+            endpointId = parts[parts.length - 1];
+          }
+        }
+      }
+    }
+
+    if (!targetNodeId) return null;
+    const targetNode = nodes.find((n) => n.id === targetNodeId);
+    if (!targetNode) return null;
+
+    let endpoint: Endpoint | undefined;
+    if (endpointId) {
+      endpoint = endpoints.find(
+        (ep) =>
+          ep.nodeId === targetNode.id &&
+          (ep.id === endpointId || ep.name === endpointId),
+      );
+      if (!endpoint) {
+        endpoint = endpoints.find(
+          (ep) => ep.id === endpointId || ep.name === endpointId,
+        );
+      }
+      if (!endpoint && targetNode.data?.endpoints) {
+        endpoint = (targetNode.data.endpoints as Endpoint[]).find(
+          (ep) => ep.id === endpointId || ep.name === endpointId,
+        );
+      }
+      if (!endpoint && targetNode.data?.routeGroups) {
+        for (const group of targetNode.data.routeGroups) {
+          endpoint = (group.endpoints as Endpoint[] | undefined)?.find(
+            (ep) => ep.id === endpointId || ep.name === endpointId,
+          );
+          if (endpoint) break;
+        }
+      }
+    }
+
+    if (!endpoint) {
+      const srvEndpoints = endpoints.filter((ep) => ep.nodeId === targetNode.id);
+      if (srvEndpoints.length > 0 && srvEndpoints[0]) {
+        endpoint = srvEndpoints[0];
+      } else if (
+        targetNode.data?.endpoints &&
+        (targetNode.data.endpoints as Endpoint[]).length > 0
+      ) {
+        endpoint = (targetNode.data.endpoints as Endpoint[])[0];
+      }
+    }
+
     if (!endpoint) return null;
     return { targetNode, endpoint };
   };
@@ -268,48 +357,135 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
     });
   };
 
-  // Sync endpoint parameters to event
-  const syncWithEndpoint = (targetEndpoint: Endpoint) => {
-    updateEventFields({
-      headers: targetEndpoint.headers ? [...targetEndpoint.headers] : [],
-      pathParams: targetEndpoint.pathParams ? [...targetEndpoint.pathParams] : [],
-      queryParams: targetEndpoint.queryParams ? [...targetEndpoint.queryParams] : [],
-      requestBody: targetEndpoint.requestBody
-        ? { ...targetEndpoint.requestBody }
-        : { id: generateId() },
-      requestBodyMode:
-        targetEndpoint.requestBodyMode ??
-        (targetEndpoint.requestBody?.rawJson ? "raw_json" : "field_builder"),
-    });
-  };
-
-  // When endpoint changes or is newly linked and event has no configured params, initialize from endpoint
-  useEffect(() => {
-    if (!endpoint) return;
-    const hasConfiguredParams =
-      item?.headers !== undefined ||
-      item?.pathParams !== undefined ||
-      item?.queryParams !== undefined ||
-      item?.requestBody !== undefined;
-
-    if (!hasConfiguredParams) {
-      syncWithEndpoint(endpoint);
-    }
-  }, [endpoint?.id]);
-
   if (!item) return null;
 
   const isNavigateToPage = eventType === "navigateToPage";
-  const headers: Parameter[] = item.headers ?? endpoint?.headers ?? [];
-  const pathParams: Parameter[] = item.pathParams ?? endpoint?.pathParams ?? [];
-  const queryParams: Parameter[] = item.queryParams ?? endpoint?.queryParams ?? [];
-  const requestBody: Schema =
-    item.requestBody ??
-    endpoint?.requestBody ?? { id: generateId(), fields: [] };
-  const requestBodyMode: RequestBodyMode =
-    item.requestBodyMode ??
-    endpoint?.requestBodyMode ??
-    (requestBody.rawJson ? "raw_json" : "field_builder");
+
+  // Check if authentication / protected route is enabled
+  const isAuthRequired = Boolean(
+    endpoint
+      ? endpoint.requireAuth !== false
+      : parentNode?.data?.requireAuth !== false,
+  );
+
+  // Derive live parameters and request body from connected endpoint
+  const headers: Parameter[] = React.useMemo(() => {
+    let baseHeaders =
+      endpoint?.headers && endpoint.headers.length > 0
+        ? [...endpoint.headers]
+        : item?.headers && item.headers.length > 0
+        ? [...item.headers]
+        : [];
+
+    if (isAuthRequired) {
+      if (!baseHeaders.some((h) => h.name.toLowerCase() === "authorization")) {
+        baseHeaders = [
+          {
+            id: "auth-bearer-header",
+            name: "Authorization",
+            type: "string",
+            required: true,
+            description: "Bearer <token>",
+            defaultValue: "Bearer <token>",
+            key: "Authorization",
+            value: "Bearer <token>",
+          },
+          ...baseHeaders,
+        ];
+      }
+    } else {
+      baseHeaders = baseHeaders.filter(
+        (h) => h.name.toLowerCase() !== "authorization",
+      );
+    }
+    return baseHeaders;
+  }, [endpoint?.headers, item?.headers, isAuthRequired]);
+
+  const pathParams: Parameter[] = React.useMemo(() => {
+    if (endpoint?.pathParams && endpoint.pathParams.length > 0) return endpoint.pathParams;
+    if (item?.pathParams && item.pathParams.length > 0) return item.pathParams;
+    return [];
+  }, [endpoint?.pathParams, item?.pathParams]);
+
+  const queryParams: Parameter[] = React.useMemo(() => {
+    if (endpoint?.queryParams && endpoint.queryParams.length > 0) return endpoint.queryParams;
+    if (item?.queryParams && item.queryParams.length > 0) return item.queryParams;
+    return [];
+  }, [endpoint?.queryParams, item?.queryParams]);
+
+  const requestBody: Schema = React.useMemo(() => {
+    if (endpoint?.requestBody) {
+      const epFields =
+        endpoint.requestBody.fields && endpoint.requestBody.fields.length > 0
+          ? endpoint.requestBody.fields
+          : endpoint.params && endpoint.params.length > 0
+          ? endpoint.params
+          : [];
+      return {
+        id: endpoint.requestBody.id || endpoint.id || generateId(),
+        fields: epFields,
+        rawJson: endpoint.requestBody.rawJson ?? endpoint.body ?? "",
+      };
+    }
+    if (endpoint?.body) {
+      return { id: endpoint.id || generateId(), rawJson: endpoint.body, fields: [] };
+    }
+    if (endpoint?.params && endpoint.params.length > 0) {
+      return { id: endpoint.id || generateId(), fields: [...endpoint.params], rawJson: "" };
+    }
+    if (item?.requestBody) {
+      return item.requestBody;
+    }
+    return { id: generateId(), fields: [] };
+  }, [
+    endpoint?.id,
+    endpoint?.requestBody,
+    endpoint?.params,
+    endpoint?.body,
+    item?.requestBody,
+  ]);
+
+  const requestBodyMode: RequestBodyMode = React.useMemo(() => {
+    if (endpoint?.requestBodyMode) return endpoint.requestBodyMode;
+    if (requestBody.rawJson?.trim()) return "raw_json";
+    if (item?.requestBodyMode) return item.requestBodyMode;
+    return "field_builder";
+  }, [endpoint?.requestBodyMode, requestBody.rawJson, item?.requestBodyMode]);
+
+  const handleHeadersChange = (newHeaders: Parameter[]) => {
+    updateEventFields({ headers: newHeaders });
+    if (endpoint) {
+      updateEndpoint(endpoint.id, { headers: newHeaders });
+    }
+  };
+
+  const handlePathParamsChange = (newPathParams: Parameter[]) => {
+    updateEventFields({ pathParams: newPathParams });
+    if (endpoint) {
+      updateEndpoint(endpoint.id, { pathParams: newPathParams });
+    }
+  };
+
+  const handleQueryParamsChange = (newQueryParams: Parameter[]) => {
+    updateEventFields({ queryParams: newQueryParams });
+    if (endpoint) {
+      updateEndpoint(endpoint.id, { queryParams: newQueryParams });
+    }
+  };
+
+  const handleRequestBodyChange = (newRequestBody: Schema) => {
+    updateEventFields({ requestBody: newRequestBody });
+    if (endpoint) {
+      updateEndpoint(endpoint.id, { requestBody: newRequestBody });
+    }
+  };
+
+  const handleRequestBodyModeChange = (newMode: RequestBodyMode) => {
+    updateEventFields({ requestBodyMode: newMode });
+    if (endpoint) {
+      updateEndpoint(endpoint.id, { requestBodyMode: newMode });
+    }
+  };
 
   return (
     <div className="flex flex-col gap-5 font-sans">
@@ -358,22 +534,11 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
             requestBody={requestBody}
             requestBodyMode={requestBodyMode}
             connectedEndpoint={endpoint}
-            onHeadersChange={(newHeaders) =>
-              updateEventFields({ headers: newHeaders })
-            }
-            onPathParamsChange={(newPathParams) =>
-              updateEventFields({ pathParams: newPathParams })
-            }
-            onQueryParamsChange={(newQueryParams) =>
-              updateEventFields({ queryParams: newQueryParams })
-            }
-            onRequestBodyChange={(newRequestBody) =>
-              updateEventFields({ requestBody: newRequestBody })
-            }
-            onRequestBodyModeChange={(newMode) =>
-              updateEventFields({ requestBodyMode: newMode })
-            }
-            onSyncWithEndpoint={endpoint ? () => syncWithEndpoint(endpoint) : undefined}
+            onHeadersChange={handleHeadersChange}
+            onPathParamsChange={handlePathParamsChange}
+            onQueryParamsChange={handleQueryParamsChange}
+            onRequestBodyChange={handleRequestBodyChange}
+            onRequestBodyModeChange={handleRequestBodyModeChange}
           />
         )}
 

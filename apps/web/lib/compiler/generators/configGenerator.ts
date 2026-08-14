@@ -81,7 +81,17 @@ const PORT = process.env.PORT || ${port};
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-${cors ? `app.use(cors({ origin: "${corsOrigins}" }));\n` : "app.use(cors());\n"}
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      ${corsOrigins && corsOrigins !== "*" ? `const allowed = ${JSON.stringify(corsOrigins.split(",").map((s) => s.trim()))};\n      if (!allowed.includes("*") && !allowed.includes(origin)) return callback(null, false);\n` : ""}      return callback(null, true);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "*"],
+  })
+);
 // --- Request Logger ---
 app.use((req: Request, _res: Response, next) => {
   logger.info(\`\${req.method} \${req.url}\`);
