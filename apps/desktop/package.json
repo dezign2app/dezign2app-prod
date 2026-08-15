@@ -3,10 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "author": "Dezign2App Team",
-  "description": "Dezign2App desktop app powered by Electron",
+  "description": "D2A",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "wait-on http://localhost:3000 && tsc -p tsconfig.electron.json && electron .",
+    "dev": "wait-on -i 1000 http://localhost:3000/robots.txt && tsc -p tsconfig.electron.json && electron .",
     "build:electron": "tsc -p tsconfig.electron.json && electron-builder --dir",
     "rebuild:native": "electron-rebuild -f -w node-pty",
     "typecheck": "tsc --noEmit"
@@ -24,12 +24,22 @@
     "cross-env": "^10.1.0",
     "electron": "^34.5.1",
     "electron-builder": "^25.1.8",
+    "png-to-ico": "^3.0.2",
     "typescript": "^5.9.3",
     "wait-on": "^8.0.3"
   },
   "build": {
     "appId": "com.dezign2app.desktop",
-    "productName": "Dezign2App",
+    "productName": "D2A",
+    "icon": "build/icon.ico",
+    "protocols": [
+      {
+        "name": "D2A",
+        "schemes": [
+          "dezign2app"
+        ]
+      }
+    ],
     "asar": false,
     "npmRebuild": false,
     "publish": [
@@ -79,14 +89,15 @@
           ]
         }
       ],
-      "icon": "public/favicon.ico"
+      "icon": "build/icon.ico"
     },
     "mac": {
       "target": "dmg",
-      "icon": "public/favicon.ico"
+      "icon": "build/icon.png"
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "icon": "build/icon.png"
     }
   }
 }

@@ -28,6 +28,12 @@ export interface ElectronAPI {
     onLog(cb: (line: string) => void): () => void;
   };
 
+  /** Browser-based Authentication */
+  auth: {
+    openBrowserLogin(url?: string): Promise<void>;
+    onAuthCallback(cb: (data: { token?: string; ticket?: string; rawUrl?: string }) => void): () => void;
+  };
+
   /** PTY terminal sessions */
   terminal: {
     create(id: string, cwd: string, cols: number, rows: number): Promise<{ success: boolean }>;
@@ -55,6 +61,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   isElectron: true,
 
   platform: () => ipcRenderer.invoke("app:platform"),
+
+  auth: {
+    openBrowserLogin: (url?: string) =>
+      ipcRenderer.invoke("auth:open-browser-login", url),
+    onAuthCallback: (
+      cb: (data: { token?: string; ticket?: string; rawUrl?: string }) => void
+    ) => on("auth:callback", cb),
+  },
 
   fs: {
     pickDirectory: () => ipcRenderer.invoke("fs:pick-directory"),

@@ -21,6 +21,13 @@ export interface ElectronAPI {
     ): Promise<{ success: boolean; path: string }>;
   };
 
+  auth: {
+    openBrowserLogin(url?: string): Promise<void>;
+    onAuthCallback(
+      cb: (data: { token?: string; ticket?: string; rawUrl?: string }) => void
+    ): () => void;
+  };
+
   docker: {
     up(projectDir: string): void;
     down(projectDir: string): void;
