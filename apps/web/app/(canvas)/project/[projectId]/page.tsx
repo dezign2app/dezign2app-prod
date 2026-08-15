@@ -65,7 +65,7 @@ export default function ProjectCanvasPage({
 
         <div className="flex-1 relative overflow-hidden flex">
           <div className="flex-1 relative">
-            <BackendCanvas projectId={projectId} view={view} />
+            <BackendCanvas projectId={projectId} projectName={project.name} view={view} />
           </div>
 
           <AiPanel

@@ -14,14 +14,56 @@ function generateResponseInterface(
   responseFields: any[] = [],
   legacyResponseBody: any,
   nodes: BackendNode[],
+  ep?: Endpoint,
 ): { code: string; dbImports: Set<string> } {
   const dbImports = new Set<string>();
 
+  // Resolve target DB entity type if endpoint is associated with database operations
+  let dbEntityName: string | null = null;
+  if (ep) {
+    const targetDbIds = [
+      ...(ep.databaseNodeIds || []),
+      ...(ep.databaseNodeId && ep.databaseNodeId !== "none" ? [ep.databaseNodeId] : []),
+      ...Object.keys(ep.crudOperations || {}),
+    ];
+    if (targetDbIds.length > 0) {
+      const targetTable = nodes.find((n) => targetDbIds.includes(n.id));
+      if (targetTable) {
+        const rawTableName = targetTable.data?.label || targetTable.data?.tableRef || "Entity";
+        const pascal = toPascalCase(rawTableName);
+        if (pascal) {
+          dbEntityName = pascal;
+          dbImports.add(pascal);
+        }
+      }
+    }
+  }
+
+  const defaultDataType = dbEntityName
+    ? (ep?.type === "POST" ? dbEntityName : `${dbEntityName} | ${dbEntityName}[]`)
+    : "Record<string, string | number | boolean | null>";
+
   if (!responseFields || responseFields.length === 0) {
     const legacy = schemaToTsInterface(interfaceName, legacyResponseBody);
-    if (legacy.hasContent) return { code: legacy.code, dbImports };
+    if (legacy.hasContent) {
+      if (
+        legacy.code.includes(`export interface ${interfaceName}`) &&
+        !legacy.code.includes("data:") &&
+        !legacy.code.includes("data?:")
+      ) {
+        const lastBraceIndex = legacy.code.lastIndexOf("}");
+        if (lastBraceIndex !== -1) {
+          const augmentedCode =
+            legacy.code.slice(0, lastBraceIndex) +
+            `  data?: ${defaultDataType};\n` +
+            legacy.code.slice(lastBraceIndex);
+          return { code: augmentedCode, dbImports };
+        }
+      }
+      return { code: legacy.code, dbImports };
+    }
     return {
-      code: `export interface ${interfaceName} {\n  status: number;\n  message: string;\n  data?: unknown;\n}\n`,
+      code: `export interface ${interfaceName} {\n  status: number;\n  message: string;\n  data?: ${defaultDataType};\n}\n`,
       dbImports,
     };
   }
@@ -31,7 +73,7 @@ function generateResponseInterface(
   for (const field of responseFields) {
     const isRequired = field.required !== false;
     const propName = field.name || "field";
-    let tsType = "unknown";
+    let tsType = "string";
 
     if (field.type && field.type.startsWith("db:")) {
       const parts = field.type.split(":");
@@ -71,10 +113,10 @@ function generateResponseInterface(
           tsType = "boolean";
           break;
         case "object":
-          tsType = "Record<string, unknown>";
+          tsType = "Record<string, string | number | boolean | null>";
           break;
         case "array":
-          tsType = "unknown[]";
+          tsType = "string[]";
           break;
         default:
           tsType = "string";
@@ -95,6 +137,7 @@ export function generateTypesPackage(
     nodeId: string;
     variant: "publish" | "consume";
   })[] = [],
+  servicesInfo?: { id: string; name: string; folderName: string }[],
 ): CompiledFile[] {
   const files: CompiledFile[] = [];
   const barrelExports: string[] = [];
@@ -162,10 +205,12 @@ export function generateTypesPackage(
   const processedServiceFolders = new Set<string>();
 
   endpointNodes.forEach((serviceNode) => {
+    const srvInfo = servicesInfo?.find((s) => s.id === serviceNode.id);
     const rawServiceName =
-      serviceNode.data.label || serviceNode.id || "Service";
-    let serviceFolderName = toVarName(rawServiceName) || "service";
-    let pascalServiceName = toPascalCase(rawServiceName);
+      srvInfo?.name || serviceNode.data?.label || serviceNode.id || "Service";
+    const folderBase = srvInfo?.folderName || rawServiceName;
+    let serviceFolderName = toVarName(folderBase) || "service";
+    let pascalServiceName = toPascalCase(folderBase);
 
     if (processedServiceFolders.has(serviceFolderName)) {
       serviceFolderName = `${serviceFolderName}_${serviceNode.id.replace(/[^a-zA-Z0-9]/g, "")}`;
@@ -232,6 +277,7 @@ export function generateTypesPackage(
           ep.responseFields,
           ep.responseBody,
           nodes,
+          ep,
         );
 
         const queryZodRes = parametersToZodSchema(

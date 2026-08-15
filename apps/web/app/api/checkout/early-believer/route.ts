@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const totalAmountUSD = tier * seats;
     const totalAmountInCents = totalAmountUSD * 100;
 
-    const successUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/projects?early_believer=success`;
+    const successUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500"}/projects?early_believer=success`;
 
     // Dynamically create a Creem product based on the user's custom tier and seat selection
     const product = await creem.products.create({

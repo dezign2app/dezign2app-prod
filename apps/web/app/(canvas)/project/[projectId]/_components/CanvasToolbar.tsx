@@ -1,18 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
   Network,
-  Workflow,
   Sparkles,
   Database,
-  RefreshCw,
-  Trash2,
   Hammer,
-  Router,
   Cloud,
+  Code,
 } from "lucide-react";
 import { BackendCanvasView } from "@/types/canvas";
 import { Button } from "@workspace/ui/components/button";
@@ -103,8 +100,8 @@ export function CanvasToolbar({
               asChild
             >
               <Link href={`/project/${projectId}/compiler`}>
-                <Hammer className="w-4 h-4 mr-1 text-primary" />
-                Compile
+                <Code className="w-4 h-4 mr-1 text-primary" />
+                Code
               </Link>
             </Button>
           </TooltipTrigger>

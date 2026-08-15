@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useMemo } from "react";
 import { Terminal, Trash2, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Resizable } from "re-resizable";
+import { WTermTerminal } from "@/components/terminal";
 
 export interface TerminalLog {
   id: string;
@@ -26,13 +27,32 @@ export function TerminalPanel({
   onToggleOpen,
 }: TerminalPanelProps) {
   const [copied, setCopied] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [logs, isOpen]);
+  // Convert structured logs into ANSI colored terminal output for wterm
+  const formattedLogs = useMemo(() => {
+    return logs.map((log) => {
+      let typeBadge = "";
+      switch (log.type) {
+        case "error":
+          typeBadge = `\x1b[41;97m ERROR \x1b[0m \x1b[31m${log.text}\x1b[0m`;
+          break;
+        case "warning":
+          typeBadge = `\x1b[43;30m WARN \x1b[0m \x1b[33m${log.text}\x1b[0m`;
+          break;
+        case "success":
+          typeBadge = `\x1b[42;30m SUCCESS \x1b[0m \x1b[32m${log.text}\x1b[0m`;
+          break;
+        case "system":
+          typeBadge = `\x1b[45;97m SYSTEM \x1b[0m \x1b[35m${log.text}\x1b[0m`;
+          break;
+        case "info":
+        default:
+          typeBadge = `\x1b[44;97m INFO \x1b[0m \x1b[36m${log.text}\x1b[0m`;
+          break;
+      }
+      return `\x1b[90m[${log.timestamp}]\x1b[0m ${typeBadge}\r\n`;
+    });
+  }, [logs]);
 
   const handleCopyLogs = () => {
     const content = logs
@@ -74,7 +94,7 @@ export function TerminalPanel({
       handleClasses={{
         top: "h-1.5 bg-border/40 hover:bg-primary/60 cursor-row-resize transition-colors z-20",
       }}
-      className="border-t border-border/50 flex flex-col shrink-0 font-mono text-xs text-slate-200 select-none bg-[#0a0d12] relative"
+      className="border-t border-border/50 flex flex-col shrink-0 font-mono text-xs text-slate-200 select-none bg-[#090d13] relative"
     >
       {/* Header */}
       <div className="h-7 bg-[#161b22] px-3 border-b border-border/40 flex items-center justify-between shrink-0">
@@ -84,7 +104,7 @@ export function TerminalPanel({
             Terminal / Console Log
           </span>
           <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">
-            Local Dev Server
+            wterm engine
           </span>
         </div>
 
@@ -124,52 +144,12 @@ export function TerminalPanel({
         </div>
       </div>
 
-      {/* Log Output Body */}
-      <div className="flex-1 p-3 overflow-y-auto font-mono text-[11px] leading-relaxed space-y-1 select-text">
-        {logs.length === 0 ? (
-          <div className="text-slate-500 italic py-2">
-            Terminal idle. Click "Run Localhost" to simulate dev server startup logs.
-          </div>
-        ) : (
-          logs.map((log) => (
-            <div key={log.id} className="flex items-start gap-2">
-              <span className="text-slate-500 shrink-0 select-none">
-                [{log.timestamp}]
-              </span>
-              <span
-                className={`font-semibold shrink-0 select-none uppercase text-[10px] px-1 rounded ${
-                  log.type === "error"
-                    ? "bg-red-500/20 text-red-400"
-                    : log.type === "warning"
-                      ? "bg-amber-500/20 text-amber-400"
-                      : log.type === "success"
-                        ? "bg-emerald-500/20 text-emerald-400"
-                        : log.type === "system"
-                          ? "bg-purple-500/20 text-purple-400"
-                          : "bg-blue-500/20 text-blue-400"
-                }`}
-              >
-                {log.type}
-              </span>
-              <span
-                className={
-                  log.type === "error"
-                    ? "text-red-300"
-                    : log.type === "warning"
-                      ? "text-amber-300"
-                      : log.type === "success"
-                        ? "text-emerald-300"
-                        : log.type === "system"
-                          ? "text-purple-300"
-                          : "text-slate-200"
-                }
-              >
-                {log.text}
-              </span>
-            </div>
-          ))
-        )}
-        <div ref={bottomRef} />
+      {/* wterm Log Output Body */}
+      <div className="flex-1 min-h-0 bg-[#090d13] relative">
+        <WTermTerminal
+          logs={formattedLogs}
+          placeholder="Terminal idle. Click 'Run Localhost' to simulate dev server startup logs."
+        />
       </div>
     </Resizable>
   );

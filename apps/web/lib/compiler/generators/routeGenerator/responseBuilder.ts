@@ -102,11 +102,11 @@ export function buildResponsePayloadCode(
             const pickProps = cols.map((c) => `${c}: item.${c}`).join(", ");
             if (isArrayCategory) {
               fieldEntries.push(
-                `      ${fieldName}: (Array.isArray(${targetVar}) ? ${targetVar} : ${targetVar} ? [${targetVar}] : []).map((item: any) => ({ ${pickProps} }))`,
+                `      ${fieldName}: (Array.isArray(${targetVar}) ? ${targetVar} : ${targetVar} ? [${targetVar}] : []).map((item) => ({ ${pickProps} }))`,
               );
             } else {
               fieldEntries.push(
-                `      ${fieldName}: ${targetVar} ? ({ ${cols.map((c) => `${c}: (${targetVar} as any).${c}`).join(", ")} }) : null`,
+                `      ${fieldName}: ${targetVar} ? ({ ${cols.map((c) => `${c}: ${targetVar}.${c}`).join(", ")} }) : null`,
               );
             }
           } else {
@@ -126,7 +126,7 @@ export function buildResponsePayloadCode(
           if (category === "array" || category === "partial_array") {
             fieldEntries.push(`      ${fieldName}: []`);
           } else {
-            fieldEntries.push(`      ${fieldName}: {} as any`);
+            fieldEntries.push(`      ${fieldName}: {}`);
           }
         }
         continue;
@@ -154,7 +154,7 @@ export function buildResponsePayloadCode(
           fieldEntries.push(`      ${fieldName}: {}`);
           break;
         default:
-          fieldEntries.push(`      ${fieldName}: {} as any`);
+          fieldEntries.push(`      ${fieldName}: ""`);
       }
     }
 

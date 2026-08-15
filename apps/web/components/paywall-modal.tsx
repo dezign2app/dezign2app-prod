@@ -174,7 +174,7 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
 
   const handleOpenBrowserPricing = () => {
     const webBaseUrl =
-      process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500";
     const pricingUrl = `${webBaseUrl}/pricing`;
     const api = getElectronAPI();
     if (api?.auth) {

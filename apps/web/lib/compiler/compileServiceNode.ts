@@ -20,8 +20,9 @@ export function compileServiceNode(
   testCases: SimulationTestCase[] = [],
   dbFunctions: ReusableFunction[] = [],
   kafkaFunctions: ReusableFunction[] = [],
+  folderName?: string,
 ): CompiledServiceResult {
-  const techStack = node.data.techStack || "express";
+  const techStack = node.data?.techStack || "express";
 
   if (dbFunctions.length === 0 && allNodes.length > 0) {
     const compiledDb = compileDatabaseNodes(allNodes, allEdges);
@@ -56,6 +57,7 @@ export function compileServiceNode(
         testCases,
         dbFunctions,
         kafkaFunctions,
+        folderName,
       );
   }
 }

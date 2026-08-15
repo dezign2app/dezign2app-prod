@@ -25,12 +25,19 @@ export function compileExpressV4Service(
   testCases: SimulationTestCase[] = [],
   dbFunctions: ReusableFunction[] = [],
   kafkaFunctions: ReusableFunction[] = [],
+  folderName?: string,
 ): CompiledServiceResult {
-  const serviceName = node.data.label || "Service";
-  const sanitizedName = serviceName.toLowerCase().replace(/[^a-z0-9]/g, "-");
-  const port = node.data.port || "8080";
-  const cors = node.data.cors || false;
-  const corsOrigins = node.data.corsOrigins || "*";
+  const serviceName = node.data?.label || node.id || "Service";
+  const sanitizedName =
+    folderName ||
+    serviceName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "-")
+      .replace(/^-+|-+$/g, "") ||
+    "service";
+  const port = node.data?.port || "8080";
+  const cors = node.data?.cors || false;
+  const corsOrigins = node.data?.corsOrigins || "*";
 
   let nodeEndpoints = endpoints.filter((e) => e.nodeId === node.id);
   if (nodeEndpoints.length === 0 && node.data?.endpoints) {
@@ -84,6 +91,7 @@ export function compileExpressV4Service(
       dbFunctions,
       kafkaFunctions,
       nodePublishedEvents,
+      sanitizedName,
     ),
     ...generateConsumers(
       serviceName,
