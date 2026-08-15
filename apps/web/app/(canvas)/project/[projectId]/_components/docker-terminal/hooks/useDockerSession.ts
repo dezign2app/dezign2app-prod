@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { isElectron, getElectronAPI } from "@/lib/electron";
 import { CompiledFile, CompiledMonorepoResult } from "@/lib/compiler";
-import { ProcessStatus, ServiceEndpoint } from "../types";
+import { ProcessStatus, ServiceEndpoint, TerminalTab } from "../types";
 import { exportFilesToDirectory } from "../utils/terminalExportUtils";
 
 interface UseDockerSessionProps {
@@ -14,6 +14,7 @@ interface UseDockerSessionProps {
   files: CompiledFile[];
   monorepoResult: CompiledMonorepoResult;
   serviceEndpoints: ServiceEndpoint[];
+  activeTab?: TerminalTab;
 }
 
 export function useDockerSession({
@@ -23,48 +24,111 @@ export function useDockerSession({
   files,
   monorepoResult,
   serviceEndpoints,
+  activeTab = "docker",
 }: UseDockerSessionProps) {
   const inElectron = isElectron();
-  const [dockerLogs, setDockerLogs] = useState<string[]>([]);
+  const [dockerLogs, setDockerLogs] = useState<string[]>(() => {
+    if (!inElectron) {
+      return [
+        `\x1b[36mDezign2App Docker Shell [Web Preview]\x1b[0m\r\n\x1b[90mWorkspace: ${outputDir || `/workspace/${projectId}`}\x1b[0m\r\n\x1b[90mClick "Docker Build" or type "docker compose up --build" to compile containers.\x1b[0m\r\n\r\n\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m `,
+      ];
+    }
+    return [];
+  });
   const [dockerStatus, setDockerStatus] = useState<ProcessStatus>("idle");
   const [isExportingDocker, setIsExportingDocker] = useState<boolean>(false);
 
-  // Hook into Electron Docker logs
+  const dockerDimensionsRef = useRef<{ cols: number; rows: number }>({ cols: 100, rows: 20 });
+  const dockerIdRef = useRef<string>(`pty-docker-${projectId}`);
+  const ptyCreatedRef = useRef<boolean>(false);
+  const prevOutputDirRef = useRef<string>(outputDir);
+
+  const handleDockerResize = useCallback(
+    (cols: number, rows: number) => {
+      dockerDimensionsRef.current = { cols, rows };
+      if (inElectron) {
+        const api = getElectronAPI();
+        api?.terminal?.resize?.(dockerIdRef.current, cols, rows);
+      }
+    },
+    [inElectron],
+  );
+
+  // Initialize Interactive PTY Shell for Docker Session (Electron)
   useEffect(() => {
     if (!inElectron) return;
     const api = getElectronAPI();
-    if (!api?.docker?.onLog) return;
+    if (!api?.terminal?.create) return;
 
-    const cleanup = api.docker.onLog((line: string) => {
-      setDockerLogs((prev) => [...prev, line]);
+    const ptyId = dockerIdRef.current;
+    const { cols, rows } = dockerDimensionsRef.current;
 
-      if (line.includes("Building") || line.includes("Step ") || line.includes("build")) {
+    // Only create PTY once per session
+    if (!ptyCreatedRef.current) {
+      ptyCreatedRef.current = true;
+      api.terminal.create(ptyId, outputDir || "", cols, rows).then(() => {
+        if (outputDir) {
+          api?.terminal?.write?.(ptyId, `cd "${outputDir}"\r`);
+        }
+      });
+    }
+
+    const cleanupData = api.terminal.onData(ptyId, (data: string) => {
+      setDockerLogs((prev) => [...prev, data]);
+
+      // Automatically infer process status from PTY ANSI stream
+      if (
+        data.includes("docker compose up") ||
+        data.includes("Building") ||
+        data.includes("Step ") ||
+        data.includes("[+] Building")
+      ) {
         setDockerStatus("building");
       } else if (
-        line.includes("operational at") ||
-        line.includes("Started") ||
-        line.includes("running on") ||
-        line.includes("Ready on") ||
-        line.includes("Application startup complete") ||
-        line.includes("healthy")
+        data.includes("operational at") ||
+        data.includes("Started") ||
+        data.includes("running on") ||
+        data.includes("Ready on") ||
+        data.includes("Application startup complete") ||
+        data.includes("healthy")
       ) {
         setDockerStatus("running");
-      } else if (line.includes("Stopped") || line.includes("exited with code 0")) {
+      } else if (data.includes("[Docker Session Exited]")) {
         setDockerStatus("stopped");
-      } else if (line.includes("Failed") || line.includes("ERROR") || line.includes("error")) {
+      } else if (data.includes("ERROR") || data.includes("failed to solve") || data.includes("Error response from daemon")) {
         setDockerStatus("error");
       }
     });
 
-    return cleanup;
-  }, [inElectron]);
+    const cleanupExit = api.terminal.onExit(ptyId, () => {
+      setDockerStatus("stopped");
+      setDockerLogs((prev) => [...prev, "\r\n\x1b[31m[Docker Session Exited]\x1b[0m\r\n"]);
+    });
+
+    return () => {
+      cleanupData();
+      cleanupExit();
+    };
+  }, [inElectron, outputDir]);
+
+  // Navigate PTY to new directory if user picks a different folder
+  useEffect(() => {
+    if (!inElectron || !ptyCreatedRef.current) return;
+    if (outputDir && prevOutputDirRef.current !== outputDir) {
+      prevOutputDirRef.current = outputDir;
+      const api = getElectronAPI();
+      api?.terminal?.write(dockerIdRef.current, `cd "${outputDir}"\r`);
+    }
+  }, [inElectron, outputDir]);
 
   // Browser Simulation: Docker Run
   const handleSimulateDockerRun = useCallback(() => {
     const services = monorepoResult.services || [];
     const webClients = monorepoResult.webClients || [];
 
-    setDockerLogs([
+    setDockerLogs((prev) => [
+      ...prev,
+      "docker compose up --build\r\n",
       "\x1b[36m🚀 [Preview] docker compose up --build\x1b[0m\r\n",
       "🐳 Building multi-stage container images with BuildKit...\r\n",
       ...services.map(
@@ -86,12 +150,11 @@ export function useDockerSession({
     setDockerStatus("running");
   }, [monorepoResult, serviceEndpoints]);
 
-  // Docker Build Runner (Production)
+  // Docker Build Runner (Production) in live PTY
   const handleStartDocker = useCallback(async () => {
     const api = getElectronAPI();
-    if (inElectron && (!api?.docker?.up || !api?.fs?.writeProject)) return;
-
     let targetDir = outputDir;
+
     if (!targetDir && typeof window !== "undefined") {
       try {
         targetDir =
@@ -113,25 +176,20 @@ export function useDockerSession({
 
     setIsExportingDocker(true);
     setDockerStatus("building");
-    setDockerLogs([]);
 
-    if (inElectron && api?.docker?.up) {
+    if (inElectron && api?.terminal?.write) {
       try {
-        // 1. Preflight
-        const preflight = await api.docker.preflight();
-        if (!preflight.ok) {
-          setDockerStatus("error");
-          toast.error("Pre-flight check failed. See terminal for details.");
-          return;
+        // 1. Export files
+        if (targetDir) {
+          await exportFilesToDirectory(files, targetDir, setDockerLogs);
         }
 
-        // 2. Export files
-        await exportFilesToDirectory(files, targetDir, setDockerLogs);
-
-        // 3. docker compose up --build
-        setDockerLogs((prev) => [...prev, `🚀 Running: docker compose up --build\n`]);
-        api.docker.up(targetDir);
-        toast.success("Docker containers building and starting...");
+        // 2. Ensure PTY is in directory and execute docker compose up --build
+        if (targetDir) {
+          api.terminal.write(dockerIdRef.current, `cd "${targetDir}"\r`);
+        }
+        api.terminal.write(dockerIdRef.current, "docker compose up --build\r");
+        toast.success("Building & orchestrating Docker containers in Build Terminal...");
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setDockerLogs((prev) => [...prev, `\n❌ Error starting Docker: ${msg}\n`]);
@@ -147,22 +205,36 @@ export function useDockerSession({
     }
   }, [inElectron, outputDir, projectId, saveWorkspaceDir, files, handleSimulateDockerRun]);
 
+  // Stop Docker Build (sends SIGINT or docker compose down)
   const handleStopDocker = useCallback(() => {
     const api = getElectronAPI();
-    if (inElectron && api?.docker?.down && outputDir) {
-      api.docker.down(outputDir);
+    if (inElectron && api?.terminal?.write) {
+      api.terminal.write(dockerIdRef.current, "\x03\r\n");
       setDockerStatus("stopped");
-      toast.info("Stopping Docker containers...");
+      toast.info("Stopped Docker runner");
+      setTimeout(() => {
+        setDockerStatus("idle");
+      }, 1200);
     } else {
       setDockerStatus("stopped");
-      setDockerLogs((prev) => [...prev, "\n🛑 Docker containers stopped.\n"]);
+      setDockerLogs((prev) => [
+        ...prev,
+        "^C\r\n\x1b[31m[Docker Runner Stopped]\x1b[0m\r\n\r\n\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ",
+      ]);
+      setTimeout(() => {
+        setDockerStatus("idle");
+      }, 1200);
     }
-  }, [inElectron, outputDir]);
+  }, [inElectron]);
 
   const clearDockerLogs = useCallback(() => {
     setDockerLogs([]);
     setDockerStatus("idle");
-  }, []);
+    if (inElectron) {
+      const api = getElectronAPI();
+      api?.terminal?.write(dockerIdRef.current, "\x0c");
+    }
+  }, [inElectron]);
 
   return {
     dockerLogs,
@@ -170,6 +242,8 @@ export function useDockerSession({
     dockerStatus,
     setDockerStatus,
     isExportingDocker,
+    dockerIdRef,
+    handleDockerResize,
     handleStartDocker,
     handleStopDocker,
     clearDockerLogs,

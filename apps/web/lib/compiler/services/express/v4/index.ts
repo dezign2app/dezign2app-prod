@@ -26,6 +26,7 @@ export function compileExpressV4Service(
   dbFunctions: ReusableFunction[] = [],
   kafkaFunctions: ReusableFunction[] = [],
   folderName?: string,
+  allEndpoints: (Endpoint & { nodeId: string })[] = [],
 ): CompiledServiceResult {
   const serviceName = node.data?.label || node.id || "Service";
   const sanitizedName =
@@ -39,8 +40,18 @@ export function compileExpressV4Service(
   const cors = node.data?.cors || false;
   const corsOrigins = node.data?.corsOrigins || "*";
 
-  let nodeEndpoints = endpoints.filter((e) => e.nodeId === node.id);
-  if (nodeEndpoints.length === 0 && node.data?.endpoints) {
+  let nodeEndpoints = endpoints.filter(
+    (e) =>
+      e.nodeId === node.id ||
+      (e.nodeId &&
+        ((node.data?.label && e.nodeId === node.data.label) ||
+          (node.data?.label && e.nodeId === node.data.label.toLowerCase()))),
+  );
+  if (nodeEndpoints.length === 0 && endpoints.length > 0 && endpoints.every((e) => !e.nodeId || e.nodeId === node.id)) {
+    nodeEndpoints = endpoints;
+  }
+  const totalEndpointsCount = allEndpoints.length > 0 ? allEndpoints.length : endpoints.length;
+  if (nodeEndpoints.length === 0 && totalEndpointsCount === 0 && node.data?.endpoints) {
     nodeEndpoints = node.data.endpoints.map((ep) => ({
       ...ep,
       nodeId: node.id,
@@ -59,9 +70,13 @@ export function compileExpressV4Service(
   }
 
   let nodeConsumedEvents = events.filter(
-    (e) => e.nodeId === node.id && e.variant === "consume",
+    (e) =>
+      (e.nodeId === node.id ||
+        (node.data?.label && e.nodeId === node.data.label) ||
+        (node.data?.label && e.nodeId === node.data.label.toLowerCase())) &&
+      e.variant === "consume",
   );
-  if (nodeConsumedEvents.length === 0 && node.data?.consumedEvents) {
+  if (nodeConsumedEvents.length === 0 && events.length === 0 && node.data?.consumedEvents) {
     nodeConsumedEvents = node.data.consumedEvents.map((e) => ({
       ...e,
       nodeId: node.id,
@@ -70,9 +85,13 @@ export function compileExpressV4Service(
   }
 
   let nodePublishedEvents = events.filter(
-    (e) => e.nodeId === node.id && e.variant === "publish",
+    (e) =>
+      (e.nodeId === node.id ||
+        (node.data?.label && e.nodeId === node.data.label) ||
+        (node.data?.label && e.nodeId === node.data.label.toLowerCase())) &&
+      e.variant === "publish",
   );
-  if (nodePublishedEvents.length === 0 && node.data?.publishedEvents) {
+  if (nodePublishedEvents.length === 0 && events.length === 0 && node.data?.publishedEvents) {
     nodePublishedEvents = node.data.publishedEvents.map((e) => ({
       ...e,
       nodeId: node.id,

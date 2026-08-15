@@ -17,8 +17,14 @@ export interface ElectronAPI {
     pickDirectory(): Promise<string | null>;
     writeProject(
       outputDir: string,
-      files: ElectronCompiledFile[]
-    ): Promise<{ success: boolean; path: string }>;
+      files: ElectronCompiledFile[],
+      options?: { cleanStale?: boolean }
+    ): Promise<{
+      success: boolean;
+      path: string;
+      writtenCount?: number;
+      totalCount?: number;
+    }>;
   };
 
   shell?: {

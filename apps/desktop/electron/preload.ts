@@ -18,7 +18,11 @@ export interface ElectronAPI {
   /** File system */
   fs: {
     pickDirectory(): Promise<string | null>;
-    writeProject(outputDir: string, files: CompiledFile[]): Promise<{ success: boolean; path: string }>;
+    writeProject(
+      outputDir: string,
+      files: CompiledFile[],
+      options?: { cleanStale?: boolean }
+    ): Promise<{ success: boolean; path: string; writtenCount?: number; totalCount?: number }>;
   };
 
   /** Docker Compose runner */
@@ -92,8 +96,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   fs: {
     pickDirectory: () => ipcRenderer.invoke("fs:pick-directory"),
-    writeProject: (outputDir: string, files: CompiledFile[]) =>
-      ipcRenderer.invoke("fs:write-project", outputDir, files),
+    writeProject: (
+      outputDir: string,
+      files: CompiledFile[],
+      options?: { cleanStale?: boolean }
+    ) => ipcRenderer.invoke("fs:write-project", outputDir, files, options),
   },
 
   docker: {
@@ -119,18 +126,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     resize: (id: string, cols: number, rows: number) =>
       ipcRenderer.send("terminal:resize", id, cols, rows),
     kill: (id: string) => ipcRenderer.send("terminal:kill", id),
-    onData: (id: string, cb: (data: string) => void) =>
-      on(`terminal:data:${id}`, cb),
-    onExit: (id: string, cb: (code: number) => void) =>
-      on(`terminal:exit:${id}`, cb),
+    onData(id: string, cb: (data: string) => void) {
+      return on(`terminal:data:${id}`, cb);
+    },
+    onExit(id: string, cb: (code: number) => void) {
+      return on(`terminal:exit:${id}`, cb);
+    },
   },
 } satisfies ElectronAPI);
-
-// ─────────────────────────────────────────────
-//  TypeScript global type augmentation
-// ─────────────────────────────────────────────
-declare global {
-  interface Window {
-    electronAPI?: ElectronAPI;
-  }
-}

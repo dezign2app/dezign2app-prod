@@ -30,7 +30,7 @@ export function generateProjectConfigFiles(appSlug: string = "web-app"): Compile
         next: "^16.0.0",
         react: "^19.0.0",
         "react-dom": "^19.0.0",
-        zod: "^4.4.3",
+        zod: "^3.24.2",
       },
       devDependencies: {
         "@better-auth/cli": "^1.4.21",
@@ -42,7 +42,7 @@ export function generateProjectConfigFiles(appSlug: string = "web-app"): Compile
         "@workspace/typescript-config": "workspace:*",
         "prebuild-install": "^7.1.3",
         tailwindcss: "^4.0.0",
-        typescript: "^5.9.0",
+        typescript: "^5.7.3",
         vitest: "^1.6.0",
       },
     },

@@ -12,13 +12,14 @@ import {
   Maximize2,
   Minimize2,
   X,
-  Trash2,
   Zap,
   Layers,
   Code2,
 } from "lucide-react";
 import { TerminalTab, ProcessStatus } from "../types";
 import { TerminalStatusBadge } from "./TerminalStatusBadge";
+import { AutoSyncStatus } from "../hooks/useAutoDiskSync";
+import { RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
 
 interface TerminalHeaderProps {
   inElectron: boolean;
@@ -32,16 +33,18 @@ interface TerminalHeaderProps {
   onDownloadZip: () => void;
   downloadingZip: boolean;
   isExporting: boolean;
+  syncStatus?: AutoSyncStatus;
+  lastSyncedAt?: Date | null;
+  autoSyncEnabled?: boolean;
+  onToggleAutoSync?: () => void;
+  onForceSync?: () => void;
   onStartDev: () => void;
   onStopDev: () => void;
   onStartDocker: () => void;
   onStopDocker: () => void;
+  onStartBuild?: () => void;
   onCopyCommand: () => void;
   copiedCmd: boolean;
-  onCopyLogs: () => void;
-  copiedLogs: boolean;
-  hasLogs: boolean;
-  onClearLogs: () => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onClose: () => void;
@@ -59,20 +62,26 @@ export function TerminalHeader({
   onDownloadZip,
   downloadingZip,
   isExporting,
+  syncStatus = "idle",
+  lastSyncedAt,
+  autoSyncEnabled = true,
+  onToggleAutoSync,
+  onForceSync,
   onStartDev,
   onStopDev,
   onStartDocker,
   onStopDocker,
+  onStartBuild,
   onCopyCommand,
   copiedCmd,
-  onCopyLogs,
-  copiedLogs,
-  hasLogs,
-  onClearLogs,
   isExpanded,
   onToggleExpand,
   onClose,
 }: TerminalHeaderProps) {
+  const formattedSyncTime = lastSyncedAt
+    ? lastSyncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    : null;
+
   return (
     <div className="flex items-center justify-between h-9 bg-zinc-900 border-b border-zinc-800 shrink-0 px-2 select-none text-zinc-300">
       {/* Left: Terminal Tabs */}
@@ -135,6 +144,48 @@ export function TerminalHeader({
 
       {/* Right: Terminal Actions */}
       <div className="flex items-center gap-1">
+        {/* Real-time Auto-Sync Status Badge (Electron only) */}
+        {inElectron && outputDir && (
+          <button
+            type="button"
+            onClick={onForceSync}
+            className="flex items-center gap-1.5 h-6 px-2 text-[11px] rounded bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-700/60 transition-colors"
+            title={
+              syncStatus === "syncing"
+                ? "Syncing canvas changes to disk..."
+                : syncStatus === "synced"
+                  ? `Live synced to disk at ${formattedSyncTime || "just now"}. Click to force re-sync.`
+                  : syncStatus === "error"
+                    ? "Sync error occurred. Click to retry."
+                    : "Auto-sync active. Click to force sync."
+            }
+          >
+            {syncStatus === "syncing" ? (
+              <>
+                <RefreshCw className="w-3 h-3 text-sky-400 animate-spin" />
+                <span className="text-sky-300 font-mono hidden md:inline">Syncing...</span>
+              </>
+            ) : syncStatus === "synced" ? (
+              <>
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <span className="text-emerald-300 font-mono hidden md:inline">
+                  {formattedSyncTime ? `Synced ${formattedSyncTime}` : "Synced"}
+                </span>
+              </>
+            ) : syncStatus === "error" ? (
+              <>
+                <AlertTriangle className="w-3 h-3 text-amber-400" />
+                <span className="text-amber-300 font-mono hidden md:inline">Sync Error</span>
+              </>
+            ) : (
+              <>
+                <Zap className="w-3 h-3 text-zinc-400" />
+                <span className="text-zinc-400 font-mono hidden md:inline">Auto-Sync</span>
+              </>
+            )}
+          </button>
+        )}
+
         {/* Directory Selector in Desktop */}
         {inElectron ? (
           <Button
@@ -165,7 +216,7 @@ export function TerminalHeader({
           </Button>
         )}
 
-        {/* Primary Action Button (Start / Stop) for Active Tab */}
+        {/* Primary Action Button (Start / Stop / Build) for Active Tab */}
         {activeTab === "dev" ? (
           devStatus === "running" || devStatus === "starting" ? (
             <Button
@@ -208,6 +259,17 @@ export function TerminalHeader({
               <span>Docker Build</span>
             </Button>
           )
+        ) : activeTab === "shell" && inElectron ? (
+          <Button
+            size="sm"
+            onClick={onStartBuild}
+            disabled={isExporting}
+            className="h-6 px-2.5 text-[11px] gap-1 bg-purple-600 hover:bg-purple-700 text-white border-0 font-medium"
+            title="Execute pnpm install && pnpm build in project workspace"
+          >
+            <Play className="w-2.5 h-2.5 fill-white" />
+            <span>Run Build</span>
+          </Button>
         ) : null}
 
         {/* Copy Command */}
@@ -225,33 +287,6 @@ export function TerminalHeader({
           )}
         </Button>
 
-        {/* Copy Logs */}
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onCopyLogs}
-          disabled={!hasLogs}
-          className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-30"
-          title="Copy Terminal Logs"
-        >
-          {copiedLogs ? (
-            <Check className="w-3 h-3 text-emerald-400" />
-          ) : (
-            <Copy className="w-3 h-3" />
-          )}
-        </Button>
-
-        {/* Clear Output */}
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onClearLogs}
-          disabled={!hasLogs}
-          className="h-6 w-6 p-0 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 disabled:opacity-30"
-          title="Clear Terminal Output"
-        >
-          <Trash2 className="w-3 h-3" />
-        </Button>
 
         {/* Expand / Minimize */}
         <Button

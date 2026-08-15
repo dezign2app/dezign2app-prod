@@ -9,14 +9,14 @@ import { toast } from "sonner";
 export async function exportFilesToDirectory(
   files: CompiledFile[],
   targetDir: string,
-  logSetter: React.Dispatch<React.SetStateAction<string[]>>,
+  logSetter?: React.Dispatch<React.SetStateAction<string[]>>,
 ): Promise<void> {
   const api = getElectronAPI();
   if (!api?.fs?.writeProject) {
     throw new Error("File export not available in this environment");
   }
 
-  logSetter((prev) => [
+  logSetter?.((prev) => [
     ...prev,
     `📂 Syncing ${files.length} monorepo files to ${targetDir}...\n`,
   ]);
@@ -27,8 +27,11 @@ export async function exportFilesToDirectory(
     content: f.content,
   }));
 
-  await api.fs.writeProject(targetDir, exportFiles);
-  logSetter((prev) => [...prev, `✅ Files written successfully to ${targetDir}\n`]);
+  const res = await api.fs.writeProject(targetDir, exportFiles, { cleanStale: true });
+  logSetter?.((prev) => [
+    ...prev,
+    `✅ Files written successfully to ${targetDir} (${res?.writtenCount ?? files.length} updated)\n`,
+  ]);
 }
 
 /**
