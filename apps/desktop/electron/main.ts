@@ -13,8 +13,14 @@ import net from "net";
 import { spawn, ChildProcess } from "child_process";
 
 // ─────────────────────────────────────────────
-//  Constants & Single Instance Lock
+//  App Identity & Constants
 // ─────────────────────────────────────────────
+app.name = "D2A";
+app.setName("D2A");
+if (process.platform === "win32") {
+  app.setAppUserModelId("com.dezign2app.desktop");
+}
+
 const DEV_SERVER_URL = process.env.ELECTRON_DEV_URL || "http://localhost:3000";
 const IS_DEV = !app.isPackaged;
 
@@ -121,13 +127,64 @@ app.on("before-quit", () => {
   nextUtilityProcess?.kill();
 });
 
+// Register custom protocol client (dezign2app://) for browser OAuth redirect
+if (process.defaultApp || IS_DEV) {
+  const packagedExe = path.join(__dirname, "../release/win-unpacked/D2A.exe");
+  if (fs.existsSync(packagedExe)) {
+    app.setAsDefaultProtocolClient("dezign2app", packagedExe);
+  } else {
+    const mainScript = process.argv[1];
+    if (mainScript) {
+      app.setAsDefaultProtocolClient("dezign2app", process.execPath, [
+        path.resolve(mainScript),
+      ]);
+    }
+  }
+} else {
+  app.setAsDefaultProtocolClient("dezign2app");
+}
+
+function handleAuthUrl(urlStr: string) {
+  if (!urlStr || !urlStr.startsWith("dezign2app://")) return;
+  console.log("[main] Received auth deep link:", urlStr);
+  try {
+    const urlObj = new URL(urlStr);
+    const token = urlObj.searchParams.get("token") || undefined;
+    const ticket = urlObj.searchParams.get("ticket") || undefined;
+
+    mainWindow?.webContents.send("auth:callback", {
+      token,
+      ticket,
+      rawUrl: urlStr,
+    });
+
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  } catch (err) {
+    console.error("[main] Failed to parse auth deep link URL:", err);
+  }
+}
+
+// Handle initial deep link argument if launched with one on Windows
+const initialDeepLink = process.argv.find((arg) =>
+  arg.startsWith("dezign2app://")
+);
+if (initialDeepLink) {
+  setTimeout(() => handleAuthUrl(initialDeepLink), 1500);
+}
+
 // ─────────────────────────────────────────────
 //  Window management
 // ─────────────────────────────────────────────
 let mainWindow: BrowserWindow | null = null;
 
 async function createWindow() {
-  const iconPath = path.join(__dirname, "../public/favicon.ico");
+  const iconPath =
+    process.platform === "win32"
+      ? path.join(__dirname, "../public/icon.ico")
+      : path.join(__dirname, "../public/icon.png");
 
   mainWindow = new BrowserWindow({
     title: "Dezign2App",
@@ -148,8 +205,17 @@ async function createWindow() {
     ...(fs.existsSync(iconPath) ? { icon: iconPath } : {}),
   });
 
+  // Inject x-electron-app header on all requests
+  mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
+    (details, callback) => {
+      details.requestHeaders["x-electron-app"] = "1";
+      callback({ cancel: false, requestHeaders: details.requestHeaders });
+    }
+  );
+
+  // Directly navigate to /projects (bypassing landing/pricing/marketing pages)
   if (IS_DEV) {
-    mainWindow.loadURL(DEV_SERVER_URL);
+    mainWindow.loadURL(`${DEV_SERVER_URL}/projects`);
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     // Show smooth startup splash while local server initializes
@@ -189,7 +255,7 @@ async function createWindow() {
           <body>
             <div class="spinner"></div>
             <h2>Starting Dezign2App</h2>
-            <p>Initializing local engine...</p>
+            <p>Initializing workspace...</p>
           </body>
         </html>
       `)}`
@@ -199,7 +265,7 @@ async function createWindow() {
 
     startNextServer(targetPort)
       .then((port) => {
-        mainWindow?.loadURL(`http://localhost:${port}`);
+        mainWindow?.loadURL(`http://localhost:${port}/projects`);
       })
       .catch((err) => {
         dialog.showErrorBox(
@@ -238,11 +304,20 @@ process.on("unhandledRejection", (reason) => {
   console.error("[main] Unhandled Rejection:", reason);
 });
 
-app.on("second-instance", () => {
+app.on("second-instance", (_event, commandLine) => {
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
   }
+  const deepLink = commandLine.find((arg) => arg.startsWith("dezign2app://"));
+  if (deepLink) {
+    handleAuthUrl(deepLink);
+  }
+});
+
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  handleAuthUrl(url);
 });
 
 app.whenReady().then(() => {
@@ -255,6 +330,20 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+// ─────────────────────────────────────────────
+//  IPC — Authentication (Browser OAuth flow)
+// ─────────────────────────────────────────────
+ipcMain.handle("auth:open-browser-login", async (_event, customUrl?: string) => {
+  const loginUrl =
+    customUrl ||
+    (process.env.NEXT_PUBLIC_APP_URL
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/sign-in?desktop=true`
+      : "http://localhost:3000/sign-in?desktop=true");
+
+  shell.openExternal(loginUrl);
+  return { success: true };
 });
 
 // ─────────────────────────────────────────────

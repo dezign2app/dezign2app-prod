@@ -29,3 +29,20 @@ export async function generateUserToken() {
 
   return jwt;
 }
+
+export async function createDesktopSignInToken() {
+  const session = await auth();
+
+  if (!session || !session.userId) {
+    throw new Error("Unauthorized");
+  }
+
+  const client = await clerkClient();
+  const signInToken = await client.signInTokens.createSignInToken({
+    userId: session.userId,
+    expiresInSeconds: 300,
+  });
+
+  return { token: signInToken.token };
+}
+
