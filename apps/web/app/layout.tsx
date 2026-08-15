@@ -27,7 +27,7 @@ const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://dezign2app.com";
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),
   title: {
-    default: "Dezign 2 App | AI-Powered System Design & Software Engineering Platform",
+    default: "Dezign 2 App | System Design to Application",
     template: "%s | Dezign 2 App",
   },
   description:

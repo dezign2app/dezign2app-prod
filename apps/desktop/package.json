@@ -6,8 +6,9 @@
   "description": "D2A",
   "main": "dist-electron/main.js",
   "scripts": {
+    "generate-icons": "node scripts/generate-icons.js",
     "dev": "wait-on -i 1000 http://localhost:46500/robots.txt && tsc -p tsconfig.electron.json && electron .",
-    "build:electron": "tsc -p tsconfig.electron.json && electron-builder --dir",
+    "build:electron": "node scripts/generate-icons.js && tsc -p tsconfig.electron.json && electron-builder --dir",
     "rebuild:native": "electron-rebuild -f -w node-pty",
     "typecheck": "tsc -p tsconfig.electron.json --noEmit"
   },
@@ -78,7 +79,8 @@
       }
     ],
     "files": [
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "public/**/*"
     ],
     "win": {
       "target": [
