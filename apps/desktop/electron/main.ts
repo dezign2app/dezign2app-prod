@@ -186,11 +186,30 @@ if (initialDeepLink) {
 // ─────────────────────────────────────────────
 let mainWindow: BrowserWindow | null = null;
 
+function getAppIcon(): string | undefined {
+  const isWin = process.platform === "win32";
+  const primaryExt = isWin ? "ico" : "png";
+  const fallbackExt = isWin ? "png" : "ico";
+
+  const searchPaths = [
+    path.join(__dirname, `../public/icon.${primaryExt}`),
+    path.join(__dirname, `../public/icon.${fallbackExt}`),
+    path.join(__dirname, `../build/icon.${primaryExt}`),
+    path.join(__dirname, `../build/icon.${fallbackExt}`),
+    path.join(process.resourcesPath, `public/icon.${primaryExt}`),
+    path.join(process.resourcesPath, `app/public/icon.${primaryExt}`),
+    path.join(process.resourcesPath, `web/public/favicon.ico`),
+    path.join(process.resourcesPath, `web/app/favicon.ico`),
+  ];
+
+  for (const p of searchPaths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return undefined;
+}
+
 async function createWindow() {
-  const iconPath =
-    process.platform === "win32"
-      ? path.join(__dirname, "../public/icon.ico")
-      : path.join(__dirname, "../public/icon.png");
+  const iconPath = getAppIcon();
 
   mainWindow = new BrowserWindow({
     title: "Dezign2App",
@@ -208,7 +227,7 @@ async function createWindow() {
       nodeIntegration: false,
       sandbox: false,
     },
-    ...(fs.existsSync(iconPath) ? { icon: iconPath } : {}),
+    ...(iconPath ? { icon: iconPath } : {}),
   });
 
   // Inject x-electron-app header on all requests
