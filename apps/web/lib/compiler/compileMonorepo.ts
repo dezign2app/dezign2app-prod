@@ -14,6 +14,7 @@ import {
   generateTypescriptConfigPackage,
 } from "./generators/rootFilesGenerator";
 import { generateRootReadme } from "./generators/readmeGenerator";
+import { generateDockerFiles } from "./generators/dockerGenerator";
 import { compileGrpcPackages } from "./grpc";
 
 /**
@@ -44,6 +45,51 @@ export function compileMonorepo(
 
   const servicesInfo: { id: string; name: string; folderName: string }[] = [];
   const webClientsInfo: { id: string; name: string; folderName: string }[] = [];
+
+  // Helper to resolve unique folder name for services
+  const getUniqueServiceFolder = (label: string, defaultName: string) => {
+    const base = (label || defaultName).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || defaultName;
+    let folderName = base;
+    let counter = 1;
+    while (servicesInfo.some((s) => s.folderName === folderName)) {
+      counter++;
+      folderName = `${base}-${counter}`;
+    }
+    return folderName;
+  };
+
+  // Helper to resolve unique folder name for web clients
+  const getUniqueWebClientFolder = (slug: string, defaultName: string) => {
+    const base = (slug || defaultName).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || defaultName;
+    let folderName = base;
+    let counter = 1;
+    while (webClientsInfo.some((w) => w.folderName === folderName)) {
+      counter++;
+      folderName = `${base}-${counter}`;
+    }
+    return folderName;
+  };
+
+  // Pre-populate servicesInfo so all packages and types are generated with consistent naming
+  serviceNodes.forEach((srvNode) => {
+    const rawName = srvNode.data?.label || srvNode.id || "Service";
+    const folderName = getUniqueServiceFolder(rawName, "service");
+    servicesInfo.push({
+      id: srvNode.id,
+      name: rawName,
+      folderName,
+    });
+  });
+
+  langGraphNodes.forEach((lgNode) => {
+    const rawName = lgNode.data?.label || lgNode.id || "LangGraph Service";
+    const folderName = getUniqueServiceFolder(rawName, "langgraph-service");
+    servicesInfo.push({
+      id: lgNode.id,
+      name: rawName,
+      folderName,
+    });
+  });
 
   // 1. Generate Root Manifest Files (package.json, pnpm-workspace.yaml, turbo.json, .gitignore)
   files.push(...generateRootFiles(projectName));
@@ -82,7 +128,7 @@ export function compileMonorepo(
   });
 
   // 4.6 Generate Shared Package: packages/types (@workspace/types)
-  const compiledTypes = generateTypesPackage(nodes, endpoints, events);
+  const compiledTypes = generateTypesPackage(nodes, endpoints, events, servicesInfo);
   compiledTypes.forEach((f) => {
     files.push({
       filename: `packages/types/${f.filename}`,
@@ -129,40 +175,10 @@ export function compileMonorepo(
     grpcPackageFolders.push(`packages/${packageFolder}`);
   });
 
-
-  // Helper to resolve unique folder name for services
-  const getUniqueServiceFolder = (label: string, defaultName: string) => {
-    const base = (label || defaultName).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || defaultName;
-    let folderName = base;
-    let counter = 1;
-    while (servicesInfo.some((s) => s.folderName === folderName)) {
-      counter++;
-      folderName = `${base}-${counter}`;
-    }
-    return folderName;
-  };
-
-  // Helper to resolve unique folder name for web clients
-  const getUniqueWebClientFolder = (slug: string, defaultName: string) => {
-    const base = (slug || defaultName).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || defaultName;
-    let folderName = base;
-    let counter = 1;
-    while (webClientsInfo.some((w) => w.folderName === folderName)) {
-      counter++;
-      folderName = `${base}-${counter}`;
-    }
-    return folderName;
-  };
-
   // 5. Generate Apps: apps/<sanitizedName> for Service Nodes
   serviceNodes.forEach((srvNode) => {
-    const rawName = srvNode.data?.label || "Service";
-    const folderName = getUniqueServiceFolder(rawName, "service");
-    servicesInfo.push({
-      id: srvNode.id,
-      name: rawName,
-      folderName,
-    });
+    const srvInfo = servicesInfo.find((s) => s.id === srvNode.id);
+    const folderName = srvInfo?.folderName || getUniqueServiceFolder(srvNode.data?.label || srvNode.id || "Service", "service");
 
     const srvResult = compileServiceNode(
       srvNode,
@@ -173,6 +189,7 @@ export function compileMonorepo(
       testCases,
       dbFunctions,
       kafkaFunctions,
+      folderName,
     );
     srvResult.files.forEach((f) => {
       files.push({
@@ -185,13 +202,8 @@ export function compileMonorepo(
 
   // 5.5. Generate Apps: apps/<sanitizedName> for LangGraph Service Nodes
   langGraphNodes.forEach((lgNode) => {
-    const rawName = lgNode.data?.label || "LangGraph Service";
-    const folderName = getUniqueServiceFolder(rawName, "langgraph-service");
-    servicesInfo.push({
-      id: lgNode.id,
-      name: rawName,
-      folderName,
-    });
+    const lgInfo = servicesInfo.find((s) => s.id === lgNode.id);
+    const folderName = lgInfo?.folderName || getUniqueServiceFolder(lgNode.data?.label || lgNode.id || "LangGraph Service", "langgraph-service");
 
     const lgResult = compileLangGraphNode(lgNode, {
       edges,
@@ -219,8 +231,9 @@ export function compileMonorepo(
     webAppNodes.forEach((appNode) => {
       const appName = appNode.data?.label || "Web Application";
       const appSlug =
-        appNode.data?.appSlug ||
-        appName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        appNode.data?.appSlug?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") ||
+        appName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") ||
+        "web-app";
 
       if (!appMap.has(appSlug)) {
         appMap.set(appSlug, {
@@ -235,8 +248,9 @@ export function compileMonorepo(
     // Default app slug from first WebApp node or fallback "web-app"
     const defaultAppSlug =
       webAppNodes.length > 0
-        ? (webAppNodes[0]!.data?.appSlug ||
-           (webAppNodes[0]!.data?.label || "web-app").toLowerCase().replace(/[^a-z0-9]+/g, "-"))
+        ? (webAppNodes[0]!.data?.appSlug?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") ||
+           (webAppNodes[0]!.data?.label || "web-app").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") ||
+           "web-app")
         : "web-app";
 
     if (webAppNodes.length === 0 && !appMap.has(defaultAppSlug)) {
@@ -265,10 +279,12 @@ export function compileMonorepo(
         const targetAppNode = webAppNodes.find((n) => n.id === targetAppId);
         if (targetAppNode) {
           targetAppSlug =
-            targetAppNode.data?.appSlug ||
+            targetAppNode.data?.appSlug?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") ||
             (targetAppNode.data?.label || "web-app")
               .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "-");
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/^-+|-+$/g, "") ||
+            "web-app";
 
           const handle = (edgeToApp.source === pageNode.id ? edgeToApp.targetHandle : edgeToApp.sourceHandle) || "";
           const zones = targetAppNode.data?.zones || [];
@@ -284,7 +300,8 @@ export function compileMonorepo(
             } else {
               const zoneSlug = (matchedZone.name || "custom")
                 .toLowerCase()
-                .replace(/[^a-z0-9]+/g, "-");
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "");
               routeGroup = zoneSlug || "custom";
               accessTypeOverride = "private";
             }
@@ -305,11 +322,13 @@ export function compileMonorepo(
             accessTypeOverride = "org-gated";
           } else {
             const cleanHandle = handle.replace(/-(in|out)$/, "").replace(/^zone-/, "");
-            routeGroup = cleanHandle ? cleanHandle.toLowerCase().replace(/[^a-z0-9]+/g, "-") : "public";
+            routeGroup = cleanHandle ? cleanHandle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") : "public";
           }
         }
       } else if (pageNode.data?.appSlug) {
-        targetAppSlug = pageNode.data.appSlug;
+        targetAppSlug =
+          pageNode.data.appSlug.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") ||
+          defaultAppSlug;
         routeGroup =
           pageNode.data.routeGroup ||
           (pageNode.data.accessType && pageNode.data.accessType !== "public" ? "private" : "public");
@@ -370,7 +389,7 @@ export function compileMonorepo(
         edges,
         `${projectName} - ${appName}`,
         testCases,
-        appSlug,
+        folderName,
       );
 
       webClientResult.files.forEach((f) => {
@@ -426,6 +445,18 @@ export function compileMonorepo(
       compiledRedis.files.length > 0,
     ),
   );
+
+  // 9. Generate Docker Manifests (Dockerfiles, docker-compose.yml, .dockerignore, local startup scripts)
+  const dockerFiles = generateDockerFiles({
+    nodes,
+    edges,
+    services: servicesInfo,
+    webClients: webClientsInfo,
+    projectName,
+    hasKafka: compiledKafka.files.length > 0,
+    hasRedis: compiledRedis.files.length > 0,
+  });
+  files.push(...dockerFiles);
 
   // Deduplicate files by filename (keeping the latest definition for any duplicated file path)
   const uniqueFilesMap = new Map<string, CompiledFile>();

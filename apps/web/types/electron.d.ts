@@ -21,6 +21,10 @@ export interface ElectronAPI {
     ): Promise<{ success: boolean; path: string }>;
   };
 
+  shell?: {
+    openExternal(url: string): Promise<{ success: boolean }>;
+  };
+
   auth: {
     openBrowserLogin(url?: string): Promise<void>;
     onAuthCallback(
@@ -31,6 +35,15 @@ export interface ElectronAPI {
   docker: {
     up(projectDir: string): void;
     down(projectDir: string): void;
+    write(data: string): void;
+    onLog(cb: (line: string) => void): () => void;
+    preflight(): Promise<{ ok: boolean; reason: string | null }>;
+  };
+
+  dev: {
+    run(projectDir: string): Promise<{ ok: boolean; reason: string | null }>;
+    stop(projectDir: string): void;
+    write(data: string): void;
     onLog(cb: (line: string) => void): () => void;
   };
 

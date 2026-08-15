@@ -6,10 +6,10 @@
   "description": "D2A",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "wait-on -i 1000 http://localhost:3000/robots.txt && tsc -p tsconfig.electron.json && electron .",
+    "dev": "wait-on -i 1000 http://localhost:46500/robots.txt && tsc -p tsconfig.electron.json && electron .",
     "build:electron": "tsc -p tsconfig.electron.json && electron-builder --dir",
     "rebuild:native": "electron-rebuild -f -w node-pty",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc -p tsconfig.electron.json --noEmit"
   },
   "dependencies": {
     "node-pty": "^1.1.0"

@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Code,
   Archive,
+  Layers,
 } from "lucide-react";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { toast } from "sonner";
@@ -25,6 +26,7 @@ import {
   getParentPaths,
   FileTreeExplorer,
 } from "./FileTreeExplorer";
+import { DockerRunnerDialog } from "./DockerRunnerDialog";
 
 export interface CompiledCodeViewerProps {
   projectName?: string;
@@ -81,6 +83,7 @@ export function CompiledCodeViewer({
   
   const [copied, setCopied] = useState<boolean>(false);
   const [downloadingZip, setDownloadingZip] = useState<boolean>(false);
+  const [dockerDialogOpen, setDockerDialogOpen] = useState<boolean>(false);
 
   const formattedProjectName = useMemo(() => {
     const raw = (projectName || "Blueprint").trim();
@@ -339,6 +342,15 @@ export function CompiledCodeViewer({
           {files.length > 0 && (
             <div className="flex items-center gap-2">
               <Button
+                onClick={() => setDockerDialogOpen(true)}
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs border-primary/40 text-primary hover:bg-primary/10"
+              >
+                <Layers className="w-4 h-4 text-primary" />
+                <span>Run Docker</span>
+              </Button>
+              <Button
                 onClick={handleDownloadZip}
                 disabled={downloadingZip}
                 variant="outline"
@@ -429,6 +441,16 @@ export function CompiledCodeViewer({
           </div>
         </div>
       )}
+
+      <DockerRunnerDialog
+        open={dockerDialogOpen}
+        onOpenChange={setDockerDialogOpen}
+        projectName={projectName || "Blueprint"}
+        projectId={projectId || "default"}
+        monorepoResult={monorepoResult}
+        onDownloadZip={handleDownloadZip}
+        downloadingZip={downloadingZip}
+      />
     </div>
   );
 }

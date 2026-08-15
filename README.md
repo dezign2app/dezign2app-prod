@@ -23,7 +23,7 @@ This repository is powered by a high-performance **pnpm Workspace** and **Turbor
 
 | App Directory                                                  | Core Stack                                                                                               | Port     | Description                                                                                                                                                                                                                        |
 | :------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------- | :------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [**`apps/web`**](./apps/web)                                   | Next.js 16 (Turbopack), React 19, Tailwind v4, `@xyflow/react`, Tldraw, Clerk, Creem, Framer Motion      | `3000`   | **Interactive Frontend Canvas & App Portal**: Multi-tenant protected user portal with workspace folders, drag-and-drop system design canvas using React Flow & Tldraw, embedded AI chat panel, and API Key/billing administration. |
+| [**`apps/web`**](./apps/web)                                   | Next.js 16 (Turbopack), React 19, Tailwind v4, `@xyflow/react`, Tldraw, Clerk, Creem, Framer Motion      | `46500`  | **Interactive Frontend Canvas & App Portal**: Multi-tenant protected user portal with workspace folders, drag-and-drop system design canvas using React Flow & Tldraw, embedded AI chat panel, and API Key/billing administration. |
 | [**`apps/desktop`**](./apps/desktop)                           | Electron 34, node-pty, electron-builder                                                                  | —        | **Native Desktop App**: Wraps the web app in an Electron shell, adds a real PTY terminal (PowerShell/bash), local Docker Compose runner for executing generated monorepos, and native file-system access.                         |
 | [**`apps/system-design-engine`**](./apps/system-design-engine) | Express.js, `@langchain/langgraph`, LangChain Core, MCP SDK, Groq SDK, Convex Client                     | Custom   | **High-Performance AI System Design Engine**: Computes system design analysis using LangGraph state machines, coordinates architecture node generation, MCP tools, and custom API limiters.                                        |
 | [**`apps/workflow-engine`**](./apps/workflow-engine)           | Express.js, `@langchain/langgraph`, LangChain Core, Inngest SDK, Upstash Redis & Realtime, Convex Client | `3001`   | **Secondary Background Orchestration Service**: Handles background job execution, event queues, and Redis state streaming.                                                                                                         |
@@ -93,7 +93,7 @@ CREEM_API_KEY=your-creem-key
 
 ```env
 PORT=3001
-CORS_ORIGIN=http://localhost:3000
+CORS_ORIGIN=http://localhost:46500
 CONVEX_URL=your-convex-deployment-url
 SYSTEM_CORE_SECRET=your-internal-secret
 GEMINI_API_KEY=your-gemini-api-key
@@ -126,7 +126,7 @@ pnpm dev
 
 This command spins up:
 
-- Next.js Web Portal (`http://localhost:3000`)
+- Next.js Web Portal (`http://localhost:46500`)
 - AI System Design Engine (`http://localhost:3001`)
 - Technical Documentation Portal (`http://localhost:3500`)
 - MCP Inspector UI Console & Convex backend
@@ -144,7 +144,7 @@ Dezign2App ships as a native desktop application powered by **Electron 34**. The
 
 ### Running in development
 
-> The Electron window loads the web app at `http://localhost:3000`. Start both together:
+> The Electron window loads the web app at `http://localhost:46500`. Start both together:
 
 ```bash
 # Option A — both together from root
@@ -152,7 +152,7 @@ pnpm desktop:dev
 
 # Option B — separately (two terminals)
 pnpm --filter web dev          # Terminal 1
-pnpm --filter desktop dev      # Terminal 2 (waits for port 3000 then opens Electron)
+pnpm --filter desktop dev      # Terminal 2 (waits for port 46500 then opens Electron)
 ```
 
 ### Building the `.exe` / `.dmg` / `.AppImage`

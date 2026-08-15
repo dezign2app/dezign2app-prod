@@ -10,7 +10,7 @@ import {
 import path from "path";
 import fs from "fs";
 import net from "net";
-import { spawn, ChildProcess } from "child_process";
+import { spawn, execFile, ChildProcess } from "child_process";
 
 // ─────────────────────────────────────────────
 //  App Identity & Constants
@@ -21,7 +21,7 @@ if (process.platform === "win32") {
   app.setAppUserModelId("com.dezign2app.desktop");
 }
 
-const DEV_SERVER_URL = process.env.ELECTRON_DEV_URL || "http://localhost:3000";
+const DEV_SERVER_URL = process.env.ELECTRON_DEV_URL || "http://localhost:46500";
 const IS_DEV = !app.isPackaged;
 
 const gotTheLock = app.requestSingleInstanceLock();
@@ -30,7 +30,7 @@ if (!gotTheLock) {
 }
 
 // Helper to find an open port dynamically (prevents EADDRINUSE)
-function getAvailablePort(preferredPort: number = 3100): Promise<number> {
+function getAvailablePort(preferredPort: number = 46500): Promise<number> {
   return new Promise((resolve) => {
     const server = net.createServer();
     server.listen(preferredPort, "127.0.0.1", () => {
@@ -261,7 +261,7 @@ async function createWindow() {
       `)}`
     );
 
-    const targetPort = await getAvailablePort(3100);
+    const targetPort = await getAvailablePort(46500);
 
     startNextServer(targetPort)
       .then((port) => {
@@ -275,12 +275,11 @@ async function createWindow() {
       });
   }
 
-  // Open external links in the system browser, not inside Electron
+  // Open external links and dev stack endpoints in the system browser, not inside Electron
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("http://localhost") || url.startsWith(DEV_SERVER_URL)) {
-      return { action: "allow" };
+    if (url && (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("mailto:"))) {
+      shell.openExternal(url);
     }
-    shell.openExternal(url);
     return { action: "deny" };
   });
 
@@ -288,6 +287,17 @@ async function createWindow() {
     mainWindow = null;
   });
 }
+
+// ─────────────────────────────────────────────
+//  IPC — Shell (External Browser Links)
+// ─────────────────────────────────────────────
+ipcMain.handle("shell:open-external", async (_event, url: string) => {
+  if (url && (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("mailto:"))) {
+    shell.openExternal(url);
+    return { success: true };
+  }
+  return { success: false };
+});
 
 // ─────────────────────────────────────────────
 //  App lifecycle & Global Error Handling
@@ -340,7 +350,7 @@ ipcMain.handle("auth:open-browser-login", async (_event, customUrl?: string) => 
     customUrl ||
     (process.env.NEXT_PUBLIC_APP_URL
       ? `${process.env.NEXT_PUBLIC_APP_URL}/sign-in?desktop=true`
-      : "http://localhost:3000/sign-in?desktop=true");
+      : "http://localhost:46500/sign-in?desktop=true");
 
   shell.openExternal(loginUrl);
   return { success: true };
@@ -376,6 +386,75 @@ ipcMain.handle(
 // ─────────────────────────────────────────────
 //  IPC — Docker runner
 // ─────────────────────────────────────────────
+
+/**
+ * Runs a command and resolves with { ok, output }.
+ * Never rejects — errors are returned as { ok: false, output: errorMessage }.
+ */
+function checkCommand(
+  cmd: string,
+  args: string[]
+): Promise<{ ok: boolean; output: string }> {
+  return new Promise((resolve) => {
+    execFile(cmd, args, { shell: true, timeout: 10_000 }, (err, stdout, stderr) => {
+      if (err) {
+        resolve({ ok: false, output: stderr.trim() || err.message });
+      } else {
+        resolve({ ok: true, output: (stdout + stderr).trim() });
+      }
+    });
+  });
+}
+
+/**
+ * docker:preflight — runs environment checks and streams results as docker:log events.
+ * Returns { ok: boolean } — if false, the caller must NOT proceed with docker:up.
+ */
+ipcMain.handle("docker:preflight", async (_event) => {
+  const send = (line: string) =>
+    mainWindow?.webContents.send("docker:log", line);
+
+  send("🔍 Running pre-flight checks...\n");
+
+  // ── 1. Node.js ──────────────────────────────
+  send("  [1/3] Checking Node.js...\n");
+  const nodeCheck = await checkCommand("node", ["--version"]);
+  if (nodeCheck.ok) {
+    send(`  ✅ Node.js: ${nodeCheck.output}\n`);
+  } else {
+    send(`  ❌ Node.js not found: ${nodeCheck.output}\n`);
+    send("\n❌ Pre-flight failed: Node.js is required. Install it from https://nodejs.org\n");
+    return { ok: false, reason: "node_missing" };
+  }
+
+  // ── 2. Docker CLI ───────────────────────────
+  send("  [2/3] Checking Docker CLI...\n");
+  const dockerVersionCheck = await checkCommand("docker", ["--version"]);
+  if (dockerVersionCheck.ok) {
+    send(`  ✅ Docker CLI: ${dockerVersionCheck.output}\n`);
+  } else {
+    send(`  ❌ Docker CLI not found: ${dockerVersionCheck.output}\n`);
+    send("\n❌ Pre-flight failed: Docker is not installed or not in PATH.\n");
+    send("   → Install Docker Desktop: https://www.docker.com/products/docker-desktop\n");
+    return { ok: false, reason: "docker_missing" };
+  }
+
+  // ── 3. Docker Daemon ────────────────────────
+  send("  [3/3] Checking Docker daemon...\n");
+  const dockerInfoCheck = await checkCommand("docker", ["info", "--format", "{{.ServerVersion}}"]);
+  if (dockerInfoCheck.ok) {
+    send(`  ✅ Docker daemon running (server v${dockerInfoCheck.output})\n`);
+  } else {
+    send(`  ❌ Docker daemon not reachable: ${dockerInfoCheck.output}\n`);
+    send("\n❌ Pre-flight failed: Docker daemon is not running.\n");
+    send("   → Open Docker Desktop and wait until the whale icon stops animating.\n");
+    return { ok: false, reason: "docker_daemon_down" };
+  }
+
+  send("\n✅ All pre-flight checks passed. Launching containers...\n\n");
+  return { ok: true, reason: null };
+});
+
 let dockerProcess: ChildProcess | null = null;
 
 ipcMain.on("docker:up", (_event, projectDir: string) => {
@@ -420,6 +499,108 @@ ipcMain.on("docker:down", (_event, projectDir: string) => {
   dockerProcess.kill("SIGTERM");
   dockerProcess = null;
   mainWindow?.webContents.send("docker:log", "🛑 Stopped Docker Compose.\n");
+});
+
+// ─────────────────────────────────────────────
+//  IPC — Dev runner (infra + pnpm dev)
+// ─────────────────────────────────────────────
+
+let devProcess: ChildProcess | null = null;
+
+/**
+ * Runs a command to completion and returns { ok, output }.
+ * stdout + stderr are concatenated into output.
+ */
+function runToCompletion(
+  cmd: string,
+  args: string[],
+  cwd: string
+): Promise<{ ok: boolean; output: string }> {
+  return new Promise((resolve) => {
+    const chunks: string[] = [];
+    const proc = spawn(cmd, args, { cwd, shell: true });
+    proc.stdout?.on("data", (d: Buffer) => chunks.push(d.toString()));
+    proc.stderr?.on("data", (d: Buffer) => chunks.push(d.toString()));
+    proc.on("close", (code) =>
+      resolve({ ok: code === 0, output: chunks.join("") })
+    );
+    proc.on("error", (err: Error) =>
+      resolve({ ok: false, output: err.message })
+    );
+  });
+}
+
+ipcMain.handle("dev:run", async (_event, projectDir: string) => {
+  const send = (line: string) =>
+    mainWindow?.webContents.send("dev:log", line);
+
+  if (devProcess) {
+    send("⚠️  Dev server is already running. Stop it first.\n");
+    return { ok: false, reason: "already_running" };
+  }
+
+  send("🚀 Starting Dev Mode (pnpm install && pnpm dev)...\n\n");
+
+  // ── 1. pnpm install ──────────────────────────
+  send("📦 [1/2] Installing dependencies (pnpm install)...\n");
+  const installResult = await runToCompletion("pnpm", ["install"], projectDir);
+  if (installResult.output.trim()) send(installResult.output);
+  if (!installResult.ok) {
+    send("\n⚠️  pnpm install finished with warnings or errors.\n\n");
+  } else {
+    send("  ✅ Dependencies installed successfully.\n\n");
+  }
+
+  // ── 2. pnpm dev (long-running Turbo hot reload) ───────────────
+  send("🔥 [2/2] Launching all apps with hot reload (pnpm dev)...\n");
+  send("─".repeat(60) + "\n\n");
+
+  devProcess = spawn("pnpm", ["dev"], { cwd: projectDir, shell: true });
+
+  devProcess.stdout?.on("data", (data: Buffer) => {
+    mainWindow?.webContents.send("dev:log", data.toString());
+  });
+
+  devProcess.stderr?.on("data", (data: Buffer) => {
+    mainWindow?.webContents.send("dev:log", data.toString());
+  });
+
+  devProcess.on("close", (code: number | null) => {
+    mainWindow?.webContents.send("dev:log", `\n🛑 Dev server exited (code ${code})\n`);
+    devProcess = null;
+  });
+
+  devProcess.on("error", (err: Error) => {
+    mainWindow?.webContents.send("dev:log", `\n❌ Failed to start dev: ${err.message}\n`);
+    devProcess = null;
+  });
+
+  return { ok: true, reason: null };
+});
+
+ipcMain.on("dev:write", (_event, data: string) => {
+  if (devProcess?.stdin?.writable) {
+    devProcess.stdin.write(data);
+  }
+});
+
+ipcMain.on("docker:write", (_event, data: string) => {
+  if (dockerProcess?.stdin?.writable) {
+    dockerProcess.stdin.write(data);
+  }
+});
+
+ipcMain.on("dev:stop", (_event, _projectDir: string) => {
+  const send = (line: string) =>
+    mainWindow?.webContents.send("dev:log", line);
+
+  if (devProcess) {
+    devProcess.kill("SIGTERM");
+    devProcess = null;
+    send("\n🛑 Stopped dev server (pnpm dev).\n");
+  } else {
+    send("\nℹ️  No running dev server found.\n");
+  }
 });
 
 // ─────────────────────────────────────────────

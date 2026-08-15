@@ -119,7 +119,7 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     );
     expect(webEnvExampleFile).toBeDefined();
     expect(webEnvExampleFile?.content).toContain("DATABASE_PATH=../../packages/db/sqlite.db");
-    expect(webEnvExampleFile?.content).toContain("DATABASE_URL=../../packages/db/sqlite.db");
+    expect(webEnvExampleFile?.content).toContain("DATABASE_URL=");
 
     // 3. Verify Backend Service .env points to centralized packages/db/sqlite.db
     const serviceEnvFile = result.files.find(

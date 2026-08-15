@@ -21,14 +21,16 @@ export function generateRoutes(
   dbFunctions: ReusableFunction[] = [],
   kafkaFunctions: ReusableFunction[] = [],
   nodePublishedEvents: (AnyMessagingResource & { nodeId: string; variant: "publish" | "consume" })[] = [],
+  folderName?: string,
 ): CompiledFile[] {
   const files: CompiledFile[] = [];
   const routeImports: string[] = [];
   const routeRegistrations: string[] = [];
   const usedFileNames = new Set<string>();
 
-  const pascalServiceName = toPascalCase(serviceName);
-  const serviceFolderName = toVarName(serviceName);
+  const nameForTypes = folderName || serviceName;
+  const pascalServiceName = toPascalCase(nameForTypes);
+  const serviceFolderName = toVarName(nameForTypes);
 
   if (nodeEndpoints.length === 0) {
     const defaultRouteResult = generateDefaultRoute(serviceName, dbFunctions);

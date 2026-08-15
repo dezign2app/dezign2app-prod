@@ -18,6 +18,10 @@ export function generateRootFiles(projectName: string): CompiledFile[] {
         lint: "turbo lint",
         "check-types": "turbo check-types",
         format: 'prettier --write "**/*.{ts,tsx,md}"',
+        "docker:build": "docker compose build",
+        "docker:up": "docker compose up -d",
+        "docker:down": "docker compose down",
+        "docker:logs": "docker compose logs -f",
         postinstall: 'node -e "try { const p = require(\'path\').dirname(require.resolve(\'better-sqlite3/package.json\', { paths: [\'./packages/db\'] })); require(\'child_process\').execSync(\'npx prebuild-install\', { cwd: p, stdio: \'inherit\' }); } catch (e) {}"',
       },
       devDependencies: {

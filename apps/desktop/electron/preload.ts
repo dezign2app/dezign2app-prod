@@ -25,7 +25,22 @@ export interface ElectronAPI {
   docker: {
     up(projectDir: string): void;
     down(projectDir: string): void;
+    write(data: string): void;
     onLog(cb: (line: string) => void): () => void;
+    preflight(): Promise<{ ok: boolean; reason: string | null }>;
+  };
+
+  /** Dev runner (infra + pnpm dev) */
+  dev: {
+    run(projectDir: string): Promise<{ ok: boolean; reason: string | null }>;
+    stop(projectDir: string): void;
+    write(data: string): void;
+    onLog(cb: (line: string) => void): () => void;
+  };
+
+  /** Shell / External links */
+  shell: {
+    openExternal(url: string): Promise<{ success: boolean }>;
   };
 
   /** Browser-based Authentication */
@@ -62,6 +77,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   platform: () => ipcRenderer.invoke("app:platform"),
 
+  shell: {
+    openExternal: (url: string) =>
+      ipcRenderer.invoke("shell:open-external", url),
+  },
+
   auth: {
     openBrowserLogin: (url?: string) =>
       ipcRenderer.invoke("auth:open-browser-login", url),
@@ -79,7 +99,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   docker: {
     up: (projectDir: string) => ipcRenderer.send("docker:up", projectDir),
     down: (projectDir: string) => ipcRenderer.send("docker:down", projectDir),
+    write: (data: string) => ipcRenderer.send("docker:write", data),
     onLog: (cb: (line: string) => void) => on("docker:log", cb),
+    preflight: () => ipcRenderer.invoke("docker:preflight"),
+  },
+
+  dev: {
+    run: (projectDir: string) => ipcRenderer.invoke("dev:run", projectDir),
+    stop: (projectDir: string) => ipcRenderer.send("dev:stop", projectDir),
+    write: (data: string) => ipcRenderer.send("dev:write", data),
+    onLog: (cb: (line: string) => void) => on("dev:log", cb),
   },
 
   terminal: {

@@ -88,7 +88,7 @@ export const SignInView = () => {
     const api = getElectronAPI();
     if (api?.auth) {
       const webBaseUrl =
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500";
       const loginUrl = `${webBaseUrl}/sign-in?redirect_url=${encodeURIComponent(
         `${webBaseUrl}/auth/desktop`
       )}`;

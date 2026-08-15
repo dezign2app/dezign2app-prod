@@ -212,8 +212,8 @@ const logger = createLogger("${serviceName}:${routeFileName}");
  * ${summary}
  */
 export async function ${handlerName}(
-  req: Request<${pascalName}Params, ${pascalName}Response | { error: string; details?: unknown }, ${pascalName}Body, ${pascalName}Query>,
-  res: Response<${pascalName}Response | { error: string; details?: unknown }>
+  req: Request<${pascalName}Params, ${pascalName}Response | { error: string; details?: string }, ${pascalName}Body, ${pascalName}Query>,
+  res: Response<${pascalName}Response | { error: string; details?: string }>
 ) {
   try {
     logger.info("Handling ${ep.type || "GET"} ${path}");
@@ -585,7 +585,7 @@ export async function ${handlerName}(
           routeHandlerCode += `      body: JSON.stringify(${payloadVar}),\n`;
         }
         routeHandlerCode += `    });\n\n`;
-        routeHandlerCode += `    let ${varPrefix}Data: unknown = null;\n`;
+        routeHandlerCode += `    let ${varPrefix}Data: Record<string, string | number | boolean | null> | null = null;\n`;
         routeHandlerCode += `    if (!${varPrefix}Response.ok) {\n`;
         routeHandlerCode += `      logger.error("Inter-service request to ${tgtLabel} failed", { status: ${varPrefix}Response.status, statusText: ${varPrefix}Response.statusText });\n`;
         routeHandlerCode += `    } else {\n`;
