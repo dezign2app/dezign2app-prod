@@ -4,7 +4,7 @@ import React, { useState, useMemo } from "react";
 import { Terminal, Trash2, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Resizable } from "re-resizable";
-import { WTermTerminal } from "@/components/terminal";
+import { WTermTerminal, cleanTerminalText } from "@/components/terminal";
 
 export interface TerminalLog {
   id: string;
@@ -55,8 +55,12 @@ export function TerminalPanel({
   }, [logs]);
 
   const handleCopyLogs = () => {
+    if (logs.length === 0) return;
     const content = logs
-      .map((l) => `[${l.timestamp}] [${l.type.toUpperCase()}] ${l.text}`)
+      .map((l) => {
+        const cleanedText = cleanTerminalText(l.text);
+        return `[${l.timestamp}] [${l.type.toUpperCase()}] ${cleanedText}`;
+      })
       .join("\n");
     navigator.clipboard.writeText(content);
     setCopied(true);

@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { openExternalUrl } from "@/lib/electron";
-import { WTermTerminal } from "@/components/terminal";
+import { WTermTerminal, cleanTerminalText } from "@/components/terminal";
 
 export interface ServiceEndpointInfo {
   name: string;
@@ -51,7 +51,7 @@ export function DockerTerminalMonitor({
 
   const handleCopyLogs = () => {
     if (logs.length === 0) return;
-    navigator.clipboard.writeText(logs.join(""));
+    navigator.clipboard.writeText(cleanTerminalText(logs.join("")));
     setCopied(true);
     toast.success("Terminal logs copied to clipboard!");
     setTimeout(() => setCopied(false), 2000);
