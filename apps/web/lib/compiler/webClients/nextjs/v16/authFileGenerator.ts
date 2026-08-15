@@ -240,7 +240,7 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
         const cleanVersion = rawVersion.replace(/^v/, "");
         const semverVersion = cleanVersion.split(".").length === 2 ? `${cleanVersion}.0` : cleanVersion;
         pkgObj.dependencies["better-auth"] = `^${semverVersion}`;
-        pkgObj.dependencies["zod"] = "^4.4.3";
+        pkgObj.dependencies["zod"] = "^3.24.2";
 
         const dbAdapterKey = String(authNode.data?.dbAdapter || "sqlite-raw");
         if (
@@ -286,7 +286,7 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
         const cleanVersion = rawVersion.replace(/^v/, "");
         const semverVersion = cleanVersion.split(".").length === 2 ? `${cleanVersion}.0` : cleanVersion;
         pkgObj.dependencies["better-auth"] = `^${semverVersion}`;
-        pkgObj.dependencies["zod"] = "^4.4.3";
+        pkgObj.dependencies["zod"] = "^3.24.2";
         files[pkgFileIdx]!.content = JSON.stringify(pkgObj, null, 2);
       } catch (err) {
         // preserve

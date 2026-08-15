@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { isElectron, getElectronAPI } from "@/lib/electron";
 import { CompiledFile, CompiledMonorepoResult } from "@/lib/compiler";
-import { ProcessStatus } from "../types";
+import { ProcessStatus, TerminalTab } from "../types";
 import { exportFilesToDirectory } from "../utils/terminalExportUtils";
 
 interface UseDevSessionProps {
@@ -13,6 +13,7 @@ interface UseDevSessionProps {
   saveWorkspaceDir: (dir: string) => void;
   files: CompiledFile[];
   monorepoResult: CompiledMonorepoResult;
+  activeTab?: TerminalTab;
 }
 
 export function useDevSession({
@@ -21,54 +22,115 @@ export function useDevSession({
   saveWorkspaceDir,
   files,
   monorepoResult,
+  activeTab = "dev",
 }: UseDevSessionProps) {
   const inElectron = isElectron();
-  const [devLogs, setDevLogs] = useState<string[]>([]);
+  const [devLogs, setDevLogs] = useState<string[]>(() => {
+    if (!inElectron) {
+      return [
+        `\x1b[36mDezign2App Dev Shell [Web Preview]\x1b[0m\r\n\x1b[90mWorkspace: ${outputDir || `/workspace/${projectId}`}\x1b[0m\r\n\x1b[90mClick "Run Dev" or type "pnpm dev" to launch all apps with hot reload.\x1b[0m\r\n\r\n\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m `,
+      ];
+    }
+    return [];
+  });
   const [devStatus, setDevStatus] = useState<ProcessStatus>("idle");
   const [isExportingDev, setIsExportingDev] = useState<boolean>(false);
 
-  // Hook into Electron Dev logs (pnpm i && pnpm dev)
+  const devDimensionsRef = useRef<{ cols: number; rows: number }>({ cols: 100, rows: 20 });
+  const devIdRef = useRef<string>(`pty-dev-${projectId}`);
+  const ptyCreatedRef = useRef<boolean>(false);
+  const prevOutputDirRef = useRef<string>(outputDir);
+
+  const handleDevResize = useCallback(
+    (cols: number, rows: number) => {
+      devDimensionsRef.current = { cols, rows };
+      if (inElectron) {
+        const api = getElectronAPI();
+        api?.terminal?.resize?.(devIdRef.current, cols, rows);
+      }
+    },
+    [inElectron],
+  );
+
+  // Initialize Interactive PTY Shell for Dev Session (Electron)
   useEffect(() => {
     if (!inElectron) return;
     const api = getElectronAPI();
-    if (!api?.dev?.onLog) return;
+    if (!api?.terminal?.create) return;
 
-    const cleanup = api.dev.onLog((line: string) => {
-      setDevLogs((prev) => [...prev, line]);
+    const ptyId = devIdRef.current;
+    const { cols, rows } = devDimensionsRef.current;
 
+    // Only create PTY once per session
+    if (!ptyCreatedRef.current) {
+      ptyCreatedRef.current = true;
+      api.terminal.create(ptyId, outputDir || "", cols, rows).then(() => {
+        if (outputDir) {
+          api?.terminal?.write?.(ptyId, `cd "${outputDir}"\r`);
+        }
+      });
+    }
+
+    const cleanupData = api.terminal.onData(ptyId, (data: string) => {
+      setDevLogs((prev) => [...prev, data]);
+
+      // Automatically infer process status from PTY ANSI stream
       if (
-        line.includes("Starting Dev Mode") ||
-        line.includes("Installing dependencies") ||
-        line.includes("Launching all apps")
+        data.includes("Starting Dev Mode") ||
+        data.includes("Installing dependencies") ||
+        data.includes("Launching all apps") ||
+        data.includes("pnpm dev") ||
+        data.includes("pnpm install") ||
+        data.includes("next dev")
       ) {
         setDevStatus("starting");
       } else if (
-        line.includes("Ready in") ||
-        line.includes("ready on") ||
-        line.includes("Local:") ||
-        line.includes("http://localhost:") ||
-        line.includes("compiled client and server successfully") ||
-        line.includes("Server running") ||
-        line.includes("Application startup complete")
+        data.includes("Ready in") ||
+        data.includes("ready on") ||
+        data.includes("Local:") ||
+        data.includes("http://localhost:") ||
+        data.includes("compiled client and server") ||
+        data.includes("Server running") ||
+        data.includes("Application startup complete")
       ) {
         setDevStatus("running");
-      } else if (line.includes("Stopped") || line.includes("exited")) {
+      } else if (data.includes("[Dev Session Exited]")) {
         setDevStatus("stopped");
-      } else if (line.includes("Failed") || line.includes("ERROR") || line.includes("error")) {
+      } else if (data.includes("ERR!") || data.includes("ELIFECYCLE") || data.includes("Command failed")) {
         setDevStatus("error");
       }
     });
 
-    return cleanup;
-  }, [inElectron]);
+    const cleanupExit = api.terminal.onExit(ptyId, () => {
+      setDevStatus("stopped");
+      setDevLogs((prev) => [...prev, "\r\n\x1b[31m[Dev Session Exited]\x1b[0m\r\n"]);
+    });
 
-  // Browser Simulation: Dev Run (pnpm i && pnpm dev)
+    return () => {
+      cleanupData();
+      cleanupExit();
+    };
+  }, [inElectron, outputDir]);
+
+  // Navigate PTY to new directory if user picks a different folder
+  useEffect(() => {
+    if (!inElectron || !ptyCreatedRef.current) return;
+    if (outputDir && prevOutputDirRef.current !== outputDir) {
+      prevOutputDirRef.current = outputDir;
+      const api = getElectronAPI();
+      api?.terminal?.write(devIdRef.current, `cd "${outputDir}"\r`);
+    }
+  }, [inElectron, outputDir]);
+
+  // Browser Simulation: Dev Run
   const handleSimulateDevRun = useCallback(() => {
     const services = monorepoResult.services || [];
     const webClients = monorepoResult.webClients || [];
 
-    setDevLogs([
-      "\x1b[36m🚀 Starting Dev Mode (pnpm install && pnpm dev)\x1b[0m\r\n\n",
+    setDevLogs((prev) => [
+      ...prev,
+      "pnpm install; pnpm dev\r\n",
+      "\x1b[36m🚀 Starting Dev Mode (pnpm install; pnpm dev)\x1b[0m\r\n\n",
       "📦 \x1b[33m[1/2] Installing dependencies (pnpm install --frozen-lockfile=false)...\x1b[0m\r\n",
       "  Scope: all workspace packages\r\n",
       "  Progress: resolved 845, reused 845, downloaded 0\r\n",
@@ -88,12 +150,11 @@ export function useDevSession({
     setDevStatus("running");
   }, [monorepoResult]);
 
-  // Dev Server Runner (pnpm i && pnpm dev)
+  // Start Dev Server (pnpm install; pnpm dev) in live PTY
   const handleStartDev = useCallback(async () => {
     const api = getElectronAPI();
-    if (inElectron && (!api?.dev?.run || !api?.fs?.writeProject)) return;
-
     let targetDir = outputDir;
+
     if (!targetDir && typeof window !== "undefined") {
       try {
         targetDir =
@@ -115,16 +176,27 @@ export function useDevSession({
 
     setIsExportingDev(true);
     setDevStatus("starting");
-    setDevLogs([]);
 
-    if (inElectron && api?.dev?.run) {
+    if (inElectron && api?.terminal?.write) {
       try {
-        // 1. Export files
-        await exportFilesToDirectory(files, targetDir, setDevLogs);
+        // 1. Export updated files to workspace directory
+        if (targetDir) {
+          await exportFilesToDirectory(files, targetDir);
+        }
 
-        // 2. Run dev server (pnpm install && pnpm dev)
-        await api.dev.run(targetDir);
-        toast.success("Starting dev stack with hot reload...");
+        // 2. Ensure PTY is navigated to the workspace directory
+        if (targetDir) {
+          api.terminal.write(devIdRef.current, `cd "${targetDir}"\r`);
+        }
+
+        // 3. Execute pnpm install; pnpm dev (PowerShell uses ';' statement separator)
+        const isWin =
+          typeof navigator !== "undefined" &&
+          (navigator.platform?.includes("Win") ||
+            navigator.userAgent?.includes("Windows"));
+        const devCmd = isWin ? "pnpm install; pnpm dev" : "pnpm install && pnpm dev";
+        api.terminal.write(devIdRef.current, `${devCmd}\r`);
+        toast.success("Starting dev stack in Dev Terminal...");
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setDevLogs((prev) => [...prev, `\n❌ Error starting dev mode: ${msg}\n`]);
@@ -140,22 +212,36 @@ export function useDevSession({
     }
   }, [inElectron, outputDir, projectId, saveWorkspaceDir, files, handleSimulateDevRun]);
 
+  // Stop Dev Server (sends SIGINT / Ctrl+C to PTY)
   const handleStopDev = useCallback(() => {
     const api = getElectronAPI();
-    if (inElectron && api?.dev?.stop && outputDir) {
-      api.dev.stop(outputDir);
+    if (inElectron && api?.terminal?.write) {
+      api.terminal.write(devIdRef.current, "\x03\r\n");
       setDevStatus("stopped");
-      toast.info("Stopping dev server...");
+      toast.info("Stopped Dev server");
+      setTimeout(() => {
+        setDevStatus("idle");
+      }, 1200);
     } else {
       setDevStatus("stopped");
-      setDevLogs((prev) => [...prev, "\n🛑 Dev server stopped.\n"]);
+      setDevLogs((prev) => [
+        ...prev,
+        "^C\r\n\x1b[31m[Dev Server Stopped]\x1b[0m\r\n\r\n\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ",
+      ]);
+      setTimeout(() => {
+        setDevStatus("idle");
+      }, 1200);
     }
-  }, [inElectron, outputDir]);
+  }, [inElectron]);
 
   const clearDevLogs = useCallback(() => {
     setDevLogs([]);
     setDevStatus("idle");
-  }, []);
+    if (inElectron) {
+      const api = getElectronAPI();
+      api?.terminal?.write(devIdRef.current, "\x0c");
+    }
+  }, [inElectron]);
 
   return {
     devLogs,
@@ -163,6 +249,8 @@ export function useDevSession({
     devStatus,
     setDevStatus,
     isExportingDev,
+    devIdRef,
+    handleDevResize,
     handleStartDev,
     handleStopDev,
     clearDevLogs,

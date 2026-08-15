@@ -266,7 +266,7 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
 import { nextCookies } from "better-auth/next-js";
 ${adapterConfig.importStatement}
 ${createMiddlewareImport}${pluginImportStr}
-export const auth = betterAuth({
+export const auth: ReturnType<typeof betterAuth> = betterAuth({
   database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}
   plugins: [
     ${pluginCalls.join(",\n    ")},

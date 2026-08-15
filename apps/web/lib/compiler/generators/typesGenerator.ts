@@ -3,17 +3,23 @@ import { Endpoint, AnyMessagingResource } from "@workspace/canvas/types";
 import { CompiledFile } from "@workspace/canvas/types";
 import { toVarName, toPascalCase } from "../utils";
 import {
+  ParameterItem,
+  SchemaItem,
   parametersToTsInterface,
   parametersToZodSchema,
   schemaToTsInterface,
   schemaToZodSchema,
 } from "./schemaToTypeScript";
 
+export interface ResponseFieldItem extends ParameterItem {
+  selectedColumns?: string[];
+}
+
 function generateResponseInterface(
   interfaceName: string,
-  responseFields: any[] = [],
-  legacyResponseBody: any,
-  nodes: BackendNode[],
+  responseFields: ResponseFieldItem[] = [],
+  legacyResponseBody?: SchemaItem,
+  nodes: BackendNode[] = [],
   ep?: Endpoint,
 ): { code: string; dbImports: Set<string> } {
   const dbImports = new Set<string>();
@@ -219,8 +225,14 @@ export function generateTypesPackage(
     processedServiceFolders.add(serviceFolderName);
 
     // Gather all endpoints for this node
-    let nodeEndpoints = endpoints.filter((e) => e.nodeId === serviceNode.id);
-    if (nodeEndpoints.length === 0 && serviceNode.data?.endpoints) {
+    let nodeEndpoints = endpoints.filter(
+      (e) =>
+        e.nodeId === serviceNode.id ||
+        (e.nodeId &&
+          ((serviceNode.data?.label && e.nodeId === serviceNode.data.label) ||
+            (serviceNode.data?.label && e.nodeId === serviceNode.data.label.toLowerCase()))),
+    );
+    if (nodeEndpoints.length === 0 && endpoints.length === 0 && serviceNode.data?.endpoints) {
       nodeEndpoints = serviceNode.data.endpoints.map((ep) => ({
         ...ep,
         nodeId: serviceNode.id,
@@ -344,7 +356,7 @@ export function generateTypesPackage(
   // 4. Events Types: src/events/index.ts
   let eventsCode = `import { z } from "zod";\n\n`;
   if (events.length === 0) {
-    eventsCode += `// No messaging events configured\nexport type GenericEventPayload = Record<string, unknown>;\n`;
+    eventsCode += `// No messaging events configured\nexport type GenericEventPayload = Record<string, string | number | boolean | null>;\n`;
   } else {
     const processedEventNames = new Set<string>();
 

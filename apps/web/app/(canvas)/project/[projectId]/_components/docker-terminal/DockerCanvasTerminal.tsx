@@ -4,15 +4,16 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { isElectron, getElectronAPI } from "@/lib/electron";
-import { WTermTerminalHandle, cleanTerminalText } from "@/components/terminal";
+import { WTermTerminalHandle } from "@/components/terminal";
 
 import { DockerCanvasTerminalProps, TerminalTab } from "./types";
-import { downloadMonorepoZip } from "./utils/terminalExportUtils";
+import { downloadMonorepoZip, exportFilesToDirectory } from "./utils/terminalExportUtils";
 import { useTerminalWorkspace } from "./hooks/useTerminalWorkspace";
 import { useMonorepoEndpoints } from "./hooks/useMonorepoEndpoints";
 import { useDevSession } from "./hooks/useDevSession";
 import { useDockerSession } from "./hooks/useDockerSession";
 import { useShellSession } from "./hooks/useShellSession";
+import { useAutoDiskSync } from "./hooks/useAutoDiskSync";
 
 import { TerminalHeader } from "./components/TerminalHeader";
 import { TerminalEndpointsBar } from "./components/TerminalEndpointsBar";
@@ -31,7 +32,6 @@ export function DockerCanvasTerminal({
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<TerminalTab>("dev");
   const [copiedCmd, setCopiedCmd] = useState<boolean>(false);
-  const [copiedLogs, setCopiedLogs] = useState<boolean>(false);
   const [downloadingZip, setDownloadingZip] = useState<boolean>(false);
 
   // 1. Workspace persistence & folder picker
@@ -42,30 +42,33 @@ export function DockerCanvasTerminal({
   const { formattedProjectName, monorepoResult, files, serviceEndpoints } =
     useMonorepoEndpoints(projectName);
 
-  // 3. Dev Server session
+  // 3. Dev Server session (Interactive PTY)
   const {
     devLogs,
     devStatus,
     isExportingDev,
+    devIdRef,
+    handleDevResize,
     handleStartDev: startDev,
     handleStopDev,
-    clearDevLogs,
   } = useDevSession({
     projectId,
     outputDir,
     saveWorkspaceDir,
     files,
     monorepoResult,
+    activeTab,
   });
 
-  // 4. Docker Build session
+  // 4. Docker Build session (Interactive PTY)
   const {
     dockerLogs,
     dockerStatus,
     isExportingDocker,
+    dockerIdRef,
+    handleDockerResize,
     handleStartDocker: startDocker,
     handleStopDocker,
-    clearDockerLogs,
   } = useDockerSession({
     projectId,
     outputDir,
@@ -73,19 +76,32 @@ export function DockerCanvasTerminal({
     files,
     monorepoResult,
     serviceEndpoints,
+    activeTab,
   });
 
-  // 5. Interactive Shell session
+  // 5. Interactive Shell session (Interactive PTY)
   const {
     shellLogs,
     shellActive,
     shellIdRef,
     handleShellResize,
-    clearShellLogs,
   } = useShellSession({
     projectId,
     outputDir,
     activeTab,
+  });
+
+  // 6. Real-time automatic disk synchronization (Electron mode)
+  const {
+    syncStatus,
+    lastSyncedAt,
+    autoSyncEnabled,
+    setAutoSyncEnabled,
+    forceSyncNow,
+  } = useAutoDiskSync({
+    projectId,
+    outputDir,
+    files,
   });
 
   // Dedicated refs for each terminal session to ensure 100% log, buffer, and scroll isolation
@@ -115,14 +131,30 @@ export function DockerCanvasTerminal({
       if (inElectron) {
         if (tab === "shell") {
           api?.terminal?.write(shellIdRef.current, data);
-        } else if (tab === "dev" && (devStatus === "running" || devStatus === "starting")) {
-          api?.dev?.write(data);
-        } else if (tab === "docker" && (dockerStatus === "running" || dockerStatus === "building")) {
-          api?.docker?.write(data);
+        } else if (tab === "dev") {
+          api?.terminal?.write(devIdRef.current, data);
+        } else if (tab === "docker") {
+          api?.terminal?.write(dockerIdRef.current, data);
         }
       }
     },
-    [inElectron, devStatus, dockerStatus, shellIdRef],
+    [inElectron, shellIdRef, devIdRef, dockerIdRef],
+  );
+
+  // Handle Dynamic Resize for active terminal PTY
+  const handleTerminalResize = useCallback(
+    (cols: number, rows: number, tab: TerminalTab) => {
+      if (inElectron) {
+        if (tab === "dev") {
+          handleDevResize(cols, rows);
+        } else if (tab === "docker") {
+          handleDockerResize(cols, rows);
+        } else if (tab === "shell") {
+          handleShellResize(cols, rows);
+        }
+      }
+    },
+    [inElectron, handleDevResize, handleDockerResize, handleShellResize],
   );
 
   const handleStartDev = useCallback(() => {
@@ -137,39 +169,55 @@ export function DockerCanvasTerminal({
     startDocker();
   }, [startDocker]);
 
-  // Clear logs for active tab
-  const handleClearLogs = useCallback(() => {
-    if (activeTab === "dev") {
-      devWtermRef.current?.clear();
-      clearDevLogs();
-    } else if (activeTab === "docker") {
-      dockerWtermRef.current?.clear();
-      clearDockerLogs();
-    } else {
-      shellWtermRef.current?.clear();
-      clearShellLogs();
+  const handleStartBuild = useCallback(async () => {
+    setIsOpen(true);
+    setActiveTab("shell");
+    const api = getElectronAPI();
+    let targetDir = outputDir;
+    if (inElectron && !targetDir) {
+      targetDir = (await api?.fs?.pickDirectory?.()) || "";
+      if (!targetDir) {
+        toast.error("Please select a workspace folder first");
+        return;
+      }
+      saveWorkspaceDir(targetDir);
     }
-  }, [activeTab, clearDevLogs, clearDockerLogs, clearShellLogs]);
 
-  // Copy active logs
-  const handleCopyLogs = useCallback(() => {
-    const logsToCopy =
-      activeTab === "dev" ? devLogs : activeTab === "docker" ? dockerLogs : shellLogs;
-    if (logsToCopy.length === 0) return;
-    navigator.clipboard.writeText(cleanTerminalText(logsToCopy.join("")));
-    setCopiedLogs(true);
-    toast.success("Terminal output copied!");
-    setTimeout(() => setCopiedLogs(false), 2000);
-  }, [activeTab, devLogs, dockerLogs, shellLogs]);
+    if (inElectron && api?.terminal?.write) {
+      try {
+        if (targetDir) {
+          await exportFilesToDirectory(files, targetDir);
+          api.terminal.write(shellIdRef.current, `cd "${targetDir}"\r`);
+        }
+        const isWin =
+          typeof navigator !== "undefined" &&
+          (navigator.platform?.includes("Win") ||
+            navigator.userAgent?.includes("Windows"));
+        const buildCmd = isWin ? "pnpm install; pnpm build" : "pnpm install && pnpm build";
+        api.terminal.write(shellIdRef.current, `${buildCmd}\r`);
+        toast.success("Running pnpm build in Interactive Shell...");
+      } catch (err) {
+        toast.error("Failed to trigger build");
+      }
+    }
+  }, [inElectron, outputDir, files, saveWorkspaceDir, shellIdRef]);
 
   // Copy command
   const handleCopyCommand = useCallback(() => {
+    const isWin =
+      typeof navigator !== "undefined" &&
+      (navigator.platform?.includes("Win") ||
+        navigator.userAgent?.includes("Windows"));
     const cmd =
       activeTab === "dev"
-        ? "pnpm install && pnpm dev"
+        ? isWin
+          ? "pnpm install; pnpm dev"
+          : "pnpm install && pnpm dev"
         : activeTab === "docker"
           ? "docker compose up --build"
-          : "powershell.exe";
+          : isWin
+            ? "powershell.exe"
+            : "bash";
     navigator.clipboard.writeText(cmd);
     setCopiedCmd(true);
     toast.success("Command copied to clipboard!");
@@ -223,16 +271,18 @@ export function DockerCanvasTerminal({
               onDownloadZip={handleDownloadZip}
               downloadingZip={downloadingZip}
               isExporting={isExporting}
+              syncStatus={syncStatus}
+              lastSyncedAt={lastSyncedAt}
+              autoSyncEnabled={autoSyncEnabled}
+              onToggleAutoSync={() => setAutoSyncEnabled(!autoSyncEnabled)}
+              onForceSync={forceSyncNow}
               onStartDev={handleStartDev}
               onStopDev={handleStopDev}
               onStartDocker={handleStartDocker}
               onStopDocker={handleStopDocker}
+              onStartBuild={handleStartBuild}
               onCopyCommand={handleCopyCommand}
               copiedCmd={copiedCmd}
-              onCopyLogs={handleCopyLogs}
-              copiedLogs={copiedLogs}
-              hasLogs={currentLogs.length > 0}
-              onClearLogs={handleClearLogs}
               isExpanded={isExpanded}
               onToggleExpand={() => setIsExpanded(!isExpanded)}
               onClose={() => setIsOpen(false)}
@@ -254,7 +304,7 @@ export function DockerCanvasTerminal({
               dockerWtermRef={dockerWtermRef}
               shellWtermRef={shellWtermRef}
               onTerminalInput={handleTerminalInput}
-              onShellResize={handleShellResize}
+              onTerminalResize={handleTerminalResize}
             />
 
             {/* Terminal Status Footer */}

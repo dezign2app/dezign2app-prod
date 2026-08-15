@@ -13,7 +13,7 @@ interface TerminalViewportProps {
   dockerWtermRef: React.RefObject<WTermTerminalHandle | null>;
   shellWtermRef: React.RefObject<WTermTerminalHandle | null>;
   onTerminalInput: (data: string, tab: TerminalTab) => void;
-  onShellResize: (cols: number, rows: number) => void;
+  onTerminalResize: (cols: number, rows: number, tab: TerminalTab) => void;
 }
 
 export function TerminalViewport({
@@ -25,11 +25,11 @@ export function TerminalViewport({
   dockerWtermRef,
   shellWtermRef,
   onTerminalInput,
-  onShellResize,
+  onTerminalResize,
 }: TerminalViewportProps) {
   return (
     <div className="flex-1 min-h-0 bg-[#090d13] relative overflow-hidden">
-      {/* Tab 1: Dev Server Terminal (Isolated) */}
+      {/* Tab 1: Dev Server Terminal (Isolated Interactive PTY) */}
       <div
         className={`absolute inset-0 w-full h-full transition-opacity duration-150 ${
           activeTab === "dev"
@@ -43,12 +43,12 @@ export function TerminalViewport({
           rawStream={true}
           interactive={true}
           onData={(data) => onTerminalInput(data, "dev")}
-          onResize={onShellResize}
-          placeholder='Click "Run Dev" to run pnpm install and launch all apps with hot reload.'
+          onResize={(cols, rows) => onTerminalResize(cols, rows, "dev")}
+          placeholder="Dev terminal session connecting..."
         />
       </div>
 
-      {/* Tab 2: Docker Build Terminal (Isolated) */}
+      {/* Tab 2: Docker Build Terminal (Isolated Interactive PTY) */}
       <div
         className={`absolute inset-0 w-full h-full transition-opacity duration-150 ${
           activeTab === "docker"
@@ -62,12 +62,12 @@ export function TerminalViewport({
           rawStream={true}
           interactive={true}
           onData={(data) => onTerminalInput(data, "docker")}
-          onResize={onShellResize}
-          placeholder='Click "Docker Build" to compile container images and orchestrate with Docker Compose.'
+          onResize={(cols, rows) => onTerminalResize(cols, rows, "docker")}
+          placeholder="Docker terminal session connecting..."
         />
       </div>
 
-      {/* Tab 3: Interactive Shell Terminal (Isolated) */}
+      {/* Tab 3: Interactive Shell Terminal (Isolated Interactive PTY) */}
       <div
         className={`absolute inset-0 w-full h-full transition-opacity duration-150 ${
           activeTab === "shell"
@@ -81,8 +81,8 @@ export function TerminalViewport({
           rawStream={true}
           interactive={true}
           onData={(data) => onTerminalInput(data, "shell")}
-          onResize={onShellResize}
-          placeholder="Interactive shell ready. Type commands and press Enter."
+          onResize={(cols, rows) => onTerminalResize(cols, rows, "shell")}
+          placeholder="Interactive shell ready..."
         />
       </div>
     </div>

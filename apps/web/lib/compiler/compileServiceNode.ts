@@ -34,12 +34,76 @@ export function compileServiceNode(
     kafkaFunctions = compiledKafka.reusableFunctions || [];
   }
 
+  // Filter endpoints for this specific node
+  let nodeEndpoints = endpoints.filter(
+    (e) =>
+      e.nodeId === node.id ||
+      (e.nodeId &&
+        ((node.data?.label && e.nodeId === node.data.label) ||
+          (node.data?.label && e.nodeId === node.data.label.toLowerCase()))),
+  );
+
+  // If endpoints are passed and pre-filtered to this single node, preserve them
+  if (nodeEndpoints.length === 0 && endpoints.length > 0 && endpoints.every((e) => !e.nodeId || e.nodeId === node.id)) {
+    nodeEndpoints = endpoints;
+  }
+
+  // Fall back to node.data.endpoints ONLY if global endpoints array is empty
+  if (nodeEndpoints.length === 0 && endpoints.length === 0 && node.data?.endpoints) {
+    nodeEndpoints = node.data.endpoints.map((ep) => ({
+      ...ep,
+      nodeId: node.id,
+    }));
+  }
+
+  if (node.data?.routeGroups) {
+    for (const group of node.data.routeGroups) {
+      if (group.endpoints) {
+        const groupEndpoints = group.endpoints.map((ep) => ({
+          ...ep,
+          nodeId: node.id,
+        }));
+        nodeEndpoints = [...nodeEndpoints, ...groupEndpoints];
+      }
+    }
+  }
+
+  // Filter events for this specific node
+  let nodeEvents = events.filter(
+    (e) =>
+      e.nodeId === node.id ||
+      (e.nodeId &&
+        ((node.data?.label && e.nodeId === node.data.label) ||
+          (node.data?.label && e.nodeId === node.data.label.toLowerCase()))),
+  );
+
+  if (nodeEvents.length === 0 && events.length === 0) {
+    if (node.data?.consumedEvents) {
+      nodeEvents.push(
+        ...node.data.consumedEvents.map((e) => ({
+          ...e,
+          nodeId: node.id,
+          variant: "consume" as const,
+        })),
+      );
+    }
+    if (node.data?.publishedEvents) {
+      nodeEvents.push(
+        ...node.data.publishedEvents.map((e) => ({
+          ...e,
+          nodeId: node.id,
+          variant: "publish" as const,
+        })),
+      );
+    }
+  }
+
   switch (techStack) {
     case "fastapi":
       return compileFastAPIService(
         node,
-        endpoints,
-        events,
+        nodeEndpoints,
+        nodeEvents,
         allNodes,
         allEdges,
         testCases,
@@ -50,14 +114,15 @@ export function compileServiceNode(
     default:
       return compileExpressV4Service(
         node,
-        endpoints,
-        events,
+        nodeEndpoints,
+        nodeEvents,
         allNodes,
         allEdges,
         testCases,
         dbFunctions,
         kafkaFunctions,
         folderName,
+        endpoints,
       );
   }
 }

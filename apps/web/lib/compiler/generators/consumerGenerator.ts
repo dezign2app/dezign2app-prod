@@ -68,20 +68,18 @@ const logger = createLogger("${serviceName}:Consumer:${ev.name}");
  * Event Consumer for: "${ev.name}"
  * Description: ${ev.description || "Processes incoming event payload"}
  */
-export async function ${handlerName}(rawPayload: unknown): Promise<void> {
+export async function ${handlerName}(payload: ${payloadInterfaceName}): Promise<void> {
   try {
-    logger.info(\`Consuming event [${ev.name}]\`, rawPayload);
+    logger.info(\`Consuming event [${ev.name}]\`, payload);
 `;
 
       if (zodRes.hasContent) {
-        consumerCode += `    const parsed = ${schemaName}.safeParse(rawPayload);\n`;
+        consumerCode += `    const parsed = ${schemaName}.safeParse(payload);\n`;
         consumerCode += `    if (!parsed.success) {\n`;
         consumerCode += `      logger.error(\`Invalid payload format for event [${ev.name}]:\`, parsed.error.flatten());\n`;
         consumerCode += `      return;\n`;
         consumerCode += `    }\n`;
-        consumerCode += `    const payload = parsed.data;\n\n`;
-      } else {
-        consumerCode += `    const payload = rawPayload as ${payloadInterfaceName};\n\n`;
+        consumerCode += `    const validatedPayload = parsed.data;\n\n`;
       }
 
       consumerCode += `    // =========================================================================\n`;

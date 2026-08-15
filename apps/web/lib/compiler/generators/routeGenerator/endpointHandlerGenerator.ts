@@ -207,13 +207,18 @@ import {
 ${extraImportLines ? `${extraImportLines}\n` : ""}
 const logger = createLogger("${serviceName}:${routeFileName}");
 
+type ${pascalName}ErrorResponse = {
+  error: string;
+  details?: string | { formErrors: string[]; fieldErrors: Record<string, string[] | undefined> } | Record<string, string | number | boolean | null>;
+};
+
 /**
  * ${ep.type || "GET"} ${path}
  * ${summary}
  */
 export async function ${handlerName}(
-  req: Request<${pascalName}Params, ${pascalName}Response | { error: string; details?: string }, ${pascalName}Body, ${pascalName}Query>,
-  res: Response<${pascalName}Response | { error: string; details?: string }>
+  req: Request<${pascalName}Params, ${pascalName}Response | ${pascalName}ErrorResponse, ${pascalName}Body, ${pascalName}Query>,
+  res: Response<${pascalName}Response | ${pascalName}ErrorResponse>
 ) {
   try {
     logger.info("Handling ${ep.type || "GET"} ${path}");
@@ -354,8 +359,8 @@ export async function ${handlerName}(
           : [];
 
         if (cols.length > 0) {
-          const allColFields = cols.map((c: any) => `${c.name || "col"}: ${toTsType(c.type || "string")}`).join("; ");
-          const writableColFields = cols.filter((c: any) => !c.isPrimaryKey).map((c: any) => `${c.name || "col"}: ${toTsType(c.type || "string")}`).join("; ");
+          const allColFields = cols.map((c: { name?: string; type?: string }) => `${c.name || "col"}: ${toTsType(c.type || "string")}`).join("; ");
+          const writableColFields = cols.filter((c: { isPrimaryKey?: boolean }) => !c.isPrimaryKey).map((c: { name?: string; type?: string }) => `${c.name || "col"}: ${toTsType(c.type || "string")}`).join("; ");
 
           routeHandlerCode += `    // - Table: "${tableName}"\n`;
           routeHandlerCode += `    //   type ${Pascal}Row = { ${allColFields} };\n`;

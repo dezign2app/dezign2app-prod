@@ -208,5 +208,175 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
     expect(packageJsonFile).toBeDefined();
     const pkg = JSON.parse(packageJsonFile!.content);
     expect(pkg.name).toBe("@workspace/super-app");
+    expect(pkg.dependencies.zod).toBe("^3.24.2");
+  });
+
+  it("should compile four-service setup (Products, Service, Super, Super App) with full type consistency", () => {
+    const serviceNode: BackendNode = {
+      id: "node-service",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Service",
+        port: "8080",
+        endpoints: [
+          // Leftover legacy endpoint in data that is NOT in global endpoints
+          { id: "stale-ep", name: "/create-product", type: "POST" },
+        ],
+      },
+    };
+
+    const productsNode: BackendNode = {
+      id: "node-products",
+      type: "service",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Products",
+        port: "8081",
+      },
+    };
+
+    const superNode: BackendNode = {
+      id: "node-super",
+      type: "service",
+      position: { x: 400, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "Super",
+        port: "8082",
+      },
+    };
+
+    const superAppNode: BackendNode = {
+      id: "node-super-app",
+      type: "webApp",
+      position: { x: 600, y: 0 },
+      fractionalIndex: "a3",
+      data: {
+        label: "Super App",
+        appSlug: "super-app",
+      },
+    };
+
+    const createProductEndpoint: Endpoint & { nodeId: string } = {
+      id: "ep-create-product",
+      nodeId: "node-products",
+      name: "/create-product",
+      type: "POST",
+      summary: "Create product in products service",
+      requestBody: {
+        id: "req-create-product",
+        rawJson: JSON.stringify({ name: "Phone", price: 699 }),
+      },
+    };
+
+    const result = compileMonorepo(
+      [serviceNode, productsNode, superNode, superAppNode],
+      [createProductEndpoint],
+      [],
+      [],
+      [],
+      "FourAppsMonorepo",
+    );
+
+    // 1. Verify types package generates products/postCreateProduct.ts with ProductsPostCreateProduct types
+    const productsTypeFile = result.files.find(
+      (f) => f.filename === "packages/types/src/products/postCreateProduct.ts",
+    );
+    expect(productsTypeFile).toBeDefined();
+    expect(productsTypeFile?.content).toContain("ProductsPostCreateProductBody");
+    expect(productsTypeFile?.content).toContain("ProductsPostCreateProductResponse");
+    expect(productsTypeFile?.content).toContain("productsPostCreateProductBodySchema");
+
+    // 2. Verify apps/products has postCreateProduct.ts with matching types and strictly typed error response
+    const productsRouteFile = result.files.find(
+      (f) => f.filename === "apps/products/src/routes/postCreateProduct.ts",
+    );
+    expect(productsRouteFile).toBeDefined();
+    expect(productsRouteFile?.content).toContain("ProductsPostCreateProductBody");
+    expect(productsRouteFile?.content).toContain("ProductsPostCreateProductErrorResponse");
+    expect(productsRouteFile?.content).not.toContain("details?: any");
+
+    // 3. Verify apps/service does NOT resurrect stale create-product endpoint and uses healthRoute instead
+    const serviceRouteFile = result.files.find(
+      (f) => f.filename === "apps/service/src/routes/postCreateProduct.ts",
+    );
+    expect(serviceRouteFile).toBeUndefined();
+
+    const serviceHealthFile = result.files.find(
+      (f) => f.filename === "apps/service/src/routes/healthRoute.ts",
+    );
+    expect(serviceHealthFile).toBeDefined();
+
+    // 4. Verify apps/super uses healthRoute
+    const superHealthFile = result.files.find(
+      (f) => f.filename === "apps/super/src/routes/healthRoute.ts",
+    );
+    expect(superHealthFile).toBeDefined();
+
+    // 5. Verify apps/super-app has package.json with zod ^3.24.2
+    const superAppPkg = result.files.find(
+      (f) => f.filename === "apps/super-app/package.json",
+    );
+    expect(superAppPkg).toBeDefined();
+    const parsedPkg = JSON.parse(superAppPkg!.content);
+    expect(parsedPkg.dependencies.zod).toBe("^3.24.2");
+  });
+
+  it("should generate portable ReturnType<typeof betterAuth> in lib/auth.ts to avoid TS2742 error", () => {
+    const authNode: BackendNode = {
+      id: "node-auth-1",
+      type: "auth",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Auth",
+        framework: "better_auth",
+        version: "v1.6",
+      },
+    };
+
+    const webClientNode: BackendNode = {
+      id: "node-web-1",
+      type: "webClient",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Super",
+        appSlug: "super",
+      },
+    };
+
+    const dbNode: BackendNode = {
+      id: "node-db-1",
+      type: "database",
+      position: { x: 0, y: 200 },
+      fractionalIndex: "a2",
+      data: {
+        label: "SQLite DB",
+        dbEngine: "sqlite",
+      },
+    };
+
+    const result = compileMonorepo(
+      [authNode, webClientNode, dbNode],
+      [],
+      [],
+      [],
+      [],
+      "AuthTypeMonorepo",
+    );
+
+    // 1. Verify lib/auth.ts contains explicit ReturnType<typeof betterAuth>
+    const authFile = result.files.find((f) => f.filename === "apps/super/lib/auth.ts");
+    expect(authFile).toBeDefined();
+    expect(authFile?.content).toContain("export const auth: ReturnType<typeof betterAuth> = betterAuth({");
+
+    // 2. Verify packages/db/connection.ts contains turbopackIgnore comments
+    const dbConnFile = result.files.find((f) => f.filename === "packages/db/connection.ts");
+    expect(dbConnFile).toBeDefined();
+    expect(dbConnFile?.content).toContain("/* turbopackIgnore: true */");
   });
 });

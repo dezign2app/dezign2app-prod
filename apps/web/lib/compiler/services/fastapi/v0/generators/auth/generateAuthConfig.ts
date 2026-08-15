@@ -293,7 +293,7 @@ export function generateAuthConfig(data: AuthNodeData): string {
   return `import { betterAuth } from "better-auth";
 ${adapterConfig.importStatement}
 ${createMiddlewareImport}${pluginImportStr}
-export const auth = betterAuth({
+export const auth: ReturnType<typeof betterAuth> = betterAuth({
   database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}
   plugins: [
     ${pluginCalls.join(",\n    ")}
