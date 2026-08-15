@@ -52,6 +52,7 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
     const { ref: terminalRef, write, resize, focus } = useTerminal();
     const [isReady, setIsReady] = useState(false);
     const lastWrittenIndexRef = useRef<number>(0);
+    const prevLogsRef = useRef<string[]>(logs);
     const logsRef = useRef<string[]>(logs);
     logsRef.current = logs;
 
@@ -112,9 +113,12 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
       }, 50);
     }, [write, onReady, focusTerminal, rawStream]);
 
-    // Synchronize incremental log writes
+    // Synchronize incremental log writes & tab switches
     useEffect(() => {
       if (!isReady || !write) return;
+
+      const prevLogs = prevLogsRef.current;
+      prevLogsRef.current = logs;
 
       if (logs.length === 0) {
         if (lastWrittenIndexRef.current > 0) {
@@ -123,18 +127,30 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
         return;
       }
 
-      // If logs were reset/cleared or replaced with a smaller array
-      if (logs.length < lastWrittenIndexRef.current) {
-        clearTerminal();
-      }
+      // Check if `logs` is an incremental extension of the previous array
+      const isAppend =
+        lastWrittenIndexRef.current > 0 &&
+        logs.length >= lastWrittenIndexRef.current &&
+        prevLogs.length > 0 &&
+        logs[0] === prevLogs[0] &&
+        logs[lastWrittenIndexRef.current - 1] === prevLogs[lastWrittenIndexRef.current - 1];
 
-      // Stream newly appended log entries
-      const newEntries = logs.slice(lastWrittenIndexRef.current);
-      if (newEntries.length > 0) {
-        newEntries.forEach((line) => {
+      if (!isAppend) {
+        // Tab switch, log replacement, or log reset: full refresh
+        clearTerminal();
+        logs.forEach((line) => {
           write(rawStream ? line : formatTerminalChunk(line));
         });
         lastWrittenIndexRef.current = logs.length;
+      } else {
+        // Incremental new log lines in the same session
+        const newEntries = logs.slice(lastWrittenIndexRef.current);
+        if (newEntries.length > 0) {
+          newEntries.forEach((line) => {
+            write(rawStream ? line : formatTerminalChunk(line));
+          });
+          lastWrittenIndexRef.current = logs.length;
+        }
       }
     }, [logs, isReady, write, clearTerminal, rawStream]);
 
