@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Loader2, AlertCircle, Square } from "lucide-react";
+import { AlertCircle, Square } from "lucide-react";
 import { ProcessStatus } from "../types";
 
 interface TerminalStatusBadgeProps {
@@ -10,14 +10,6 @@ interface TerminalStatusBadgeProps {
 
 export function TerminalStatusBadge({ status }: TerminalStatusBadgeProps) {
   switch (status) {
-    case "starting":
-    case "building":
-      return (
-        <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 font-mono">
-          <Loader2 className="w-2.5 h-2.5 animate-spin" />
-          <span className="capitalize">{status}</span>
-        </span>
-      );
     case "running":
       return (
         <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-mono">

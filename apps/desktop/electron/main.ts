@@ -704,12 +704,22 @@ async function getPty(): Promise<typeof NodePty> {
 
 ipcMain.handle(
   "terminal:create",
-  async (_event, id: string, cwd: string, cols: number, rows: number) => {
+  async (
+    _event,
+    id: string,
+    cwd: string,
+    cols: number,
+    rows: number,
+    customShell?: string
+  ) => {
     const pty = await getPty();
-    const shell =
-      process.platform === "win32"
-        ? "powershell.exe"
-        : process.env.SHELL || "/bin/bash";
+    let shell = customShell && customShell.trim() ? customShell.trim() : "";
+    if (!shell) {
+      shell =
+        process.platform === "win32"
+          ? "powershell.exe"
+          : process.env.SHELL || "/bin/bash";
+    }
 
     // Clean up any existing PTY process with the same ID
     if (ptyMap.has(id)) {
@@ -729,10 +739,13 @@ ipcMain.handle(
       }
     }
 
-    const shellArgs =
-      process.platform === "win32"
-        ? ["-NoLogo", "-ExecutionPolicy", "Bypass"]
-        : [];
+    let shellArgs: string[] = [];
+    const lowerShell = shell.toLowerCase();
+    if (lowerShell.includes("powershell") || lowerShell.includes("pwsh")) {
+      shellArgs = ["-NoLogo", "-ExecutionPolicy", "Bypass"];
+    } else if (lowerShell.includes("cmd.exe") || lowerShell === "cmd") {
+      shellArgs = ["/Q"];
+    }
 
     const ptyProcess = pty.spawn(shell, shellArgs, {
       name: "xterm-color",
@@ -769,6 +782,36 @@ ipcMain.on("terminal:kill", (_event, id: string) => {
     ptyMap.get(id)?.kill();
   } catch (e) {}
   ptyMap.delete(id);
+});
+
+// ─────────────────────────────────────────────
+//  IPC — Silent TCP Network Port Reachability
+// ─────────────────────────────────────────────
+ipcMain.handle("network:isPortOpen", async (_event, port: number) => {
+  if (!port || isNaN(port) || port <= 0 || port > 65535) return false;
+  return new Promise<boolean>((resolve) => {
+    const socket = new net.Socket();
+    let settled = false;
+
+    const cleanup = (isOpen: boolean) => {
+      if (settled) return;
+      settled = true;
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(isOpen);
+    };
+
+    socket.setTimeout(600);
+    socket.once("connect", () => cleanup(true));
+    socket.once("timeout", () => cleanup(false));
+    socket.once("error", () => cleanup(false));
+
+    try {
+      socket.connect(port, "127.0.0.1");
+    } catch {
+      cleanup(false);
+    }
+  });
 });
 
 // ─────────────────────────────────────────────

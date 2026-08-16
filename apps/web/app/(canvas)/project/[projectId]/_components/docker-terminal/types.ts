@@ -3,9 +3,32 @@ export interface DockerCanvasTerminalProps {
   projectName?: string;
 }
 
-export type TerminalTab = "dev" | "docker" | "shell";
+export type TerminalType =
+  | "shell"
+  | "powershell"
+  | "cmd"
+  | "bash"
+  | "zsh"
+  | "custom";
 
-export type ProcessStatus = "idle" | "starting" | "building" | "running" | "stopped" | "error";
+export type ProcessStatus = "idle" | "running" | "stopped" | "error";
+
+export interface DetectedPort {
+  port: number;
+  url: string;
+  detectedAt: number;
+}
+
+export interface TerminalSession {
+  id: string;
+  title: string;
+  type: TerminalType;
+  shell?: string;
+  logs: string[];
+  status: ProcessStatus;
+  detectedPorts?: DetectedPort[];
+  createdAt: number;
+}
 
 export interface ServiceEndpoint {
   name: string;

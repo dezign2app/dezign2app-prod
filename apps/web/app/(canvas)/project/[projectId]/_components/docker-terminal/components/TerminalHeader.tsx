@@ -1,50 +1,52 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@workspace/ui/components/button";
 import {
-  Play,
-  Square,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@workspace/ui/components/dropdown-menu";
+import {
+  Terminal as TerminalIcon,
+  Plus,
+  X,
   Folder,
-  Copy,
-  Check,
   Archive,
   Maximize2,
   Minimize2,
-  X,
+  Trash2,
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle,
   Zap,
-  Layers,
   Code2,
+  Monitor,
+  FolderSync,
 } from "lucide-react";
-import { TerminalTab, ProcessStatus } from "../types";
-import { TerminalStatusBadge } from "./TerminalStatusBadge";
+import { formatDistanceToNow } from "date-fns";
+import { TerminalSession, TerminalType } from "../types";
 import { AutoSyncStatus } from "../hooks/useAutoDiskSync";
-import { RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
 
 interface TerminalHeaderProps {
   inElectron: boolean;
-  activeTab: TerminalTab;
-  setActiveTab: (tab: TerminalTab) => void;
-  devStatus: ProcessStatus;
-  dockerStatus: ProcessStatus;
-  shellActive: boolean;
+  sessions: TerminalSession[];
+  activeSessionId: string | null;
+  onSelectTab: (id: string) => void;
+  onCloseTab: (id: string) => void;
+  onNewTab: (type?: TerminalType, shell?: string, title?: string) => void;
+  onRenameTab: (id: string, newTitle: string) => void;
+  onClearActiveTab: () => void;
   outputDir: string;
   onPickDirectory: () => void;
   onDownloadZip: () => void;
   downloadingZip: boolean;
-  isExporting: boolean;
   syncStatus?: AutoSyncStatus;
   lastSyncedAt?: Date | null;
-  autoSyncEnabled?: boolean;
-  onToggleAutoSync?: () => void;
   onForceSync?: () => void;
-  onStartDev: () => void;
-  onStopDev: () => void;
-  onStartDocker: () => void;
-  onStopDocker: () => void;
-  onStartBuild?: () => void;
-  onCopyCommand: () => void;
-  copiedCmd: boolean;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onClose: () => void;
@@ -52,98 +54,225 @@ interface TerminalHeaderProps {
 
 export function TerminalHeader({
   inElectron,
-  activeTab,
-  setActiveTab,
-  devStatus,
-  dockerStatus,
-  shellActive,
+  sessions,
+  activeSessionId,
+  onSelectTab,
+  onCloseTab,
+  onNewTab,
+  onRenameTab,
+  onClearActiveTab,
   outputDir,
   onPickDirectory,
   onDownloadZip,
   downloadingZip,
-  isExporting,
   syncStatus = "idle",
   lastSyncedAt,
-  autoSyncEnabled = true,
-  onToggleAutoSync,
   onForceSync,
-  onStartDev,
-  onStopDev,
-  onStartDocker,
-  onStopDocker,
-  onStartBuild,
-  onCopyCommand,
-  copiedCmd,
   isExpanded,
   onToggleExpand,
   onClose,
 }: TerminalHeaderProps) {
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState<string>("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const isWin =
+    typeof navigator !== "undefined" &&
+    (navigator.platform?.includes("Win") ||
+      navigator.userAgent?.includes("Windows"));
+
+  const getRelativeSyncTime = (date: Date | null | undefined): string => {
+    if (!date) return "Synced";
+    const diffSeconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+    if (diffSeconds < 15) return "just now";
+    return formatDistanceToNow(date, { addSuffix: true });
+  };
+
+  const [relativeSyncTime, setRelativeSyncTime] = useState<string>(() =>
+    getRelativeSyncTime(lastSyncedAt),
+  );
+
+  useEffect(() => {
+    setRelativeSyncTime(getRelativeSyncTime(lastSyncedAt));
+    if (!lastSyncedAt) return;
+
+    const interval = setInterval(() => {
+      setRelativeSyncTime(getRelativeSyncTime(lastSyncedAt));
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [lastSyncedAt]);
+
   const formattedSyncTime = lastSyncedAt
-    ? lastSyncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    ? lastSyncedAt.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
     : null;
+
+  useEffect(() => {
+    if (editingSessionId && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingSessionId]);
+
+  const handleStartRename = (session: TerminalSession) => {
+    setEditingSessionId(session.id);
+    setEditingTitle(session.title);
+  };
+
+  const handleSaveRename = (sessionId: string) => {
+    if (editingTitle.trim()) {
+      onRenameTab(sessionId, editingTitle.trim());
+    }
+    setEditingSessionId(null);
+  };
+
+  const handleKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    sessionId: string,
+  ) => {
+    if (e.key === "Enter") {
+      handleSaveRename(sessionId);
+    } else if (e.key === "Escape") {
+      setEditingSessionId(null);
+    }
+  };
+
+  const getTabIcon = (session: TerminalSession) => {
+    if (session.type === "powershell") {
+      return <TerminalIcon className="w-3.5 h-3.5 text-sky-400" />;
+    }
+    if (session.type === "cmd") {
+      return <Monitor className="w-3.5 h-3.5 text-amber-400" />;
+    }
+    if (session.type === "bash" || session.type === "zsh") {
+      return <Code2 className="w-3.5 h-3.5 text-emerald-400" />;
+    }
+    return <TerminalIcon className="w-3.5 h-3.5 text-zinc-400" />;
+  };
 
   return (
     <div className="flex items-center justify-between h-9 bg-zinc-900 border-b border-zinc-800 shrink-0 px-2 select-none text-zinc-300">
-      {/* Left: Terminal Tabs */}
-      <div className="flex items-center h-full gap-0.5">
-        {/* Dev Server Tab (pnpm i && pnpm dev) */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("dev")}
-          className={`flex items-center gap-2 h-full px-3 text-xs font-medium transition-colors border-b-2 ${
-            activeTab === "dev"
-              ? "bg-zinc-950 text-zinc-100 border-emerald-500 font-semibold"
-              : "bg-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border-transparent"
-          }`}
-        >
-          <Zap
-            className={`w-3.5 h-3.5 ${activeTab === "dev" ? "text-emerald-400" : "text-zinc-500"}`}
-          />
-          <span>1: Dev (pnpm dev)</span>
-          <TerminalStatusBadge status={devStatus} />
-        </button>
+      {/* Left: Dynamic Tabs Bar */}
+      <div className="flex items-center h-full gap-0.5 overflow-x-auto hide-scrollbar max-w-[calc(100%-340px)]">
+        {sessions.map((session, index) => {
+          const isActive = session.id === activeSessionId;
+          const isEditing = session.id === editingSessionId;
 
-        {/* Docker Build Tab */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("docker")}
-          className={`flex items-center gap-2 h-full px-3 text-xs font-medium transition-colors border-b-2 ${
-            activeTab === "docker"
-              ? "bg-zinc-950 text-zinc-100 border-blue-500 font-semibold"
-              : "bg-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border-transparent"
-          }`}
-        >
-          <Layers
-            className={`w-3.5 h-3.5 ${activeTab === "docker" ? "text-blue-400" : "text-zinc-500"}`}
-          />
-          <span>2: Docker Build</span>
-          <TerminalStatusBadge status={dockerStatus} />
-        </button>
+          return (
+            <div
+              key={session.id}
+              onClick={() => onSelectTab(session.id)}
+              onDoubleClick={() => handleStartRename(session)}
+              className={`group relative flex items-center gap-1.5 h-full px-2.5 text-xs transition-colors border-b-2 cursor-pointer ${
+                isActive
+                  ? "bg-zinc-950 text-zinc-100 border-sky-500 font-semibold"
+                  : "bg-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border-transparent font-medium"
+              }`}
+              title="Click to switch tab, double-click to rename"
+            >
+              {getTabIcon(session)}
 
-        {/* Interactive Shell Tab */}
-        {inElectron && (
-          <button
-            type="button"
-            onClick={() => setActiveTab("shell")}
-            className={`flex items-center gap-2 h-full px-3 text-xs font-medium transition-colors border-b-2 ${
-              activeTab === "shell"
-                ? "bg-zinc-950 text-zinc-100 border-purple-500 font-semibold"
-                : "bg-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border-transparent"
-            }`}
+              {isEditing ? (
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={editingTitle}
+                  onChange={(e) => setEditingTitle(e.target.value)}
+                  onBlur={() => handleSaveRename(session.id)}
+                  onKeyDown={(e) => handleKeyDown(e, session.id)}
+                  className="w-24 px-1 py-0.5 text-xs bg-zinc-800 text-white rounded border border-sky-500 outline-none"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span className="truncate max-w-[120px]">
+                  {session.title || `Terminal ${index + 1}`}
+                </span>
+              )}
+
+              {session.status === "running" && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 opacity-80" />
+              )}
+
+              {/* Close Tab Button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCloseTab(session.id);
+                }}
+                className="p-0.5 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-opacity opacity-70 group-hover:opacity-100"
+                title="Close terminal (kill process)"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          );
+        })}
+
+        {/* Add Terminal (+) Dropdown Button */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded ml-1"
+              title="New Terminal"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            sideOffset={6}
+            className="w-48 bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs shadow-xl rounded-lg p-1 z-50"
           >
-            <Code2
-              className={`w-3.5 h-3.5 ${activeTab === "shell" ? "text-purple-400" : "text-zinc-500"}`}
-            />
-            <span>3: Interactive Shell</span>
-            {shellActive && (
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+            <DropdownMenuLabel className="px-2 py-1 text-[10px] text-zinc-500 uppercase tracking-wider font-mono">
+              New Terminal
+            </DropdownMenuLabel>
+            <DropdownMenuItem
+              onClick={() => onNewTab("shell")}
+              className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-800 rounded cursor-pointer"
+            >
+              <TerminalIcon className="w-3.5 h-3.5 text-sky-400" />
+              <span>Default Terminal</span>
+            </DropdownMenuItem>
+
+            {isWin && (
+              <>
+                <DropdownMenuItem
+                  onClick={() => onNewTab("powershell", "powershell.exe", "PowerShell")}
+                  className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-800 rounded cursor-pointer"
+                >
+                  <TerminalIcon className="w-3.5 h-3.5 text-sky-400" />
+                  <span>PowerShell</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onNewTab("cmd", "cmd.exe", "Command Prompt")}
+                  className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-800 rounded cursor-pointer"
+                >
+                  <Monitor className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Command Prompt (CMD)</span>
+                </DropdownMenuItem>
+              </>
             )}
-          </button>
-        )}
+
+            <DropdownMenuItem
+              onClick={() => onNewTab("bash", "bash", "Bash")}
+              className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-800 rounded cursor-pointer"
+            >
+              <Code2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Bash / Git Bash</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Right: Terminal Actions */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 shrink-0">
         {/* Real-time Auto-Sync Status Badge (Electron only) */}
         {inElectron && outputDir && (
           <button
@@ -163,24 +292,30 @@ export function TerminalHeader({
             {syncStatus === "syncing" ? (
               <>
                 <RefreshCw className="w-3 h-3 text-sky-400 animate-spin" />
-                <span className="text-sky-300 font-mono hidden md:inline">Syncing...</span>
+                <span className="text-sky-300 font-mono hidden md:inline">
+                  Syncing...
+                </span>
               </>
             ) : syncStatus === "synced" ? (
               <>
-                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <FolderSync className="w-3 h-3 text-emerald-400" />
                 <span className="text-emerald-300 font-mono hidden md:inline">
-                  {formattedSyncTime ? `Synced ${formattedSyncTime}` : "Synced"}
+                  {lastSyncedAt ? `${relativeSyncTime}` : "Synced"}
                 </span>
               </>
             ) : syncStatus === "error" ? (
               <>
                 <AlertTriangle className="w-3 h-3 text-amber-400" />
-                <span className="text-amber-300 font-mono hidden md:inline">Sync Error</span>
+                <span className="text-amber-300 font-mono hidden md:inline">
+                  Sync Error
+                </span>
               </>
             ) : (
               <>
                 <Zap className="w-3 h-3 text-zinc-400" />
-                <span className="text-zinc-400 font-mono hidden md:inline">Auto-Sync</span>
+                <span className="text-zinc-400 font-mono hidden md:inline">
+                  Auto-Sync
+                </span>
               </>
             )}
           </button>
@@ -193,7 +328,9 @@ export function TerminalHeader({
             variant="ghost"
             onClick={onPickDirectory}
             className="h-6 px-2 text-[11px] gap-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
-            title={outputDir ? `Workspace: ${outputDir}` : "Choose workspace directory"}
+            title={
+              outputDir ? `Workspace: ${outputDir}` : "Choose workspace directory"
+            }
           >
             <Folder className="w-3 h-3 text-zinc-400" />
             <span className="max-w-[130px] truncate hidden sm:inline font-mono">
@@ -216,77 +353,18 @@ export function TerminalHeader({
           </Button>
         )}
 
-        {/* Primary Action Button (Start / Stop / Build) for Active Tab */}
-        {activeTab === "dev" ? (
-          devStatus === "running" || devStatus === "starting" ? (
-            <Button
-              size="sm"
-              onClick={onStopDev}
-              className="h-6 px-2.5 text-[11px] gap-1 bg-red-600 hover:bg-red-700 text-white border-0 font-medium"
-            >
-              <Square className="w-2.5 h-2.5 fill-white" />
-              <span>Stop Dev</span>
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              onClick={onStartDev}
-              disabled={isExporting}
-              className="h-6 px-2.5 text-[11px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white border-0 font-medium"
-            >
-              <Play className="w-2.5 h-2.5 fill-white" />
-              <span>Run Dev</span>
-            </Button>
-          )
-        ) : activeTab === "docker" ? (
-          dockerStatus === "running" || dockerStatus === "building" ? (
-            <Button
-              size="sm"
-              onClick={onStopDocker}
-              className="h-6 px-2.5 text-[11px] gap-1 bg-red-600 hover:bg-red-700 text-white border-0 font-medium"
-            >
-              <Square className="w-2.5 h-2.5 fill-white" />
-              <span>Stop Build</span>
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              onClick={onStartDocker}
-              disabled={isExporting}
-              className="h-6 px-2.5 text-[11px] gap-1 bg-blue-600 hover:bg-blue-700 text-white border-0 font-medium"
-            >
-              <Play className="w-2.5 h-2.5 fill-white" />
-              <span>Docker Build</span>
-            </Button>
-          )
-        ) : activeTab === "shell" && inElectron ? (
+        {/* Clear Active Terminal Output */}
+        {activeSessionId && (
           <Button
             size="sm"
-            onClick={onStartBuild}
-            disabled={isExporting}
-            className="h-6 px-2.5 text-[11px] gap-1 bg-purple-600 hover:bg-purple-700 text-white border-0 font-medium"
-            title="Execute pnpm install && pnpm build in project workspace"
+            variant="ghost"
+            onClick={onClearActiveTab}
+            className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+            title="Clear terminal buffer (Ctrl+L / clear)"
           >
-            <Play className="w-2.5 h-2.5 fill-white" />
-            <span>Run Build</span>
+            <Trash2 className="w-3 h-3" />
           </Button>
-        ) : null}
-
-        {/* Copy Command */}
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onCopyCommand}
-          className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
-          title="Copy startup command"
-        >
-          {copiedCmd ? (
-            <Check className="w-3 h-3 text-emerald-400" />
-          ) : (
-            <Copy className="w-3 h-3" />
-          )}
-        </Button>
-
+        )}
 
         {/* Expand / Minimize */}
         <Button
@@ -309,7 +387,7 @@ export function TerminalHeader({
           variant="ghost"
           onClick={onClose}
           className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
-          title="Close Terminal"
+          title="Close Terminal Drawer"
         >
           <X className="w-3.5 h-3.5" />
         </Button>
