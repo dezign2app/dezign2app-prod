@@ -58,13 +58,18 @@ export interface ElectronAPI {
       id: string,
       cwd: string,
       cols: number,
-      rows: number
+      rows: number,
+      customShell?: string
     ): Promise<{ success: boolean }>;
     write(id: string, data: string): void;
     resize(id: string, cols: number, rows: number): void;
     kill(id: string): void;
     onData(id: string, cb: (data: string) => void): () => void;
     onExit(id: string, cb: (code: number) => void): () => void;
+  };
+
+  network?: {
+    isPortOpen(port: number): Promise<boolean>;
   };
 }
 

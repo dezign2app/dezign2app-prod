@@ -55,12 +55,23 @@ export interface ElectronAPI {
 
   /** PTY terminal sessions */
   terminal: {
-    create(id: string, cwd: string, cols: number, rows: number): Promise<{ success: boolean }>;
+    create(
+      id: string,
+      cwd: string,
+      cols: number,
+      rows: number,
+      customShell?: string
+    ): Promise<{ success: boolean }>;
     write(id: string, data: string): void;
     resize(id: string, cols: number, rows: number): void;
     kill(id: string): void;
     onData(id: string, cb: (data: string) => void): () => void;
     onExit(id: string, cb: (code: number) => void): () => void;
+  };
+
+  /** Silent OS-level network port reachability */
+  network: {
+    isPortOpen(port: number): Promise<boolean>;
   };
 }
 
@@ -119,8 +130,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   terminal: {
-    create: (id: string, cwd: string, cols: number, rows: number) =>
-      ipcRenderer.invoke("terminal:create", id, cwd, cols, rows),
+    create: (
+      id: string,
+      cwd: string,
+      cols: number,
+      rows: number,
+      customShell?: string
+    ) => ipcRenderer.invoke("terminal:create", id, cwd, cols, rows, customShell),
     write: (id: string, data: string) =>
       ipcRenderer.send("terminal:write", id, data),
     resize: (id: string, cols: number, rows: number) =>
@@ -132,5 +148,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     onExit(id: string, cb: (code: number) => void) {
       return on(`terminal:exit:${id}`, cb);
     },
+  },
+
+  network: {
+    isPortOpen: (port: number) => ipcRenderer.invoke("network:isPortOpen", port),
   },
 } satisfies ElectronAPI);

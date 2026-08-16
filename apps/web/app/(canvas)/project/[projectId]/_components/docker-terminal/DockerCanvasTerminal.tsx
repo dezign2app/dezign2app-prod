@@ -2,17 +2,14 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { toast } from "sonner";
-import { isElectron, getElectronAPI } from "@/lib/electron";
+import { isElectron } from "@/lib/electron";
 import { WTermTerminalHandle } from "@/components/terminal";
 
-import { DockerCanvasTerminalProps, TerminalTab } from "./types";
-import { downloadMonorepoZip, exportFilesToDirectory } from "./utils/terminalExportUtils";
+import { DockerCanvasTerminalProps } from "./types";
+import { downloadMonorepoZip } from "./utils/terminalExportUtils";
 import { useTerminalWorkspace } from "./hooks/useTerminalWorkspace";
 import { useMonorepoEndpoints } from "./hooks/useMonorepoEndpoints";
-import { useDevSession } from "./hooks/useDevSession";
-import { useDockerSession } from "./hooks/useDockerSession";
-import { useShellSession } from "./hooks/useShellSession";
+import { useDynamicTerminalSessions } from "./hooks/useDynamicTerminalSessions";
 import { useAutoDiskSync } from "./hooks/useAutoDiskSync";
 
 import { TerminalHeader } from "./components/TerminalHeader";
@@ -27,71 +24,37 @@ export function DockerCanvasTerminal({
 }: DockerCanvasTerminalProps) {
   const inElectron = isElectron();
 
-  // UI state
+  // Drawer UI state
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<TerminalTab>("dev");
-  const [copiedCmd, setCopiedCmd] = useState<boolean>(false);
   const [downloadingZip, setDownloadingZip] = useState<boolean>(false);
 
-  // 1. Workspace persistence & folder picker
-  const { outputDir, saveWorkspaceDir, handlePickDirectory } =
-    useTerminalWorkspace(projectId);
+  // 1. Workspace directory persistence & folder picker
+  const { outputDir, handlePickDirectory } = useTerminalWorkspace(projectId);
 
-  // 2. Monorepo compilation & live service endpoints
-  const { formattedProjectName, monorepoResult, files, serviceEndpoints } =
+  // 2. Monorepo compilation & endpoints
+  const { formattedProjectName, files, serviceEndpoints } =
     useMonorepoEndpoints(projectName);
 
-  // 3. Dev Server session (Interactive PTY)
+  // 3. Dynamic User-Created Terminal Sessions (Persistent across drawers/nodes until closed)
   const {
-    devLogs,
-    devStatus,
-    isExportingDev,
-    devIdRef,
-    handleDevResize,
-    handleStartDev: startDev,
-    handleStopDev,
-  } = useDevSession({
+    sessions,
+    activeSessionId,
+    activeSession,
+    createTerminal,
+    closeTerminal,
+    selectTerminal,
+    renameTerminal,
+    clearTerminal,
+    writeToSession,
+    resizeSession,
+    allDetectedPorts,
+  } = useDynamicTerminalSessions({
     projectId,
     outputDir,
-    saveWorkspaceDir,
-    files,
-    monorepoResult,
-    activeTab,
   });
 
-  // 4. Docker Build session (Interactive PTY)
-  const {
-    dockerLogs,
-    dockerStatus,
-    isExportingDocker,
-    dockerIdRef,
-    handleDockerResize,
-    handleStartDocker: startDocker,
-    handleStopDocker,
-  } = useDockerSession({
-    projectId,
-    outputDir,
-    saveWorkspaceDir,
-    files,
-    monorepoResult,
-    serviceEndpoints,
-    activeTab,
-  });
-
-  // 5. Interactive Shell session (Interactive PTY)
-  const {
-    shellLogs,
-    shellActive,
-    shellIdRef,
-    handleShellResize,
-  } = useShellSession({
-    projectId,
-    outputDir,
-    activeTab,
-  });
-
-  // 6. Real-time automatic disk synchronization (Electron mode)
+  // 4. Real-time automatic disk synchronization (Electron mode)
   const {
     syncStatus,
     lastSyncedAt,
@@ -104,127 +67,29 @@ export function DockerCanvasTerminal({
     files,
   });
 
-  // Dedicated refs for each terminal session to ensure 100% log, buffer, and scroll isolation
-  const devWtermRef = useRef<WTermTerminalHandle>(null);
-  const dockerWtermRef = useRef<WTermTerminalHandle>(null);
-  const shellWtermRef = useRef<WTermTerminalHandle>(null);
+  // Map of refs for each mounted terminal instance to ensure log and buffer isolation
+  const terminalRefs = useRef<Map<string, WTermTerminalHandle | null>>(
+    new Map(),
+  );
 
-  // Auto-focus active tab terminal when switching tabs, expanding, or opening
+  // Auto-initialize 1 default terminal when drawer is opened and no sessions exist
   useEffect(() => {
-    if (!isOpen) return;
+    if (isOpen && sessions.length === 0) {
+      createTerminal({ title: "Terminal 1", type: "shell" });
+    }
+  }, [isOpen, sessions.length, createTerminal]);
+
+  // Auto-focus active terminal when switching tabs, expanding, or opening drawer
+  useEffect(() => {
+    if (!isOpen || !activeSessionId) return;
     const timer = setTimeout(() => {
-      if (activeTab === "dev") {
-        devWtermRef.current?.focus();
-      } else if (activeTab === "docker") {
-        dockerWtermRef.current?.focus();
-      } else if (activeTab === "shell") {
-        shellWtermRef.current?.focus();
-      }
+      const handle = terminalRefs.current.get(activeSessionId);
+      handle?.focus();
     }, 60);
     return () => clearTimeout(timer);
-  }, [activeTab, isOpen, isExpanded]);
+  }, [activeSessionId, isOpen, isExpanded]);
 
-  // Handle Interactive Key Input (wterm onData)
-  const handleTerminalInput = useCallback(
-    (data: string, tab: TerminalTab) => {
-      const api = getElectronAPI();
-      if (inElectron) {
-        if (tab === "shell") {
-          api?.terminal?.write(shellIdRef.current, data);
-        } else if (tab === "dev") {
-          api?.terminal?.write(devIdRef.current, data);
-        } else if (tab === "docker") {
-          api?.terminal?.write(dockerIdRef.current, data);
-        }
-      }
-    },
-    [inElectron, shellIdRef, devIdRef, dockerIdRef],
-  );
-
-  // Handle Dynamic Resize for active terminal PTY
-  const handleTerminalResize = useCallback(
-    (cols: number, rows: number, tab: TerminalTab) => {
-      if (inElectron) {
-        if (tab === "dev") {
-          handleDevResize(cols, rows);
-        } else if (tab === "docker") {
-          handleDockerResize(cols, rows);
-        } else if (tab === "shell") {
-          handleShellResize(cols, rows);
-        }
-      }
-    },
-    [inElectron, handleDevResize, handleDockerResize, handleShellResize],
-  );
-
-  const handleStartDev = useCallback(() => {
-    setIsOpen(true);
-    setActiveTab("dev");
-    startDev();
-  }, [startDev]);
-
-  const handleStartDocker = useCallback(() => {
-    setIsOpen(true);
-    setActiveTab("docker");
-    startDocker();
-  }, [startDocker]);
-
-  const handleStartBuild = useCallback(async () => {
-    setIsOpen(true);
-    setActiveTab("shell");
-    const api = getElectronAPI();
-    let targetDir = outputDir;
-    if (inElectron && !targetDir) {
-      targetDir = (await api?.fs?.pickDirectory?.()) || "";
-      if (!targetDir) {
-        toast.error("Please select a workspace folder first");
-        return;
-      }
-      saveWorkspaceDir(targetDir);
-    }
-
-    if (inElectron && api?.terminal?.write) {
-      try {
-        if (targetDir) {
-          await exportFilesToDirectory(files, targetDir);
-          api.terminal.write(shellIdRef.current, `cd "${targetDir}"\r`);
-        }
-        const isWin =
-          typeof navigator !== "undefined" &&
-          (navigator.platform?.includes("Win") ||
-            navigator.userAgent?.includes("Windows"));
-        const buildCmd = isWin ? "pnpm install; pnpm build" : "pnpm install && pnpm build";
-        api.terminal.write(shellIdRef.current, `${buildCmd}\r`);
-        toast.success("Running pnpm build in Interactive Shell...");
-      } catch (err) {
-        toast.error("Failed to trigger build");
-      }
-    }
-  }, [inElectron, outputDir, files, saveWorkspaceDir, shellIdRef]);
-
-  // Copy command
-  const handleCopyCommand = useCallback(() => {
-    const isWin =
-      typeof navigator !== "undefined" &&
-      (navigator.platform?.includes("Win") ||
-        navigator.userAgent?.includes("Windows"));
-    const cmd =
-      activeTab === "dev"
-        ? isWin
-          ? "pnpm install; pnpm dev"
-          : "pnpm install && pnpm dev"
-        : activeTab === "docker"
-          ? "docker compose up --build"
-          : isWin
-            ? "powershell.exe"
-            : "bash";
-    navigator.clipboard.writeText(cmd);
-    setCopiedCmd(true);
-    toast.success("Command copied to clipboard!");
-    setTimeout(() => setCopiedCmd(false), 2000);
-  }, [activeTab]);
-
-  // Download ZIP
+  // Download ZIP (Web mode)
   const handleDownloadZip = useCallback(async () => {
     setDownloadingZip(true);
     try {
@@ -234,17 +99,11 @@ export function DockerCanvasTerminal({
     }
   }, [files, formattedProjectName]);
 
-  // Active tab logs & status
-  const currentLogs =
-    activeTab === "dev" ? devLogs : activeTab === "docker" ? dockerLogs : shellLogs;
-
-  const isExporting = isExportingDev || isExportingDocker;
-  const overallRunning = devStatus === "running" || dockerStatus === "running";
-  const overallBuilding = devStatus === "starting" || dockerStatus === "building";
+  const hasRunningSession = sessions.some((s) => s.status === "running");
 
   return (
     <div className="fixed bottom-3 right-4 z-40 flex flex-col items-end pointer-events-none font-sans">
-      {/* wterm-Powered Modern Terminal Window */}
+      {/* wterm-Powered Dynamic Modern Terminal Window */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -258,60 +117,56 @@ export function DockerCanvasTerminal({
                 : "w-[min(900px,calc(100vw-2.5rem))] h-[420px]"
             }`}
           >
-            {/* Terminal Header & Tabs Bar */}
+            {/* Terminal Dynamic Tabs & Action Header */}
             <TerminalHeader
               inElectron={inElectron}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              devStatus={devStatus}
-              dockerStatus={dockerStatus}
-              shellActive={shellActive}
+              sessions={sessions}
+              activeSessionId={activeSessionId}
+              onSelectTab={selectTerminal}
+              onCloseTab={closeTerminal}
+              onNewTab={(type, shell, title) =>
+                createTerminal({ type, shell, title })
+              }
+              onRenameTab={renameTerminal}
+              onClearActiveTab={() => {
+                if (activeSessionId) clearTerminal(activeSessionId);
+              }}
               outputDir={outputDir}
               onPickDirectory={handlePickDirectory}
               onDownloadZip={handleDownloadZip}
               downloadingZip={downloadingZip}
-              isExporting={isExporting}
               syncStatus={syncStatus}
               lastSyncedAt={lastSyncedAt}
-              autoSyncEnabled={autoSyncEnabled}
-              onToggleAutoSync={() => setAutoSyncEnabled(!autoSyncEnabled)}
               onForceSync={forceSyncNow}
-              onStartDev={handleStartDev}
-              onStopDev={handleStopDev}
-              onStartDocker={handleStartDocker}
-              onStopDocker={handleStopDocker}
-              onStartBuild={handleStartBuild}
-              onCopyCommand={handleCopyCommand}
-              copiedCmd={copiedCmd}
               isExpanded={isExpanded}
               onToggleExpand={() => setIsExpanded(!isExpanded)}
               onClose={() => setIsOpen(false)}
             />
 
-            {/* Sub-Header: Active Mode Details & Quick Endpoints */}
+            {/* Sub-Header: Live Service Endpoints & Detected Runtime Ports */}
             <TerminalEndpointsBar
-              activeTab={activeTab}
               serviceEndpoints={serviceEndpoints}
+              detectedPorts={allDetectedPorts}
             />
 
-            {/* wterm WebAssembly DOM Terminal Viewport - 3 Isolated Interactive Terminal Instances */}
+            {/* Multi-Tab Terminal Viewport with disabled autoScroll & launcher empty state */}
             <TerminalViewport
-              activeTab={activeTab}
-              devLogs={devLogs}
-              dockerLogs={dockerLogs}
-              shellLogs={shellLogs}
-              devWtermRef={devWtermRef}
-              dockerWtermRef={dockerWtermRef}
-              shellWtermRef={shellWtermRef}
-              onTerminalInput={handleTerminalInput}
-              onTerminalResize={handleTerminalResize}
+              sessions={sessions}
+              activeSessionId={activeSessionId}
+              terminalRefs={terminalRefs}
+              onTerminalInput={writeToSession}
+              onTerminalResize={resizeSession}
+              onNewTab={(type, shell, title) =>
+                createTerminal({ type, shell, title })
+              }
             />
 
             {/* Terminal Status Footer */}
             <TerminalFooter
-              activeTab={activeTab}
+              activeTitle={activeSession?.title}
+              sessionCount={sessions.length}
               outputDir={outputDir}
-              eventCount={currentLogs.length}
+              eventCount={activeSession?.logs.length || 0}
               inElectron={inElectron}
             />
           </motion.div>
@@ -322,9 +177,8 @@ export function DockerCanvasTerminal({
       <TerminalDockButton
         isOpen={isOpen}
         onToggleOpen={() => setIsOpen(!isOpen)}
-        overallRunning={overallRunning}
-        overallBuilding={overallBuilding}
-        activeTab={activeTab}
+        sessionCount={sessions.length}
+        hasRunningSession={hasRunningSession}
       />
     </div>
   );

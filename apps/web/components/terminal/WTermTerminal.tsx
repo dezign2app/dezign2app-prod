@@ -1,8 +1,16 @@
 "use client";
 
-import React, { useEffect, useRef, useCallback, useState, useImperativeHandle, forwardRef } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useCallback,
+  useState,
+  useImperativeHandle,
+  forwardRef,
+} from "react";
 import { Terminal, useTerminal } from "@wterm/react";
 import "@wterm/react/css";
+import { cleanTerminalText } from "./terminalUtils";
 
 export interface WTermTerminalHandle {
   write: (data: string) => void;
@@ -26,11 +34,30 @@ export interface WTermTerminalProps {
 
 /**
  * Normalizes standalone \n to standard VT100/ANSI CRLF (\r\n).
- * Preserves standalone \r (carriage return) for in-place cursor overwrites and does NOT append trailing newlines to raw keystroke echoes.
+ * Preserves standalone \r (carriage return) for in-place cursor overwrites.
  */
 function formatTerminalChunk(raw: string): string {
   if (!raw) return "";
   return raw.replace(/(?<!\r)\n/g, "\r\n");
+}
+
+/**
+ * Finds the actual scroll container element rendered by wterm.
+ */
+function getScrollableElement(root: HTMLElement | null): HTMLElement | null {
+  if (!root) return null;
+  const elements = root.querySelectorAll("*");
+  for (const el of Array.from(elements)) {
+    const htmlEl = el as HTMLElement;
+    const overflowY = window.getComputedStyle(htmlEl).overflowY;
+    if (
+      (overflowY === "auto" || overflowY === "scroll") &&
+      htmlEl.scrollHeight > htmlEl.clientHeight
+    ) {
+      return htmlEl;
+    }
+  }
+  return null;
 }
 
 export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>(
@@ -41,7 +68,7 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
       onResize,
       onReady,
       theme = "monokai",
-      autoScroll = true,
+      autoScroll = false,
       className = "",
       placeholder = "Terminal ready. Click to type commands.",
       interactive = true,
@@ -49,12 +76,15 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
     },
     forwardedRef,
   ) {
+    const wrapperRef = useRef<HTMLDivElement>(null);
     const { ref: terminalRef, write, resize, focus } = useTerminal();
     const [isReady, setIsReady] = useState(false);
     const lastWrittenIndexRef = useRef<number>(0);
     const prevLogsRef = useRef<string[]>(logs);
     const logsRef = useRef<string[]>(logs);
     logsRef.current = logs;
+
+    const mouseDownScrollTopRef = useRef<number | null>(null);
 
     // Buffer for local shell echo when no external PTY is connected
     const inputBufferRef = useRef<string>("");
@@ -70,10 +100,29 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
     }, [write]);
 
     const focusTerminal = useCallback(() => {
+      // Do not focus or scroll to bottom if user is selecting text
+      const selection =
+        typeof window !== "undefined" ? window.getSelection() : null;
+      if (selection && selection.toString().length > 0) {
+        return;
+      }
+
+      // Preserve existing scroll position so focus does not snap to cursor
+      const scrollEl = getScrollableElement(wrapperRef.current);
+      const prevScrollTop = scrollEl ? scrollEl.scrollTop : null;
+
       try {
         focus?.();
       } catch (e) {}
-    }, [focus]);
+
+      if (scrollEl && prevScrollTop !== null && !autoScroll) {
+        requestAnimationFrame(() => {
+          if (scrollEl.scrollTop !== prevScrollTop) {
+            scrollEl.scrollTop = prevScrollTop;
+          }
+        });
+      }
+    }, [focus, autoScroll]);
 
     // Expose handle methods to parent components
     useImperativeHandle(
@@ -107,7 +156,7 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
         lastWrittenIndexRef.current = logsRef.current.length;
       }
       onReady?.();
-      // Auto-focus terminal on mount
+      // Auto-focus terminal on initial mount
       setTimeout(() => {
         focusTerminal();
       }, 50);
@@ -119,6 +168,9 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
 
       const prevLogs = prevLogsRef.current;
       prevLogsRef.current = logs;
+
+      const scrollEl = getScrollableElement(wrapperRef.current);
+      const prevScrollTop = scrollEl ? scrollEl.scrollTop : null;
 
       if (logs.length === 0) {
         if (lastWrittenIndexRef.current > 0) {
@@ -133,7 +185,8 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
         logs.length >= lastWrittenIndexRef.current &&
         prevLogs.length > 0 &&
         logs[0] === prevLogs[0] &&
-        logs[lastWrittenIndexRef.current - 1] === prevLogs[lastWrittenIndexRef.current - 1];
+        logs[lastWrittenIndexRef.current - 1] ===
+          prevLogs[lastWrittenIndexRef.current - 1];
 
       if (!isAppend) {
         // Tab switch, log replacement, or log reset: full refresh
@@ -152,20 +205,29 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
           lastWrittenIndexRef.current = logs.length;
         }
       }
-    }, [logs, isReady, write, clearTerminal, rawStream]);
+
+      // If autoScroll is disabled, preserve scroll position across incoming logs
+      if (scrollEl && prevScrollTop !== null && !autoScroll) {
+        requestAnimationFrame(() => {
+          if (scrollEl.scrollTop !== prevScrollTop) {
+            scrollEl.scrollTop = prevScrollTop;
+          }
+        });
+      }
+    }, [logs, isReady, write, clearTerminal, rawStream, autoScroll]);
 
     // Handle user typing and keystrokes
     const handleData = useCallback(
       (data: string) => {
         if (!interactive) return;
 
-        // If parent provided custom onData (e.g. forwarding to node-pty or child process stdin)
+        // If parent provided custom onData (e.g. forwarding to node-pty)
         if (onData) {
           onData(data);
           return;
         }
 
-        // Built-in standalone local echo & shell emulator
+        // Built-in standalone local echo & shell emulator (Web preview fallback)
         if (!write) return;
 
         // Enter key
@@ -221,9 +283,45 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
       [interactive, onData, write],
     );
 
+    // Mouse handlers to prevent copy selection from scrolling to bottom
+    const handleMouseDown = useCallback(() => {
+      const scrollEl = getScrollableElement(wrapperRef.current);
+      if (scrollEl) {
+        mouseDownScrollTopRef.current = scrollEl.scrollTop;
+      }
+    }, []);
+
+    const handleMouseUp = useCallback(() => {
+      const selection =
+        typeof window !== "undefined" ? window.getSelection() : null;
+      if (selection && selection.toString().length > 0) {
+        // User selected text to copy: restore exact scroll position
+        const scrollEl = getScrollableElement(wrapperRef.current);
+        if (scrollEl && mouseDownScrollTopRef.current !== null) {
+          scrollEl.scrollTop = mouseDownScrollTopRef.current;
+        }
+      }
+    }, []);
+
+    const handleWrapperClick = useCallback(
+      (e: React.MouseEvent) => {
+        const selection =
+          typeof window !== "undefined" ? window.getSelection() : null;
+        if (selection && selection.toString().length > 0) {
+          e.stopPropagation();
+          return;
+        }
+        focusTerminal();
+      },
+      [focusTerminal],
+    );
+
     return (
       <div
-        onClick={focusTerminal}
+        ref={wrapperRef}
+        onClick={handleWrapperClick}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
         className={`relative w-full h-full bg-[#090d13] text-[#e6edf3] font-mono select-text overflow-hidden cursor-text ${className}`}
         style={
           {
@@ -231,7 +329,8 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
             "--term-fg": "#e6edf3",
             "--term-cursor": "#38bdf8",
             "--term-selection": "rgba(56, 189, 248, 0.25)",
-            "--term-font-family": "Consolas, 'Cascadia Code', 'Fira Code', 'Courier New', ui-monospace, monospace",
+            "--term-font-family":
+              "Consolas, 'Cascadia Code', 'Fira Code', 'Courier New', ui-monospace, monospace",
             "--term-font-size": "13px",
             "--term-line-height": "1.25",
           } as React.CSSProperties
