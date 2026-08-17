@@ -31,6 +31,8 @@ export function generatePageCode(
           .map((c) => `            <${c.componentName} onTrigger={handleTriggerAction} />`)
           .join("\n")}\n          </div>`;
 
+  const hasAuth = Boolean(authNodeData);
+
   return `"use client";
 
 import React, { useState, useEffect } from "react";
@@ -38,9 +40,7 @@ import Link from "next/link";
 import { Button } from "@workspace/ui/components/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@workspace/ui/components/card";
 import { Badge } from "@workspace/ui/components/badge";
-import { getAuthBearerToken } from "@/lib/auth-token";
-${allImports ? `${allImports}\n` : ""}
-export default function ${pageMeta.componentName}() {
+${hasAuth ? `import { getAuthBearerToken } from "@/lib/auth-token";\n` : ""}${allImports ? `${allImports}\n` : ""}export default function ${pageMeta.componentName}() {
   const [pageLoadData, setPageLoadData] = useState<Record<string, Record<string, string | number | boolean | null>> | null>(null);
   const [pageLoadLoading, setPageLoadLoading] = useState<boolean>(false);
   const [pageLoadError, setPageLoadError] = useState<string | null>(null);
@@ -85,14 +85,14 @@ export default function ${pageMeta.componentName}() {
 
       if (customHeaders?.["Authorization"] && customHeaders["Authorization"].trim() && customHeaders["Authorization"] !== "Bearer <token>") {
         headers["Authorization"] = customHeaders["Authorization"].trim();
-      } else if (requireAuth !== false) {
+      }${hasAuth ? ` else if (requireAuth !== false) {
         try {
           const token = await getAuthBearerToken();
           if (token) {
             headers["Authorization"] = token;
           }
         } catch (_tokenErr) {}
-      }
+      }` : ""}
 
       let targetUrl = url;
       if (queryParams && Object.keys(queryParams).length > 0 && targetUrl && targetUrl !== "#") {

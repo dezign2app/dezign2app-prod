@@ -48,6 +48,12 @@ export function generatePageAndComponentFiles({
       hasExplicitRoot = true;
     }
 
+    const effectiveAuthNode =
+      authNode ||
+      (node.data?.authNodeId
+        ? allNodes.find((n) => n.id === node.data.authNodeId && n.type === "auth")
+        : undefined);
+
     const nodeHeaders: Record<string, string> = {};
     (node.data?.headers || []).forEach((h: any) => {
       const hKey = h.key || h.name;
@@ -103,7 +109,7 @@ export function generatePageAndComponentFiles({
         );
         const evtKey = evt.name || "pageLoad";
         if (link) {
-          const requireAuth = link.requireAuth !== false;
+          const requireAuth = Boolean(effectiveAuthNode) && link.requireAuth !== false;
           const headersEntries = Object.entries(nodeHeaders)
             .map(([k, v]) => `"${k}": "${v}",`)
             .join("\n          ");
@@ -157,7 +163,7 @@ export function generatePageAndComponentFiles({
       let method = "POST";
       let targetRoute: string | undefined = undefined;
       let targetPageLabel: string | undefined = undefined;
-      let requireAuth = true;
+      let requireAuth = Boolean(effectiveAuthNode);
       let link: ReturnType<typeof resolveLinkedEndpoint> = null;
 
       if (evtType === "navigateToPage") {
@@ -181,7 +187,7 @@ export function generatePageAndComponentFiles({
         );
         url = link ? link.fullUrl : "";
         method = link ? link.method : "POST";
-        requireAuth = link ? link.requireAuth !== false : true;
+        requireAuth = Boolean(effectiveAuthNode) && (link ? link.requireAuth !== false : true);
       }
 
       eventComponentsMeta.push({
@@ -237,12 +243,6 @@ export function generatePageAndComponentFiles({
       language: "typescript",
       content: generatePageHeaderComponent(pageMeta),
     });
-
-    const effectiveAuthNode =
-      authNode ||
-      allNodes.find(
-        (n) => n.type === "auth" || (node.data?.authNodeId && n.id === node.data.authNodeId)
-      );
 
     const isAuth = isAuthPage(pageMeta, effectiveAuthNode?.data);
     if (isAuth) {

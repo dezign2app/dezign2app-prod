@@ -11,12 +11,22 @@ export function resolvePagesInfo(
   allNodes: BackendNode[] = [],
   allEdges: BackendEdge[] = [],
   effectiveAppSlug: string = "web-app",
+  webAppNode?: BackendNode,
+  authNode?: BackendNode,
 ): PageInfo[] {
   const pagesInfo: PageInfo[] = [];
   const usedSlugs = new Set<string>();
 
-  const webAppNode = allNodes.find((n) => n.type === "webApp");
-  const authNode = allNodes.find((n) => n.type === "auth");
+  const targetWebAppNode =
+    webAppNode ||
+    allNodes.find(
+      (n) =>
+        n.type === "webApp" &&
+        (n.data?.appSlug?.toLowerCase().replace(/[^a-z0-9]+/g, "-") === effectiveAppSlug ||
+          n.data?.label?.toLowerCase().replace(/[^a-z0-9]+/g, "-") === effectiveAppSlug),
+    ) ||
+    allNodes.find((n) => n.type === "webApp");
+
   const defaultSignInPage = authNode?.data?.redirects?.signInPageUrl || "/login";
 
   const defaultZones: WebAppZone[] = [
@@ -47,8 +57,8 @@ export function resolvePagesInfo(
   ];
 
   const appZones: WebAppZone[] =
-    webAppNode && Array.isArray(webAppNode.data?.zones) && webAppNode.data.zones.length > 0
-      ? webAppNode.data.zones
+    targetWebAppNode && Array.isArray(targetWebAppNode.data?.zones) && targetWebAppNode.data.zones.length > 0
+      ? targetWebAppNode.data.zones
       : defaultZones;
 
   webClientNodes.forEach((node, idx) => {
@@ -81,13 +91,13 @@ export function resolvePagesInfo(
       const isSource = e.source === node.id;
       if (!isTarget && !isSource) return false;
       const otherId = isSource ? e.target : e.source;
-      return webAppNode ? otherId === webAppNode.id : allNodes.some((n) => n.id === otherId && n.type === "webApp");
+      return targetWebAppNode ? otherId === targetWebAppNode.id : allNodes.some((n) => n.id === otherId && n.type === "webApp");
     });
 
     let matchedZone: WebAppZone | undefined = undefined;
-    if (connectedEdge && webAppNode) {
+    if (connectedEdge && targetWebAppNode) {
       const sectionHandleId =
-        connectedEdge.source === webAppNode.id
+        connectedEdge.source === targetWebAppNode.id
           ? connectedEdge.sourceHandle
           : connectedEdge.targetHandle;
       matchedZone = appZones.find((z) => z.handleId === sectionHandleId);

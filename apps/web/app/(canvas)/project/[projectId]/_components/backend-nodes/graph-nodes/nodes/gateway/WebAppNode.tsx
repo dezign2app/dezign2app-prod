@@ -68,21 +68,36 @@ export const WebAppNode = ({
     (data.label || "web-app").toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const port = data.port || "3000";
 
-  // Find connected Auth Node
-  const connectedAuthEdge = edges.find(
-    (e) =>
-      (e.target === id && e.targetHandle === "auth-in") ||
-      (e.source === id && e.sourceHandle === "auth-out"),
-  );
-  const connectedAuthNode = connectedAuthEdge
-    ? nodes.find(
-        (n) =>
-          n.id ===
-          (connectedAuthEdge.source === id
-            ? connectedAuthEdge.target
-            : connectedAuthEdge.source),
-      )
-    : null;
+  // Find connected Auth Node (via direct edge, handle, or authNodeId)
+  const connectedAuthNode =
+    (data.authNodeId
+      ? nodes.find((n) => n.id === data.authNodeId && n.type === "auth")
+      : null) ||
+    (() => {
+      const edge = edges.find((e) => {
+        if (e.target === id) {
+          const srcNode = nodes.find((n) => n.id === e.source);
+          return (
+            srcNode?.type === "auth" ||
+            e.targetHandle === "auth-in" ||
+            e.sourceHandle === "auth-out"
+          );
+        }
+        if (e.source === id) {
+          const tgtNode = nodes.find((n) => n.id === e.target);
+          return (
+            tgtNode?.type === "auth" ||
+            e.sourceHandle === "auth-in" ||
+            e.targetHandle === "auth-out"
+          );
+        }
+        return false;
+      });
+      if (!edge) return null;
+      const authId = edge.source === id ? edge.target : edge.source;
+      return nodes.find((n) => n.id === authId && n.type === "auth") || null;
+    })() ||
+    null;
 
   const isAuthConnected = Boolean(connectedAuthNode);
   const authNodeLabel = connectedAuthNode?.data?.label || "Auth";
@@ -203,7 +218,7 @@ export const WebAppNode = ({
           >
             <ShieldCheck className="w-3 h-3" />
             <span>
-              {isAuthConnected ? `🔒 Auth → ${authNodeLabel}` : "⚠️ No Auth connected"}
+              {isAuthConnected ? `🔒 ${authNodeLabel}` : "⚠️ No Auth connected"}
             </span>
           </button>
 

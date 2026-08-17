@@ -31,11 +31,27 @@ export const WebAppGroupNode = ({
 
   // Check if an AuthNode is connected to this app group
   const edges = useBackendCanvasStore((s) => s.edges);
-  const isAuthConnected = edges.some(
-    (e) =>
-      (e.target === id && e.targetHandle === "auth-in") ||
-      (e.source === id && e.sourceHandle === "auth-out"),
-  );
+  const isAuthConnected =
+    Boolean(data.authNodeId) ||
+    edges.some((e) => {
+      if (e.target === id) {
+        const srcNode = nodes.find((n) => n.id === e.source);
+        return (
+          srcNode?.type === "auth" ||
+          e.targetHandle === "auth-in" ||
+          e.sourceHandle === "auth-out"
+        );
+      }
+      if (e.source === id) {
+        const tgtNode = nodes.find((n) => n.id === e.target);
+        return (
+          tgtNode?.type === "auth" ||
+          e.sourceHandle === "auth-in" ||
+          e.targetHandle === "auth-out"
+        );
+      }
+      return false;
+    });
 
   useEffect(() => {
     if (isEditing && inputRef.current) {

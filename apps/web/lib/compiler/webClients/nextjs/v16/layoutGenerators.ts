@@ -42,13 +42,13 @@ export default function RootLayout({
 `;
 }
 
-export function generateSectionLayout(groupName: string): string {
+export function generateSectionLayout(groupName: string, isAuthConnected: boolean = true): string {
   const isPublic = groupName === "public";
   const badgeVariant = isPublic ? "secondary" : "outline";
   const sectionTitle = groupName.charAt(0).toUpperCase() + groupName.slice(1);
   const componentName = slugToComponentName(groupName) + "Layout";
 
-  if (isPublic) {
+  if (isPublic || !isAuthConnected) {
     return `import React from "react";
 import { Badge } from "@workspace/ui/components/badge";
 
@@ -65,7 +65,7 @@ export default function ${componentName}({
             (${groupName}) ${sectionTitle} Section
           </Badge>
           <span className="text-muted-foreground">
-            Unprotected Public Route Group Layout
+            ${isPublic ? "Unprotected Public Route Group Layout" : "Route Group Layout"}
           </span>
         </div>
       </div>
@@ -123,7 +123,7 @@ export default async function ${componentName}({
 /**
  * Generates section layout files for all route groups present in pagesInfo
  */
-export function generateRouteGroupLayouts(pagesInfo: PageInfo[]): CompiledFile[] {
+export function generateRouteGroupLayouts(pagesInfo: PageInfo[], isAuthConnected: boolean = true): CompiledFile[] {
   const files: CompiledFile[] = [];
   const routeGroups = new Set<string>();
   pagesInfo.forEach((p) => {
@@ -135,7 +135,7 @@ export function generateRouteGroupLayouts(pagesInfo: PageInfo[]): CompiledFile[]
     files.push({
       filename: `app/(${groupName})/layout.tsx`,
       language: "typescript",
-      content: generateSectionLayout(groupName),
+      content: generateSectionLayout(groupName, isAuthConnected),
     });
   });
 

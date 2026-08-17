@@ -15,7 +15,7 @@ export function generateProxy(pagesInfo: PageInfo[], authNodeData?: BackendNodeD
   const signUpPageUrl = redirects.signUpPageUrl || "/register";
   const signInRedirectUrl = redirects.signInRedirectUrl || "/";
 
-  if (protectedPages.length === 0 && !authNodeData) {
+  if (!authNodeData) {
     return `import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 

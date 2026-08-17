@@ -25,13 +25,29 @@ export function compileDatabaseNodes(
 
   let effectiveNodes = allNodes;
 
-  const authNode = allNodes.find((n) => n.type === "auth");
-  if (authNode) {
-    const enabledPlugins: string[] =
-      authNode.data?.plugins || ["bearer", "admin", "organization", "jwt"];
-    const isOrgEnabled: boolean =
-      authNode.data?.organization?.enabled ?? true;
+  // Find auth nodes that are connected to at least one webApp, webClient, service, or database
+  const connectedAuthNodes = allNodes.filter((n) => {
+    if (n.type !== "auth") return false;
+    const hasEdge = allEdges.some((e) => {
+      if (e.source !== n.id && e.target !== n.id) return false;
+      const otherId = e.source === n.id ? e.target : e.source;
+      const other = allNodes.find((o) => o.id === otherId);
+      return (
+        other &&
+        (other.type === "webApp" ||
+          other.type === "webClient" ||
+          other.type === "service" ||
+          other.type === "database" ||
+          other.type === "entity" ||
+          other.type === "db_ref" ||
+          other.data?.isWebClient)
+      );
+    });
+    const hasRef = allNodes.some((other) => other.data?.authNodeId === n.id);
+    return hasEdge || hasRef;
+  });
 
+  if (connectedAuthNodes.length > 0) {
     const existingEntityNames = new Set<string>();
     entityNodes.forEach((n) => {
       const raw = n.data?.label || n.data?.tableRef || "";
@@ -43,27 +59,41 @@ export function compileDatabaseNodes(
       existingEntityNames.add(raw.toLowerCase());
     });
 
-    const syntheticEntities: BackendNode[] = BETTER_AUTH_TABLE_DEFINITIONS.filter(
-      (def) =>
-        isBetterAuthTableRequired(def, {
-          isOrgEnabled,
-          enabledPlugins,
-          providers: authNode.data?.providers,
-        }) &&
-        !existingEntityNames.has(def.name.toLowerCase()) &&
-        !existingEntityNames.has(toSingular(def.name).toLowerCase()) &&
-        !existingEntityNames.has(toPlural(def.name).toLowerCase()),
-    ).map((def) => ({
-      id: `synthetic-auth-${def.key}`,
-      type: "entity",
-      fractionalIndex: "a0",
-      position: { x: 0, y: 0 },
-      data: {
-        label: def.name,
-        description: def.description,
-        columns: def.defaultColumns,
-      },
-    }));
+    const syntheticEntities: BackendNode[] = [];
+
+    connectedAuthNodes.forEach((authNode) => {
+      const enabledPlugins: string[] =
+        authNode.data?.plugins || ["bearer", "admin", "organization", "jwt"];
+      const isOrgEnabled: boolean =
+        authNode.data?.organization?.enabled ?? true;
+
+      const neededDefs = BETTER_AUTH_TABLE_DEFINITIONS.filter(
+        (def) =>
+          isBetterAuthTableRequired(def, {
+            isOrgEnabled,
+            enabledPlugins,
+            providers: authNode.data?.providers,
+          }) &&
+          !existingEntityNames.has(def.name.toLowerCase()) &&
+          !existingEntityNames.has(toSingular(def.name).toLowerCase()) &&
+          !existingEntityNames.has(toPlural(def.name).toLowerCase()) &&
+          !syntheticEntities.some((s) => s.data?.label?.toLowerCase() === def.name.toLowerCase()),
+      );
+
+      neededDefs.forEach((def) => {
+        syntheticEntities.push({
+          id: `synthetic-auth-${def.key}`,
+          type: "entity",
+          fractionalIndex: "a0",
+          position: { x: 0, y: 0 },
+          data: {
+            label: def.name,
+            description: def.description,
+            columns: def.defaultColumns,
+          },
+        });
+      });
+    });
 
     if (syntheticEntities.length > 0) {
       effectiveNodes = [...allNodes, ...syntheticEntities];
