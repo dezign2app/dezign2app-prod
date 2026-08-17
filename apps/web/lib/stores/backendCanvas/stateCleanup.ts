@@ -408,6 +408,29 @@ export function cleanupDeletedEdgesState(
         }
       });
     }
+
+    // 4. WebApp <-> Auth Node connection cleanup: remove authNodeId if no edge remains between them
+    const srcNode = currentState.nodes.find((n) => n.id === edge.source);
+    const tgtNode = currentState.nodes.find((n) => n.id === edge.target);
+    const webAppNode = srcNode?.type === "webApp" ? srcNode : tgtNode?.type === "webApp" ? tgtNode : null;
+    const authNode = srcNode?.type === "auth" ? srcNode : tgtNode?.type === "auth" ? tgtNode : null;
+    if (webAppNode && authNode && webAppNode.data?.authNodeId === authNode.id) {
+      const stillConnected = nextEdges.some(
+        (e) =>
+          e &&
+          ((e.source === webAppNode.id && e.target === authNode.id) ||
+            (e.target === webAppNode.id && e.source === authNode.id)),
+      );
+      if (!stillConnected) {
+        nodesChanged = true;
+        const updatedNode = {
+          ...webAppNode,
+          data: { ...webAppNode.data, authNodeId: undefined },
+        };
+        nextNodes = nextNodes.map((n) => (n.id === webAppNode.id ? updatedNode : n));
+        pendingNodeUpserts.push(updatedNode);
+      }
+    }
   });
 
   const updates: Partial<BackendCanvasState> = {

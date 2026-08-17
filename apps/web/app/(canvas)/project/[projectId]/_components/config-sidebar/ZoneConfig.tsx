@@ -75,21 +75,36 @@ export const ZoneConfig = ({
     setActiveConfigItem(null);
   };
 
-  // Find connected Auth Node or fallback to any Auth node in workspace
-  const connectedAuthEdge = edges.find(
-    (e) =>
-      (e.target === nodeId && e.targetHandle === "auth-in") ||
-      (e.source === nodeId && e.sourceHandle === "auth-out"),
-  );
-  const connectedAuthNode = connectedAuthEdge
-    ? nodes.find(
-        (n) =>
-          n.id ===
-          (connectedAuthEdge.source === nodeId
-            ? connectedAuthEdge.target
-            : connectedAuthEdge.source),
-      )
-    : nodes.find((n) => n.type === "auth");
+  // Find connected Auth Node
+  const connectedAuthNode =
+    (currentZone.rule?.conditions && node?.data?.authNodeId
+      ? nodes.find((n) => n.id === node.data.authNodeId && n.type === "auth")
+      : null) ||
+    (() => {
+      const edge = edges.find((e) => {
+        if (e.target === nodeId) {
+          const srcNode = nodes.find((n) => n.id === e.source);
+          return (
+            srcNode?.type === "auth" ||
+            e.targetHandle === "auth-in" ||
+            e.sourceHandle === "auth-out"
+          );
+        }
+        if (e.source === nodeId) {
+          const tgtNode = nodes.find((n) => n.id === e.target);
+          return (
+            tgtNode?.type === "auth" ||
+            e.sourceHandle === "auth-in" ||
+            e.targetHandle === "auth-out"
+          );
+        }
+        return false;
+      });
+      if (!edge) return null;
+      const authId = edge.source === nodeId ? edge.target : edge.source;
+      return nodes.find((n) => n.id === authId && n.type === "auth") || null;
+    })() ||
+    nodes.find((n) => n.type === "auth");
 
   const isAuthConnected = Boolean(connectedAuthNode);
   const authNodeLabel = connectedAuthNode?.data?.label || "Auth Server";

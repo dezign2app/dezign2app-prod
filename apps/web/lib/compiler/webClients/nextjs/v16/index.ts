@@ -14,6 +14,7 @@ import { generateRootLayout, generateRouteGroupLayouts } from "./layoutGenerator
 import { generateProxy } from "./middlewareTemplate";
 import { resolvePagesInfo } from "./pageResolver";
 import {
+  resolveConnectedAuthNode,
   generateAuthFilesAndDependencies,
   ensureDatabaseDependencies,
 } from "./authFileGenerator";
@@ -40,13 +41,23 @@ export function compileNextjsV16WebClient(
   projectName: string = "Blueprint Monorepo",
   testCases: SimulationTestCase[] = [],
   appSlug?: string,
+  webAppNode?: BackendNode,
 ): CompiledWebClientResult {
   const files: CompiledFile[] = [];
 
   const effectiveAppSlug =
     appSlug ||
+    webAppNode?.data?.appSlug ||
     webClientNodes[0]?.data.appSlug ||
     "web-app";
+
+  // 0. Resolve the specific AuthNode connected to THIS WebApp (or its pages)
+  const authNode = resolveConnectedAuthNode(
+    webAppNode,
+    webClientNodes,
+    allNodes,
+    allEdges,
+  );
 
   // 1. Resolve Page Metadata and Routes
   const pagesInfo = resolvePagesInfo(
@@ -54,16 +65,17 @@ export function compileNextjsV16WebClient(
     allNodes,
     allEdges,
     effectiveAppSlug,
+    webAppNode,
+    authNode,
   );
 
   // 2. Generate Route Group Layouts
-  files.push(...generateRouteGroupLayouts(pagesInfo));
+  files.push(...generateRouteGroupLayouts(pagesInfo, Boolean(authNode)));
 
   // 3. Project Configuration Files
   files.push(...generateProjectConfigFiles(effectiveAppSlug));
 
-  // 4. Auth Server, Client SDK, Authorization Helpers & Dependencies
-  const authNode = allNodes.find((n) => n.type === "auth");
+  // 4. Auth Server, Client SDK, Authorization Helpers & Dependencies (only if authNode connected)
   generateAuthFilesAndDependencies({
     files,
     webClientNodes,

@@ -391,15 +391,14 @@ import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { getAuthBearerToken } from "@/lib/auth-token";
-
+${requireAuth ? `import { getAuthBearerToken } from "@/lib/auth-token";\n` : ""}
 ${typeDefs.join("\n\n")}
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [targetUrl, setTargetUrl] = useState<string>("${url}");
 ${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, any>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
-${hasHeaders && mergedHeaders.some((h) => h.name.toLowerCase() === "authorization") ? `  useEffect(() => {
+${requireAuth && hasHeaders && mergedHeaders.some((h) => h.name.toLowerCase() === "authorization") ? `  useEffect(() => {
     async function autoFetchToken() {
       try {
         const token = await getAuthBearerToken();
@@ -583,7 +582,7 @@ ${mergedQueryParams.map((q) => `              <div key="${q.name}" className="sp
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
 ${mergedHeaders.map((h) => {
-  if (h.name.toLowerCase() === "authorization") {
+  if (h.name.toLowerCase() === "authorization" && requireAuth) {
     return `              <div key="${h.name}" className="space-y-1 sm:col-span-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-[11px] font-mono text-muted-foreground flex items-center gap-1.5">

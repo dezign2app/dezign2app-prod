@@ -21,7 +21,74 @@ export interface GenerateAuthFilesParams {
 }
 
 /**
+ * Resolves the specific AuthNode connected to a given WebAppNode (or its child WebClient pages).
+ * Returns undefined if no AuthNode is connected to this WebApp.
+ */
+export function resolveConnectedAuthNode(
+  webAppNode?: BackendNode,
+  webClientNodes: BackendNode[] = [],
+  allNodes: BackendNode[] = [],
+  allEdges: BackendEdge[] = [],
+): BackendNode | undefined {
+  const authNodes = allNodes.filter((n) => n.type === "auth");
+  if (authNodes.length === 0) return undefined;
+
+  // 1. Check direct connection to webAppNode
+  if (webAppNode) {
+    if (webAppNode.data?.authNodeId) {
+      const match = authNodes.find((a) => a.id === webAppNode.data.authNodeId);
+      if (match) return match;
+    }
+
+    const connectedEdge = allEdges.find((e) => {
+      const connectsWebApp = e.source === webAppNode.id || e.target === webAppNode.id;
+      if (!connectsWebApp) return false;
+      const otherId = e.source === webAppNode.id ? e.target : e.source;
+      return authNodes.some((a) => a.id === otherId);
+    });
+
+    if (connectedEdge) {
+      const authId = connectedEdge.source === webAppNode.id ? connectedEdge.target : connectedEdge.source;
+      const match = authNodes.find((a) => a.id === authId);
+      if (match) return match;
+    }
+  }
+
+  // 2. Check connection via any of the webClient page nodes
+  const pageIds = new Set(webClientNodes.map((w) => w.id));
+  for (const page of webClientNodes) {
+    if (page.data?.authNodeId) {
+      const match = authNodes.find((a) => a.id === page.data.authNodeId);
+      if (match) return match;
+    }
+  }
+
+  const pageEdge = allEdges.find((e) => {
+    const connectsPage = pageIds.has(e.source) || pageIds.has(e.target);
+    if (!connectsPage) return false;
+    const otherId = pageIds.has(e.source) ? e.target : e.source;
+    return authNodes.some((a) => a.id === otherId);
+  });
+
+  if (pageEdge) {
+    const authId = pageIds.has(pageEdge.source) ? pageEdge.target : pageEdge.source;
+    const match = authNodes.find((a) => a.id === authId);
+    if (match) return match;
+  }
+
+  // 3. Fallback only if there are NO explicit WebApp nodes on the canvas
+  // and there is a single auth node on the canvas
+  const hasExplicitWebAppNodes = allNodes.some((n) => n.type === "webApp");
+  if (!hasExplicitWebAppNodes && webAppNode === undefined && authNodes.length === 1) {
+    return authNodes[0];
+  }
+
+  return undefined;
+}
+
+/**
  * Generates Auth server endpoints, client SDKs, authorization middleware helpers, and package dependencies
+ * ONLY if an AuthNode is explicitly connected to this WebApp.
  */
 export function generateAuthFilesAndDependencies({
   files,
@@ -34,31 +101,10 @@ export function generateAuthFilesAndDependencies({
   allEdges = [],
   testCases = [],
 }: GenerateAuthFilesParams): void {
-  const authPort = authNode?.data?.port || "3000";
-  const authBaseUrl = authNode?.data?.baseUrl || `http://localhost:${authPort}`;
-
-  const webNodeIds = new Set<string>();
-  webClientNodes.forEach((w) => webNodeIds.add(w.id));
-  allNodes
-    .filter((n) => n.type === "webApp" || n.type === "webClient" || n.data?.isWebClient)
-    .forEach((n) => webNodeIds.add(n.id));
-
-  const isAuthNodeConnected = authNode
-    ? allEdges.some((edge) => {
-        const connectsAuth = edge.source === authNode.id || edge.target === authNode.id;
-        const connectsWeb = webNodeIds.has(edge.source) || webNodeIds.has(edge.target);
-        return connectsAuth && connectsWeb;
-      }) ||
-      webClientNodes.some((w) => w.data?.authNodeId === authNode.id) ||
-      allNodes.some(
-        (n) => (n.type === "webApp" || n.type === "webClient") && n.data?.authNodeId === authNode.id
-      )
-    : false;
-
-  const hasProtectedRoutes = pagesInfo.some((p) => p.accessType && p.accessType !== "public");
-
-  // Generate Better Auth server files whenever an AuthNode is present in the project
+  // Generate Better Auth server files and SDK ONLY when an AuthNode is connected
   if (authNode) {
+    const authPort = authNode.data?.port || "3000";
+    const authBaseUrl = authNode.data?.baseUrl || `http://localhost:${authPort}`;
     const compiledAuth = compileAuth(authNode, endpoints, events, allNodes, allEdges, testCases);
 
     const authFile = compiledAuth.files.find((f) => f.filename.endsWith("auth.ts"));
@@ -235,12 +281,17 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
         const pkgObj = JSON.parse(files[pkgFileIdx]!.content);
         pkgObj.dependencies = pkgObj.dependencies || {};
         pkgObj.devDependencies = pkgObj.devDependencies || {};
+        pkgObj.scripts = pkgObj.scripts || {};
 
         const rawVersion = authNode.data?.version || DEFAULT_BETTER_AUTH_VERSION;
         const cleanVersion = rawVersion.replace(/^v/, "");
         const semverVersion = cleanVersion.split(".").length === 2 ? `${cleanVersion}.0` : cleanVersion;
         pkgObj.dependencies["better-auth"] = `^${semverVersion}`;
+        pkgObj.devDependencies["@better-auth/cli"] = `^${semverVersion}`;
         pkgObj.dependencies["zod"] = "^3.24.2";
+        pkgObj.scripts["db:migrate"] = "npx @better-auth/cli migrate -y";
+        pkgObj.scripts["predev"] = "pnpm db:migrate";
+        pkgObj.scripts["prestart"] = "pnpm db:migrate";
 
         const dbAdapterKey = String(authNode.data?.dbAdapter || "sqlite-raw");
         if (
@@ -251,7 +302,6 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
           pkgObj.dependencies["better-sqlite3"] = "^12.0.0";
           pkgObj.dependencies["@libsql/client"] = "^0.14.0";
           pkgObj.devDependencies["@types/better-sqlite3"] = "^7.6.12";
-          pkgObj.scripts = pkgObj.scripts || {};
           pkgObj.devDependencies["prebuild-install"] = "^7.1.3";
           pkgObj.scripts["postinstall"] = "prebuild-install || node -e \"try { const p = require('path').dirname(require.resolve('better-sqlite3/package.json')); require('child_process').execSync('npx prebuild-install', {cwd: p, stdio: 'inherit'}); } catch (e) {}\"";
         } else if (dbAdapterKey === "drizzle") {
@@ -266,39 +316,12 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
         // preserve existing content on parse failure
       }
     }
-  } else if (hasProtectedRoutes) {
-    // If protected routes exist without an AuthNode, generate client helper
+
+    // Generate client auth token helper for API calls when auth is connected
     files.push({
-      filename: "lib/auth-client.ts",
+      filename: "lib/auth-token.ts",
       language: "typescript",
-      content: generateAuthClient({
-        baseUrl: authBaseUrl,
-        plugins: ["adminClient", "organizationClient"],
-      }),
-    });
-
-    const pkgFileIdx = files.findIndex((f) => f.filename === "package.json");
-    if (pkgFileIdx !== -1) {
-      try {
-        const pkgObj = JSON.parse(files[pkgFileIdx]!.content);
-        pkgObj.dependencies = pkgObj.dependencies || {};
-        const rawVersion = DEFAULT_BETTER_AUTH_VERSION;
-        const cleanVersion = rawVersion.replace(/^v/, "");
-        const semverVersion = cleanVersion.split(".").length === 2 ? `${cleanVersion}.0` : cleanVersion;
-        pkgObj.dependencies["better-auth"] = `^${semverVersion}`;
-        pkgObj.dependencies["zod"] = "^3.24.2";
-        files[pkgFileIdx]!.content = JSON.stringify(pkgObj, null, 2);
-      } catch (err) {
-        // preserve
-      }
-    }
-  }
-
-  // Always generate client auth token helper for API calls
-  files.push({
-    filename: "lib/auth-token.ts",
-    language: "typescript",
-    content: `/**
+      content: `/**
  * Helper to retrieve the Bearer authorization token for client API requests.
  * Checks active Better Auth session, cookies, localStorage, and sessionStorage.
  */
@@ -356,7 +379,8 @@ export async function getAuthBearerToken(): Promise<string | null> {
   return null;
 }
 `,
-  });
+    });
+  }
 }
 
 /**

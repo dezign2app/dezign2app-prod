@@ -144,6 +144,24 @@ export const createEdgeSlice = (
       });
     }
 
+    // Automatically sync authNodeId on WebApp node when connecting Auth -> WebApp or WebApp -> Auth
+    if (sourceNode.type === "auth" && targetNode.type === "webApp") {
+      get().updateNode(targetNode.id, {
+        data: {
+          ...targetNode.data,
+          authNodeId: sourceNode.id,
+        },
+      });
+    }
+    if (sourceNode.type === "webApp" && targetNode.type === "auth") {
+      get().updateNode(sourceNode.id, {
+        data: {
+          ...sourceNode.data,
+          authNodeId: targetNode.id,
+        },
+      });
+    }
+
     // Update targetNodeId on service events if connected via messaging handles
     if (isPublishedConnect && connection.sourceHandle) {
       const eventId = connection.sourceHandle.replace(

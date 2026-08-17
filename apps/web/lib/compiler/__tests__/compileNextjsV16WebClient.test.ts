@@ -51,6 +51,17 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
       },
     };
 
+    const authNode: BackendNode = {
+      id: "node-auth-1",
+      type: "auth",
+      position: { x: 200, y: -200 },
+      fractionalIndex: "a2",
+      data: {
+        label: "Auth",
+        framework: "better_auth",
+      },
+    };
+
     const endpoints: (Endpoint & { nodeId: string })[] = [
       {
         id: "ep-get-orders",
@@ -93,7 +104,7 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
       [webClientNode],
       endpoints,
       [],
-      [webClientNode, serviceNode],
+      [webClientNode, serviceNode, authNode],
       edges,
       "TestProject",
     );

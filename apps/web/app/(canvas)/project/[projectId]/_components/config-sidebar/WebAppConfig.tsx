@@ -27,6 +27,7 @@ import {
   WebClientTechVersion,
 } from "@/types/canvas";
 import { WebAppZone } from "@workspace/canvas";
+import { cn } from "@workspace/ui/lib/utils";
 
 function isWebClientTechStack(val: string): val is WebClientTechStack {
   return WEB_CLIENT_TECH_OPTIONS.some((t) => t.value === val);
@@ -119,6 +120,37 @@ export const WebAppConfig = ({
     updateData({ zones: updated });
   };
 
+  // Find connected Auth Node (via explicit authNodeId, edge, or handle)
+  const connectedAuthNode =
+    (data.authNodeId
+      ? allNodes.find((n) => n.id === data.authNodeId && n.type === "auth")
+      : null) ||
+    (() => {
+      const edge = allEdges.find((e) => {
+        if (e.target === nodeId) {
+          const srcNode = allNodes.find((n) => n.id === e.source);
+          return (
+            srcNode?.type === "auth" ||
+            e.targetHandle === "auth-in" ||
+            e.sourceHandle === "auth-out"
+          );
+        }
+        if (e.source === nodeId) {
+          const tgtNode = allNodes.find((n) => n.id === e.target);
+          return (
+            tgtNode?.type === "auth" ||
+            e.sourceHandle === "auth-in" ||
+            e.targetHandle === "auth-out"
+          );
+        }
+        return false;
+      });
+      if (!edge) return null;
+      const authId = edge.source === nodeId ? edge.target : edge.source;
+      return allNodes.find((n) => n.id === authId && n.type === "auth") || null;
+    })() ||
+    null;
+
   return (
     <div className="flex flex-col gap-6 mt-6 pb-12 text-foreground">
       {/* Header */}
@@ -189,6 +221,61 @@ export const WebAppConfig = ({
               className="h-8 text-xs font-mono bg-background/50"
             />
           </div>
+        </div>
+      </div>
+
+      {/* Authentication Service Section */}
+      <div className="flex flex-col gap-4 p-4 rounded-xl bg-card border border-border/60 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <ShieldCheck className={cn("w-4 h-4", connectedAuthNode ? "text-indigo-400" : "text-muted-foreground")} />
+            <span>Authentication Service</span>
+          </div>
+          {connectedAuthNode && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-indigo-400 hover:text-indigo-300 cursor-pointer"
+              onClick={() =>
+                setActiveConfigItem({
+                  type: "auth",
+                  id: connectedAuthNode.id,
+                  nodeId: connectedAuthNode.id,
+                })
+              }
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 mr-1" /> Configure Auth
+            </Button>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label className="text-xs text-muted-foreground">Bound Auth Server Node</Label>
+          <Select
+            value={connectedAuthNode?.id || "none"}
+            onValueChange={(val: string) => {
+              updateData({ authNodeId: val === "none" ? undefined : val });
+            }}
+          >
+            <SelectTrigger className="h-8 text-xs font-medium bg-background/50">
+              <SelectValue placeholder="Select an Auth Node..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none" className="text-xs text-muted-foreground">
+                None (No Auth Connected)
+              </SelectItem>
+              {authNodes.map((a) => (
+                <SelectItem key={a.id} value={a.id} className="text-xs">
+                  🔒 {a.data?.label || "Auth Server"} ({a.data?.framework || "Better Auth"})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-[11px] text-muted-foreground">
+            {connectedAuthNode
+              ? `Wired to "${connectedAuthNode.data?.label || "Auth"}". Better Auth endpoints and client SDKs will be generated in apps/${appSlug}.`
+              : "Connect an Auth Server node on the canvas or select one above to enable authentication."}
+          </span>
         </div>
       </div>
 

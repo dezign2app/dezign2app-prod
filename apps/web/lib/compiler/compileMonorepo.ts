@@ -230,19 +230,24 @@ export function compileMonorepo(
     // Process explicit WebApp nodes
     webAppNodes.forEach((appNode) => {
       const appName = appNode.data?.label || "Web Application";
-      const appSlug =
+      const baseSlug =
         appNode.data?.appSlug?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") ||
         appName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") ||
         "web-app";
 
-      if (!appMap.has(appSlug)) {
-        appMap.set(appSlug, {
-          appName,
-          appSlug,
-          webAppNode: appNode,
-          pageNodes: [],
-        });
+      let appSlug = baseSlug;
+      let counter = 1;
+      while (appMap.has(appSlug)) {
+        counter++;
+        appSlug = `${baseSlug}-${counter}`;
       }
+
+      appMap.set(appSlug, {
+        appName,
+        appSlug,
+        webAppNode: appNode,
+        pageNodes: [],
+      });
     });
 
     // Default app slug from first WebApp node or fallback "web-app"
@@ -373,7 +378,7 @@ export function compileMonorepo(
       targetAppObj.pageNodes.push(enrichedPageNode);
     });
 
-    appMap.forEach(({ appName, appSlug, pageNodes }) => {
+    appMap.forEach(({ appName, appSlug, pageNodes, webAppNode }) => {
       const folderName = getUniqueWebClientFolder(appSlug, "web-app");
       webClientsInfo.push({
         id: `web-app-${appSlug}`,
@@ -390,6 +395,7 @@ export function compileMonorepo(
         `${projectName} - ${appName}`,
         testCases,
         folderName,
+        webAppNode,
       );
 
       webClientResult.files.forEach((f) => {
