@@ -1,7 +1,7 @@
 import { AdapterConfig } from "./types";
 
 export const DEFAULT_SQLITE_CONFIG: AdapterConfig = {
-  importStatement: `import { db } from "@workspace/db";\n`,
+  importStatement: `import { db } from "@workspace/db/connection";\n`,
   adapterCall: `db`,
 };
 

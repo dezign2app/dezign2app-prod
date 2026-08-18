@@ -394,17 +394,27 @@ export function generateDefaultDbOperations(
         col.name.toLowerCase() !== "id" &&
         col.name.toLowerCase() !== "_id")
     ) {
-      const rawBase = col.name.replace(/(_id|id)$/i, "");
+      const rawBase = col.name.replace(/(_id|id|_by|by)$/i, "");
       let targetTableName = "";
       let targetPascalSingular = "";
 
       const roleMap: Record<string, string> = {
         userId: "user",
         user_id: "user",
+        created_by: "user",
+        createdBy: "user",
+        authorId: "user",
+        author_id: "user",
+        ownerId: "user",
+        owner_id: "user",
+        creatorId: "user",
+        creator_id: "user",
         inviterId: "user",
         inviter_id: "user",
         organizationId: "organization",
         organization_id: "organization",
+        orgId: "organization",
+        org_id: "organization",
         teamId: "team",
         team_id: "team",
       };
@@ -413,12 +423,28 @@ export function generateDefaultDbOperations(
         const lbl = (n.data?.label || n.data?.tableRef || "").toLowerCase();
         return (
           lbl === rawBase.toLowerCase() ||
-          toSingular(lbl) === toSingular(rawBase.toLowerCase())
+          toSingular(lbl) === toSingular(rawBase.toLowerCase()) ||
+          toPlural(lbl) === toPlural(rawBase.toLowerCase())
         );
       });
 
       if ((col as any).references?.table) {
-        targetTableName = toTableName((col as any).references.table);
+        const rawRef = String((col as any).references.table);
+        const matchedRefNode = entityNodes.find((n) => {
+          const lbl = (n.data?.label || n.data?.tableRef || "").toLowerCase();
+          return (
+            lbl === rawRef.toLowerCase() ||
+            toSingular(lbl) === toSingular(rawRef.toLowerCase()) ||
+            toPlural(lbl) === toPlural(rawRef.toLowerCase())
+          );
+        });
+        if (matchedRefNode) {
+          targetTableName = toTableName(matchedRefNode.data?.label || matchedRefNode.data?.tableRef || rawRef);
+        } else if (rawRef.toLowerCase() === "user" || rawRef.toLowerCase() === "users") {
+          targetTableName = "user";
+        } else {
+          targetTableName = toTableName(rawRef);
+        }
         targetPascalSingular = toSingular(toPascal(targetTableName));
       } else if (matchedNode) {
         const matchedLabel = matchedNode.data?.label || matchedNode.data?.tableRef || rawBase;

@@ -454,8 +454,12 @@ export function compileRawSqliteDatabase(
     return true;
   });
 
-  const ddlStatements = tables.map((tableNode) => {
+  const ddlStatements: string[] = [];
+  const createdTableNames = new Set<string>();
+
+  tables.forEach((tableNode) => {
     const tableName = toTableName(tableNode.data.label || "table");
+    createdTableNames.add(tableName.toLowerCase());
     const cols = getColumns(tableNode);
     const colDefs = cols.map((c) => {
       let colType = "TEXT";
@@ -468,8 +472,92 @@ export function compileRawSqliteDatabase(
       if (c.isUnique) constraints += " UNIQUE";
       return `    "${c.name}" ${colType}${constraints}`;
     });
-    return `  CREATE TABLE IF NOT EXISTS "${tableName}" (\n${colDefs.join(",\n")}\n  );`;
+    ddlStatements.push(`  CREATE TABLE IF NOT EXISTS "${tableName}" (\n${colDefs.join(",\n")}\n  );`);
+
+    const singularName = toSingular(tableName);
+    const pluralName = toPlural(tableName);
+    if (singularName !== tableName && !createdTableNames.has(singularName.toLowerCase())) {
+      ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "${singularName}" AS SELECT * FROM "${tableName}";`);
+      createdTableNames.add(singularName.toLowerCase());
+    }
+    if (pluralName !== tableName && !createdTableNames.has(pluralName.toLowerCase())) {
+      ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "${pluralName}" AS SELECT * FROM "${tableName}";`);
+      createdTableNames.add(pluralName.toLowerCase());
+    }
   });
+
+  // Ensure core Better Auth tables & views exist if not already created
+  if (!createdTableNames.has("user") && !createdTableNames.has("users")) {
+    ddlStatements.push(`  CREATE TABLE IF NOT EXISTS "user" (
+    "id" TEXT PRIMARY KEY,
+    "name" TEXT,
+    "email" TEXT UNIQUE,
+    "emailVerified" INTEGER,
+    "image" TEXT,
+    "createdAt" TEXT,
+    "updatedAt" TEXT
+  );`);
+    ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "users" AS SELECT * FROM "user";`);
+    createdTableNames.add("user");
+    createdTableNames.add("users");
+  } else if (createdTableNames.has("user") && !createdTableNames.has("users")) {
+    ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "users" AS SELECT * FROM "user";`);
+    createdTableNames.add("users");
+  } else if (createdTableNames.has("users") && !createdTableNames.has("user")) {
+    ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "user" AS SELECT * FROM "users";`);
+    createdTableNames.add("user");
+  }
+
+  if (!createdTableNames.has("session") && !createdTableNames.has("sessions")) {
+    ddlStatements.push(`  CREATE TABLE IF NOT EXISTS "session" (
+    "id" TEXT PRIMARY KEY,
+    "userId" TEXT,
+    "token" TEXT UNIQUE,
+    "expiresAt" TEXT,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "createdAt" TEXT,
+    "updatedAt" TEXT
+  );`);
+    ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "sessions" AS SELECT * FROM "session";`);
+    createdTableNames.add("session");
+    createdTableNames.add("sessions");
+  }
+
+  if (!createdTableNames.has("account") && !createdTableNames.has("accounts")) {
+    ddlStatements.push(`  CREATE TABLE IF NOT EXISTS "account" (
+    "id" TEXT PRIMARY KEY,
+    "userId" TEXT,
+    "accountId" TEXT,
+    "providerId" TEXT,
+    "password" TEXT,
+    "accessToken" TEXT,
+    "refreshToken" TEXT,
+    "accessTokenExpiresAt" TEXT,
+    "refreshTokenExpiresAt" TEXT,
+    "scope" TEXT,
+    "idToken" TEXT,
+    "createdAt" TEXT,
+    "updatedAt" TEXT
+  );`);
+    ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "accounts" AS SELECT * FROM "account";`);
+    createdTableNames.add("account");
+    createdTableNames.add("accounts");
+  }
+
+  if (!createdTableNames.has("verification") && !createdTableNames.has("verifications")) {
+    ddlStatements.push(`  CREATE TABLE IF NOT EXISTS "verification" (
+    "id" TEXT PRIMARY KEY,
+    "identifier" TEXT,
+    "value" TEXT,
+    "expiresAt" TEXT,
+    "createdAt" TEXT,
+    "updatedAt" TEXT
+  );`);
+    ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "verifications" AS SELECT * FROM "verification";`);
+    createdTableNames.add("verification");
+    createdTableNames.add("verifications");
+  }
 
   const sqlStatementsString = JSON.stringify(ddlStatements.join("\n\n"));
   const ddlBlock =

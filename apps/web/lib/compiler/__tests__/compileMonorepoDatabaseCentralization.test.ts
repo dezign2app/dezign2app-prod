@@ -446,6 +446,84 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     const rootTsconfig = result.files.find((f) => f.filename === "tsconfig.json");
     expect(rootTsconfig?.content).toContain('"path": "packages/db"');
   });
+
+  it("should generate singular/plural compatibility views and correctly resolve created_by FK joins with user", () => {
+    const productsEntityNode: BackendNode = {
+      id: "node-entity-products",
+      type: "entity",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Products",
+        columns: [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "title", type: "string" },
+          { name: "created_by", type: "string", isForeignKey: true },
+        ],
+      },
+    };
+
+    const authNode: BackendNode = {
+      id: "node-auth-1",
+      type: "auth",
+      position: { x: 200, y: -200 },
+      fractionalIndex: "a1",
+      data: {
+        label: "AuthServer",
+        framework: "better_auth",
+        version: "v1.6",
+      },
+    };
+
+    const webNode: BackendNode = {
+      id: "node-web-1",
+      type: "webClient",
+      position: { x: 200, y: 200 },
+      fractionalIndex: "a2",
+      data: {
+        label: "Storefront",
+        appSlug: "storefront",
+        isWebClient: true,
+      },
+    };
+
+    const edges: BackendEdge[] = [
+      {
+        id: "edge-auth-web",
+        source: "node-auth-1",
+        target: "node-web-1",
+        type: "connection",
+        fractionalIndex: "a0",
+      },
+    ];
+
+    const result = compileMonorepo(
+      [productsEntityNode, authNode, webNode],
+      [],
+      [],
+      edges,
+      [],
+      "ProductsAuthMonorepo",
+    );
+
+    // 1. Verify packages/db/connection.ts includes table DDLs and compatibility views
+    const dbConn = result.files.find((f) => f.filename === "packages/db/connection.ts");
+    expect(dbConn).toBeDefined();
+    expect(dbConn?.content).toContain('CREATE TABLE IF NOT EXISTS \\"products\\"');
+    expect(dbConn?.content).toContain('CREATE TABLE IF NOT EXISTS \\"user\\"');
+    expect(dbConn?.content).toContain('CREATE VIEW IF NOT EXISTS \\"users\\" AS SELECT * FROM \\"user\\"');
+
+    // 2. Verify packages/db/helpers/products.ts generated the join helper with user
+    const productsHelper = result.files.find((f) => f.filename === "packages/db/helpers/products.ts");
+    expect(productsHelper).toBeDefined();
+    expect(productsHelper?.content).toContain("findProductByIdWithUser");
+    expect(productsHelper?.content).toContain("LEFT JOIN user r ON t.created_by = r.id");
+
+    // 3. Verify lib/auth.ts imports db from @workspace/db/connection
+    const authLib = result.files.find((f) => f.filename === "apps/storefront/lib/auth.ts");
+    expect(authLib).toBeDefined();
+    expect(authLib?.content).toContain('import { db } from "@workspace/db/connection"');
+  });
 });
 
 
