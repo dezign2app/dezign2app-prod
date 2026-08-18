@@ -98,7 +98,7 @@ export function TerminalPanel({
       handleClasses={{
         top: "h-1.5 bg-border/40 hover:bg-primary/60 cursor-row-resize transition-colors z-20",
       }}
-      className="border-t border-border/50 flex flex-col shrink-0 font-mono text-xs text-slate-200 select-none bg-[#090d13] relative"
+      className="border-t border-border/50 flex flex-col shrink-0 font-mono text-xs text-slate-200 select-none bg-[#090d13] relative overflow-hidden"
     >
       {/* Header */}
       <div className="h-7 bg-[#161b22] px-3 border-b border-border/40 flex items-center justify-between shrink-0">

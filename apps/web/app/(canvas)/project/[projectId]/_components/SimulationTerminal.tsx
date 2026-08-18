@@ -34,9 +34,12 @@ export function SimulationTerminal() {
     if (!container || !inner) return;
 
     const observer = new ResizeObserver(() => {
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: "auto",
+      window.requestAnimationFrame(() => {
+        if (!container) return;
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: "auto",
+        });
       });
     });
 

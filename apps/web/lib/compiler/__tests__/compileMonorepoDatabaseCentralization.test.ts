@@ -179,4 +179,150 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     expect(nextAuthClient).toBeDefined();
     expect(nextAuthClient?.content).toContain("createAuthClient");
   });
+
+  it("should generate type-compatible create functions for numeric primary keys and untitled tables", () => {
+    const numericEntityNode: BackendNode = {
+      id: "node-entity-product",
+      type: "entity",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Product",
+        columns: [
+          { name: "id", type: "integer", isPrimaryKey: true },
+          { name: "title", type: "string" },
+        ],
+      },
+    };
+
+    const untitledTableNode: BackendNode = {
+      id: "node-entity-untitled",
+      type: "entity",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Untitled Table",
+        columns: [
+          { name: "id", type: "number", isPrimaryKey: true },
+        ],
+      },
+    };
+
+    const result = compileMonorepo(
+      [numericEntityNode, untitledTableNode],
+      [],
+      [],
+      [],
+      [],
+      "TestCentralizedMonorepo",
+    );
+
+    const productHelper = result.files.find(
+      (f) => f.filename === "packages/db/helpers/product.ts",
+    );
+    expect(productHelper).toBeDefined();
+    expect(productHelper?.content).toContain("Number(info.lastInsertRowid)");
+    expect(productHelper?.content).not.toContain("info.lastInsertRowid.toString()");
+
+    const untitledHelper = result.files.find(
+      (f) => f.filename === "packages/db/helpers/untitledTable.ts",
+    );
+    expect(untitledHelper).toBeDefined();
+    expect(untitledHelper?.content).toContain("Number(info.lastInsertRowid)");
+    expect(untitledHelper?.content).toContain("return { id: _rowId } as unknown as UntitledTableRow;");
+  });
+
+  it("should deduplicate duplicate operations and prepared statements in helper files", () => {
+    const accountNode: BackendNode = {
+      id: "node-entity-account",
+      type: "entity",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Account",
+        columns: [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "userId", type: "string", isForeignKey: true },
+        ],
+        indexes: [
+          { name: "idx_account_userId", columns: "userId" },
+          { name: "idx_account_user_id", columns: "userId" },
+        ],
+        dbOperations: [
+          {
+            id: "op-1",
+            name: "findAccountsByUserId",
+            kind: "fetchByIndex",
+            code: `const stmtFindAccountsByUserId = db.prepare<[userId: string, limit?: number, offset?: number], AccountRow>(\n  "SELECT * FROM account WHERE userId = ? LIMIT ? OFFSET ?"\n);\n\nexport function findAccountsByUserId(userId: string, limit: number = 20, offset: number = 0): AccountRow[] {\n  return stmtFindAccountsByUserId.all(userId, limit, offset) as unknown as AccountRow[];\n}`,
+            enabled: true,
+          },
+          {
+            id: "op-2",
+            name: "findAccountsByUserId",
+            kind: "fetchByIndex",
+            code: `const stmtFindAccountsByUserId = db.prepare<[userId: string, limit?: number, offset?: number], AccountRow>(\n  "SELECT * FROM account WHERE userId = ? LIMIT ? OFFSET ?"\n);\n\nexport function findAccountsByUserId(userId: string, limit: number = 20, offset: number = 0): AccountRow[] {\n  return stmtFindAccountsByUserId.all(userId, limit, offset) as unknown as AccountRow[];\n}`,
+            enabled: true,
+          },
+          {
+            id: "op-3",
+            name: "findAccountByIdWithUser",
+            kind: "join",
+            code: `const stmtFindAccountByIdWithUser = db.prepare<[id: string]>(\n  "SELECT * FROM account WHERE id = ?"\n);\n\nexport function findAccountByIdWithUser(id: string): AccountWithUserRow | undefined {\n  return stmtFindAccountByIdWithUser.get(id) as unknown as AccountWithUserRow | undefined;\n}`,
+            enabled: true,
+          },
+          {
+            id: "op-4",
+            name: "findAccountByIdWithUser",
+            kind: "join",
+            code: `const stmtFindAccountByIdWithUser = db.prepare<[id: string]>(\n  "SELECT * FROM account WHERE id = ?"\n);\n\nexport function findAccountByIdWithUser(id: string): AccountWithUserRow | undefined {\n  return stmtFindAccountByIdWithUser.get(id) as unknown as AccountWithUserRow | undefined;\n}`,
+            enabled: true,
+          },
+        ],
+      },
+    };
+
+    const userNode: BackendNode = {
+      id: "node-entity-user",
+      type: "entity",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "User",
+        columns: [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "email", type: "string" },
+        ],
+      },
+    };
+
+    const result = compileMonorepo(
+      [accountNode, userNode],
+      [],
+      [],
+      [],
+      [],
+      "TestCentralizedMonorepo",
+    );
+
+    const accountHelper = result.files.find(
+      (f) => f.filename === "packages/db/helpers/account.ts",
+    );
+    expect(accountHelper).toBeDefined();
+    const content = accountHelper?.content || "";
+
+    const stmtMatches = content.match(/stmtFindAccountsByUserId/g) || [];
+    // Should be prepared once and called in function
+    expect(stmtMatches.length).toBeLessThanOrEqual(2);
+
+    const fnMatches = content.match(/function findAccountsByUserId/g) || [];
+    expect(fnMatches.length).toBe(1);
+
+    const joinStmtMatches = content.match(/stmtFindAccountByIdWithUser/g) || [];
+    expect(joinStmtMatches.length).toBeLessThanOrEqual(2);
+
+    const joinFnMatches = content.match(/function findAccountByIdWithUser/g) || [];
+    expect(joinFnMatches.length).toBe(1);
+  });
 });
+
+

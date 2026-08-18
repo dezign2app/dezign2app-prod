@@ -43,3 +43,54 @@ export const DB_COLUMN_TYPES = {
 } as const;
 
 export type DbColumnType = (typeof DB_COLUMN_TYPES)[keyof typeof DB_COLUMN_TYPES];
+
+export const SQL_NUMERIC_COLUMN_TYPES = [
+  "int",
+  "integer",
+  "bigint",
+  "number",
+  "serial",
+  "smallint",
+  "tinyint",
+  "float",
+  "real",
+  "double",
+  "numeric",
+  "decimal",
+] as const;
+
+export const SQL_BOOLEAN_COLUMN_TYPES = [
+  "boolean",
+  "bool",
+] as const;
+
+export const SQL_STRING_COLUMN_TYPES = [
+  "string",
+  "text",
+  "varchar",
+  "char",
+  "uuid",
+  "date",
+  "time",
+  "timestamp",
+  "json",
+  "jsonb",
+] as const;
+
+export function isSqlNumericType(type?: string): boolean {
+  if (!type) return false;
+  return (SQL_NUMERIC_COLUMN_TYPES as readonly string[]).includes(type.toLowerCase().trim());
+}
+
+export function isSqlBooleanType(type?: string): boolean {
+  if (!type) return false;
+  return (SQL_BOOLEAN_COLUMN_TYPES as readonly string[]).includes(type.toLowerCase().trim());
+}
+
+export function sqlColumnToTsType(type?: string): "number" | "boolean" | "string" {
+  const t = (type || "string").toLowerCase().trim();
+  if (isSqlNumericType(t)) return "number";
+  if (isSqlBooleanType(t)) return "boolean";
+  return "string";
+}
+

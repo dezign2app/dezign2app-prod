@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import { Terminal, useTerminal } from "@wterm/react";
 import "@wterm/react/css";
+import "@/lib/utils/patchResizeObserver";
 import { cleanTerminalText } from "./terminalUtils";
 
 export interface WTermTerminalHandle {
@@ -148,11 +149,14 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
 
     const handleReady = useCallback(() => {
       setIsReady(true);
-      // Write any existing logs on initial ready
+      // Write any existing logs on initial ready in a single batch
       if (logsRef.current.length > 0 && write) {
-        logsRef.current.forEach((line) => {
-          write(rawStream ? line : formatTerminalChunk(line));
-        });
+        const fullContent = logsRef.current
+          .map((line) => (rawStream ? line : formatTerminalChunk(line)))
+          .join("");
+        if (fullContent) {
+          write(fullContent);
+        }
         lastWrittenIndexRef.current = logsRef.current.length;
       }
       onReady?.();
@@ -189,19 +193,25 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
           prevLogs[lastWrittenIndexRef.current - 1];
 
       if (!isAppend) {
-        // Tab switch, log replacement, or log reset: full refresh
+        // Tab switch, log replacement, or log reset: full refresh in a single batch
         clearTerminal();
-        logs.forEach((line) => {
-          write(rawStream ? line : formatTerminalChunk(line));
-        });
+        const batch = logs
+          .map((line) => (rawStream ? line : formatTerminalChunk(line)))
+          .join("");
+        if (batch) {
+          write(batch);
+        }
         lastWrittenIndexRef.current = logs.length;
       } else {
-        // Incremental new log lines in the same session
+        // Incremental new log lines in the same session: batch write
         const newEntries = logs.slice(lastWrittenIndexRef.current);
         if (newEntries.length > 0) {
-          newEntries.forEach((line) => {
-            write(rawStream ? line : formatTerminalChunk(line));
-          });
+          const batch = newEntries
+            .map((line) => (rawStream ? line : formatTerminalChunk(line)))
+            .join("");
+          if (batch) {
+            write(batch);
+          }
           lastWrittenIndexRef.current = logs.length;
         }
       }
@@ -234,22 +244,47 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
         if (data === "\r" || data === "\n") {
           const cmd = inputBufferRef.current.trim();
           inputBufferRef.current = "";
-          write("\r\n");
 
-          if (cmd === "clear" || cmd === "cls") {
-            write("\x1bc");
-          } else if (cmd === "help") {
-            write("\x1b[36mAvailable commands:\x1b[0m\r\n");
-            write("  pnpm dev       - Run all workspace apps with hot reload\r\n");
-            write("  pnpm install   - Install all workspace dependencies\r\n");
-            write("  docker compose - Run containerized stack\r\n");
-            write("  clear / cls    - Clear terminal window\r\n");
-            write("  help           - Show this help message\r\n\n");
+          const lowerCmd = cmd.toLowerCase();
+          let response = "\r\n";
+
+          if (lowerCmd === "clear" || lowerCmd === "cls") {
+            response = "\x1bc\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ";
+          } else if (lowerCmd === "help") {
+            response +=
+              "\x1b[36mAvailable commands:\x1b[0m\r\n" +
+              "  pnpm i / install - Install workspace dependencies\r\n" +
+              "  pnpm dev         - Run all workspace apps with hot reload\r\n" +
+              "  docker compose   - Run containerized stack\r\n" +
+              "  clear / cls      - Clear terminal window\r\n" +
+              "  help             - Show this help message\r\n\n" +
+              "\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ";
+          } else if (
+            lowerCmd === "pnpm i" ||
+            lowerCmd === "pnpm install" ||
+            lowerCmd.startsWith("pnpm i ") ||
+            lowerCmd.startsWith("pnpm install ") ||
+            lowerCmd.startsWith("pnpm add ")
+          ) {
+            response +=
+              "\x1b[90mResolving dependencies...\x1b[0m\r\n" +
+              "\x1b[32m✔ Packages are up to date.\x1b[0m (Simulated workspace environment)\r\n\r\n" +
+              "\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ";
+          } else if (lowerCmd === "pnpm dev" || lowerCmd === "npm run dev") {
+            response +=
+              "\x1b[32m✔\x1b[0m Ready in 450ms\r\n" +
+              "\x1b[36m▲ Next.js 16.0.10 (Turbopack)\x1b[0m\r\n" +
+              "  - Local:   http://localhost:3000\r\n" +
+              "  - Network: http://192.168.1.100:3000\r\n\r\n" +
+              "\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ";
           } else if (cmd) {
-            write(`\x1b[90mExecuted: ${cmd}\x1b[0m\r\n`);
+            response += `\x1b[90mExecuted: ${cmd}\x1b[0m\r\n\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m `;
+          } else {
+            response += "\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ";
           }
 
-          write("\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ");
+          // Single batched write to avoid multi-layout passes triggering ResizeObserver loops
+          write(response);
           return;
         }
 
