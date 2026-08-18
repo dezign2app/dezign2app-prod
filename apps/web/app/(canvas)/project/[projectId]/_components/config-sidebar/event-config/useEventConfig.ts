@@ -152,12 +152,24 @@ export function useEventConfig(id: string, nodeId: string) {
     : undefined;
 
   const availableResources = selectedBroker
-    ? selectedBroker.data.topics ||
-      selectedBroker.data.streams ||
-      selectedBroker.data.queues ||
-      selectedBroker.data.channels ||
-      []
+    ? ((selectedBroker.data.topics ||
+        selectedBroker.data.streams ||
+        selectedBroker.data.queues ||
+        selectedBroker.data.channels ||
+        []) as AnyMessagingResource[])
     : [];
+
+  const boundBrokerResource = item?.messagingResourceId
+    ? availableResources.find((r) => r.id === item.messagingResourceId)
+    : undefined;
+
+  const isBoundToBroker = Boolean(
+    item?.brokerNodeId && item?.messagingResourceId && boundBrokerResource,
+  );
+
+  const effectiveSchema = isBoundToBroker
+    ? (boundBrokerResource?.payloadSchema ?? item?.payloadSchema)
+    : item?.payloadSchema;
 
   return {
     item,
@@ -172,6 +184,9 @@ export function useEventConfig(id: string, nodeId: string) {
     messagingNodes,
     selectedBroker,
     availableResources,
+    boundBrokerResource,
+    isBoundToBroker,
+    effectiveSchema,
     events,
     endpoints,
     nodes,

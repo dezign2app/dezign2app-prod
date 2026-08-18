@@ -1,7 +1,7 @@
 import { BackendNode, BackendEdge, SimulationTestCase } from "@/types/canvas";
 import { Endpoint, AnyMessagingResource } from "@workspace/canvas/types";
 import { CompiledFile } from "@workspace/canvas/types";
-import { toVarName, toPascalCase } from "../utils";
+import { toVarName, toPascalCase, deriveRouteFileName } from "../utils";
 import { resolveLinkedEndpoint } from "../compileWebClientNode";
 
 /**
@@ -50,9 +50,8 @@ describe("${serviceName} Unit Test: healthRoute", () => {
 
   nodeEndpoints.forEach((ep, index) => {
     const method = (ep.type || "GET").toLowerCase();
-    const rawName = ep.name || ep.id || "route";
-    let routeFileName =
-      toVarName(`${method}_${rawName}`) || `route_${index + 1}`;
+    let routeFileName = deriveRouteFileName(ep, index, serviceName);
+
 
     if (usedFileNames.has(routeFileName)) {
       routeFileName = `${routeFileName}_${index + 1}`;

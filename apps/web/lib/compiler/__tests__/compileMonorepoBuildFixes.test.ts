@@ -380,4 +380,96 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
     expect(dbConnFile).toBeDefined();
     expect(dbConnFile?.content).toContain("/* turbopackIgnore: true */");
   });
+
+  it("should never use raw random endpoint IDs in route filenames, handler names, or types, but instead generate meaningful full names", () => {
+    const notifNode: BackendNode = {
+      id: "node-notif-service",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Notification Service",
+        port: "8082",
+      },
+    };
+
+    const productsNode: BackendNode = {
+      id: "node-products-service",
+      type: "service",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Products",
+        port: "8083",
+      },
+    };
+
+    // Endpoints with random database IDs as name / id
+    const notifEndpoint: Endpoint & { nodeId: string } = {
+      id: "tohz6eq",
+      nodeId: "node-notif-service",
+      name: "/tohz6eq",
+      type: "GET",
+      responseBody: {
+        id: "res-notif",
+        rawJson: JSON.stringify({ notifications: [] }),
+      },
+    };
+
+    const productsEndpoint: Endpoint & { nodeId: string } = {
+      id: "zaz4xx1",
+      nodeId: "node-products-service",
+      name: "zaz4xx1",
+      type: "GET",
+      responseBody: {
+        id: "res-prod",
+        rawJson: JSON.stringify({ items: [] }),
+      },
+    };
+
+    const result = compileMonorepo(
+      [notifNode, productsNode],
+      [notifEndpoint, productsEndpoint],
+      [],
+      [],
+      [],
+      "RandomIdFixMonorepo",
+    );
+
+    // 1. Verify NO random IDs like getTohz6eq or getZaz4xx1 in routes
+    const notifRoute = result.files.find((f) =>
+      f.filename.startsWith("apps/notification-service/src/routes/") && f.filename !== "apps/notification-service/src/routes/index.ts"
+    );
+    expect(notifRoute).toBeDefined();
+    expect(notifRoute?.filename).not.toContain("tohz6eq");
+    expect(notifRoute?.filename).toBe("apps/notification-service/src/routes/getNotificationService.ts");
+    expect(notifRoute?.content).not.toContain("Tohz6eq");
+    expect(notifRoute?.content).toContain("NotificationServiceGetNotificationServiceResponse");
+
+    const productsRoute = result.files.find((f) =>
+      f.filename.startsWith("apps/products/src/routes/") && f.filename !== "apps/products/src/routes/index.ts"
+    );
+    expect(productsRoute).toBeDefined();
+    expect(productsRoute?.filename).not.toContain("zaz4xx1");
+    expect(productsRoute?.filename).toBe("apps/products/src/routes/getProducts.ts");
+    expect(productsRoute?.content).not.toContain("Zaz4xx1");
+    expect(productsRoute?.content).toContain("ProductsGetProductsResponse");
+
+    // 2. Verify @workspace/types generates matching type definitions without random IDs
+    const notifTypeFile = result.files.find(
+      (f) => f.filename === "packages/types/src/notification_service/getNotificationService.ts" ||
+             f.filename === "packages/types/src/notificationService/getNotificationService.ts"
+    );
+    expect(notifTypeFile).toBeDefined();
+    expect(notifTypeFile?.content).toContain("export interface NotificationServiceGetNotificationServiceResponse");
+    expect(notifTypeFile?.content).not.toContain("Tohz6eq");
+
+    const productsTypeFile = result.files.find(
+      (f) => f.filename === "packages/types/src/products/getProducts.ts"
+    );
+    expect(productsTypeFile).toBeDefined();
+    expect(productsTypeFile?.content).toContain("export interface ProductsGetProductsResponse");
+    expect(productsTypeFile?.content).not.toContain("Zaz4xx1");
+  });
 });
+

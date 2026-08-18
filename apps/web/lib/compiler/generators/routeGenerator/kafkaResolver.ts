@@ -15,8 +15,11 @@ export function pickKafkaPublishFunction(
  * like "PRODUCT_CREATED" that matches the generated constant.
  */
 export function toKafkaTopicKey(eventName: string): string {
-  return eventName
+  if (!eventName) return "TOPIC";
+  const cleaned = eventName
     .trim()
     .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
     .toUpperCase();
+  return cleaned || "TOPIC";
 }

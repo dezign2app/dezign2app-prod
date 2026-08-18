@@ -53,7 +53,7 @@ async def health_handler():
   } else {
     nodeEndpoints.forEach((ep, index) => {
       const method = (ep.type || "GET").toLowerCase();
-      const rawName = ep.name || ep.id || "route";
+      const rawName = ep.name?.trim() ? ep.name.trim() : `endpoint_${index + 1}`;
       let routeFileName = toPythonRouteFileName(method, rawName, index);
 
       if (usedFileNames.has(routeFileName)) {

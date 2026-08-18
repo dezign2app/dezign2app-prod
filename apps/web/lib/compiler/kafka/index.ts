@@ -37,7 +37,7 @@ export function compileKafkaNodes(
       n.type === "kafka" ||
       n.type === "eventstream" ||
       (n.type === "queue" &&
-        (n.data as { implementation?: string })?.implementation?.toLowerCase() === "kafka"),
+        n.data?.implementation?.toLowerCase() === "kafka"),
   );
 
   // Derive package name from first node label
@@ -56,18 +56,44 @@ export function compileKafkaNodes(
 
   kafkaNodes.forEach((node) => {
     const label = node.data?.label || "Kafka Broker";
-    const topics = (node.data as { topics?: KafkaTopic[] })?.topics;
+    const topics = node.data?.topics;
     if (topics && Array.isArray(topics)) {
       topics.forEach((t) => {
         if (t.name && !seenTopicNames.has(t.name)) {
           seenTopicNames.add(t.name);
-          allTopics.push({ ...t, nodeId: node.id, nodeLabel: label });
+          let payloadSchema = t.payloadSchema;
+
+          if (!payloadSchema) {
+            for (const n of allNodes) {
+              const nodeEndpoints = n.data?.endpoints;
+              if (nodeEndpoints && Array.isArray(nodeEndpoints)) {
+                const matchedEp = nodeEndpoints.find((ep) => {
+                  const epPubs = ep.publishedEvents;
+                  return (
+                    epPubs &&
+                    Array.isArray(epPubs) &&
+                    epPubs.some(
+                      (p) =>
+                        p.messagingResourceId === t.id ||
+                        (p.name && p.name.toLowerCase() === t.name.toLowerCase()),
+                    )
+                  );
+                });
+                if (matchedEp?.requestBody) {
+                  payloadSchema = matchedEp.requestBody;
+                  break;
+                }
+              }
+            }
+          }
+
+          allTopics.push({ ...t, payloadSchema, nodeId: node.id, nodeLabel: label });
         }
       });
     }
   });
 
-  const brokerConfig = (firstKafkaNode?.data as { kafkaBroker?: { partitions?: number; replication?: number } })?.kafkaBroker ?? {};
+  const brokerConfig = firstKafkaNode?.data?.kafkaBroker ?? {};
   const defaultPartitions = brokerConfig.partitions ?? 3;
   const defaultReplication = brokerConfig.replication ?? 1;
 
@@ -79,11 +105,12 @@ export function compileKafkaNodes(
   files.push(generateAdminFile(nodeLabel));
 
   // Topics
-  const topicList = allTopics.length > 0
+  const topicList: (KafkaTopic & { nodeId: string; nodeLabel: string })[] = allTopics.length > 0
     ? allTopics
-    : [{ name: "system-events", nodeId: "", nodeLabel }];
+    : [{ id: "topic-system-events", name: "system-events", nodeId: "", nodeLabel }];
 
   const topicBarrelExports: string[] = [];
+  const topicImports: string[] = [];
   const kafkaTopicsEntries: string[] = [];
   const seenTopicKeys = new Set<string>();
 
@@ -99,11 +126,12 @@ export function compileKafkaNodes(
       content: generateTopicFile(t.name),
     });
 
+    topicImports.push(`import { ${key}_TOPIC } from "./${varName}";`);
     topicBarrelExports.push(`export * from "./${varName}";`);
     kafkaTopicsEntries.push(`  ${key}: ${key}_TOPIC,`);
   });
 
-  files.push(generateTopicsIndexFile(topicBarrelExports, kafkaTopicsEntries));
+  files.push(generateTopicsIndexFile(topicBarrelExports, kafkaTopicsEntries, topicImports));
 
   // Publishers
   const publisherBarrelExports: string[] = [];
@@ -116,13 +144,13 @@ export function compileKafkaNodes(
     files.push({
       filename: `src/publishers/${varName}.ts`,
       language: "typescript",
-      content: generatePublisherFile(t.name, nodeLabel),
+      content: generatePublisherFile(t.name, nodeLabel, t.payloadSchema),
     });
 
     publisherBarrelExports.push(`export * from "./${varName}";`);
   });
 
-  files.push(generatePublishersIndexFile(publisherBarrelExports, nodeLabel));
+  files.push(generatePublishersIndexFile(publisherBarrelExports, nodeLabel, topicList));
 
   // Consumers
   const consumerBarrelExports: string[] = [];

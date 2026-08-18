@@ -43,8 +43,26 @@ export function initConsumers(): void {
       const payloadInterfaceName = `${eventPascalName}EventPayload`;
       const schemaName = `${consumerFileName}PayloadSchema`;
 
+      let payloadSchema = ev.payloadSchema;
+      if (ev.brokerNodeId && ev.messagingResourceId) {
+        const brokerNode = allNodes.find((n) => n.id === ev.brokerNodeId);
+        const brokerResources = [
+          ...(brokerNode?.data?.topics || []),
+          ...(brokerNode?.data?.streams || []),
+          ...(brokerNode?.data?.queues || []),
+          ...(brokerNode?.data?.channels || []),
+        ];
+        const brokerResource = brokerResources.find((r) => r.id === ev.messagingResourceId);
+        if (brokerResource?.payloadSchema) {
+          payloadSchema = brokerResource.payloadSchema;
+        }
+      }
+
       const schemaObj = {
-        rawJson: ev.payloadSchema?.rawJson,
+        rawJson: payloadSchema?.rawJson,
+        fields: payloadSchema?.fields,
+        mode: payloadSchema?.mode,
+        requestBodyMode: payloadSchema?.requestBodyMode,
       };
       const zodRes = schemaToZodSchema(schemaName, schemaObj);
 

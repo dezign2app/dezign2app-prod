@@ -1,7 +1,7 @@
 import { BackendNode } from "@/types/canvas";
 import { Endpoint, AnyMessagingResource } from "@workspace/canvas/types";
 import { CompiledFile } from "@workspace/canvas/types";
-import { toVarName, toPascalCase } from "../utils";
+import { toVarName, toPascalCase, deriveRouteFileName } from "../utils";
 import {
   ParameterItem,
   SchemaItem,
@@ -222,9 +222,13 @@ export function generateTypesPackage(
     let serviceFolderName = toVarName(folderBase) || "service";
     let pascalServiceName = toPascalCase(folderBase);
 
-    if (processedServiceFolders.has(serviceFolderName)) {
-      serviceFolderName = `${serviceFolderName}_${serviceNode.id.replace(/[^a-zA-Z0-9]/g, "")}`;
-      pascalServiceName = `${pascalServiceName}_${toPascalCase(serviceNode.id)}`;
+    let dupCount = 1;
+    const baseFolderName = serviceFolderName;
+    const basePascalName = pascalServiceName;
+    while (processedServiceFolders.has(serviceFolderName)) {
+      dupCount += 1;
+      serviceFolderName = `${baseFolderName}_${dupCount}`;
+      pascalServiceName = `${basePascalName}${dupCount}`;
     }
     processedServiceFolders.add(serviceFolderName);
 
@@ -236,7 +240,7 @@ export function generateTypesPackage(
           ((serviceNode.data?.label && e.nodeId === serviceNode.data.label) ||
             (serviceNode.data?.label && e.nodeId === serviceNode.data.label.toLowerCase()))),
     );
-    if (nodeEndpoints.length === 0 && endpoints.length === 0 && serviceNode.data?.endpoints) {
+    if (nodeEndpoints.length === 0 && serviceNode.data?.endpoints) {
       nodeEndpoints = serviceNode.data.endpoints.map((ep) => ({
         ...ep,
         nodeId: serviceNode.id,
@@ -260,9 +264,7 @@ export function generateTypesPackage(
 
       nodeEndpoints.forEach((ep, index) => {
         const method = (ep.type || "GET").toLowerCase();
-        const rawName = ep.name || ep.id || "route";
-        let routeFileName =
-          toVarName(`${method}_${rawName}`) || `route_${index + 1}`;
+        let routeFileName = deriveRouteFileName(ep, index, rawServiceName);
 
         if (usedFileNames.has(routeFileName)) {
           routeFileName = `${routeFileName}_${index + 1}`;
@@ -358,13 +360,40 @@ export function generateTypesPackage(
   });
 
   // 4. Events Types: src/events/index.ts
+  // Always collect node-local events and merge them (de-duped by event ID) so that
+  // consumers importing types from @workspace/types never reference a missing export.
+  const seenEventIds = new Set<string>(events.map((e) => e.id));
+  const allEvents: (AnyMessagingResource & {
+    nodeId: string;
+    variant: "publish" | "consume";
+  })[] = [...events];
+
+  nodes.forEach((n) => {
+    if (n.data?.publishedEvents) {
+      n.data.publishedEvents.forEach((e) => {
+        if (!seenEventIds.has(e.id)) {
+          seenEventIds.add(e.id);
+          allEvents.push({ ...e, nodeId: n.id, variant: "publish" as const });
+        }
+      });
+    }
+    if (n.data?.consumedEvents) {
+      n.data.consumedEvents.forEach((e) => {
+        if (!seenEventIds.has(e.id)) {
+          seenEventIds.add(e.id);
+          allEvents.push({ ...e, nodeId: n.id, variant: "consume" as const });
+        }
+      });
+    }
+  });
+
   let eventsCode = `import { z } from "zod";\n\n`;
-  if (events.length === 0) {
+  if (allEvents.length === 0) {
     eventsCode += `// No messaging events configured\nexport type GenericEventPayload = Record<string, string | number | boolean | null>;\n`;
   } else {
     const processedEventNames = new Set<string>();
 
-    events.forEach((ev) => {
+    allEvents.forEach((ev) => {
       const eventName = ev.name || "event";
       const eventPascalName = toPascalCase(eventName);
       if (processedEventNames.has(eventPascalName)) return;
@@ -373,8 +402,26 @@ export function generateTypesPackage(
       const payloadInterfaceName = `${eventPascalName}EventPayload`;
       const schemaName = `${toVarName(eventName)}PayloadSchema`;
 
+      let payloadSchema = ev.payloadSchema;
+      if (ev.brokerNodeId && ev.messagingResourceId) {
+        const brokerNode = nodes.find((n) => n.id === ev.brokerNodeId);
+        const brokerResources = [
+          ...(brokerNode?.data?.topics || []),
+          ...(brokerNode?.data?.streams || []),
+          ...(brokerNode?.data?.queues || []),
+          ...(brokerNode?.data?.channels || []),
+        ];
+        const brokerResource = brokerResources.find((r) => r.id === ev.messagingResourceId);
+        if (brokerResource?.payloadSchema) {
+          payloadSchema = brokerResource.payloadSchema;
+        }
+      }
+
       const schemaObj = {
-        rawJson: ev.payloadSchema?.rawJson,
+        rawJson: payloadSchema?.rawJson,
+        fields: payloadSchema?.fields,
+        mode: payloadSchema?.mode,
+        requestBodyMode: payloadSchema?.requestBodyMode,
       };
 
       const interfaceRes = schemaToTsInterface(payloadInterfaceName, schemaObj);

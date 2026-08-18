@@ -31,12 +31,16 @@ export const schemaModelSchema = z.object({
   id: z.string(),
   fields: z.array(parameterSchema).optional(),
   rawJson: z.string().optional(),
+  mode: z.enum(["field_builder", "raw_json"]).optional(),
+  requestBodyMode: z.enum(["field_builder", "raw_json"]).optional(),
 });
 
 export const schemaModelInputSchema = z.object({
   id: z.string().optional(),
   fields: z.array(parameterInputSchema).optional(),
   rawJson: z.string().optional(),
+  mode: z.enum(["field_builder", "raw_json"]).optional(),
+  requestBodyMode: z.enum(["field_builder", "raw_json"]).optional(),
 });
 
 export const processingStepSchema = z.object({

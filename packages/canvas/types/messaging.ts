@@ -223,13 +223,10 @@ export type ConfigItemData = AnyMessagingResource & {
   nodeId?: string;
 };
 
+import type { BrokerResourceKey } from "../constants/messaging";
+
 export type ResourceArrayName =
-  | "topics"
-  | "streams"
-  | "queues"
-  | "channels"
-  | "caches"
-  | "buckets"
+  | BrokerResourceKey
   | "";
 
 export interface EventConfigProps {

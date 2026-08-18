@@ -17,11 +17,13 @@ export function generateTopicFile(topicName: string): string {
 export function generateTopicsIndexFile(
   topicBarrelExports: string[],
   kafkaTopicsEntries: string[],
+  topicImports: string[] = [],
 ): CompiledFile {
   return {
     filename: "src/topics/index.ts",
     language: "typescript",
     content: [
+      ...(topicImports.length > 0 ? [...topicImports, ""] : []),
       `/** Barrel export for all topic constants */`,
       ...topicBarrelExports,
       ``,

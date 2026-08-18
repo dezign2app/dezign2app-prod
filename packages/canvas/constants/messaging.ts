@@ -1,3 +1,14 @@
+export const BROKER_RESOURCE_KEYS = [
+  "topics",
+  "streams",
+  "queues",
+  "channels",
+  "caches",
+  "buckets",
+] as const;
+
+export type BrokerResourceKey = (typeof BROKER_RESOURCE_KEYS)[number];
+
 export const MESSAGING_RESOURCE_TYPES = [
   "topics",
   "streams",

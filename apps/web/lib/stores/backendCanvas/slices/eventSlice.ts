@@ -128,9 +128,26 @@ export const createEventSlice = (
       }
     }
 
+    // Clean up all edges connected to this event handle or resource ID
+    const currentEdges = get().edges;
+    const removedEdges = currentEdges.filter(
+      (edge) =>
+        edge &&
+        (edge.sourceHandle === `publishedEvents-out-${id}` ||
+          edge.targetHandle === `consumedEvents-in-${id}` ||
+          edge.sourceHandle?.includes(id) ||
+          edge.targetHandle?.includes(id) ||
+          edge.sourceResourceId === id ||
+          edge.targetResourceId === id),
+    );
+    const removedEdgeIds = removedEdges.map((e) => e.id);
+    const nextEdges = currentEdges.filter((e) => !removedEdgeIds.includes(e.id));
+
     set({
       events: nextEvents,
       ...(endpointsChanged ? { endpoints: nextEndpoints, pendingEndpointUpserts } : {}),
+      edges: nextEdges,
+      pendingEdgeRemovals: [...get().pendingEdgeRemovals, ...removedEdgeIds],
       activeConfigItem: active?.id === id ? null : active,
       ...(targetNodeId
         ? {

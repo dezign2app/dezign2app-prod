@@ -11,7 +11,7 @@ export function generateReusableFunctions(
       name: "publishKafkaEvent",
       importPath: `${packageName}/publishers`,
       signature:
-        "publishKafkaEvent<T extends Record<string, string | number | boolean | null>>(topic: string, message: T, key?: string): Promise<void>",
+        "publishKafkaEvent<T extends Record<string, unknown>>(topic: string, message: T, key?: string): Promise<void>",
       targetName: packageFolder,
       kind: "publish",
     },
@@ -31,25 +31,25 @@ export function generateReusableFunctions(
       kind: "custom",
     },
     // Per-topic typed publish functions
-    ...topicList.map((t) => {
+    ...topicList.map((t): ReusableFunction => {
       const fnName = `publish${toPascalCase(t.name || "Event")}`;
       return {
         name: fnName,
         importPath: `${packageName}/publishers`,
         signature: `${fnName}(message: ${toPascalCase(t.name || "Event")}Payload, key?: string): Promise<void>`,
         targetName: t.name,
-        kind: "publish" as const,
+        kind: "publish",
       };
     }),
     // Per-topic typed consume functions
-    ...topicList.map((t) => {
+    ...topicList.map((t): ReusableFunction => {
       const fnName = `consume${toPascalCase(t.name || "Event")}`;
       return {
         name: fnName,
         importPath: `${packageName}/consumers`,
         signature: `${fnName}(groupId: string, handler: (payload: EachMessagePayload) => Promise<void>): Promise<Consumer>`,
         targetName: t.name,
-        kind: "consume" as const,
+        kind: "consume",
       };
     }),
   ];

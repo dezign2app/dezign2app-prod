@@ -17,6 +17,8 @@ export type Schema = {
   id: string;
   fields?: Parameter[];
   rawJson?: string;
+  mode?: "field_builder" | "raw_json";
+  requestBodyMode?: "field_builder" | "raw_json";
 };
 
 import type { processingOperationEnum, parameterTypeEnum } from "../schemas/primitives";

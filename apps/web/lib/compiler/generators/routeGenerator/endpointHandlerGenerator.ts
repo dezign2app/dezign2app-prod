@@ -1,6 +1,6 @@
 import { Endpoint, AnyMessagingResource, CompiledFile, ReusableFunction } from "@workspace/canvas/types";
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { parseSchemaJson, toVarName, toPascalCase, toEnvVarName } from "../../utils";
+import { parseSchemaJson, toVarName, toPascalCase, toEnvVarName, deriveRouteFileName } from "../../utils";
 
 function toTsType(colType: string): string {
   const t = (colType || "string").toLowerCase();
@@ -68,14 +68,16 @@ export function generateEndpointRouteHandler(
   } = params;
 
   const method = (ep.type || "GET").toLowerCase();
-  const rawName = ep.name || ep.id || "route";
-  let routeFileName =
-    toVarName(`${method}_${rawName}`) || `route_${index + 1}`;
+  let routeFileName = deriveRouteFileName(ep, index, serviceName);
 
   if (usedFileNames.has(routeFileName)) {
     routeFileName = `${routeFileName}_${index + 1}`;
   }
   usedFileNames.add(routeFileName);
+
+  // rawName = the actual endpoint path, used for event-name fuzzy matching below.
+  // It is intentionally separate from routeFileName (which is the human-readable derived name).
+  const rawName = ep.name?.trim() ? ep.name.trim() : `endpoint_${index + 1}`;
 
   const handlerName = `${routeFileName}Handler`;
   const pascalName = `${pascalServiceName}${toPascalCase(routeFileName)}`;
@@ -92,7 +94,7 @@ export function generateEndpointRouteHandler(
       "\n    ",
     );
   } else {
-    responseData = `{\n      success: true,\n      message: "Successfully executed ${ep.type || "GET"} ${path}",\n      timestamp: new Date().toISOString()\n    }`;
+    responseData = `{\n      status: 200,\n      message: "Successfully executed ${ep.type || "GET"} ${path}"\n    }`;
   }
 
   const queryTypeRes = parametersToTsInterface(
@@ -173,7 +175,7 @@ export function generateEndpointRouteHandler(
     }
     const topicsConst = kafkaFunctions.find((f) => f.name === "KAFKA_TOPICS");
     if (topicsConst) {
-      const importPath = publishFn?.importPath || topicsConst.importPath;
+      const importPath = topicsConst.importPath;
       if (!extraImports.has(importPath)) {
         extraImports.set(importPath, new Set());
       }
@@ -461,13 +463,19 @@ export async function ${handlerName}(
     let resolvedTopicName: string | undefined;
 
     if (matchedEvent) {
-      const brokerId = (matchedEvent as { brokerNodeId?: string }).brokerNodeId;
-      const resourceId = (matchedEvent as { messagingResourceId?: string }).messagingResourceId;
+      const brokerId =
+        "brokerNodeId" in matchedEvent && typeof matchedEvent.brokerNodeId === "string"
+          ? matchedEvent.brokerNodeId
+          : undefined;
+      const resourceId =
+        "messagingResourceId" in matchedEvent && typeof matchedEvent.messagingResourceId === "string"
+          ? matchedEvent.messagingResourceId
+          : undefined;
 
       if (brokerId && resourceId) {
         const brokerNode = allNodes.find((n) => n.id === brokerId);
-        const topics = (brokerNode?.data as { topics?: Array<{ id: string; name: string }> })?.topics;
-        const topicRes = topics?.find((t) => t.id === resourceId);
+        const topics = brokerNode?.data?.topics;
+        const topicRes = Array.isArray(topics) ? topics.find((t) => t.id === resourceId) : undefined;
         if (topicRes?.name) {
           resolvedTopicName = topicRes.name;
         }
@@ -475,8 +483,8 @@ export async function ${handlerName}(
 
       if (!resolvedTopicName && matchedEvent.name) {
         for (const node of allNodes) {
-          const topics = (node.data as { topics?: Array<{ id: string; name: string }> })?.topics;
-          const t = topics?.find((top) => top.name === matchedEvent.name);
+          const topics = node.data?.topics;
+          const t = Array.isArray(topics) ? topics.find((top) => top.name === matchedEvent.name) : undefined;
           if (t?.name) {
             resolvedTopicName = t.name;
             break;
@@ -488,8 +496,8 @@ export async function ${handlerName}(
     if (!resolvedTopicName) {
       for (const node of allNodes) {
         if (node.type === "kafka") {
-          const topics = (node.data as { topics?: Array<{ id: string; name: string }> })?.topics;
-          const firstTopicName = topics?.[0]?.name;
+          const topics = node.data?.topics;
+          const firstTopicName = Array.isArray(topics) ? topics[0]?.name : undefined;
           if (firstTopicName) {
             resolvedTopicName = firstTopicName;
             break;

@@ -136,7 +136,7 @@ def test_health_route():
   } else {
     nodeEndpoints.forEach((ep, index) => {
       const method = (ep.type || "GET").toLowerCase();
-      const rawName = ep.name || ep.id || "route";
+      const rawName = ep.name?.trim() ? ep.name.trim() : `endpoint_${index + 1}`;
       let routeFileName = toPythonRouteFileName(method, rawName, index);
 
       const testFilename = `tests/unit/test_${routeFileName}.py`;

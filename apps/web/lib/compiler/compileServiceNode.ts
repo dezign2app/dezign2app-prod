@@ -77,7 +77,7 @@ export function compileServiceNode(
           (node.data?.label && e.nodeId === node.data.label.toLowerCase()))),
   );
 
-  if (nodeEvents.length === 0 && events.length === 0) {
+  if (nodeEvents.length === 0) {
     if (node.data?.consumedEvents) {
       nodeEvents.push(
         ...node.data.consumedEvents.map((e) => ({

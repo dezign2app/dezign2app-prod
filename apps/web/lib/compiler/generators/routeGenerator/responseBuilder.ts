@@ -23,7 +23,7 @@ export function buildResponsePayloadCode(
           : lastOp
             ? `${lastOp.fn.name}Result`
             : "result";
-      return `{ success: true, data: ${primaryVar}, timestamp: new Date().toISOString() }`;
+      return `{ status: ${statusCode}, message: "Successfully executed ${ep.type || "GET"} ${path}", data: ${primaryVar} }`;
     }
     return responseData;
   }
