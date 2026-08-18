@@ -293,11 +293,13 @@ export function generateAuthConfig(data: AuthNodeData): string {
   return `import { betterAuth } from "better-auth";
 ${adapterConfig.importStatement}
 ${createMiddlewareImport}${pluginImportStr}
-export const auth: ReturnType<typeof betterAuth> = betterAuth({
+export const auth = betterAuth({
   database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}
   plugins: [
     ${pluginCalls.join(",\n    ")}
   ],
 });
+
+export type Auth = typeof auth;
 `;
 }

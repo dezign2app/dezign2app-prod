@@ -174,6 +174,8 @@ export function generateTypescriptConfigPackage(): CompiledFile[] {
         plugins: [{ name: "next" }],
         module: "ESNext",
         moduleResolution: "Bundler",
+        declaration: false,
+        declarationMap: false,
         allowJs: true,
         jsx: "preserve",
         noEmit: true,

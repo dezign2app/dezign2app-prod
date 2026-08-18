@@ -1,6 +1,6 @@
 import React from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { ShieldCheck, Settings } from "lucide-react";
+import { ShieldCheck, Settings, Database } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -35,12 +35,14 @@ export const AuthNode = ({
     (s) => s.setActiveConfigItem,
   );
   const edges = useBackendCanvasStore((s) => s.edges);
+  const allNodes = useBackendCanvasStore((s) => s.nodes);
 
   const updateData = (changes: Partial<BackendNode["data"]>) =>
     updateNode(id, { data: { ...data, ...changes } });
 
   const framework = data.framework || DEFAULT_AUTH_FRAMEWORK;
   const version = data.version || DEFAULT_BETTER_AUTH_VERSION;
+  const databaseNodes = allNodes.filter((n) => n.type === "database");
 
   // Calculate connected WebApp / service apps
   const connectedAppsCount = edges.filter(
@@ -131,6 +133,34 @@ export const AuthNode = ({
             + Creem Plugin
           </span>
         )}
+      </div>
+
+      {/* Database Node Selector */}
+      <div className="px-3 py-1.5 bg-muted/30 border-t border-border/50 flex items-center justify-between gap-2 nodrag">
+        <div className="flex items-center gap-1.5 text-muted-foreground min-w-0">
+          <Database className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+          <span className="text-[10.5px] font-medium text-foreground">DB:</span>
+        </div>
+        <Select
+          value={data.databaseId || "none"}
+          onValueChange={(val: string) =>
+            updateData({ databaseId: val === "none" ? undefined : val })
+          }
+        >
+          <SelectTrigger className="h-6 text-[11px] font-mono px-2 py-0.5 max-w-[200px] bg-background/80 border border-border nodrag focus:ring-0 shadow-none truncate">
+            <SelectValue placeholder="Select Database..." />
+          </SelectTrigger>
+          <SelectContent className="nodrag font-mono">
+            <SelectItem value="none" className="text-xs font-mono text-muted-foreground">
+              All Tables (No DB Filter)
+            </SelectItem>
+            {databaseNodes.map((db) => (
+              <SelectItem key={db.id} value={db.id} className="text-xs font-mono">
+                {db.data?.label || "Database"} ({db.data?.dbEngine || "sqlite"})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="p-2.5 border-t border-border/50 flex items-center justify-between gap-2 bg-muted/20 nodrag">

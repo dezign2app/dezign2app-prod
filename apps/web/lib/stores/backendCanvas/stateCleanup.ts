@@ -27,8 +27,63 @@ export function cleanupDeletedNodesState(
   const idsToDeleteArray = Array.from(allIdsSet);
   if (idsToDeleteArray.length === 0) return {};
 
-  // 1. Next Nodes
-  const nextNodes = currentState.nodes.filter((n) => !allIdsSet.has(n.id));
+  // 1. Next Nodes (and clean up internal references on auth nodes)
+  const nextNodes = currentState.nodes
+    .filter((n) => !allIdsSet.has(n.id))
+    .map((node) => {
+      if (node.type === "auth" && node.data) {
+        let changed = false;
+        let newData = { ...node.data };
+
+        // Clean up databaseId if the referenced database node was deleted
+        if (newData.databaseId && allIdsSet.has(newData.databaseId)) {
+          newData.databaseId = undefined;
+          changed = true;
+        }
+
+        // Clean up table mappings if referenced entity was deleted
+        if (newData.tableMappings) {
+          const newMappings: Record<string, string | undefined> = { ...newData.tableMappings };
+          let mappingsChanged = false;
+          for (const [key, entId] of Object.entries(newMappings)) {
+            if (entId && allIdsSet.has(entId)) {
+              delete newMappings[key];
+              mappingsChanged = true;
+            }
+          }
+          if (mappingsChanged) {
+            newData.tableMappings = newMappings;
+            changed = true;
+          }
+        }
+
+        // Clean up userEntityId / userSchemaId
+        if (newData.userEntityId && allIdsSet.has(newData.userEntityId)) {
+          newData.userEntityId = undefined;
+          changed = true;
+        }
+        if (newData.userSchemaId && allIdsSet.has(newData.userSchemaId)) {
+          newData.userSchemaId = undefined;
+          changed = true;
+        }
+
+        // Clean up authFunctions
+        if (
+          newData.authFunctions &&
+          newData.authFunctions.some((af: { entityNodeId?: string }) => af.entityNodeId && allIdsSet.has(af.entityNodeId))
+        ) {
+          newData.authFunctions = newData.authFunctions.filter(
+            (af: { entityNodeId?: string }) => !af.entityNodeId || !allIdsSet.has(af.entityNodeId)
+          );
+          changed = true;
+        }
+
+        if (changed) {
+          return { ...node, data: newData };
+        }
+      }
+      return node;
+    });
 
   // 2. Events to remove (publishers & consumers)
   const eventsToDelete = currentState.events.filter((ev) =>
@@ -166,6 +221,11 @@ export function cleanupDeletedNodesState(
     return old && old !== ev;
   });
 
+  const changedNodes = nextNodes.filter((n) => {
+    const old = currentState.nodes.find((o) => o.id === n.id);
+    return old && old !== n;
+  });
+
   return {
     nodes: nextNodes,
     edges: nextEdges,
@@ -173,6 +233,10 @@ export function cleanupDeletedNodesState(
     events: nextEvents,
     identityProviders: nextProviders,
     activeConfigItem: nextActiveConfigItem,
+    pendingNodeUpserts: [
+      ...currentState.pendingNodeUpserts,
+      ...changedNodes,
+    ],
     pendingNodeRemovals: [
       ...currentState.pendingNodeRemovals,
       ...idsToDeleteArray,

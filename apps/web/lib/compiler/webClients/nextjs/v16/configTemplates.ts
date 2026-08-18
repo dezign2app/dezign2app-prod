@@ -16,7 +16,9 @@ export function generateProjectConfigFiles(appSlug: string = "web-app"): Compile
         test: "vitest run",
       },
       dependencies: {
+        "@workspace/db": "workspace:*",
         "@workspace/logger": "workspace:*",
+        "@workspace/types": "workspace:*",
         "@workspace/ui": "workspace:*",
         "lucide-react": "^0.475.0",
         next: "^16.0.0",
@@ -47,6 +49,8 @@ export function generateProjectConfigFiles(appSlug: string = "web-app"): Compile
         paths: {
           "@/*": ["./*"],
         },
+        declaration: false,
+        declarationMap: false,
       },
       include: [
         "next-env.d.ts",
@@ -64,8 +68,8 @@ export function generateProjectConfigFiles(appSlug: string = "web-app"): Compile
   const nextConfig = `/** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@workspace/ui", "@workspace/logger"],
-  serverExternalPackages: ["better-sqlite3", "better-auth", "@workspace/db"],
+  transpilePackages: ["@workspace/ui", "@workspace/logger", "@workspace/db", "@workspace/types"],
+  serverExternalPackages: ["better-sqlite3", "better-auth"],
 };
 
 export default nextConfig;

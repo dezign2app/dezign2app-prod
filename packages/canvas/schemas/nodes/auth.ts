@@ -164,6 +164,7 @@ export const authDataSchema = baseNodeDataSchema
     provider: z.string().optional(),
     version: z.string().optional(),
     dbAdapter: z.string().optional(),
+    databaseId: z.string().optional(),
     authFunctions: z.array(authFunctionRefSchema).optional(),
     tableMappings: betterAuthTableMappingSchema.optional(),
     userEntityId: z.string().optional(),
