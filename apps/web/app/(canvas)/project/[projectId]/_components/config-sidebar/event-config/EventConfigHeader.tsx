@@ -12,15 +12,16 @@ export const EventConfigHeader: React.FC<EventConfigHeaderProps> = ({
 }) => {
   const isCache = resourceArrayName === "caches" || item.kind === "cache";
   const isBucket = resourceArrayName === "buckets";
+  const isConsumed = item.variant === "consume";
 
   return (
     <div className="flex flex-col gap-2 border-b border-border/50 pb-6">
       <div className="flex items-center gap-2.5">
         <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-orange-500/15 text-orange-500 rounded border border-orange-500/20 shadow-sm">
-          {isCache ? "CACHE" : isBucket ? "STORAGE" : "EVENT"}
+          {isCache ? "CACHE" : isBucket ? "STORAGE" : isConsumed ? "CONSUMER" : "EVENT"}
         </span>
         <span className="text-lg font-semibold tracking-tight text-foreground">
-          {item.name}
+          {item.name || (isConsumed ? "Event Consumer" : "Untitled Event")}
         </span>
       </div>
       <span className="text-sm text-muted-foreground">
@@ -28,7 +29,9 @@ export const EventConfigHeader: React.FC<EventConfigHeaderProps> = ({
           ? "Configure caching details and schema."
           : isBucket
             ? "Configure data persistence, schema and events."
-            : "Configure event and messaging details."}
+            : isConsumed
+              ? "Configure broker subscription, topic, and handler logic."
+              : "Configure event and messaging details."}
       </span>
     </div>
   );
