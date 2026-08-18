@@ -20,7 +20,43 @@ if (!convexUrl) {
 
 const convex = new ConvexReactClient(convexUrl);
 
+import "@/lib/utils/patchResizeObserver";
 import { Toaster } from "@workspace/ui/components/sonner";
+
+// Suppress benign browser ResizeObserver loop notifications from triggering Next.js dev error overlays
+if (typeof window !== "undefined") {
+  const isResizeObserverError = (msg: unknown) => {
+    if (typeof msg !== "string") return false;
+    return (
+      msg.includes("ResizeObserver loop completed with undelivered notifications") ||
+      msg.includes("ResizeObserver loop limit exceeded") ||
+      msg.includes("ResizeObserver")
+    );
+  };
+
+  window.addEventListener(
+    "error",
+    (e: ErrorEvent) => {
+      if (isResizeObserverError(e.message)) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      }
+    },
+    true,
+  );
+
+  window.addEventListener(
+    "unhandledrejection",
+    (e: PromiseRejectionEvent) => {
+      const msg = e.reason?.message || String(e.reason);
+      if (isResizeObserverError(msg)) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      }
+    },
+    true,
+  );
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
