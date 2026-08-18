@@ -27,6 +27,13 @@ export function compileBetterAuthV16(
   const serviceName = data.label || "Auth";
   const authPort = data.port || "3000";
   const authBaseUrl = data.baseUrl || `http://localhost:${authPort}`;
+  const enabledPlugins = data.plugins || ["bearer", "admin", "organization", "jwt"];
+  const clientPlugins: string[] = [];
+  if (enabledPlugins.includes("admin")) clientPlugins.push("adminClient");
+  if (enabledPlugins.includes("organization")) clientPlugins.push("organizationClient");
+  if (clientPlugins.length === 0) {
+    clientPlugins.push("adminClient", "organizationClient");
+  }
 
   const files: CompiledFile[] = [
     {
@@ -38,8 +45,8 @@ export function compileBetterAuthV16(
       filename: "auth-client.ts",
       language: "typescript",
       content: generateAuthClient({
-        baseUrl: authBaseUrl,
-        plugins: ["adminClient", "organizationClient"],
+        baseURL: authBaseUrl,
+        plugins: clientPlugins,
       }),
     },
     {
