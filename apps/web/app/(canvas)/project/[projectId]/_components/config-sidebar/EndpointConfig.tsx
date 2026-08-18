@@ -22,9 +22,6 @@ import {
 } from "@workspace/ui/components/select";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
-import { useSimulationStore } from "@/lib/stores/simulationStore";
-import { useMutation } from "convex/react";
-import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { useParams } from "next/navigation";
 import {
@@ -38,6 +35,7 @@ import { useCallerWebClientZone } from "./hooks/useCallerWebClientZone";
 import { AuthAwarenessBanner } from "./AuthAwarenessBanner";
 import { RequestBodyEditor } from "./RequestBodyEditor";
 import { ResponseBodyEditor } from "./ResponseBodyEditor";
+import { EndpointTestCasesSection } from "./endpoint-testing/EndpointTestCasesSection";
 
 interface EndpointConfigProps {
   id: string;
@@ -54,13 +52,6 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
     s.nodes.find((n) => n.id === nodeId),
   );
   const authRules = node?.data.authRules || [];
-
-  const testCases = useSimulationStore((s) => s.testCases);
-  const updateTestCase = useSimulationStore((s) => s.updateTestCase);
-  const upsertBackendTestCase = useMutation(api.canvas.upsertBackendTestCase);
-
-  const selectedCaseId = useSimulationStore((s) => s.selectedCaseId) || "none";
-  const selectTestCase = useSimulationStore((s) => s.selectTestCase);
 
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const allEdges = useBackendCanvasStore((s) => s.edges);
@@ -409,6 +400,12 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         }
         availableTableNodes={availableTableNodes}
         allNodes={allNodes}
+      />
+
+      <EndpointTestCasesSection
+        endpoint={item}
+        nodeId={nodeId}
+        serviceNode={node}
       />
     </div>
   );

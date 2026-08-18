@@ -1,0 +1,234 @@
+"use client";
+
+import React, { useState, useRef, useMemo } from "react";
+import { Button } from "@workspace/ui/components/button";
+import { Input } from "@workspace/ui/components/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select";
+import {
+  Play,
+  Send,
+  Loader2,
+  Globe,
+  Settings2,
+  RefreshCw,
+  SlidersHorizontal,
+} from "lucide-react";
+import { Endpoint, BackendNode } from "@/types/canvas";
+import { SimulationTestCase } from "@workspace/canvas";
+import {
+  buildFullEndpointUrl,
+  executeLiveApiCall,
+  evaluateAssertions,
+  getServiceDefaultPort,
+  LiveApiCallResult,
+  AssertionResultItem,
+} from "./utils";
+import { EndpointResponseViewer } from "./EndpointResponseViewer";
+import { cn } from "@workspace/ui/lib/utils";
+
+interface EndpointLiveRunnerProps {
+  testCase: SimulationTestCase;
+  endpoint: Endpoint;
+  nodeId: string;
+  serviceNode?: BackendNode | null;
+  onRunCompleted?: (result: LiveApiCallResult, assertions: AssertionResultItem[]) => void;
+}
+
+export function EndpointLiveRunner({
+  testCase,
+  endpoint,
+  nodeId,
+  serviceNode,
+  onRunCompleted,
+}: EndpointLiveRunnerProps) {
+  const defaultPort = useMemo(() => getServiceDefaultPort(serviceNode), [serviceNode]);
+  const defaultLocalBaseUrl = `http://localhost:${defaultPort}`;
+
+  const [envMode, setEnvMode] = useState<"local" | "custom">("local");
+  const [customBaseUrl, setCustomBaseUrl] = useState<string>("");
+  const [activeBaseUrl, setActiveBaseUrl] = useState<string>(defaultLocalBaseUrl);
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastResult, setLastResult] = useState<LiveApiCallResult | null>(null);
+  const [lastAssertions, setLastAssertions] = useState<AssertionResultItem[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Extract path and query params from testCase.request
+  const pathParams: Record<string, string> = {};
+  const queryParams: Record<string, string> = {};
+
+  if (testCase.request?.params) {
+    const rawPath = endpoint.name || "";
+    Object.entries(testCase.request.params).forEach(([k, v]) => {
+      if (
+        rawPath.includes(`:${k}`) ||
+        rawPath.includes(`{${k}}`) ||
+        endpoint.pathParams?.some((p) => p.key === k || p.name === k)
+      ) {
+        pathParams[k] = String(v ?? "");
+      } else {
+        queryParams[k] = String(v ?? "");
+      }
+    });
+  }
+
+  const effectiveBaseUrl =
+    envMode === "local" ? defaultLocalBaseUrl : customBaseUrl || defaultLocalBaseUrl;
+
+  const targetUrl = useMemo(() => {
+    return buildFullEndpointUrl(
+      effectiveBaseUrl,
+      endpoint.name || "/",
+      pathParams,
+      queryParams,
+    );
+  }, [effectiveBaseUrl, endpoint.name, pathParams, queryParams]);
+
+  const method = (endpoint.type || "GET").toUpperCase();
+
+  const handleSend = async () => {
+    if (isLoading) {
+      abortControllerRef.current?.abort();
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    abortControllerRef.current = new AbortController();
+
+    try {
+      const headers = { ...(testCase.request?.headers || {}) };
+      const body = testCase.request?.body;
+
+      const result = await executeLiveApiCall({
+        url: targetUrl,
+        method,
+        headers,
+        body,
+        signal: abortControllerRef.current.signal,
+      });
+
+      const assertions = evaluateAssertions({
+        actualStatus: result.status,
+        actualBody: result.body,
+        latencyMs: result.latencyMs,
+        expectedStatus: testCase.expectedStatus,
+        expectedBody: testCase.expectedBody,
+      });
+
+      setLastResult(result);
+      setLastAssertions(assertions);
+      onRunCompleted?.(result, assertions);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const methodColors: Record<string, string> = {
+    GET: "bg-zinc-800 text-sky-400 border-zinc-700/60",
+    POST: "bg-zinc-800 text-emerald-400 border-zinc-700/60",
+    PUT: "bg-zinc-800 text-amber-400 border-zinc-700/60",
+    PATCH: "bg-zinc-800 text-purple-400 border-zinc-700/60",
+    DELETE: "bg-zinc-800 text-rose-400 border-zinc-700/60",
+  };
+
+  return (
+    <div className="flex flex-col gap-3 font-sans">
+      {/* Target URL & Environment Bar */}
+      <div className="flex flex-col gap-2 rounded-xl border border-border/50 bg-card/50 p-3 shadow-sm backdrop-blur-sm">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <Globe className="w-3.5 h-3.5 text-muted-foreground" />
+            <span>Target Environment & URL</span>
+          </span>
+
+          <div className="flex items-center gap-1.5">
+            <Select
+              value={envMode}
+              onValueChange={(val: "local" | "custom") => setEnvMode(val)}
+            >
+              <SelectTrigger className="h-6 text-[11px] px-2 bg-background border-border/60">
+                <SelectValue placeholder="Select Env" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="local" className="text-xs">
+                  Local Dev (:{defaultPort})
+                </SelectItem>
+                <SelectItem value="custom" className="text-xs">
+                  Custom URL / Tunnel
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {envMode === "custom" && (
+          <div className="flex items-center gap-2">
+            <Input
+              value={customBaseUrl}
+              onChange={(e) => setCustomBaseUrl(e.target.value)}
+              placeholder="e.g. https://api-dev.example.com or http://localhost:8080"
+              className="h-7 text-xs font-mono bg-background border-border/60"
+            />
+          </div>
+        )}
+
+        {/* Live URL & Send Bar */}
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span
+            className={cn(
+              "px-2 py-0.5 rounded text-[10px] font-mono font-bold border shrink-0 uppercase",
+              methodColors[method] || "bg-secondary text-foreground border-border/50",
+            )}
+          >
+            {method}
+          </span>
+          <div className="flex-1 px-2.5 py-1 rounded-md bg-zinc-950/80 border border-zinc-800 text-zinc-300 font-mono text-[11px] truncate select-all">
+            {targetUrl}
+          </div>
+          <Button
+            size="sm"
+            onClick={handleSend}
+            disabled={isLoading && !abortControllerRef.current}
+            variant="secondary"
+            className={cn(
+              "h-7 px-3 text-xs font-medium border border-border/60 shadow-none gap-1.5 shrink-0 transition-all",
+              isLoading
+                ? "bg-destructive/15 text-destructive border-destructive/30 hover:bg-destructive/25"
+                : "bg-secondary hover:bg-secondary/80 text-foreground",
+            )}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Cancel</span>
+              </>
+            ) : (
+              <>
+                <Send className="w-3.5 h-3.5 text-muted-foreground" />
+                <span>Send Request</span>
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {/* Response and Assertion Results */}
+      <EndpointResponseViewer
+        result={lastResult}
+        assertions={lastAssertions}
+        isLoading={isLoading}
+        onClear={() => {
+          setLastResult(null);
+          setLastAssertions([]);
+        }}
+      />
+    </div>
+  );
+}
