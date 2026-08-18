@@ -72,8 +72,26 @@ export const ConfigSidebar = () => {
     });
   }, [activeConfigItem]);
 
+  const cleanupIfUnconfigured = (item: ConfigItem | null) => {
+    if (item && item.type === "event") {
+      const ev = useBackendCanvasStore
+        .getState()
+        .events.find((e) => e.id === item.id);
+      if (ev && ev.variant === "consume") {
+        const isConfigured = Boolean(
+          (ev.name && ev.name.trim().length > 0) ||
+            (ev.messagingResourceId && ev.messagingResourceId !== "none"),
+        );
+        if (!isConfigured) {
+          useBackendCanvasStore.getState().deleteEvent(item.id);
+        }
+      }
+    }
+  };
+
   const handleBack = () => {
     if (history.length > 1) {
+      cleanupIfUnconfigured(activeConfigItem);
       setActiveConfigItem(history[history.length - 2] ?? null);
     }
   };
@@ -109,7 +127,12 @@ export const ConfigSidebar = () => {
     <Sheet
       modal={false}
       open={open}
-      onOpenChange={(isOpen) => !isOpen && setActiveConfigItem(null)}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          cleanupIfUnconfigured(activeConfigItem);
+          setActiveConfigItem(null);
+        }
+      }}
     >
       <SheetContent
         hideOverlay

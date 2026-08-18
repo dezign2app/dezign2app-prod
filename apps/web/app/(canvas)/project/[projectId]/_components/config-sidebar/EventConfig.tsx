@@ -1,4 +1,5 @@
 import React from "react";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { SchemaEditor } from "../backend-nodes/graph-nodes/Editors";
 import {
   EventConfigProps,

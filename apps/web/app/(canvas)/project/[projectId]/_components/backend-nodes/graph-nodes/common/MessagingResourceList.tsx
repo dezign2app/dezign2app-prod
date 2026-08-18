@@ -135,6 +135,11 @@ export const MessagingResourceRow = ({
     return !hasName && !hasDesc && !hasSchema && !hasLogic && !hasTarget && !hasResource;
   };
 
+  const resolvedTopicName =
+    item.name ||
+    allAvailableBrokerTopics.find((t) => t.resourceId === item.messagingResourceId)?.name ||
+    (item._legacyName as string | undefined);
+
   return (
     <div
       className="flex flex-col border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20 nodrag"
@@ -145,16 +150,18 @@ export const MessagingResourceRow = ({
         if (related?.closest("[data-radix-popper-content-wrapper]")) return;
 
         if (!e.currentTarget.contains(related)) {
-          if (isChannelEmpty()) {
-            handleDelete(item.id);
-            if (isEditing) setEditingId(null);
-          } else if (isEditing) {
-            const wasEmpty = !item.name;
-            handleUpdate(item.id, editingName.trim());
-            if (wasEmpty && editingName.trim()) {
-              setActiveConfigItem({ type: "event", id: item.id, nodeId });
+          if (isEditing) {
+            if (isChannelEmpty()) {
+              handleDelete(item.id);
+              setEditingId(null);
+            } else {
+              const wasEmpty = !item.name;
+              handleUpdate(item.id, editingName.trim());
+              if (wasEmpty && editingName.trim()) {
+                setActiveConfigItem({ type: "event", id: item.id, nodeId });
+              }
+              setEditingId(null);
             }
-            setEditingId(null);
           }
         }
       }}
@@ -205,7 +212,7 @@ export const MessagingResourceRow = ({
         </>
       )}
       <div className="flex flex-col px-3 py-1.5 nodrag">
-        {isEditing ? (
+        {isEditing && !isConsumed ? (
           isPublished ? (
             <div className="flex items-center gap-1 w-full nodrag">
               <Select
@@ -315,13 +322,22 @@ export const MessagingResourceRow = ({
             <div
               className="flex items-center justify-between w-full cursor-pointer"
               onClick={() => {
-                setEditingId(item.id);
-                setEditingName(item.name || "");
+                if (isConsumed) {
+                  setActiveConfigItem({ type: "event", id: item.id, nodeId });
+                } else {
+                  setEditingId(item.id);
+                  setEditingName(item.name || "");
+                }
               }}
             >
               <div className="flex items-center gap-2 overflow-hidden">
-                <span className="font-medium truncate">
-                  {item.name || (item._legacyName as string | undefined)}
+                <span
+                  className={cn(
+                    "font-medium truncate",
+                    isConsumed && !resolvedTopicName && "text-muted-foreground/70 italic",
+                  )}
+                >
+                  {resolvedTopicName || (isConsumed ? "Select Topic..." : "Untitled Resource")}
                 </span>
                 {variant === "definition" && item.name && (
                   <span className="text-[9px] bg-secondary/80 text-muted-foreground px-1 py-0.5 rounded font-mono shrink-0">
@@ -330,7 +346,14 @@ export const MessagingResourceRow = ({
                   </span>
                 )}
               </div>
-              <div className={cn("flex items-center gap-1 transition-all", isPublished ? "opacity-100" : "opacity-0 group-hover/row:opacity-100")}>
+              <div
+                className={cn(
+                  "flex items-center gap-1 transition-all",
+                  isPublished || isConsumed
+                    ? "opacity-100"
+                    : "opacity-0 group-hover/row:opacity-100",
+                )}
+              >
                 <div
                   className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
                   onClick={(e) => {
@@ -391,6 +414,10 @@ export const MessagingResourceList = <
   handlePosition?: "left" | "right" | "top" | "bottom";
   asCard?: boolean;
 }) => {
+  const setActiveConfigItem = useBackendCanvasStore(
+    (s) => s.setActiveConfigItem,
+  );
+  const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
 
@@ -418,8 +445,12 @@ export const MessagingResourceList = <
     } else if (onChange) {
       onChange([...items, newItem]);
     }
-    setEditingId(newItem.id);
-    setEditingName("");
+    if (variant === "consume" || field === "consumedEvents") {
+      setActiveConfigItem({ type: "event", id: newItem.id, nodeId });
+    } else {
+      setEditingId(newItem.id);
+      setEditingName("");
+    }
   };
 
   const handleUpdate = (id: string, name: string) => {
@@ -488,6 +519,7 @@ export const MessagingResourceList = <
               handleUpdateItem={handleUpdateItem}
               variant={variant}
               resourceType={resourceType}
+              field={field}
             />
           ))}
         </div>
@@ -522,6 +554,7 @@ export const MessagingResourceList = <
             handleUpdateItem={handleUpdateItem}
             variant={variant}
             resourceType={resourceType}
+            field={field}
           />
         ))}
       </div>
