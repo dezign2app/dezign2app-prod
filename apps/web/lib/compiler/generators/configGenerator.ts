@@ -66,7 +66,7 @@ export function generateServerFile(
   const grpcPort = node?.data?.grpcPort || "50051";
 
   let serverCode = `import "dotenv/config";
-import express, { Request, Response } from "express";
+import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { createLogger } from "@workspace/logger";
 import { router as apiRouter } from "./routes";
@@ -80,7 +80,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
-    origin: (origin, callback) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       if (!origin) return callback(null, true);
       ${corsOrigins && corsOrigins !== "*" ? `const allowed = ${JSON.stringify(corsOrigins.split(",").map((s) => s.trim()))};\n      if (!allowed.includes("*") && !allowed.includes(origin)) return callback(null, false);\n` : ""}      return callback(null, true);
     },
@@ -90,7 +90,7 @@ app.use(
   })
 );
 // --- Request Logger ---
-app.use((req: Request, _res: Response, next) => {
+app.use((req: Request, _res: Response, next: NextFunction) => {
   logger.info(\`\${req.method} \${req.url}\`);
   next();
 });
@@ -164,9 +164,25 @@ export function generateConfigFiles(
   const hasDb = allNodes.some(
     (n) => n.type === "database" || n.type === "entity" || n.type === "db_ref" || n.type === "auth",
   );
+  const firstKafkaNode = allNodes.find(
+    (n) =>
+      n.type === "kafka" ||
+      n.type === "eventstream" ||
+      (n.type === "queue" &&
+        n.data?.implementation?.toLowerCase() === "kafka"),
+  );
+  const hasKafka = Boolean(firstKafkaNode);
+  const kafkaPackageFolder = firstKafkaNode
+    ? (firstKafkaNode.data?.label
+        ?.toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || "kafka")
+    : "kafka";
+  const kafkaPackageName = `@workspace/${kafkaPackageFolder}`;
 
   const dependencies: Record<string, string> = {
     ...(hasDb ? { "@workspace/db": "workspace:*" } : {}),
+    ...(hasKafka ? { [kafkaPackageName]: "workspace:*" } : {}),
     "@workspace/logger": "workspace:*",
     "@workspace/types": "workspace:*",
     express: "^4.19.2",

@@ -3,6 +3,7 @@ import {
   DEFAULT_LLM_PROVIDER,
   DEFAULT_LLM_MODEL,
   DEFAULT_LLM_TEMPERATURE,
+  BROKER_RESOURCE_KEYS,
 } from "@workspace/canvas/constants";
 import { getUniqueNodeLabel } from "@workspace/canvas";
 import { applyNodeChanges, NodeChange } from "@xyflow/react";
@@ -512,6 +513,38 @@ export const createNodeSlice = (
         }
       });
     }
+
+    BROKER_RESOURCE_KEYS.forEach((key) => {
+      if (changes.data && key in changes.data) {
+        const oldList = ((updatedNode.data as any)?.[key] || []) as Array<{ id: string }>;
+        const newList = ((changes.data as any)[key] || []) as Array<{ id: string }>;
+        const newIds = new Set(newList.map((r) => r.id));
+        const removedResourceIds = oldList
+          .filter((r) => !newIds.has(r.id))
+          .map((r) => r.id);
+
+        if (removedResourceIds.length > 0) {
+          removedResourceIds.forEach((resId) => {
+            const removedForRes = nextEdges.filter(
+              (edge) =>
+                edge &&
+                (edge.sourceResourceId === resId ||
+                  edge.targetResourceId === resId ||
+                  edge.sourceHandle?.includes(resId) ||
+                  edge.targetHandle?.includes(resId)),
+            );
+            if (removedForRes.length > 0) {
+              const ids = removedForRes.map((e) => e.id);
+              nextEdges = nextEdges.filter((e) => !ids.includes(e.id));
+              edgesChanged = true;
+              set({
+                pendingEdgeRemovals: [...get().pendingEdgeRemovals, ...ids],
+              });
+            }
+          });
+        }
+      }
+    });
 
     const update: Partial<BackendCanvasState> = {
       nodes: next,

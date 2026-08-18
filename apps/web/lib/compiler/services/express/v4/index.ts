@@ -76,11 +76,11 @@ export function compileExpressV4Service(
         (node.data?.label && e.nodeId === node.data.label.toLowerCase())) &&
       e.variant === "consume",
   );
-  if (nodeConsumedEvents.length === 0 && events.length === 0 && node.data?.consumedEvents) {
+  if (nodeConsumedEvents.length === 0 && node.data?.consumedEvents) {
     nodeConsumedEvents = node.data.consumedEvents.map((e) => ({
       ...e,
       nodeId: node.id,
-      variant: "consume",
+      variant: "consume" as const,
     }));
   }
 
@@ -91,11 +91,11 @@ export function compileExpressV4Service(
         (node.data?.label && e.nodeId === node.data.label.toLowerCase())) &&
       e.variant === "publish",
   );
-  if (nodePublishedEvents.length === 0 && events.length === 0 && node.data?.publishedEvents) {
+  if (nodePublishedEvents.length === 0 && node.data?.publishedEvents) {
     nodePublishedEvents = node.data.publishedEvents.map((e) => ({
       ...e,
       nodeId: node.id,
-      variant: "publish",
+      variant: "publish" as const,
     }));
   }
 

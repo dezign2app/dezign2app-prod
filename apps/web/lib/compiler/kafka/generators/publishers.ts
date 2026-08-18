@@ -1,13 +1,30 @@
 import { CompiledFile } from "@workspace/canvas/types";
 import { toVarName, toPascalCase } from "../../utils";
 import { toTopicKey } from "../utils";
+import { SchemaItem, schemaToTsInterface } from "../../generators/schemaToTypeScript";
 
 /** publishers/<topicVar>.ts — typed publish function for a single topic */
-export function generatePublisherFile(topicName: string, loggerPrefix: string): string {
+export function generatePublisherFile(
+  topicName: string,
+  loggerPrefix: string,
+  payloadSchema?: SchemaItem,
+): string {
   const key = toTopicKey(topicName);
   const Pascal = toPascalCase(topicName);
   const varName = toVarName(topicName) || "topic";
   const fnName = `publish${Pascal}`;
+
+  const schemaRes = schemaToTsInterface(`${Pascal}Payload`, payloadSchema);
+  const payloadInterfaceCode = schemaRes.hasContent
+    ? schemaRes.code.trim()
+    : [
+        `export interface ${Pascal}Payload {`,
+        `  action?: string;`,
+        `  path?: string;`,
+        `  payload?: Record<string, string | number | boolean | null | object>;`,
+        `  [key: string]: string | number | boolean | null | object | undefined;`,
+        `}`,
+      ].join("\n");
 
   const lines: string[] = [];
   lines.push(`import { Producer } from "kafkajs";`);
@@ -17,10 +34,7 @@ export function generatePublisherFile(topicName: string, loggerPrefix: string): 
   lines.push(``);
   lines.push(`const logger = createLogger("${loggerPrefix}:Publisher:${Pascal}");`);
   lines.push(``);
-  lines.push(`export interface ${Pascal}Payload {`);
-  lines.push(`  // TODO: define the fields for "${topicName}" messages`);
-  lines.push(`  [key: string]: string | number | boolean | null;`);
-  lines.push(`}`);
+  lines.push(payloadInterfaceCode);
   lines.push(``);
   lines.push(`/**`);
   lines.push(` * Publish a typed message to the "${topicName}" topic.`);
@@ -54,11 +68,24 @@ export function generatePublisherFile(topicName: string, loggerPrefix: string): 
   return lines.join("\n");
 }
 
-/** publishers/index.ts — barrel + generic publishKafkaEvent utility */
+/** publishers/index.ts — barrel + typed KafkaTopicPayloadMap and publishKafkaEvent */
 export function generatePublishersIndexFile(
   publisherBarrelExports: string[],
   nodeLabel: string,
+  topicList: { name: string }[] = [],
 ): CompiledFile {
+  const payloadImports = topicList.map((t) => {
+    const Pascal = toPascalCase(t.name);
+    const varName = toVarName(t.name) || "topic";
+    return `import { ${Pascal}Payload } from "./${varName}";`;
+  });
+
+  const payloadMapEntries = topicList.map((t) => {
+    const key = toTopicKey(t.name);
+    const Pascal = toPascalCase(t.name);
+    return `  [KAFKA_TOPICS.${key}]: ${Pascal}Payload;`;
+  });
+
   return {
     filename: "src/publishers/index.ts",
     language: "typescript",
@@ -66,20 +93,34 @@ export function generatePublishersIndexFile(
       `/** Barrel export for all typed publisher functions */`,
       ...publisherBarrelExports,
       ``,
-      `// Generic low-level utility — prefer the typed publish functions above`,
-      `export { getKafkaProducer } from "../client";`,
-      ``,
       `import { getKafkaProducer } from "../client";`,
       `import { createLogger } from "@workspace/logger";`,
+      `import { KAFKA_TOPICS, KafkaTopicName } from "../topics";`,
+      ...payloadImports,
       ``,
       `const logger = createLogger("${nodeLabel}:GenericPublisher");`,
       ``,
+      `/** Map of Kafka topics to their strongly-typed payloads inferred from architecture */`,
+      `export interface KafkaTopicPayloadMap {`,
+      ...payloadMapEntries,
+      `}`,
+      ``,
       `/**`,
-      ` * Generic publish — use the typed publish<Topic>() functions when possible.`,
+      ` * Publish a message to a Kafka topic with payload type inferred from the topic contract.`,
       ` */`,
-      `export async function publishKafkaEvent<T extends Record<string, string | number | boolean | null>>(`,
+      `export async function publishKafkaEvent<TTopic extends KafkaTopicName>(`,
+      `  topic: TTopic,`,
+      `  message: KafkaTopicPayloadMap[TTopic],`,
+      `  key?: string,`,
+      `): Promise<void>;`,
+      `export async function publishKafkaEvent<TPayload extends Record<string, string | number | boolean | null | object | undefined>>(`,
       `  topic: string,`,
-      `  message: T,`,
+      `  message: TPayload,`,
+      `  key?: string,`,
+      `): Promise<void>;`,
+      `export async function publishKafkaEvent(`,
+      `  topic: string,`,
+      `  message: Record<string, string | number | boolean | null | object | undefined>,`,
       `  key?: string,`,
       `): Promise<void> {`,
       `  const producer = await getKafkaProducer();`,
