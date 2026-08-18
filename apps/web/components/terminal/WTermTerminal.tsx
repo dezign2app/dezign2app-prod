@@ -43,22 +43,45 @@ function formatTerminalChunk(raw: string): string {
 }
 
 /**
- * Finds the actual scroll container element rendered by wterm.
+ * Finds all scrollable elements within a root and its ancestors to preserve exact scroll positions.
  */
-function getScrollableElement(root: HTMLElement | null): HTMLElement | null {
-  if (!root) return null;
-  const elements = root.querySelectorAll("*");
-  for (const el of Array.from(elements)) {
-    const htmlEl = el as HTMLElement;
-    const overflowY = window.getComputedStyle(htmlEl).overflowY;
+function captureScrollableElements(root: HTMLElement | null): Map<HTMLElement, { top: number; left: number }> {
+  const map = new Map<HTMLElement, { top: number; left: number }>();
+  if (!root) return map;
+
+  const elements = [root, ...Array.from(root.querySelectorAll("*"))] as HTMLElement[];
+  for (const el of elements) {
     if (
-      (overflowY === "auto" || overflowY === "scroll") &&
-      htmlEl.scrollHeight > htmlEl.clientHeight
+      el.scrollHeight > el.clientHeight ||
+      el.scrollWidth > el.clientWidth ||
+      el.scrollTop > 0 ||
+      el.scrollLeft > 0
     ) {
-      return htmlEl;
+      map.set(el, { top: el.scrollTop, left: el.scrollLeft });
     }
   }
-  return null;
+
+  let parent = root.parentElement;
+  while (parent) {
+    if (
+      parent.scrollHeight > parent.clientHeight ||
+      parent.scrollWidth > parent.clientWidth ||
+      parent.scrollTop > 0 ||
+      parent.scrollLeft > 0
+    ) {
+      map.set(parent, { top: parent.scrollTop, left: parent.scrollLeft });
+    }
+    parent = parent.parentElement;
+  }
+
+  return map;
+}
+
+function restoreCapturedScrolls(map: Map<HTMLElement, { top: number; left: number }>) {
+  map.forEach(({ top, left }, el) => {
+    if (el.scrollTop !== top) el.scrollTop = top;
+    if (el.scrollLeft !== left) el.scrollLeft = left;
+  });
 }
 
 export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>(
@@ -85,7 +108,7 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
     const logsRef = useRef<string[]>(logs);
     logsRef.current = logs;
 
-    const mouseDownScrollTopRef = useRef<number | null>(null);
+    const mouseDownScrollMapRef = useRef<Map<HTMLElement, { top: number; left: number }> | null>(null);
 
     // Buffer for local shell echo when no external PTY is connected
     const inputBufferRef = useRef<string>("");
@@ -101,29 +124,40 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
     }, [write]);
 
     const focusTerminal = useCallback(() => {
-      // Do not focus or scroll to bottom if user is selecting text
+      // Do not focus if interactive is false or if user is selecting text
+      if (!interactive) return;
+
       const selection =
         typeof window !== "undefined" ? window.getSelection() : null;
       if (selection && selection.toString().length > 0) {
         return;
       }
 
-      // Preserve existing scroll position so focus does not snap to cursor
-      const scrollEl = getScrollableElement(wrapperRef.current);
-      const prevScrollTop = scrollEl ? scrollEl.scrollTop : null;
+      // Capture existing scroll positions so focus does not snap ancestor containers or buffer
+      const scrollMap = captureScrollableElements(wrapperRef.current);
 
       try {
-        focus?.();
-      } catch (e) {}
-
-      if (scrollEl && prevScrollTop !== null && !autoScroll) {
-        requestAnimationFrame(() => {
-          if (scrollEl.scrollTop !== prevScrollTop) {
-            scrollEl.scrollTop = prevScrollTop;
-          }
-        });
+        const helperInput = wrapperRef.current?.querySelector(
+          "textarea, input",
+        ) as HTMLElement | null;
+        if (helperInput && typeof helperInput.focus === "function") {
+          helperInput.focus({ preventScroll: true });
+        } else {
+          focus?.();
+        }
+      } catch (e) {
+        try {
+          focus?.();
+        } catch {}
       }
-    }, [focus, autoScroll]);
+
+      if (!autoScroll) {
+        restoreCapturedScrolls(scrollMap);
+        requestAnimationFrame(() => restoreCapturedScrolls(scrollMap));
+        setTimeout(() => restoreCapturedScrolls(scrollMap), 0);
+        setTimeout(() => restoreCapturedScrolls(scrollMap), 40);
+      }
+    }, [focus, autoScroll, interactive]);
 
     // Expose handle methods to parent components
     useImperativeHandle(
@@ -160,11 +194,13 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
         lastWrittenIndexRef.current = logsRef.current.length;
       }
       onReady?.();
-      // Auto-focus terminal on initial mount
-      setTimeout(() => {
-        focusTerminal();
-      }, 50);
-    }, [write, onReady, focusTerminal, rawStream]);
+      // Auto-focus terminal on initial mount ONLY if interactive and autoScroll enabled
+      if (interactive && autoScroll) {
+        setTimeout(() => {
+          focusTerminal();
+        }, 50);
+      }
+    }, [write, onReady, focusTerminal, rawStream, interactive, autoScroll]);
 
     // Synchronize incremental log writes & tab switches
     useEffect(() => {
@@ -173,8 +209,9 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
       const prevLogs = prevLogsRef.current;
       prevLogsRef.current = logs;
 
-      const scrollEl = getScrollableElement(wrapperRef.current);
-      const prevScrollTop = scrollEl ? scrollEl.scrollTop : null;
+      const scrollMap = !autoScroll
+        ? captureScrollableElements(wrapperRef.current)
+        : null;
 
       if (logs.length === 0) {
         if (lastWrittenIndexRef.current > 0) {
@@ -217,12 +254,9 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
       }
 
       // If autoScroll is disabled, preserve scroll position across incoming logs
-      if (scrollEl && prevScrollTop !== null && !autoScroll) {
-        requestAnimationFrame(() => {
-          if (scrollEl.scrollTop !== prevScrollTop) {
-            scrollEl.scrollTop = prevScrollTop;
-          }
-        });
+      if (scrollMap && !autoScroll) {
+        restoreCapturedScrolls(scrollMap);
+        requestAnimationFrame(() => restoreCapturedScrolls(scrollMap));
       }
     }, [logs, isReady, write, clearTerminal, rawStream, autoScroll]);
 
@@ -320,10 +354,7 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
 
     // Mouse handlers to prevent copy selection from scrolling to bottom
     const handleMouseDown = useCallback(() => {
-      const scrollEl = getScrollableElement(wrapperRef.current);
-      if (scrollEl) {
-        mouseDownScrollTopRef.current = scrollEl.scrollTop;
-      }
+      mouseDownScrollMapRef.current = captureScrollableElements(wrapperRef.current);
     }, []);
 
     const handleMouseUp = useCallback(() => {
@@ -331,15 +362,16 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
         typeof window !== "undefined" ? window.getSelection() : null;
       if (selection && selection.toString().length > 0) {
         // User selected text to copy: restore exact scroll position
-        const scrollEl = getScrollableElement(wrapperRef.current);
-        if (scrollEl && mouseDownScrollTopRef.current !== null) {
-          scrollEl.scrollTop = mouseDownScrollTopRef.current;
+        if (mouseDownScrollMapRef.current) {
+          restoreCapturedScrolls(mouseDownScrollMapRef.current);
         }
       }
     }, []);
 
     const handleWrapperClick = useCallback(
       (e: React.MouseEvent) => {
+        if (!interactive) return;
+
         const selection =
           typeof window !== "undefined" ? window.getSelection() : null;
         if (selection && selection.toString().length > 0) {
@@ -348,7 +380,7 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
         }
         focusTerminal();
       },
-      [focusTerminal],
+      [focusTerminal, interactive],
     );
 
     return (

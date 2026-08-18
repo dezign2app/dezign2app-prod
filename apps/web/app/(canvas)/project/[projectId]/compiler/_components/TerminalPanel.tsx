@@ -152,6 +152,8 @@ export function TerminalPanel({
       <div className="flex-1 min-h-0 bg-[#090d13] relative">
         <WTermTerminal
           logs={formattedLogs}
+          interactive={false}
+          autoScroll={false}
           placeholder="Terminal idle. Click 'Run Localhost' to simulate dev server startup logs."
         />
       </div>
