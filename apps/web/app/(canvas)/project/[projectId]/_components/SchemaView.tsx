@@ -149,7 +149,7 @@ export function SchemaView({ projectId }: SchemaViewProps) {
       position: { x, y },
       data: {
         label: tableLabel,
-        columns: [{ name: "id", type: "INTEGER", isPrimaryKey: true }],
+        columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
         indexes: [],
         databaseId: dbId,
       },
@@ -208,7 +208,7 @@ export function SchemaView({ projectId }: SchemaViewProps) {
       data: {
         label: vectorLabel,
         dbType: "vector",
-        columns: [{ name: "_id", type: "UUID", isPrimaryKey: true }],
+        columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
         databaseId: dbId,
       },
     });

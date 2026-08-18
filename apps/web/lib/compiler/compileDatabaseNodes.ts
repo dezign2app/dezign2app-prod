@@ -103,6 +103,32 @@ export function compileDatabaseNodes(
   const dbNode = allNodes.find((n) => n.type === "database" || (n.data as any)?.isDatabase);
   const orm = (dbNode?.data as any)?.orm || (dbNode?.data as any)?.dbAdapter || (dbNode?.data as any)?.adapter;
 
+  const dbEngine = (
+    dbNode?.data?.dbEngine ||
+    (dbNode?.data as any)?.engine ||
+    (dbNode?.data as any)?.provider ||
+    (dbNode?.data as any)?.dbType ||
+    ""
+  ).toLowerCase();
+
+  const isExplicitNonSqlite =
+    dbEngine.includes("postgres") ||
+    dbEngine.includes("mysql") ||
+    dbEngine.includes("mongo") ||
+    dbEngine.includes("redis");
+
+  const hasSqliteDbNode = Boolean(dbNode && !isExplicitNonSqlite);
+  const hasEntityNodes = entityNodes.length > 0;
+  const hasConnectedAuth = connectedAuthNodes.length > 0;
+
+  // Only compile SQLite package and helpers if SQLite database, entities, or connected auth are configured
+  if (!hasSqliteDbNode && !hasEntityNodes && !hasConnectedAuth) {
+    return {
+      files: [],
+      reusableFunctions: [],
+    };
+  }
+
   if (orm === "drizzle") {
     return compileSqliteDrizzleDatabase(effectiveNodes, allEdges);
   }

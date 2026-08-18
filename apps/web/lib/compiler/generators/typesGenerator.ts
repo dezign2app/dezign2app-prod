@@ -148,6 +148,10 @@ export function generateTypesPackage(
   const files: CompiledFile[] = [];
   const barrelExports: string[] = [];
 
+  const hasDb = nodes.some(
+    (n) => n.type === "database" || n.type === "entity" || n.type === "db_ref" || n.type === "auth",
+  );
+
   // 1. package.json
   const packageJson = JSON.stringify(
     {
@@ -166,7 +170,7 @@ export function generateTypesPackage(
         zod: "^3.24.2",
       },
       devDependencies: {
-        "@workspace/db": "workspace:*",
+        ...(hasDb ? { "@workspace/db": "workspace:*" } : {}),
         "@workspace/typescript-config": "workspace:*",
         typescript: "^5.3.3",
       },

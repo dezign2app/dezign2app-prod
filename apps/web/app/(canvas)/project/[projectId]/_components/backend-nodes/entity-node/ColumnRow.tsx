@@ -158,7 +158,10 @@ export const ColumnRow = ({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {COLUMN_TYPES.map((t) => (
+              {((COLUMN_TYPES as readonly string[]).includes(editingType)
+                ? (COLUMN_TYPES as readonly string[])
+                : [editingType, ...(COLUMN_TYPES as readonly string[])]
+              ).map((t) => (
                 <SelectItem key={t} value={t} className="text-xs">
                   {t}
                 </SelectItem>
@@ -180,7 +183,7 @@ export const ColumnRow = ({
           onClick={() => {
             setEditingIndex(index);
             setEditingName(col.name);
-            setEditingType(col.type || "VARCHAR");
+            setEditingType(col.type || "TEXT");
             setNameError(false);
           }}
         >

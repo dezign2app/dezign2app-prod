@@ -99,6 +99,10 @@ export function compileExpressV4Service(
     }));
   }
 
+  const hasDb = allNodes.some(
+    (n) => n.type === "database" || n.type === "entity" || n.type === "db_ref" || n.type === "auth",
+  );
+
   const files: CompiledFile[] = [
     ...generateRoutes(
       serviceName,
@@ -126,7 +130,7 @@ export function compileExpressV4Service(
       allNodes,
       allEdges,
     ),
-    ...generateLibFiles(),
+    ...generateLibFiles(hasDb),
     generateServerFile(serviceName, port, cors, corsOrigins, node, allNodes, allEdges),
 
     ...generateConfigFiles(

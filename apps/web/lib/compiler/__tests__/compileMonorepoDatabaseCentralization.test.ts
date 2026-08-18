@@ -323,6 +323,129 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     const joinFnMatches = content.match(/function findAccountByIdWithUser/g) || [];
     expect(joinFnMatches.length).toBe(1);
   });
+
+  it("should sanitize legacy custom dbOperations containing unsafe casts and string rowIds for numeric tables", () => {
+    const legacyNode: BackendNode = {
+      id: "node-entity-legacy",
+      type: "entity",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Legacy Table",
+        columns: [
+          { name: "id", type: "number", isPrimaryKey: true },
+        ],
+        dbOperations: [
+          {
+            id: "legacy-create",
+            name: "createLegacyTable",
+            kind: "create",
+            code: `export function createLegacyTable(): LegacyTableRow {\n  const info = db.prepare("INSERT INTO legacy_table DEFAULT VALUES").run();\n  const _rowId = typeof info.lastInsertRowid === "bigint" ? info.lastInsertRowid.toString() : String(info.lastInsertRowid);\n  return { id: _rowId } as LegacyTableRow;\n}`,
+            enabled: true,
+          },
+        ],
+      },
+    };
+
+    const result = compileMonorepo(
+      [legacyNode],
+      [],
+      [],
+      [],
+      [],
+      "TestCentralizedMonorepo",
+    );
+
+    const legacyHelper = result.files.find(
+      (f) => f.filename === "packages/db/helpers/legacyTable.ts",
+    );
+    expect(legacyHelper).toBeDefined();
+    expect(legacyHelper?.content).toContain("Number(info.lastInsertRowid)");
+    expect(legacyHelper?.content).toContain("return { id: _rowId } as unknown as LegacyTableRow;");
+  });
+
+  it("should NOT compile packages/db or db helpers on an empty project", () => {
+    const result = compileMonorepo([], [], [], [], [], "EmptyMonorepo");
+
+    // 1. Verify NO packages/db files exist
+    const dbFiles = result.files.filter((f) => f.filename.startsWith("packages/db/"));
+    expect(dbFiles).toHaveLength(0);
+
+    // 2. Verify root tsconfig does NOT reference packages/db
+    const rootTsconfig = result.files.find((f) => f.filename === "tsconfig.json");
+    expect(rootTsconfig).toBeDefined();
+    expect(rootTsconfig?.content).not.toContain('"path": "packages/db"');
+
+    // 3. Verify @workspace/types devDependencies does NOT include @workspace/db
+    const typesPkg = result.files.find((f) => f.filename === "packages/types/package.json");
+    expect(typesPkg).toBeDefined();
+    const parsedTypesPkg = JSON.parse(typesPkg!.content);
+    expect(parsedTypesPkg.devDependencies?.["@workspace/db"]).toBeUndefined();
+
+    // 4. Verify README.md does NOT list Database Package
+    const readme = result.files.find((f) => f.filename === "README.md");
+    expect(readme).toBeDefined();
+    expect(readme?.content).not.toContain("Database Package");
+  });
+
+  it("should NOT compile packages/db on a service-only project without database nodes", () => {
+    const serviceNode: BackendNode = {
+      id: "node-service-standalone",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "BillingService",
+        port: "8080",
+      },
+    };
+
+    const result = compileMonorepo([serviceNode], [], [], [], [], "BillingMonorepo");
+
+    // 1. Verify NO packages/db files exist
+    const dbFiles = result.files.filter((f) => f.filename.startsWith("packages/db/"));
+    expect(dbFiles).toHaveLength(0);
+
+    // 2. Verify service package.json does NOT depend on @workspace/db
+    const servicePkg = result.files.find((f) => f.filename === "apps/billingservice/package.json");
+    expect(servicePkg).toBeDefined();
+    const parsedServicePkg = JSON.parse(servicePkg!.content);
+    expect(parsedServicePkg.dependencies?.["@workspace/db"]).toBeUndefined();
+
+    // 3. Verify service src/lib/index.ts does NOT export from @workspace/db/helpers
+    const libIndex = result.files.find((f) => f.filename === "apps/billingservice/src/lib/index.ts");
+    expect(libIndex).toBeDefined();
+    expect(libIndex?.content).not.toContain("@workspace/db/helpers");
+  });
+
+  it("should compile packages/db when a standalone SQLite database node is added", () => {
+    const dbNode: BackendNode = {
+      id: "node-db-primary",
+      type: "database",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Primary SQLite DB",
+        dbEngine: "sqlite",
+      },
+    };
+
+    const result = compileMonorepo([dbNode], [], [], [], [], "SqliteDbMonorepo");
+
+    // 1. Verify packages/db files exist
+    const dbConnection = result.files.find((f) => f.filename === "packages/db/connection.ts");
+    expect(dbConnection).toBeDefined();
+
+    const dbIndex = result.files.find((f) => f.filename === "packages/db/index.ts");
+    expect(dbIndex).toBeDefined();
+
+    const dbHelpersIndex = result.files.find((f) => f.filename === "packages/db/helpers/index.ts");
+    expect(dbHelpersIndex).toBeDefined();
+
+    // 2. Verify root tsconfig references packages/db
+    const rootTsconfig = result.files.find((f) => f.filename === "tsconfig.json");
+    expect(rootTsconfig?.content).toContain('"path": "packages/db"');
+  });
 });
 
 

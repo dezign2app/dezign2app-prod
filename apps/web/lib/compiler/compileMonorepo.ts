@@ -109,13 +109,15 @@ export function compileMonorepo(
 
   // 4. Generate Shared Package: packages/db (@workspace/db)
   const compiledDb = compileDatabaseNodes(nodes, edges);
-  compiledDb.files.forEach((f) => {
-    files.push({
-      filename: `packages/db/${f.filename}`,
-      language: f.language,
-      content: f.content,
+  if (compiledDb.files.length > 0) {
+    compiledDb.files.forEach((f) => {
+      files.push({
+        filename: `packages/db/${f.filename}`,
+        language: f.language,
+        content: f.content,
+      });
     });
-  });
+  }
 
   // 4.5 Generate Shared Package: packages/logger (@workspace/logger)
   const compiledLogger = generateLoggerPackage();
@@ -411,7 +413,7 @@ export function compileMonorepo(
   // 7. Generate Root tsconfig.json (referencing packages and apps with valid tsconfig.json)
   const rawRootPaths = [
     "packages/ui",
-    "packages/db",
+    ...(compiledDb.files.length > 0 ? ["packages/db"] : []),
     "packages/logger",
     "packages/types",
     ...(compiledKafka.files.length > 0 ? [`packages/${compiledKafka.packageFolder}`] : []),
@@ -449,6 +451,7 @@ export function compileMonorepo(
       webClientsInfo,
       compiledKafka.files.length > 0,
       compiledRedis.files.length > 0,
+      compiledDb.files.length > 0,
     ),
   );
 

@@ -58,7 +58,7 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
       position: { x: dbPos.x, y: dbPos.y + 220 },
       data: {
         label: tableLabel,
-        columns: [{ name: "id", type: "INTEGER", isPrimaryKey: true }],
+        columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
         indexes: [],
         databaseId: nodeId,
       },
@@ -126,7 +126,7 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
               <SelectItem value="sqlite" className="text-xs">
                 SQLite 3.x (Default)
               </SelectItem>
-              <SelectItem value="postgres" className="text-xs">
+              {/* <SelectItem value="postgres" className="text-xs">
                 PostgreSQL
               </SelectItem>
               <SelectItem value="mysql" className="text-xs">
@@ -140,7 +140,7 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
               </SelectItem>
               <SelectItem value="redis" className="text-xs">
                 Redis (Key-Value)
-              </SelectItem>
+              </SelectItem> */}
             </SelectContent>
           </Select>
         </div>

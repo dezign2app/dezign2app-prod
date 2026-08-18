@@ -12,15 +12,12 @@ import {
   GRPC_DEFAULT_PORT,
 } from "@workspace/canvas";
 
-export function generateLibFiles(): CompiledFile[] {
-
+export function generateLibFiles(hasDb: boolean = true): CompiledFile[] {
+  const dbExport = hasDb ? `export * from "@workspace/db/helpers";\n\n` : "";
   const libIndexCode = `/**
- * Shared lib helpers for this service.
- * DB access goes through @workspace/db/helpers — injection-safe prepared statements.
+ * Shared lib helpers for this service.${hasDb ? "\n * DB access goes through @workspace/db/helpers — injection-safe prepared statements." : ""}
  */
-export * from "@workspace/db/helpers";
-
-export function formatResponse<T>(data: T, message = "Success") {
+${dbExport}export function formatResponse<T>(data: T, message = "Success") {
   return {
     success: true,
     message,
@@ -164,9 +161,12 @@ export function generateConfigFiles(
   allEdges: BackendEdge[] = [],
 ): CompiledFile[] {
   const grpcEnabled = isGrpcEnabledForService(node, allNodes, allEdges);
+  const hasDb = allNodes.some(
+    (n) => n.type === "database" || n.type === "entity" || n.type === "db_ref" || n.type === "auth",
+  );
 
   const dependencies: Record<string, string> = {
-    "@workspace/db": "workspace:*",
+    ...(hasDb ? { "@workspace/db": "workspace:*" } : {}),
     "@workspace/logger": "workspace:*",
     "@workspace/types": "workspace:*",
     express: "^4.19.2",
