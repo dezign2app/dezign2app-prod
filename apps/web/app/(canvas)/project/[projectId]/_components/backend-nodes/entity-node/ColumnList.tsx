@@ -20,15 +20,15 @@ export const ColumnList = ({
 }: ColumnListProps) => {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
-  const [editingType, setEditingType] = useState("VARCHAR");
+  const [editingType, setEditingType] = useState("TEXT");
   const [nameError, setNameError] = useState(false);
 
   const handleAdd = () => {
-    const newItems = [...items, { name: "", type: "VARCHAR" }];
+    const newItems = [...items, { name: "", type: "TEXT" }];
     updateNode(nodeId, { data: { ...data, columns: newItems } });
     setEditingIndex(newItems.length - 1);
     setEditingName("");
-    setEditingType("VARCHAR");
+    setEditingType("TEXT");
     setNameError(false);
   };
 

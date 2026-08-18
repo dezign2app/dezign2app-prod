@@ -43,7 +43,7 @@ export function TerminalFooter({
         <span className="text-zinc-500">{eventCount} events</span>
         <span className="text-zinc-600">|</span>
         <span className="text-zinc-400">
-          {inElectron ? "Electron Desktop Native" : "Web Preview"}
+          {inElectron ? "Desktop Native" : "Web Preview"}
         </span>
       </div>
     </div>

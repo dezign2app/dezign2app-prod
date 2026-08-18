@@ -158,7 +158,7 @@ export const createNodeSlice = (
       fractionalIndex,
       data: {
         label: "",
-        columns: [{ name: "_id", type: "UUID", isPrimaryKey: true }],
+        columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
       },
       selected: true,
     };
