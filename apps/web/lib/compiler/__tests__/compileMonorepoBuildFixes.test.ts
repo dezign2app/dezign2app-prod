@@ -369,10 +369,11 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
       "AuthTypeMonorepo",
     );
 
-    // 1. Verify lib/auth.ts contains explicit ReturnType<typeof betterAuth>
+    // 1. Verify lib/auth.ts contains typed betterAuth instance and Auth type export
     const authFile = result.files.find((f) => f.filename === "apps/super/lib/auth.ts");
     expect(authFile).toBeDefined();
-    expect(authFile?.content).toContain("export const auth: ReturnType<typeof betterAuth> = betterAuth({");
+    expect(authFile?.content).toContain("export const auth = betterAuth({");
+    expect(authFile?.content).toContain("export type Auth = typeof auth;");
 
     // 2. Verify packages/db/connection.ts contains turbopackIgnore comments
     const dbConnFile = result.files.find((f) => f.filename === "packages/db/connection.ts");

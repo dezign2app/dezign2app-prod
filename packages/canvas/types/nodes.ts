@@ -295,6 +295,7 @@ export interface CanvasAuthNodeData {
   baseUrl?: string;
   version?: BetterAuthVersion | string;
   dbAdapter?: "sqlite-raw" | "custom";
+  databaseId?: string;
   authFunctions?: AuthFunctionRef[];
   tableMappings?: BetterAuthTableMapping;
   userEntityId?: string;

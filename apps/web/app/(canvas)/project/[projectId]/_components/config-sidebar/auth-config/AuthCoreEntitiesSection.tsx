@@ -31,6 +31,7 @@ import {
   Sparkles,
   AlertTriangle,
   GitFork,
+  Database,
 } from "lucide-react";
 import {
   AuthFunctionRef,
@@ -64,7 +65,15 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
 }) => {
   const authFunctions: AuthFunctionRef[] = data.authFunctions || [];
   const tableMappings: BetterAuthTableMapping = data.tableMappings || {};
-  const schemaEntities = allNodes.filter((n) => n.type === BACKEND_NODE_ENTITY);
+  const databaseNodes = allNodes.filter((n) => n.type === BACKEND_NODE_DATABASE);
+  const selectedDatabaseId = data.databaseId;
+  const selectedDb = databaseNodes.find((db) => db.id === selectedDatabaseId);
+
+  const schemaEntities = allNodes.filter(
+    (n) =>
+      n.type === BACKEND_NODE_ENTITY &&
+      (!selectedDatabaseId || n.data?.databaseId === selectedDatabaseId),
+  );
 
   const orgConfig = data.organization || { enabled: true };
   const isOrgEnabled = orgConfig.enabled ?? true;
@@ -171,9 +180,12 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
     const baseX = (authNode?.position?.x || 100) + 320;
     const baseY = (authNode?.position?.y || 100) + schemaEntities.length * 90;
 
-    // Check if an entity node with matching label already exists on canvas
+    // Check if an entity node with matching label already exists on canvas (filtered to selected DB if set)
     const matchingEntity = storeNodes.find(
-      (n) => n.type === BACKEND_NODE_ENTITY && n.data?.label?.toLowerCase().trim() === def.name.toLowerCase().trim()
+      (n) =>
+        n.type === BACKEND_NODE_ENTITY &&
+        (!selectedDatabaseId || n.data?.databaseId === selectedDatabaseId) &&
+        n.data?.label?.toLowerCase().trim() === def.name.toLowerCase().trim()
     );
 
     let targetEntityId: string;
@@ -195,27 +207,30 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
       }
     } else {
       // Check if a database node exists; if not, create default SQLite DB node
-      let dbNode = storeNodes.find((n) => n.type === BACKEND_NODE_DATABASE);
-      let dbId = dbNode?.id;
-
+      let dbId = selectedDatabaseId;
       if (!dbId) {
-        dbId = crypto.randomUUID();
-        const dbLabel = getUniqueNodeLabel(storeNodes, DEFAULT_DATABASE_NODE_LABEL, "database");
-        addNode({
-          id: dbId,
-          type: BACKEND_NODE_DATABASE,
-          position: { x: baseX - 300, y: baseY - 50 },
-          data: {
-            label: dbLabel,
-            dbEngine: DEFAULT_DATABASE_ENGINE,
-            dbType: "relational",
-            dbCategory: "sql",
-            dbConnectionType: "env_var",
-            connectionStringEnv: DEFAULT_DATABASE_ENV_VARS.connectionStringEnv,
-            dbFilePathEnv: DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv,
-            isDefault: true,
-          },
-        });
+        let dbNode = storeNodes.find((n) => n.type === BACKEND_NODE_DATABASE);
+        dbId = dbNode?.id;
+
+        if (!dbId) {
+          dbId = crypto.randomUUID();
+          const dbLabel = getUniqueNodeLabel(storeNodes, DEFAULT_DATABASE_NODE_LABEL, "database");
+          addNode({
+            id: dbId,
+            type: BACKEND_NODE_DATABASE,
+            position: { x: baseX - 300, y: baseY - 50 },
+            data: {
+              label: dbLabel,
+              dbEngine: DEFAULT_DATABASE_ENGINE,
+              dbType: "relational",
+              dbCategory: "sql",
+              dbConnectionType: "env_var",
+              connectionStringEnv: DEFAULT_DATABASE_ENV_VARS.connectionStringEnv,
+              dbFilePathEnv: DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv,
+              isDefault: true,
+            },
+          });
+        }
       }
 
       targetEntityId = `entity-${Date.now()}-${def.name}`;
@@ -280,7 +295,11 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
 
   const autoCreateAllMissingTables = () => {
     const storeNodes = useBackendCanvasStore.getState().nodes;
-    const existingEntities = storeNodes.filter((n) => n.type === BACKEND_NODE_ENTITY);
+    const existingEntities = storeNodes.filter(
+      (n) =>
+        n.type === BACKEND_NODE_ENTITY &&
+        (!selectedDatabaseId || n.data?.databaseId === selectedDatabaseId)
+    );
     const enabledPlugins: string[] = data.plugins || ["bearer", "admin", "organization", "jwt"];
 
     const rawUserMapping = data.userEntityId || data.userSchemaId;
@@ -311,32 +330,35 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
     const baseY = (authNode?.position?.y || 100);
 
     // Check if a database node exists; if not, create default SQLite DB node
-    let dbNode = storeNodes.find((n) => n.type === BACKEND_NODE_DATABASE);
-    let dbId = dbNode?.id;
-
+    let dbId = selectedDatabaseId;
     if (!dbId) {
-      dbId = crypto.randomUUID();
-      const dbLabel = getUniqueNodeLabel(storeNodes, DEFAULT_DATABASE_NODE_LABEL, "database");
-      addNode({
-        id: dbId,
-        type: BACKEND_NODE_DATABASE,
-        position: { x: baseX - 300, y: baseY - 50 },
-        data: {
-          label: dbLabel,
-          dbEngine: DEFAULT_DATABASE_ENGINE,
-          dbType: "relational",
-          dbCategory: "sql",
-          dbConnectionType: "env_var",
-          connectionStringEnv: DEFAULT_DATABASE_ENV_VARS.connectionStringEnv,
-          dbFilePathEnv: DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv,
-          isDefault: true,
-        },
-      });
+      let dbNode = storeNodes.find((n) => n.type === BACKEND_NODE_DATABASE);
+      dbId = dbNode?.id;
+
+      if (!dbId) {
+        dbId = crypto.randomUUID();
+        const dbLabel = getUniqueNodeLabel(storeNodes, DEFAULT_DATABASE_NODE_LABEL, "database");
+        addNode({
+          id: dbId,
+          type: BACKEND_NODE_DATABASE,
+          position: { x: baseX - 300, y: baseY - 50 },
+          data: {
+            label: dbLabel,
+            dbEngine: DEFAULT_DATABASE_ENGINE,
+            dbType: "relational",
+            dbCategory: "sql",
+            dbConnectionType: "env_var",
+            connectionStringEnv: DEFAULT_DATABASE_ENV_VARS.connectionStringEnv,
+            dbFilePathEnv: DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv,
+            isDefault: true,
+          },
+        });
+      }
     }
 
     let createdCount = 0;
     tablesToCreate.forEach((def) => {
-      // 1. Check if an entity node with matching name already exists on canvas
+      // 1. Check if an entity node with matching name already exists on canvas in this DB
       const matchingEntity = existingEntities.find(
         (e) => e.data?.label?.toLowerCase().trim() === def.name.toLowerCase().trim()
       );
@@ -408,7 +430,11 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
 
   const syncAllTableRelationships = () => {
     const storeNodes = useBackendCanvasStore.getState().nodes;
-    const existingEntities = storeNodes.filter((n) => n.type === BACKEND_NODE_ENTITY);
+    const existingEntities = storeNodes.filter(
+      (n) =>
+        n.type === BACKEND_NODE_ENTITY &&
+        (!selectedDatabaseId || n.data?.databaseId === selectedDatabaseId)
+    );
     const rawUserMapping = data.userEntityId || data.userSchemaId;
     const activeMappings: BetterAuthTableMapping = {};
 
@@ -515,6 +541,58 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
 
       <AccordionContent className="px-4 pb-4 pt-1">
         <div className="flex flex-col gap-6 pt-2">
+          {/* Target Database Selection */}
+          <div className="p-3 bg-background/60 rounded-lg border border-border/50 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-amber-500 shrink-0" />
+                <span className="text-xs font-semibold text-foreground">Target Database Node</span>
+              </div>
+              {selectedDb && (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase font-semibold">
+                  {selectedDb.data?.dbEngine || "sqlite"}
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Select which database node from your schema this Auth Server operates on. Tables and functions will be filtered to this database.
+            </p>
+            <div className="flex items-center gap-2">
+              <Select
+                value={selectedDatabaseId || "none"}
+                onValueChange={(val: string) =>
+                  updateData({ databaseId: val === "none" ? undefined : val })
+                }
+              >
+                <SelectTrigger className="h-8 text-xs font-mono bg-background">
+                  <SelectValue placeholder="Select Database Node..." />
+                </SelectTrigger>
+                <SelectContent className="font-mono">
+                  <SelectItem value="none" className="text-xs font-mono text-muted-foreground">
+                    All Database Tables (No DB Filter)
+                  </SelectItem>
+                  {databaseNodes.map((db) => (
+                    <SelectItem key={db.id} value={db.id} className="text-xs font-mono">
+                      {db.data?.label || "Database"} ({db.data?.dbEngine || "sqlite"})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectedDatabaseId && schemaEntities.length === 0 && (
+              <div className="p-2.5 rounded bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2 text-xs text-amber-600 dark:text-amber-400 font-mono">
+                <span>No tables in this database yet.</span>
+                <button
+                  type="button"
+                  onClick={autoCreateAllMissingTables}
+                  className="font-bold underline hover:text-amber-500 shrink-0 text-[11px]"
+                >
+                  Auto-create Better Auth tables &rarr;
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Section 1: Better Auth Required Tables Grouped By Category */}
           <div className="flex flex-col gap-4 p-3.5 bg-background/50 rounded-lg border border-border/40">
             <div className="flex flex-col items-start gap-4 justify-start">

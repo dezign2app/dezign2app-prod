@@ -55,7 +55,12 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
   const claims: SessionClaimConfig[] = sessionConfig.claims || [];
   const cookieCache = sessionConfig.cookieCache || { enabled: true, maxAgeSeconds: 300 };
 
-  const schemaEntities = allNodes.filter((n) => n.type === "entity");
+  const selectedDatabaseId = data.databaseId;
+  const schemaEntities = allNodes.filter(
+    (n) =>
+      n.type === "entity" &&
+      (!selectedDatabaseId || n.data?.databaseId === selectedDatabaseId),
+  );
   const serviceNodes = allNodes.filter((n) => n.type === "service" || n.type === "webClient");
 
   const selectedUserSchemaId = data.userEntityId || data.userSchemaId;

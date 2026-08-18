@@ -163,50 +163,22 @@ export const { POST, GET } = toNextJsHandler(auth);
       language: "typescript",
       content: `import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 
 export async function requireSession(redirectTo: string = "/login") {
   let session = null;
   try {
-    const { auth } = await import("@/lib/auth");
     session = await auth.api.getSession({
       headers: await headers(),
     });
   } catch (err) {
-    const isRedirect = err && typeof err === "object" && "digest" in err && String((err as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT");
-    if (isRedirect) {
+    if (err && typeof err === "object" && "digest" in err && String((err as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")) {
       throw err;
     }
     session = null;
   }
 
   if (!session || !session.user || !session.user.id) {
-    redirect(redirectTo);
-  }
-
-  // Deep DB Record Validation: Verify user record exists in the database table
-  try {
-    const userId = session.user.id;
-    let userExistsInDb = false;
-
-    try {
-      const { findUserById } = await import("@workspace/db");
-      const user = findUserById(userId);
-      if (user && user.id) {
-        userExistsInDb = true;
-      }
-    } catch (_dbErr) {
-      // Fallback if db is not directly queried
-      userExistsInDb = Boolean(session && session.user && session.user.id);
-    }
-
-    if (!userExistsInDb) {
-      redirect(redirectTo);
-    }
-  } catch (err) {
-    const isRedirect = err && typeof err === "object" && "digest" in err && String((err as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT");
-    if (isRedirect) {
-      throw err;
-    }
     redirect(redirectTo);
   }
 
@@ -223,7 +195,8 @@ import { redirect } from "next/navigation";
 
 export async function requireRole(allowedRoles: string[], redirectTo: string = "/unauthorized") {
   const session = await requireSession();
-  const role = (session.user as { role?: string })?.role || "user";
+  const user = session.user as { role?: string; [key: string]: unknown };
+  const role = typeof user.role === "string" ? user.role : "user";
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
     redirect(redirectTo);
@@ -242,8 +215,9 @@ import { redirect } from "next/navigation";
 
 export async function requireOrgRole(allowedOrgRoles: string[], redirectTo: string = "/unauthorized") {
   const session = await requireSession();
-  const activeOrgRole = (session.session as { activeOrgRole?: string })?.activeOrgRole ||
-                        (session.user as { orgRole?: string })?.orgRole;
+  const sessionData = session.session as { activeOrgRole?: string; [key: string]: unknown };
+  const userData = session.user as { orgRole?: string; [key: string]: unknown };
+  const activeOrgRole = sessionData?.activeOrgRole || userData?.orgRole;
 
   if (allowedOrgRoles.length > 0 && (!activeOrgRole || !allowedOrgRoles.includes(activeOrgRole))) {
     redirect(redirectTo);
@@ -262,8 +236,9 @@ import { redirect } from "next/navigation";
 
 export async function requirePlan(requiredPlans: string[], redirectTo: string = "/pricing") {
   const session = await requireSession();
-  const plan = (session.session as { plan?: string })?.plan ||
-               (session.user as { plan?: string })?.plan || "free";
+  const sessionData = session.session as { plan?: string; [key: string]: unknown };
+  const userData = session.user as { plan?: string; [key: string]: unknown };
+  const plan = sessionData?.plan || userData?.plan || "free";
 
   if (requiredPlans.length > 0 && !requiredPlans.includes(plan)) {
     redirect(redirectTo);
@@ -286,6 +261,8 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
         const rawVersion = authNode.data?.version || DEFAULT_BETTER_AUTH_VERSION;
         const cleanVersion = rawVersion.replace(/^v/, "");
         const semverVersion = cleanVersion.split(".").length === 2 ? `${cleanVersion}.0` : cleanVersion;
+        pkgObj.dependencies["@workspace/db"] = "workspace:*";
+        pkgObj.dependencies["@workspace/types"] = "workspace:*";
         pkgObj.dependencies["better-auth"] = `^${semverVersion}`;
         pkgObj.devDependencies["@better-auth/cli"] = `^${semverVersion}`;
         pkgObj.dependencies["zod"] = "^3.24.2";
@@ -384,13 +361,19 @@ export async function getAuthBearerToken(): Promise<string | null> {
 }
 
 /**
- * Ensures workspace DB dependencies are included if entity or db_ref nodes exist
+ * Ensures workspace DB dependencies are included if entity, database, or db_ref nodes exist
  */
 export function ensureDatabaseDependencies(
   files: CompiledFile[],
   allNodes: BackendNode[] = [],
 ): void {
-  const hasDatabaseNodes = allNodes.some((n) => n.type === "entity" || n.type === "db_ref");
+  const hasDatabaseNodes = allNodes.some(
+    (n) =>
+      n.type === "entity" ||
+      n.type === "db_ref" ||
+      n.type === "database" ||
+      n.type === "auth",
+  );
   if (hasDatabaseNodes) {
     const pkgFileIdx = files.findIndex((f) => f.filename === "package.json");
     if (pkgFileIdx !== -1) {
@@ -399,6 +382,7 @@ export function ensureDatabaseDependencies(
         pkgObj.dependencies = pkgObj.dependencies || {};
         pkgObj.devDependencies = pkgObj.devDependencies || {};
         pkgObj.dependencies["@workspace/db"] = "workspace:*";
+        pkgObj.dependencies["@workspace/types"] = "workspace:*";
         pkgObj.dependencies["better-sqlite3"] = "^12.0.0";
         pkgObj.devDependencies["@types/better-sqlite3"] = "^7.6.12";
         files[pkgFileIdx]!.content = JSON.stringify(pkgObj, null, 2);
