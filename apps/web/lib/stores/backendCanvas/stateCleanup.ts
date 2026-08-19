@@ -495,6 +495,132 @@ export function cleanupDeletedEdgesState(
         pendingNodeUpserts.push(updatedNode);
       }
     }
+
+    // 5. Service <-> Messaging Broker Node cleanup: remove published & consumed event references if disconnected
+    const MESSAGING_TYPES = new Set([
+      "kafka",
+      "queue",
+      "eventstream",
+      "pubsub",
+      "redis-streams",
+      "sqs",
+      "redis-pubsub",
+    ]);
+    const serviceNode = srcNode?.type === "service" ? srcNode : tgtNode?.type === "service" ? tgtNode : null;
+    const brokerNode =
+      srcNode && MESSAGING_TYPES.has(srcNode.type)
+        ? srcNode
+        : tgtNode && MESSAGING_TYPES.has(tgtNode.type)
+          ? tgtNode
+          : null;
+
+    if (serviceNode && brokerNode) {
+      const stillConnected = nextEdges.some((e) => {
+        if (!e) return false;
+        if ((e.source === serviceNode.id && e.target === brokerNode.id) || (e.target === serviceNode.id && e.source === brokerNode.id)) {
+          return true;
+        }
+        const topics = brokerNode.data?.topics || [];
+        if (e.source === serviceNode.id && e.targetHandle && topics.some((t: any) => e.targetHandle!.includes(t.id))) {
+          return true;
+        }
+        if (e.target === serviceNode.id && e.sourceHandle && topics.some((t: any) => e.sourceHandle!.includes(t.id))) {
+          return true;
+        }
+        return false;
+      });
+
+      if (!stillConnected) {
+        const brokerTopicIds = new Set((brokerNode.data?.topics || []).map((t: any) => t.id));
+
+        // Clean up nextEvents
+        const eventsToRemove = nextEvents.filter(
+          (ev) =>
+            ev.nodeId === serviceNode.id &&
+            (ev.brokerNodeId === brokerNode.id || (ev.messagingResourceId && brokerTopicIds.has(ev.messagingResourceId))),
+        );
+        if (eventsToRemove.length > 0) {
+          eventsChanged = true;
+          const removeIds = new Set(eventsToRemove.map((ev) => ev.id));
+          nextEvents = nextEvents.filter((ev) => !removeIds.has(ev.id));
+          eventsToRemove.forEach((ev) => {
+            deletedEventEntries.push({ nodeId: ev.nodeId, eventId: ev.id });
+          });
+        }
+
+        // Clean up nextEndpoints
+        nextEndpoints = nextEndpoints.map((ep) => {
+          if (ep.nodeId === serviceNode.id && ep.publishedEvents && ep.publishedEvents.length > 0) {
+            const remainingPubs = ep.publishedEvents.filter(
+              (pe) =>
+                pe.brokerNodeId !== brokerNode.id &&
+                (!pe.messagingResourceId || !brokerTopicIds.has(pe.messagingResourceId)),
+            );
+            if (remainingPubs.length !== ep.publishedEvents.length) {
+              endpointsChanged = true;
+              const updatedEp = { ...ep, publishedEvents: remainingPubs };
+              pendingEndpointUpserts.push(updatedEp);
+              return updatedEp;
+            }
+          }
+          return ep;
+        });
+
+        // Clean up service node data if it contains publishedEvents/consumedEvents
+        const liveSrvNode = nextNodes.find((n) => n.id === serviceNode.id);
+        if (liveSrvNode?.data) {
+          let nodeDataChanged = false;
+          const newData = { ...liveSrvNode.data };
+          if (newData.publishedEvents) {
+            const remainingPubs = newData.publishedEvents.filter(
+              (pe: any) =>
+                pe.brokerNodeId !== brokerNode.id &&
+                (!pe.messagingResourceId || !brokerTopicIds.has(pe.messagingResourceId)),
+            );
+            if (remainingPubs.length !== newData.publishedEvents.length) {
+              newData.publishedEvents = remainingPubs;
+              nodeDataChanged = true;
+            }
+          }
+          if (newData.consumedEvents) {
+            const remainingCons = newData.consumedEvents.filter(
+              (ce: any) =>
+                ce.brokerNodeId !== brokerNode.id &&
+                (!ce.messagingResourceId || !brokerTopicIds.has(ce.messagingResourceId)),
+            );
+            if (remainingCons.length !== newData.consumedEvents.length) {
+              newData.consumedEvents = remainingCons;
+              nodeDataChanged = true;
+            }
+          }
+          if (newData.endpoints) {
+            const newEps = newData.endpoints.map((ep: any) => {
+              if (ep.publishedEvents) {
+                const filtered = ep.publishedEvents.filter(
+                  (pe: any) =>
+                    pe.brokerNodeId !== brokerNode.id &&
+                    (!pe.messagingResourceId || !brokerTopicIds.has(pe.messagingResourceId)),
+                );
+                if (filtered.length !== ep.publishedEvents.length) {
+                  nodeDataChanged = true;
+                  return { ...ep, publishedEvents: filtered };
+                }
+              }
+              return ep;
+            });
+            if (nodeDataChanged) {
+              newData.endpoints = newEps;
+            }
+          }
+          if (nodeDataChanged) {
+            nodesChanged = true;
+            const updatedNode = { ...liveSrvNode, data: newData };
+            nextNodes = nextNodes.map((n) => (n.id === serviceNode.id ? updatedNode : n));
+            pendingNodeUpserts.push(updatedNode);
+          }
+        }
+      }
+    }
   });
 
   const updates: Partial<BackendCanvasState> = {

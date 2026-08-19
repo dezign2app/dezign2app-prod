@@ -23,7 +23,8 @@ export type ConfigItemType =
   | "payments"
   | "zone"
   | "entityFunctions"
-  | "database";
+  | "database"
+  | "testUsers";
 
 export interface ActiveConfigItem {
   type: ConfigItemType;

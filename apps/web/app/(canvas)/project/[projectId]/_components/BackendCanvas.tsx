@@ -36,7 +36,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
   const { isLoading } = useBackendSync(projectId, view);
 
   // Syncs the active test case for this project from localStorage
-  const testCases = useSimulationStore((s) => s.testCases);
+  const testCases = useSimulationStore((s) => s.testCases) ?? [];
   const selectedCaseId = useSimulationStore((s) => s.selectedCaseId);
   const selectTestCase = useSimulationStore((s) => s.selectTestCase);
 
@@ -47,7 +47,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         selectTestCase(savedId);
       }
     }
-  }, [testCases.length, projectId]);
+  }, [testCases.length, selectedCaseId, projectId, selectTestCase]);
 
   React.useEffect(() => {
     if (selectedCaseId) {

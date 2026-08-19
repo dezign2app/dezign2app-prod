@@ -492,6 +492,7 @@ export function compileRawSqliteDatabase(
     "id" TEXT PRIMARY KEY,
     "name" TEXT,
     "email" TEXT UNIQUE,
+    "role" TEXT,
     "emailVerified" INTEGER,
     "image" TEXT,
     "createdAt" TEXT,
@@ -558,6 +559,17 @@ export function compileRawSqliteDatabase(
     createdTableNames.add("verification");
     createdTableNames.add("verifications");
   }
+
+  // Pre-seed default test users and active sessions for endpoint testing and dev execution
+  ddlStatements.push(`  INSERT OR IGNORE INTO "user" ("id", "name", "email", "role", "createdAt") VALUES
+    ('fake_admin_1', 'Admin User', 'admin@example.com', 'admin', '2026-01-01T00:00:00.000Z'),
+    ('fake_user_1', 'Standard User', 'user@example.com', 'user', '2026-01-01T00:00:00.000Z'),
+    ('fake_superadmin_1', 'Super Admin', 'superadmin@example.com', 'superadmin', '2026-01-01T00:00:00.000Z');`);
+
+  ddlStatements.push(`  INSERT OR IGNORE INTO "session" ("id", "userId", "token", "expiresAt", "createdAt") VALUES
+    ('fake_session_admin', 'fake_admin_1', 'fake_admin_token', '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'),
+    ('fake_session_user', 'fake_user_1', 'fake_user_token', '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'),
+    ('fake_session_superadmin', 'fake_superadmin_1', 'fake_superadmin_token', '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');`);
 
   const sqlStatementsString = JSON.stringify(ddlStatements.join("\n\n"));
   const ddlBlock =

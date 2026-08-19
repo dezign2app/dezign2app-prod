@@ -44,20 +44,40 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   terminalOpen: true,
   selectedCaseId: undefined,
   testCases: [],
-  setTestCases: (testCases) => set({ testCases }),
-  selectTestCase: (caseId) => set({ selectedCaseId: caseId }),
+  setTestCases: (testCases: SimulationTestCase[]) => {
+    const seen = new Set<string>();
+    const unique = (testCases || []).filter((tc) => {
+      if (!tc?.id || seen.has(tc.id)) return false;
+      seen.add(tc.id);
+      return true;
+    });
+    set({ testCases: unique });
+  },
+  selectTestCase: (caseId: string | undefined) => set({ selectedCaseId: caseId }),
   clearSelectedTestCase: () => set({ selectedCaseId: undefined }),
-  addTestCase: (testCase) =>
-    set((state) => ({ testCases: [...state.testCases, testCase] })),
-  updateTestCase: (id, updates) =>
+  addTestCase: (testCase: SimulationTestCase) =>
+    set((state) => {
+      if (!testCase?.id) return state;
+      const currentList = state.testCases || [];
+      const exists = currentList.some((tc) => tc.id === testCase.id);
+      if (exists) {
+        return {
+          testCases: currentList.map((tc) =>
+            tc.id === testCase.id ? { ...tc, ...testCase } : tc,
+          ),
+        };
+      }
+      return { testCases: [...currentList, testCase] };
+    }),
+  updateTestCase: (id: string, updates: Partial<SimulationTestCase>) =>
     set((state) => ({
-      testCases: state.testCases.map((tc) =>
+      testCases: (state.testCases || []).map((tc) =>
         tc.id === id ? { ...tc, ...updates } : tc,
       ),
     })),
-  deleteTestCase: (id) =>
+  deleteTestCase: (id: string) =>
     set((state) => ({
-      testCases: state.testCases.filter((tc) => tc.id !== id),
+      testCases: (state.testCases || []).filter((tc) => tc.id !== id),
       selectedCaseId:
         state.selectedCaseId === id ? undefined : state.selectedCaseId,
     })),
