@@ -1,5 +1,11 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { KafkaTopic, CompiledFile, CompiledKafkaResult } from "@workspace/canvas/types";
+import {
+  KafkaTopic,
+  CompiledFile,
+  CompiledKafkaResult,
+  Endpoint,
+  AnyMessagingResource,
+} from "@workspace/canvas/types";
 import { toVarName } from "../utils";
 import { toFolderName, toTopicKey } from "./utils";
 import {
@@ -124,12 +130,14 @@ export function isServiceConnectedToKafka(
   const allPublished = [
     ...(serviceNode.data?.publishedEvents || []),
     ...serviceEndpoints.flatMap((ep) => ep.publishedEvents || []),
-    ...events.filter((ev) => ev.nodeId === serviceNode.id && (ev as any).variant === "publish"),
+    ...events.filter((ev) => ev.nodeId === serviceNode.id && "variant" in ev && ev.variant === "publish"),
   ];
 
   const hasPublishedKafkaRef = allPublished.some((ev) => {
-    if (ev.brokerNodeId && kafkaNodeIds.has(ev.brokerNodeId)) return true;
-    if (ev.messagingResourceId && kafkaTopicIds.has(ev.messagingResourceId)) return true;
+    const brokerId = "brokerNodeId" in ev && typeof ev.brokerNodeId === "string" ? ev.brokerNodeId : "";
+    const resId = "messagingResourceId" in ev && typeof ev.messagingResourceId === "string" ? ev.messagingResourceId : "";
+    if (brokerId && kafkaNodeIds.has(brokerId)) return true;
+    if (resId && kafkaTopicIds.has(resId)) return true;
     return false;
   });
   if (hasPublishedKafkaRef) return true;
@@ -137,12 +145,14 @@ export function isServiceConnectedToKafka(
   // 3. Consumed events configured to target a Kafka broker or topic
   const allConsumed = [
     ...(serviceNode.data?.consumedEvents || []),
-    ...events.filter((ev) => ev.nodeId === serviceNode.id && (ev as any).variant === "consume"),
+    ...events.filter((ev) => ev.nodeId === serviceNode.id && "variant" in ev && ev.variant === "consume"),
   ];
 
   const hasConsumedKafkaRef = allConsumed.some((ev) => {
-    if (ev.brokerNodeId && kafkaNodeIds.has(ev.brokerNodeId)) return true;
-    if (ev.messagingResourceId && kafkaTopicIds.has(ev.messagingResourceId)) return true;
+    const brokerId = "brokerNodeId" in ev && typeof ev.brokerNodeId === "string" ? ev.brokerNodeId : "";
+    const resId = "messagingResourceId" in ev && typeof ev.messagingResourceId === "string" ? ev.messagingResourceId : "";
+    if (brokerId && kafkaNodeIds.has(brokerId)) return true;
+    if (resId && kafkaTopicIds.has(resId)) return true;
     return false;
   });
   if (hasConsumedKafkaRef) return true;
