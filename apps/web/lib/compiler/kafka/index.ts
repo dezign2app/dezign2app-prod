@@ -24,21 +24,142 @@ export * from "./generators/consumers";
 export * from "./generators/reusableFunctions";
 
 /**
+ * Checks if a given node is a Kafka-compatible messaging broker.
+ */
+export function isKafkaNode(n: BackendNode): boolean {
+  return (
+    n.type === "kafka" ||
+    n.type === "eventstream" ||
+    (n.type === "queue" &&
+      n.data?.implementation?.toLowerCase() === "kafka")
+  );
+}
+
+/**
+ * Determines whether a specific service node is actively connected to any Kafka broker.
+ */
+export function isServiceConnectedToKafka(
+  serviceNode: BackendNode,
+  allNodes: BackendNode[] = [],
+  allEdges: BackendEdge[] = [],
+  endpoints: (Endpoint & { nodeId?: string })[] = [],
+  events: (AnyMessagingResource & { nodeId?: string })[] = [],
+): boolean {
+  const kafkaNodes = allNodes.filter(isKafkaNode);
+  if (kafkaNodes.length === 0) return false;
+
+  const kafkaNodeIds = new Set(kafkaNodes.map((k) => k.id));
+  const kafkaTopicIds = new Set(
+    kafkaNodes.flatMap((k) => (k.data?.topics || []).map((t) => t.id)),
+  );
+
+  // 1. Direct or handle-based edges between service and kafka
+  const serviceEndpoints = [
+    ...(serviceNode.data?.endpoints || []),
+    ...(serviceNode.data?.routeGroups?.flatMap((rg) => rg.endpoints || []) || []),
+    ...endpoints.filter((ep) => ep.nodeId === serviceNode.id),
+  ];
+  const serviceEndpointIds = new Set(serviceEndpoints.map((ep) => ep.id));
+
+  const serviceEvents = [
+    ...(serviceNode.data?.publishedEvents || []),
+    ...(serviceNode.data?.consumedEvents || []),
+    ...events.filter((ev) => ev.nodeId === serviceNode.id),
+  ];
+  const serviceEventIds = new Set(serviceEvents.map((ev) => ev.id));
+
+  const hasConnectedEdge = allEdges.some((edge) => {
+    if (!edge) return false;
+    const isSourceService = edge.source === serviceNode.id;
+    const isTargetService = edge.target === serviceNode.id;
+    const isSourceKafka = kafkaNodeIds.has(edge.source);
+    const isTargetKafka = kafkaNodeIds.has(edge.target);
+
+    // Direct edge between service node and kafka node
+    if ((isSourceService && isTargetKafka) || (isTargetService && isSourceKafka)) {
+      return true;
+    }
+
+    // Endpoint -> Kafka edge
+    if (edge.sourceHandle?.startsWith("endpoint-out-")) {
+      const epId = edge.sourceHandle.replace("endpoint-out-", "");
+      if (serviceEndpointIds.has(epId) && isTargetKafka) return true;
+    }
+
+    // Published event -> Kafka edge
+    if (edge.sourceHandle?.startsWith("publishedEvents-out-")) {
+      const evId = edge.sourceHandle.replace("publishedEvents-out-", "");
+      if (
+        (serviceEventIds.has(evId) || serviceEndpoints.some((ep) => ep.publishedEvents?.some((pe) => pe.id === evId))) &&
+        isTargetKafka
+      ) {
+        return true;
+      }
+    }
+
+    // Kafka -> Consumed event edge
+    if (edge.targetHandle?.startsWith("consumedEvents-in-")) {
+      const evId = edge.targetHandle.replace("consumedEvents-in-", "");
+      if (serviceEventIds.has(evId) && isSourceKafka) return true;
+    }
+
+    // Check if targetHandle or sourceHandle references a Kafka topic ID
+    if (isSourceService && edge.targetHandle) {
+      for (const topicId of kafkaTopicIds) {
+        if (edge.targetHandle.includes(topicId)) return true;
+      }
+    }
+    if (isTargetService && edge.sourceHandle) {
+      for (const topicId of kafkaTopicIds) {
+        if (edge.sourceHandle.includes(topicId)) return true;
+      }
+    }
+
+    return false;
+  });
+
+  if (hasConnectedEdge) return true;
+
+  // 2. Published events configured to target a Kafka broker or topic
+  const allPublished = [
+    ...(serviceNode.data?.publishedEvents || []),
+    ...serviceEndpoints.flatMap((ep) => ep.publishedEvents || []),
+    ...events.filter((ev) => ev.nodeId === serviceNode.id && (ev as any).variant === "publish"),
+  ];
+
+  const hasPublishedKafkaRef = allPublished.some((ev) => {
+    if (ev.brokerNodeId && kafkaNodeIds.has(ev.brokerNodeId)) return true;
+    if (ev.messagingResourceId && kafkaTopicIds.has(ev.messagingResourceId)) return true;
+    return false;
+  });
+  if (hasPublishedKafkaRef) return true;
+
+  // 3. Consumed events configured to target a Kafka broker or topic
+  const allConsumed = [
+    ...(serviceNode.data?.consumedEvents || []),
+    ...events.filter((ev) => ev.nodeId === serviceNode.id && (ev as any).variant === "consume"),
+  ];
+
+  const hasConsumedKafkaRef = allConsumed.some((ev) => {
+    if (ev.brokerNodeId && kafkaNodeIds.has(ev.brokerNodeId)) return true;
+    if (ev.messagingResourceId && kafkaTopicIds.has(ev.messagingResourceId)) return true;
+    return false;
+  });
+  if (hasConsumedKafkaRef) return true;
+
+  return false;
+}
+
+/**
  * Compiles Kafka nodes into a structured shared package under packages/<nodeLabel>.
  */
 export function compileKafkaNodes(
   allNodes: BackendNode[],
-  _allEdges: BackendEdge[] = [],
+  allEdges: BackendEdge[] = [],
 ): CompiledKafkaResult {
   const files: CompiledFile[] = [];
 
-  const kafkaNodes = allNodes.filter(
-    (n) =>
-      n.type === "kafka" ||
-      n.type === "eventstream" ||
-      (n.type === "queue" &&
-        n.data?.implementation?.toLowerCase() === "kafka"),
-  );
+  const kafkaNodes = allNodes.filter(isKafkaNode);
 
   // Derive package name from first node label
   const firstKafkaNode = kafkaNodes[0];
@@ -48,6 +169,20 @@ export function compileKafkaNodes(
 
   if (kafkaNodes.length === 0) {
     return { files: [], reusableFunctions: [], packageFolder: "kafka", packageName: "@workspace/kafka" };
+  }
+
+  // If there are other service/app nodes present on canvas, verify that Kafka is actually connected
+  const nonKafkaAppNodes = allNodes.filter(
+    (n) => n.type === "service" || n.type === "webApp" || n.type === "webClient" || n.type === "langgraph",
+  );
+
+  if (nonKafkaAppNodes.length > 0) {
+    const isAnyKafkaConnected = nonKafkaAppNodes.some((srv) =>
+      isServiceConnectedToKafka(srv, allNodes, allEdges),
+    );
+    if (!isAnyKafkaConnected) {
+      return { files: [], reusableFunctions: [], packageFolder, packageName };
+    }
   }
 
   // Gather all topics across all Kafka nodes (de-duped by name)

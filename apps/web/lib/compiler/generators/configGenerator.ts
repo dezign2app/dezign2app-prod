@@ -7,6 +7,7 @@ import {
   resolveProducerTrace,
 } from "../traceResolver";
 import { toEnvVarName } from "../utils";
+import { isServiceConnectedToKafka } from "../kafka";
 import {
   INTER_SERVICE_PROTOCOL_GRPC,
   GRPC_DEFAULT_PORT,
@@ -164,6 +165,7 @@ export function generateConfigFiles(
   const hasDb = allNodes.some(
     (n) => n.type === "database" || n.type === "entity" || n.type === "db_ref" || n.type === "auth",
   );
+  const hasKafka = isServiceConnectedToKafka(node, allNodes, allEdges, endpoints, events);
   const firstKafkaNode = allNodes.find(
     (n) =>
       n.type === "kafka" ||
@@ -171,7 +173,6 @@ export function generateConfigFiles(
       (n.type === "queue" &&
         n.data?.implementation?.toLowerCase() === "kafka"),
   );
-  const hasKafka = Boolean(firstKafkaNode);
   const kafkaPackageFolder = firstKafkaNode
     ? (firstKafkaNode.data?.label
         ?.toLowerCase()

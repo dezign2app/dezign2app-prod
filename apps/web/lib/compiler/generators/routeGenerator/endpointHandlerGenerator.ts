@@ -128,9 +128,10 @@ export function generateEndpointRouteHandler(
     allEdges,
   );
   const hasPublishedEvents =
-    nodePublishedEvents.length > 0 || (ep.publishedEvents && ep.publishedEvents.length > 0);
+    nodePublishedEvents.length > 0 || Boolean(ep.publishedEvents && ep.publishedEvents.length > 0);
+  const hasBrokerTrace = trace.outgoing.some((out) => out.nodeType === "Message Broker");
   const pickedKafka =
-    (hasPublishedEvents || method === "post") && kafkaFunctions.length > 0
+    (hasPublishedEvents || hasBrokerTrace) && kafkaFunctions.length > 0
       ? pickKafkaPublishFunction(kafkaFunctions)
       : null;
 

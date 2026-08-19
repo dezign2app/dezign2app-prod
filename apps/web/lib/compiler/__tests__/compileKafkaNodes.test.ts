@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { compileKafkaNodes } from "../kafka";
+import { compileServiceNode } from "../compileServiceNode";
 import { BackendNode } from "@/types/canvas";
 
 describe("compileKafkaNodes", () => {
@@ -230,4 +231,168 @@ describe("compileKafkaNodes", () => {
     expect(publishersIndex!.content).toContain("[KAFKA_TOPICS.CREATE_PRODUCT]: CreateProductPayload;");
     expect(publishersIndex!.content).not.toContain("unknown");
   });
+
+  it("returns empty structure when Kafka node exists on canvas with services but has no connecting edges", () => {
+    const kafkaNode: BackendNode = {
+      id: "kafka-1",
+      type: "kafka",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Kafka Broker",
+        topics: [{ id: "top-1", name: "notifications" }],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "srv-1",
+      type: "service",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "User Service",
+        endpoints: [{ id: "ep-1", name: "/users", type: "POST" }],
+      },
+    };
+
+    // No connecting edges between service and kafka
+    const result = compileKafkaNodes([kafkaNode, serviceNode], []);
+    expect(result.files).toHaveLength(0);
+    expect(result.reusableFunctions).toHaveLength(0);
+  });
+
+  it("compiles Kafka package when edge connects service node to kafka broker", () => {
+    const kafkaNode: BackendNode = {
+      id: "kafka-1",
+      type: "kafka",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Kafka Broker",
+        topics: [{ id: "top-1", name: "notifications" }],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "srv-1",
+      type: "service",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "User Service",
+        endpoints: [{ id: "ep-1", name: "/users", type: "POST" }],
+      },
+    };
+
+    const edge = {
+      id: "edge-1",
+      source: "srv-1",
+      target: "kafka-1",
+      type: "message" as const,
+      fractionalIndex: "a0",
+    };
+
+    const result = compileKafkaNodes([kafkaNode, serviceNode], [edge]);
+    expect(result.files.length).toBeGreaterThan(0);
+    expect(result.reusableFunctions.length).toBeGreaterThan(0);
+  });
+
+  it("removes kafka code and dependencies from service when edge to kafka is disconnected", () => {
+    const kafkaNode: BackendNode = {
+      id: "kafka-1",
+      type: "kafka",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Kafka Broker",
+        topics: [{ id: "top-1", name: "notifications" }],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "srv-1",
+      type: "service",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "User Service",
+        endpoints: [{ id: "ep-1", name: "/users", type: "POST" }],
+      },
+    };
+
+    // Disconnected (no edges)
+    const resultDisconnected = compileServiceNode(
+      serviceNode,
+      [{ id: "ep-1", name: "/users", type: "POST", nodeId: "srv-1" }],
+      [],
+      [kafkaNode, serviceNode],
+      [],
+    );
+
+    const packageJsonDisconnected = resultDisconnected.files.find(
+      (f) => f.filename === "package.json",
+    );
+    expect(packageJsonDisconnected).toBeDefined();
+    expect(packageJsonDisconnected!.content).not.toContain("@workspace/kafka");
+
+    const routeFileDisconnected = resultDisconnected.files.find((f) =>
+      f.filename.startsWith("src/routes/"),
+    );
+    expect(routeFileDisconnected).toBeDefined();
+    expect(routeFileDisconnected!.content).not.toContain("publishKafkaEvent");
+    expect(routeFileDisconnected!.content).not.toContain("KAFKA_TOPICS");
+
+    // Connected with edge
+    const edge = {
+      id: "edge-1",
+      source: "srv-1",
+      target: "kafka-1",
+      type: "message" as const,
+      fractionalIndex: "a0",
+    };
+
+    const resultConnected = compileServiceNode(
+      serviceNode,
+      [
+        {
+          id: "ep-1",
+          name: "/users",
+          type: "POST",
+          nodeId: "srv-1",
+          publishedEvents: [
+            {
+              id: "ev-pub-1",
+              name: "notifications",
+              messagingResourceId: "top-1",
+              brokerNodeId: "kafka-1",
+              publishedWhen: "ALWAYS",
+              version: "v1",
+              category: "DOMAIN",
+              delivery: "AT_LEAST_ONCE",
+              ordering: "NONE",
+              deprecated: false,
+            },
+          ],
+        },
+      ],
+      [],
+      [kafkaNode, serviceNode],
+      [edge],
+    );
+
+    const packageJsonConnected = resultConnected.files.find(
+      (f) => f.filename === "package.json",
+    );
+    expect(packageJsonConnected).toBeDefined();
+    expect(packageJsonConnected!.content).toContain("@workspace/kafka");
+
+    const routeFileConnected = resultConnected.files.find((f) =>
+      f.filename.startsWith("src/routes/"),
+    );
+    expect(routeFileConnected).toBeDefined();
+    expect(routeFileConnected!.content).toContain("publishKafkaEvent");
+    expect(routeFileConnected!.content).toContain("KAFKA_TOPICS");
+  });
 });
+
+

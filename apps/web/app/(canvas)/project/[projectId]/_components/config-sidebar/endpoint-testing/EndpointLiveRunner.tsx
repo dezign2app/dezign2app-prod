@@ -18,6 +18,7 @@ import {
   Settings2,
   RefreshCw,
   SlidersHorizontal,
+  Users,
 } from "lucide-react";
 import { Endpoint, BackendNode } from "@/types/canvas";
 import { SimulationTestCase } from "@workspace/canvas";
@@ -29,6 +30,7 @@ import {
   LiveApiCallResult,
   AssertionResultItem,
 } from "./utils";
+import { useActiveFakeUsers } from "./fakeUser";
 import { EndpointResponseViewer } from "./EndpointResponseViewer";
 import { cn } from "@workspace/ui/lib/utils";
 
@@ -49,6 +51,16 @@ export function EndpointLiveRunner({
 }: EndpointLiveRunnerProps) {
   const defaultPort = useMemo(() => getServiceDefaultPort(serviceNode), [serviceNode]);
   const defaultLocalBaseUrl = `http://localhost:${defaultPort}`;
+
+  const fakeUsers = useActiveFakeUsers();
+  const [selectedPersonaId, setSelectedPersonaId] = useState<string>(() => {
+    const existingAuth = (testCase.request?.headers?.authorization || "").replace(/^Bearer\s+/i, "").trim();
+    if (!existingAuth) return "anonymous";
+    const matched = fakeUsers.find((u) => u.token === existingAuth);
+    return matched ? matched.id : fakeUsers[0]?.id || "anonymous";
+  });
+
+  const [customAuthTokenOverride, setCustomAuthTokenOverride] = useState<string | null>(null);
 
   const [envMode, setEnvMode] = useState<"local" | "custom">("local");
   const [customBaseUrl, setCustomBaseUrl] = useState<string>("");
@@ -104,6 +116,18 @@ export function EndpointLiveRunner({
 
     try {
       const headers = { ...(testCase.request?.headers || {}) };
+
+      if (endpoint.requireAuth !== false && selectedPersonaId) {
+        const selectedPersona = fakeUsers.find((u) => u.id === selectedPersonaId);
+        if (selectedPersona) {
+          if (selectedPersona.isAnonymous) {
+            delete headers["authorization"];
+          } else if (selectedPersona.token) {
+            headers["authorization"] = `Bearer ${selectedPersona.token}`;
+          }
+        }
+      }
+
       const body = testCase.request?.body;
 
       const result = await executeLiveApiCall({
@@ -167,6 +191,37 @@ export function EndpointLiveRunner({
             </Select>
           </div>
         </div>
+
+        {/* Auth Persona Selector (when endpoint requires authentication) */}
+        {endpoint.requireAuth !== false && (
+          <div className="flex items-center justify-between p-2 rounded-lg bg-background/50 border border-border/40 text-xs gap-2">
+            <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5 shrink-0">
+              <Users className="w-3.5 h-3.5 text-muted-foreground" />
+              <span>Auth Persona:</span>
+            </span>
+
+            <Select
+              value={selectedPersonaId}
+              onValueChange={(val) => {
+                setSelectedPersonaId(val);
+              }}
+            >
+              <SelectTrigger className="h-6 text-[11px] bg-background border-border/50 font-medium">
+                <SelectValue placeholder="Select Auth Identity" />
+              </SelectTrigger>
+              <SelectContent>
+                {fakeUsers.map((u) => (
+                  <SelectItem key={u.id} value={u.id} className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span>{u.name}</span>
+                      <span className="text-[10px] font-mono text-muted-foreground">({u.badge})</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {envMode === "custom" && (
           <div className="flex items-center gap-2">

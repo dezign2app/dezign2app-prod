@@ -25,6 +25,7 @@ import { EventTestingConfig } from "./config-sidebar/EventTestingConfig";
 import { LangGraphRouteConfig } from "./config-sidebar/LangGraphRouteConfig";
 import { EntityFunctionsConfig } from "./config-sidebar/EntityFunctionsConfig";
 import { DatabaseConfig } from "./config-sidebar/DatabaseConfig";
+import { TestUsersConfig } from "./config-sidebar/TestUsersConfig";
 
 export const ConfigSidebar = () => {
   const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
@@ -221,6 +222,8 @@ export const ConfigSidebar = () => {
             <EntityFunctionsConfig id={id} nodeId={nodeId} />
           ) : type === "database" ? (
             <DatabaseConfig id={id} nodeId={nodeId} />
+          ) : type === "testUsers" ? (
+            <TestUsersConfig id={id} nodeId={nodeId} />
           ) : (
             <EventConfig id={id} nodeId={nodeId} />
           )}

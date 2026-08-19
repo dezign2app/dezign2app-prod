@@ -48,6 +48,7 @@ import {
 import {
   generateDefaultTestCases,
   createTestCaseFromPreset,
+  getInitialBody,
   generateId,
 } from "./utils";
 import { EndpointTestCaseEditor } from "./EndpointTestCaseEditor";
@@ -76,12 +77,19 @@ export function EndpointTestCasesSection({
   const upsertBackendTestCase = useMutation(api.canvas.upsertBackendTestCase);
   const removeBackendTestCase = useMutation(api.canvas.removeBackendTestCase);
 
-  // Filter test cases targeting this endpoint
-  const endpointCases = testCases.filter(
-    (tc) =>
+  // Filter test cases targeting this endpoint (deduplicated by tc.id)
+  const seenIds = new Set<string>();
+  const endpointCases = testCases.filter((tc) => {
+    if (!tc?.id) return false;
+    const matches =
       (tc.targetNodeId === nodeId && tc.targetEventId === endpoint.id) ||
-      tc.targetEventId === endpoint.id,
-  );
+      tc.targetEventId === endpoint.id;
+    if (matches && !seenIds.has(tc.id)) {
+      seenIds.add(tc.id);
+      return true;
+    }
+    return false;
+  });
 
   // Separate Auto-Generated vs Manual test cases
   const autoCases = endpointCases.filter(
@@ -111,25 +119,32 @@ export function EndpointTestCasesSection({
     "200_ok" | "201_created" | "400_bad_request" | "401_unauthorized" | "404_not_found" | "custom"
   >("200_ok");
 
-  // Automatically populate basic contract test cases on mount if missing
+  // Automatically populate basic contract test cases on mount or update with schema fields
   useEffect(() => {
-    const hasSuccess = autoCases.some(
+    const storeCases = useSimulationStore.getState().testCases;
+    const hasSuccess = storeCases.some(
       (tc) =>
-        tc.id === `auto-${endpoint.id}-success` ||
-        tc.expectedStatus === 200 ||
-        tc.expectedStatus === 201,
+        (tc.targetNodeId === nodeId || tc.targetEventId === endpoint.id) &&
+        (tc.id === `auto-${endpoint.id}-success` ||
+          tc.expectedStatus === 200 ||
+          tc.expectedStatus === 201),
     );
-    const hasValidation = autoCases.some(
+    const hasValidation = storeCases.some(
       (tc) =>
-        tc.id === `auto-${endpoint.id}-validation` ||
-        tc.expectedStatus === 400,
+        (tc.targetNodeId === nodeId || tc.targetEventId === endpoint.id) &&
+        (tc.id === `auto-${endpoint.id}-validation` ||
+          tc.expectedStatus === 400),
     );
 
     if (!hasSuccess || !hasValidation) {
       const generated = generateDefaultTestCases(endpoint, nodeId, serviceNode);
       generated.forEach((genCase) => {
-        const alreadyExists = endpointCases.some(
-          (tc) => tc.id === genCase.id || tc.expectedStatus === genCase.expectedStatus,
+        const latestStoreCases = useSimulationStore.getState().testCases;
+        const alreadyExists = latestStoreCases.some(
+          (tc) =>
+            tc.id === genCase.id ||
+            ((tc.targetNodeId === nodeId || tc.targetEventId === endpoint.id) &&
+              tc.expectedStatus === genCase.expectedStatus),
         );
         if (!alreadyExists) {
           addTestCase(genCase);
@@ -142,8 +157,46 @@ export function EndpointTestCasesSection({
           }
         }
       });
+    } else {
+      // Sync auto-success test case with configured request schema fields
+      const currentInitialBody = getInitialBody(endpoint);
+      const existingAutoSuccess = autoCases.find((tc) => tc.id === `auto-${endpoint.id}-success`);
+      if (existingAutoSuccess && currentInitialBody && typeof currentInitialBody === "object") {
+        const schemaKeys = Object.keys(currentInitialBody);
+        const caseKeys = existingAutoSuccess.request?.body ? Object.keys(existingAutoSuccess.request.body) : [];
+        const isMissingFields = schemaKeys.some((k) => !caseKeys.includes(k));
+        if (isMissingFields && schemaKeys.length > 0) {
+          const updated: SimulationTestCase = {
+            ...existingAutoSuccess,
+            request: {
+              ...existingAutoSuccess.request,
+              body: currentInitialBody,
+            },
+            expectedBody: {
+              success: true,
+              data: currentInitialBody,
+            },
+          };
+          updateTestCase(existingAutoSuccess.id, updated);
+          if (projectId) {
+            upsertBackendTestCase({
+              projectId,
+              testCaseId: existingAutoSuccess.id,
+              data: updated,
+            });
+          }
+        }
+      }
     }
-  }, [endpoint.id, nodeId, projectId, autoCases.length, endpointCases.length]);
+  }, [
+    endpoint.id,
+    endpoint.requestBody,
+    endpoint.params,
+    nodeId,
+    projectId,
+    autoCases.length,
+    endpointCases.length,
+  ]);
 
   // Create new manual test case
   const handleCreateNewManual = () => {

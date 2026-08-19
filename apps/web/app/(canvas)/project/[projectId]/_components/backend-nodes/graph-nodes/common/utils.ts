@@ -1,5 +1,5 @@
 import { useSimulationStore } from "@/lib/stores/simulationStore";
-import { Endpoint, Parameter, JSONValue } from "@/types/canvas";
+import { Endpoint, Parameter, JSONValue, JSONObject } from "@/types/canvas";
 
 export const generateId = () => Math.random().toString(36).substring(2, 9);
 
@@ -70,10 +70,53 @@ export function endpointBodyTemplate(endpoint: Endpoint): string {
 }
 
 export function getInitialBody(endpoint: Endpoint): JSONValue | undefined {
+  if (endpoint.requestBody?.fields && endpoint.requestBody.fields.length > 0) {
+    const obj: JSONObject = {};
+    endpoint.requestBody.fields.forEach((f) => {
+      const fieldKey = f.key || f.name;
+      if (!fieldKey) return;
+      if (f.defaultValue !== undefined && f.defaultValue !== "") {
+        try {
+          const parsedDefault: JSONValue = JSON.parse(f.defaultValue);
+          obj[fieldKey] = parsedDefault;
+          return;
+        } catch {
+          obj[fieldKey] = f.defaultValue;
+          return;
+        }
+      }
+      const type = (f.type || "string").toLowerCase();
+      const name = fieldKey.toLowerCase();
+      if (name.includes("email")) {
+        obj[fieldKey] = "alice@example.com";
+      } else if (name.includes("price") || name.includes("amount") || name.includes("cost")) {
+        obj[fieldKey] = 49.99;
+      } else if (name.includes("count") || name.includes("quantity") || name.includes("qty") || name.includes("age")) {
+        obj[fieldKey] = 10;
+      } else if (name.includes("title") || name.includes("name")) {
+        obj[fieldKey] = `Sample ${fieldKey}`;
+      } else if (name.includes("description") || name.includes("bio")) {
+        obj[fieldKey] = "Sample description for testing";
+      } else if (type === "number" || type === "int" || type === "integer" || type === "float") {
+        obj[fieldKey] = 42;
+      } else if (type === "boolean" || type === "bool") {
+        obj[fieldKey] = true;
+      } else if (type === "array" || type === "list") {
+        obj[fieldKey] = ["item_1", "item_2"];
+      } else if (type === "object" || type === "json") {
+        obj[fieldKey] = { sampleKey: "sample_value" };
+      } else {
+        obj[fieldKey] = `Sample ${fieldKey}`;
+      }
+    });
+    return obj;
+  }
+
   const template = endpointBodyTemplate(endpoint);
   if (!template) return undefined;
   try {
-    return JSON.parse(template) as JSONValue;
+    const parsed: JSONValue = JSON.parse(template);
+    return parsed;
   } catch {
     return undefined;
   }
