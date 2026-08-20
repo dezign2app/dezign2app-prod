@@ -39,8 +39,12 @@ export interface GraphViewProps {
 }
 
 export function GraphView({ projectId }: GraphViewProps) {
-  const { nodes, edges, onEdgesChange, onConnect, addNode } =
+  const { nodes, edges, onEdgesChange, onConnect, addNode, setView } =
     useBackendCanvasStore();
+
+  useEffect(() => {
+    setView("graph");
+  }, [setView]);
   const simulation = useSimulationStore();
   const selectedCaseId = useSimulationStore((state) => state.selectedCaseId);
   const testCases = useSimulationStore((state) => state.testCases);
@@ -52,19 +56,68 @@ export function GraphView({ projectId }: GraphViewProps) {
   } | null>(null);
   const [deleteCaseOpen, setDeleteCaseOpen] = useState(false);
 
-  const { handleNodesChange, handleMoveEnd } = useCanvasHandlers(
-    projectId,
-    "graph",
-  );
+  const {
+    handleNodesChange,
+    handleNodeDragStart,
+    handleSelectionDragStart,
+    handleMoveEnd,
+  } = useCanvasHandlers(projectId, "graph");
   const { screenToFlowPosition, fitView } = useReactFlow();
 
-  const graphNodes = nodes.filter(
-    (n) => n.type !== "group" && n.type !== "entity" && n.type !== "database",
+  const endpoints = useBackendCanvasStore((s) => s.endpoints);
+  const events = useBackendCanvasStore((s) => s.events);
+
+  const graphNodes = React.useMemo(
+    () =>
+      nodes.filter(
+        (n) => n.type !== "group" && n.type !== "entity" && n.type !== "database",
+      ),
+    [nodes],
   );
 
-  const graphEdges = edges.filter(
-    (e) => e.type !== "database-connection" && e.type !== "foreign-key",
+  const graphNodeIds = React.useMemo(
+    () => new Set(graphNodes.map((n) => n.id)),
+    [graphNodes],
   );
+  const validEndpointKeys = React.useMemo(
+    () => new Set(endpoints.map((ep) => `${ep.nodeId}::${ep.id}`)),
+    [endpoints],
+  );
+  const validEventKeys = React.useMemo(
+    () => new Set(events.map((ev) => `${ev.nodeId}::${ev.id}`)),
+    [events],
+  );
+
+  const graphEdges = React.useMemo(() => {
+    return edges.filter((e) => {
+      if (e.type === "database-connection" || e.type === "foreign-key") {
+        return false;
+      }
+      if (!graphNodeIds.has(e.source) || !graphNodeIds.has(e.target)) {
+        return false;
+      }
+
+      if (e.sourceHandle?.startsWith("endpoint-out-") || e.sourceHandle?.startsWith("endpoint-in-")) {
+        const epId = e.sourceHandle.replace(/^endpoint-(out|in)-/, "");
+        if (!validEndpointKeys.has(`${e.source}::${epId}`)) return false;
+      }
+      if (e.targetHandle?.startsWith("endpoint-in-") || e.targetHandle?.startsWith("endpoint-out-")) {
+        const epId = e.targetHandle.replace(/^endpoint-(in|out)-/, "");
+        if (!validEndpointKeys.has(`${e.target}::${epId}`)) return false;
+      }
+
+      if (e.sourceHandle?.startsWith("publishedEvents-out-") || e.sourceHandle?.startsWith("consumedEvents-out-")) {
+        const evId = e.sourceHandle.replace(/^(publishedEvents|consumedEvents)-out-/, "");
+        if (!validEventKeys.has(`${e.source}::${evId}`)) return false;
+      }
+      if (e.targetHandle?.startsWith("consumedEvents-in-") || e.targetHandle?.startsWith("publishedEvents-in-")) {
+        const evId = e.targetHandle.replace(/^(consumedEvents|publishedEvents)-in-/, "");
+        if (!validEventKeys.has(`${e.target}::${evId}`)) return false;
+      }
+
+      return true;
+    });
+  }, [edges, graphNodeIds, validEndpointKeys, validEventKeys]);
 
   const { handleLayout } = useGraphAutoLayout({
     nodes: graphNodes,
@@ -106,83 +159,92 @@ export function GraphView({ projectId }: GraphViewProps) {
     });
   };
 
-  const sortedGraphNodes = [...graphNodes].sort((a, b) => {
-    if (a.type === "webAppGroup") return -1;
-    if (b.type === "webAppGroup") return 1;
-    return 0;
-  });
+  const sortedGraphNodes = React.useMemo(() => {
+    return [...graphNodes].sort((a, b) => {
+      if (a.type === "webAppGroup") return -1;
+      if (b.type === "webAppGroup") return 1;
+      return 0;
+    });
+  }, [graphNodes]);
 
-  const visualGraphNodes = sortedGraphNodes.map((node) => {
+  const visualGraphNodes = React.useMemo(() => {
     const hasRun = simulation.status !== "idle";
-    let isVisited = simulation.activeNodeIds.includes(node.id);
-    let isCurrent = simulation.currentNodeId === node.id;
-
-    if (node.type === "db_ref") {
-      const activeEndpointIds = simulation.trace
-        .slice(0, simulation.activeIndex + 1)
-        .filter((t) => t.kind === "endpoint")
-        .map((t) => t.id);
-
-      const connectedToActive = edges.some((edge) => {
-        if (
-          edge.target === node.id &&
-          simulation.activeNodeIds.includes(edge.source)
-        ) {
-          if (edge.sourceHandle?.startsWith("endpoint-out-")) {
-            const endpointId = edge.sourceHandle.replace("endpoint-out-", "");
-            return activeEndpointIds.includes(endpointId);
-          }
-          return true;
-        }
-        if (
-          edge.source === node.id &&
-          simulation.activeNodeIds.includes(edge.target)
-        ) {
-          return true;
-        }
-        return false;
-      });
-      if (connectedToActive) isVisited = true;
-
-      const currentEndpointIds =
-        simulation.trace[simulation.activeIndex]?.kind === "endpoint"
-          ? [simulation.trace[simulation.activeIndex]?.id]
-          : [];
-
-      const connectedToCurrent = edges.some((edge) => {
-        if (
-          edge.target === node.id &&
-          simulation.currentNodeId === edge.source
-        ) {
-          if (edge.sourceHandle?.startsWith("endpoint-out-")) {
-            const endpointId = edge.sourceHandle.replace("endpoint-out-", "");
-            return currentEndpointIds.includes(endpointId);
-          }
-          return true;
-        }
-        if (
-          edge.source === node.id &&
-          simulation.currentNodeId === edge.target
-        ) {
-          return true;
-        }
-        return false;
-      });
-      if (connectedToCurrent) isCurrent = true;
+    if (!hasRun) {
+      return sortedGraphNodes;
     }
 
-    return {
-      ...node,
-      style: {
-        ...node.style,
-        opacity: hasRun && !isVisited ? 0.14 : 1,
-        transition: "opacity 180ms ease, filter 180ms ease",
-        filter: isCurrent
-          ? "drop-shadow(0 0 8px hsl(var(--primary)))"
-          : undefined,
-      },
-    };
-  });
+    return sortedGraphNodes.map((node) => {
+      let isVisited = simulation.activeNodeIds.includes(node.id);
+      let isCurrent = simulation.currentNodeId === node.id;
+
+      if (node.type === "db_ref") {
+        const activeEndpointIds = simulation.trace
+          .slice(0, simulation.activeIndex + 1)
+          .filter((t) => t.kind === "endpoint")
+          .map((t) => t.id);
+
+        const connectedToActive = edges.some((edge) => {
+          if (
+            edge.target === node.id &&
+            simulation.activeNodeIds.includes(edge.source)
+          ) {
+            if (edge.sourceHandle?.startsWith("endpoint-out-")) {
+              const endpointId = edge.sourceHandle.replace("endpoint-out-", "");
+              return activeEndpointIds.includes(endpointId);
+            }
+            return true;
+          }
+          if (
+            edge.source === node.id &&
+            simulation.activeNodeIds.includes(edge.target)
+          ) {
+            return true;
+          }
+          return false;
+        });
+        if (connectedToActive) isVisited = true;
+
+        const currentEndpointIds =
+          simulation.trace[simulation.activeIndex]?.kind === "endpoint"
+            ? [simulation.trace[simulation.activeIndex]?.id]
+            : [];
+
+        const connectedToCurrent = edges.some((edge) => {
+          if (
+            edge.target === node.id &&
+            simulation.currentNodeId === edge.source
+          ) {
+            if (edge.sourceHandle?.startsWith("endpoint-out-")) {
+              const endpointId = edge.sourceHandle.replace("endpoint-out-", "");
+              return currentEndpointIds.includes(endpointId);
+            }
+            return true;
+          }
+          if (
+            edge.source === node.id &&
+            simulation.currentNodeId === edge.target
+          ) {
+            return true;
+          }
+          return false;
+        });
+        if (connectedToCurrent) isCurrent = true;
+      }
+
+      return {
+        ...node,
+        style: {
+          ...node.style,
+          opacity: !isVisited ? 0.14 : 1,
+          transition: "opacity 180ms ease, filter 180ms ease",
+          filter: isCurrent
+            ? "drop-shadow(0 0 8px hsl(var(--primary)))"
+            : undefined,
+        },
+      };
+    });
+  }, [sortedGraphNodes, simulation.status, simulation.activeNodeIds, simulation.currentNodeId, simulation.trace, simulation.activeIndex, edges]);
+
 
   const selectedCaseEntry = testCases.find(
     (testCase) => testCase.id === selectedCaseId,
@@ -202,6 +264,8 @@ export function GraphView({ projectId }: GraphViewProps) {
         elevateEdgesOnSelect={true}
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeDragStart={handleNodeDragStart}
+        onSelectionDragStart={handleSelectionDragStart}
         deleteKeyCode={["Backspace", "Delete"]}
         onConnect={onConnect}
         isValidConnection={(connection: Connection) => {

@@ -5,6 +5,9 @@ import { Id, Doc } from "@workspace/backend/_generated/dataModel";
 import {
   useBackendCanvasStore,
   parseResourceHandle,
+  EndpointWithNode,
+  EventWithNode,
+  IdentityProviderWithNode,
 } from "@/lib/stores/backendCanvasStore";
 import { ensureLangGraphDataReachability } from "@workspace/canvas/constants";
 import {
@@ -102,15 +105,30 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
 
     const store = useBackendCanvasStore.getState();
     const pendingNodeIds = new Set(store.pendingNodeUpserts.map((n) => n.id));
+    const pendingNodeRemovalIds = new Set(store.pendingNodeRemovals);
+
     const pendingEdgeIds = new Set(store.pendingEdgeUpserts.map((e) => e.id));
-    const pendingEventIds = new Set(
-      store.pendingEventUpserts.map((ev) => ev.id),
-    );
+    const pendingEdgeRemovalIds = new Set(store.pendingEdgeRemovals);
+
     const pendingEndpointIds = new Set(
       store.pendingEndpointUpserts.map((ep) => ep.id),
     );
+    const pendingEndpointRemovalIds = new Set(
+      store.pendingEndpointRemovals.map((r) => r.endpointId),
+    );
+
+    const pendingEventIds = new Set(
+      store.pendingEventUpserts.map((ev) => ev.id),
+    );
+    const pendingEventRemovalIds = new Set(
+      store.pendingEventRemovals.map((r) => r.eventId),
+    );
+
     const pendingProviderIds = new Set(
       store.pendingIdentityProviderUpserts.map((p) => p.id),
+    );
+    const pendingProviderRemovalIds = new Set(
+      store.pendingIdentityProviderRemovals.map((r) => r.providerId),
     );
 
     // Ensure parent nodes appear before child nodes for React Flow
@@ -119,8 +137,14 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
 
     const addNode = (node: BackendNode) => {
       if (addedIds.has(node.id)) return;
+      if (!isFirstHydration && pendingNodeRemovalIds.has(node.id)) return;
+
       if (node.parentId && !addedIds.has(node.parentId)) {
-        const parent = rawNodes.find((n) => n.id === node.parentId);
+        const parent =
+          rawNodes.find((n) => n.id === node.parentId) ||
+          (!isFirstHydration
+            ? store.nodes.find((n) => n.id === node.parentId)
+            : undefined);
         if (parent) addNode(parent);
       }
 
@@ -140,37 +164,80 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
 
     rawNodes.forEach(addNode);
 
-    const edgesToSet: BackendEdge[] = (initialElements.edges ?? []).map(
-      (row: Doc<"canvas_backend_edges">) => {
-        if (!isFirstHydration && pendingEdgeIds.has(row.edgeId)) {
-          const localEdge = store.edges.find((e) => e.id === row.edgeId);
-          if (localEdge) return localEdge;
+    // Also include any locally added nodes not yet returned by Convex
+    if (!isFirstHydration) {
+      store.nodes.forEach((localNode) => {
+        if (
+          pendingNodeIds.has(localNode.id) &&
+          !addedIds.has(localNode.id) &&
+          !pendingNodeRemovalIds.has(localNode.id)
+        ) {
+          addNode(localNode);
         }
+      });
+    }
 
-        const sourceResource = parseResourceHandle(row.sourceHandle);
-        const targetResource = parseResourceHandle(row.targetHandle);
-        return {
-          id: row.edgeId,
-          source: row.source,
-          target: row.target,
-          type: row.type as BackendEdge["type"],
-          sourceHandle: row.sourceHandle ?? undefined,
-          targetHandle: row.targetHandle ?? undefined,
-          sourceResourceId: sourceResource?.resourceId,
-          targetResourceId: targetResource?.resourceId,
-          resourceType:
-            targetResource?.resourceType ?? sourceResource?.resourceType,
-          data: row.data,
-          fractionalIndex: row.fractionalIndex,
-        };
-      },
+    const edgesToSet: BackendEdge[] = [];
+    const addedEdgeIds = new Set<string>();
+
+    (initialElements.edges ?? []).forEach((row: Doc<"canvas_backend_edges">) => {
+      if (!isFirstHydration && pendingEdgeRemovalIds.has(row.edgeId)) {
+        return;
+      }
+
+      if (!isFirstHydration && pendingEdgeIds.has(row.edgeId)) {
+        const localEdge = store.edges.find((e) => e.id === row.edgeId);
+        if (localEdge) {
+          edgesToSet.push(localEdge);
+          addedEdgeIds.add(localEdge.id);
+          return;
+        }
+      }
+
+      const sourceResource = parseResourceHandle(row.sourceHandle);
+      const targetResource = parseResourceHandle(row.targetHandle);
+      const edge: BackendEdge = {
+        id: row.edgeId,
+        source: row.source,
+        target: row.target,
+        type: row.type as BackendEdge["type"],
+        sourceHandle: row.sourceHandle ?? undefined,
+        targetHandle: row.targetHandle ?? undefined,
+        sourceResourceId: sourceResource?.resourceId,
+        targetResourceId: targetResource?.resourceId,
+        resourceType:
+          targetResource?.resourceType ?? sourceResource?.resourceType,
+        data: row.data,
+        fractionalIndex: row.fractionalIndex,
+      };
+      edgesToSet.push(edge);
+      addedEdgeIds.add(edge.id);
+    });
+
+    // Also include any locally added edges not yet in Convex
+    if (!isFirstHydration) {
+      store.edges.forEach((localEdge) => {
+        if (
+          pendingEdgeIds.has(localEdge.id) &&
+          !addedEdgeIds.has(localEdge.id) &&
+          !pendingEdgeRemovalIds.has(localEdge.id)
+        ) {
+          edgesToSet.push(localEdge);
+          addedEdgeIds.add(localEdge.id);
+        }
+      });
+    }
+
+    // Only retain edges whose source and target nodes exist
+    const nodeMap = new Map(nodesToSet.map((n) => [n.id, n]));
+    const validEdges = edgesToSet.filter(
+      (e) => nodeMap.has(e.source) && nodeMap.has(e.target),
     );
 
     // Heal FK edges that were saved without column handles (e.g. created by AI).
     // Without handles, ReactFlow falls back to the first handle it finds on the node
     // which is `database-entity-target` at the top — making edges point to the card head.
-    const nodeMap = new Map(nodesToSet.map((n) => [n.id, n]));
-    const healedEdges = edgesToSet.map((edge) => {
+    const healedEdges = validEdges.map((edge) => {
       if (
         edge.type !== "foreign-key" ||
         (edge.sourceHandle && edge.targetHandle)
@@ -182,8 +249,8 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
       if (
         srcNode?.type !== "entity" ||
         tgtNode?.type !== "entity" ||
-        !srcNode.data.columns ||
-        !tgtNode.data.columns
+        !srcNode.data?.columns ||
+        !tgtNode.data?.columns
       ) {
         return edge;
       }
@@ -217,35 +284,107 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
     const rawEndpoints = z
       .array(fullEndpointSchema)
       .parse(initialElements.endpoints || []);
-    const endpointsToSet = rawEndpoints.map((ep) => {
+    const endpointsToSet: EndpointWithNode[] = [];
+    const addedEndpointIds = new Set<string>();
+
+    rawEndpoints.forEach((ep) => {
+      if (!isFirstHydration && pendingEndpointRemovalIds.has(ep.id)) {
+        return;
+      }
       if (!isFirstHydration && pendingEndpointIds.has(ep.id)) {
         const local = store.endpoints.find((e) => e.id === ep.id);
-        if (local) return local;
+        if (local) {
+          endpointsToSet.push(local);
+          addedEndpointIds.add(local.id);
+          return;
+        }
       }
-      return ep;
+      endpointsToSet.push(ep);
+      addedEndpointIds.add(ep.id);
     });
+
+    if (!isFirstHydration) {
+      store.endpoints.forEach((local) => {
+        if (
+          pendingEndpointIds.has(local.id) &&
+          !addedEndpointIds.has(local.id) &&
+          !pendingEndpointRemovalIds.has(local.id)
+        ) {
+          endpointsToSet.push(local);
+          addedEndpointIds.add(local.id);
+        }
+      });
+    }
 
     const rawEvents = z
       .array(fullEventSchema)
       .parse(initialElements.events || []);
-    const eventsToSet = rawEvents.map((ev) => {
+    const eventsToSet: EventWithNode[] = [];
+    const addedEventIds = new Set<string>();
+
+    rawEvents.forEach((ev) => {
+      if (!isFirstHydration && pendingEventRemovalIds.has(ev.id)) {
+        return;
+      }
       if (!isFirstHydration && pendingEventIds.has(ev.id)) {
         const local = store.events.find((e) => e.id === ev.id);
-        if (local) return local;
+        if (local) {
+          eventsToSet.push(local);
+          addedEventIds.add(local.id);
+          return;
+        }
       }
-      return ev;
+      eventsToSet.push(ev);
+      addedEventIds.add(ev.id);
     });
+
+    if (!isFirstHydration) {
+      store.events.forEach((local) => {
+        if (
+          pendingEventIds.has(local.id) &&
+          !addedEventIds.has(local.id) &&
+          !pendingEventRemovalIds.has(local.id)
+        ) {
+          eventsToSet.push(local);
+          addedEventIds.add(local.id);
+        }
+      });
+    }
 
     const rawProviders = z
       .array(fullIdentityProviderSchema)
       .parse(initialElements.identityProviders || []);
-    const providersToSet = rawProviders.map((p) => {
+    const providersToSet: IdentityProviderWithNode[] = [];
+    const addedProviderIds = new Set<string>();
+
+    rawProviders.forEach((p) => {
+      if (!isFirstHydration && pendingProviderRemovalIds.has(p.id)) {
+        return;
+      }
       if (!isFirstHydration && pendingProviderIds.has(p.id)) {
         const local = store.identityProviders.find((ip) => ip.id === p.id);
-        if (local) return local;
+        if (local) {
+          providersToSet.push(local);
+          addedProviderIds.add(local.id);
+          return;
+        }
       }
-      return p;
+      providersToSet.push(p);
+      addedProviderIds.add(p.id);
     });
+
+    if (!isFirstHydration) {
+      store.identityProviders.forEach((local) => {
+        if (
+          pendingProviderIds.has(local.id) &&
+          !addedProviderIds.has(local.id) &&
+          !pendingProviderRemovalIds.has(local.id)
+        ) {
+          providersToSet.push(local);
+          addedProviderIds.add(local.id);
+        }
+      });
+    }
 
     setNodesAndEdges(
       nodesToSet,
@@ -308,45 +447,73 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
         ...pendingIdentityProviderRemovals,
       ];
 
-      // Deduplicate for actual API calls
-      const uniqueNodesToSync = Array.from(
-        new Map(
-          syncingNodes
-            .filter((n): n is typeof n => Boolean(n?.id))
-            .map((n) => [n.id, n]),
-        ).values(),
-      );
-      const uniqueEdgesToSync = Array.from(
-        new Map(
-          syncingEdges
-            .filter((e): e is typeof e => Boolean(e?.id))
-            .map((e) => [e.id, e]),
-        ).values(),
-      );
       const uniqueNodeRemovals = Array.from(
         new Set(syncingNodeRemovals.filter(Boolean)),
       );
       const uniqueEdgeRemovals = Array.from(
         new Set(syncingEdgeRemovals.filter(Boolean)),
       );
+      const uniqueNodeRemovalSet = new Set(uniqueNodeRemovals);
+      const uniqueEdgeRemovalSet = new Set(uniqueEdgeRemovals);
+
+      const uniqueEndpointRemovalSet = new Set(
+        syncingEndpointRemovals.map((r) => r.endpointId),
+      );
+      const uniqueEventRemovalSet = new Set(
+        syncingEventRemovals.map((r) => r.eventId),
+      );
+      const uniqueProviderRemovalSet = new Set(
+        syncingIdentityProviderRemovals.map((r) => r.providerId),
+      );
+
+      // Deduplicate for actual API calls (excluding items being deleted)
+      const uniqueNodesToSync = Array.from(
+        new Map(
+          syncingNodes
+            .filter(
+              (n): n is typeof n =>
+                Boolean(n?.id) && !uniqueNodeRemovalSet.has(n.id),
+            )
+            .map((n) => [n.id, n]),
+        ).values(),
+      );
+      const uniqueEdgesToSync = Array.from(
+        new Map(
+          syncingEdges
+            .filter(
+              (e): e is typeof e =>
+                Boolean(e?.id) && !uniqueEdgeRemovalSet.has(e.id),
+            )
+            .map((e) => [e.id, e]),
+        ).values(),
+      );
       const uniqueEndpointsToSync = Array.from(
         new Map(
           syncingEndpoints
-            .filter((e): e is typeof e => Boolean(e?.id))
+            .filter(
+              (e): e is typeof e =>
+                Boolean(e?.id) && !uniqueEndpointRemovalSet.has(e.id),
+            )
             .map((e) => [e.id, e]),
         ).values(),
       );
       const uniqueEventsToSync = Array.from(
         new Map(
           syncingEvents
-            .filter((e): e is typeof e => Boolean(e?.id))
+            .filter(
+              (e): e is typeof e =>
+                Boolean(e?.id) && !uniqueEventRemovalSet.has(e.id),
+            )
             .map((e) => [e.id, e]),
         ).values(),
       );
       const uniqueIdentityProvidersToSync = Array.from(
         new Map(
           syncingIdentityProviders
-            .filter((p): p is typeof p => Boolean(p?.id))
+            .filter(
+              (p): p is typeof p =>
+                Boolean(p?.id) && !uniqueProviderRemovalSet.has(p.id),
+            )
             .map((p) => [p.id, p]),
         ).values(),
       );
@@ -484,6 +651,8 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
     pendingEndpointRemovals,
     pendingEventUpserts,
     pendingEventRemovals,
+    pendingIdentityProviderUpserts,
+    pendingIdentityProviderRemovals,
     projectId,
     upsertNode,
     removeNode,
@@ -493,6 +662,8 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
     removeEndpoint,
     upsertEvent,
     removeEvent,
+    upsertIdentityProvider,
+    removeIdentityProvider,
     clearPending,
   ]);
 

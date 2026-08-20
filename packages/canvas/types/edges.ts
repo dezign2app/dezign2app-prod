@@ -52,6 +52,8 @@ export type BackendEdge = {
   fractionalIndex: string; // For sequence diagram ordering
 };
 
+export type EdgeData = NonNullable<BackendEdge["data"]>;
+
 export type BackendDesignDoc = {
   schemaVersion?: number;
   nodes: BackendNode[];

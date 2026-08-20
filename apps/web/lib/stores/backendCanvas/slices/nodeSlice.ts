@@ -59,6 +59,30 @@ export const createNodeSlice = (
     let currentState = get();
     let updates: Partial<BackendCanvasState> = {};
 
+    const persistentChangedNodeIds = new Set(
+      nonRemoveChanges
+        .filter((c) => {
+          if (
+            c.type === "add" ||
+            c.type === "replace" ||
+            c.type === "dimensions"
+          )
+            return true;
+          if (c.type === "position" && !c.dragging) return true;
+          return false;
+        })
+        .map((c) => c.id),
+    );
+
+    if (removedIds.length > 0) {
+      const isSchema = currentState.nodes.some(
+        (n) =>
+          removedIds.includes(n.id) &&
+          (n.type === "entity" || n.type === "database" || n.type === "group"),
+      );
+      get().pushHistorySnapshot(isSchema ? "schema" : "graph");
+    }
+
     if (removedIds.length > 0) {
       updates = cleanupDeletedNodesState(currentState, removedIds);
       currentState = { ...currentState, ...updates };
@@ -70,21 +94,6 @@ export const createNodeSlice = (
         currentState.nodes,
       );
       const next = rawNext.filter((n): n is BackendNode => Boolean(n?.id));
-
-      const persistentChangedNodeIds = new Set(
-        nonRemoveChanges
-          .filter((c) => {
-            if (
-              c.type === "add" ||
-              c.type === "replace" ||
-              c.type === "dimensions"
-            )
-              return true;
-            if (c.type === "position" && !c.dragging) return true;
-            return false;
-          })
-          .map((c) => c.id),
-      );
 
       const upserts = next.filter((n) => persistentChangedNodeIds.has(n.id));
 
@@ -101,6 +110,11 @@ export const createNodeSlice = (
   },
 
   addNode: (nodeWithoutIndex) => {
+    const isSchema =
+      nodeWithoutIndex.type === "entity" ||
+      nodeWithoutIndex.type === "database" ||
+      nodeWithoutIndex.type === "group";
+    get().pushHistorySnapshot(isSchema ? "schema" : "graph");
     let finalNode = nodeWithoutIndex;
     if (
       (nodeWithoutIndex.type === "entity" || nodeWithoutIndex.type === "database") &&
@@ -119,22 +133,40 @@ export const createNodeSlice = (
         },
       };
     }
-    if (nodeWithoutIndex.type === "service" && !nodeWithoutIndex.data?.port) {
-      const existingPorts = new Set(
-        get()
-          .nodes.filter((n) => n.type === "service")
-          .map((n) => parseInt(n.data?.port || "8080", 10))
-          .filter((p) => !isNaN(p)),
-      );
+    if (nodeWithoutIndex.type === "service") {
       let nextPort = 8080;
-      while (existingPorts.has(nextPort)) {
-        nextPort++;
+      let nextGrpcPort = 50051;
+
+      if (!nodeWithoutIndex.data?.port) {
+        const existingPorts = new Set(
+          get()
+            .nodes.filter((n) => n.type === "service")
+            .map((n) => parseInt(n.data?.port || "8080", 10))
+            .filter((p) => !isNaN(p)),
+        );
+        while (existingPorts.has(nextPort)) {
+          nextPort++;
+        }
       }
+
+      if (!nodeWithoutIndex.data?.grpcPort) {
+        const existingGrpcPorts = new Set(
+          get()
+            .nodes.filter((n) => n.type === "service")
+            .map((n) => parseInt(n.data?.grpcPort || "50051", 10))
+            .filter((p) => !isNaN(p)),
+        );
+        while (existingGrpcPorts.has(nextGrpcPort)) {
+          nextGrpcPort++;
+        }
+      }
+
       finalNode = {
-        ...nodeWithoutIndex,
+        ...finalNode,
         data: {
-          ...nodeWithoutIndex.data,
-          port: String(nextPort),
+          ...finalNode.data,
+          port: nodeWithoutIndex.data?.port || String(nextPort),
+          grpcPort: nodeWithoutIndex.data?.grpcPort || String(nextGrpcPort),
         },
       };
     }
@@ -149,6 +181,7 @@ export const createNodeSlice = (
   },
 
   addTableNode: (parentId, position) => {
+    get().pushHistorySnapshot("schema");
     const lastNodeIndex = getLastIndex(get().nodes);
     const fractionalIndex = generateKeyBetween(lastNodeIndex, null);
     const node: BackendNode = {
@@ -171,6 +204,7 @@ export const createNodeSlice = (
   },
 
   addLangGraphStepNode: (parentId, position, name, stepType) => {
+    get().pushHistorySnapshot("graph");
     const existingCount = get().nodes.filter(
       (n) => n.parentId === parentId,
     ).length;
@@ -207,9 +241,13 @@ export const createNodeSlice = (
   },
 
   updateNode: (id, changes) => {
-    console.log("backendCanvasStore: updateNode called for id", id, changes);
     const updatedNode = get().nodes.find((n) => n.id === id);
     if (!updatedNode) return;
+    const isSchema =
+      updatedNode.type === "entity" ||
+      updatedNode.type === "database" ||
+      updatedNode.type === "group";
+    get().pushHistorySnapshot(isSchema ? "schema" : "graph");
 
     let currentNodes = get().nodes;
 
@@ -262,6 +300,8 @@ export const createNodeSlice = (
     // Bidirectional sync: sync dropdown updates to edges
     let nextEdges = [...get().edges];
     let edgesChanged = false;
+    const newPendingEdgeRemovals: string[] = [];
+    const newPendingEdgeUpserts: BackendEdge[] = [];
 
     if (changes.data?.publishedEvents) {
       const existingPublishEdges = nextEdges.filter(
@@ -282,7 +322,7 @@ export const createNodeSlice = (
         ) {
           nextEdges = nextEdges.filter((e) => e.id !== edge.id);
           edgesChanged = true;
-          set({ pendingEdgeRemovals: [...get().pendingEdgeRemovals, edge.id] });
+          newPendingEdgeRemovals.push(edge.id);
         }
       });
 
@@ -308,7 +348,7 @@ export const createNodeSlice = (
             };
             nextEdges.push(newEdge);
             edgesChanged = true;
-            set({ pendingEdgeUpserts: [...get().pendingEdgeUpserts, newEdge] });
+            newPendingEdgeUpserts.push(newEdge);
           }
         }
       });
@@ -333,7 +373,7 @@ export const createNodeSlice = (
         ) {
           nextEdges = nextEdges.filter((e) => e.id !== edge.id);
           edgesChanged = true;
-          set({ pendingEdgeRemovals: [...get().pendingEdgeRemovals, edge.id] });
+          newPendingEdgeRemovals.push(edge.id);
         }
       });
 
@@ -359,7 +399,7 @@ export const createNodeSlice = (
             };
             nextEdges.push(newEdge);
             edgesChanged = true;
-            set({ pendingEdgeUpserts: [...get().pendingEdgeUpserts, newEdge] });
+            newPendingEdgeUpserts.push(newEdge);
           }
         }
       });
@@ -419,12 +459,7 @@ export const createNodeSlice = (
                   };
                   nextEdges[primaryEdgeIdx] = updatedEdge;
                   edgesChanged = true;
-                  set({
-                    pendingEdgeUpserts: [
-                      ...get().pendingEdgeUpserts,
-                      updatedEdge,
-                    ],
-                  });
+                  newPendingEdgeUpserts.push(updatedEdge);
                 }
 
                 for (let i = 1; i < existingEdgeIndices.length; i++) {
@@ -432,12 +467,7 @@ export const createNodeSlice = (
                   const staleEdge = nextEdges[staleIdx];
                   if (staleEdge) {
                     nextEdges = nextEdges.filter((e) => e.id !== staleEdge.id);
-                    set({
-                      pendingEdgeRemovals: [
-                        ...get().pendingEdgeRemovals,
-                        staleEdge.id,
-                      ],
-                    });
+                    newPendingEdgeRemovals.push(staleEdge.id);
                     edgesChanged = true;
                   }
                 }
@@ -455,9 +485,7 @@ export const createNodeSlice = (
                 };
                 nextEdges.push(newEdge);
                 edgesChanged = true;
-                set({
-                  pendingEdgeUpserts: [...get().pendingEdgeUpserts, newEdge],
-                });
+                newPendingEdgeUpserts.push(newEdge);
               }
             }
           }
@@ -467,12 +495,7 @@ export const createNodeSlice = (
               const edgeToRemove = nextEdges[edgeIdx];
               if (edgeToRemove) {
                 nextEdges = nextEdges.filter((e) => e.id !== edgeToRemove.id);
-                set({
-                  pendingEdgeRemovals: [
-                    ...get().pendingEdgeRemovals,
-                    edgeToRemove.id,
-                  ],
-                });
+                newPendingEdgeRemovals.push(edgeToRemove.id);
               }
             });
             edgesChanged = true;
@@ -490,9 +513,7 @@ export const createNodeSlice = (
               const idx = parseInt(match[1]!, 10);
               if (idx > maxColIdx) {
                 nextEdges = nextEdges.filter((edge) => edge.id !== e.id);
-                set({
-                  pendingEdgeRemovals: [...get().pendingEdgeRemovals, e.id],
-                });
+                newPendingEdgeRemovals.push(e.id);
                 edgesChanged = true;
               }
             }
@@ -503,9 +524,7 @@ export const createNodeSlice = (
               const idx = parseInt(match[1]!, 10);
               if (idx > maxColIdx) {
                 nextEdges = nextEdges.filter((edge) => edge.id !== e.id);
-                set({
-                  pendingEdgeRemovals: [...get().pendingEdgeRemovals, e.id],
-                });
+                newPendingEdgeRemovals.push(e.id);
                 edgesChanged = true;
               }
             }
@@ -537,9 +556,7 @@ export const createNodeSlice = (
               const ids = removedForRes.map((e) => e.id);
               nextEdges = nextEdges.filter((e) => !ids.includes(e.id));
               edgesChanged = true;
-              set({
-                pendingEdgeRemovals: [...get().pendingEdgeRemovals, ...ids],
-              });
+              newPendingEdgeRemovals.push(...ids);
             }
           });
         }
@@ -549,14 +566,34 @@ export const createNodeSlice = (
     const update: Partial<BackendCanvasState> = {
       nodes: next,
       pendingNodeUpserts: [...get().pendingNodeUpserts, updated],
+      ...(edgesChanged ? { edges: nextEdges } : {}),
+      ...(newPendingEdgeRemovals.length > 0
+        ? {
+            pendingEdgeRemovals: [
+              ...get().pendingEdgeRemovals,
+              ...newPendingEdgeRemovals,
+            ],
+          }
+        : {}),
+      ...(newPendingEdgeUpserts.length > 0
+        ? {
+            pendingEdgeUpserts: [
+              ...get().pendingEdgeUpserts,
+              ...newPendingEdgeUpserts,
+            ],
+          }
+        : {}),
     };
-    if (edgesChanged) {
-      update.edges = nextEdges;
-    }
     set(update);
   },
 
   deleteNode: (id) => {
+    const nodeToDelete = get().nodes.find((n) => n.id === id);
+    const isSchema =
+      nodeToDelete?.type === "entity" ||
+      nodeToDelete?.type === "database" ||
+      nodeToDelete?.type === "group";
+    get().pushHistorySnapshot(isSchema ? "schema" : "graph");
     const updates = cleanupDeletedNodesState(get(), [id]);
     set(updates);
   },

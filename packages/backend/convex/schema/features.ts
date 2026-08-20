@@ -9,6 +9,7 @@ import {
   backendEventDataValidator,
   backendIdentityProviderDataValidator,
 } from "./canvasValidators";
+import { changeSummaryValidator } from "./canvasVersionsValidator";
 
 export const featureTables = {
   conversations: defineTable({
@@ -152,4 +153,21 @@ export const featureTables = {
   })
     .index("by_project", ["projectId"])
     .index("by_project_test_case", ["projectId", "testCaseId"]),
+
+  // Long-term project versions and commit history
+  project_versions: defineTable({
+    projectId: v.id("projects"),
+    versionNumber: v.number(),
+    title: v.string(),
+    description: v.optional(v.string()),
+    authorId: v.string(),
+    authorName: v.string(),
+    authorAvatar: v.optional(v.string()),
+    snapshotJson: v.string(),
+    changeSummary: changeSummaryValidator,
+    isAutoSave: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_project", ["projectId", "createdAt"])
+    .index("by_project_version", ["projectId", "versionNumber"]),
 };

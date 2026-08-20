@@ -6,6 +6,20 @@ import {
   MessagingResourceType,
 } from "@workspace/canvas/types";
 import { NodeChange, EdgeChange, Connection } from "@xyflow/react";
+import { GraphSnapshot, SchemaSnapshot } from "./history/types";
+
+export type {
+  VersionChangeSummary,
+  ChangeSummary,
+  VersionNodeSnapshot,
+  VersionEdgeSnapshot,
+  VersionEndpointSnapshot,
+  VersionEventSnapshot,
+  VersionIdentityProviderSnapshot,
+  VersionTestCaseSnapshot,
+  VersionSnapshot,
+  VersionListItem,
+} from "@workspace/canvas/types";
 
 export type ConfigItemType =
   | "endpoint"
@@ -48,6 +62,14 @@ export type PendingEndpointRemoval = { nodeId: string; endpointId: string };
 export type PendingEventRemoval = { nodeId: string; eventId: string };
 export type PendingIdentityProviderRemoval = { nodeId: string; providerId: string };
 
+export interface CanvasSnapshotState {
+  nodes: BackendNode[];
+  edges: BackendEdge[];
+  endpoints: EndpointWithNode[];
+  events: EventWithNode[];
+  identityProviders: IdentityProviderWithNode[];
+}
+
 export interface BackendCanvasState {
   projectId: string | null;
   nodes: BackendNode[];
@@ -59,6 +81,24 @@ export interface BackendCanvasState {
   identityProviders: IdentityProviderWithNode[];
   activeConfigItem: ActiveConfigItem | null;
   setActiveConfigItem: (item: ActiveConfigItem | null) => void;
+
+  // History / Undo / Redo (fully separated history managers for graph and schema)
+  graphUndoStack: GraphSnapshot[];
+  graphRedoStack: GraphSnapshot[];
+  schemaUndoStack: SchemaSnapshot[];
+  schemaRedoStack: SchemaSnapshot[];
+  canUndo: boolean;
+  canRedo: boolean;
+  pushGraphHistorySnapshot: () => void;
+  pushSchemaHistorySnapshot: () => void;
+  pushHistorySnapshot: (view?: BackendCanvasView) => void;
+  undoGraph: () => void;
+  undoSchema: () => void;
+  undo: () => void;
+  redoGraph: () => void;
+  redoSchema: () => void;
+  redo: () => void;
+  clearHistory: () => void;
 
   // Pending Convex sync ops
   pendingNodeUpserts: BackendNode[];

@@ -262,9 +262,9 @@ export const backendNodeDataValidator = v.union(
   zodToConvex(paymentsDataSchema),
   langgraphConvexDataValidator,
   zodToConvex(langgraphStepDataSchema),
-  // Fallback for completely empty data (allowable in some updates)
+  // Fallback for partial updates (label is always present on real nodes)
   v.object({
-    label: v.optional(v.string()),
+    label: v.string(),
     color: v.optional(v.string()),
     parentId: v.optional(v.string()),
     position: v.optional(v.object({ x: v.number(), y: v.number() })),
@@ -285,6 +285,13 @@ export const backendEndpointDataValidator = zodToConvex(endpointSchema);
 export const backendIdentityProviderDataValidator = zodToConvex(
   identityProviderSchema,
 );
+
+// Use z.string() for retryPolicy in the DB validator — the app-layer Zod schema
+// (consumedEventSchema) enforces the strict enum on user input, but the DB should
+// accept any string to stay compatible with AnyMessagingResource (retryPolicy?: RetryPolicy | string).
 export const backendEventDataValidator = zodToConvex(
-  z.union([publishedEventSchema, consumedEventSchema]),
+  z.union([
+    publishedEventSchema,
+    consumedEventSchema.extend({ retryPolicy: z.string().default("NONE") }),
+  ]),
 );

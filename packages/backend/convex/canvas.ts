@@ -4,3 +4,4 @@ export * from "./canvas/nodes";
 export * from "./canvas/edges";
 export * from "./canvas/entities";
 export * from "./canvas/testCases";
+export * from "./canvas/versions";
