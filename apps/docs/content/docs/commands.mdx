@@ -45,9 +45,12 @@ pnpm --filter docs dev
 pnpm desktop:dev
 ```
 
-**Package Desktop App Executable:**
+**Package Desktop App Executables (All platforms or specific):**
 ```bash
-pnpm build:desktop
+pnpm build:desktop          # Packages Windows, macOS, and Linux
+pnpm build:desktop:win      # Windows only
+pnpm build:desktop:mac      # macOS only
+pnpm build:desktop:linux    # Linux only
 ```
 
 **Build only the Backend packages:**
