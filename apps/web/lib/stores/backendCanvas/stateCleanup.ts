@@ -234,13 +234,16 @@ export function cleanupDeletedNodesState(
     identityProviders: nextProviders,
     activeConfigItem: nextActiveConfigItem,
     pendingNodeUpserts: [
-      ...currentState.pendingNodeUpserts,
+      ...currentState.pendingNodeUpserts.filter((n) => !allIdsSet.has(n.id)),
       ...changedNodes,
     ],
     pendingNodeRemovals: [
       ...currentState.pendingNodeRemovals,
       ...idsToDeleteArray,
     ],
+    pendingEdgeUpserts: currentState.pendingEdgeUpserts.filter(
+      (e) => !removedEdgeSet.has(e.id),
+    ),
     pendingEdgeRemovals: [
       ...currentState.pendingEdgeRemovals,
       ...removedEdgeIds,
@@ -625,6 +628,9 @@ export function cleanupDeletedEdgesState(
 
   const updates: Partial<BackendCanvasState> = {
     edges: nextEdges,
+    pendingEdgeUpserts: currentState.pendingEdgeUpserts.filter(
+      (e) => !removedSet.has(e.id),
+    ),
     pendingEdgeRemovals: [
       ...currentState.pendingEdgeRemovals,
       ...removedEdgeIds,

@@ -3,9 +3,10 @@ import type { GraphNodeType } from "@workspace/canvas";
 export function createGraphNodeData(
   type: GraphNodeType,
   label: string,
-  existingNodes: Array<{ type: string; data?: { port?: string } }>,
+  existingNodes: Array<{ type: string; data?: { port?: string; grpcPort?: string } }>,
 ) {
   let initialPort: string | undefined = undefined;
+  let initialGrpcPort: string | undefined = undefined;
   if (type === "service") {
     const existingPorts = new Set(
       existingNodes
@@ -18,11 +19,24 @@ export function createGraphNodeData(
       nextPort++;
     }
     initialPort = String(nextPort);
+
+    const existingGrpcPorts = new Set(
+      existingNodes
+        .filter((n) => n.type === "service")
+        .map((n) => parseInt(n.data?.grpcPort || "50051", 10))
+        .filter((p) => !isNaN(p)),
+    );
+    let nextGrpcPort = 50051;
+    while (existingGrpcPorts.has(nextGrpcPort)) {
+      nextGrpcPort++;
+    }
+    initialGrpcPort = String(nextGrpcPort);
   }
 
   return {
     label,
     port: initialPort,
+    grpcPort: initialGrpcPort,
     events: type === "webClient" ? [] : undefined,
     inputs: type === "service" ? [] : undefined,
     logic: type === "service" ? [] : undefined,

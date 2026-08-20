@@ -31,6 +31,7 @@ export const createEndpointSlice = (
   pendingEndpointRemovals: [],
 
   addEndpoint: (nodeId, endpoint) => {
+    get().pushHistorySnapshot("graph");
     const newEndpoint = { ...endpoint, nodeId };
     set({
       endpoints: [...get().endpoints, newEndpoint],
@@ -39,6 +40,7 @@ export const createEndpointSlice = (
   },
 
   updateEndpoint: (id, changes) => {
+    get().pushHistorySnapshot("graph");
     const next = get().endpoints.map((e) =>
       e.id === id ? { ...e, ...changes } : e,
     );
@@ -192,6 +194,7 @@ export const createEndpointSlice = (
   deleteEndpoint: (id) => {
     const endpoint = get().endpoints.find((e) => e.id === id);
     if (endpoint) {
+      get().pushHistorySnapshot("graph");
       const active = get().activeConfigItem;
       set({
         endpoints: get().endpoints.filter((e) => e.id !== id),

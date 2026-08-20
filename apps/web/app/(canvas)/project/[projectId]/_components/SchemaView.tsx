@@ -43,22 +43,39 @@ interface SchemaViewProps {
 }
 
 export function SchemaView({ projectId }: SchemaViewProps) {
-  const { nodes, edges, onEdgesChange, onConnect, addTableNode, addNode } =
+  const { nodes, edges, onEdgesChange, onConnect, addTableNode, addNode, setView } =
     useBackendCanvasStore();
 
-  const { handleNodesChange, handleMoveEnd } = useCanvasHandlers(
-    projectId,
-    "schema",
-  );
+  useEffect(() => {
+    setView("schema");
+  }, [setView]);
+
+  const {
+    handleNodesChange,
+    handleNodeDragStart,
+    handleSelectionDragStart,
+    handleMoveEnd,
+  } = useCanvasHandlers(projectId, "schema");
   const { screenToFlowPosition, fitView } = useReactFlow();
-  const schemaNodes = nodes.filter(
-    (n) => n.type === "entity" || n.type === "database",
+  const schemaNodes = React.useMemo(
+    () => nodes.filter((n) => n.type === "entity" || n.type === "database"),
+    [nodes],
   );
-  const schemaEdges = edges.filter(
-    (e) =>
-      e.type === "foreign-key" ||
-      e.type === "database-connection" ||
-      e.type === "connection",
+  const schemaNodeIds = React.useMemo(
+    () => new Set(schemaNodes.map((n) => n.id)),
+    [schemaNodes],
+  );
+  const schemaEdges = React.useMemo(
+    () =>
+      edges.filter(
+        (e) =>
+          (e.type === "foreign-key" ||
+            e.type === "database-connection" ||
+            e.type === "connection") &&
+          schemaNodeIds.has(e.source) &&
+          schemaNodeIds.has(e.target),
+      ),
+    [edges, schemaNodeIds],
   );
 
   const { handleLayout } = useSchemaAutoLayout({
@@ -233,6 +250,8 @@ export function SchemaView({ projectId }: SchemaViewProps) {
         elevateEdgesOnSelect={true}
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeDragStart={handleNodeDragStart}
+        onSelectionDragStart={handleSelectionDragStart}
         deleteKeyCode={["Backspace", "Delete"]}
         onConnect={onConnect}
         isValidConnection={(connection: Connection) => {

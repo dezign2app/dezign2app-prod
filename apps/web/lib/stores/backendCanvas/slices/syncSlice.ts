@@ -39,6 +39,99 @@ export interface SyncSlice {
   reset: (projectId?: string | null) => void;
 }
 
+function reconcileNodes(incoming: BackendNode[], existing: BackendNode[]): BackendNode[] {
+  if (incoming.length === 0 && existing.length === 0) return existing;
+  const existingMap = new Map(existing.map((n) => [n.id, n]));
+  let hasChange = incoming.length !== existing.length;
+
+  const nextNodes = incoming.map((item, idx) => {
+    const prev = existingMap.get(item.id);
+    if (!prev) {
+      hasChange = true;
+      return item;
+    }
+    const isSame =
+      prev.position?.x === item.position?.x &&
+      prev.position?.y === item.position?.y &&
+      prev.parentId === item.parentId &&
+      prev.type === item.type &&
+      prev.fractionalIndex === item.fractionalIndex &&
+      prev.selected === item.selected &&
+      JSON.stringify(prev.data) === JSON.stringify(item.data) &&
+      JSON.stringify(prev.style) === JSON.stringify(item.style);
+
+    if (isSame) {
+      if (existing[idx]?.id !== item.id) {
+        hasChange = true;
+      }
+      return prev;
+    }
+
+    hasChange = true;
+    return item;
+  });
+
+  return hasChange ? nextNodes : existing;
+}
+
+function reconcileEdges(incoming: BackendEdge[], existing: BackendEdge[]): BackendEdge[] {
+  if (incoming.length === 0 && existing.length === 0) return existing;
+  const existingMap = new Map(existing.map((e) => [e.id, e]));
+  let hasChange = incoming.length !== existing.length;
+
+  const nextEdges = incoming.map((item, idx) => {
+    const prev = existingMap.get(item.id);
+    if (!prev) {
+      hasChange = true;
+      return item;
+    }
+    const isSame =
+      prev.source === item.source &&
+      prev.target === item.target &&
+      prev.sourceHandle === item.sourceHandle &&
+      prev.targetHandle === item.targetHandle &&
+      prev.type === item.type &&
+      prev.fractionalIndex === item.fractionalIndex &&
+      JSON.stringify(prev.data) === JSON.stringify(item.data);
+
+    if (isSame) {
+      if (existing[idx]?.id !== item.id) {
+        hasChange = true;
+      }
+      return prev;
+    }
+
+    hasChange = true;
+    return item;
+  });
+
+  return hasChange ? nextEdges : existing;
+}
+
+function reconcileEntities<T extends { id: string }>(incoming: T[], existing: T[]): T[] {
+  if (incoming.length === 0 && existing.length === 0) return existing;
+  const existingMap = new Map(existing.map((e) => [e.id, e]));
+  let hasChange = incoming.length !== existing.length;
+
+  const nextItems = incoming.map((item, idx) => {
+    const prev = existingMap.get(item.id);
+    if (!prev) {
+      hasChange = true;
+      return item;
+    }
+    if (JSON.stringify(prev) === JSON.stringify(item)) {
+      if (existing[idx]?.id !== item.id) {
+        hasChange = true;
+      }
+      return prev;
+    }
+    hasChange = true;
+    return item;
+  });
+
+  return hasChange ? nextItems : existing;
+}
+
 export const createSyncSlice = (
   set: (
     partial:
@@ -60,26 +153,44 @@ export const createSyncSlice = (
     identityProviders = [],
     projectId,
   ) =>
-    set({
-      ...(projectId !== undefined && { projectId }),
-      nodes,
-      edges,
-      endpoints,
-      events,
-      identityProviders,
-      pendingNodeUpserts: [],
-      pendingNodeRemovals: [],
-      pendingEdgeUpserts: [],
-      pendingEdgeRemovals: [],
-      pendingEndpointUpserts: [],
-      pendingEndpointRemovals: [],
-      pendingEventUpserts: [],
-      pendingEventRemovals: [],
-      pendingIdentityProviderUpserts: [],
-      pendingIdentityProviderRemovals: [],
+    set((state) => {
+      const nextNodes = reconcileNodes(nodes, state.nodes);
+      const nextEdges = reconcileEdges(edges, state.edges);
+      const nextEndpoints = reconcileEntities(endpoints, state.endpoints);
+      const nextEvents = reconcileEntities(events, state.events);
+      const nextIdps = reconcileEntities(identityProviders, state.identityProviders);
+
+      if (
+        nextNodes === state.nodes &&
+        nextEdges === state.edges &&
+        nextEndpoints === state.endpoints &&
+        nextEvents === state.events &&
+        nextIdps === state.identityProviders &&
+        (projectId === undefined || state.projectId === projectId)
+      ) {
+        return state;
+      }
+
+      return {
+        ...(projectId !== undefined && { projectId }),
+        nodes: nextNodes,
+        edges: nextEdges,
+        endpoints: nextEndpoints,
+        events: nextEvents,
+        identityProviders: nextIdps,
+      };
     }),
 
-  setView: (view) => set({ canvasView: view }),
+  setView: (view) =>
+    set((state) => ({
+      canvasView: view,
+      canUndo:
+        (view === "schema" ? state.schemaUndoStack : state.graphUndoStack)
+          .length > 0,
+      canRedo:
+        (view === "schema" ? state.schemaRedoStack : state.graphRedoStack)
+          .length > 0,
+    })),
 
   clearPending: (
     syncedNodes,
@@ -111,13 +222,18 @@ export const createSyncSlice = (
       ),
       pendingEndpointRemovals: state.pendingEndpointRemovals.filter(
         (r) =>
-          !syncedEndpointRemovals.some((sr) => sr.endpointId === r.endpointId),
+          !syncedEndpointRemovals.some(
+            (sr) => sr.nodeId === r.nodeId && sr.endpointId === r.endpointId,
+          ),
       ),
       pendingEventUpserts: state.pendingEventUpserts.filter(
         (e) => !syncedEventUpserts.includes(e),
       ),
       pendingEventRemovals: state.pendingEventRemovals.filter(
-        (r) => !syncedEventRemovals.some((sr) => sr.eventId === r.eventId),
+        (r) =>
+          !syncedEventRemovals.some(
+            (sr) => sr.nodeId === r.nodeId && sr.eventId === r.eventId,
+          ),
       ),
       pendingIdentityProviderUpserts:
         state.pendingIdentityProviderUpserts.filter(
@@ -127,7 +243,7 @@ export const createSyncSlice = (
         state.pendingIdentityProviderRemovals.filter(
           (r) =>
             !syncedIdentityProviderRemovals.some(
-              (sr) => sr.providerId === r.providerId,
+              (sr) => sr.nodeId === r.nodeId && sr.providerId === r.providerId,
             ),
         ),
     })),
@@ -140,6 +256,12 @@ export const createSyncSlice = (
       endpoints: [],
       events: [],
       identityProviders: [],
+      graphUndoStack: [],
+      graphRedoStack: [],
+      schemaUndoStack: [],
+      schemaRedoStack: [],
+      canUndo: false,
+      canRedo: false,
       pendingNodeUpserts: [],
       pendingNodeRemovals: [],
       pendingEdgeUpserts: [],

@@ -59,6 +59,14 @@ export function useCanvasHandlers(projectId: string, view: BackendCanvasView) {
     [onNodesChangeStore],
   );
 
+  const handleNodeDragStart = useCallback(() => {
+    useBackendCanvasStore.getState().pushHistorySnapshot(view);
+  }, [view]);
+
+  const handleSelectionDragStart = useCallback(() => {
+    useBackendCanvasStore.getState().pushHistorySnapshot(view);
+  }, [view]);
+
   const handleMoveEnd = useCallback(
     (
       _event: MouseEvent | TouchEvent | null,
@@ -72,7 +80,12 @@ export function useCanvasHandlers(projectId: string, view: BackendCanvasView) {
     [projectId, view],
   );
 
-  return { handleNodesChange, handleMoveEnd };
+  return {
+    handleNodesChange,
+    handleNodeDragStart,
+    handleSelectionDragStart,
+    handleMoveEnd,
+  };
 }
 
 export function getOffsetPosition(

@@ -10,6 +10,10 @@ import {
   Hammer,
   Cloud,
   Code,
+  Undo2,
+  Redo2,
+  GitCommit,
+  History,
 } from "lucide-react";
 import { BackendCanvasView } from "@/types/canvas";
 import { Button } from "@workspace/ui/components/button";
@@ -19,6 +23,7 @@ import {
   TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
 interface CanvasToolbarProps {
   projectName: string;
@@ -27,7 +32,10 @@ interface CanvasToolbarProps {
   setView: (view: BackendCanvasView) => void;
   aiPanelOpen: boolean;
   setAiPanelOpen: (open: boolean) => void;
+  onOpenCommit: () => void;
+  onOpenHistory: () => void;
 }
+
 export function CanvasToolbar({
   projectName,
   projectId,
@@ -35,24 +43,100 @@ export function CanvasToolbar({
   setView,
   aiPanelOpen,
   setAiPanelOpen,
-}: CanvasToolbarProps) {
+  onOpenCommit,
+  onOpenHistory,
+}: CanvasToolbarProps): React.JSX.Element {
+  const canUndo = useBackendCanvasStore((s) =>
+    view === "schema"
+      ? s.schemaUndoStack.length > 0
+      : s.graphUndoStack.length > 0,
+  );
+  const canRedo = useBackendCanvasStore((s) =>
+    view === "schema"
+      ? s.schemaRedoStack.length > 0
+      : s.graphRedoStack.length > 0,
+  );
+  const undoSchema = useBackendCanvasStore((s) => s.undoSchema);
+  const undoGraph = useBackendCanvasStore((s) => s.undoGraph);
+  const redoSchema = useBackendCanvasStore((s) => s.redoSchema);
+  const redoGraph = useBackendCanvasStore((s) => s.redoGraph);
+  const setStoreView = useBackendCanvasStore((s) => s.setView);
+
+  const handleUndo = () => {
+    if (view === "schema") {
+      undoSchema();
+    } else {
+      undoGraph();
+    }
+  };
+
+  const handleRedo = () => {
+    if (view === "schema") {
+      redoSchema();
+    } else {
+      redoGraph();
+    }
+  };
+
   return (
     <div className="flex items-center justify-between h-14 px-4 border-b bg-background shrink-0">
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-3">
         <Button variant="ghost" size="icon" asChild className="h-8 w-8">
           <Link href="/projects">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <div className="font-medium text-sm truncate max-w-[200px]">
+        <div className="font-medium text-sm truncate max-w-[180px]">
           {projectName}
         </div>
+
+        {/* Undo / Redo buttons */}
+        <div className="flex items-center bg-muted/40 rounded-lg p-0.5 border border-border/50">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground disabled:opacity-30 hover:text-foreground"
+                disabled={!canUndo}
+                onClick={handleUndo}
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Undo (Ctrl+Z)
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground disabled:opacity-30 hover:text-foreground"
+                disabled={!canRedo}
+                onClick={handleRedo}
+              >
+                <Redo2 className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Redo (Ctrl+Y / Ctrl+Shift+Z)
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
+
       <div className="flex items-center justify-center flex-1">
         <Tabs
           value={view}
-          onValueChange={(v) => setView(v as BackendCanvasView)}
-          className="w-[300px]"
+          onValueChange={(v) => {
+            const nextView = v as BackendCanvasView;
+            setView(nextView);
+            setStoreView(nextView);
+          }}
+          className="w-[280px]"
         >
           <TabsList className="grid w-fit grid-cols-2 h-9">
             <TabsTrigger
@@ -69,24 +153,50 @@ export function CanvasToolbar({
               <Database className="w-3 h-3 mr-1.5" />
               Schema
             </TabsTrigger>
-            {/* <TabsTrigger value="sequence" className="text-xs">
-              <Workflow className="w-3 h-3 mr-1.5" />
-              Sequence
-            </TabsTrigger> */}
           </TabsList>
         </Tabs>
       </div>
 
       <div className="flex items-center space-x-2">
-        {/* <Button asChild variant={"secondary"}>
-          <Link href={"/api-keys"}>
-            <Router className="mr-1" />
-            MCP
-          </Link>
-        </Button> */}
-        <Button asChild variant={"secondary"}>
+        {/* Version History Button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="py-3.5 h-8 gap-1.5 text-xs font-medium"
+              onClick={onOpenHistory}
+            >
+              <History className="w-3.5 h-3.5 text-primary" />
+              <span>History</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            View version checkpoints & audit history
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Commit Checkpoint Button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="py-3.5 h-8 gap-1.5 text-xs font-medium border-primary/20 hover:bg-primary/5"
+              onClick={onOpenCommit}
+            >
+              <GitCommit className="w-3.5 h-3.5 text-primary" />
+              <span>Commit</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            Create a version checkpoint snapshot
+          </TooltipContent>
+        </Tooltip>
+
+        <Button asChild variant={"secondary"} size="sm" className="py-3.5 h-8">
           <Link href={"#"}>
-            <Cloud className="mr-1" />
+            <Cloud className="mr-1 w-3.5 h-3.5" />
             Deploy
           </Link>
         </Button>
@@ -96,7 +206,7 @@ export function CanvasToolbar({
             <Button
               variant={"secondary"}
               size="sm"
-              className="py-3.5"
+              className="py-3.5 h-8"
               asChild
             >
               <Link href={`/project/${projectId}/compiler`}>
@@ -121,7 +231,7 @@ export function CanvasToolbar({
         <Button
           variant={"secondary"}
           size="sm"
-          className="py-3.5"
+          className="py-3.5 h-8"
           onClick={() => setAiPanelOpen(!aiPanelOpen)}
         >
           <Sparkles className="w-4 h-4 mr-2 text-primary" />

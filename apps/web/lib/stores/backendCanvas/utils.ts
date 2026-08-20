@@ -1,5 +1,35 @@
-import { BackendNode } from "@/types/canvas";
+import { BackendNode, BackendNodeData, BackendNodeType } from "@/types/canvas";
 import { MessagingResourceType } from "@workspace/canvas/types";
+import { isBackendNode } from "@workspace/canvas";
+
+/**
+ * Convert a raw Convex node snapshot into a BackendNode.
+ *
+ * The parameter type uses BackendNodeData for `data` (same type as BackendNode.data),
+ * and isBackendNode() narrows the string type field — no casts required.
+ */
+export function convexNodeToBackendNode(n: {
+  nodeId: string;
+  type: string;
+  position: { x: number; y: number };
+  data?: BackendNodeData;
+  fractionalIndex: string;
+}): BackendNode {
+  const type: BackendNodeType = isBackendNode(n.type) ? n.type : "service";
+  const activePosition = n.data?.position ?? n.position;
+  return {
+    id: n.nodeId,
+    type,
+    position: activePosition,
+    data: {
+      label: n.data?.label ?? "",
+      ...n.data,
+      position: activePosition,
+    },
+    fractionalIndex: n.fractionalIndex,
+    parentId: n.data?.parentId,
+  };
+}
 
 // Helper: get the last fractional index from a sorted list
 export function getLastIndex(items: { fractionalIndex?: string }[]): string | null {

@@ -30,6 +30,7 @@ export const createIdentityProviderSlice = (
   pendingIdentityProviderRemovals: [],
 
   addIdentityProvider: (nodeId, provider) => {
+    get().pushHistorySnapshot("graph");
     const newProvider = { ...provider, nodeId };
     set({
       identityProviders: [...get().identityProviders, newProvider],
@@ -41,6 +42,7 @@ export const createIdentityProviderSlice = (
   },
 
   updateIdentityProvider: (id, changes) => {
+    get().pushHistorySnapshot("graph");
     const next = get().identityProviders.map((p) =>
       p.id === id ? { ...p, ...changes } : p,
     );
@@ -59,6 +61,7 @@ export const createIdentityProviderSlice = (
   deleteIdentityProvider: (id) => {
     const provider = get().identityProviders.find((p) => p.id === id);
     if (provider) {
+      get().pushHistorySnapshot("graph");
       set({
         identityProviders: get().identityProviders.filter((p) => p.id !== id),
         pendingIdentityProviderRemovals: [

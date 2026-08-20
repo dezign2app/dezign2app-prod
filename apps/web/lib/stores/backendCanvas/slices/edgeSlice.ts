@@ -59,6 +59,15 @@ export const createEdgeSlice = (
         .map((c) => c.id),
     );
 
+    if (removedIds.length > 0) {
+      const isSchema = get().edges.some(
+        (e) =>
+          removedIds.includes(e.id) &&
+          (e.type === "foreign-key" || e.type === "database-connection"),
+      );
+      get().pushHistorySnapshot(isSchema ? "schema" : "graph");
+    }
+
     const upserts = next.filter((e) => persistentChangedEdgeIds.has(e.id));
 
     let updates: Partial<BackendCanvasState> = {
@@ -97,6 +106,9 @@ export const createEdgeSlice = (
     }
 
     const edgeType = result.edgeType;
+    const isSchema =
+      edgeType === "foreign-key" || edgeType === "database-connection";
+    get().pushHistorySnapshot(isSchema ? "schema" : "graph");
     const isColumnToColumn = edgeType === "foreign-key";
     const isPublishedConnect = connection.sourceHandle?.startsWith(
       "publishedEvents-out-",
@@ -420,6 +432,9 @@ export const createEdgeSlice = (
       }
     }
 
+    const isSchema =
+      edge.type === "foreign-key" || edge.type === "database-connection";
+    get().pushHistorySnapshot(isSchema ? "schema" : "graph");
     const next = [...get().edges, edge];
     set({
       edges: next,
@@ -427,8 +442,12 @@ export const createEdgeSlice = (
     });
   },
 
-
   updateEdge: (id, changes) => {
+    const edgeToUpdate = get().edges.find((e) => e.id === id);
+    const isSchema =
+      edgeToUpdate?.type === "foreign-key" ||
+      edgeToUpdate?.type === "database-connection";
+    get().pushHistorySnapshot(isSchema ? "schema" : "graph");
     const next = get().edges.map((e) =>
       e.id === id ? { ...e, ...changes } : e,
     );
@@ -440,6 +459,11 @@ export const createEdgeSlice = (
   },
 
   deleteEdge: (id) => {
+    const edgeToDelete = get().edges.find((e) => e.id === id);
+    const isSchema =
+      edgeToDelete?.type === "foreign-key" ||
+      edgeToDelete?.type === "database-connection";
+    get().pushHistorySnapshot(isSchema ? "schema" : "graph");
     const updates = cleanupDeletedEdgesState(get(), [id]);
     set(updates);
   },

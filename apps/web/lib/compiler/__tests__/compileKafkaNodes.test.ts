@@ -371,6 +371,7 @@ describe("compileKafkaNodes", () => {
               delivery: "AT_LEAST_ONCE",
               ordering: "NONE",
               deprecated: false,
+              payloadSchema: { id: "ps-1", mode: "raw_json", rawJson: "{}" },
             },
           ],
         },

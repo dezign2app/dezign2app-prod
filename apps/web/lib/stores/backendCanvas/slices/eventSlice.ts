@@ -32,6 +32,7 @@ export const createEventSlice = (
   pendingEventRemovals: [],
 
   addEvent: (nodeId, variant, event) => {
+    get().pushHistorySnapshot("graph");
     const newEvent = { ...event, nodeId, variant };
     set({
       events: [...get().events, newEvent],
@@ -40,6 +41,7 @@ export const createEventSlice = (
   },
 
   updateEvent: (id, changes) => {
+    get().pushHistorySnapshot("graph");
     const nextEvents = get().events.map((e) =>
       e.id === id ? { ...e, ...changes } : e,
     );
@@ -98,6 +100,7 @@ export const createEventSlice = (
   },
 
   deleteEvent: (id) => {
+    get().pushHistorySnapshot("graph");
     const event = get().events.find((e) => e.id === id);
     const active = get().activeConfigItem;
 

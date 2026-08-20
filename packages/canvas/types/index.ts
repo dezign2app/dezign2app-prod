@@ -13,4 +13,5 @@ export * from "./nodes";
 export * from "./edges";
 export * from "./graph";
 export * from "./compiler";
+export * from "./versions";
 

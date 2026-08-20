@@ -38,39 +38,7 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     Boolean(selected),
   );
 
-  // Mandatory HTTP Port Initialization
-  useEffect(() => {
-    if (!data.port || !data.port.trim()) {
-      const existingPorts = new Set(
-        nodes
-          .filter((n) => n?.id !== id && n?.type === "service")
-          .map((n) => parseInt(n.data?.port?.trim() || "8080", 10))
-          .filter((p) => !isNaN(p)),
-      );
-      let nextPort = 8080;
-      while (existingPorts.has(nextPort)) {
-        nextPort++;
-      }
-      updateNode(id, { data: { ...data, port: String(nextPort) } });
-    }
-  }, [id, data, nodes, updateNode]);
 
-  // Mandatory gRPC Port Initialization
-  useEffect(() => {
-    if (!data.grpcPort || !data.grpcPort.trim()) {
-      const existingGrpcPorts = new Set(
-        nodes
-          .filter((n) => n?.id !== id && n?.type === "service")
-          .map((n) => parseInt(n.data?.grpcPort?.trim() || "50051", 10))
-          .filter((p) => !isNaN(p)),
-      );
-      let nextGrpcPort = 50051;
-      while (existingGrpcPorts.has(nextGrpcPort)) {
-        nextGrpcPort++;
-      }
-      updateNode(id, { data: { ...data, grpcPort: String(nextGrpcPort) } });
-    }
-  }, [id, data, nodes, updateNode]);
 
   const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
   const endpointPubEventIds = new Set(
