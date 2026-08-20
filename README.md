@@ -182,19 +182,29 @@ New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
 
 > **Alternative**: Enable **Windows Developer Mode** (`Settings → For Developers → Developer Mode ON`) — this permanently allows symlink creation and skips the step above.
 
-#### Build command
+#### Build commands
 
 ```bash
-# Builds Next.js + packages Electron (all platforms on CI, current platform locally)
+# Builds Next.js + packages Electron for all platforms (Windows, macOS, Linux)
 pnpm build:desktop
+
+# Or target specific platforms:
+pnpm build:desktop:win     # Windows (.exe portable + NSIS)
+pnpm build:desktop:mac     # macOS (.dmg + .zip)
+pnpm build:desktop:linux   # Linux (.AppImage + .tar.gz)
 ```
 
 Output location:
 
 ```
 apps/desktop/release/
-└── win-unpacked/
-    └── Dezign2App.exe        ← Windows portable executable (~180 MB)
+├── win-unpacked/
+│   └── Dezign2App.exe        ← Windows portable executable (~180 MB)
+├── Dezign2App-Setup-*.exe    ← Windows NSIS installer
+├── Dezign2App-*.dmg          ← macOS installer
+├── Dezign2App-*.mac.zip      ← macOS zip bundle
+├── Dezign2App-*.AppImage     ← Linux AppImage executable
+└── Dezign2App-*.tar.gz       ← Linux tarball
 ```
 
 #### Distributing

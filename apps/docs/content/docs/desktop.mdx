@@ -72,18 +72,28 @@ export interface IElectronAPI {
 pnpm desktop:dev
 ```
 
-### Packaging Executable (`.exe` / `.dmg` / `.AppImage`)
+### Packaging Executables (`.exe` / `.dmg` / `.AppImage`)
 
 ```bash
-# Builds Next.js production bundle and packages the desktop app
+# Builds Next.js production bundle and packages for all platforms
 pnpm build:desktop
+
+# Or package for a specific platform:
+pnpm build:desktop:win     # Windows
+pnpm build:desktop:mac     # macOS
+pnpm build:desktop:linux   # Linux
 ```
 
 Output directory:
 ```
 apps/desktop/release/
-└── win-unpacked/
-    └── Dezign2App.exe   # Portable self-contained Windows executable
+├── win-unpacked/
+│   └── Dezign2App.exe   # Portable self-contained Windows executable
+├── Dezign2App-Setup-*.exe # Windows NSIS installer
+├── Dezign2App-*.dmg       # macOS DMG installer
+├── Dezign2App-*.mac.zip   # macOS zip archive
+├── Dezign2App-*.AppImage  # Linux AppImage
+└── Dezign2App-*.tar.gz    # Linux tarball
 ```
 
 ---

@@ -25,9 +25,13 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
+    "@workspace/backend#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["convex/_generated/**"]
+    },
     "system-design-engine#build": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": ["dist/**"]
     },
     "workflow-engine#build": {
       "dependsOn": ["^build"],

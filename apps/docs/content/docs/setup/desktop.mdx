@@ -52,13 +52,23 @@ pnpm --filter desktop dev
 
 ## 4. Packaging for Production
 
-To compile Next.js in production mode and package the Electron `.exe`:
+To compile Next.js in production mode and package desktop executables for Windows, macOS, and Linux:
 
 ```bash
+# Package for all platforms (Windows, macOS, Linux)
 pnpm build:desktop
+
+# Or package for specific target platforms:
+pnpm build:desktop:win     # Windows (.exe)
+pnpm build:desktop:mac     # macOS (.dmg, .zip)
+pnpm build:desktop:linux   # Linux (.AppImage, .tar.gz)
 ```
 
-The packaged executable will be generated at:
+The packaged executables will be generated in `apps/desktop/release/`:
 ```
-apps/desktop/release/win-unpacked/Dezign2App.exe
+apps/desktop/release/
+├── win-unpacked/Dezign2App.exe
+├── Dezign2App-Setup-*.exe
+├── Dezign2App-*.dmg
+└── Dezign2App-*.AppImage
 ```

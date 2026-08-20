@@ -8,7 +8,12 @@
   "scripts": {
     "generate-icons": "node scripts/generate-icons.js",
     "dev": "wait-on -i 1000 http://localhost:46500/robots.txt && tsc -p tsconfig.electron.json && electron .",
-    "build:electron": "node scripts/generate-icons.js && tsc -p tsconfig.electron.json && electron-builder --dir",
+    "build:electron": "node scripts/build.js",
+    "build:electron:win": "node scripts/build.js --win",
+    "build:electron:mac": "node scripts/build.js --mac",
+    "build:electron:linux": "node scripts/build.js --linux",
+    "build:electron:all": "node scripts/build.js --all",
+    "build:electron:dir": "node scripts/build.js --dir",
     "rebuild:native": "electron-rebuild -f -w node-pty",
     "typecheck": "tsc -p tsconfig.electron.json --noEmit"
   },
@@ -53,10 +58,17 @@
     "directories": {
       "output": "release"
     },
+    "compression": "normal",
     "extraResources": [
       {
         "from": "../web/.next",
-        "to": "web/.next"
+        "to": "web/.next",
+        "filter": [
+          "!cache/**",
+          "!dev/**",
+          "!diagnostics/**",
+          "!**/*.map"
+        ]
       },
       {
         "from": "../web/public",
@@ -74,7 +86,12 @@
         "from": "../web/node_modules",
         "to": "web/node_modules",
         "filter": [
-          "!**/*.map"
+          "!**/*.map",
+          "!**/*.d.ts",
+          "!**/*.md",
+          "!**/test/**",
+          "!**/tests/**",
+          "!**/__tests__/**"
         ]
       }
     ],
@@ -85,7 +102,7 @@
     "win": {
       "target": [
         {
-          "target": "portable",
+          "target": "nsis",
           "arch": [
             "x64"
           ]
@@ -93,13 +110,51 @@
       ],
       "icon": "build/icon.ico"
     },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "D2A",
+      "differentialPackage": false
+    },
     "mac": {
-      "target": "dmg",
-      "icon": "build/icon.png"
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools"
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "build/icon.png"
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "tar.gz",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Development"
     }
   }
 }
