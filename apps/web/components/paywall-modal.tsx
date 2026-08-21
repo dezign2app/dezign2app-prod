@@ -74,7 +74,10 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
   const { data: session, isPending: isSessionPending } = useSession();
   const isAuthLoaded = !isSessionPending;
   const isSignedIn = !!session?.user;
-  const subscriptionStatus = useQuery(api.users.getSubscriptionStatus);
+  const subscriptionStatus = useQuery(
+    api.users.getSubscriptionStatus,
+    session?.user?.email ? { email: session.user.email } : {},
+  );
 
   const [isPaywallActive, setIsPaywallActive] = useState(false);
   const [paywallDismissible, setPaywallDismissible] = useState(true);
@@ -112,7 +115,13 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
       return;
     }
 
-    // Handle protected routes
+    // If user is unauthenticated, do not show paywall modal (auth guards / proxy handle sign-in)
+    if (!isSignedIn || status === "unauthenticated" || status === "user_not_found") {
+      setIsPaywallActive(false);
+      return;
+    }
+
+    // Handle protected routes for signed-in users
     if (
       currentAccess === "premium-only" ||
       currentAccess === "premium-limited"
@@ -123,20 +132,8 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
         return;
       }
 
-      // 2. Unauthenticated or Never-subscribed:
-      if (
-        status === "unauthenticated" ||
-        status === "no_subscription" ||
-        status === "user_not_found"
-      ) {
-        if (
-          isSignedIn &&
-          (status === "unauthenticated" || status === "user_not_found")
-        ) {
-          return;
-        }
-
-        // Show Paywall Modal on both Web and Desktop cleanly
+      // 2. Signed-in, but Never-subscribed:
+      if (status === "no_subscription") {
         setIsPaywallActive(true);
         setPaywallDismissible(currentAccess === "premium-limited");
         return;
@@ -182,23 +179,10 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
 
   // Public/free pages render immediately
   if (currentAccess !== "free" && pathname !== "/") {
-    if (!isAuthLoaded || subscriptionStatus === undefined) {
+    if (!isAuthLoaded || (isSignedIn && subscriptionStatus === undefined)) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      );
-    }
-
-    if (
-      isSignedIn &&
-      (subscriptionStatus.status === "unauthenticated" ||
-        subscriptionStatus.status === "user_not_found")
-    ) {
-      return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground gap-3">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          <p className="text-sm text-muted-foreground">Synchronizing your session...</p>
         </div>
       );
     }

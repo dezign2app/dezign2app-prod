@@ -106,6 +106,7 @@ export const auth = betterAuth({
       jwt: {
         definePayload: async ({ user, session }) => {
           return {
+            aud: "convex",
             sub: user.id,
             email: user.email,
             name: user.name,

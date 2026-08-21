@@ -85,13 +85,16 @@ export const createAuth: CreateAuth<GenericDataModel> = (
       bearer(),
       convex({
         authConfig,
+        jwksRotateOnTokenGenerationError: true,
         jwt: {
           definePayload: async ({ user, session }) => {
             const activeOrgId =
-              "activeOrganizationId" in session
-                ? (session as { activeOrganizationId?: string }).activeOrganizationId
+              "activeOrganizationId" in session &&
+              typeof session.activeOrganizationId === "string"
+                ? session.activeOrganizationId
                 : undefined;
             return {
+              aud: "convex",
               sub: user.id,
               email: user.email,
               name: user.name,

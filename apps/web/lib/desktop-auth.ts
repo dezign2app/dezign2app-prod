@@ -1,21 +1,30 @@
 // In-memory single-use ticket store for desktop browser-to-app handoff
+// Uses globalThis to ensure singleton state is shared across Next.js Server Actions and Route Handlers
 interface DesktopTicket {
   userId: string;
   token: string;
   expiresAt: number;
 }
 
-const desktopTickets = new Map<string, DesktopTicket>();
+const globalForTickets = globalThis as unknown as {
+  __desktopTickets?: Map<string, DesktopTicket>;
+};
+
+const desktopTickets =
+  globalForTickets.__desktopTickets ||
+  (globalForTickets.__desktopTickets = new Map<string, DesktopTicket>());
 
 // Periodically clean up expired tickets
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of desktopTickets.entries()) {
-    if (value.expiresAt < now) {
-      desktopTickets.delete(key);
+if (typeof setInterval !== "undefined") {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, value] of desktopTickets.entries()) {
+      if (value.expiresAt < now) {
+        desktopTickets.delete(key);
+      }
     }
-  }
-}, 60000);
+  }, 60000);
+}
 
 export function createTicket(userId: string, token: string): string {
   const ticketId = `ticket_${Math.random().toString(36).substring(2, 15)}_${Date.now()}`;

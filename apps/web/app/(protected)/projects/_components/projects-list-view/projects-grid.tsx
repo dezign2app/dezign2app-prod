@@ -46,6 +46,13 @@ export const ProjectsGrid = () => {
         ))}
       </div>
 
+      {/* Loading First Page Spinner */}
+      {status === "LoadingFirstPage" && (
+        <div className="flex h-[300px] w-full items-center justify-center">
+          <Spinner className="h-8 w-8 text-primary" />
+        </div>
+      )}
+
       {/* Sentinel for Infinite Scroll */}
       {(status === "CanLoadMore" || status === "LoadingMore") && (
         <div

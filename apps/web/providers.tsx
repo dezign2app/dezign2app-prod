@@ -101,16 +101,35 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 }
 
+import { useRouter } from "next/navigation";
+
 export const AuthenticatedProvider = ({
   children,
 }: {
   children: React.ReactNode;
 }) => {
-  return (
-    <Authenticated>
-      {children}
-    </Authenticated>
-  );
+  const { data: session, isPending } = useSession();
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (!isPending && !session?.user) {
+      if (typeof window !== "undefined") {
+        window.location.href = "/sign-in";
+      } else {
+        router.replace("/sign-in");
+      }
+    }
+  }, [session, isPending, router]);
+
+  if (isPending || !session?.user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  return <>{children}</>;
 };
 
 export const UnauthenticatedProvider = ({

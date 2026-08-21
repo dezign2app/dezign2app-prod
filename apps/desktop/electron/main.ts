@@ -52,7 +52,9 @@ app.on("second-instance", (_event, commandLine) => {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
   }
-  const deepLink = commandLine.find((arg) => arg.startsWith("dezign2app://"));
+  const deepLink = commandLine.find((arg) =>
+    arg.toLowerCase().includes("dezign2app://")
+  );
   if (deepLink) {
     handleAuthUrl(deepLink);
   }

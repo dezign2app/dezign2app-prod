@@ -45,9 +45,40 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     }
   );
 
+  // Handle load failures gracefully (e.g. while dev server or Turbopack is compiling)
+  mainWindow.webContents.on(
+    "did-fail-load",
+    (_event, errorCode, errorDescription, validatedURL) => {
+      // Ignore aborted loads (such as fast redirects)
+      if (errorCode === -3) return; // ERR_ABORTED
+      console.warn(
+        `[window] Page load warning on ${validatedURL}: ${errorDescription} (${errorCode})`
+      );
+      if (IS_DEV && mainWindow && !mainWindow.isDestroyed()) {
+        setTimeout(() => {
+          mainWindow
+            ?.loadURL(`${DEV_SERVER_URL}/projects`)
+            .catch(() => {});
+        }, 1500);
+      }
+    }
+  );
+
   // Directly navigate to /projects (bypassing landing/pricing/marketing pages)
   if (IS_DEV) {
-    mainWindow.loadURL(`${DEV_SERVER_URL}/projects`);
+    const loadDevUrl = async () => {
+      try {
+        await mainWindow?.loadURL(`${DEV_SERVER_URL}/projects`);
+      } catch (err: any) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          console.log("[window] Retrying dev load in 1s...");
+          setTimeout(() => {
+            mainWindow?.loadURL(`${DEV_SERVER_URL}/projects`).catch(() => {});
+          }, 1000);
+        }
+      }
+    };
+    loadDevUrl();
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     // Show smooth startup splash while local server initializes
