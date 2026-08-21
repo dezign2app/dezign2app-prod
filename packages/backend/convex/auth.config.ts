@@ -1,14 +1,16 @@
 import { AuthConfig } from "convex/server";
 
+const convexSiteUrl =
+  process.env.CONVEX_SITE_URL || "https://neighborly-setter-541.convex.site";
+
 export default {
   providers: [
     {
-      // Replace with your own Clerk Issuer URL from your "convex" JWT template
-      // or with `process.env.CLERK_ISSUER_URL`
-      // and configure CLERK_ISSUER_URL on the Convex Dashboard
-      // See https://docs.convex.dev/auth/clerk#configuring-dev-and-prod-instances
-      domain: process.env.CLERK_ISSUER_URL!,
+      type: "customJwt",
+      issuer: convexSiteUrl,
       applicationID: "convex",
+      algorithm: "RS256",
+      jwks: `${convexSiteUrl}/api/auth/convex/jwks`,
     },
   ],
 } satisfies AuthConfig;

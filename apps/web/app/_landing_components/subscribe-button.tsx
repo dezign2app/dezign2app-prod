@@ -2,15 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useUser, SignInButton } from "@clerk/nextjs";
-import { useSearchParams } from "next/navigation";
+import { useSession } from "@/lib/auth-client";
+import { useSearchParams, useRouter } from "next/navigation";
 
 interface SubscribeButtonProps {
   productId: string;
 }
 
 export const SubscribeButton = ({ productId }: SubscribeButtonProps) => {
-  const { isSignedIn, isLoaded } = useUser();
+  const { data: session, isPending } = useSession();
+  const isSignedIn = !!session?.user;
+  const isLoaded = !isPending;
+  const router = useRouter();
+
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [hasAutoTriggered, setHasAutoTriggered] = useState(false);
@@ -31,6 +35,7 @@ export const SubscribeButton = ({ productId }: SubscribeButtonProps) => {
       if (!response.ok) {
         if (response.status === 401) {
           toast.error("Please sign in to continue.");
+          router.push(`/sign-in?redirect_url=${encodeURIComponent("/pricing?checkout=true")}`);
           return;
         }
         throw new Error("Checkout failed");
@@ -77,14 +82,13 @@ export const SubscribeButton = ({ productId }: SubscribeButtonProps) => {
       : `${currentUrl}?checkout=true`;
 
     return (
-      <SignInButton mode="modal" forceRedirectUrl={redirectUrl}>
-        <button
-          className={buttonStyle}
-          style={{ fontFamily: "'DM Sans', sans-serif" }}
-        >
-          Get Started
-        </button>
-      </SignInButton>
+      <button
+        onClick={() => router.push(`/sign-in?redirect_url=${encodeURIComponent(redirectUrl)}`)}
+        className={buttonStyle}
+        style={{ fontFamily: "'DM Sans', sans-serif" }}
+      >
+        Get Started
+      </button>
     );
   }
 

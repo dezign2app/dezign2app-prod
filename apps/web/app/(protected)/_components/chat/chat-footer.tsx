@@ -14,7 +14,6 @@ import {
   TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { useParams } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
 import { useMutation } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
@@ -44,7 +43,6 @@ export const ChatFooter = ({ conversationId }: ChatFooterProps) => {
   const params = useParams();
   const projectId = params?.projectId as string;
   const workflowId = params?.workflowId as string;
-  const { getToken } = useAuth();
   const [fileId] = useQueryState("fileId");
 
   const createConversation = useMutation(
@@ -108,7 +106,16 @@ export const ChatFooter = ({ conversationId }: ChatFooterProps) => {
         clientMessageId,
       });
 
-      const token = (await getToken({ template: "convex" })) ?? undefined;
+      let token: string | undefined = undefined;
+      try {
+        const tokenRes = await fetch("/api/auth/token");
+        if (tokenRes.ok) {
+          const tokenData = await tokenRes.json();
+          token = tokenData.token;
+        }
+      } catch (e) {
+        console.warn("Failed to get auth token:", e);
+      }
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_WORKFLOW_ENGINE_BASE_URL}/ai/agent`,

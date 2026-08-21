@@ -7,7 +7,8 @@ export const authTables = {
     passwordHash: v.string(),
     name: v.string(),
     creemCustomerId: v.optional(v.string()),
-    clerkId: v.optional(v.string()),
+    authId: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
     isSystemAdmin: v.optional(v.boolean()),
     createdAt: v.number(),
   })

@@ -7,10 +7,13 @@ import {
   Authenticated,
   ConvexReactClient,
   Unauthenticated,
+  useMutation,
 } from "convex/react";
-import { ConvexProviderWithClerk } from "convex/react-clerk";
-import { ClerkProvider, useAuth } from "@clerk/nextjs";
-import { shadcn } from "@clerk/themes";
+import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
+import { authClient, useSession } from "@/lib/auth-client";
+import { api } from "@workspace/backend/_generated/api";
+import "@/lib/utils/patchResizeObserver";
+import { Toaster } from "@workspace/ui/components/sonner";
 
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 
@@ -19,9 +22,6 @@ if (!convexUrl) {
 }
 
 const convex = new ConvexReactClient(convexUrl);
-
-import "@/lib/utils/patchResizeObserver";
-import { Toaster } from "@workspace/ui/components/sonner";
 
 // Suppress benign browser ResizeObserver loop notifications from triggering Next.js dev error overlays
 if (typeof window !== "undefined") {
@@ -58,6 +58,30 @@ if (typeof window !== "undefined") {
   );
 }
 
+function UserSync() {
+  const { data: session } = useSession();
+  const ensureUser = useMutation(api.users.ensureAuthUser);
+  const syncCurrentUser = useMutation(api.users.syncCurrentUser);
+
+  React.useEffect(() => {
+    if (session?.user?.email) {
+      const userEmail = session.user.email;
+      ensureUser({
+        email: userEmail,
+        name: session.user.name || userEmail.split("@")[0] || "User",
+        authId: session.user.id,
+        avatarUrl: session.user.image || undefined,
+      }).catch((err) => {
+        console.warn("[UserSync] Error in ensureUser:", err);
+      });
+    } else {
+      syncCurrentUser().catch(() => {});
+    }
+  }, [session, ensureUser, syncCurrentUser]);
+
+  return null;
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <NextThemesProvider
@@ -66,14 +90,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
       enableSystem
       disableTransitionOnChange
     >
-      <ClerkProvider appearance={{ theme: shadcn }}>
-        <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-          <NuqsAdapter>
-            {children}
-            <Toaster />
-          </NuqsAdapter>
-        </ConvexProviderWithClerk>
-      </ClerkProvider>
+      <ConvexBetterAuthProvider client={convex} authClient={authClient}>
+        <UserSync />
+        <NuqsAdapter>
+          {children}
+          <Toaster />
+        </NuqsAdapter>
+      </ConvexBetterAuthProvider>
     </NextThemesProvider>
   );
 }
@@ -83,8 +106,13 @@ export const AuthenticatedProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  return <Authenticated>{children}</Authenticated>;
+  return (
+    <Authenticated>
+      {children}
+    </Authenticated>
+  );
 };
+
 export const UnauthenticatedProvider = ({
   children,
 }: {

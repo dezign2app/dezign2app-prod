@@ -1,8 +1,9 @@
 import { generateUserToken } from "@/app/(auth)/_components/actions";
-import { auth } from "@clerk/nextjs/server";
+import { getServerSession } from "@/lib/auth-server";
+import { headers } from "next/headers";
 
 /**
- * API endpoint to generate a Clerk JWT token for MCP authentication
+ * API endpoint to generate a Better Auth JWT token for MCP & Workflow authentication
  *
  * Usage:
  * ```
@@ -12,9 +13,10 @@ import { auth } from "@clerk/nextjs/server";
  */
 export async function GET() {
   try {
-    const session = await auth();
+    const reqHeaders = await headers();
+    const session = await getServerSession(reqHeaders);
 
-    if (!session?.userId) {
+    if (!session?.user?.id) {
       return Response.json({ error: "Not authenticated" }, { status: 401 });
     }
 
@@ -29,8 +31,8 @@ export async function GET() {
 
     return Response.json({
       token,
-      userId: session.userId,
-      expiresIn: 3600, // 1 hour (typical Clerk JWT expiration)
+      userId: session.user.id,
+      expiresIn: 3600,
     });
   } catch (error) {
     console.error("[API] Token generation error:", error);

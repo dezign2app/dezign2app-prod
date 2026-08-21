@@ -1,9 +1,11 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api } from "./_generated/api";
-import { Webhook } from "svix";
+import { betterAuthComponentClient, createAuth } from "./auth";
 
 const http = httpRouter();
+
+betterAuthComponentClient.registerRoutes(http, createAuth);
 
 const createCreemWebhookHandler =
   (secretEnvKey: string) => async (ctx: any, request: Request) => {
@@ -119,57 +121,6 @@ http.route({
   handler: httpAction(
     createCreemWebhookHandler("CREEM_SUBSCRIPTION_WEBHOOK_SECRET"),
   ),
-});
-
-http.route({
-  path: "/clerk-webhook",
-  method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    const payloadString = await request.text();
-    const headerPayload = request.headers;
-
-    let evt: any;
-    try {
-      const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET || "");
-      evt = wh.verify(payloadString, {
-        "svix-id": headerPayload.get("svix-id")!,
-        "svix-timestamp": headerPayload.get("svix-timestamp")!,
-        "svix-signature": headerPayload.get("svix-signature")!,
-      });
-    } catch (err) {
-      console.error("Error verifying clerk webhook:", err);
-      // Fallback for local development
-      try {
-        evt = JSON.parse(payloadString);
-        console.log(
-          "Parsed webhook payload without verification for local testing.",
-        );
-      } catch (e) {
-        return new Response("Invalid webhook payload", { status: 400 });
-      }
-    }
-
-    const eventType = evt.type;
-
-    if (eventType === "user.created" || eventType === "user.updated") {
-      const { id, email_addresses, first_name, last_name } = evt.data;
-      const primaryEmail = email_addresses?.[0]?.email_address;
-      const name = [first_name, last_name].filter(Boolean).join(" ");
-
-      if (primaryEmail) {
-        await ctx.runMutation(api.users.syncClerkUser, {
-          email: primaryEmail,
-          name: name || "Unknown User",
-          clerkId: id,
-        });
-        console.log(`Synced clerk user ${id} with email ${primaryEmail}`);
-      } else {
-        console.error("No email address found in user event data:", evt.data);
-      }
-    }
-
-    return new Response("Webhook received", { status: 200 });
-  }),
 });
 
 export default http;

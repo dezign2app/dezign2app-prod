@@ -10,7 +10,7 @@ export interface AuthContext {
 
 const CONVEX_URL = process.env.CONVEX_URL || "";
 
-function verifyClerkJWT(token: string): any {
+function verifyJWT(token: string): any {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) {
@@ -139,13 +139,14 @@ export async function resolveAuth(token: string): Promise<AuthContext | null> {
     return null;
   }
 
-  const payload = verifyClerkJWT(token);
+  const payload = verifyJWT(token);
   if (payload && payload.sub) {
     console.log(
-      `[AUTH] Resolved JWT auth — user=${payload.sub} (no projectId from JWT)`,
+      `[AUTH] Resolved JWT auth — user=${payload.sub} (org=${payload.org_id || payload.orgId || "NONE"})`,
     );
     return {
       userId: payload.sub,
+      orgId: payload.org_id || payload.orgId,
       token: token,
     };
   }

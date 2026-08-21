@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useUser, SignInButton } from "@clerk/nextjs";
+import { useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { Minus, Plus, Info } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 function CheckCircle() {
   return (
@@ -39,7 +40,10 @@ function PlanIconBadge() {
 }
 
 export function EarlyBelieverCard() {
-  const { isSignedIn, isLoaded } = useUser();
+  const { data: session, isPending } = useSession();
+  const router = useRouter();
+  const isSignedIn = !!session?.user;
+  const isLoaded = !isPending;
   const [tier, setTier] = useState<500 | 1000>(1000);
   const [seats, setSeats] = useState<number>(1);
   const [loading, setLoading] = useState(false);
@@ -217,14 +221,13 @@ export function EarlyBelieverCard() {
           Loading...
         </button>
       ) : !isSignedIn ? (
-        <SignInButton mode="modal" forceRedirectUrl="/#pricing">
-          <button
-            className={buttonStyle}
-            style={{ fontFamily: "'DM Sans', sans-serif" }}
-          >
-            Get Started
-          </button>
-        </SignInButton>
+        <button
+          onClick={() => router.push("/sign-in?redirect_url=/#pricing")}
+          className={buttonStyle}
+          style={{ fontFamily: "'DM Sans', sans-serif" }}
+        >
+          Get Started
+        </button>
       ) : (
         <button
           onClick={handleCheckout}

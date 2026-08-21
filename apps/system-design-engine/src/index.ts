@@ -292,7 +292,7 @@ app.all("/mcp", async (req, res) => {
           session.orgId = auth.orgId;
           session.keyId = auth.keyId;
           session.projectId = auth.projectId;
-          session.clerkToken = auth.token;
+          session.authToken = auth.token;
         }
       }
 

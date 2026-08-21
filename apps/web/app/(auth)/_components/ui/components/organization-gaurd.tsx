@@ -1,11 +1,17 @@
 "use client";
-import { useOrganization } from "@clerk/nextjs";
+
 import React, { ReactNode } from "react";
+import { useActiveOrganization } from "@/lib/auth-client";
 import { AuthLayout } from "../layouts/auth-layout";
 import { OrgSelectionView } from "../views/org-selection-view";
 
 export const OrganizationGuard = ({ children }: { children: ReactNode }) => {
-  const { organization } = useOrganization();
+  const { data: organization, isPending } = useActiveOrganization();
+
+  if (isPending) {
+    return null;
+  }
+
   if (!organization) {
     return (
       <AuthLayout>
@@ -13,5 +19,6 @@ export const OrganizationGuard = ({ children }: { children: ReactNode }) => {
       </AuthLayout>
     );
   }
+
   return <>{children}</>;
 };

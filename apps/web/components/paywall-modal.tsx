@@ -17,7 +17,7 @@ import { useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { SubscriptionAccessContext } from "@/providers/subscription-access-context";
 import { useRouter, usePathname } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
+import { useSession } from "@/lib/auth-client";
 import { ReadOnlyBanner } from "./read-only-banner";
 import Link from "next/link";
 import { isElectron, getElectronAPI } from "@/lib/electron";
@@ -71,7 +71,9 @@ const ROUTE_CONFIG: Record<
 export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
   const pathname = usePathname();
-  const { isLoaded: isClerkLoaded, isSignedIn } = useAuth();
+  const { data: session, isPending: isSessionPending } = useSession();
+  const isAuthLoaded = !isSessionPending;
+  const isSignedIn = !!session?.user;
   const subscriptionStatus = useQuery(api.users.getSubscriptionStatus);
 
   const [isPaywallActive, setIsPaywallActive] = useState(false);
@@ -100,7 +102,7 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
     : "free";
 
   useEffect(() => {
-    if (!isClerkLoaded || subscriptionStatus === undefined) return;
+    if (!isAuthLoaded || subscriptionStatus === undefined) return;
 
     const { status } = subscriptionStatus;
 
@@ -134,15 +136,9 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
           return;
         }
 
-        // On Desktop: Keep user inside app and open Paywall Modal (never bounce to /pricing)
-        if (inDesktop) {
-          setIsPaywallActive(true);
-          setPaywallDismissible(currentAccess === "premium-limited");
-          return;
-        }
-
-        // On Web: Redirect to pricing
-        router.push("/pricing");
+        // Show Paywall Modal on both Web and Desktop cleanly
+        setIsPaywallActive(true);
+        setPaywallDismissible(currentAccess === "premium-limited");
         return;
       }
 
@@ -167,7 +163,7 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
     pathname,
     currentAccess,
     hasDismissedInitialModal,
-    isClerkLoaded,
+    isAuthLoaded,
     isSignedIn,
     inDesktop,
   ]);
@@ -186,7 +182,7 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
 
   // Public/free pages render immediately
   if (currentAccess !== "free" && pathname !== "/") {
-    if (!isClerkLoaded || subscriptionStatus === undefined) {
+    if (!isAuthLoaded || subscriptionStatus === undefined) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -205,17 +201,6 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
           <p className="text-sm text-muted-foreground">Synchronizing your session...</p>
         </div>
       );
-    }
-
-    if (
-      !inDesktop &&
-      (currentAccess === "premium-only" || currentAccess === "premium-limited") &&
-      !isSignedIn &&
-      (subscriptionStatus.status === "no_subscription" ||
-        subscriptionStatus.status === "user_not_found" ||
-        subscriptionStatus.status === "unauthenticated")
-    ) {
-      return null;
     }
   }
 

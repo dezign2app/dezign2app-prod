@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@workspace/backend/_generated/api";
@@ -33,7 +32,18 @@ import { useWorkflowVersionsSecrets } from "./use-workflow-versions-secrets";
 
 export const useWorkflowEditor = (workflowId: string) => {
   const { isReadOnly, showPaywall } = useSubscriptionAccess();
-  const { getToken } = useAuth();
+  const getToken = async () => {
+    try {
+      const res = await fetch("/api/auth/token");
+      if (res.ok) {
+        const data = await res.json();
+        return (data.token as string) || null;
+      }
+    } catch (err) {
+      console.warn("Failed to get auth token:", err);
+    }
+    return null;
+  };
 
   const data = useQuery(api.workflows.crud.getWorkflowEditorData, {
     workflowId: workflowId as Id<"workflows">,

@@ -25,10 +25,11 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@workspace/ui/components/sidebar";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Separator } from "@workspace/ui/components/separator";
 import { useTheme } from "next-themes";
-import { OrganizationSwitcher, SignOutButton } from "@clerk/nextjs";
+import { OrgSwitcher } from "@/components/auth/org-switcher";
+import { signOut } from "@/lib/auth-client";
 import { KeyIcon } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@workspace/ui/lib/utils";
@@ -63,24 +64,36 @@ const configurationItems: SidebarItem[] = [
 
 const ProtectedSidebar = () => {
   const pathname = usePathname();
+  const router = useRouter();
   const { theme, setTheme } = useTheme();
 
   const isActive = (url: string) => {
     if (url === "/") return pathname === "/";
     return pathname.startsWith(url);
   };
+
+  const handleSignOut = async () => {
+    await signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          router.push("/sign-in");
+        },
+      },
+    });
+  };
+
   return (
     <Sidebar className="group" collapsible="icon">
       <SidebarHeader>
-        <p>Ctx</p>
+        <p className="font-semibold text-xs text-muted-foreground px-2 text-nowrap">d2a</p>
       </SidebarHeader>
       <Separator />
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem key="org_123">
-                <OrganizationSwitcher />
+              <SidebarMenuItem key="org_switcher">
+                <OrgSwitcher />
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
@@ -179,18 +192,14 @@ const ProtectedSidebar = () => {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              asChild
+              onClick={handleSignOut}
               tooltip={"Signout"}
               size="sm"
               className="cursor-pointer"
             >
-              {
-                <SignOutButton redirectUrl="/sign-in">
-                  <div className="flex items-center justify-center gap-2">
-                    <LogOut className="size-4" /> Sign Out
-                  </div>
-                </SignOutButton>
-              }
+              <div className="flex items-center justify-center gap-2">
+                <LogOut className="size-4" /> Sign Out
+              </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
