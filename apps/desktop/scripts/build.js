@@ -1,15 +1,147 @@
 const { execSync, spawn } = require("child_process");
 const path = require("path");
+const fs = require("fs");
 
 const desktopDir = path.join(__dirname, "..");
 const args = process.argv.slice(2);
 const hostPlatform = process.platform; // 'win32', 'darwin', 'linux'
 
-function runElectronBuilder(flag, cwd) {
+function copyDirPlain(src, dest) {
+  if (!fs.existsSync(src)) return;
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src)) {
+    const srcPath = path.join(src, entry);
+    const destPath = path.join(dest, entry);
+    const stat = fs.lstatSync(srcPath);
+    if (stat.isSymbolicLink()) {
+      continue;
+    } else if (stat.isDirectory()) {
+      copyDirPlain(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+function stageWebResources() {
+  const webDir = path.join(desktopDir, "../web");
+  const buildWebDir = path.join(desktopDir, "build-web");
+  const standaloneDir = path.join(webDir, ".next", "standalone");
+  const standaloneServer = path.join(standaloneDir, "apps", "web", "server.js");
+
+  if (!fs.existsSync(standaloneServer) && !fs.existsSync(path.join(standaloneDir, "server.js"))) {
+    console.log("\n==> [Auto-Build] Next.js standalone bundle not found. Building Next.js Web runtime...");
+    execSync("pnpm --filter web build", {
+      stdio: "inherit",
+      cwd: path.join(desktopDir, "../.."),
+    });
+  }
+
+  console.log("\n==> Staging Next.js standalone Web runtime (~50MB)...");
+
+  // Clean old build-web folder
+  if (fs.existsSync(buildWebDir)) {
+    fs.rmSync(buildWebDir, { recursive: true, force: true });
+  }
+  fs.mkdirSync(buildWebDir, { recursive: true });
+
+  if (fs.existsSync(standaloneDir)) {
+    console.log("   ✓ Staging Next.js standalone bundle (clean flat node_modules)...");
+
+    // 1. Copy standalone apps/web (skip node_modules inside it which are pnpm symlinks)
+    const standaloneWeb = path.join(standaloneDir, "apps", "web");
+    if (fs.existsSync(standaloneWeb)) {
+      for (const item of fs.readdirSync(standaloneWeb)) {
+        if (item === "node_modules") continue;
+        const sPath = path.join(standaloneWeb, item);
+        const dPath = path.join(buildWebDir, "apps", "web", item);
+        const stat = fs.lstatSync(sPath);
+        if (stat.isDirectory()) {
+          copyDirPlain(sPath, dPath);
+        } else {
+          fs.mkdirSync(path.dirname(dPath), { recursive: true });
+          fs.copyFileSync(sPath, dPath);
+        }
+      }
+    } else {
+      copyDirPlain(standaloneDir, buildWebDir);
+    }
+
+    // 2. Copy static files & public assets
+    const nextStaticSrc = path.join(webDir, ".next", "static");
+    const publicSrc = path.join(webDir, "public");
+    const envSrc = path.join(webDir, ".env");
+
+    const candidateTargets = [
+      buildWebDir,
+      path.join(buildWebDir, "apps", "web"),
+    ].filter((dir) => fs.existsSync(dir));
+
+    for (const target of candidateTargets) {
+      if (fs.existsSync(nextStaticSrc)) {
+        copyDirPlain(nextStaticSrc, path.join(target, ".next", "static"));
+      }
+      if (fs.existsSync(publicSrc)) {
+        copyDirPlain(publicSrc, path.join(target, "public"));
+      }
+      if (fs.existsSync(envSrc)) {
+        fs.copyFileSync(envSrc, path.join(target, ".env"));
+      }
+    }
+
+    // 3. Copy clean flat packages from .pnpm virtual store
+    const pnpmDir = path.join(standaloneDir, "node_modules", ".pnpm");
+    const targetNm = path.join(buildWebDir, "node_modules");
+    fs.mkdirSync(targetNm, { recursive: true });
+
+    if (fs.existsSync(pnpmDir)) {
+      for (const pnpmEntry of fs.readdirSync(pnpmDir)) {
+        if (pnpmEntry === "node_modules") continue;
+        const innerNm = path.join(pnpmDir, pnpmEntry, "node_modules");
+        if (fs.existsSync(innerNm)) {
+          for (const pkg of fs.readdirSync(innerNm)) {
+            const pkgPath = path.join(innerNm, pkg);
+            const stat = fs.lstatSync(pkgPath);
+            if (stat.isSymbolicLink()) continue;
+
+            if (pkg.startsWith("@") && stat.isDirectory()) {
+              for (const sPkg of fs.readdirSync(pkgPath)) {
+                const sPath = path.join(pkgPath, sPkg);
+                const sStat = fs.lstatSync(sPath);
+                if (sStat.isSymbolicLink()) continue;
+                if (sStat.isDirectory()) {
+                  copyDirPlain(sPath, path.join(targetNm, pkg, sPkg));
+                }
+              }
+            } else if (stat.isDirectory()) {
+              copyDirPlain(pkgPath, path.join(targetNm, pkg));
+            }
+          }
+        }
+      }
+    }
+  } else {
+    console.warn("   ⚠️  .next/standalone not found. Staging standard .next build...");
+    const nextSrc = path.join(webDir, ".next");
+    const publicSrc = path.join(webDir, "public");
+    const envSrc = path.join(webDir, ".env");
+    const pkgSrc = path.join(webDir, "package.json");
+
+    if (fs.existsSync(nextSrc)) copyDirPlain(nextSrc, path.join(buildWebDir, ".next"));
+    if (fs.existsSync(publicSrc)) copyDirPlain(publicSrc, path.join(buildWebDir, "public"));
+    if (fs.existsSync(envSrc)) fs.copyFileSync(envSrc, path.join(buildWebDir, ".env"));
+    if (fs.existsSync(pkgSrc)) fs.copyFileSync(pkgSrc, path.join(buildWebDir, "package.json"));
+  }
+
+  console.log("   ✓ Web runtime staged successfully (~50MB, 100% self-contained)");
+}
+
+function runElectronBuilder(builderArgs, cwd) {
   return new Promise((resolve, reject) => {
     const isWindows = process.platform === "win32";
     const cmd = isWindows ? "npx.cmd" : "npx";
-    const child = spawn(cmd, ["electron-builder", flag], {
+    const flags = Array.isArray(builderArgs) ? builderArgs : [builderArgs];
+    const child = spawn(cmd, ["electron-builder", ...flags], {
       cwd,
       stdio: ["inherit", "pipe", "pipe"],
       shell: true,
@@ -41,9 +173,8 @@ function runElectronBuilder(flag, cwd) {
       startTime = Date.now();
       frameIdx = 0;
 
-      console.log("\n📦 [7-Zip Compression in Progress]");
-      console.log("   Compressing offline Next.js server runtime and application files into the installer package.");
-      console.log("   This step takes a few minutes depending on CPU & disk speed — please wait...\n");
+      console.log("\n📦 [Packaging in Progress]");
+      console.log("   Compressing and packaging application files and Next.js runtime into the installer package...\n");
 
       renderSpinner();
       compressionTimer = setInterval(renderSpinner, 500);
@@ -134,19 +265,31 @@ async function run() {
   if (args.includes("--linux")) targets.push("linux");
   if (args.includes("--dir")) targets.push("dir");
 
+  // Determine specific architecture filters if provided
+  const archFlags = [];
+  if (args.includes("--x64")) archFlags.push("--x64");
+  if (args.includes("--ia32") || args.includes("--x32") || args.includes("--win32")) archFlags.push("--ia32");
+  if (args.includes("--arm64")) archFlags.push("--arm64");
+
   // If no explicit targets passed or --all requested
   if (targets.length === 0 || args.includes("--all")) {
-    if (hostPlatform === "win32") {
-      targets = ["win", "linux"];
-      console.log("\nℹ️  Host: Windows (Building Windows and Linux packages)");
-      console.log("ℹ️  Note: macOS (.dmg) builds require macOS hardware or GitHub Actions CI (macos-latest runner).\n");
-    } else if (hostPlatform === "darwin") {
-      targets = ["mac", "win", "linux"];
-      console.log("\nℹ️  Host: macOS (Building macOS, Windows, and Linux packages)\n");
+    if (args.includes("--all")) {
+      if (hostPlatform === "win32") {
+        targets = ["win", "linux"];
+      } else if (hostPlatform === "darwin") {
+        targets = ["mac", "win", "linux"];
+      } else {
+        targets = ["linux", "win"];
+      }
     } else {
-      targets = ["linux", "win"];
-      console.log("\nℹ️  Host: Linux (Building Linux and Windows packages)");
-      console.log("ℹ️  Note: macOS (.dmg) builds require macOS hardware or GitHub Actions CI (macos-latest runner).\n");
+      // Default to the host platform
+      if (hostPlatform === "win32") {
+        targets = ["win"];
+      } else if (hostPlatform === "darwin") {
+        targets = ["mac"];
+      } else {
+        targets = ["linux"];
+      }
     }
   }
 
@@ -159,11 +302,15 @@ async function run() {
     } catch (e) {}
   }
 
-  // 5. Package for each requested target
-  console.log("==> [3/3] Packaging desktop executables...");
+  // 5. Stage Web Runtime
+  stageWebResources();
+
+  // 6. Package for each requested target
+  console.log("\n==> [3/3] Packaging desktop executables...");
   for (const target of targets) {
     const flag = target === "dir" ? "--dir" : `--${target}`;
-    console.log(`\n── Building target: ${target.toUpperCase()} (${flag}) ──`);
+    const builderArgs = [flag, ...archFlags];
+    console.log(`\n── Building target: ${target.toUpperCase()} (${builderArgs.join(" ")}) ──`);
 
     if (target === "mac" && hostPlatform !== "darwin") {
       console.warn(`\n⚠️  Cannot package macOS target directly on ${hostPlatform}.`);
@@ -173,7 +320,7 @@ async function run() {
     }
 
     try {
-      await runElectronBuilder(flag, desktopDir);
+      await runElectronBuilder(builderArgs, desktopDir);
     } catch (err) {
       if (target === "linux" && hostPlatform === "win32") {
         console.warn("\n⚠️  Linux AppImage packaging on Windows encountered a symlink restriction.");

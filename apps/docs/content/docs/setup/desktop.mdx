@@ -55,20 +55,23 @@ pnpm --filter desktop dev
 To compile Next.js in production mode and package desktop executables for Windows, macOS, and Linux:
 
 ```bash
-# Package for all platforms (Windows, macOS, Linux)
+# Package for all platforms (Windows [x64 + x32], macOS, Linux)
 pnpm build:desktop
 
-# Or package for specific target platforms:
-pnpm build:desktop:win     # Windows (.exe)
-pnpm build:desktop:mac     # macOS (.dmg, .zip)
-pnpm build:desktop:linux   # Linux (.AppImage, .tar.gz)
+# Or package for specific target platforms & architectures:
+pnpm build:desktop:win         # Windows (both x64 and x32/ia32 setups)
+pnpm build:desktop:win:x64     # Windows (x64 setup only)
+pnpm build:desktop:win:x32     # Windows (x32/ia32 setup only)
+pnpm build:desktop:mac         # macOS (.dmg, .zip)
+pnpm build:desktop:linux       # Linux (.AppImage, .tar.gz)
 ```
 
 The packaged executables will be generated in `apps/desktop/release/`:
 ```
 apps/desktop/release/
 ├── win-unpacked/Dezign2App.exe
-├── Dezign2App-Setup-*.exe
+├── D2A Setup *-x64.exe
+├── D2A Setup *-ia32.exe
 ├── Dezign2App-*.dmg
 └── Dezign2App-*.AppImage
 ```

@@ -7,26 +7,30 @@ import fs from "fs";
 // ─────────────────────────────────────────────
 let nextUtilityProcess: UtilityProcess | null = null;
 
-export function startNextServer(port: number): Promise<number> {
+export async function startNextServer(
+  port: number,
+  onStatus?: (status: string) => void
+): Promise<number> {
+  const webAppPath = app.isPackaged
+    ? path.join(process.resourcesPath, "web")
+    : path.join(__dirname, "../../web");
+
+  const runnerPath = path.join(__dirname, "../server-runner.js");
+
+  onStatus?.("Starting internal application engine...");
+  console.log("[main] Target webAppPath:", webAppPath);
+  console.log("[main] Runner path:", runnerPath);
+  console.log("[main] Target dynamic port:", port);
+
+  if (!fs.existsSync(webAppPath)) {
+    const err = new Error(
+      `Web app bundle directory not found at: ${webAppPath}`
+    );
+    console.error("[main]", err);
+    throw err;
+  }
+
   return new Promise((resolve, reject) => {
-    const webAppPath = app.isPackaged
-      ? path.join(process.resourcesPath, "web")
-      : path.join(__dirname, "../../web");
-
-    const runnerPath = path.join(__dirname, "../server-runner.js");
-
-    console.log("[main] Target webAppPath:", webAppPath);
-    console.log("[main] Runner path:", runnerPath);
-    console.log("[main] Target dynamic port:", port);
-
-    if (!fs.existsSync(webAppPath)) {
-      const err = new Error(
-        `Web app bundle directory not found at: ${webAppPath}`
-      );
-      console.error("[main]", err);
-      return reject(err);
-    }
-
     try {
       nextUtilityProcess = utilityProcess.fork(runnerPath, [], {
         cwd: webAppPath,
@@ -41,34 +45,65 @@ export function startNextServer(port: number): Promise<number> {
       });
 
       let resolved = false;
+      let stderrAccumulator = "";
+      let fallbackTimer: NodeJS.Timeout | null = null;
 
-      const onData = (data: Buffer) => {
-        const msg = data.toString();
-        console.log("[next-server]", msg);
-        if (
-          !resolved &&
-          (msg.includes("Ready") ||
-            msg.includes("started server") ||
-            msg.includes("http://localhost"))
-        ) {
+      const finishSuccess = () => {
+        if (!resolved) {
           resolved = true;
+          if (fallbackTimer) clearTimeout(fallbackTimer);
           resolve(port);
         }
       };
 
+      const onData = (data: Buffer) => {
+        const msg = data.toString();
+        console.log("[next-server]", msg);
+        const firstLine = msg.trim().split("\n")[0];
+        if (firstLine) {
+          onStatus?.(firstLine);
+        }
+        if (
+          !resolved &&
+          (msg.includes("Ready") ||
+            msg.includes("started server") ||
+            msg.includes("Listening on") ||
+            msg.includes("http://localhost") ||
+            msg.includes("http://127.0.0.1") ||
+            msg.includes("Local:") ||
+            msg.includes("Network:"))
+        ) {
+          finishSuccess();
+        }
+      };
+
+      const onErrorData = (data: Buffer) => {
+        const msg = data.toString();
+        console.error("[next-server:err]", msg);
+        stderrAccumulator += msg;
+      };
+
       nextUtilityProcess.stdout?.on("data", onData);
-      nextUtilityProcess.stderr?.on("data", onData);
+      nextUtilityProcess.stderr?.on("data", onErrorData);
 
       nextUtilityProcess.on("exit", (code) => {
         console.log("[next-server] Process exited with code:", code);
-      });
-
-      // Fallback: resolve after 3s so UI displays
-      setTimeout(() => {
         if (!resolved) {
           resolved = true;
-          resolve(port);
+          if (fallbackTimer) clearTimeout(fallbackTimer);
+          reject(
+            new Error(
+              `Next.js server exited unexpectedly with code ${code}.\n${
+                stderrAccumulator ? `Errors:\n${stderrAccumulator}` : ""
+              }`
+            )
+          );
         }
+      });
+
+      // Fallback: if server doesn't print explicit Ready but stays running, resolve after 3s
+      fallbackTimer = setTimeout(() => {
+        finishSuccess();
       }, 3000);
     } catch (err) {
       console.error("[main] Failed to fork utilityProcess:", err);
@@ -87,3 +122,4 @@ export function stopNextServer(): void {
     nextUtilityProcess = null;
   }
 }
+

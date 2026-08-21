@@ -185,13 +185,15 @@ New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
 #### Build commands
 
 ```bash
-# Builds Next.js + packages Electron for all platforms (Windows, macOS, Linux)
+# Builds Next.js + packages Electron for all platforms (Windows [x64 + x32], macOS, Linux)
 pnpm build:desktop
 
-# Or target specific platforms:
-pnpm build:desktop:win     # Windows (.exe portable + NSIS)
-pnpm build:desktop:mac     # macOS (.dmg + .zip)
-pnpm build:desktop:linux   # Linux (.AppImage + .tar.gz)
+# Or target specific platforms & architectures:
+pnpm build:desktop:win         # Windows (both x64 and x32/ia32 setups)
+pnpm build:desktop:win:x64     # Windows (x64 setup only)
+pnpm build:desktop:win:x32     # Windows (x32/ia32 setup only)
+pnpm build:desktop:mac         # macOS (.dmg + .zip)
+pnpm build:desktop:linux       # Linux (.AppImage + .tar.gz)
 ```
 
 Output location:
@@ -200,7 +202,8 @@ Output location:
 apps/desktop/release/
 ├── win-unpacked/
 │   └── Dezign2App.exe        ← Windows portable executable (~180 MB)
-├── Dezign2App-Setup-*.exe    ← Windows NSIS installer
+├── D2A Setup *-x64.exe       ← Windows 64-bit NSIS installer
+├── D2A Setup *-ia32.exe      ← Windows 32-bit (x32) NSIS installer
 ├── Dezign2App-*.dmg          ← macOS installer
 ├── Dezign2App-*.mac.zip      ← macOS zip bundle
 ├── Dezign2App-*.AppImage     ← Linux AppImage executable
@@ -219,9 +222,10 @@ git push origin v1.0.0
 
 This triggers [`.github/workflows/release-desktop.yml`](.github/workflows/release-desktop.yml) and attaches:
 
-| File | Platform |
-| :--- | :------- |
-| `Dezign2App-Setup-1.0.0.exe` | Windows (NSIS installer) |
+| File | Platform / Arch |
+| :--- | :-------------- |
+| `D2A Setup *-x64.exe` | Windows x64 (64-bit NSIS installer) |
+| `D2A Setup *-ia32.exe` | Windows x32 (32-bit NSIS installer) |
 | `Dezign2App-1.0.0.dmg` | macOS |
 | `Dezign2App-1.0.0.AppImage` | Linux |
 
