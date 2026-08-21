@@ -102,29 +102,14 @@ export default async function proxy(req: NextRequest) {
     }
   }
 
-  // 1. If user is signed in and tries to access auth pages, send them to redirect_url or /projects
-  if (isSignedIn && isAuthRoute(req)) {
-    // If user is accessing /auth/desktop, allow them through to generate the desktop token!
-    if (req.nextUrl.pathname.startsWith("/auth/desktop")) {
-      return NextResponse.next();
-    }
-    const redirectUrl =
-      req.nextUrl.searchParams.get("redirect_url") ||
-      req.nextUrl.searchParams.get("fallback_redirect_url");
-    if (redirectUrl) {
-      try {
-        const targetUrl = new URL(redirectUrl, req.url);
-        return NextResponse.redirect(targetUrl);
-      } catch {
-        const normalized = redirectUrl.startsWith("/") ? redirectUrl : `/${redirectUrl}`;
-        return NextResponse.redirect(new URL(normalized, req.url));
-      }
-    }
-    return NextResponse.redirect(new URL("/projects", req.url));
+  // Allow auth routes to render without server-side redirect loops
+  // Client-side useSession() handles navigation once authenticated
+  if (isAuthRoute(req)) {
+    return NextResponse.next();
   }
 
-  // 2. Protect non-public routes
-  if (!isPublicRoute(req) && !isAuthRoute(req) && !isSignedIn) {
+  // 2. Protect non-public routes for unauthenticated users
+  if (!isPublicRoute(req) && !isSignedIn) {
     const signInUrl = new URL("/sign-in", req.url);
     signInUrl.searchParams.set("redirect_url", req.nextUrl.pathname + req.nextUrl.search);
     return NextResponse.redirect(signInUrl);
