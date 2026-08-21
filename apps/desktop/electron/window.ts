@@ -64,21 +64,83 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     }
   );
 
+  const loadWithRetry = async (
+    targetUrl: string,
+    maxRetries: number = 8,
+    delayMs: number = 1000
+  ): Promise<void> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      try {
+        console.log(`[window] Loading ${targetUrl} (attempt ${attempt}/${maxRetries})...`);
+        await mainWindow.loadURL(targetUrl);
+        return;
+      } catch (err: any) {
+        console.warn(
+          `[window] Attempt ${attempt}/${maxRetries} failed to load ${targetUrl}:`,
+          err?.message
+        );
+        if (attempt === maxRetries) {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.loadURL(
+              `data:text/html;charset=utf-8,${encodeURIComponent(`
+                <!DOCTYPE html>
+                <html>
+                  <head>
+                    <title>Dezign2App - Connection Failed</title>
+                    <style>
+                      body {
+                        margin: 0;
+                        height: 100vh;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        background-color: #0d1117;
+                        color: #e6edf3;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                        padding: 24px;
+                        box-sizing: border-box;
+                        text-align: center;
+                      }
+                      .icon { font-size: 40px; margin-bottom: 16px; }
+                      h2 { font-size: 20px; font-weight: 600; margin: 0 0 10px 0; color: #f87171; }
+                      p { color: #8b949e; margin: 0 0 24px 0; font-size: 13px; max-width: 480px; line-height: 1.5; }
+                      .btn {
+                        background-color: #38bdf8;
+                        color: #0d1117;
+                        border: none;
+                        padding: 10px 22px;
+                        font-size: 13px;
+                        font-weight: 600;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        transition: opacity 0.2s;
+                      }
+                      .btn:hover { opacity: 0.9; }
+                    </style>
+                  </head>
+                  <body>
+                    <div class="icon">⚠️</div>
+                    <h2>Application Service Unavailable</h2>
+                    <p>Could not connect to the internal workspace engine at <code>${targetUrl}</code>. Please click Retry to reconnect.</p>
+                    <button class="btn" onclick="window.location.href='${targetUrl}'">Retry Connection</button>
+                  </body>
+                </html>
+              `)}`
+            );
+          }
+          return;
+        }
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  };
+
   // Directly navigate to /projects (bypassing landing/pricing/marketing pages)
   if (IS_DEV) {
-    const loadDevUrl = async () => {
-      try {
-        await mainWindow?.loadURL(`${DEV_SERVER_URL}/projects`);
-      } catch (err: any) {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          console.log("[window] Retrying dev load in 1s...");
-          setTimeout(() => {
-            mainWindow?.loadURL(`${DEV_SERVER_URL}/projects`).catch(() => {});
-          }, 1000);
-        }
-      }
-    };
-    loadDevUrl();
+    const devUrl = DEV_SERVER_URL.replace("localhost", "127.0.0.1");
+    loadWithRetry(`${devUrl}/projects`, 12, 1200);
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     // Show smooth startup splash while local server initializes
@@ -100,25 +162,33 @@ export async function createMainWindow(): Promise<BrowserWindow> {
                 color: #e6edf3;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                 user-select: none;
+                padding: 24px;
+                box-sizing: border-box;
               }
               .spinner {
-                width: 36px;
-                height: 36px;
-                border: 3px solid rgba(255,255,255,0.1);
+                width: 40px;
+                height: 40px;
+                border: 3px solid rgba(255,255,255,0.08);
                 border-top-color: #38bdf8;
                 border-radius: 50%;
                 animation: spin 0.8s linear infinite;
-                margin-bottom: 20px;
+                margin-bottom: 24px;
               }
               @keyframes spin { to { transform: rotate(360deg); } }
-              h2 { font-weight: 500; font-size: 18px; margin: 0 0 6px 0; }
-              p { color: #8b949e; margin: 0; font-size: 13px; }
+              h2 { font-weight: 500; font-size: 19px; margin: 0 0 8px 0; }
+              p { color: #8b949e; margin: 0; font-size: 13px; max-width: 450px; text-align: center; line-height: 1.4; }
             </style>
           </head>
           <body>
             <div class="spinner"></div>
             <h2>Starting Dezign2App</h2>
-            <p>Initializing workspace...</p>
+            <p id="status-text">Initializing workspace...</p>
+            <script>
+              window.setStatus = (text) => {
+                const el = document.getElementById("status-text");
+                if (el) el.textContent = text;
+              };
+            </script>
           </body>
         </html>
       `)}`
@@ -126,9 +196,19 @@ export async function createMainWindow(): Promise<BrowserWindow> {
 
     const targetPort = await getAvailablePort(DEFAULT_PORT);
 
-    startNextServer(targetPort)
+    const updateStatus = (text: string) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents
+          .executeJavaScript(
+            `if (window.setStatus) window.setStatus(${JSON.stringify(text)});`
+          )
+          .catch(() => {});
+      }
+    };
+
+    startNextServer(targetPort, updateStatus)
       .then((port) => {
-        mainWindow?.loadURL(`http://localhost:${port}/projects`);
+        loadWithRetry(`http://127.0.0.1:${port}/projects`, 8, 1000);
       })
       .catch((err) => {
         dialog.showErrorBox(

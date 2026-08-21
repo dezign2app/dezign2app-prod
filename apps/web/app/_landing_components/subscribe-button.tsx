@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
 import { useSearchParams, useRouter } from "next/navigation";
+import { isElectron, getElectronAPI } from "@/lib/electron";
 
 interface SubscribeButtonProps {
   productId: string;
@@ -35,6 +36,16 @@ export const SubscribeButton = ({ productId }: SubscribeButtonProps) => {
       if (!response.ok) {
         if (response.status === 401) {
           toast.error("Please sign in to continue.");
+          if (isElectron()) {
+            const webBaseUrl =
+              process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500";
+            const pricingUrl = `${webBaseUrl}/pricing`;
+            const api = getElectronAPI();
+            if (api?.auth) {
+              api.auth.openBrowserLogin(pricingUrl);
+              return;
+            }
+          }
           router.push(`/sign-in?redirect_url=${encodeURIComponent("/pricing?checkout=true")}`);
           return;
         }
@@ -44,6 +55,14 @@ export const SubscribeButton = ({ productId }: SubscribeButtonProps) => {
       const { checkoutUrl } = await response.json();
 
       if (checkoutUrl) {
+        if (isElectron()) {
+          const api = getElectronAPI();
+          if (api?.auth) {
+            api.auth.openBrowserLogin(checkoutUrl);
+            toast.success("Opened checkout in your browser!");
+            return;
+          }
+        }
         window.location.href = checkoutUrl;
       }
     } catch (error) {
@@ -75,15 +94,29 @@ export const SubscribeButton = ({ productId }: SubscribeButtonProps) => {
   }
 
   if (!isSignedIn) {
-    const currentUrl =
-      typeof window !== "undefined" ? window.location.href : "/pricing";
-    const redirectUrl = currentUrl.includes("?")
-      ? `${currentUrl}&checkout=true`
-      : `${currentUrl}?checkout=true`;
+    const handleUnauthenticatedClick = () => {
+      if (isElectron()) {
+        const webBaseUrl =
+          process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500";
+        const pricingUrl = `${webBaseUrl}/pricing`;
+        const api = getElectronAPI();
+        if (api?.auth) {
+          api.auth.openBrowserLogin(pricingUrl);
+          return;
+        }
+      }
+      const currentUrl =
+        typeof window !== "undefined" ? window.location.href : "/pricing";
+      const redirectUrl = currentUrl.includes("?")
+        ? `${currentUrl}&checkout=true`
+        : `${currentUrl}?checkout=true`;
+
+      router.push(`/sign-in?redirect_url=${encodeURIComponent(redirectUrl)}`);
+    };
 
     return (
       <button
-        onClick={() => router.push(`/sign-in?redirect_url=${encodeURIComponent(redirectUrl)}`)}
+        onClick={handleUnauthenticatedClick}
         className={buttonStyle}
         style={{ fontFamily: "'DM Sans', sans-serif" }}
       >

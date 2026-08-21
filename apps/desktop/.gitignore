@@ -1,4 +1,5 @@
 dist-electron/
 release/
+build-web/
 .next/
 node_modules/

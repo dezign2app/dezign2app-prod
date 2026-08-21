@@ -78,22 +78,25 @@ pnpm desktop:dev
 # Builds Next.js production bundle and packages for all platforms
 pnpm build:desktop
 
-# Or package for a specific platform:
-pnpm build:desktop:win     # Windows
-pnpm build:desktop:mac     # macOS
-pnpm build:desktop:linux   # Linux
+# Or package for a specific platform & architecture:
+pnpm build:desktop:win         # Windows (both x64 and x32/ia32 setups)
+pnpm build:desktop:win:x64     # Windows (x64 setup only)
+pnpm build:desktop:win:x32     # Windows (x32/ia32 setup only)
+pnpm build:desktop:mac         # macOS
+pnpm build:desktop:linux       # Linux
 ```
 
 Output directory:
 ```
 apps/desktop/release/
 ├── win-unpacked/
-│   └── Dezign2App.exe   # Portable self-contained Windows executable
-├── Dezign2App-Setup-*.exe # Windows NSIS installer
-├── Dezign2App-*.dmg       # macOS DMG installer
-├── Dezign2App-*.mac.zip   # macOS zip archive
-├── Dezign2App-*.AppImage  # Linux AppImage
-└── Dezign2App-*.tar.gz    # Linux tarball
+│   └── Dezign2App.exe          # Portable self-contained Windows executable
+├── D2A Setup *-x64.exe         # Windows 64-bit NSIS installer
+├── D2A Setup *-ia32.exe        # Windows 32-bit (x32) NSIS installer
+├── Dezign2App-*.dmg            # macOS DMG installer
+├── Dezign2App-*.mac.zip        # macOS zip archive
+├── Dezign2App-*.AppImage       # Linux AppImage
+└── Dezign2App-*.tar.gz         # Linux tarball
 ```
 
 ---

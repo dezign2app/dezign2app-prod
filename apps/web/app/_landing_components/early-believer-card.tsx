@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Minus, Plus, Info } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { isElectron, getElectronAPI } from "@/lib/electron";
 
 function CheckCircle() {
   return (
@@ -72,12 +73,31 @@ export function EarlyBelieverCard() {
       if (!response.ok) {
         if (response.status === 401) {
           toast.error("Please sign in to continue.");
+          if (isElectron()) {
+            const webBaseUrl =
+              process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500";
+            const pricingUrl = `${webBaseUrl}/#pricing`;
+            const api = getElectronAPI();
+            if (api?.auth) {
+              api.auth.openBrowserLogin(pricingUrl);
+              return;
+            }
+          }
+          router.push("/sign-in?redirect_url=/#pricing");
           return;
         }
         throw new Error(data.error || "Checkout failed");
       }
 
       if (data.checkoutUrl) {
+        if (isElectron()) {
+          const api = getElectronAPI();
+          if (api?.auth) {
+            api.auth.openBrowserLogin(data.checkoutUrl);
+            toast.success("Opened checkout in your browser!");
+            return;
+          }
+        }
         window.location.href = data.checkoutUrl;
       } else {
         throw new Error("No checkout URL received");
@@ -222,7 +242,19 @@ export function EarlyBelieverCard() {
         </button>
       ) : !isSignedIn ? (
         <button
-          onClick={() => router.push("/sign-in?redirect_url=/#pricing")}
+          onClick={() => {
+            if (isElectron()) {
+              const webBaseUrl =
+                process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500";
+              const pricingUrl = `${webBaseUrl}/#pricing`;
+              const api = getElectronAPI();
+              if (api?.auth) {
+                api.auth.openBrowserLogin(pricingUrl);
+                return;
+              }
+            }
+            router.push("/sign-in?redirect_url=/#pricing");
+          }}
           className={buttonStyle}
           style={{ fontFamily: "'DM Sans', sans-serif" }}
         >

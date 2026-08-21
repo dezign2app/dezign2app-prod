@@ -175,17 +175,17 @@ export const SignInView = () => {
     }
   };
 
-  // If running inside Desktop app: Render clean shadcn authentication card with browser redirect
+  // If running inside Desktop app: Render clean shadcn authentication card with ONLY browser authentication
   if (inDesktop) {
     return (
-      <div className="flex w-full items-center justify-center p-4 min-h-[500px]">
+      <div className="flex w-full items-center justify-center p-4 min-h-[400px]">
         <Card className="w-full max-w-md border-border bg-card text-card-foreground shadow-xl">
-          <CardHeader className="text-center pb-4">
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-sm">
-              <Laptop className="h-7 w-7" />
+          <CardHeader className="text-center pb-4 pt-6">
+            <div className="mx-auto mb-2.5 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-sm">
+              <Laptop className="h-6 w-6" />
             </div>
 
-            <div className="flex justify-center mb-1.5">
+            <div className="flex justify-center mb-1">
               <Badge variant="secondary" className="gap-1 px-2.5 py-0.5 text-xs font-normal">
                 Desktop Workspace
               </Badge>
@@ -194,30 +194,13 @@ export const SignInView = () => {
             <CardTitle className="text-2xl font-bold tracking-tight">
               Sign In to Dezign2App
             </CardTitle>
-            <CardDescription className="text-muted-foreground text-sm">
-              Authenticate via your default web browser to sync your system design diagrams, AI workflows, and cloud storage.
+            <CardDescription className="text-muted-foreground text-xs">
+              Connect your account to sync system designs, AI workflows, and workspaces.
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-4 pt-0">
-            <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 p-3 text-left">
-              <ShieldCheck className="h-5 w-5 text-primary shrink-0" />
-              <div className="text-xs text-muted-foreground">
-                <span className="font-medium text-foreground block">
-                  Secure Browser Sign-In
-                </span>
-                Supports Google, GitHub, Email, Passkeys & 2FA.
-              </div>
-            </div>
-
-            {error && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive text-center">
-                {error}
-              </div>
-            )}
-          </CardContent>
-
-          <CardFooter className="flex flex-col gap-3 pt-0">
+          <CardContent className="space-y-3 pt-0 pb-6">
+            {/* Primary Browser Sign-In */}
             <Button
               onClick={handleBrowserLogin}
               size="lg"
@@ -236,19 +219,25 @@ export const SignInView = () => {
                 </>
               ) : (
                 <>
-                  Continue in Browser
+                  Continue with Web Browser
                   <ExternalLink className="h-4 w-4" />
                 </>
               )}
             </Button>
 
+            {error && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive text-center">
+                {error}
+              </div>
+            )}
+
             {waitingForAuth && !isExchanging && (
               <form
                 onSubmit={handleManualSubmit}
-                className="w-full pt-3 border-t border-border mt-1 flex flex-col gap-2 text-left animate-in fade-in duration-200"
+                className="w-full p-2.5 rounded-lg border border-border bg-muted/30 flex flex-col gap-2 text-left animate-in fade-in duration-200"
               >
                 <label className="text-[11px] text-muted-foreground flex items-center gap-1">
-                  <KeyRound className="h-3 w-3" /> Or paste sign-in code from browser:
+                  <KeyRound className="h-3 w-3 text-primary" /> Paste sign-in code from browser:
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -268,7 +257,7 @@ export const SignInView = () => {
                 </div>
               </form>
             )}
-          </CardFooter>
+          </CardContent>
         </Card>
       </div>
     );
