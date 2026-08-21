@@ -1,22 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 
 function createRouteMatcher(patterns: string[]) {
-  const regexes = patterns.map((pattern) => {
-    const regexStr = pattern
-      .replace(/[.+?^${}()|[\]\\]/g, (match) => {
-        if (match === "(" || match === ")" || match === "." || match === "*") {
-          return match;
-        }
-        return `\\${match}`;
-      })
-      .replace(/\(\.\*\)/g, ".*")
-      .replace(/\*/g, ".*");
-    return new RegExp(`^${regexStr}`);
-  });
-
   return (req: NextRequest) => {
     const pathname = req.nextUrl.pathname;
-    return regexes.some((regex) => regex.test(pathname));
+    return patterns.some((pattern) => {
+      if (pattern === "/") {
+        return pathname === "/";
+      }
+      const cleanPattern = pattern.replace(/\(\.\*\)/g, "").replace(/\*$/, "");
+      if (pattern.includes(".*") || pattern.includes("*")) {
+        return pathname === cleanPattern || pathname.startsWith(cleanPattern);
+      }
+      return pathname === pattern;
+    });
   };
 }
 
@@ -39,6 +35,7 @@ const isPublicRoute = createRouteMatcher([
   "/changelog(.*)",
   "/integrations(.*)",
   "/early-believer(.*)",
+  "/auth/desktop(.*)",
   "/robots.txt",
   "/sitemap.xml",
   "/favicon.ico",
@@ -66,7 +63,11 @@ const isExcludedDesktopRoute = createRouteMatcher([
   "/early-believer(.*)",
 ]);
 
-const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
+const isAuthRoute = createRouteMatcher([
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/auth/desktop(.*)",
+]);
 
 const isIgnoredRoute = createRouteMatcher([
   "/api/inngest(.*)",
@@ -85,11 +86,6 @@ export default async function proxy(req: NextRequest) {
     req.headers.get("x-electron-app") === "1" ||
     req.cookies.get("is_electron")?.value === "1";
 
-  // If in Electron and trying to access marketing/landing/public pages, redirect directly to /projects
-  if (isElectron && isExcludedDesktopRoute(req)) {
-    return NextResponse.redirect(new URL("/projects", req.url));
-  }
-
   const sessionToken =
     req.cookies.get("better-auth.session_token")?.value ||
     req.cookies.get("__Secure-better-auth.session_token")?.value ||
@@ -97,13 +93,32 @@ export default async function proxy(req: NextRequest) {
 
   const isSignedIn = !!sessionToken;
 
+  // If in Electron and trying to access marketing/landing/public pages, redirect directly to /projects or /sign-in
+  if (isElectron && isExcludedDesktopRoute(req)) {
+    if (isSignedIn) {
+      return NextResponse.redirect(new URL("/projects", req.url));
+    } else {
+      return NextResponse.redirect(new URL("/sign-in", req.url));
+    }
+  }
+
   // 1. If user is signed in and tries to access auth pages, send them to redirect_url or /projects
   if (isSignedIn && isAuthRoute(req)) {
+    // If user is accessing /auth/desktop, allow them through to generate the desktop token!
+    if (req.nextUrl.pathname.startsWith("/auth/desktop")) {
+      return NextResponse.next();
+    }
     const redirectUrl =
       req.nextUrl.searchParams.get("redirect_url") ||
       req.nextUrl.searchParams.get("fallback_redirect_url");
     if (redirectUrl) {
-      return NextResponse.redirect(new URL(redirectUrl, req.url));
+      try {
+        const targetUrl = new URL(redirectUrl, req.url);
+        return NextResponse.redirect(targetUrl);
+      } catch {
+        const normalized = redirectUrl.startsWith("/") ? redirectUrl : `/${redirectUrl}`;
+        return NextResponse.redirect(new URL(normalized, req.url));
+      }
     }
     return NextResponse.redirect(new URL("/projects", req.url));
   }

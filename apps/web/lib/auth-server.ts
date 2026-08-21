@@ -27,7 +27,8 @@ export interface ServerSession {
   session?: {
     id?: string;
     userId: string;
-    expiresAt?: Date;
+    token?: string;
+    expiresAt?: Date | string | number;
   };
 }
 

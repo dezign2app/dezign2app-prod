@@ -45,21 +45,49 @@ export const createProject = mutation({
 });
 
 export const getProjectsByOrganization = query({
-  args: { paginationOpts: paginationOptsValidator },
+  args: {
+    paginationOpts: paginationOptsValidator,
+    userEmail: v.optional(v.string()),
+  },
   async handler(ctx, args) {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({
-        code: "UNAUTHORIZED",
-        message: "Not authenticated",
-      });
+    const userOrgId = identity?.org_id?.toString();
+    const userId = identity?.subject;
+
+    if (userOrgId) {
+      return await ctx.db
+        .query("projects")
+        .withIndex("by_organization", (q) => q.eq("organizationId", userOrgId))
+        .order("desc")
+        .paginate(args.paginationOpts);
     }
 
-    const userOrgId = identity.org_id?.toString();
+    if (userId) {
+      return await ctx.db
+        .query("projects")
+        .withIndex("by_creator", (q) => q.eq("createdBy", userId))
+        .order("desc")
+        .paginate(args.paginationOpts);
+    }
+
+    if (args.userEmail) {
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", args.userEmail!))
+        .first();
+
+      if (user?.authId) {
+        return await ctx.db
+          .query("projects")
+          .withIndex("by_creator", (q) => q.eq("createdBy", user.authId!))
+          .order("desc")
+          .paginate(args.paginationOpts);
+      }
+    }
 
     const projects = await ctx.db
       .query("projects")
-      .withIndex("by_organization", (q) => q.eq("organizationId", userOrgId))
+      .withIndex("by_organization", (q) => q.eq("organizationId", undefined))
       .order("desc")
       .paginate(args.paginationOpts);
 

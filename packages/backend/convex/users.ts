@@ -2,16 +2,19 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 export const getSubscriptionStatus = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    email: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity || !identity.email) {
+    const userEmail = identity?.email || args.email;
+    if (!userEmail) {
       return { status: "unauthenticated" };
     }
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_email", (q) => q.eq("email", identity.email!))
+      .withIndex("by_email", (q) => q.eq("email", userEmail))
       .first();
 
     if (!user) {

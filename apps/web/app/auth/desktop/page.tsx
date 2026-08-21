@@ -26,31 +26,32 @@ export default function DesktopAuthSuccessPage() {
 
   useEffect(() => {
     async function generateTicket() {
-      if (isSignedIn) {
-        try {
-          const res = await createDesktopSignInToken();
-          if (res?.token) {
-            setTicket(res.token);
-            const targetUrl = `dezign2app://auth?ticket=${encodeURIComponent(
-              res.token
-            )}`;
-            setDeepLink(targetUrl);
+      try {
+        setLoading(true);
+        const res = await createDesktopSignInToken();
+        if (res?.token) {
+          setTicket(res.token);
+          const targetUrl = `dezign2app://auth?ticket=${encodeURIComponent(
+            res.token
+          )}`;
+          setDeepLink(targetUrl);
 
-            // Automatically open desktop app
+          // Automatically open desktop app
+          try {
             window.location.href = targetUrl;
-          }
-        } catch (err) {
-          console.error("Failed to create desktop sign in token:", err);
-        } finally {
-          setLoading(false);
+          } catch (e) {}
         }
+      } catch (err) {
+        console.error("Failed to create desktop sign in token:", err);
+      } finally {
+        setLoading(false);
       }
     }
 
     if (isLoaded) {
       generateTicket();
     }
-  }, [isSignedIn, isLoaded]);
+  }, [isLoaded]);
 
   const handleCopy = () => {
     if (!ticket) return;

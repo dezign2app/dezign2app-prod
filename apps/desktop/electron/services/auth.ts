@@ -32,11 +32,14 @@ export function registerProtocolClient(): void {
  * Handles incoming auth deep links (dezign2app://...).
  */
 export function handleAuthUrl(urlStr: string): void {
-  if (!urlStr || !urlStr.startsWith(`${PROTOCOL_SCHEME}://`)) return;
-  console.log("[main] Received auth deep link:", urlStr);
+  if (!urlStr) return;
+  const match = urlStr.match(/dezign2app:\/\/[^\s"']+/i);
+  if (!match) return;
+  const cleanUrl = match[0].replace(/\/$/, "");
+  console.log("[main] Received auth deep link:", cleanUrl);
 
   try {
-    const urlObj = new URL(urlStr);
+    const urlObj = new URL(cleanUrl);
     const token = urlObj.searchParams.get("token") || undefined;
     const ticket = urlObj.searchParams.get("ticket") || undefined;
 
@@ -44,11 +47,12 @@ export function handleAuthUrl(urlStr: string): void {
     mainWindow?.webContents.send("auth:callback", {
       token,
       ticket,
-      rawUrl: urlStr,
+      rawUrl: cleanUrl,
     });
 
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
       mainWindow.focus();
     }
   } catch (err) {
@@ -61,10 +65,10 @@ export function handleAuthUrl(urlStr: string): void {
  */
 export function handleInitialDeepLink(): void {
   const initialDeepLink = process.argv.find((arg) =>
-    arg.startsWith(`${PROTOCOL_SCHEME}://`)
+    arg.toLowerCase().includes("dezign2app://")
   );
   if (initialDeepLink) {
-    setTimeout(() => handleAuthUrl(initialDeepLink), 1500);
+    setTimeout(() => handleAuthUrl(initialDeepLink), 1000);
   }
 }
 

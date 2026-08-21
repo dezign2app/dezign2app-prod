@@ -177,7 +177,7 @@ export const Intro = () => {
         >
           <Link
             href="/sign-up"
-            className="bg-[#0B0E14] hover:bg-[#1A1F2B] text-white text-sm font-medium px-6 py-3 rounded-lg transition-all shadow-sm hover:shadow-md flex items-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5B4FE0]"
+            className="bg-[#0B0E14] hover:bg-[#1A1F2B] text-white text-sm font-medium px-6 py-3 rounded-lg transition-all shadow-sm hover:shadow-md flex items-center gap-2 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-[#5B4FE0]"
           >
             Get started <ArrowRight className="w-4 h-4" />
           </Link>

@@ -21,11 +21,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       token: ticketData.token,
       userId: ticketData.userId,
       success: true,
     });
+
+    response.cookies.set("better-auth.session_token", ticketData.token, {
+      path: "/",
+      maxAge: 30 * 24 * 60 * 60,
+      sameSite: "lax",
+      httpOnly: false,
+    });
+    response.cookies.set("is_electron", "1", {
+      path: "/",
+      maxAge: 30 * 24 * 60 * 60,
+      sameSite: "lax",
+      httpOnly: false,
+    });
+
+    return response;
   } catch (error) {
     console.error("[Desktop Auth Exchange] Error:", error);
     return NextResponse.json(
