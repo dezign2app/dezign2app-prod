@@ -11,7 +11,7 @@ export const APP_USER_MODEL_ID = "com.dezign2app.desktop";
 export const PROTOCOL_SCHEME = "dezign2app";
 
 export const DEV_SERVER_URL =
-  process.env.ELECTRON_DEV_URL || "http://localhost:46500";
+  process.env.ELECTRON_DEV_URL || "http://127.0.0.1:46500";
 export const IS_DEV = !app.isPackaged;
 export const DEFAULT_PORT = 46500;
 

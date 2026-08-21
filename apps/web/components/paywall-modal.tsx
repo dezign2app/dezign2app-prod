@@ -76,7 +76,7 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
   const isSignedIn = !!session?.user;
   const subscriptionStatus = useQuery(
     api.users.getSubscriptionStatus,
-    session?.user?.email ? { email: session.user.email } : {},
+    session?.user?.email ? { email: session.user.email } : "skip",
   );
 
   const [isPaywallActive, setIsPaywallActive] = useState(false);

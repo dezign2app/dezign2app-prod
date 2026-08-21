@@ -113,11 +113,7 @@ export const AuthenticatedProvider = ({
 
   React.useEffect(() => {
     if (!isPending && !session?.user) {
-      if (typeof window !== "undefined") {
-        window.location.href = "/sign-in";
-      } else {
-        router.replace("/sign-in");
-      }
+      router.replace("/sign-in");
     }
   }, [session, isPending, router]);
 
