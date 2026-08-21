@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useSession } from "@/lib/auth-client";
 import { createDesktopSignInToken } from "@/app/(auth)/_components/actions";
 import {
   Card,
@@ -16,7 +16,9 @@ import { Badge } from "@workspace/ui/components/badge";
 import { CheckCircle2, Laptop, ExternalLink, Copy, Check } from "lucide-react";
 
 export default function DesktopAuthSuccessPage() {
-  const { isSignedIn, isLoaded } = useAuth();
+  const { data: session, isPending } = useSession();
+  const isSignedIn = !!session?.user;
+  const isLoaded = !isPending;
   const [ticket, setTicket] = useState<string | null>(null);
   const [deepLink, setDeepLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);

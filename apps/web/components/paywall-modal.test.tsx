@@ -14,6 +14,13 @@ vi.mock("next/navigation", () => ({
   usePathname: vi.fn(),
 }));
 
+vi.mock("@/lib/auth-client", () => ({
+  useSession: vi.fn(() => ({
+    data: { user: { id: "user_123", email: "user@example.com" } },
+    isPending: false,
+  })),
+}));
+
 describe("PaywallModal", () => {
   const mockPush = vi.fn();
 
@@ -40,7 +47,7 @@ describe("PaywallModal", () => {
     expect(screen.queryByText("Subscription Expired")).not.toBeInTheDocument();
   });
 
-  it("redirects to pricing when user has no subscription on a required route", () => {
+  it("shows modal when user has no subscription on a required route", () => {
     vi.mocked(useQuery).mockReturnValue({ status: "no_subscription" });
 
     render(
@@ -49,8 +56,10 @@ describe("PaywallModal", () => {
       </PaywallModal>,
     );
 
-    expect(mockPush).toHaveBeenCalledWith("/pricing");
-    expect(screen.queryByTestId("child")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Active Subscription Required"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("View Plans & Upgrade")).toBeInTheDocument();
   });
 
   it("shows non-dismissible modal when subscription is inactive on a required route", () => {
@@ -63,11 +72,12 @@ describe("PaywallModal", () => {
     );
 
     expect(screen.getByText("Subscription Expired")).toBeInTheDocument();
-    expect(screen.getByText("Resubscribe Now")).toBeInTheDocument();
+    expect(screen.getByText("View Plans & Upgrade")).toBeInTheDocument();
     // It should NOT have the dismiss option
     expect(
       screen.queryByText("Continue in View-Only Mode"),
     ).not.toBeInTheDocument();
+    expect(screen.getByText("Return to Workspace")).toBeInTheDocument();
   });
 
   it("renders children immediately on a free route like /admin", () => {

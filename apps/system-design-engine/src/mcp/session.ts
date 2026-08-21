@@ -32,7 +32,7 @@ export interface Session {
   orgId?: string;
   keyId?: string;
   projectId?: string;
-  clerkToken?: string;
+  authToken?: string;
 }
 
 export async function createSession(
@@ -50,7 +50,7 @@ export async function createSession(
 
   // If the API key has a bound projectId, tools are restricted to that project only.
   const boundProjectId = auth?.projectId;
-  const boundClerkToken = auth?.token;
+  const boundAuthToken = auth?.token;
   console.log(
     `[SESSION] boundProjectId for session ${sessionId}: ${boundProjectId ?? "NONE (no project bound — tools will error)"}`,
   );
@@ -118,11 +118,11 @@ export async function createSession(
 
     const client = new ConvexHttpClient(convexUrl);
     if (
-      boundClerkToken &&
-      boundClerkToken.includes(".") &&
-      !boundClerkToken.startsWith("sk_")
+      boundAuthToken &&
+      boundAuthToken.includes(".") &&
+      !boundAuthToken.startsWith("sk_")
     ) {
-      client.setAuth(boundClerkToken);
+      client.setAuth(boundAuthToken);
     }
 
     const raw = await client.query(api.canvas.getBackendElements, {
@@ -382,7 +382,7 @@ export async function createSession(
     orgId: auth?.orgId,
     keyId: auth?.keyId,
     projectId: auth?.projectId,
-    clerkToken: auth?.token,
+    authToken: auth?.token,
   };
 }
 

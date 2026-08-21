@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { currentUser } from "@clerk/nextjs/server";
+import { getServerSession } from "@/lib/auth-server";
 import { creem } from "@/lib/creem";
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await currentUser();
+    const session = await getServerSession(request.headers);
 
-    if (!user) {
+    if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const email = user.emailAddresses[0]?.emailAddress;
+    const email = session.user.email;
     if (!email) {
       return NextResponse.json({ error: "No email found" }, { status: 400 });
     }
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
         tier: String(tier),
         seats: String(seats),
         discountPercent: String(discountPercent),
-        userId: user.id,
+        userId: session.user.id,
       },
     });
 

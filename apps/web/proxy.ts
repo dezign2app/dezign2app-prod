@@ -1,5 +1,24 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+
+function createRouteMatcher(patterns: string[]) {
+  const regexes = patterns.map((pattern) => {
+    const regexStr = pattern
+      .replace(/[.+?^${}()|[\]\\]/g, (match) => {
+        if (match === "(" || match === ")" || match === "." || match === "*") {
+          return match;
+        }
+        return `\\${match}`;
+      })
+      .replace(/\(\.\*\)/g, ".*")
+      .replace(/\*/g, ".*");
+    return new RegExp(`^${regexStr}`);
+  });
+
+  return (req: NextRequest) => {
+    const pathname = req.nextUrl.pathname;
+    return regexes.some((regex) => regex.test(pathname));
+  };
+}
 
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -24,6 +43,7 @@ const isPublicRoute = createRouteMatcher([
   "/sitemap.xml",
   "/favicon.ico",
   "/api/public(.*)",
+  "/api/auth(.*)",
 ]);
 
 const isExcludedDesktopRoute = createRouteMatcher([
@@ -52,10 +72,10 @@ const isIgnoredRoute = createRouteMatcher([
   "/api/inngest(.*)",
   "/api/ai(.*)",
   "/api/checkout(.*)",
-  "/api/auth/desktop(.*)",
+  "/api/auth(.*)",
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
+export default async function proxy(req: NextRequest) {
   // Skip authentication for ignored routes
   if (isIgnoredRoute(req)) {
     return NextResponse.next();
@@ -70,10 +90,15 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(new URL("/projects", req.url));
   }
 
-  const session = await auth();
+  const sessionToken =
+    req.cookies.get("better-auth.session_token")?.value ||
+    req.cookies.get("__Secure-better-auth.session_token")?.value ||
+    req.cookies.get("convex_jwt")?.value;
+
+  const isSignedIn = !!sessionToken;
 
   // 1. If user is signed in and tries to access auth pages, send them to redirect_url or /projects
-  if (session.userId && isAuthRoute(req)) {
+  if (isSignedIn && isAuthRoute(req)) {
     const redirectUrl =
       req.nextUrl.searchParams.get("redirect_url") ||
       req.nextUrl.searchParams.get("fallback_redirect_url");
@@ -84,10 +109,14 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   // 2. Protect non-public routes
-  if (!isPublicRoute(req) && !isAuthRoute(req) && !session.userId) {
-    return session.redirectToSignIn();
+  if (!isPublicRoute(req) && !isAuthRoute(req) && !isSignedIn) {
+    const signInUrl = new URL("/sign-in", req.url);
+    signInUrl.searchParams.set("redirect_url", req.nextUrl.pathname + req.nextUrl.search);
+    return NextResponse.redirect(signInUrl);
   }
-});
+
+  return NextResponse.next();
+}
 
 export const config = {
   matcher: [

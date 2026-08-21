@@ -1,48 +1,31 @@
 "use server";
 
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { getServerSession, getAuthToken } from "@/lib/auth-server";
+import { headers } from "next/headers";
+import { createTicket } from "@/lib/desktop-auth";
 
 export async function generateUserToken() {
-  const session = await auth();
+  const reqHeaders = await headers();
+  const session = await getServerSession(reqHeaders);
 
-  if (!session || !session.userId || !session.sessionId) {
+  if (!session?.user) {
     throw new Error("Unauthorized");
   }
 
-  const client = await clerkClient();
-
-  // Get the token for the specific session
-  // We can use a template if configured, but default JWT works for standard auth
-  const token = await client.sessions.getToken(session.sessionId, "convex");
-
-  // If the template returns an object, extract jwt. If string, execute directly.
-  let jwt = "";
-  if (token && typeof token === "object" && "jwt" in token) {
-    jwt = token.jwt;
-  } else if (typeof token === "string") {
-    jwt = token;
-  } else {
-    // Fallback to default
-    const defaultToken = await client.sessions.getToken(session.sessionId);
-    jwt = defaultToken.jwt || "";
-  }
-
-  return jwt;
+  const token = (await getAuthToken()) || session.session?.id || session.user.id;
+  return token;
 }
 
 export async function createDesktopSignInToken() {
-  const session = await auth();
+  const reqHeaders = await headers();
+  const session = await getServerSession(reqHeaders);
 
-  if (!session || !session.userId) {
+  if (!session?.user) {
     throw new Error("Unauthorized");
   }
 
-  const client = await clerkClient();
-  const signInToken = await client.signInTokens.createSignInToken({
-    userId: session.userId,
-    expiresInSeconds: 300,
-  });
+  const token = (await getAuthToken()) || session.session?.id || session.user.id;
+  const ticket = createTicket(session.user.id, token);
 
-  return { token: signInToken.token };
+  return { token: ticket };
 }
-

@@ -2,7 +2,6 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
-import { Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import {
   ArrowRight,
   FileText,
@@ -13,22 +12,6 @@ import {
   Server,
   Cpu,
 } from "lucide-react";
-
-// Two typefaces doing distinct jobs: a geometric display face for the
-// headline, and a mono face for anything that reads like the tool's own
-// output (status tags, file labels, the badge). This is deliberate — the
-// product compiles specs into code, so its UI should occasionally *look*
-// like the artifacts it produces.
-const display = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "700"],
-  variable: "--font-display",
-});
-const mono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-mono",
-});
 
 // Palette (named, not decorative): ink for text, violet for "input/spec",
 // then a semantic three-color pipeline — blue (compiling), amber
@@ -140,7 +123,7 @@ export const Intro = () => {
 
   return (
     <div
-      className={`${display.variable} ${mono.variable} w-full flex flex-col items-center bg-[#F6F7F9] text-[#0B0E14] overflow-x-hidden pb-24`}
+      className="w-full flex flex-col items-center bg-[#F6F7F9] text-[#0B0E14] overflow-x-hidden pb-24"
     >
       <section className="w-full flex flex-col items-center text-center px-4 max-w-6xl relative pt-12">
         {/* Ambient glow — quiet, single source, no competing gradients */}

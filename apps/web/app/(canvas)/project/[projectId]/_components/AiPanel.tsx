@@ -16,7 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { useAuth } from "@clerk/nextjs";
 import { useReactFlow } from "@xyflow/react";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -103,7 +102,6 @@ export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { getToken } = useAuth();
   const backendNodes = useBackendCanvasStore((state) => state.nodes);
   const backendEdges = useBackendCanvasStore((state) => state.edges);
 
@@ -202,8 +200,6 @@ export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
         backendEdges,
       );
 
-      const token = await getToken({ template: "convex" });
-
       // Get current viewport center so AI can place nodes near the user
       const viewportCenter = reactFlow.screenToFlowPosition({
         x: window.innerWidth / 2,
@@ -217,7 +213,6 @@ export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
           projectId,
           chatId: currentChatId,
           canvasStateContext,
-          token,
           viewportCenter,
         }),
       });

@@ -7,6 +7,7 @@
     "dev": "turbo dev",
     "desktop:dev": "concurrently -n web,electron -c blue,green \"pnpm --filter web dev\" \"pnpm --filter desktop dev\"",
     "build:desktop": "pnpm --filter web build && pnpm --filter desktop run build:electron",
+    "build:desktop:dir": "pnpm --filter web build && pnpm --filter desktop run build:electron:dir",
     "build:desktop:win": "pnpm --filter web build && pnpm --filter desktop run build:electron:win",
     "build:desktop:mac": "pnpm --filter web build && pnpm --filter desktop run build:electron:mac",
     "build:desktop:linux": "pnpm --filter web build && pnpm --filter desktop run build:electron:linux",
