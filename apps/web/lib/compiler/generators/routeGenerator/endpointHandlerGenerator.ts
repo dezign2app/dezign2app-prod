@@ -215,13 +215,29 @@ type ${pascalName}ErrorResponse = {
   details?: string | { formErrors: string[]; fieldErrors: Record<string, string[] | undefined> } | Record<string, string | number | boolean | null>;
 };
 
+export type ${pascalName}Request =
+  | Request<${pascalName}Params, ${pascalName}Response | ${pascalName}ErrorResponse, ${pascalName}Body, ${pascalName}Query>
+  | {
+      headers?: Record<string, string | string[] | undefined>;
+      params: ${pascalName}Params;
+      query: ${pascalName}Query;
+      body: ${pascalName}Body;
+    };
+
+export type ${pascalName}ResponseContext =
+  | Response<${pascalName}Response | ${pascalName}ErrorResponse>
+  | {
+      status: (code: number) => { json: (data: ${pascalName}Response | ${pascalName}ErrorResponse) => void };
+      json: (data: ${pascalName}Response | ${pascalName}ErrorResponse) => void;
+    };
+
 /**
  * ${ep.type || "GET"} ${path}
  * ${summary}
  */
 export async function ${handlerName}(
-  req: Request<${pascalName}Params, ${pascalName}Response | ${pascalName}ErrorResponse, ${pascalName}Body, ${pascalName}Query>,
-  res: Response<${pascalName}Response | ${pascalName}ErrorResponse>
+  req: ${pascalName}Request,
+  res: ${pascalName}ResponseContext
 ) {
   try {
     logger.info("Handling ${ep.type || "GET"} ${path}");

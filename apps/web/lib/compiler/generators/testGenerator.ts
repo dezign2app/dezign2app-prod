@@ -14,6 +14,7 @@ export function generateServiceUnitTests(
   testCases: SimulationTestCase[] = [],
 ): CompiledFile[] {
   const files: CompiledFile[] = [];
+  const pascalServiceName = toPascalCase(serviceName);
 
   if (nodeEndpoints.length === 0) {
     files.push({
@@ -24,8 +25,10 @@ import { healthHandler } from "../../src/routes/healthRoute";
 
 describe("${serviceName} Unit Test: healthRoute", () => {
   it("should return health status 200", async () => {
-    const req: any = {};
-    const res: any = {
+    const req = {
+      headers: {},
+    };
+    const res = {
       status: vi.fn().mockReturnThis(),
       json: vi.fn(),
     };
@@ -52,16 +55,17 @@ describe("${serviceName} Unit Test: healthRoute", () => {
     const method = (ep.type || "GET").toLowerCase();
     let routeFileName = deriveRouteFileName(ep, index, serviceName);
 
-
     if (usedFileNames.has(routeFileName)) {
       routeFileName = `${routeFileName}_${index + 1}`;
     }
     usedFileNames.add(routeFileName);
 
     const handlerName = `${routeFileName}Handler`;
+    const pascalName = `${pascalServiceName}${toPascalCase(routeFileName)}`;
     const rawPath = ep.name?.startsWith("/") ? ep.name : `/${ep.name || ""}`;
     const path = rawPath.replace(/\s+/g, "-");
     const expectedStatus = method === "post" ? 201 : 200;
+    const isBodyMethod = ["post", "put", "patch"].includes(method);
 
     // Match any simulation test cases defined for this endpoint
     const matchingCases = testCases.filter(
@@ -81,29 +85,34 @@ describe("${serviceName} Unit Test: healthRoute", () => {
           : "{}";
         const statusToAssert = tc.expectedStatus || expectedStatus;
 
-        const content = `import { describe, it, expect, vi } from "vitest";
+        let content = `import { describe, it, expect, vi } from "vitest";
+import type {
+  ${pascalName}Params,
+  ${pascalName}Query,
+  ${pascalName}Body,
+  ${pascalName}Response,
+} from "@workspace/types";
 import { ${handlerName} } from "../../src/routes/${routeFileName}";
 
 describe("Unit Test: ${serviceName} -> ${method.toUpperCase()} ${path} [${tc.name || "Test Case"}]", () => {
   it("should execute ${tc.name || "handler test"} and return status ${statusToAssert}", async () => {
-    const req: any = {
-      headers: ${reqHeaders},
-      params: ${reqParams},
-      query: ${reqParams},
-      body: ${reqBody},
-    };
-    const res: any = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn(),
-    };
-
-    await ${handlerName}(req, res);
-
-    expect(res.status).toHaveBeenCalledWith(${statusToAssert});
-    expect(res.json).toHaveBeenCalled();
-  });
-});
+    const headers: Record<string, string> = ${reqHeaders};
+    const params: ${pascalName}Params = ${reqParams};
+    const query: ${pascalName}Query = ${reqParams};
 `;
+        if (isBodyMethod) {
+          content += `    const body: ${pascalName}Body = ${reqBody};\n`;
+        }
+
+        content += `\n    const req = {\n      headers,\n      params,\n      query,\n`;
+        if (isBodyMethod) {
+          content += `      body,\n`;
+        }
+        content += `    };\n    const res = {\n      status: vi.fn().mockReturnThis(),\n      json: vi.fn(),\n    };\n\n`;
+        content += `    await ${handlerName}(req, res);\n\n`;
+        content += `    expect(res.status).toHaveBeenCalledWith(${statusToAssert});\n`;
+        content += `    expect(res.json).toHaveBeenCalled();\n`;
+        content += `  });\n});\n`;
 
         files.push({
           filename: testFilename,
@@ -115,29 +124,34 @@ describe("Unit Test: ${serviceName} -> ${method.toUpperCase()} ${path} [${tc.nam
       // Create a unique standalone route unit test file
       const testFilename = `tests/unit/${routeFileName}.unit.test.ts`;
 
-      const content = `import { describe, it, expect, vi } from "vitest";
+      let content = `import { describe, it, expect, vi } from "vitest";
+import type {
+  ${pascalName}Params,
+  ${pascalName}Query,
+  ${pascalName}Body,
+  ${pascalName}Response,
+} from "@workspace/types";
 import { ${handlerName} } from "../../src/routes/${routeFileName}";
 
 describe("Unit Test: ${serviceName} -> ${method.toUpperCase()} ${path}", () => {
   it("should handle ${method.toUpperCase()} ${path} correctly", async () => {
-    const req: any = {
-      headers: { "content-type": "application/json" },
-      params: {},
-      query: {},
-      body: {},
-    };
-    const res: any = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn(),
-    };
-
-    await ${handlerName}(req, res);
-
-    expect(res.status).toHaveBeenCalledWith(${expectedStatus});
-    expect(res.json).toHaveBeenCalled();
-  });
-});
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    const params: ${pascalName}Params = {};
+    const query: ${pascalName}Query = {};
 `;
+      if (isBodyMethod) {
+        content += `    const body: ${pascalName}Body = {};\n`;
+      }
+
+      content += `\n    const req = {\n      headers,\n      params,\n      query,\n`;
+      if (isBodyMethod) {
+        content += `      body,\n`;
+      }
+      content += `    };\n    const res = {\n      status: vi.fn().mockReturnThis(),\n      json: vi.fn(),\n    };\n\n`;
+      content += `    await ${handlerName}(req, res);\n\n`;
+      content += `    expect(res.status).toHaveBeenCalledWith(${expectedStatus});\n`;
+      content += `    expect(res.json).toHaveBeenCalled();\n`;
+      content += `  });\n});\n`;
 
       files.push({
         filename: testFilename,
@@ -238,7 +252,7 @@ describe("E2E Flow: ${tcName}", () => {
     // Generate individual E2E test files for each web client UI event if no custom cases exist
     webClientNodes.forEach((webNode) => {
       const webEvents = webNode.data?.events || [];
-      webEvents.forEach((ev: any, idx: number) => {
+      webEvents.forEach((ev: { id: string; name?: string; event?: string }, idx: number) => {
         const resolved = resolveLinkedEndpoint(
           webNode.id,
           ev.id,
