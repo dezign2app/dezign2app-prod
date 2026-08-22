@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Table2, Trash2, Settings } from "lucide-react";
-import { BackendNode } from "@/types/canvas";
+import { DatabaseZap, Trash2, Settings, Key, Clock, ShieldAlert, Sparkles, Layers } from "lucide-react";
+import { BackendNode, RedisHashField } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
+import { Badge } from "@workspace/ui/components/badge";
 import {
   Select,
   SelectContent,
@@ -13,13 +14,12 @@ import {
 } from "@workspace/ui/components/select";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { ColumnList } from "./ColumnList";
-import { IndexList } from "./IndexList";
-import { VectorConfig } from "./VectorConfig";
-import { DbOperationsList } from "./DbOperationsList";
+import { ColumnList } from "../entity-node/ColumnList";
+import { RedisConfig } from "../entity-node/RedisConfig";
+import { DbOperationsList } from "../entity-node/DbOperationsList";
 import { getUniqueNodeLabel } from "@workspace/canvas";
 
-export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+export const RedisSchemaNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
@@ -27,11 +27,15 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const setNodesPendingDeletion = useBackendCanvasStore(
     (s) => s.setNodesPendingDeletion,
   );
-  const [editingName, setEditingName] = useState(data.label);
+  const [editingName, setEditingName] = useState(data.label || "User_Cache");
   const [isEditingName, setIsEditingName] = useState(data.label === "");
   const [nameError, setNameError] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const nodeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setEditingName(data.label || "User_Cache");
+  }, [data.label]);
 
   useEffect(() => {
     if (isEditingName) {
@@ -39,72 +43,36 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     }
   }, [isEditingName]);
 
-  const columns = data.columns || [];
-  const indexes = data.indexes || [];
-
-  const saveName = (e?: React.FocusEvent | React.KeyboardEvent) => {
+  const saveName = (e?: React.SyntheticEvent) => {
     let finalName = editingName.trim();
     if (!finalName) {
-      if (!data.label) {
-        if (e && "relatedTarget" in e) {
-          const relatedTarget =
-            e.relatedTarget instanceof globalThis.Node ? e.relatedTarget : null;
-          if (relatedTarget && nodeRef.current?.contains(relatedTarget)) {
-            const allNodes = useBackendCanvasStore.getState().nodes;
-            const defaultName = getUniqueNodeLabel(allNodes, "Untitled_Table", "entity");
-            const latestNode = allNodes.find((n) => n.id === id);
-            if (latestNode) {
-              updateNode(id, {
-                data: { ...latestNode.data, label: defaultName },
-              });
-            }
-            setEditingName(defaultName);
-            setNameError(false);
-            setIsEditingName(false);
-            return;
-          }
-        }
+      const latestNode = useBackendCanvasStore
+        .getState()
+        .nodes.find((n) => n.id === id);
+      if (!latestNode) return;
 
-        const latestNode = useBackendCanvasStore
-          .getState()
-          .nodes.find((n) => n.id === id);
-        if (!latestNode) return;
-
-        const latestCols = latestNode.data.columns || [];
-        const latestIdxs = latestNode.data.indexes || [];
-
-        const isEmpty = latestCols.length === 0 && latestIdxs.length === 0;
-        const isInitial =
-          latestCols.length === 1 &&
-          latestCols[0]?.name === "_id" &&
-          latestIdxs.length === 0;
-
-        if (isEmpty || isInitial) {
-          useBackendCanvasStore.getState().deleteNode(id);
-        } else {
-          const allNodes = useBackendCanvasStore.getState().nodes;
-          const defaultName = getUniqueNodeLabel(allNodes, "Untitled_Table", "entity");
-          updateNode(id, { data: { ...latestNode.data, label: defaultName } });
-          setEditingName(defaultName);
-          setNameError(false);
-          setIsEditingName(false);
-        }
-        return;
+      const latestCols = latestNode.data?.columns || [];
+      const isEmpty = latestCols.length === 0;
+      if (isEmpty) {
+        useBackendCanvasStore.getState().deleteNode(id);
+      } else {
+        const allNodes = useBackendCanvasStore.getState().nodes;
+        const defaultName = getUniqueNodeLabel(allNodes, "User_Cache", "redis_schema");
+        updateNode(id, { data: { ...latestNode.data, label: defaultName } });
+        setEditingName(defaultName);
+        setNameError(false);
+        setIsEditingName(false);
       }
-      finalName = data.label; // revert to original valid name
-      setEditingName(finalName);
-      setNameError(false);
-      setIsEditingName(false);
       return;
     }
 
-    // Check global uniqueness for entities
+    // Check global uniqueness
     const allNodes = useBackendCanvasStore.getState().nodes;
     const exists = allNodes.some(
       (n) =>
         n.id !== id &&
-        n.type === "entity" &&
-        n.data.label.toLowerCase() === finalName.toLowerCase(),
+        (n.type === "redis_schema" || n.type === "entity") &&
+        Boolean(n.data?.label && n.data.label.toLowerCase() === finalName.toLowerCase()),
     );
 
     if (exists) {
@@ -128,32 +96,69 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     setIsEditingName(false);
   };
 
-  const isVector = data.dbType === "vector";
-
   const allNodes = useBackendCanvasStore((s) => s.nodes);
-  // List only SQL/relational/document database nodes
-  const dbNodes = allNodes.filter(
-    (n) => n.type === "database" && n.data?.dbEngine !== "redis",
+  // Find all Redis instance nodes
+  const redisInstanceNodes = allNodes.filter(
+    (n) => n.type === "redis_instance" || (n.type === "database" && n.data?.dbEngine === "redis"),
   );
   const parentDbNode = allNodes.find((n) => n.id === data.databaseId);
-  const dbThemeColor = parentDbNode?.data?.color || (isVector ? "#8b5cf6" : undefined);
+  const dbThemeColor = parentDbNode?.data?.color || "#ef4444";
 
   const openSettings = (e: React.MouseEvent) => {
     e.stopPropagation();
     setActiveConfigItem({
-      type: "entityFunctions",
+      type: "redisSchema",
       id: id,
       nodeId: id,
     });
+  };
+
+  const redisStructure = data.redisDataStructure || "hash";
+
+  const handleUpdateNodeWithSync = (targetNodeId: string, changes: Partial<BackendNode>) => {
+    if (changes.data?.columns && redisStructure === "hash") {
+      const newFields: RedisHashField[] = changes.data.columns.map((c) => ({
+        name: c.name,
+        type:
+          c.type === "INTEGER" || c.type === "REAL" || c.type === "FLOAT" || c.type === "NUMERIC"
+            ? "number"
+            : c.type === "BOOLEAN" || c.type === "BOOL"
+              ? "boolean"
+              : c.type === "JSON" || c.type === "OBJECT"
+                ? "json"
+                : "string",
+        required: Boolean(c.isPrimaryKey || c.isNotNull),
+      }));
+      updateNode(targetNodeId, {
+        ...changes,
+        data: {
+          ...changes.data,
+          hashConfig: {
+            ...changes.data.hashConfig,
+            fields: newFields,
+          },
+        },
+      });
+      return;
+    }
+    updateNode(targetNodeId, changes);
   };
 
   return (
     <div
       ref={nodeRef}
       tabIndex={-1}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        setActiveConfigItem({
+          type: "redisSchema",
+          id: id,
+          nodeId: id,
+        });
+      }}
       className={cn(
-        "shadow-md rounded-xl bg-card border-2 min-w-[260px] max-w-[360px] focus:outline-none transition-all",
-        !dbThemeColor && (selected ? "border-primary" : "border-border"),
+        "shadow-md rounded-xl bg-card border-2 min-w-[280px] max-w-[370px] focus:outline-none transition-all",
+        selected ? "border-primary" : "border-border",
       )}
       style={{
         borderColor: dbThemeColor ? dbThemeColor : undefined,
@@ -162,38 +167,24 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
           : undefined,
       }}
     >
-      {/* Top Handle for Database Node connection */}
+      {/* Top Handle for Redis Instance Node connection */}
       <Handle
         type="target"
         position={Position.Top}
         id="database-entity-target"
         className="w-3 h-3 border-2 border-background !-top-1.5"
-        style={{ backgroundColor: dbThemeColor || "#f59e0b" }}
+        style={{ backgroundColor: dbThemeColor }}
       />
 
-      <div
-        className={cn(
-          "px-3 py-2 border-b flex flex-col gap-1.5 group rounded-t-[10px]",
-          isVector
-            ? "bg-violet-500/10 text-violet-700 dark:text-violet-400"
-            : "bg-secondary/80",
-        )}
-      >
+      {/* Header */}
+      <div className="px-3 py-2 border-b flex flex-col gap-1.5 group rounded-t-[10px] bg-red-500/10 text-red-700 dark:text-red-400">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center flex-1 min-w-0">
-            {isVector ? (
-              <Database
-                size={14}
-                className="mr-2 shrink-0"
-                style={dbThemeColor ? { color: dbThemeColor } : undefined}
-              />
-            ) : (
-              <Table2
-                size={14}
-                className="mr-2 shrink-0 text-muted-foreground"
-                style={dbThemeColor ? { color: dbThemeColor } : undefined}
-              />
-            )}
+            <DatabaseZap
+              size={14}
+              className="mr-2 shrink-0 text-red-500"
+              style={{ color: dbThemeColor }}
+            />
             {isEditingName ? (
               <div className="flex flex-1 items-center gap-1">
                 <Input
@@ -212,7 +203,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") saveName(e);
                     if (e.key === "Escape") {
-                      setEditingName(data.label);
+                      setEditingName(data.label || "User_Cache");
                       setNameError(false);
                       setIsEditingName(false);
                     }
@@ -223,24 +214,25 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
             ) : (
               <div className="flex items-center gap-1.5 min-w-0">
                 <span
-                  className={cn(
-                    "font-bold text-xs cursor-pointer hover:opacity-80 transition-colors truncate",
-                    isVector
-                      ? "text-violet-700 dark:text-violet-300"
-                      : "text-foreground",
-                  )}
-                  style={dbThemeColor ? { color: dbThemeColor } : undefined}
+                  className="font-bold text-xs cursor-pointer hover:opacity-80 transition-colors truncate text-red-700 dark:text-red-300"
+                  style={{ color: dbThemeColor }}
                   onClick={() => setIsEditingName(true)}
                 >
-                  {data.label || "Untitled_Table"}
+                  {data.label || "User_Cache"}
                 </span>
+                <Badge
+                  variant="outline"
+                  className="text-[9px] px-1 py-0 uppercase font-mono bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 shrink-0"
+                >
+                  {redisStructure}
+                </Badge>
               </div>
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0 ml-2">
             <div
               className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-all cursor-pointer"
-              title="DB Operation Functions"
+              title="Configure Redis Schema"
               onClick={openSettings}
             >
               <Settings size={14} />
@@ -250,14 +242,8 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
               onClick={(e) => {
                 e.stopPropagation();
                 const cols = data.columns || [];
-                const idxs = data.indexes || [];
-                const isEmpty = cols.length === 0 && idxs.length === 0;
-                const isInitial =
-                  cols.length === 1 &&
-                  cols[0]?.name === "_id" &&
-                  idxs.length === 0;
-
-                if (!isEmpty && !isInitial) {
+                const isEmpty = cols.length === 0;
+                if (!isEmpty) {
                   const node = useBackendCanvasStore
                     .getState()
                     .nodes.find((n) => n.id === id);
@@ -272,11 +258,11 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
           </div>
         </div>
 
-        {/* Database Node Association Dropdown */}
+        {/* Redis Instance Association Dropdown */}
         <div className="flex items-center justify-between gap-1.5 nodrag pt-1 border-t border-border/40 text-[10px]">
           <span className="text-muted-foreground font-medium shrink-0 flex items-center gap-1">
-            <Database size={10} style={{ color: dbThemeColor || (isVector ? "#8b5cf6" : "#f59e0b") }} />
-            DB Node:
+            <DatabaseZap size={10} className="text-red-500" style={{ color: dbThemeColor }} />
+            Redis Instance:
           </span>
           <Select
             value={data.databaseId || "none"}
@@ -319,15 +305,15 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
             }}
           >
             <SelectTrigger className="h-5 text-[10px] font-semibold bg-background/60 hover:bg-background border-border/40 px-1.5 py-0 shadow-none">
-              <SelectValue placeholder="Unattached" />
+              <SelectValue placeholder="Standalone Redis" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none" className="text-xs italic text-muted-foreground">
-                Unattached
+                Standalone (In-Memory / Env)
               </SelectItem>
-              {dbNodes.map((db) => (
+              {redisInstanceNodes.map((db) => (
                 <SelectItem key={db.id} value={db.id} className="text-xs">
-                  {db.data.label || "Database"} ({db.data.dbEngine || "sqlite"})
+                  {db.data.label || "Redis Instance"} (redis)
                 </SelectItem>
               ))}
             </SelectContent>
@@ -336,46 +322,33 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       </div>
 
       {/* Description */}
-      <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
+      <div className="px-3 py-1.5 bg-secondary/10 border-b nodrag">
         <Textarea
-          className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
-          placeholder="description"
           value={data.description || ""}
           onChange={(e) =>
             updateNode(id, { data: { ...data, description: e.target.value } })
           }
+          placeholder="Describe cache schema / invalidation rules..."
+          className="h-10 text-xs min-h-[36px] bg-transparent border-none shadow-none resize-none focus-visible:ring-0 p-0 placeholder:text-muted-foreground/50"
         />
       </div>
 
-      {/* Vector Collection Settings */}
-      {isVector && (
-        <VectorConfig id={id} data={data} updateNode={updateNode} />
-      )}
+      {/* Redis Key & Structure Settings */}
+      <RedisConfig id={id} data={data} updateNode={updateNode} />
 
-      {/* Column List */}
-      <ColumnList
-        nodeId={id}
-        items={columns}
-        updateNode={updateNode}
-        data={data}
-        isVector={isVector}
-      />
-
-      {/* Index List for Relational */}
-      {!isVector && (
-        <IndexList
-          id={id}
-          indexes={indexes}
-          columns={columns}
+      {/* Schema Columns (for Hash or JSON structures) */}
+      {(redisStructure === "hash" || redisStructure === "json") && (
+        <ColumnList
+          nodeId={id}
+          items={data.columns || []}
+          updateNode={handleUpdateNodeWithSync}
           data={data}
-          updateNode={updateNode}
+          isVector={false}
         />
       )}
 
-      {/* Database Operations / Helper Functions List */}
+      {/* DB / Redis Operations list */}
       <DbOperationsList nodeId={id} data={data} updateNode={updateNode} />
-
-      <div className="h-2 w-full border-t border-transparent rounded-b-[10px]" />
     </div>
   );
 };

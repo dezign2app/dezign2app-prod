@@ -87,7 +87,7 @@ export const RedisConfig: React.FC<RedisConfigProps> = ({
   updateNode,
 }) => {
   const structure: RedisDataStructure = data.redisDataStructure || "hash";
-  const template = data.keyTemplate || "user:{id}:profile";
+  const template = data.keyTemplate ?? "";
   const clusterTagParam = data.clusterHashTagParam;
 
   const keyPattern = deriveKeyPattern(template);

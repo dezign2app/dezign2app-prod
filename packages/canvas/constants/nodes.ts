@@ -30,6 +30,8 @@ export const BACKEND_NODE_PAYMENTS = "payments" as const;
 export const BACKEND_NODE_LANGGRAPH = "langgraph" as const;
 export const BACKEND_NODE_LANGGRAPH_STEP = "langgraph_step" as const;
 export const BACKEND_NODE_PAGE_REF = "page_ref" as const;
+export const BACKEND_NODE_REDIS_INSTANCE = "redis_instance" as const;
+export const BACKEND_NODE_REDIS_SCHEMA = "redis_schema" as const;
 
 export const NODE_TYPE_TO_RESOURCE_KIND: Record<string, string | undefined> = {
   kafka: "kafka",
@@ -55,6 +57,8 @@ export const NODE_TYPE_TO_RESOURCE_KIND: Record<string, string | undefined> = {
 export const BACKEND_NODE_TYPES = {
   SERVICE: BACKEND_NODE_SERVICE,
   DATABASE: BACKEND_NODE_DATABASE,
+  REDIS_INSTANCE: BACKEND_NODE_REDIS_INSTANCE,
+  REDIS_SCHEMA: BACKEND_NODE_REDIS_SCHEMA,
   QUEUE: BACKEND_NODE_QUEUE,
   PUBSUB: BACKEND_NODE_PUBSUB,
   EVENTSTREAM: BACKEND_NODE_EVENTSTREAM,

@@ -169,15 +169,18 @@ export function compileMonorepo(
   const dbFunctions: ReusableFunction[] = compiledDb.reusableFunctions ?? [];
   const kafkaFunctions: ReusableFunction[] = compiledKafka.reusableFunctions ?? [];
 
-  // 4.8 Generate Shared Package: packages/redis (@workspace/redis)
+  // 4.8 Generate Shared Package: packages/<redisFolder> (@workspace/<redisFolder>)
   const compiledRedis = compileRedisNodes(nodes, edges);
-  compiledRedis.files.forEach((f) => {
-    files.push({
-      filename: `packages/redis/${f.filename}`,
-      language: f.language,
-      content: f.content,
+  if (compiledRedis.files.length > 0) {
+    const redisFolder = compiledRedis.packageFolder || "redis";
+    compiledRedis.files.forEach((f) => {
+      files.push({
+        filename: `packages/${redisFolder}/${f.filename}`,
+        language: f.language,
+        content: f.content,
+      });
     });
-  });
+  }
 
   // 4.9 Generate Shared Packages: packages/grpc/<service-name>/ for gRPC inter-service calls
   const compiledGrpc = compileGrpcPackages(nodes, edges, endpoints);
@@ -477,6 +480,10 @@ export function compileMonorepo(
       compiledKafka.files.length > 0,
       compiledRedis.files.length > 0,
       compiledDb.files.length > 0,
+      compiledRedis.packageFolder || "redis",
+      compiledRedis.packageFolder && compiledRedis.packageFolder !== "redis"
+        ? compiledRedis.packageFolder
+        : undefined,
     ),
   );
 

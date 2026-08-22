@@ -10,13 +10,15 @@ export function generateRootReadme(
   hasKafka: boolean = false,
   hasRedis: boolean = false,
   hasDb: boolean = false,
+  redisPackageFolder: string = "redis",
+  redisPackageLabel?: string,
 ): CompiledFile {
   const kafkaSection = hasKafka
     ? `- **Kafka Broker Package**: \`packages/kafka\` (\`@workspace/kafka\`)\n`
     : "";
 
   const redisSection = hasRedis
-    ? `- **Redis Package**: \`packages/redis\` (\`@workspace/redis\`)\n`
+    ? `- **Redis Package${redisPackageLabel ? ` (${redisPackageLabel})` : ""}**: \`packages/${redisPackageFolder}\` (\`@workspace/${redisPackageFolder}\`)\n`
     : "";
 
   const dbSection = hasDb

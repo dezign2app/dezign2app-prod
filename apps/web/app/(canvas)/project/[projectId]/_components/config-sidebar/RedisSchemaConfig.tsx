@@ -169,7 +169,7 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
   const [aiPrompt, setAiPrompt] = useState("");
   const [copiedKey, setCopiedKey] = useState(false);
 
-  if (!node || node.type !== "entity") {
+  if (!node || (node.type !== "redis_schema" && node.type !== "entity")) {
     return (
       <div className="p-4 text-sm text-muted-foreground">
         Redis Schema node not found.
@@ -180,7 +180,7 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
   const data = node.data || {};
   const label = data.label || "Redis_Schema";
   const structure: RedisDataStructure = data.redisDataStructure || "hash";
-  const keyTemplate = data.keyTemplate || "user:{id}:profile";
+  const keyTemplate = data.keyTemplate ?? "";
   const clusterTagParam = data.clusterHashTagParam;
   const ttl: RedisDuration = data.ttl || { value: 3600, unit: "s" };
   const strategy = data.cacheStrategy || "Cache Aside";
@@ -194,8 +194,10 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
   const namespace = deriveNamespace(keyTemplate);
   const params = extractKeyTemplateParams(keyTemplate);
 
-  // Parent Database Node
-  const dbNodes = allNodes.filter((n) => n.type === "database");
+  // Parent Database Node (supports both standard database and redis_instance)
+  const dbNodes = allNodes.filter(
+    (n) => n.type === "database" || n.type === "redis_instance",
+  );
   const parentDb = allNodes.find((n) => n.id === data.databaseId);
 
   // Available Table Nodes on Canvas for Source of Truth
@@ -212,14 +214,16 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
     });
   };
 
-  // Sample Key preview resolution (e.g. user:{id}:profile -> user:usr_9918:profile)
-  const sampleKey = keyTemplate.replace(/\{([^}]+)\}/g, (_, p) => {
-    if (p.toLowerCase().includes("id")) return "1001";
-    if (p.toLowerCase().includes("token") || p.toLowerCase().includes("session"))
-      return "sess_99a8x";
-    if (p.toLowerCase().includes("date")) return "2026-08-22";
-    return `val_${p}`;
-  });
+  // Sample Key preview resolution (e.g. user:{id}:profile -> user:1001:profile)
+  const sampleKey = keyTemplate
+    ? keyTemplate.replace(/\{([^}]+)\}/g, (_, p) => {
+        if (p.toLowerCase().includes("id")) return "1001";
+        if (p.toLowerCase().includes("token") || p.toLowerCase().includes("session"))
+          return "sess_99a8x";
+        if (p.toLowerCase().includes("date")) return "2026-08-22";
+        return `val_${p}`;
+      })
+    : "(none)";
 
   const handleCopyKey = () => {
     navigator.clipboard.writeText(sampleKey);
@@ -332,6 +336,41 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
       });
     }
   };
+
+  const syncColumnsFromFields = (fields: RedisHashField[]) => {
+    return fields.map((f) => ({
+      name: f.name,
+      type:
+        f.type === "number"
+          ? "INTEGER"
+          : f.type === "boolean"
+            ? "BOOLEAN"
+            : f.type === "json"
+              ? "JSON"
+              : "TEXT",
+      isNotNull: f.required,
+    }));
+  };
+
+  const hashFields: RedisHashField[] =
+    data.hashConfig?.fields ||
+    (data.columns && data.columns.length > 0
+      ? data.columns.map((c) => ({
+          name: c.name,
+          type:
+            c.type === "INTEGER" ||
+            c.type === "REAL" ||
+            c.type === "FLOAT" ||
+            c.type === "NUMERIC"
+              ? "number"
+              : c.type === "BOOLEAN" || c.type === "BOOL"
+                ? "boolean"
+                : c.type === "JSON" || c.type === "OBJECT"
+                  ? "json"
+                  : "string",
+          required: Boolean(c.isPrimaryKey || c.isNotNull),
+        }))
+      : []);
 
   return (
     <div className="flex flex-col gap-6 mt-2 pb-16">
@@ -600,7 +639,7 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-foreground uppercase tracking-wider">
-                  Hash Fields Schema ({data.hashConfig?.fields?.length || 0})
+                  Hash Fields Schema ({hashFields.length})
                 </span>
                 <span className="text-[10px] text-muted-foreground">
                   Define field names, data types, defaults, and optional Redis 7.4+ field-level TTLs (HEXPIRE).
@@ -611,14 +650,15 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
                 variant="outline"
                 className="h-7 text-xs gap-1"
                 onClick={() => {
-                  const currentFields = data.hashConfig?.fields || [];
                   const newField: RedisHashField = {
-                    name: `field_${currentFields.length + 1}`,
+                    name: `field_${hashFields.length + 1}`,
                     type: "string",
                     required: false,
                   };
+                  const nextFields = [...hashFields, newField];
                   updateData({
-                    hashConfig: { fields: [...currentFields, newField] },
+                    hashConfig: { fields: nextFields },
+                    columns: syncColumnsFromFields(nextFields),
                   });
                 }}
               >
@@ -626,13 +666,13 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
               </Button>
             </div>
 
-            {(!data.hashConfig?.fields || data.hashConfig.fields.length === 0) ? (
+            {(hashFields.length === 0) ? (
               <div className="p-3 text-xs text-muted-foreground italic text-center border border-dashed border-border/60 rounded-lg">
                 No hash fields defined. Click &quot;Add Field&quot; above to specify fields.
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                {data.hashConfig.fields.map((f, idx) => (
+                {hashFields.map((f, idx) => (
                   <div
                     key={idx}
                     className="p-2.5 rounded-lg border border-border/50 bg-background/80 flex flex-col gap-2 text-xs"
@@ -642,9 +682,12 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
                         value={f.name}
                         placeholder="field name"
                         onChange={(e) => {
-                          const updated = [...(data.hashConfig?.fields || [])];
+                          const updated = [...hashFields];
                           updated[idx] = { ...updated[idx]!, name: e.target.value };
-                          updateData({ hashConfig: { fields: updated } });
+                          updateData({
+                            hashConfig: { fields: updated },
+                            columns: syncColumnsFromFields(updated),
+                          });
                         }}
                         className="h-7 text-xs font-mono flex-1"
                       />
@@ -652,9 +695,12 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
                         value={f.type}
                         onValueChange={(val) => {
                           if (isRedisHashFieldType(val)) {
-                            const updated = [...(data.hashConfig?.fields || [])];
+                            const updated = [...hashFields];
                             updated[idx] = { ...updated[idx]!, type: val };
-                            updateData({ hashConfig: { fields: updated } });
+                            updateData({
+                              hashConfig: { fields: updated },
+                              columns: syncColumnsFromFields(updated),
+                            });
                           }
                         }}
                       >
@@ -675,8 +721,11 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
                         size="icon"
                         className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
                         onClick={() => {
-                          const updated = data.hashConfig?.fields?.filter((_, i) => i !== idx) || [];
-                          updateData({ hashConfig: { fields: updated } });
+                          const updated = hashFields.filter((_, i) => i !== idx);
+                          updateData({
+                            hashConfig: { fields: updated },
+                            columns: syncColumnsFromFields(updated),
+                          });
                         }}
                       >
                         <Trash2 size={12} />
@@ -690,7 +739,7 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
                           placeholder="Optional field description..."
                           value={f.description || ""}
                           onChange={(e) => {
-                            const updated = [...(data.hashConfig?.fields || [])];
+                            const updated = [...hashFields];
                             updated[idx] = { ...updated[idx]!, description: e.target.value };
                             updateData({ hashConfig: { fields: updated } });
                           }}
@@ -706,7 +755,7 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
                           value={f.ttl?.value ?? ""}
                           onChange={(e) => {
                             const val = parseInt(e.target.value);
-                            const updated = [...(data.hashConfig?.fields || [])];
+                            const updated = [...hashFields];
                             updated[idx] = {
                               ...updated[idx]!,
                               ttl: isNaN(val) ? undefined : { value: val, unit: "s" },
@@ -1198,6 +1247,305 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
                 </Select>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* G. SET CONFIG */}
+        {structure === "set" && (
+          <div className="flex flex-col gap-3 pt-3 border-t border-border/40">
+            <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1">
+              <Share2 size={12} className="text-red-500" /> Set Membership Settings (SADD / SISMEMBER / SMEMBERS)
+            </span>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">Member Type</Label>
+                <Input
+                  value={data.setConfig?.memberType || "string"}
+                  onChange={(e) =>
+                    updateData({
+                      setConfig: {
+                        memberType: e.target.value,
+                        description: data.setConfig?.description,
+                      },
+                    })
+                  }
+                  className="h-7 text-xs font-mono"
+                  placeholder="string, uuid, or number"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">Set Purpose / Description</Label>
+                <Input
+                  value={data.setConfig?.description || ""}
+                  onChange={(e) =>
+                    updateData({
+                      setConfig: {
+                        memberType: data.setConfig?.memberType || "string",
+                        description: e.target.value,
+                      },
+                    })
+                  }
+                  className="h-7 text-xs"
+                  placeholder="e.g. Unique visitor IDs"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* H. BITMAP CONFIG */}
+        {structure === "bitmap" && (
+          <div className="flex flex-col gap-3 pt-3 border-t border-border/40">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1">
+                <Binary size={12} className="text-red-500" /> Bitmap Flags & Offsets (SETBIT / GETBIT / BITCOUNT)
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1"
+                onClick={() => {
+                  const currentBits = data.bitmapConfig?.bitDescriptions || [];
+                  const nextOffset =
+                    currentBits.length > 0
+                      ? Math.max(...currentBits.map((b) => b.offset)) + 1
+                      : 0;
+                  const newBit = {
+                    offset: nextOffset,
+                    name: `flag_${currentBits.length + 1}`,
+                    description: "Boolean feature flag",
+                  };
+                  updateData({
+                    bitmapConfig: { bitDescriptions: [...currentBits, newBit] },
+                  });
+                }}
+              >
+                <Plus size={12} /> Add Bit Offset
+              </Button>
+            </div>
+            {!data.bitmapConfig?.bitDescriptions || data.bitmapConfig.bitDescriptions.length === 0 ? (
+              <div className="p-3 text-xs text-muted-foreground italic text-center border border-dashed border-border/60 rounded-lg">
+                No bit offset flags defined. Click &quot;Add Bit Offset&quot; to map individual bit positions.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {data.bitmapConfig.bitDescriptions.map((b, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-2 p-2 rounded bg-background/80 border border-border/40 text-xs"
+                  >
+                    <div className="flex items-center gap-1 w-24 shrink-0">
+                      <span className="text-[10px] text-muted-foreground">Bit:</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={b.offset}
+                        onChange={(e) => {
+                          const updated = [...(data.bitmapConfig?.bitDescriptions || [])];
+                          updated[idx] = {
+                            ...updated[idx]!,
+                            offset: parseInt(e.target.value) || 0,
+                          };
+                          updateData({ bitmapConfig: { bitDescriptions: updated } });
+                        }}
+                        className="h-7 text-xs font-mono w-14"
+                      />
+                    </div>
+                    <Input
+                      value={b.name}
+                      placeholder="flag name"
+                      onChange={(e) => {
+                        const updated = [...(data.bitmapConfig?.bitDescriptions || [])];
+                        updated[idx] = { ...updated[idx]!, name: e.target.value };
+                        updateData({ bitmapConfig: { bitDescriptions: updated } });
+                      }}
+                      className="h-7 text-xs font-mono flex-1"
+                    />
+                    <Input
+                      value={b.description || ""}
+                      placeholder="description..."
+                      onChange={(e) => {
+                        const updated = [...(data.bitmapConfig?.bitDescriptions || [])];
+                        updated[idx] = { ...updated[idx]!, description: e.target.value };
+                        updateData({ bitmapConfig: { bitDescriptions: updated } });
+                      }}
+                      className="h-7 text-xs flex-1"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                      onClick={() => {
+                        const updated =
+                          data.bitmapConfig?.bitDescriptions?.filter((_, i) => i !== idx) || [];
+                        updateData({ bitmapConfig: { bitDescriptions: updated } });
+                      }}
+                    >
+                      <Trash2 size={12} />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* I. HYPERLOGLOG CONFIG */}
+        {structure === "hyperloglog" && (
+          <div className="flex flex-col gap-3 pt-3 border-t border-border/40">
+            <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1">
+              <DatabaseZap size={12} className="text-red-500" /> HyperLogLog Cardinality Estimation (PFADD / PFCOUNT)
+            </span>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">Estimated Item Type</Label>
+                <Input
+                  value={data.hyperloglogConfig?.memberType || "string"}
+                  onChange={(e) =>
+                    updateData({
+                      hyperloglogConfig: {
+                        memberType: e.target.value,
+                        precision: data.hyperloglogConfig?.precision || "standard (0.81% error)",
+                      },
+                    })
+                  }
+                  className="h-7 text-xs font-mono"
+                  placeholder="e.g. IP Address, User ID"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">Estimation Precision</Label>
+                <Input
+                  value={data.hyperloglogConfig?.precision || "standard (0.81% error)"}
+                  onChange={(e) =>
+                    updateData({
+                      hyperloglogConfig: {
+                        memberType: data.hyperloglogConfig?.memberType || "string",
+                        precision: e.target.value,
+                      },
+                    })
+                  }
+                  className="h-7 text-xs"
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              HyperLogLog uses a fixed 12 KB memory footprint to count billions of unique elements with ~0.81% standard error.
+            </p>
+          </div>
+        )}
+
+        {/* J. REDISJSON CONFIG */}
+        {structure === "json" && (
+          <div className="flex flex-col gap-3 pt-3 border-t border-border/40">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                  RedisJSON Document Schema Fields ({hashFields.length})
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  JSON documents support nested path querying (JSON.GET, JSON.SET, JSON.NUMINCRBY).
+                </span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1"
+                onClick={() => {
+                  const newField: RedisHashField = {
+                    name: `field_${hashFields.length + 1}`,
+                    type: "string",
+                    required: false,
+                  };
+                  const nextFields = [...hashFields, newField];
+                  updateData({
+                    hashConfig: { fields: nextFields },
+                    columns: syncColumnsFromFields(nextFields),
+                  });
+                }}
+              >
+                <Plus size={12} /> Add Field
+              </Button>
+            </div>
+            {hashFields.length === 0 ? (
+              <div className="p-3 text-xs text-muted-foreground italic text-center border border-dashed border-border/60 rounded-lg">
+                No JSON schema fields defined. Click &quot;Add Field&quot; to specify document structure.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {hashFields.map((f, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2.5 rounded-lg border border-border/50 bg-background/80 flex flex-col gap-2 text-xs"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={f.name}
+                        placeholder="field name / JSON path"
+                        onChange={(e) => {
+                          const updated = [...hashFields];
+                          updated[idx] = { ...updated[idx]!, name: e.target.value };
+                          updateData({
+                            hashConfig: { fields: updated },
+                            columns: syncColumnsFromFields(updated),
+                          });
+                        }}
+                        className="h-7 text-xs font-mono flex-1"
+                      />
+                      <Select
+                        value={f.type}
+                        onValueChange={(val) => {
+                          if (isRedisHashFieldType(val)) {
+                            const updated = [...hashFields];
+                            updated[idx] = { ...updated[idx]!, type: val };
+                            updateData({
+                              hashConfig: { fields: updated },
+                              columns: syncColumnsFromFields(updated),
+                            });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="h-7 w-28 text-xs font-mono">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="string">string</SelectItem>
+                          <SelectItem value="number">number</SelectItem>
+                          <SelectItem value="boolean">boolean</SelectItem>
+                          <SelectItem value="json">nested json</SelectItem>
+                          <SelectItem value="datetime">datetime</SelectItem>
+                          <SelectItem value="binary">binary</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                        onClick={() => {
+                          const updated = hashFields.filter((_, i) => i !== idx);
+                          updateData({
+                            hashConfig: { fields: updated },
+                            columns: syncColumnsFromFields(updated),
+                          });
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </Button>
+                    </div>
+                    <Input
+                      placeholder="Optional path or field description..."
+                      value={f.description || ""}
+                      onChange={(e) => {
+                        const updated = [...hashFields];
+                        updated[idx] = { ...updated[idx]!, description: e.target.value };
+                        updateData({ hashConfig: { fields: updated } });
+                      }}
+                      className="h-6 text-[11px] bg-background/60"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

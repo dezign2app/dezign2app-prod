@@ -52,6 +52,9 @@ export type BackendNodeType =
   | "group"
   | "db_ref"
   | "storage"
+  // Redis Dedicated Schema View Nodes
+  | "redis_instance"
+  | "redis_schema"
   // New node types
   | "worker"
   | "serverless"

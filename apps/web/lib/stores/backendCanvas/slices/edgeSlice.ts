@@ -105,6 +105,16 @@ export const createEdgeSlice = (
       return;
     }
 
+    // Enforce matching DB engine (Redis DB -> Redis Entity, SQL DB -> SQL/Doc Entity)
+    if (sourceNode.type === "database" && targetNode.type === "entity") {
+      const isRedisDb = sourceNode.data?.dbEngine === "redis";
+      const isRedisEntity = targetNode.data?.dbType === "redis";
+      if (isRedisDb !== isRedisEntity) {
+        console.warn("Cannot connect Redis instance to SQL table or SQL database to Redis schema");
+        return;
+      }
+    }
+
     const edgeType = result.edgeType;
     const isSchema =
       edgeType === "foreign-key" || edgeType === "database-connection";
@@ -146,8 +156,11 @@ export const createEdgeSlice = (
       pendingEdgeUpserts: [...get().pendingEdgeUpserts, newEdge],
     });
 
-    // Automatically sync databaseId on target entity node when connecting database -> entity
-    if (sourceNode.type === "database" && targetNode.type === "entity") {
+    // Automatically sync databaseId on target entity / redis schema node when connecting database / redis instance -> entity / redis schema
+    if (
+      (sourceNode.type === "database" && targetNode.type === "entity") ||
+      (sourceNode.type === "redis_instance" && (targetNode.type === "redis_schema" || targetNode.type === "entity"))
+    ) {
       get().updateNode(targetNode.id, {
         data: {
           ...targetNode.data,

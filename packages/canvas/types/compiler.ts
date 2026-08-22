@@ -42,6 +42,9 @@ export interface CompiledKafkaResult {
 
 export interface CompiledRedisResult {
   files: CompiledFile[];
+  reusableFunctions?: ReusableFunction[];
+  packageFolder?: string;
+  packageName?: string;
 }
 
 export interface CompiledWebClientResult {
