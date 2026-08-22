@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Table2, Trash2, Settings } from "lucide-react";
+import { Database, Table2, Trash2, Settings, DatabaseZap } from "lucide-react";
 import {
   BackendNode,
   DATABASE_ENGINE_OPTIONS,
@@ -12,6 +12,7 @@ function isDatabaseEngine(val: string): val is DatabaseEngine {
 }
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
+import { Badge } from "@workspace/ui/components/badge";
 import {
   Select,
   SelectContent,
@@ -24,6 +25,7 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { ColumnList } from "./ColumnList";
 import { IndexList } from "./IndexList";
 import { VectorConfig } from "./VectorConfig";
+import { RedisConfig } from "./RedisConfig";
 import { DbOperationsList } from "./DbOperationsList";
 
 import { DEFAULT_DATABASE_NODE_LABEL, getUniqueNodeLabel } from "@workspace/canvas";
@@ -55,11 +57,10 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     let finalName = editingName.trim();
     if (!finalName) {
       if (!data.label) {
-        const isBlur = e?.type === "blur";
-        if (isBlur) {
-          const relatedTarget = (e as React.FocusEvent)
-            .relatedTarget as Node | null;
-          if (nodeRef.current?.contains(relatedTarget)) {
+        if (e && "relatedTarget" in e) {
+          const relatedTarget =
+            e.relatedTarget instanceof globalThis.Node ? e.relatedTarget : null;
+          if (relatedTarget && nodeRef.current?.contains(relatedTarget)) {
             const allNodes = useBackendCanvasStore.getState().nodes;
             const defaultName = getUniqueNodeLabel(allNodes, "Untitled_Table", "entity");
             const latestNode = allNodes.find((n) => n.id === id);
@@ -138,19 +139,48 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     setIsEditingName(false);
   };
 
+  const isRedis = data.dbType === "redis";
+  const isVector = data.dbType === "vector";
   const currentDbEngine = data.dbEngine || "sqlite";
 
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const dbNodes = allNodes.filter((n) => n.type === "database");
   const parentDbNode = allNodes.find((n) => n.id === data.databaseId);
-  const dbThemeColor = parentDbNode?.data?.color;
+  const dbThemeColor = parentDbNode?.data?.color || (isRedis ? "#ef4444" : isVector ? "#8b5cf6" : undefined);
+
+  const openSettings = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isRedis) {
+      setActiveConfigItem({
+        type: "redisSchema",
+        id: id,
+        nodeId: id,
+      });
+    } else {
+      setActiveConfigItem({
+        type: "entityFunctions",
+        id: id,
+        nodeId: id,
+      });
+    }
+  };
 
   return (
     <div
       ref={nodeRef}
       tabIndex={-1}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        if (isRedis) {
+          setActiveConfigItem({
+            type: "redisSchema",
+            id: id,
+            nodeId: id,
+          });
+        }
+      }}
       className={cn(
-        "shadow-md rounded-xl bg-card border-2 min-w-[250px] max-w-[350px] focus:outline-none transition-all",
+        "shadow-md rounded-xl bg-card border-2 min-w-[260px] max-w-[360px] focus:outline-none transition-all",
         !dbThemeColor && (selected ? "border-primary" : "border-border"),
       )}
       style={{
@@ -166,21 +196,33 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         position={Position.Top}
         id="database-entity-target"
         className="w-3 h-3 border-2 border-background !-top-1.5"
-        style={{ backgroundColor: dbThemeColor || "#f59e0b" }}
+        style={{ backgroundColor: dbThemeColor || (isRedis ? "#ef4444" : "#f59e0b") }}
       />
 
       <div
         className={cn(
           "px-3 py-2 border-b flex flex-col gap-1.5 group rounded-t-[10px]",
-          data.dbType === "vector"
-            ? "bg-violet-500/10 text-violet-700 dark:text-violet-400"
-            : "bg-secondary/80",
+          isRedis
+            ? "bg-red-500/10 text-red-700 dark:text-red-400"
+            : isVector
+              ? "bg-violet-500/10 text-violet-700 dark:text-violet-400"
+              : "bg-secondary/80",
         )}
       >
         <div className="flex items-center justify-between w-full">
-          <div className="flex items-center flex-1">
-            {data.dbType === "vector" ? (
-              <Database size={14} className="mr-2 shrink-0" style={dbThemeColor ? { color: dbThemeColor } : undefined} />
+          <div className="flex items-center flex-1 min-w-0">
+            {isRedis ? (
+              <DatabaseZap
+                size={14}
+                className="mr-2 shrink-0 text-red-500"
+                style={dbThemeColor ? { color: dbThemeColor } : undefined}
+              />
+            ) : isVector ? (
+              <Database
+                size={14}
+                className="mr-2 shrink-0"
+                style={dbThemeColor ? { color: dbThemeColor } : undefined}
+              />
             ) : (
               <Table2
                 size={14}
@@ -215,27 +257,30 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                 />
               </div>
             ) : (
-              <span
-                className="font-bold text-sm cursor-pointer hover:opacity-80 transition-colors flex-1 truncate"
-                style={dbThemeColor ? { color: dbThemeColor } : undefined}
-                onClick={() => setIsEditingName(true)}
-              >
-                {data.label}
-              </span>
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <span
+                  className="font-bold text-sm cursor-pointer hover:opacity-80 transition-colors truncate"
+                  style={dbThemeColor ? { color: dbThemeColor } : undefined}
+                  onClick={() => setIsEditingName(true)}
+                >
+                  {data.label}
+                </span>
+                {isRedis && (
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] px-1 py-0 uppercase font-mono bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 shrink-0"
+                  >
+                    {data.redisDataStructure || "HASH"}
+                  </Badge>
+                )}
+              </div>
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0 ml-2">
             <div
               className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-all cursor-pointer"
-              title="DB Operation Functions"
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveConfigItem({
-                  type: "entityFunctions",
-                  id: id,
-                  nodeId: id,
-                });
-              }}
+              title={isRedis ? "Configure Redis Schema" : "DB Operation Functions"}
+              onClick={openSettings}
             >
               <Settings size={14} />
             </div>
@@ -269,7 +314,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         {/* Database Node Association Dropdown */}
         <div className="flex items-center justify-between gap-1.5 nodrag pt-1 border-t border-border/40 text-[10px]">
           <span className="text-muted-foreground font-medium shrink-0 flex items-center gap-1">
-            <Database size={10} style={{ color: dbThemeColor || "#f59e0b" }} />
+            <Database size={10} style={{ color: dbThemeColor || (isRedis ? "#ef4444" : "#f59e0b") }} />
             DB Node:
           </span>
           <Select
@@ -321,7 +366,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
               </SelectItem>
               {dbNodes.map((db) => (
                 <SelectItem key={db.id} value={db.id} className="text-xs">
-                  {db.data.label || "SQLite DB"}
+                  {db.data.label || "Database"} ({db.data.dbEngine || "sqlite"})
                 </SelectItem>
               ))}
             </SelectContent>
@@ -333,7 +378,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
         <Textarea
           className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
-          placeholder="description"
+          placeholder={isRedis ? "Describe cache schema / invalidation rules..." : "description"}
           value={data.description || ""}
           onChange={(e) =>
             updateNode(id, { data: { ...data, description: e.target.value } })
@@ -341,27 +386,39 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         />
       </div>
 
+      {/* Redis Key & Structure Settings */}
+      {isRedis && (
+        <RedisConfig id={id} data={data} updateNode={updateNode} />
+      )}
+
       {/* Vector Collection Settings */}
-      {data.dbType === "vector" && (
+      {isVector && (
         <VectorConfig id={id} data={data} updateNode={updateNode} />
       )}
 
-      <ColumnList
-        nodeId={id}
-        items={columns}
-        updateNode={updateNode}
-        data={data}
-        isVector={data.dbType === "vector"}
-      />
+      {/* Column / Hash Fields List: Shown for relational, vector, or Redis Hash/JSON */}
+      {(!isRedis || data.redisDataStructure === "hash" || data.redisDataStructure === "json" || !data.redisDataStructure) && (
+        <ColumnList
+          nodeId={id}
+          items={columns}
+          updateNode={updateNode}
+          data={data}
+          isVector={isVector}
+        />
+      )}
 
-      <IndexList
-        id={id}
-        indexes={indexes}
-        columns={columns}
-        data={data}
-        updateNode={updateNode}
-      />
+      {/* Index List for Relational */}
+      {!isRedis && !isVector && (
+        <IndexList
+          id={id}
+          indexes={indexes}
+          columns={columns}
+          data={data}
+          updateNode={updateNode}
+        />
+      )}
 
+      {/* Database Operations / Helper Functions List */}
       <DbOperationsList nodeId={id} data={data} updateNode={updateNode} />
 
       <div className="h-2 w-full border-t border-transparent rounded-b-[10px]" />

@@ -9,7 +9,7 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { Button } from "@workspace/ui/components/button";
-import { PlusSquare, Database, LayoutTemplate, Server } from "lucide-react";
+import { PlusSquare, Database, LayoutTemplate, Server, DatabaseZap } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { nodeTypes } from "./backend-nodes/Nodes";
 import { ForeignKeyEdge } from "./backend-nodes/ForeignKeyEdge";
@@ -242,6 +242,88 @@ export function SchemaView({ projectId }: SchemaViewProps) {
     }
   };
 
+  const handleAddRedisSchema = () => {
+    const center = getCenterPosition();
+    const { x, y } = getOffsetPosition(center.x - 75, center.y - 30, nodes);
+
+    // Check if a Redis database node exists
+    let redisDbNode = nodes.find(
+      (n) => n.type === "database" && n.data?.dbEngine === "redis",
+    );
+    let dbId = redisDbNode?.id;
+
+    if (!dbId) {
+      // Check if any database exists, or create a Redis Database node
+      const anyDb = nodes.find((n) => n.type === "database");
+      if (anyDb) {
+        dbId = anyDb.id;
+      } else {
+        dbId = crypto.randomUUID();
+        const dbLabel = getUniqueNodeLabel(nodes, "Redis_Instance", "database");
+        addNode({
+          id: dbId,
+          type: "database",
+          position: { x: x - 250, y: y - 100 },
+          data: {
+            label: dbLabel,
+            dbEngine: "redis",
+            dbType: "key-value",
+            dbCategory: "nosql",
+            dbConnectionType: "env_var",
+            connectionStringEnv: "REDIS_URL",
+            maxmemoryPolicy: "volatile-lru",
+            maxmemory: "2gb",
+            persistenceMode: "RDB+AOF",
+            color: "#ef4444",
+            isDefault: false,
+          },
+        });
+      }
+    }
+
+    const schemaId = crypto.randomUUID();
+    const redisLabel = getUniqueNodeLabel(nodes, "User_Cache", "entity");
+    addNode({
+      id: schemaId,
+      type: "entity",
+      position: { x, y },
+      data: {
+        label: redisLabel,
+        dbType: "redis",
+        redisDataStructure: "hash",
+        keyTemplate: "user:{id}:profile",
+        clusterHashTagParam: "id",
+        ttl: { value: 3600, unit: "s" },
+        cacheStrategy: "Cache Aside",
+        negativeCaching: { enabled: true, ttl: { value: 60, unit: "s" } },
+        columns: [
+          { name: "id", type: "TEXT", isPrimaryKey: true },
+          { name: "username", type: "TEXT" },
+          { name: "email", type: "TEXT" },
+        ],
+        hashConfig: {
+          fields: [
+            { name: "id", type: "string", required: true },
+            { name: "username", type: "string", required: true },
+            { name: "email", type: "string", required: true },
+          ],
+        },
+        databaseId: dbId,
+      },
+    });
+
+    if (dbId) {
+      useBackendCanvasStore.getState().addEdge({
+        id: `edge-${dbId}-${schemaId}`,
+        source: dbId,
+        target: schemaId,
+        sourceHandle: "database-source",
+        targetHandle: "database-entity-target",
+        type: "database-connection",
+      });
+    }
+  };
+
   return (
     <div className="w-full h-full bg-muted/20">
       <ReactFlow
@@ -302,6 +384,15 @@ export function SchemaView({ projectId }: SchemaViewProps) {
           >
             <Database className="w-3.5 h-3.5 mr-2 text-violet-500" />
             Vector Collection
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-500/10"
+            onClick={handleAddRedisSchema}
+          >
+            <DatabaseZap className="w-3.5 h-3.5 mr-2 text-red-500" />
+            Redis Schema
           </Button>
           <Button
             variant="outline"

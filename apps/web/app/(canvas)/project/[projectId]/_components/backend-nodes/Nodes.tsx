@@ -8,4 +8,7 @@ export { IndexList } from "./entity-node/IndexList";
 export type { IndexListProps } from "./entity-node/IndexList";
 export { VectorConfig } from "./entity-node/VectorConfig";
 export type { VectorConfigProps } from "./entity-node/VectorConfig";
+export { RedisConfig } from "./entity-node/RedisConfig";
+export type { RedisConfigProps } from "./entity-node/RedisConfig";
 export { nodeTypes } from "./nodeTypes";
+

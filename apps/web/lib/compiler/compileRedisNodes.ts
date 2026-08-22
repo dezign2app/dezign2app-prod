@@ -10,20 +10,17 @@ export function compileRedisNodes(
 ): CompiledRedisResult {
   const files: CompiledFile[] = [];
 
-  const redisNodes = allNodes.filter(
-    (n) =>
+  const redisNodes = allNodes.filter((n) => {
+    const d = n.data;
+    if (!d) return false;
+    return (
       n.type === "redis-streams" ||
       n.type === "redis-pubsub" ||
       n.type === "redis-cache" ||
-      ((n.type === "queue" ||
-        n.type === "pubsub" ||
-        n.type === "eventstream" ||
-        n.type === "database" ||
-        n.type === "storage") &&
-        ((n.data as any)?.implementation?.toLowerCase()?.includes("redis") ||
-          (n.data as any)?.dbType?.toLowerCase() === "redis" ||
-          (n.data as any)?.engine?.toLowerCase() === "redis")),
-  );
+      d.dbEngine === "redis" ||
+      d.dbType === "redis"
+    );
+  });
 
   if (redisNodes.length === 0) {
     return { files: [] };
@@ -63,7 +60,7 @@ export function compileRedisNodes(
   });
 
   // 2. tsconfig.json
-  const tsconfig = JSON.stringify(
+  const tsConfig = JSON.stringify(
     {
       extends: "@workspace/typescript-config/base.json",
       compilerOptions: {
@@ -78,95 +75,63 @@ export function compileRedisNodes(
   files.push({
     filename: "tsconfig.json",
     language: "json",
-    content: tsconfig,
-  });
-
-  // 3. src/config.ts
-  const configContent = `/**
- * Redis Client Configuration Defaults & Environment Resolvers
- */
-export interface RedisClientConfig {
-  host: string;
-  port: number;
-  password?: string;
-  db: number;
-  url?: string;
-  keyPrefix?: string;
-}
-
-export function getRedisConfig(): RedisClientConfig {
-  const url = process.env.REDIS_URL;
-  const host = process.env.REDIS_HOST || "localhost";
-  const port = Number(process.env.REDIS_PORT) || 6379;
-  const password = process.env.REDIS_PASSWORD || undefined;
-  const db = Number(process.env.REDIS_DB) || 0;
-  const keyPrefix = process.env.REDIS_KEY_PREFIX || "";
-
-  return {
-    url,
-    host,
-    port,
-    password,
-    db,
-    keyPrefix,
-  };
-}
-`;
-  files.push({
-    filename: "src/config.ts",
-    language: "typescript",
-    content: configContent,
+    content: tsConfig,
   });
 
   // 4. src/client.ts
-  const clientContent = `import Redis, { RedisOptions } from "ioredis";
-import { getRedisConfig } from "./config";
+  const redisHost = "localhost";
+  const redisPort = "6379";
+
+  const clientContent = `import Redis from "ioredis";
 import { createLogger } from "@workspace/logger";
 
-const logger = createLogger("RedisClient");
+const logger = createLogger("Redis");
 
-let sharedRedisInstance: Redis | null = null;
+let redisClient: Redis | null = null;
 
-export function createRedisClient(overrides?: RedisOptions): Redis {
-  if (sharedRedisInstance && !overrides) {
-    return sharedRedisInstance;
-  }
-
-  const config = getRedisConfig();
-  const client = config.url
-    ? new Redis(config.url, { keyPrefix: config.keyPrefix, ...overrides })
-    : new Redis({
-        host: overrides?.host || config.host,
-        port: overrides?.port || config.port,
-        password: overrides?.password || config.password,
-        db: overrides?.db !== undefined ? overrides.db : config.db,
-        keyPrefix: overrides?.keyPrefix || config.keyPrefix,
-        lazyConnect: true,
-        maxRetriesPerRequest: 3,
-        ...overrides,
-      });
+export function createRedisClient(): Redis {
+  const redisUrl = process.env.REDIS_URL || "redis://${redisHost}:${redisPort}";
+  
+  const client = new Redis(redisUrl, {
+    maxRetriesPerRequest: 3,
+    retryStrategy(times) {
+      const delay = Math.min(times * 50, 2000);
+      logger.warn(\`Redis connection lost. Retrying in \${delay}ms...\`);
+      return delay;
+    },
+    reconnectOnError(err) {
+      const targetError = "READONLY";
+      if (err.message.includes(targetError)) {
+        return true;
+      }
+      return false;
+    },
+  });
 
   client.on("connect", () => {
-    logger.info(\`Connected to Redis instance [\${config.host}:\${config.port}]\`);
+    logger.info("Connected to Redis successfully");
   });
 
   client.on("error", (err) => {
-    logger.error("Redis client encountered an error", err);
+    logger.error("Redis connection error:", err);
   });
-
-  if (!overrides) {
-    sharedRedisInstance = client;
-  }
 
   return client;
 }
 
 export async function getRedisClient(): Promise<Redis> {
-  const client = createRedisClient();
-  if (client.status === "wait" || client.status === "close") {
-    await client.connect();
+  if (!redisClient) {
+    redisClient = createRedisClient();
   }
-  return client;
+  return redisClient;
+}
+
+export async function closeRedisConnection(): Promise<void> {
+  if (redisClient) {
+    await redisClient.quit();
+    redisClient = null;
+    logger.info("Closed Redis connection");
+  }
 }
 `;
   files.push({
@@ -181,7 +146,7 @@ import { createLogger } from "@workspace/logger";
 
 const logger = createLogger("RedisCache");
 
-export async function getCache<T = unknown>(key: string): Promise<T | null> {
+export async function getCache<T = Record<string, string | number | boolean | null>>(key: string): Promise<T | null> {
   try {
     const redis = await getRedisClient();
     const data = await redis.get(key);
@@ -193,7 +158,7 @@ export async function getCache<T = unknown>(key: string): Promise<T | null> {
   }
 }
 
-export async function setCache<T = unknown>(
+export async function setCache<T = Record<string, string | number | boolean | null>>(
   key: string,
   value: T,
   ttlSeconds?: number,
@@ -251,7 +216,7 @@ const logger = createLogger("RedisPubSub");
 let pubClient: Redis | null = null;
 let subClient: Redis | null = null;
 
-export async function publishRedisMessage<T = Record<string, unknown>>(
+export async function publishRedisMessage<T = Record<string, string | number | boolean | null>>(
   channel: string,
   message: T,
 ): Promise<number> {
@@ -271,7 +236,7 @@ export async function publishRedisMessage<T = Record<string, unknown>>(
   }
 }
 
-export async function subscribeRedisChannel<T = Record<string, unknown>>(
+export async function subscribeRedisChannel<T = Record<string, string | number | boolean | null>>(
   channel: string,
   handler: (message: T, channelName: string) => void | Promise<void>,
 ): Promise<Redis> {
@@ -320,7 +285,7 @@ export async function addStreamEntry(
     });
     const entryId = await redis.xadd(streamKey, "*", ...args);
     logger.info(\`Added entry [\${entryId}] to Redis Stream [\${streamKey}]\`);
-    return entryId as string;
+    return String(entryId);
   } catch (error) {
     logger.error(\`Failed to add entry to Redis Stream [\${streamKey}]\`, error);
     throw error;
@@ -338,8 +303,8 @@ export async function createConsumerGroup(
     logger.info(
       \`Created Redis Stream consumer group [\${groupName}] on stream [\${streamKey}]\`,
     );
-  } catch (error: any) {
-    if (error?.message?.includes("BUSYGROUP")) {
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("BUSYGROUP")) {
       logger.info(
         \`Consumer group [\${groupName}] already exists on stream [\${streamKey}]\`,
       );
@@ -350,6 +315,8 @@ export async function createConsumerGroup(
   }
 }
 
+type StreamGroupResponse = Array<[string, Array<[string, string[]]>]>;
+
 export async function readStreamGroup(
   streamKey: string,
   groupName: string,
@@ -358,7 +325,7 @@ export async function readStreamGroup(
 ): Promise<Array<{ id: string; message: Record<string, string> }>> {
   try {
     const redis = await getRedisClient();
-    const response = (await redis.xreadgroup(
+    const raw = await redis.xreadgroup(
       "GROUP",
       groupName,
       consumerName,
@@ -367,19 +334,26 @@ export async function readStreamGroup(
       "STREAMS",
       streamKey,
       ">",
-    )) as any;
+    );
+    const response = (raw || []) as StreamGroupResponse;
 
-    if (!response || response.length === 0) {
+    if (response.length === 0) {
       return [];
     }
 
     const results: Array<{ id: string; message: Record<string, string> }> = [];
-    const [, entries] = response[0] as [string, Array<[string, string[]]>];
+    const firstStream = response[0];
+    if (!firstStream) return [];
+    const [, entries] = firstStream;
 
     for (const [id, rawFields] of entries) {
       const messageObj: Record<string, string> = {};
       for (let i = 0; i < rawFields.length; i += 2) {
-        messageObj[rawFields[i]] = rawFields[i + 1];
+        const k = rawFields[i];
+        const v = rawFields[i + 1];
+        if (k && v !== undefined) {
+          messageObj[k] = v;
+        }
       }
       results.push({ id, message: messageObj });
     }

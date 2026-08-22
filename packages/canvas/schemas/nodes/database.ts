@@ -17,4 +17,20 @@ export const databaseDataSchema = baseNodeDataSchema.extend({
   passwordEnv: z.string().optional(),
   apiKeyEnv: z.string().optional(),
   isDefault: z.boolean().optional(),
+  // Redis instance-wide server configurations
+  maxmemoryPolicy: z
+    .enum([
+      "noeviction",
+      "allkeys-lru",
+      "volatile-lru",
+      "allkeys-lfu",
+      "volatile-lfu",
+      "volatile-ttl",
+      "allkeys-random",
+      "volatile-random",
+    ])
+    .optional(),
+  maxmemory: z.string().optional(),
+  persistenceMode: z.enum(["RDB", "AOF", "RDB+AOF", "None"]).optional(),
+  clustering: z.boolean().optional(),
 });

@@ -38,7 +38,8 @@ export type ConfigItemType =
   | "zone"
   | "entityFunctions"
   | "database"
-  | "testUsers";
+  | "testUsers"
+  | "redisSchema";
 
 export interface ActiveConfigItem {
   type: ConfigItemType;
