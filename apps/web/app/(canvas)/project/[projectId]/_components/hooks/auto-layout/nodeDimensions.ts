@@ -1,10 +1,86 @@
 import type { LayoutNode, NodeHandleData } from "./types";
 
+function getEntityColumns(node: LayoutNode) {
+  if (
+    node.data &&
+    typeof node.data === "object" &&
+    "columns" in node.data &&
+    Array.isArray(node.data.columns)
+  ) {
+    return node.data.columns;
+  }
+  return [];
+}
+
+function getEntityIndexes(node: LayoutNode) {
+  if (
+    node.data &&
+    typeof node.data === "object" &&
+    "indexes" in node.data &&
+    Array.isArray(node.data.indexes)
+  ) {
+    return node.data.indexes;
+  }
+  return [];
+}
+
+function getEntityDbType(node: LayoutNode): string | undefined {
+  if (
+    node.data &&
+    typeof node.data === "object" &&
+    "dbType" in node.data &&
+    typeof node.data.dbType === "string"
+  ) {
+    return node.data.dbType;
+  }
+  return undefined;
+}
+
+function getRedisDataStructure(node: LayoutNode): string | undefined {
+  if (
+    node.data &&
+    typeof node.data === "object" &&
+    "redisDataStructure" in node.data &&
+    typeof node.data.redisDataStructure === "string"
+  ) {
+    return node.data.redisDataStructure;
+  }
+  return undefined;
+}
+
 export function getLayoutNodeData(node: LayoutNode): NodeHandleData | undefined {
   if (!node.data || typeof node.data !== "object") {
     return undefined;
   }
-  return node.data as NodeHandleData;
+
+  const endpoints =
+    "endpoints" in node.data && Array.isArray(node.data.endpoints)
+      ? node.data.endpoints
+      : undefined;
+  const events =
+    "events" in node.data && Array.isArray(node.data.events)
+      ? node.data.events
+      : undefined;
+  const topics =
+    "topics" in node.data && Array.isArray(node.data.topics)
+      ? node.data.topics
+      : undefined;
+  const consumedEvents =
+    "consumedEvents" in node.data && Array.isArray(node.data.consumedEvents)
+      ? node.data.consumedEvents
+      : undefined;
+  const publishedEvents =
+    "publishedEvents" in node.data && Array.isArray(node.data.publishedEvents)
+      ? node.data.publishedEvents
+      : undefined;
+
+  return {
+    endpoints,
+    events,
+    topics,
+    consumedEvents,
+    publishedEvents,
+  };
 }
 
 export function getNodeDimensions(node: LayoutNode): {
@@ -12,22 +88,32 @@ export function getNodeDimensions(node: LayoutNode): {
   height: number;
 } {
   const measured =
-    "measured" in node && node.measured
-      ? (node.measured as { width?: number; height?: number })
+    "measured" in node &&
+    typeof node.measured === "object" &&
+    node.measured !== null
+      ? node.measured
+      : undefined;
+
+  const measuredWidth =
+    measured && "width" in measured && typeof measured.width === "number"
+      ? measured.width
+      : undefined;
+  const measuredHeight =
+    measured && "height" in measured && typeof measured.height === "number"
+      ? measured.height
       : undefined;
 
   const isMeasured = Boolean(
-    measured &&
-      typeof measured.width === "number" &&
-      typeof measured.height === "number" &&
-      measured.width > 0 &&
-      measured.height > 0,
+    measuredWidth !== undefined &&
+      measuredHeight !== undefined &&
+      measuredWidth > 0 &&
+      measuredHeight > 0,
   );
 
-  if (isMeasured && node.type !== "entity") {
+  if (isMeasured && node.type !== "entity" && measuredWidth !== undefined && measuredHeight !== undefined) {
     return {
-      width: measured!.width!,
-      height: measured!.height!,
+      width: measuredWidth,
+      height: measuredHeight,
     };
   }
 
@@ -52,8 +138,6 @@ export function getNodeDimensions(node: LayoutNode): {
     case "db_ref":
     case "vector_db_ref":
       return { width: 280, height: 180 };
-    case "step":
-      return { width: 300, height: 220 };
     case "end":
     case "END":
       return { width: 140, height: 60 };
@@ -66,7 +150,34 @@ export function getNodeDimensions(node: LayoutNode): {
     case "web_client_page":
     case "kafka":
     case "pubsub":
-    case "queue": {
+    case "queue":
+    case "eventConsumer": {
+      return { width: 280, height: 160 };
+    }
+    case "database": {
+      return { width: 280, height: 160 };
+    }
+    case "flow": {
+      const data = getLayoutNodeData(node);
+      const epCount = Array.isArray(data?.endpoints)
+        ? data.endpoints.length
+        : 1;
+      const estHeight = Math.max(140, 60 + epCount * 44);
+      return { width: 280, height: estHeight };
+    }
+    case "zone": {
+      return { width: 340, height: 260 };
+    }
+    case "event": {
+      return { width: 260, height: 160 };
+    }
+    case "auth": {
+      return { width: 300, height: 200 };
+    }
+    case "app": {
+      return { width: 280, height: 180 };
+    }
+    case "group": {
       const data = getLayoutNodeData(node);
       const count =
         (Array.isArray(data?.endpoints) ? data.endpoints.length : 0) +
@@ -76,52 +187,55 @@ export function getNodeDimensions(node: LayoutNode): {
       return { width: 320, height: estHeight };
     }
     case "entity": {
-      const data = node.data as
-        | {
-            columns?: any[];
-            indexes?: any[];
-            dbOperations?: any[];
-            description?: string;
-            dbType?: string;
-          }
-        | undefined;
-      const isVector = data?.dbType === "vector";
-      const colCount = data?.columns?.length ?? 1;
-      const idxCount = data?.indexes?.length ?? 0;
+      const dbType = getEntityDbType(node);
+      const isVector = dbType === "vector";
+      const isRedis = dbType === "redis";
+      const columns = getEntityColumns(node);
+      const indexes = getEntityIndexes(node);
+      const redisStructure = getRedisDataStructure(node);
+      const colCount = columns.length > 0 ? columns.length : 1;
+      const idxCount = indexes.length;
 
-      // Header: 68px (standard SQL with engine select) or 44px (vector)
-      const headerH = isVector ? 44 : 68;
+      // Header: 68px (standard SQL with engine select) or 44px (vector/redis)
+      const headerH = isVector || isRedis ? 44 : 68;
       // Description box is always rendered in EntityNode DOM (~44px)
       const descH = 44;
       // Vector config block (if vector db type): ~120px
       const vectorConfigH = isVector ? 120 : 0;
-      // Column list: header 24px + 42px per column row
-      const columnsH = 24 + colCount * 42;
-      // Index list: header 24px + 44px per index row (if indexes present)
-      const indexesH = idxCount > 0 ? 24 + idxCount * 44 : 0;
+      // Redis config block (if redis db type): ~130px
+      const redisConfigH = isRedis ? 130 : 0;
+      // Column list: rendered for relational, vector, or Redis Hash/JSON
+      const showColumns =
+        !isRedis ||
+        redisStructure === "hash" ||
+        redisStructure === "json" ||
+        !redisStructure;
+      const columnsH = showColumns ? 24 + colCount * 42 : 0;
+      // Index list: header 24px + 44px per index row (if indexes present and not redis/vector)
+      const indexesH = !isRedis && !isVector && idxCount > 0 ? 24 + idxCount * 44 : 0;
       // DbOperations list header: ~30px
       const dbOpsH = 30;
       // Card padding / bottom margin
       const paddingH = 16;
 
       const estHeight =
-        headerH + descH + vectorConfigH + columnsH + indexesH + dbOpsH + paddingH;
+        headerH + descH + vectorConfigH + redisConfigH + columnsH + indexesH + dbOpsH + paddingH;
       const estWidth = 320;
 
-      if (isMeasured) {
+      if (isMeasured && measuredWidth !== undefined && measuredHeight !== undefined) {
         return {
-          width: Math.max(measured!.width!, estWidth),
-          height: Math.max(measured!.height!, estHeight),
+          width: Math.max(measuredWidth, estWidth),
+          height: Math.max(measuredHeight, estHeight),
         };
       }
 
       return { width: estWidth, height: Math.max(220, estHeight) };
     }
     default:
-      if (isMeasured) {
+      if (isMeasured && measuredWidth !== undefined && measuredHeight !== undefined) {
         return {
-          width: measured!.width!,
-          height: measured!.height!,
+          width: measuredWidth,
+          height: measuredHeight,
         };
       }
       return { width: 300, height: 200 };
@@ -138,12 +252,10 @@ export function getHandleYRatio(
     const colMatch = handleId.match(/^(?:source|target)-(\d+)$/);
     if (colMatch) {
       const colIndex = parseInt(colMatch[1]!, 10);
-      const data = node.data as
-        | { columns?: any[]; description?: string; dbType?: string }
-        | undefined;
+      const dbType = getEntityDbType(node);
       const { height } = getNodeDimensions(node);
 
-      const isVector = data?.dbType === "vector";
+      const isVector = dbType === "vector";
       const headerH = isVector ? 44 : 68;
       const descH = 44;
       const vectorConfigH = isVector ? 120 : 0;
@@ -161,7 +273,7 @@ export function getHandleYRatio(
 
   if (Array.isArray(data.endpoints) && data.endpoints.length > 0) {
     const idx = data.endpoints.findIndex((ep) => {
-      const id = ep?.id || ep?._id;
+      const id = ep && typeof ep === "object" && ("id" in ep && ep.id || "_id" in ep && ep._id);
       return Boolean(id && handleId.includes(String(id)));
     });
     if (idx !== -1) {
@@ -171,7 +283,7 @@ export function getHandleYRatio(
 
   if (Array.isArray(data.events) && data.events.length > 0) {
     const idx = data.events.findIndex((ev) => {
-      const id = ev?.id || ev?._id;
+      const id = ev && typeof ev === "object" && ("id" in ev && ev.id || "_id" in ev && ev._id);
       return Boolean(id && handleId.includes(String(id)));
     });
     if (idx !== -1) {
@@ -181,7 +293,10 @@ export function getHandleYRatio(
 
   if (Array.isArray(data.topics) && data.topics.length > 0) {
     const idx = data.topics.findIndex((tp) => {
-      const id = tp?.id || tp?._id || tp?.name;
+      const id =
+        tp &&
+        typeof tp === "object" &&
+        ("id" in tp && tp.id || "_id" in tp && tp._id || "name" in tp && tp.name);
       return Boolean(id && handleId.includes(String(id)));
     });
     if (idx !== -1) {
@@ -191,7 +306,10 @@ export function getHandleYRatio(
 
   if (Array.isArray(data.consumedEvents) && data.consumedEvents.length > 0) {
     const idx = data.consumedEvents.findIndex((ev) => {
-      const id = typeof ev === "string" ? ev : ev?.id || ev?._id;
+      const id =
+        typeof ev === "string"
+          ? ev
+          : ev && typeof ev === "object" && ("id" in ev && ev.id || "_id" in ev && ev._id);
       return Boolean(id && handleId.includes(String(id)));
     });
     if (idx !== -1) {
@@ -201,7 +319,10 @@ export function getHandleYRatio(
 
   if (Array.isArray(data.publishedEvents) && data.publishedEvents.length > 0) {
     const idx = data.publishedEvents.findIndex((ev) => {
-      const id = typeof ev === "string" ? ev : ev?.id || ev?._id;
+      const id =
+        typeof ev === "string"
+          ? ev
+          : ev && typeof ev === "object" && ("id" in ev && ev.id || "_id" in ev && ev._id);
       return Boolean(id && handleId.includes(String(id)));
     });
     if (idx !== -1) {
@@ -224,15 +345,19 @@ export function getIsPkNode(
   node?: LayoutNode,
   handleId?: string | null,
 ): boolean {
-  if (!node || !handleId || !node.data || typeof node.data !== "object")
-    return false;
-  const columns = (node.data as { columns?: any[] }).columns;
-  if (!Array.isArray(columns)) return false;
+  if (!node || !handleId) return false;
+  const columns = getEntityColumns(node);
+  if (columns.length === 0) return false;
   const match = handleId.match(/^(?:source|target)-(\d+)$/);
   if (!match) return false;
   const idx = parseInt(match[1]!, 10);
   const col = columns[idx];
-  return Boolean(col?.isPrimaryKey || col?.name === "_id");
+  return Boolean(
+    col &&
+      typeof col === "object" &&
+      (("isPrimaryKey" in col && col.isPrimaryKey) ||
+        ("name" in col && col.name === "_id")),
+  );
 }
 
 export function getHandleYOffset(

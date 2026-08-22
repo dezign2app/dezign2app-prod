@@ -1,9 +1,10 @@
 import React from "react";
-import { Database, Key, Server, Plus, Table2, Trash2, CheckCircle2 } from "lucide-react";
+import { Database, Key, Server, Plus, Table2, Trash2, CheckCircle2, DatabaseZap, HardDrive } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
+import { Switch } from "@workspace/ui/components/switch";
 import {
   Select,
   SelectContent,
@@ -12,11 +13,46 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { DEFAULT_DATABASE_ENV_VARS, getUniqueNodeLabel } from "@workspace/canvas";
+import { BackendNode, DEFAULT_DATABASE_ENV_VARS, getUniqueNodeLabel } from "@workspace/canvas";
+import { cn } from "@workspace/ui/lib/utils";
 
 interface DatabaseConfigProps {
   id: string;
   nodeId: string;
+}
+
+type DatabaseEngine = NonNullable<BackendNode["data"]["dbEngine"]>;
+type MaxmemoryPolicy = NonNullable<BackendNode["data"]["maxmemoryPolicy"]>;
+type PersistenceMode = NonNullable<BackendNode["data"]["persistenceMode"]>;
+
+function isDatabaseEngine(val: string): val is DatabaseEngine {
+  return (
+    val === "sqlite" ||
+    val === "postgres" ||
+    val === "mysql" ||
+    val === "mongodb" ||
+    val === "pinecone" ||
+    val === "qdrant" ||
+    val === "convex" ||
+    val === "redis"
+  );
+}
+
+function isMaxmemoryPolicy(val: string): val is MaxmemoryPolicy {
+  return (
+    val === "noeviction" ||
+    val === "allkeys-lru" ||
+    val === "volatile-lru" ||
+    val === "allkeys-lfu" ||
+    val === "volatile-lfu" ||
+    val === "volatile-ttl" ||
+    val === "allkeys-random" ||
+    val === "volatile-random"
+  );
+}
+
+function isPersistenceMode(val: string): val is PersistenceMode {
+  return val === "None" || val === "RDB" || val === "AOF" || val === "RDB+AOF";
 }
 
 export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
@@ -29,16 +65,21 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
   if (!dbNode) return null;
 
   const data = dbNode.data || {};
-  const label = data.label || "Primary SQLite DB";
+  const label = data.label || "Primary Database";
   const engine = data.dbEngine || "sqlite";
-  const connStringEnv = data.connectionStringEnv || DEFAULT_DATABASE_ENV_VARS.connectionStringEnv;
+  const connStringEnv = data.connectionStringEnv || (engine === "redis" ? "REDIS_URL" : DEFAULT_DATABASE_ENV_VARS.connectionStringEnv);
   const dbFilePathEnv = data.dbFilePathEnv || DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv;
 
-  const attachedTables = nodes.filter(
+  const attachedEntities = nodes.filter(
     (n) => n.type === "entity" && n.data?.databaseId === nodeId,
   );
 
-  const handleUpdateField = (field: string, value: string | boolean | undefined) => {
+  const isRedis = engine === "redis";
+
+  const handleUpdateField = <K extends keyof BackendNode["data"]>(
+    field: K,
+    value: BackendNode["data"][K],
+  ) => {
     updateNode(nodeId, {
       data: {
         ...data,
@@ -50,7 +91,7 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
   const handleAddTableToDb = () => {
     const tableId = crypto.randomUUID();
     const dbPos = dbNode.position || { x: 100, y: 100 };
-    const tableLabel = getUniqueNodeLabel(nodes, `Table_${attachedTables.length + 1}`, "entity");
+    const tableLabel = getUniqueNodeLabel(nodes, `Table_${attachedEntities.length + 1}`, "entity");
 
     addNode({
       id: tableId,
@@ -74,24 +115,66 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
     });
   };
 
+  const handleAddRedisSchemaToDb = () => {
+    const schemaId = crypto.randomUUID();
+    const dbPos = dbNode.position || { x: 100, y: 100 };
+    const schemaLabel = getUniqueNodeLabel(nodes, `Cache_${attachedEntities.length + 1}`, "entity");
+
+    addNode({
+      id: schemaId,
+      type: "entity",
+      position: { x: dbPos.x, y: dbPos.y + 220 },
+      data: {
+        label: schemaLabel,
+        dbType: "redis",
+        redisDataStructure: "hash",
+        keyTemplate: "user:{id}:profile",
+        clusterHashTagParam: "id",
+        ttl: { value: 3600, unit: "s" },
+        cacheStrategy: "Cache Aside",
+        columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
+        databaseId: nodeId,
+      },
+    });
+
+    addEdge({
+      id: `edge-${nodeId}-${schemaId}`,
+      source: nodeId,
+      target: schemaId,
+      sourceHandle: "database-source",
+      targetHandle: "database-entity-target",
+      type: "database-connection",
+    });
+  };
+
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
       <div className="flex items-center gap-3 pb-4 border-b border-border/60">
-        <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
-          <Database size={22} />
+        <div className={cn(
+          "p-2.5 rounded-xl border",
+          isRedis
+            ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+            : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+        )}>
+          {isRedis ? <DatabaseZap size={22} /> : <Database size={22} />}
         </div>
         <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold tracking-tight truncate">
               {label}
             </h2>
-            <Badge variant="outline" className="text-[10px] uppercase font-mono bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400">
+            <Badge variant="outline" className={cn(
+              "text-[10px] uppercase font-mono",
+              isRedis
+                ? "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400 font-semibold"
+                : "bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400"
+            )}>
               {engine}
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
-            Configure database connection environment variables & attached tables.
+            Configure database connection environment variables, server settings & attached schemas.
           </p>
         </div>
       </div>
@@ -99,7 +182,7 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
       {/* General Settings */}
       <div className="space-y-4">
         <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-          <Server size={14} className="text-amber-500" />
+          <Server size={14} className={isRedis ? "text-red-500" : "text-amber-500"} />
           General Info
         </h3>
 
@@ -108,7 +191,7 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
           <Input
             value={label}
             onChange={(e) => handleUpdateField("label", e.target.value)}
-            placeholder="e.g. Primary SQLite DB"
+            placeholder="e.g. Primary Redis Cache"
             className="h-8 text-xs"
           />
         </div>
@@ -117,39 +200,157 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
           <Label className="text-xs font-semibold">Database Engine</Label>
           <Select
             value={engine}
-            onValueChange={(val) => handleUpdateField("dbEngine", val)}
+            onValueChange={(val) => {
+              if (isDatabaseEngine(val)) {
+                handleUpdateField("dbEngine", val);
+                if (val === "redis" && !data.connectionStringEnv) {
+                  handleUpdateField("connectionStringEnv", "REDIS_URL");
+                }
+              }
+            }}
           >
             <SelectTrigger className="h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="sqlite" className="text-xs">
-                SQLite 3.x (Default)
+                SQLite 3.x (Relational)
               </SelectItem>
-              {/* <SelectItem value="postgres" className="text-xs">
-                PostgreSQL
+              <SelectItem value="postgres" className="text-xs">
+                PostgreSQL (Relational)
               </SelectItem>
               <SelectItem value="mysql" className="text-xs">
-                MySQL / MariaDB
+                MySQL (Relational)
               </SelectItem>
               <SelectItem value="mongodb" className="text-xs">
-                MongoDB
+                MongoDB (Document)
+              </SelectItem>
+              <SelectItem value="redis" className="text-xs">
+                Redis 7.x (Key-Value / Cache)
               </SelectItem>
               <SelectItem value="pinecone" className="text-xs">
                 Pinecone (Vector)
               </SelectItem>
-              <SelectItem value="redis" className="text-xs">
-                Redis (Key-Value)
-              </SelectItem> */}
             </SelectContent>
           </Select>
         </div>
       </div>
 
+      {/* Redis Server Instance-Wide Configurations (maxmemory-policy & persistence) */}
+      {isRedis && (
+        <div className="space-y-4 pt-2 border-t border-border/40">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400 flex items-center gap-1.5">
+            <DatabaseZap size={14} />
+            Redis Instance Server Configurations (Server-Wide)
+          </h3>
+
+          {/* Maxmemory Eviction Policy */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold">Eviction Policy (maxmemory-policy)</Label>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {data.maxmemoryPolicy || "volatile-lru"}
+              </span>
+            </div>
+            <Select
+              value={data.maxmemoryPolicy || "volatile-lru"}
+              onValueChange={(val) => {
+                if (isMaxmemoryPolicy(val)) {
+                  handleUpdateField("maxmemoryPolicy", val);
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="volatile-lru" className="text-xs">
+                  volatile-lru (Evict keys with TTL using approx. LRU)
+                </SelectItem>
+                <SelectItem value="allkeys-lru" className="text-xs">
+                  allkeys-lru (Evict any key using approx. LRU)
+                </SelectItem>
+                <SelectItem value="volatile-lfu" className="text-xs">
+                  volatile-lfu (Evict keys with TTL using LFU frequency)
+                </SelectItem>
+                <SelectItem value="allkeys-lfu" className="text-xs">
+                  allkeys-lfu (Evict any key using LFU frequency)
+                </SelectItem>
+                <SelectItem value="volatile-ttl" className="text-xs">
+                  volatile-ttl (Evict keys with TTL starting with shortest remaining)
+                </SelectItem>
+                <SelectItem value="noeviction" className="text-xs">
+                  noeviction (Return OOM error on writes when full)
+                </SelectItem>
+                <SelectItem value="allkeys-random" className="text-xs">
+                  allkeys-random (Evict random keys)
+                </SelectItem>
+                <SelectItem value="volatile-random" className="text-xs">
+                  volatile-random (Evict random keys with TTL)
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground">
+              Applied instance-wide across all keys and namespaces on this Redis node.
+            </p>
+          </div>
+
+          {/* Maxmemory Limit */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Max Memory Limit (maxmemory)</Label>
+              <Input
+                value={data.maxmemory || "2gb"}
+                onChange={(e) => handleUpdateField("maxmemory", e.target.value)}
+                placeholder="e.g. 2gb or 512mb"
+                className="h-8 text-xs font-mono"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Persistence Mode</Label>
+              <Select
+                value={data.persistenceMode || "RDB+AOF"}
+                onValueChange={(val) => {
+                  if (isPersistenceMode(val)) {
+                    handleUpdateField("persistenceMode", val);
+                  }
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="RDB+AOF" className="text-xs">RDB + AOF (Recommended)</SelectItem>
+                  <SelectItem value="AOF" className="text-xs">AOF (Append Only File)</SelectItem>
+                  <SelectItem value="RDB" className="text-xs">RDB (Point-in-time snapshots)</SelectItem>
+                  <SelectItem value="None" className="text-xs">None (In-Memory Only / Pure Cache)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Redis Cluster Mode Toggle */}
+          <div className="flex items-center justify-between p-2.5 rounded-lg bg-secondary/30 border border-border/40">
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold">Redis Cluster Mode</span>
+              <span className="text-[10px] text-muted-foreground">
+                Enables hash-slot sharding across cluster master nodes
+              </span>
+            </div>
+            <Switch
+              checked={data.clustering ?? false}
+              onCheckedChange={(checked) => handleUpdateField("clustering", checked)}
+              className="scale-90"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Environment Variable Configurations */}
       <div className="space-y-4 pt-2 border-t border-border/40">
         <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-          <Key size={14} className="text-amber-500" />
+          <Key size={14} className={isRedis ? "text-red-500" : "text-amber-500"} />
           Environment Variables (Predefined & Editable)
         </h3>
 
@@ -158,7 +359,7 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
           <Input
             value={connStringEnv}
             onChange={(e) => handleUpdateField("connectionStringEnv", e.target.value)}
-            placeholder="e.g. DATABASE_URL"
+            placeholder="e.g. REDIS_URL or DATABASE_URL"
             className="h-8 text-xs font-mono"
           />
           <p className="text-[11px] text-muted-foreground">
@@ -182,41 +383,62 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
         )}
       </div>
 
-      {/* Hanging / Attached Tables */}
+      {/* Hanging / Attached Schemas & Tables */}
       <div className="space-y-3 pt-2 border-t border-border/40">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <Table2 size={14} className="text-amber-500" />
-            Hanging Entity Tables ({attachedTables.length})
+            {isRedis ? <DatabaseZap size={14} className="text-red-500" /> : <Table2 size={14} className="text-amber-500" />}
+            Attached Schemas ({attachedEntities.length})
           </h3>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
-            onClick={handleAddTableToDb}
-          >
-            <Plus size={12} className="mr-1 text-amber-500" />
-            Add Table
-          </Button>
+          <div className="flex items-center gap-1.5">
+            {isRedis ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-500/10"
+                onClick={handleAddRedisSchemaToDb}
+              >
+                <Plus size={12} className="mr-1 text-red-500" />
+                Add Redis Schema
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                onClick={handleAddTableToDb}
+              >
+                <Plus size={12} className="mr-1 text-amber-500" />
+                Add Table
+              </Button>
+            )}
+          </div>
         </div>
 
-        {attachedTables.length === 0 ? (
+        {attachedEntities.length === 0 ? (
           <div className="p-4 rounded-lg border border-dashed border-border text-center text-xs text-muted-foreground">
-            No tables currently attached to this database. Click "+ Add Table" above or connect a table on the canvas.
+            No schemas currently attached to this database. Click &quot;+ Add&quot; above or connect on the canvas.
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {attachedTables.map((t) => (
+            {attachedEntities.map((t) => (
               <div
                 key={t.id}
                 className="flex items-center justify-between p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <CheckCircle2 size={14} className="text-amber-500 shrink-0" />
-                  <span className="font-semibold truncate">{t.data.label || "Table"}</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    ({(t.data.columns || []).length} cols)
-                  </span>
+                  <CheckCircle2 size={14} className={isRedis ? "text-red-500 shrink-0" : "text-amber-500 shrink-0"} />
+                  <span className="font-semibold truncate">{t.data.label || "Schema"}</span>
+                  {t.data.dbType === "redis" && (
+                    <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase font-mono">
+                      {t.data.redisDataStructure || "HASH"}
+                    </Badge>
+                  )}
+                  {t.data.keyTemplate && (
+                    <span className="text-[10px] text-muted-foreground font-mono truncate">
+                      {t.data.keyTemplate}
+                    </span>
+                  )}
                 </div>
                 <Button
                   size="icon"
@@ -244,3 +466,4 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
     </div>
   );
 }
+

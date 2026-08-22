@@ -26,6 +26,7 @@ import { LangGraphRouteConfig } from "./config-sidebar/LangGraphRouteConfig";
 import { EntityFunctionsConfig } from "./config-sidebar/EntityFunctionsConfig";
 import { DatabaseConfig } from "./config-sidebar/DatabaseConfig";
 import { TestUsersConfig } from "./config-sidebar/TestUsersConfig";
+import { RedisSchemaConfig } from "./config-sidebar/RedisSchemaConfig";
 
 export const ConfigSidebar = () => {
   const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
@@ -224,6 +225,8 @@ export const ConfigSidebar = () => {
             <DatabaseConfig id={id} nodeId={nodeId} />
           ) : type === "testUsers" ? (
             <TestUsersConfig id={id} nodeId={nodeId} />
+          ) : type === "redisSchema" ? (
+            <RedisSchemaConfig id={id} nodeId={nodeId} />
           ) : (
             <EventConfig id={id} nodeId={nodeId} />
           )}
