@@ -435,9 +435,18 @@ function generateTableHelpers(
  *
  * ORM-free by design. No Drizzle, no query builders.
  */
+export interface SqliteRawOptions {
+  packageName?: string;
+  packageFolder?: string;
+  connectionEnvVar?: string;
+  dbFilePathEnv?: string;
+  dbNode?: BackendNode;
+}
+
 export function compileRawSqliteDatabase(
   allNodes: BackendNode[],
   _allEdges: BackendEdge[],
+  options: SqliteRawOptions = {},
 ): CompiledDatabaseResult {
   const entityNodes = allNodes.filter(
     (n) => n.type === "entity" || n.type === "db_ref",
@@ -712,7 +721,7 @@ export function compileRawSqliteDatabase(
     language: "json",
     content: JSON.stringify(
       {
-        name: "@workspace/db",
+        name: options.packageName || "@workspace/db",
         version: "0.0.0",
         private: true,
         description: "Raw SQLite helpers — injection-safe prepared statements, no ORM",

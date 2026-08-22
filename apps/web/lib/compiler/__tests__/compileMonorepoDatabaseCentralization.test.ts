@@ -432,19 +432,19 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
 
     const result = compileMonorepo([dbNode], [], [], [], [], "SqliteDbMonorepo");
 
-    // 1. Verify packages/db files exist
-    const dbConnection = result.files.find((f) => f.filename === "packages/db/connection.ts");
+    // 1. Verify packages/db/primary-sqlite-db files exist
+    const dbConnection = result.files.find((f) => f.filename === "packages/db/primary-sqlite-db/connection.ts");
     expect(dbConnection).toBeDefined();
 
-    const dbIndex = result.files.find((f) => f.filename === "packages/db/index.ts");
+    const dbIndex = result.files.find((f) => f.filename === "packages/db/primary-sqlite-db/index.ts");
     expect(dbIndex).toBeDefined();
 
-    const dbHelpersIndex = result.files.find((f) => f.filename === "packages/db/helpers/index.ts");
+    const dbHelpersIndex = result.files.find((f) => f.filename === "packages/db/primary-sqlite-db/helpers/index.ts");
     expect(dbHelpersIndex).toBeDefined();
 
-    // 2. Verify root tsconfig references packages/db
+    // 2. Verify root tsconfig references packages/db/primary-sqlite-db
     const rootTsconfig = result.files.find((f) => f.filename === "tsconfig.json");
-    expect(rootTsconfig?.content).toContain('"path": "packages/db"');
+    expect(rootTsconfig?.content).toContain('"path": "packages/db/primary-sqlite-db"');
   });
 
   it("should generate singular/plural compatibility views and correctly resolve created_by FK joins with user", () => {

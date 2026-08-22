@@ -200,12 +200,21 @@ function generateDrizzleTableSchema(
   return code;
 }
 
+export interface SqliteDrizzleOptions {
+  packageName?: string;
+  packageFolder?: string;
+  connectionEnvVar?: string;
+  dbFilePathEnv?: string;
+  dbNode?: BackendNode;
+}
+
 /**
  * Compiles database entity nodes into a SQLite + Drizzle ORM package
  */
 export function compileSqliteDrizzleDatabase(
   allNodes: BackendNode[],
   allEdges: BackendEdge[],
+  options: SqliteDrizzleOptions = {},
 ): CompiledDatabaseResult {
   const entityNodes = allNodes.filter(
     (n) => n.type === "entity" || n.type === "db_ref",
@@ -295,7 +304,7 @@ export { schema };
 
   const dbPackageJson = JSON.stringify(
     {
-      name: "@workspace/db",
+      name: options.packageName || "@workspace/db",
       version: "0.0.0",
       private: true,
       description: "Generated Drizzle ORM database schemas package",

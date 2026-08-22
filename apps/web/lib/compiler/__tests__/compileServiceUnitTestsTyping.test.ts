@@ -41,7 +41,7 @@ describe("Service Unit Test Generation - Strict Typing", () => {
     const files = generateServiceUnitTests("OrderService", endpoints, testCases);
 
     expect(files.length).toBeGreaterThan(0);
-    const testFile = files[0];
+    const testFile = files[0]!;
     expect(testFile.filename).toBe("tests/unit/postOrders_validOrderRequest.unit.test.ts");
 
     // 1. Must import generated types from @workspace/types
@@ -60,7 +60,7 @@ describe("Service Unit Test Generation - Strict Typing", () => {
   it("should generate clean healthRoute unit test with zero any casting", () => {
     const files = generateServiceUnitTests("PaymentService", []);
     expect(files.length).toBe(1);
-    const healthTest = files[0];
+    const healthTest = files[0]!;
     expect(healthTest.filename).toBe("tests/unit/healthRoute.unit.test.ts");
     expect(healthTest.content).not.toContain(": any");
     expect(healthTest.content).not.toContain(": unknown");

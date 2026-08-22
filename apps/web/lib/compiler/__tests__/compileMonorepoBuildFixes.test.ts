@@ -375,8 +375,8 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
     expect(authFile?.content).toContain("export const auth = betterAuth({");
     expect(authFile?.content).toContain("export type Auth = typeof auth;");
 
-    // 2. Verify packages/db/connection.ts contains turbopackIgnore comments
-    const dbConnFile = result.files.find((f) => f.filename === "packages/db/connection.ts");
+    // 2. Verify packages/db/*/connection.ts contains turbopackIgnore comments
+    const dbConnFile = result.files.find((f) => f.filename.includes("packages/db/") && f.filename.endsWith("connection.ts"));
     expect(dbConnFile).toBeDefined();
     expect(dbConnFile?.content).toContain("/* turbopackIgnore: true */");
   });
