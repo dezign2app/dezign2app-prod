@@ -79,14 +79,43 @@ export function GraphView({ projectId }: GraphViewProps) {
     () => new Set(graphNodes.map((n) => n.id)),
     [graphNodes],
   );
-  const validEndpointKeys = React.useMemo(
-    () => new Set(endpoints.map((ep) => `${ep.nodeId}::${ep.id}`)),
-    [endpoints],
-  );
-  const validEventKeys = React.useMemo(
-    () => new Set(events.map((ev) => `${ev.nodeId}::${ev.id}`)),
-    [events],
-  );
+  const validEndpointKeys = React.useMemo(() => {
+    const keys = new Set(endpoints.map((ep) => `${ep.nodeId}::${ep.id}`));
+    nodes.forEach((n) => {
+      (n.data?.endpoints as any[])?.forEach((ep: any) => {
+        if (ep?.id) keys.add(`${n.id}::${ep.id}`);
+      });
+      (n.data?.routeGroups as any[])?.forEach((rg: any) => {
+        rg.endpoints?.forEach((ep: any) => {
+          if (ep?.id) keys.add(`${n.id}::${ep.id}`);
+        });
+      });
+    });
+    return keys;
+  }, [endpoints, nodes]);
+
+  const validEventKeys = React.useMemo(() => {
+    const keys = new Set(events.map((ev) => `${ev.nodeId}::${ev.id}`));
+    endpoints.forEach((ep) => {
+      ep.publishedEvents?.forEach((pev) => {
+        if (pev?.id) keys.add(`${ep.nodeId}::${pev.id}`);
+      });
+    });
+    nodes.forEach((n) => {
+      (n.data?.publishedEvents as any[])?.forEach((pev: any) => {
+        if (pev?.id) keys.add(`${n.id}::${pev.id}`);
+      });
+      (n.data?.consumedEvents as any[])?.forEach((cev: any) => {
+        if (cev?.id) keys.add(`${n.id}::${cev.id}`);
+      });
+      (n.data?.endpoints as any[])?.forEach((ep: any) => {
+        ep.publishedEvents?.forEach((pev: any) => {
+          if (pev?.id) keys.add(`${n.id}::${pev.id}`);
+        });
+      });
+    });
+    return keys;
+  }, [events, endpoints, nodes]);
 
   const graphEdges = React.useMemo(() => {
     return edges.filter((e) => {
