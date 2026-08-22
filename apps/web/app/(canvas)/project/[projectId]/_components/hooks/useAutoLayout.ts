@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
@@ -81,7 +81,15 @@ export function useGraphAutoLayout(options?: UseGraphAutoLayoutOptions) {
   const onNodesChange = options?.onNodesChange ?? store.onNodesChange;
 
   const storeEndpoints = store.endpoints;
-  const storeEvents = store.events;
+  const storeEvents = useMemo(() => {
+    const all = [...store.events];
+    store.endpoints.forEach((ep) => {
+      ep.publishedEvents?.forEach((pev) => {
+        all.push({ ...pev, nodeId: ep.nodeId, variant: "publish" as const });
+      });
+    });
+    return all;
+  }, [store.events, store.endpoints]);
 
   const handleLayout = useCallback(
     (direction: string = "LR") => {
@@ -139,7 +147,15 @@ export function useAutoLayout(options?: UseAutoLayoutOptions) {
   const onNodesChange = options?.onNodesChange;
 
   const storeEndpoints = store.endpoints;
-  const storeEvents = store.events;
+  const storeEvents = useMemo(() => {
+    const all = [...store.events];
+    store.endpoints.forEach((ep) => {
+      ep.publishedEvents?.forEach((pev) => {
+        all.push({ ...pev, nodeId: ep.nodeId, variant: "publish" as const });
+      });
+    });
+    return all;
+  }, [store.events, store.endpoints]);
 
   const handleLayout = useCallback(
     (direction: string = "LR") => {

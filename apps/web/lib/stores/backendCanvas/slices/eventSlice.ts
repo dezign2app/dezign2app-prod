@@ -49,9 +49,13 @@ export const createEventSlice = (
 
     let endpointsChanged = false;
     const pendingEndpointUpserts = [...get().pendingEndpointUpserts];
+    let updatedEndpointEvent: AnyMessagingResource | null = null;
+    let endpointOwnerNodeId: string = "";
+
     const nextEndpoints = get().endpoints.map((ep) => {
       if (ep.publishedEvents?.some((pev) => pev.id === id)) {
         endpointsChanged = true;
+        endpointOwnerNodeId = ep.nodeId;
         const updatedEp = {
           ...ep,
           publishedEvents: ep.publishedEvents.map((pev) => {
@@ -66,6 +70,7 @@ export const createEventSlice = (
               updatedItem.messagingResourceId = changes.messagingResourceId;
             if (changes.payloadSchema !== undefined)
               updatedItem.payloadSchema = changes.payloadSchema;
+            updatedEndpointEvent = updatedItem;
             return updatedItem;
           }),
         };
@@ -88,6 +93,21 @@ export const createEventSlice = (
         ...(endpointsChanged ? { endpoints: nextEndpoints, pendingEndpointUpserts } : {}),
         edges: synced.edges,
         pendingEventUpserts: [...get().pendingEventUpserts, updated],
+        pendingEdgeUpserts: [...get().pendingEdgeUpserts, ...synced.added],
+        pendingEdgeRemovals: [...get().pendingEdgeRemovals, ...synced.removed],
+      });
+    } else if (updatedEndpointEvent && endpointOwnerNodeId) {
+      const synced = syncConfiguredEventEdge(
+        updatedEndpointEvent,
+        endpointOwnerNodeId,
+        "publish",
+        get().nodes,
+        get().edges,
+      );
+      set({
+        endpoints: nextEndpoints,
+        pendingEndpointUpserts,
+        edges: synced.edges,
         pendingEdgeUpserts: [...get().pendingEdgeUpserts, ...synced.added],
         pendingEdgeRemovals: [...get().pendingEdgeRemovals, ...synced.removed],
       });
