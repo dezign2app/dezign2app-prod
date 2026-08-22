@@ -427,6 +427,7 @@ export type BackendNodeData = BaseNodeData &
 
 export type BackendNode = {
   id: string;
+  nodeId?: string;
   type: BackendNodeType;
   position: { x: number; y: number };
   data: BackendNodeData;

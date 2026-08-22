@@ -13,8 +13,19 @@ export interface CompiledServiceResult {
   files: CompiledFile[];
 }
 
+export interface CompiledDatabasePackage {
+  packageName: string;
+  packageFolder: string;
+  dbEngine: string;
+  databaseNodeId?: string;
+  databaseLabel?: string;
+  files: CompiledFile[];
+  reusableFunctions: ReusableFunction[];
+}
+
 export interface CompiledDatabaseResult {
   files: CompiledFile[];
+  packages?: CompiledDatabasePackage[];
   /** Reusable raw SQL CRUD functions generated for each table */
   reusableFunctions: ReusableFunction[];
 }

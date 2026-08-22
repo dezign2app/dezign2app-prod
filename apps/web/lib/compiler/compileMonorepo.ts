@@ -107,12 +107,28 @@ export function compileMonorepo(
     });
   });
 
-  // 4. Generate Shared Package: packages/db (@workspace/db)
+  // 4. Generate Shared Database Packages under packages/db/* (@workspace/db or @workspace/db-<name>)
   const compiledDb = compileDatabaseNodes(nodes, edges);
-  if (compiledDb.files.length > 0) {
+  if (compiledDb.packages && compiledDb.packages.length > 0) {
+    compiledDb.packages.forEach((pkg) => {
+      pkg.files.forEach((f) => {
+        const targetPath = !pkg.packageFolder
+          ? `packages/db/${f.filename}`
+          : `packages/db/${pkg.packageFolder}/${f.filename}`;
+        files.push({
+          filename: targetPath,
+          language: f.language,
+          content: f.content,
+        });
+      });
+    });
+  } else if (compiledDb.files.length > 0) {
     compiledDb.files.forEach((f) => {
+      const targetPath = f.filename.startsWith("packages/")
+        ? f.filename
+        : `packages/db/${f.filename}`;
       files.push({
-        filename: `packages/db/${f.filename}`,
+        filename: targetPath,
         language: f.language,
         content: f.content,
       });
@@ -411,9 +427,18 @@ export function compileMonorepo(
   }
 
   // 7. Generate Root tsconfig.json (referencing packages and apps with valid tsconfig.json)
+  const dbPackagePaths =
+    compiledDb.packages && compiledDb.packages.length > 0
+      ? compiledDb.packages.map((p) =>
+          p.packageFolder ? `packages/db/${p.packageFolder}` : "packages/db",
+        )
+      : compiledDb.files.length > 0
+        ? ["packages/db"]
+        : [];
+
   const rawRootPaths = [
     "packages/ui",
-    ...(compiledDb.files.length > 0 ? ["packages/db"] : []),
+    ...dbPackagePaths,
     "packages/logger",
     "packages/types",
     ...(compiledKafka.files.length > 0 ? [`packages/${compiledKafka.packageFolder}`] : []),

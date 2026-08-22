@@ -73,6 +73,12 @@ export const DATABASE_ENGINE_OPTIONS = [
     defaultVersion: "1.x",
   },
   {
+    value: "convex",
+    label: "Convex",
+    versions: [{ value: "1.x", label: "1.x" }],
+    defaultVersion: "1.x",
+  },
+  {
     value: "redis",
     label: "Redis",
     versions: [{ value: "7.x", label: "7.x" }],

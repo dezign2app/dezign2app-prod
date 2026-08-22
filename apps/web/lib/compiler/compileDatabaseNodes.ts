@@ -1,19 +1,66 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { CompiledDatabaseResult } from "@workspace/canvas/types";
+import {
+  CompiledDatabaseResult,
+  CompiledDatabasePackage,
+  CompiledFile,
+  ReusableFunction,
+  CanvasDatabaseNodeData,
+} from "@workspace/canvas/types";
 import {
   BETTER_AUTH_TABLE_DEFINITIONS,
   isBetterAuthTableRequired,
 } from "@workspace/canvas";
-import { toTableName, toSingular, toPlural } from "./utils";
+import { toTableName, toVarName, toSingular, toPlural } from "./utils";
 import { compileRawSqliteDatabase } from "./databases/sqlite/raw";
-import { compileSqliteDrizzleDatabase } from "./databases/sqlite/drizzle";
+import { compilePostgresDatabase } from "./databases/postgres";
+import { compileMysqlDatabase } from "./databases/mysql";
+import { compileConvexDatabase } from "./databases/convex";
 
 /**
- * Compiles database nodes into packages/db using raw SQL prepared statements (or Drizzle if configured).
- *
- * When an auth node is present, this function checks for BetterAuth table definitions
- * matching the auth node's configured plugins and settings, synthesizing any missing
- * entity nodes so that the db package always reflects the auth configuration.
+ * Normalizes a database engine string.
+ */
+function normalizeEngine(engine?: string): string {
+  const e = (engine || "").toLowerCase().trim();
+  if (e.includes("postgres") || e.includes("pg") || e.includes("cockroach")) {
+    return "postgres";
+  }
+  if (e.includes("mysql") || e.includes("mariadb")) {
+    return "mysql";
+  }
+  if (e.includes("convex")) {
+    return "convex";
+  }
+  if (e.includes("mongo")) {
+    return "mongodb";
+  }
+  if (e.includes("redis")) {
+    return "redis";
+  }
+  return "sqlite";
+}
+
+/**
+ * Resolves a unique, clean folder name for a database package under packages/db/.
+ */
+function resolveDbFolderName(dbNode: BackendNode, existingFolders: Set<string>): string {
+  const label = dbNode.data?.label || dbNode.data?.dbEngine || dbNode.id || "db";
+  let base = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "db";
+  let folder = base || "db";
+  let counter = 1;
+  while (existingFolders.has(folder)) {
+    counter++;
+    folder = `${base}-${counter}`;
+  }
+  existingFolders.add(folder);
+  return folder;
+}
+
+/**
+ * Compiles database nodes into modular packages under packages/db/ (or packages/db for single database).
+ * Supports database isolation (shared DB, DB-per-service, polyglot persistence with Postgres, MySQL, Convex, SQLite).
  */
 export function compileDatabaseNodes(
   allNodes: BackendNode[],
@@ -23,9 +70,9 @@ export function compileDatabaseNodes(
     (n) => n.type === "entity" || n.type === "db_ref",
   );
 
-  let effectiveNodes = allNodes;
+  let effectiveNodes = [...allNodes];
 
-  // Find auth nodes that are connected to at least one webApp, webClient, service, or database
+  // 1. Find connected Auth nodes
   const connectedAuthNodes = allNodes.filter((n) => {
     if (n.type !== "auth") return false;
     const hasEdge = allEdges.some((e) => {
@@ -47,6 +94,11 @@ export function compileDatabaseNodes(
     return hasEdge || hasRef;
   });
 
+  const dbNodes = allNodes.filter(
+    (n) => n.type === "database",
+  );
+
+  // 2. Synthesize BetterAuth tables if connected auth nodes exist
   if (connectedAuthNodes.length > 0) {
     const existingEntityNames = new Set<string>();
     entityNodes.forEach((n) => {
@@ -67,6 +119,21 @@ export function compileDatabaseNodes(
       const isOrgEnabled: boolean =
         authNode.data?.organization?.enabled ?? true;
 
+      const authNodeId = authNode.id || authNode.nodeId;
+      // Find if authNode is connected to a specific DB node
+      const authDbEdge = allEdges.find(
+        (e) =>
+          ((e.source === authNode.id || e.source === authNodeId) &&
+            dbNodes.some((d) => d.id === e.target || d.nodeId === e.target)) ||
+          ((e.target === authNode.id || e.target === authNodeId) &&
+            dbNodes.some((d) => d.id === e.source || d.nodeId === e.source)),
+      );
+      const targetDbId = authDbEdge
+        ? authDbEdge.source === authNode.id || authDbEdge.source === authNodeId
+          ? authDbEdge.target
+          : authDbEdge.source
+        : (authNode.data?.databaseId || dbNodes[0]?.id || dbNodes[0]?.nodeId);
+
       const neededDefs = BETTER_AUTH_TABLE_DEFINITIONS.filter(
         (def) =>
           isBetterAuthTableRequired(def, {
@@ -77,7 +144,9 @@ export function compileDatabaseNodes(
           !existingEntityNames.has(def.name.toLowerCase()) &&
           !existingEntityNames.has(toSingular(def.name).toLowerCase()) &&
           !existingEntityNames.has(toPlural(def.name).toLowerCase()) &&
-          !syntheticEntities.some((s) => s.data?.label?.toLowerCase() === def.name.toLowerCase()),
+          !syntheticEntities.some(
+            (s) => s.data?.label?.toLowerCase() === def.name.toLowerCase(),
+          ),
       );
 
       neededDefs.forEach((def) => {
@@ -90,48 +159,181 @@ export function compileDatabaseNodes(
             label: def.name,
             description: def.description,
             columns: def.defaultColumns,
+            databaseId: targetDbId,
           },
         });
       });
     });
 
     if (syntheticEntities.length > 0) {
-      effectiveNodes = [...allNodes, ...syntheticEntities];
+      effectiveNodes = [...effectiveNodes, ...syntheticEntities];
     }
   }
 
-  const dbNode = allNodes.find((n) => n.type === "database" || (n.data as any)?.isDatabase);
-  const orm = (dbNode?.data as any)?.orm || (dbNode?.data as any)?.dbAdapter || (dbNode?.data as any)?.adapter;
+  const allEntityNodes = effectiveNodes.filter(
+    (n) => n.type === "entity" || n.type === "db_ref",
+  );
 
-  const dbEngine = (
-    dbNode?.data?.dbEngine ||
-    (dbNode?.data as any)?.engine ||
-    (dbNode?.data as any)?.provider ||
-    (dbNode?.data as any)?.dbType ||
-    ""
-  ).toLowerCase();
-
-  const isExplicitNonSqlite =
-    dbEngine.includes("postgres") ||
-    dbEngine.includes("mysql") ||
-    dbEngine.includes("mongo") ||
-    dbEngine.includes("redis");
-
-  const hasSqliteDbNode = Boolean(dbNode && !isExplicitNonSqlite);
-  const hasEntityNodes = entityNodes.length > 0;
-  const hasConnectedAuth = connectedAuthNodes.length > 0;
-
-  // Only compile SQLite package and helpers if SQLite database, entities, or connected auth are configured
-  if (!hasSqliteDbNode && !hasEntityNodes && !hasConnectedAuth) {
+  // Check if anything DB-related exists
+  if (dbNodes.length === 0 && allEntityNodes.length === 0 && connectedAuthNodes.length === 0) {
     return {
       files: [],
+      packages: [],
       reusableFunctions: [],
     };
   }
 
-  if (orm === "drizzle") {
-    return compileSqliteDrizzleDatabase(effectiveNodes, allEdges);
+  // -------------------------------------------------------------------------
+  // Case A: No explicit database nodes on canvas (Default single SQLite DB)
+  // -------------------------------------------------------------------------
+  if (dbNodes.length === 0) {
+    const singleResult = compileRawSqliteDatabase(effectiveNodes, allEdges, {
+      packageName: "@workspace/db",
+      packageFolder: "",
+    });
+    const pkg: CompiledDatabasePackage = {
+      packageName: "@workspace/db",
+      packageFolder: "",
+      dbEngine: "sqlite",
+      files: singleResult.files,
+      reusableFunctions: singleResult.reusableFunctions,
+    };
+    return {
+      files: singleResult.files,
+      packages: [pkg],
+      reusableFunctions: singleResult.reusableFunctions,
+    };
   }
 
-  return compileRawSqliteDatabase(effectiveNodes, allEdges);
+  // -------------------------------------------------------------------------
+  // Case B: Explicit Database Nodes (Database Isolation & Polyglot Persistence)
+  // -------------------------------------------------------------------------
+  const packages: CompiledDatabasePackage[] = [];
+  const mergedFiles: CompiledFile[] = [];
+  const mergedReusableFunctions: ReusableFunction[] = [];
+  const existingFolders = new Set<string>();
+
+  // Map each entity to its parent database node
+  const entitiesByDbId = new Map<string, BackendNode[]>();
+  dbNodes.forEach((d) => {
+    entitiesByDbId.set(d.id, []);
+    const altId = d.nodeId;
+    if (altId && altId !== d.id) {
+      entitiesByDbId.set(altId, entitiesByDbId.get(d.id)!);
+    }
+  });
+
+  const primaryDbNode = dbNodes.find((d) => d.data?.isDefault) || dbNodes[0]!;
+
+  allEntityNodes.forEach((ent) => {
+    const entId = ent.id || ent.nodeId;
+    // 1. Check explicit databaseId
+    let targetDbId = ent.data?.databaseId;
+
+    // 2. Check edges connecting DB to Entity
+    if (!targetDbId) {
+      const dbEdge = allEdges.find(
+        (e) =>
+          ((e.source === entId || e.source === ent.id) &&
+            dbNodes.some((d) => d.id === e.target || d.nodeId === e.target)) ||
+          ((e.target === entId || e.target === ent.id) &&
+            dbNodes.some((d) => d.id === e.source || d.nodeId === e.source)),
+      );
+      if (dbEdge) {
+        targetDbId =
+          dbEdge.source === entId || dbEdge.source === ent.id
+            ? dbEdge.target
+            : dbEdge.source;
+      }
+    }
+
+    // 3. Fall back to primary DB
+    if (!targetDbId || !entitiesByDbId.has(targetDbId)) {
+      targetDbId = primaryDbNode.id;
+    }
+
+    const bucket = entitiesByDbId.get(targetDbId);
+    if (bucket && !bucket.includes(ent)) {
+      bucket.push(ent);
+    }
+  });
+
+  // Compile each database node in isolation
+  dbNodes.forEach((dbNode) => {
+    const dbEntities = entitiesByDbId.get(dbNode.id) || [];
+    const engine = normalizeEngine(
+      dbNode.data?.dbEngine ||
+      dbNode.data?.provider ||
+      dbNode.data?.dbType,
+    );
+    const folderName = resolveDbFolderName(dbNode, existingFolders);
+    const packageName = `@workspace/db-${folderName}`;
+
+    // Pass only the entities for this DB along with other non-entity nodes (for reference)
+    const scopedNodes = [
+      ...effectiveNodes.filter((n) => n.type !== "entity" && n.type !== "db_ref"),
+      ...dbEntities,
+    ];
+
+    let pkgResult: CompiledDatabaseResult;
+
+    switch (engine) {
+      case "postgres":
+        pkgResult = compilePostgresDatabase(scopedNodes, allEdges, {
+          packageName,
+          packageFolder: folderName,
+          dbNode,
+        });
+        break;
+      case "mysql":
+        pkgResult = compileMysqlDatabase(scopedNodes, allEdges, {
+          packageName,
+          packageFolder: folderName,
+          dbNode,
+        });
+        break;
+      case "convex":
+        pkgResult = compileConvexDatabase(scopedNodes, allEdges, {
+          packageName,
+          packageFolder: folderName,
+          dbNode,
+        });
+        break;
+      case "sqlite":
+      default:
+        pkgResult = compileRawSqliteDatabase(scopedNodes, allEdges, {
+          packageName,
+          packageFolder: folderName,
+          dbNode,
+        });
+        break;
+    }
+
+    // Prefix files for top-level files array
+    pkgResult.files.forEach((f) => {
+      mergedFiles.push({
+        filename: `packages/db/${folderName}/${f.filename}`,
+        language: f.language,
+        content: f.content,
+      });
+    });
+
+    packages.push({
+      packageName,
+      packageFolder: folderName,
+      dbEngine: engine,
+      databaseNodeId: dbNode.id,
+      databaseLabel: dbNode.data?.label || folderName,
+      files: pkgResult.files,
+      reusableFunctions: pkgResult.reusableFunctions,
+    });
+
+    mergedReusableFunctions.push(...pkgResult.reusableFunctions);
+  });
+
+  return {
+    files: mergedFiles,
+    packages,
+    reusableFunctions: mergedReusableFunctions,
+  };
 }
