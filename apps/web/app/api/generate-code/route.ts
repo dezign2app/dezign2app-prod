@@ -66,12 +66,16 @@ ${promptText ? promptText : "(No specific custom directives supplied; implement 
 ${requestBodySchemaStr}
 
 5. Database Tables & Operations Available (@workspace/db helpers):
-${tableNames.length > 0 ? tableNames.map((t: string, idx: number) => `- Table "${t}": operations [${crudList[idx]?.operations?.join(", ") || "read"}]`).join("\n") : "None"}
+${tableNames.length > 0 ? tableNames.map((t: string, idx: number) => `- Table/Cache "${t}": operations [${crudList[idx]?.operations?.join(", ") || "read"}]`).join("\n") : "None"}
 - DB helper functions are available as:
   - create<Table>(body)
   - find<Table>ById(req.params.id) / findAll<Table>()
   - update<Table>(req.params.id, body)
   - delete<Table>ById(req.params.id)
+- Redis Cache helper functions (@workspace/redis helpers):
+  - get<Cache>(id) / get<Cache>Field(id, field) (Check cache before DB if caching pattern is used)
+  - set<Cache>(id, body) / set<Cache>Field(id, field, value)
+  - invalidate<Cache>(id) / invalidateAll<Cache>()
 
 6. Kafka Events to Publish (@workspace/kafka/publishers):
 ${eventNames.length > 0 ? eventNames.map((e: string) => `- Topic: ${e}`).join("\n") : "None"}

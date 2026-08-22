@@ -70,10 +70,19 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
   );
 
   const availableTableNodes = allNodes
-    .filter((n) => n?.type === "entity")
+    .filter(
+      (n) =>
+        n?.type === "entity" ||
+        n?.type === "redis_schema" ||
+        n?.type === "redis-cache",
+    )
     .map((n) => ({
       id: n.id,
-      label: n.data?.label || "Table",
+      label:
+        n.data?.label ||
+        (n.type === "redis_schema" || n.type === "redis-cache"
+          ? "Redis Cache"
+          : "Table"),
     }));
 
   const databaseNodeIds =

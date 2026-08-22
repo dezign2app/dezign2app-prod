@@ -53,8 +53,6 @@ export function getMessagingResourceType(
     case "pubsub":
     case "redis-pubsub":
       return "channels";
-    case "redis-cache":
-      return "caches";
     case "storage":
       return "buckets";
     default:

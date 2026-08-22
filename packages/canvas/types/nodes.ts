@@ -283,6 +283,8 @@ export interface CanvasEntityNodeData {
   tableRef?: string;
   /** Reference to vector collection (used by Vector DB Ref nodes). */
   collectionRef?: string;
+  /** Reference to Redis schema node (used by Redis Cache Ref nodes). */
+  schemaRef?: string;
   /** Reference to DB node (used by Vector DB Ref nodes or Entity nodes). */
   dbRef?: string;
   /** Associated Database node ID to which this table hangs. */

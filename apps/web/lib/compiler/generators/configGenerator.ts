@@ -8,6 +8,7 @@ import {
 } from "../traceResolver";
 import { toEnvVarName } from "../utils";
 import { isServiceConnectedToKafka } from "../kafka";
+import { isServiceConnectedToRedis } from "../compileRedisNodes";
 import {
   INTER_SERVICE_PROTOCOL_GRPC,
   GRPC_DEFAULT_PORT,
@@ -181,9 +182,13 @@ export function generateConfigFiles(
     : "kafka";
   const kafkaPackageName = `@workspace/${kafkaPackageFolder}`;
 
+  const hasRedis = isServiceConnectedToRedis(node, allNodes, allEdges, endpoints);
+  const redisPackageName = "@workspace/redis";
+
   const dependencies: Record<string, string> = {
     ...(hasDb ? { "@workspace/db": "workspace:*" } : {}),
     ...(hasKafka ? { [kafkaPackageName]: "workspace:*" } : {}),
+    ...(hasRedis ? { [redisPackageName]: "workspace:*" } : {}),
     "@workspace/logger": "workspace:*",
     "@workspace/types": "workspace:*",
     express: "^4.19.2",
@@ -276,7 +281,7 @@ NODE_ENV=development
 LOG_LEVEL=info
 DATABASE_PATH=../../packages/db/sqlite.db
 DATABASE_URL=../../packages/db/sqlite.db
-${connectedServiceEnvLines.length > 0 ? connectedServiceEnvLines.join("\n") + "\n" : ""}`;
+${hasRedis ? `REDIS_HOST=localhost\nREDIS_PORT=6379\n` : ""}${connectedServiceEnvLines.length > 0 ? connectedServiceEnvLines.join("\n") + "\n" : ""}`;
 
 
 

@@ -15,13 +15,20 @@ function isValidDbOpKind(kind: string): kind is ReusableFunction["kind"] {
   );
 }
 
+function toOperationKind(kind: ReusableFunction["kind"]): "read" | "create" | "update" | "delete" {
+  if (kind === "create") return "create";
+  if (kind === "update") return "update";
+  if (kind === "delete") return "delete";
+  return "read";
+}
+
 export interface EndpointWithNodeId extends Endpoint {
   nodeId?: string;
 }
 
 /**
- * Resolves all database functions requested for an endpoint based on attached db_ref nodes,
- * canvas edges, and the user's explicit crudOperations selection.
+ * Resolves all database & cache functions requested for an endpoint based on attached db_ref,
+ * redis-cache nodes, canvas edges, and the user's explicit crudOperations selection.
  */
 export function pickDbFunctionsForEndpoint(
   ep: EndpointWithNodeId,
@@ -29,10 +36,11 @@ export function pickDbFunctionsForEndpoint(
   allNodes: BackendNode[],
   path: string,
   allEdges: BackendEdge[] = [],
+  redisFunctions: ReusableFunction[] = [],
 ): TargetDbOperation[] {
-  if (dbFunctions.length === 0) return [];
+  const combinedFunctions = [...dbFunctions, ...redisFunctions];
+  if (combinedFunctions.length === 0 && allNodes.length === 0) return [];
 
-  const method = (ep.type || "GET").toLowerCase();
   const isIdRoute = path.includes(":id") || path.includes("{id}");
 
   const nodeDbNodeIds =
@@ -50,15 +58,28 @@ export function pickDbFunctionsForEndpoint(
   if (epNodeId && allEdges.length > 0 && allNodes.length > 0) {
     allEdges.forEach((e) => {
       let candidateId: string | null = null;
-      if (e.source === epNodeId) candidateId = e.target;
-      else if (e.target === epNodeId) candidateId = e.source;
+      if (
+        e.source === epNodeId ||
+        e.source === ep.id ||
+        (e.sourceHandle && (e.sourceHandle.includes(ep.id) || e.sourceHandle.includes(epNodeId)))
+      ) {
+        candidateId = e.target;
+      } else if (
+        e.target === epNodeId ||
+        e.target === ep.id ||
+        (e.targetHandle && (e.targetHandle.includes(ep.id) || e.targetHandle.includes(epNodeId)))
+      ) {
+        candidateId = e.source;
+      }
 
       if (candidateId) {
         const candidateNode = allNodes.find((n) => n.id === candidateId);
         if (
           candidateNode &&
           (candidateNode.type === "entity" ||
-            candidateNode.type === "db_ref")
+            candidateNode.type === "db_ref" ||
+            candidateNode.type === "redis_schema" ||
+            candidateNode.type === "redis-cache")
         ) {
           edgeDbNodeIds.push(candidateId);
         }
@@ -86,23 +107,34 @@ export function pickDbFunctionsForEndpoint(
     if (tableNode?.type === "db_ref" && tableNode.data?.tableRef) {
       const refEntity = allNodes.find((n) => n.id === tableNode.data.tableRef);
       if (refEntity) {
-        rawTableName =
-          refEntity.data?.label ||
-          rawTableName;
+        rawTableName = refEntity.data?.label || rawTableName;
+      }
+    } else if (tableNode?.type === "redis-cache" && tableNode.data?.schemaRef) {
+      const refSchema = allNodes.find((n) => n.id === tableNode.data.schemaRef);
+      if (refSchema) {
+        rawTableName = refSchema.data?.label || rawTableName;
       }
     }
 
     const cleanTableName = rawTableName.toLowerCase().replace(/[^a-z0-9]/g, "");
 
     const entityCustomFns: ReusableFunction[] = [];
-    const targetEntityNode = tableNode?.type === "db_ref" && tableNode.data?.tableRef
-      ? allNodes.find((n) => n.id === tableNode.data?.tableRef)
-      : tableNode;
+    const targetEntityNode =
+      tableNode?.type === "db_ref" && tableNode.data?.tableRef
+        ? allNodes.find((n) => n.id === tableNode.data.tableRef)
+        : tableNode?.type === "redis-cache" && tableNode.data?.schemaRef
+          ? allNodes.find((n) => n.id === tableNode.data.schemaRef)
+          : tableNode;
+
+    const isRedis =
+      targetEntityNode?.type === "redis_schema" ||
+      targetEntityNode?.type === "redis-cache" ||
+      targetEntityNode?.data?.dbType === "redis";
 
     if (targetEntityNode) {
       const ops = getEntityDbOperations(targetEntityNode, allNodes);
       const varName = rawTableName.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const importPath = `@workspace/db/helpers/${varName}`;
+      const importPath = isRedis ? "@workspace/redis" : `@workspace/db/helpers/${varName}`;
       ops.forEach((op) => {
         if (op.enabled !== false) {
           const resolvedKind: ReusableFunction["kind"] = isValidDbOpKind(op.kind)
@@ -121,7 +153,7 @@ export function pickDbFunctionsForEndpoint(
 
     const tableFns = [
       ...entityCustomFns,
-      ...dbFunctions.filter((f) => {
+      ...combinedFunctions.filter((f) => {
         const targetClean = (f.targetName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
         const fnNameClean = f.name.toLowerCase();
         return (
@@ -134,11 +166,24 @@ export function pickDbFunctionsForEndpoint(
 
     const fnsToUse = tableFns;
 
+    const method = (ep.type || "POST").toLowerCase();
     const rawOps = ep.crudOperations?.[tableNodeId];
-    const selectedOps: string[] =
+    let selectedOps: string[] =
       Array.isArray(rawOps) && rawOps.length > 0
         ? rawOps
         : [];
+
+    if (selectedOps.length === 0) {
+      if (method === "get") {
+        selectedOps = ["read"];
+      } else if (method === "post") {
+        selectedOps = ["create"];
+      } else if (method === "put" || method === "patch") {
+        selectedOps = ["update"];
+      } else if (method === "delete") {
+        selectedOps = ["delete"];
+      }
+    }
 
     for (const op of selectedOps) {
       let fn: ReusableFunction | undefined = fnsToUse.find(
@@ -163,21 +208,41 @@ export function pickDbFunctionsForEndpoint(
       }
 
       if (fn) {
-        if (fn.kind === "findById" || fn.name.toLowerCase().includes("byid")) {
-          callExpr = `await ${fn.name}(req.params.id)`;
-        } else if (fn.kind === "create") {
-          callExpr = `await ${fn.name}(PAYLOAD_VAR)`;
-        } else if (fn.kind === "update") {
-          callExpr = `await ${fn.name}(req.params.id, PAYLOAD_VAR)`;
-        } else if (fn.kind === "delete") {
-          callExpr = `await ${fn.name}(req.params.id)`;
+        const opLower = fn.name.toLowerCase();
+        if (isRedis) {
+          if (opLower.startsWith("get") || fn.kind === "findById") {
+            callExpr = isIdRoute ? `await ${fn.name}(req.params.id)` : `await ${fn.name}(req.params.id || "default")`;
+          } else if (opLower.startsWith("set") || fn.kind === "create" || fn.kind === "update") {
+            callExpr = isIdRoute
+              ? `await ${fn.name}(req.params.id, PAYLOAD_VAR)`
+              : `await ${fn.name}(PAYLOAD_VAR?.id || "default", PAYLOAD_VAR)`;
+          } else if (opLower.startsWith("invalidate") || opLower.startsWith("delete") || fn.kind === "delete") {
+            callExpr = isIdRoute ? `await ${fn.name}(req.params.id)` : `await ${fn.name}(PAYLOAD_VAR?.id || "default")`;
+          } else {
+            callExpr = `await ${fn.name}()`;
+          }
         } else {
-          callExpr = `await ${fn.name}()`;
+          if (fn.kind === "findById" || opLower.includes("byid")) {
+            callExpr = `await ${fn.name}(req.params.id)`;
+          } else if (fn.kind === "create") {
+            callExpr = `await ${fn.name}(PAYLOAD_VAR)`;
+          } else if (fn.kind === "update") {
+            callExpr = `await ${fn.name}(req.params.id, PAYLOAD_VAR)`;
+          } else if (fn.kind === "delete") {
+            callExpr = `await ${fn.name}(req.params.id)`;
+          } else {
+            callExpr = `await ${fn.name}()`;
+          }
         }
 
         const targetFnName = fn.name;
         if (!results.some((r) => r.fn.name === targetFnName)) {
-          results.push({ fn, callExpr, operationKind: (fn.kind || "read") as any, tableNodeId });
+          results.push({
+            fn,
+            callExpr,
+            operationKind: toOperationKind(fn.kind),
+            tableNodeId,
+          });
         }
       }
     }

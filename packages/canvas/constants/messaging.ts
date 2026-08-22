@@ -38,7 +38,6 @@ export const MESSAGING_NODE_TYPES = [
   "redis-pubsub",
   "cache",
   "storage",
-  "redis-cache",
 ] as const;
 
 export type MessagingNodeType = (typeof MESSAGING_NODE_TYPES)[number];

@@ -27,6 +27,7 @@ export function compileExpressV4Service(
   kafkaFunctions: ReusableFunction[] = [],
   folderName?: string,
   allEndpoints: (Endpoint & { nodeId: string })[] = [],
+  redisFunctions: ReusableFunction[] = [],
 ): CompiledServiceResult {
   const serviceName = node.data?.label || node.id || "Service";
   const sanitizedName =
@@ -115,6 +116,7 @@ export function compileExpressV4Service(
       kafkaFunctions,
       nodePublishedEvents,
       sanitizedName,
+      redisFunctions,
     ),
     ...generateConsumers(
       serviceName,

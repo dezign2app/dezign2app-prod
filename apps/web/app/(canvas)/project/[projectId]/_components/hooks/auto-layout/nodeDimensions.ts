@@ -137,6 +137,7 @@ export function getNodeDimensions(node: LayoutNode): {
     case "langgraph_memory":
     case "db_ref":
     case "vector_db_ref":
+    case "redis-cache":
       return { width: 280, height: 180 };
     case "end":
     case "END":

@@ -4,6 +4,7 @@ import { compileExpressV4Service } from "./services/express/v4";
 import { compileFastAPIService } from "./services/fastapi/v0";
 import { compileDatabaseNodes } from "./compileDatabaseNodes";
 import { compileKafkaNodes, isServiceConnectedToKafka } from "./compileKafkaNodes";
+import { compileRedisNodes, isServiceConnectedToRedis } from "./compileRedisNodes";
 
 /**
  * Compiles a single Service Node into its modular microservice directory structure based on selected tech and version
@@ -21,6 +22,7 @@ export function compileServiceNode(
   dbFunctions: ReusableFunction[] = [],
   kafkaFunctions: ReusableFunction[] = [],
   folderName?: string,
+  redisFunctions: ReusableFunction[] = [],
 ): CompiledServiceResult {
   const techStack = node.data?.techStack || "express";
 
@@ -35,6 +37,14 @@ export function compileServiceNode(
   } else if (kafkaFunctions.length === 0 && allNodes.length > 0) {
     const compiledKafka = compileKafkaNodes(allNodes, allEdges);
     kafkaFunctions = compiledKafka.reusableFunctions || [];
+  }
+
+  const isConnectedToRedis = isServiceConnectedToRedis(node, allNodes, allEdges, endpoints);
+  if (!isConnectedToRedis) {
+    redisFunctions = [];
+  } else if (redisFunctions.length === 0 && allNodes.length > 0) {
+    const compiledRedis = compileRedisNodes(allNodes, allEdges);
+    redisFunctions = compiledRedis.reusableFunctions || [];
   }
 
   // Filter endpoints for this specific node
@@ -126,6 +136,7 @@ export function compileServiceNode(
         kafkaFunctions,
         folderName,
         endpoints,
+        redisFunctions,
       );
   }
 }

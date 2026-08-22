@@ -33,6 +33,7 @@ export interface GenerateEndpointHandlerParams {
   allEndpoints: (Endpoint & { nodeId: string })[];
   dbFunctions: ReusableFunction[];
   kafkaFunctions: ReusableFunction[];
+  redisFunctions?: ReusableFunction[];
   nodePublishedEvents: (AnyMessagingResource & { nodeId: string; variant: "publish" | "consume" })[];
   usedFileNames: Set<string>;
 }
@@ -63,6 +64,7 @@ export function generateEndpointRouteHandler(
     allEndpoints,
     dbFunctions,
     kafkaFunctions,
+    redisFunctions = [],
     nodePublishedEvents,
     usedFileNames,
   } = params;
@@ -126,6 +128,7 @@ export function generateEndpointRouteHandler(
     allNodes,
     path,
     allEdges,
+    redisFunctions,
   );
   const hasPublishedEvents =
     nodePublishedEvents.length > 0 || Boolean(ep.publishedEvents && ep.publishedEvents.length > 0);
@@ -146,9 +149,9 @@ export function generateEndpointRouteHandler(
     importSet.add(op.fn.name);
   });
 
-  // Scan user's manual codeBlock for DB function references
+  // Scan user's manual codeBlock for DB and Redis function references
   const codeBlockText = (ep.body || ep.code || "").trim();
-  dbFunctions.forEach((f) => {
+  [...dbFunctions, ...redisFunctions].forEach((f) => {
     if (codeBlockText.includes(f.name)) {
       let importSet = extraImports.get(f.importPath);
       if (!importSet) {
@@ -351,27 +354,42 @@ export async function ${handlerName}(
       }
     }
 
+    const traceTargetDbNodeIds = trace.outgoing
+      .filter((out) => out.nodeType === "Database Table" || out.nodeType === "Redis Cache")
+      .map((out) => out.nodeId);
+
     // Embed detailed database entity type definitions and schemas for AI coding agents
     const targetDbNodeIds = new Set<string>([
       ...(ep.databaseNodeIds || []),
       ...(ep.databaseNodeId && ep.databaseNodeId !== "none" ? [ep.databaseNodeId] : []),
       ...(ep.crudOperations ? Object.keys(ep.crudOperations) : []),
-      ...pickedDbOps.map((op) => op.tableNodeId).filter(Boolean) as string[],
+      ...traceTargetDbNodeIds,
+      ...pickedDbOps
+        .map((op) => op.tableNodeId)
+        .filter((id): id is string => Boolean(id)),
     ]);
 
     if (targetDbNodeIds.size > 0) {
-      routeHandlerCode += `    //\n    // DATABASE SCHEMAS & FULL TYPE DEFINITIONS (from @workspace/db):\n`;
+      routeHandlerCode += `    //\n    // DATABASE & CACHE SCHEMAS & FULL TYPE DEFINITIONS:\n`;
       targetDbNodeIds.forEach((tableId) => {
         const tableNode = allNodes.find((n) => n.id === tableId);
         if (!tableNode) return;
-        const entityNode = tableNode.type === "db_ref" && tableNode.data?.tableRef
-          ? allNodes.find((n) => n.id === tableNode.data?.tableRef)
-          : tableNode;
+        const entityNode =
+          tableNode.type === "db_ref" && tableNode.data?.tableRef
+            ? allNodes.find((n) => n.id === tableNode.data?.tableRef)
+            : tableNode.type === "redis-cache" && tableNode.data?.schemaRef
+              ? allNodes.find((n) => n.id === tableNode.data?.schemaRef)
+              : tableNode;
         if (!entityNode) return;
 
         const tableName = entityNode.data?.label || "Table";
         const cleanTableName = toVarName(tableName.toLowerCase().replace(/[^a-z0-9_]/g, "_"));
         const Pascal = toPascalCase(cleanTableName);
+
+        const isRedis =
+          entityNode.type === "redis_schema" ||
+          entityNode.type === "redis-cache" ||
+          entityNode.data?.dbType === "redis";
 
         const cols = entityNode.data?.columns && Array.isArray(entityNode.data.columns)
           ? entityNode.data.columns
@@ -381,10 +399,15 @@ export async function ${handlerName}(
           const allColFields = cols.map((c: { name?: string; type?: string }) => `${c.name || "col"}: ${toTsType(c.type || "string")}`).join("; ");
           const writableColFields = cols.filter((c: { isPrimaryKey?: boolean }) => !c.isPrimaryKey).map((c: { name?: string; type?: string }) => `${c.name || "col"}: ${toTsType(c.type || "string")}`).join("; ");
 
-          routeHandlerCode += `    // - Table: "${tableName}"\n`;
-          routeHandlerCode += `    //   type ${Pascal}Row = { ${allColFields} };\n`;
-          routeHandlerCode += `    //   type Create${Pascal}Data = { ${writableColFields} };\n`;
-          routeHandlerCode += `    //   type Update${Pascal}Data = Partial<Create${Pascal}Data>;\n`;
+          if (isRedis) {
+            routeHandlerCode += `    // - Redis Cache Schema: "${tableName}" (@workspace/redis)\n`;
+            routeHandlerCode += `    //   interface ${Pascal} { ${allColFields} }\n`;
+          } else {
+            routeHandlerCode += `    // - Table: "${tableName}" (@workspace/db)\n`;
+            routeHandlerCode += `    //   type ${Pascal}Row = { ${allColFields} };\n`;
+            routeHandlerCode += `    //   type Create${Pascal}Data = { ${writableColFields} };\n`;
+            routeHandlerCode += `    //   type Update${Pascal}Data = Partial<Create${Pascal}Data>;\n`;
+          }
         }
 
         const tablePickedFns = pickedDbOps.filter((op) => op.tableNodeId === tableId || (op.fn.targetName || "").toLowerCase() === tableName.toLowerCase());
@@ -414,7 +437,6 @@ export async function ${handlerName}(
   // Payload reference for DB and Messaging operations
   const payloadVar = hasValidatedBody ? "body" : "req.body";
 
-  // 3. DB Call
   const targetVarMap = new Map<string, string>();
   const hasDbInCodeBlock = Boolean(
     codeBlock &&
@@ -426,9 +448,37 @@ export async function ${handlerName}(
         codeBlock.includes("db.")),
   );
 
-  if (pickedDbOps.length > 0 && !hasDbInCodeBlock) {
+  const sqlOps = pickedDbOps.filter(
+    (op) => !op.fn.importPath.includes("@workspace/redis") && !op.fn.name.toLowerCase().includes("cache"),
+  );
+  const redisOps = pickedDbOps.filter(
+    (op) => op.fn.importPath.includes("@workspace/redis") || op.fn.name.toLowerCase().includes("cache"),
+  );
+
+  // 1. Redis Cache Lookup (Cache-Aside for GET requests)
+  if (method === "get" && redisOps.length > 0 && !hasDbInCodeBlock) {
+    const readRedisOps = redisOps.filter((op) => op.operationKind === "read");
+    if (readRedisOps.length > 0) {
+      routeHandlerCode += `    // --- Redis Cache Lookup (Cache-Aside) ---\n`;
+      readRedisOps.forEach((op) => {
+        const callExpr = op.callExpr.replace("PAYLOAD_VAR", payloadVar);
+        const rawTableName = op.fn.targetName || "Cache";
+        const cleanTableName = toVarName(rawTableName.toLowerCase().replace(/[^a-z0-9_]/g, "_"));
+        const Pascal = toPascalCase(cleanTableName);
+        const cachedVar = `cached${Pascal || "Data"}`;
+        routeHandlerCode += `    const ${cachedVar} = ${callExpr};\n`;
+        routeHandlerCode += `    if (${cachedVar} !== undefined && ${cachedVar} !== null) {\n`;
+        routeHandlerCode += `      logger.debug("Returning cached ${rawTableName} data");\n`;
+        routeHandlerCode += `      return res.status(200).json({ status: 200, message: "Successfully executed ${ep.type || "GET"} ${path}", data: ${cachedVar} });\n`;
+        routeHandlerCode += `    }\n\n`;
+      });
+    }
+  }
+
+  // 2. SQL DB Calls
+  if (sqlOps.length > 0 && !hasDbInCodeBlock) {
     routeHandlerCode += `    // --- Database Operation(s) (via @workspace/db prepared statement) ---\n`;
-    pickedDbOps.forEach((op) => {
+    sqlOps.forEach((op) => {
       const callExpr = op.callExpr.replace("PAYLOAD_VAR", payloadVar);
       const rawTableName = op.fn.targetName || "record";
       const cleanTableName = toVarName(rawTableName.toLowerCase().replace(/[^a-z0-9_]/g, "_"));
@@ -458,6 +508,52 @@ export async function ${handlerName}(
         routeHandlerCode += `    const ${varName} = ${callExpr};\n\n`;
       }
     });
+  }
+
+  // 3. Redis Cache Mutations / Writes (POST / PUT / PATCH)
+  if (["post", "put", "patch"].includes(method) && redisOps.length > 0 && !hasDbInCodeBlock) {
+    const writeRedisOps = redisOps.filter((op) => op.operationKind === "create" || op.operationKind === "update");
+    if (writeRedisOps.length > 0) {
+      routeHandlerCode += `    // --- Update Redis Cache ---\n`;
+      writeRedisOps.forEach((op) => {
+        let callExpr = op.callExpr.replace("PAYLOAD_VAR", payloadVar);
+        if (sqlOps.length > 0) {
+          const primarySql = sqlOps[0];
+          const rawSqlName = primarySql?.fn.targetName || "record";
+          const cleanSqlName = toVarName(rawSqlName.toLowerCase().replace(/[^a-z0-9_]/g, "_"));
+          const sqlPascal = toPascalCase(cleanSqlName);
+          const sqlVarName = primarySql?.operationKind === "create" ? `created${sqlPascal || "Record"}` : cleanSqlName;
+          callExpr = callExpr.replace(`${payloadVar}?.id`, `${payloadVar}?.id || ${sqlVarName}?.id`);
+        }
+        routeHandlerCode += `    ${callExpr};\n\n`;
+      });
+    }
+  }
+
+  // 4. Redis Cache Invalidation (DELETE)
+  if (method === "delete" && redisOps.length > 0 && !hasDbInCodeBlock) {
+    const deleteRedisOps = redisOps.filter((op) => op.operationKind === "delete");
+    if (deleteRedisOps.length > 0) {
+      routeHandlerCode += `    // --- Invalidate Redis Cache ---\n`;
+      deleteRedisOps.forEach((op) => {
+        const callExpr = op.callExpr.replace("PAYLOAD_VAR", payloadVar);
+        routeHandlerCode += `    ${callExpr};\n\n`;
+      });
+    }
+  }
+
+  // 5. Populate Redis Cache on GET cache miss
+  if (method === "get" && sqlOps.length > 0 && redisOps.length > 0 && !hasDbInCodeBlock) {
+    const setOp = redisOps.find((op) => op.fn.name.toLowerCase().startsWith("set"));
+    if (setOp) {
+      const primarySql = sqlOps[0];
+      const rawSqlName = primarySql?.fn.targetName || "record";
+      const cleanSqlName = toVarName(rawSqlName.toLowerCase().replace(/[^a-z0-9_]/g, "_"));
+      const sqlVarName = (path.includes(":id") || path.includes("{id}")) ? cleanSqlName : `${cleanSqlName}List`;
+      const keyArg = path.includes(":id") || path.includes("{id}") ? "req.params.id" : `"${cleanSqlName}_list"`;
+      routeHandlerCode += `    // --- Populate Redis Cache ---\n`;
+      routeHandlerCode += `    await ${setOp.fn.name}(${keyArg}, ${sqlVarName});\n\n`;
+    }
   }
 
   // 4. Kafka Publish Call

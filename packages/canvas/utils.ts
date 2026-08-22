@@ -214,7 +214,8 @@ export function classifyHandle(
     nodeType === "database" ||
     nodeType === "redis_instance" ||
     nodeType === "db_ref" ||
-    nodeType === "vector_db_ref"
+    nodeType === "vector_db_ref" ||
+    nodeType === "redis-cache"
   ) {
     if (id.startsWith("database-target") || handleDirection === "target")
       return "database-target";

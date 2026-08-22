@@ -211,7 +211,11 @@ export function GraphView({ projectId }: GraphViewProps) {
       let isVisited = simulation.activeNodeIds.includes(node.id);
       let isCurrent = simulation.currentNodeId === node.id;
 
-      if (node.type === "db_ref") {
+      if (
+        node.type === "db_ref" ||
+        node.type === "vector_db_ref" ||
+        node.type === "redis-cache"
+      ) {
         const activeEndpointIds = simulation.trace
           .slice(0, simulation.activeIndex + 1)
           .filter((t) => t.kind === "endpoint")

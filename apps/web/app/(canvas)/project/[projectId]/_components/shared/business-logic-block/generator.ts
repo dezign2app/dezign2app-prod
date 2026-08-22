@@ -64,7 +64,7 @@ export function generateSyncedEndpointCode({
   let primaryResultVar = "result";
 
   if (activeDbConfigs.length > 0) {
-    lines.push("// --- Database Operations (via @workspace/db prepared statement) ---");
+    lines.push("// --- Database & Cache Operations ---");
     activeDbConfigs.forEach((configItem) => {
       const tableObj = availableTableNodes.find(
         (t) => t.id === configItem.tableNodeId,
@@ -76,7 +76,17 @@ export function generateSyncedEndpointCode({
         endpointPath.includes(":id") || endpointPath.includes("{id}");
 
       configItem.operations.forEach((op) => {
-        if (op === "create") {
+        const opLower = op.toLowerCase();
+        if (opLower.startsWith("get") && (opLower.includes("cache") || opLower.includes("field") || opLower.includes("member"))) {
+          const varName = `cached${Pascal}`;
+          lines.push(`const ${varName} = await ${op}(req.params.id);`);
+          lines.push(`if (${varName}) {\n  return res.json({ success: true, data: ${varName} });\n}`);
+          primaryResultVar = varName;
+        } else if (opLower.startsWith("set") && opLower.includes("cache")) {
+          lines.push(`await ${op}(req.params.id, body);`);
+        } else if (opLower.startsWith("invalidate")) {
+          lines.push(`await ${op}(req.params.id);`);
+        } else if (op === "create") {
           const varName = `created${Pascal}`;
           lines.push(`const ${varName} = await create${Pascal}(body);`);
           primaryResultVar = varName;
@@ -99,6 +109,8 @@ export function generateSyncedEndpointCode({
           const varName = `delete${Pascal}Result`;
           lines.push(`const ${varName} = await delete${Pascal}ById(req.params.id);`);
           primaryResultVar = varName;
+        } else {
+          lines.push(`await ${op}();`);
         }
       });
     });

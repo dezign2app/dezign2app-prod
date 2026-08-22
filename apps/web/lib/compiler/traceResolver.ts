@@ -102,6 +102,38 @@ export function formatDatabaseColumnsContext(
 }
 
 /**
+ * Formats configured Redis cache schema details into a human-readable dataContext string
+ */
+export function formatRedisSchemaContext(
+  node: BackendNode,
+  allNodes: BackendNode[] = [],
+): string {
+  let targetNode = node;
+  if (node.type === "redis-cache" && node.data?.schemaRef) {
+    const refSchema = allNodes.find((n) => n.id === node.data?.schemaRef);
+    if (refSchema) {
+      targetNode = refSchema;
+    }
+  }
+
+  const ds = targetNode.data?.redisDataStructure || "HASH";
+  const keyTemplate = targetNode.data?.keyTemplate || "key:{id}";
+  const ttlVal = typeof targetNode.data?.ttl === "object" ? targetNode.data.ttl.value : targetNode.data?.ttl;
+  const ttl = ttlVal ? `${ttlVal}s` : "3600s";
+
+  const columns = targetNode.data?.columns;
+  if (columns && Array.isArray(columns) && columns.length > 0) {
+    const fieldsStr = columns
+      .filter((c) => c && c.name)
+      .map((c) => `${c.name}: ${c.type || "string"}`)
+      .join(", ");
+    return `Structure: ${ds.toUpperCase()}, Key: "${keyTemplate}", TTL: ${ttl}, Fields: { ${fieldsStr} }`;
+  }
+
+  return `Structure: ${ds.toUpperCase()}, Key: "${keyTemplate}", TTL: ${ttl}`;
+}
+
+/**
  * Formats endpoint request payload/query/path params into a human-readable dataContext string
  */
 export function formatEndpointPayloadContext(endpoint: Endpoint): string {
@@ -397,8 +429,22 @@ export function resolveEndpointTrace(
     const nodeData = tgtNode.data as any;
     const nodeTypeStr = tgtNode.type as string;
 
-    // A. Database / Entity Node
+    // A. Redis Cache Node
     if (
+      tgtNode.type === "redis_schema" ||
+      tgtNode.type === "redis-cache" ||
+      nodeData?.dbType === "redis"
+    ) {
+      outgoing.push({
+        nodeId: tgtNode.id,
+        nodeName: tgtName,
+        nodeType: "Redis Cache",
+        detail: `Cache "${tgtName}"`,
+        dataContext: formatRedisSchemaContext(tgtNode, allNodes),
+      });
+    }
+    // B. Database / Entity Node
+    else if (
       tgtNode.type === "entity" ||
       tgtNode.type === "db_ref" ||
       nodeTypeStr === "db" ||

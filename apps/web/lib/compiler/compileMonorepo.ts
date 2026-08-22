@@ -165,10 +165,6 @@ export function compileMonorepo(
     });
   });
 
-  // Collect reusable functions from db + kafka packages for service route generation
-  const dbFunctions: ReusableFunction[] = compiledDb.reusableFunctions ?? [];
-  const kafkaFunctions: ReusableFunction[] = compiledKafka.reusableFunctions ?? [];
-
   // 4.8 Generate Shared Package: packages/<redisFolder> (@workspace/<redisFolder>)
   const compiledRedis = compileRedisNodes(nodes, edges);
   if (compiledRedis.files.length > 0) {
@@ -181,6 +177,11 @@ export function compileMonorepo(
       });
     });
   }
+
+  // Collect reusable functions from db + kafka + redis packages for service route generation
+  const dbFunctions: ReusableFunction[] = compiledDb.reusableFunctions ?? [];
+  const kafkaFunctions: ReusableFunction[] = compiledKafka.reusableFunctions ?? [];
+  const redisFunctions: ReusableFunction[] = compiledRedis.reusableFunctions ?? [];
 
   // 4.9 Generate Shared Packages: packages/grpc/<service-name>/ for gRPC inter-service calls
   const compiledGrpc = compileGrpcPackages(nodes, edges, endpoints);
@@ -211,6 +212,7 @@ export function compileMonorepo(
       dbFunctions,
       kafkaFunctions,
       folderName,
+      redisFunctions,
     );
     srvResult.files.forEach((f) => {
       files.push({
