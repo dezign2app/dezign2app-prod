@@ -10,6 +10,7 @@ import {
 export const baseNodeDataSchema = z.object({
   label: z.string().optional(),
   position: z.object({ x: z.number(), y: z.number() }).optional(),
+  graphPosition: z.object({ x: z.number(), y: z.number() }).optional(),
   parentId: z.string().optional(),
   style: z
     .record(z.union([z.string(), z.number(), z.boolean(), z.null()]))

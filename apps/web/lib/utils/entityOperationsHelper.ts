@@ -820,7 +820,7 @@ export function generateRedisOperations(
  * Otherwise generates default CRUD, index-based, relational JOIN, or Redis operations.
  */
 export function getEntityDbOperations(
-  entityNode?: { data?: BackendNode["data"] } | null,
+  entityNode?: { type?: string; data?: BackendNode["data"] } | null,
   allNodes: BackendNode[] = []
 ): DbOperationFunction[] {
   if (!entityNode || !entityNode.data) return [];
@@ -828,7 +828,12 @@ export function getEntityDbOperations(
   const columns = entityNode.data.columns || [];
   const indexes = entityNode.data.indexes || [];
 
-  if (entityNode.data.dbType === "redis") {
+  const isRedis =
+    entityNode.data.dbType === "redis" ||
+    entityNode.type === "redis_schema" ||
+    entityNode.type === "redis-cache";
+
+  if (isRedis) {
     if (entityNode.data.dbOperations && entityNode.data.dbOperations.length > 0) {
       return entityNode.data.dbOperations;
     }

@@ -42,6 +42,8 @@ export const nodeDataSchemas: Record<string, z.ZodSchema> = {
   "redis-pubsub": redisPubSubDataSchema,
   "redis-streams": redisStreamsDataSchema,
   "redis-cache": redisCacheDataSchema,
+  redis_instance: databaseDataSchema,
+  redis_schema: entityDataSchema,
   entity: entityDataSchema,
   database: databaseDataSchema,
   service: serviceDataSchema,

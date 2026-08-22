@@ -22,6 +22,7 @@ export function generateRoutes(
   kafkaFunctions: ReusableFunction[] = [],
   nodePublishedEvents: (AnyMessagingResource & { nodeId: string; variant: "publish" | "consume" })[] = [],
   folderName?: string,
+  redisFunctions: ReusableFunction[] = [],
 ): CompiledFile[] {
   const files: CompiledFile[] = [];
   const routeImports: string[] = [];
@@ -51,6 +52,7 @@ export function generateRoutes(
         allEndpoints,
         dbFunctions,
         kafkaFunctions,
+        redisFunctions,
         nodePublishedEvents,
         usedFileNames,
       });
