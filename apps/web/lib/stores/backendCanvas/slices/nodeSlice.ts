@@ -78,7 +78,11 @@ export const createNodeSlice = (
       const isSchema = currentState.nodes.some(
         (n) =>
           removedIds.includes(n.id) &&
-          (n.type === "entity" || n.type === "database" || n.type === "group"),
+          (n.type === "entity" ||
+            n.type === "database" ||
+            n.type === "group" ||
+            n.type === "redis_instance" ||
+            n.type === "redis_schema"),
       );
       get().pushHistorySnapshot(isSchema ? "schema" : "graph");
     }
@@ -113,7 +117,9 @@ export const createNodeSlice = (
     const isSchema =
       nodeWithoutIndex.type === "entity" ||
       nodeWithoutIndex.type === "database" ||
-      nodeWithoutIndex.type === "group";
+      nodeWithoutIndex.type === "group" ||
+      nodeWithoutIndex.type === "redis_instance" ||
+      nodeWithoutIndex.type === "redis_schema";
     get().pushHistorySnapshot(isSchema ? "schema" : "graph");
     let finalNode = nodeWithoutIndex;
     if (
@@ -246,7 +252,9 @@ export const createNodeSlice = (
     const isSchema =
       updatedNode.type === "entity" ||
       updatedNode.type === "database" ||
-      updatedNode.type === "group";
+      updatedNode.type === "group" ||
+      updatedNode.type === "redis_instance" ||
+      updatedNode.type === "redis_schema";
     get().pushHistorySnapshot(isSchema ? "schema" : "graph");
 
     let currentNodes = get().nodes;
@@ -592,7 +600,9 @@ export const createNodeSlice = (
     const isSchema =
       nodeToDelete?.type === "entity" ||
       nodeToDelete?.type === "database" ||
-      nodeToDelete?.type === "group";
+      nodeToDelete?.type === "group" ||
+      nodeToDelete?.type === "redis_instance" ||
+      nodeToDelete?.type === "redis_schema";
     get().pushHistorySnapshot(isSchema ? "schema" : "graph");
     const updates = cleanupDeletedNodesState(get(), [id]);
     set(updates);

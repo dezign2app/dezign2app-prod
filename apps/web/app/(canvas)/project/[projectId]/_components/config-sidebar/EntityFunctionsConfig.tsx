@@ -49,7 +49,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
   // Selected operation ID for detail editing view
   const [selectedOpId, setSelectedOpId] = useState<string | null>(null);
 
-  if (!node || node.type !== "entity") {
+  if (!node || (node.type !== "entity" && node.type !== "redis_schema")) {
     return (
       <div className="p-4 text-sm text-muted-foreground">
         Entity node not found.

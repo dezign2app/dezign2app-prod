@@ -13,6 +13,8 @@ const ALL_BACKEND_NODE_TYPES = [
   "sqs",
   "redis-pubsub",
   "redis-cache",
+  "redis_instance",
+  "redis_schema",
   "entity",
   "webClient",
   "external",
@@ -135,7 +137,7 @@ export function classifyHandle(
   if (id.startsWith("route-out-") || id.startsWith("channel-out-"))
     return "langgraph-out";
 
-  if (nodeType === "entity") {
+  if (nodeType === "entity" || nodeType === "redis_schema") {
     if (id.startsWith("source-")) return "entity-column-source";
     if (id.startsWith("target-")) return "entity-column-target";
     if (handleDirection === "target") return "entity-top-target";
@@ -210,6 +212,7 @@ export function classifyHandle(
 
   if (
     nodeType === "database" ||
+    nodeType === "redis_instance" ||
     nodeType === "db_ref" ||
     nodeType === "vector_db_ref"
   ) {

@@ -70,11 +70,16 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
   const connStringEnv = data.connectionStringEnv || (engine === "redis" ? "REDIS_URL" : DEFAULT_DATABASE_ENV_VARS.connectionStringEnv);
   const dbFilePathEnv = data.dbFilePathEnv || DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv;
 
-  const attachedEntities = nodes.filter(
-    (n) => n.type === "entity" && n.data?.databaseId === nodeId,
-  );
+  const isRedis = dbNode.type === "redis_instance" || engine === "redis";
 
-  const isRedis = engine === "redis";
+  const attachedEntities = nodes.filter(
+    (n) =>
+      (n.type === "redis_schema" || n.type === "entity") &&
+      n.data?.databaseId === nodeId &&
+      (isRedis
+        ? n.type === "redis_schema" || n.data?.dbType === "redis"
+        : n.type !== "redis_schema" && n.data?.dbType !== "redis"),
+  );
 
   const handleUpdateField = <K extends keyof BackendNode["data"]>(
     field: K,
@@ -118,21 +123,21 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
   const handleAddRedisSchemaToDb = () => {
     const schemaId = crypto.randomUUID();
     const dbPos = dbNode.position || { x: 100, y: 100 };
-    const schemaLabel = getUniqueNodeLabel(nodes, `Cache_${attachedEntities.length + 1}`, "entity");
+    const schemaLabel = getUniqueNodeLabel(nodes, `Cache_${attachedEntities.length + 1}`, "redis_schema");
 
     addNode({
       id: schemaId,
-      type: "entity",
+      type: "redis_schema",
       position: { x: dbPos.x, y: dbPos.y + 220 },
       data: {
         label: schemaLabel,
         dbType: "redis",
         redisDataStructure: "hash",
-        keyTemplate: "user:{id}:profile",
-        clusterHashTagParam: "id",
-        ttl: { value: 3600, unit: "s" },
-        cacheStrategy: "Cache Aside",
-        columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
+        keyTemplate: "",
+        columns: [],
+        hashConfig: {
+          fields: [],
+        },
         databaseId: nodeId,
       },
     });

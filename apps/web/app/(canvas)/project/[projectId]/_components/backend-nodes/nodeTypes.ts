@@ -33,10 +33,13 @@ import { SchemaGroupNode } from "./SchemaGroupNode";
 import { WebAppGroupNode } from "./WebAppGroupNode";
 import { EntityNode } from "./entity-node/EntityNode";
 import { DatabaseNode } from "./database-node/DatabaseNode";
+import { RedisInstanceNode, RedisSchemaNode } from "./redis-node";
 
 export const nodeTypes = {
   service: ServiceNode,
   database: DatabaseNode,
+  redis_instance: RedisInstanceNode,
+  redis_schema: RedisSchemaNode,
   db_ref: DatabaseTableRefNode,
   queue: QueueNode,
   pubsub: PubSubNode,

@@ -1,25 +1,22 @@
 import React, { useState, useRef, useEffect } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Trash2, Settings, Server, Table2, Key, Palette } from "lucide-react";
+import { DatabaseZap, Trash2, Settings, Key, Palette, HardDrive, ShieldCheck } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
 import { Badge } from "@workspace/ui/components/badge";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { DEFAULT_DATABASE_NODE_LABEL } from "@workspace/canvas";
 
-export const DB_COLOR_PRESETS = [
-  { name: "Amber", hex: "#f59e0b" },
-  { name: "Blue", hex: "#3b82f6" },
-  { name: "Emerald", hex: "#10b981" },
-  { name: "Purple", hex: "#a855f7" },
+export const REDIS_COLOR_PRESETS = [
+  { name: "Crimson", hex: "#ef4444" },
   { name: "Rose", hex: "#f43f5e" },
-  { name: "Cyan", hex: "#06b6d4" },
-  { name: "Indigo", hex: "#6366f1" },
   { name: "Orange", hex: "#f97316" },
+  { name: "Amber", hex: "#f59e0b" },
+  { name: "Purple", hex: "#a855f7" },
+  { name: "Cyan", hex: "#06b6d4" },
 ];
 
-export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
@@ -27,9 +24,8 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const allNodes = useBackendCanvasStore((s) => s.nodes);
 
-  const engine = data.dbEngine || "sqlite";
-  const color = data.color || "#f59e0b"; // Default to Amber
-  const label = data.label || DEFAULT_DATABASE_NODE_LABEL;
+  const color = data.color || "#ef4444";
+  const label = data.label || "Primary_Redis_Cache";
   const [editingName, setEditingName] = useState(label);
   const [isEditingName, setIsEditingName] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -41,19 +37,22 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
   }, [isEditingName]);
 
   const saveName = () => {
-    const finalName = editingName.trim() || DEFAULT_DATABASE_NODE_LABEL;
+    const finalName = editingName.trim() || "Primary_Redis_Cache";
     updateNode(id, { data: { ...data, label: finalName } });
     setEditingName(finalName);
     setIsEditingName(false);
   };
 
-  // Find all SQL / document table entity nodes hanging off this DB
-  const attachedTables = allNodes.filter(
-    (n) => n.type === "entity" && n.data?.databaseId === id,
+  // Find all Redis schema entities hanging off this instance
+  const attachedSchemas = allNodes.filter(
+    (n) =>
+      (n.type === "redis_schema" || (n.type === "entity" && n.data?.dbType === "redis")) &&
+      n.data?.databaseId === id,
   );
 
-  const connStringEnv = data.connectionStringEnv || "DATABASE_URL";
-  const dbFilePathEnv = data.dbFilePathEnv || "DB_FILE_PATH";
+  const connStringEnv = data.connectionStringEnv || "REDIS_URL";
+  const maxmemoryPolicy = data.maxmemoryPolicy || "volatile-lru";
+  const persistenceMode = data.persistenceMode || "RDB+AOF";
 
   return (
     <div
@@ -75,7 +74,7 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
           : undefined,
       }}
     >
-      {/* Incoming Connection Handle for Services/Tasks */}
+      {/* Incoming Connection Handle for Services/Workers */}
       <Handle
         type="target"
         position={Position.Top}
@@ -91,7 +90,7 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
       >
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center flex-1 min-w-0">
-            <Database size={16} className="mr-2 shrink-0" style={{ color }} />
+            <DatabaseZap size={16} className="mr-2 shrink-0" style={{ color }} />
             {isEditingName ? (
               <Input
                 ref={inputRef}
@@ -121,19 +120,19 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
           <div className="flex items-center gap-1 shrink-0 ml-2">
             <Badge
               variant="outline"
-              className="text-[10px] px-1.5 py-0 font-mono uppercase"
+              className="text-[10px] px-1.5 py-0 font-mono uppercase font-semibold"
               style={{
                 backgroundColor: `${color}15`,
                 borderColor: `${color}40`,
                 color: color,
               }}
             >
-              {engine}
+              REDIS 7.x
             </Badge>
             <div
               className="flex items-center justify-center p-1.5 rounded hover:bg-background/40 transition-all cursor-pointer"
               style={{ color }}
-              title="Configure Database"
+              title="Configure Redis Instance"
               onClick={(e) => {
                 e.stopPropagation();
                 setActiveConfigItem({
@@ -147,7 +146,7 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
             </div>
             <div
               className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all cursor-pointer"
-              title="Delete Database"
+              title="Delete Redis Instance"
               onClick={(e) => {
                 e.stopPropagation();
                 deleteNode(id);
@@ -168,7 +167,7 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
             <span className="text-[11px] font-medium">Theme Color</span>
           </div>
           <div className="flex items-center gap-1">
-            {DB_COLOR_PRESETS.map((preset) => {
+            {REDIS_COLOR_PRESETS.map((preset) => {
               const isSelected =
                 color.toLowerCase() === preset.hex.toLowerCase();
               return (
@@ -195,6 +194,7 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
           </div>
         </div>
 
+        {/* ENV Connection */}
         <div className="flex items-center justify-between bg-muted/30 p-1.5 rounded-lg border border-border/40">
           <div className="flex items-center text-muted-foreground gap-1.5">
             <Key size={12} className="shrink-0" style={{ color }} />
@@ -208,31 +208,41 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
           </code>
         </div>
 
-        {engine === "sqlite" && (
-          <div className="flex items-center justify-between bg-muted/30 p-1.5 rounded-lg border border-border/40">
-            <div className="flex items-center text-muted-foreground gap-1.5">
-              <Server size={12} className="shrink-0" style={{ color }} />
-              <span className="text-[11px] font-medium">File Path ENV</span>
-            </div>
-            <code className="text-[10px] font-mono font-semibold bg-background px-1.5 py-0.5 rounded border border-border/60 text-foreground/80">
-              {dbFilePathEnv}
-            </code>
+        {/* Eviction Policy */}
+        <div className="flex items-center justify-between bg-muted/30 p-1.5 rounded-lg border border-border/40">
+          <div className="flex items-center text-muted-foreground gap-1.5">
+            <ShieldCheck size={12} className="shrink-0" style={{ color }} />
+            <span className="text-[11px] font-medium">Eviction Policy</span>
           </div>
-        )}
+          <code className="text-[10px] font-mono font-semibold bg-background px-1.5 py-0.5 rounded border border-border/60 text-foreground/80">
+            {maxmemoryPolicy}
+          </code>
+        </div>
 
-        {/* Connected Entities Counter */}
+        {/* Persistence */}
+        <div className="flex items-center justify-between bg-muted/30 p-1.5 rounded-lg border border-border/40">
+          <div className="flex items-center text-muted-foreground gap-1.5">
+            <HardDrive size={12} className="shrink-0" style={{ color }} />
+            <span className="text-[11px] font-medium">Persistence</span>
+          </div>
+          <code className="text-[10px] font-mono font-semibold bg-background px-1.5 py-0.5 rounded border border-border/60 text-foreground/80">
+            {persistenceMode}
+          </code>
+        </div>
+
+        {/* Connected Schemas Counter */}
         <div className="flex items-center justify-between pt-1 border-t border-border/40 text-[11px] text-muted-foreground">
           <div className="flex items-center gap-1">
-            <Table2 size={12} style={{ color }} />
-            <span>Hanging Tables</span>
+            <DatabaseZap size={12} style={{ color }} />
+            <span>Hanging Schemas</span>
           </div>
           <span className="font-semibold text-foreground bg-secondary px-1.5 rounded-full">
-            {attachedTables.length}
+            {attachedSchemas.length}
           </span>
         </div>
       </div>
 
-      {/* Outgoing Handle to Hanging Entity Nodes */}
+      {/* Outgoing Handle to Hanging Redis Schema Nodes */}
       <Handle
         type="source"
         position={Position.Bottom}

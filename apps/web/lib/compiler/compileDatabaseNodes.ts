@@ -95,7 +95,7 @@ export function compileDatabaseNodes(
   });
 
   const dbNodes = allNodes.filter(
-    (n) => n.type === "database",
+    (n) => n.type === "database" && n.data?.dbEngine !== "redis",
   );
 
   // 2. Synthesize BetterAuth tables if connected auth nodes exist
@@ -171,7 +171,9 @@ export function compileDatabaseNodes(
   }
 
   const allEntityNodes = effectiveNodes.filter(
-    (n) => n.type === "entity" || n.type === "db_ref",
+    (n) =>
+      (n.type === "entity" || n.type === "db_ref") &&
+      n.data?.dbType !== "redis",
   );
 
   // Check if anything DB-related exists

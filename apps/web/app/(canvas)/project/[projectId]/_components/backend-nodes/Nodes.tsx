@@ -1,5 +1,6 @@
 export { EntityNode } from "./entity-node/EntityNode";
 export { DatabaseNode } from "./database-node/DatabaseNode";
+export { RedisInstanceNode, RedisSchemaNode } from "./redis-node";
 export { ColumnRow } from "./entity-node/ColumnRow";
 export type { ColumnRowProps, ColumnItem } from "./entity-node/ColumnRow";
 export { ColumnList } from "./entity-node/ColumnList";

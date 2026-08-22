@@ -110,7 +110,7 @@ export function getNodeDimensions(node: LayoutNode): {
       measuredHeight > 0,
   );
 
-  if (isMeasured && node.type !== "entity" && measuredWidth !== undefined && measuredHeight !== undefined) {
+  if (isMeasured && node.type !== "entity" && node.type !== "redis_schema" && measuredWidth !== undefined && measuredHeight !== undefined) {
     return {
       width: measuredWidth,
       height: measuredHeight,
@@ -154,8 +154,38 @@ export function getNodeDimensions(node: LayoutNode): {
     case "eventConsumer": {
       return { width: 280, height: 160 };
     }
-    case "database": {
+    case "database":
+    case "redis_instance": {
       return { width: 280, height: 160 };
+    }
+    case "redis_schema": {
+      const columns = getEntityColumns(node);
+      const redisStructure = getRedisDataStructure(node);
+      const colCount = columns.length > 0 ? columns.length : 1;
+
+      // Header: 68px (title + redis instance dropdown)
+      const headerH = 68;
+      // Description box: ~44px
+      const descH = 44;
+      // Redis config block: ~130px
+      const redisConfigH = 130;
+      // Column list (for Hash / JSON): ~24px + 42px per field
+      const showColumns = redisStructure === "hash" || redisStructure === "json" || !redisStructure;
+      const columnsH = showColumns ? 24 + colCount * 42 : 0;
+      // DbOperations header: ~30px
+      const dbOpsH = 30;
+      const paddingH = 16;
+
+      const estHeight = headerH + descH + redisConfigH + columnsH + dbOpsH + paddingH;
+      const estWidth = 320;
+
+      if (isMeasured && measuredWidth !== undefined && measuredHeight !== undefined) {
+        return {
+          width: Math.max(measuredWidth, estWidth),
+          height: Math.max(measuredHeight, estHeight),
+        };
+      }
+      return { width: estWidth, height: estHeight };
     }
     case "flow": {
       const data = getLayoutNodeData(node);
@@ -248,7 +278,7 @@ export function getHandleYRatio(
 ): number {
   if (!handleId) return 0.5;
 
-  if (node.type === "entity") {
+  if (node.type === "entity" || node.type === "redis_schema") {
     const colMatch = handleId.match(/^(?:source|target)-(\d+)$/);
     if (colMatch) {
       const colIndex = parseInt(colMatch[1]!, 10);
@@ -256,12 +286,14 @@ export function getHandleYRatio(
       const { height } = getNodeDimensions(node);
 
       const isVector = dbType === "vector";
+      const isRedis = node.type === "redis_schema" || dbType === "redis";
       const headerH = isVector ? 44 : 68;
       const descH = 44;
       const vectorConfigH = isVector ? 120 : 0;
+      const redisConfigH = isRedis ? 130 : 0;
       const columnHeaderH = 24;
 
-      const topOffset = headerH + descH + vectorConfigH + columnHeaderH;
+      const topOffset = headerH + descH + vectorConfigH + redisConfigH + columnHeaderH;
       const targetY = topOffset + colIndex * 42 + 21;
 
       return Math.min(0.95, Math.max(0.05, targetY / height));

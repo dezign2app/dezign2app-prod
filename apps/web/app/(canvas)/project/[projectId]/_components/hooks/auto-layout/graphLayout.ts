@@ -37,7 +37,11 @@ export function performGraphLayout({
   // Filter for graph nodes and graph edges only
   const graphNodes = nodes.filter(
     (n: LayoutNode) =>
-      n.type !== "group" && n.type !== "entity" && n.type !== "database",
+      n.type !== "group" &&
+      n.type !== "entity" &&
+      n.type !== "database" &&
+      n.type !== "redis_instance" &&
+      n.type !== "redis_schema",
   );
   if (graphNodes.length === 0) return;
 

@@ -20,9 +20,13 @@ export function performSchemaLayout({
   fitView,
   direction = "LR",
 }: PerformSchemaLayoutOptions) {
-  // Filter for Schema nodes (entity & database) and edges (foreign-key, database-connection)
+  // Filter for Schema nodes (entity, redis_schema, database, redis_instance) and edges (foreign-key, database-connection)
   const schemaNodes = nodes.filter(
-    (n) => n.type === "entity" || n.type === "database",
+    (n) =>
+      n.type === "entity" ||
+      n.type === "database" ||
+      n.type === "redis_instance" ||
+      n.type === "redis_schema",
   );
   if (schemaNodes.length === 0) return;
 
@@ -33,7 +37,8 @@ export function performSchemaLayout({
       e.type === "connection",
   );
 
-  const isDatabaseNode = (n: LayoutNode) => n.type === "database";
+  const isDatabaseNode = (n: LayoutNode) =>
+    n.type === "database" || n.type === "redis_instance";
   const databaseNodes = schemaNodes.filter(isDatabaseNode);
   const databaseNodeIdSet = new Set(databaseNodes.map((n) => n.id));
 

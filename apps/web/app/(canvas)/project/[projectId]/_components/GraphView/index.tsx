@@ -70,7 +70,12 @@ export function GraphView({ projectId }: GraphViewProps) {
   const graphNodes = React.useMemo(
     () =>
       nodes.filter(
-        (n) => n.type !== "group" && n.type !== "entity" && n.type !== "database",
+        (n) =>
+          n.type !== "group" &&
+          n.type !== "entity" &&
+          n.type !== "database" &&
+          n.type !== "redis_instance" &&
+          n.type !== "redis_schema",
       ),
     [nodes],
   );

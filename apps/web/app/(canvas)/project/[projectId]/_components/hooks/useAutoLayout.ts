@@ -34,7 +34,13 @@ export function useSchemaAutoLayout(options?: UseSchemaAutoLayoutOptions) {
 
   const nodes: LayoutNode[] =
     options?.nodes ??
-    store.nodes.filter((n) => n.type === "entity" || n.type === "database");
+    store.nodes.filter(
+      (n) =>
+        n.type === "entity" ||
+        n.type === "database" ||
+        n.type === "redis_instance" ||
+        n.type === "redis_schema",
+    );
   const edges: LayoutEdge[] =
     options?.edges ??
     store.edges.filter(
@@ -71,7 +77,12 @@ export function useGraphAutoLayout(options?: UseGraphAutoLayoutOptions) {
   const nodes: LayoutNode[] =
     options?.nodes ??
     store.nodes.filter(
-      (n) => n.type !== "group" && n.type !== "entity" && n.type !== "database",
+      (n) =>
+        n.type !== "group" &&
+        n.type !== "entity" &&
+        n.type !== "database" &&
+        n.type !== "redis_instance" &&
+        n.type !== "redis_schema",
     );
   const edges: LayoutEdge[] =
     options?.edges ??
@@ -165,7 +176,13 @@ export function useAutoLayout(options?: UseAutoLayoutOptions) {
 
       const isSchemaView =
         nonHeadNodes.length > 0 &&
-        nonHeadNodes.every((n) => n.type === "entity" || n.type === "database");
+        nonHeadNodes.every(
+          (n) =>
+            n.type === "entity" ||
+            n.type === "database" ||
+            n.type === "redis_instance" ||
+            n.type === "redis_schema",
+        );
 
       const isLangGraphView = nonHeadNodes.some(
         (n) =>
