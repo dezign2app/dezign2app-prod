@@ -1,3 +1,8 @@
+import type { Endpoint, IdentityProvider } from "../schemas";
+import type { AnyMessagingResource } from "./messaging";
+import type { BackendNode } from "./nodes";
+import type { BackendEdge } from "./edges";
+
 export type HandleKind =
   // --- Entity (schema view) ---
   | "entity-column-source"
@@ -101,3 +106,56 @@ export interface JSONObject {
   [key: string]: JSONValue;
 }
 export interface JSONArray extends Array<JSONValue> {}
+
+// --- Canvas Configuration & Store State Types ---
+
+export type ConfigItemType =
+  | "endpoint"
+  | "event"
+  | "task"
+  | "searchIndex"
+  | "authRule"
+  | "identityProvider"
+  | "auth"
+  | "webApp"
+  | "webClient"
+  | "clientEvent"
+  | "eventTesting"
+  | "langgraphRoute"
+  | "payments"
+  | "zone"
+  | "entityFunctions"
+  | "database"
+  | "testUsers"
+  | "redisSchema"
+  | "transformer";
+
+export interface ActiveConfigItem {
+  type: ConfigItemType;
+  id: string;
+  nodeId: string;
+  edgeId?: string;
+  sourceId?: string;
+  targetNodeId?: string;
+  endpointId?: string;
+  initialTab?: "trigger" | "test-cases";
+}
+
+export type EndpointWithNode = Endpoint & { nodeId: string };
+export type EventWithNode = AnyMessagingResource & {
+  nodeId: string;
+  variant: "publish" | "consume";
+};
+export type IdentityProviderWithNode = IdentityProvider & { nodeId: string };
+
+export type PendingEndpointRemoval = { nodeId: string; endpointId: string };
+export type PendingEventRemoval = { nodeId: string; eventId: string };
+export type PendingIdentityProviderRemoval = { nodeId: string; providerId: string };
+
+export interface CanvasSnapshotState {
+  nodes: BackendNode[];
+  edges: BackendEdge[];
+  endpoints: EndpointWithNode[];
+  events: EventWithNode[];
+  identityProviders: IdentityProviderWithNode[];
+}

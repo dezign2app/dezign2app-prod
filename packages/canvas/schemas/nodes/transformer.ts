@@ -8,6 +8,7 @@ export const transformerNodeDataSchema = baseNodeDataSchema
     functionName: z.string().optional(),
     scope: z.enum(["global", "local"]).optional().default("global"),
     targetServiceId: z.string().optional(),
+    targetEndpointId: z.string().optional(),
     inputSchema: z
       .array(
         z.object({
@@ -42,6 +43,7 @@ export const transformerNodeDataInputSchema = baseNodeDataSchema
     functionName: z.string().optional(),
     scope: z.enum(["global", "local"]).optional().default("global"),
     targetServiceId: z.string().optional(),
+    targetEndpointId: z.string().optional(),
     inputSchema: z
       .array(
         z.object({

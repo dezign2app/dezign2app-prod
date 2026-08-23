@@ -14,6 +14,8 @@ import { generateId, LocalInput, LocalTextarea } from "../backend-nodes/graph-no
 export type RequestBodyMode = "field_builder" | "raw_json";
 
 interface RequestBodyEditorProps {
+  title?: string;
+  subtitle?: string;
   mode: RequestBodyMode;
   onModeChange: (mode: RequestBodyMode) => void;
   schema?: Schema;
@@ -21,7 +23,7 @@ interface RequestBodyEditorProps {
 }
 
 /**
- * Dual-mode editor for the request body schema.
+ * Dual-mode editor for the request body schema or any object schema.
  *
  * - field_builder: structured field rows (name + type + required toggle), same
  *   look as ParameterEditor. Persists to schema.fields[].
@@ -29,6 +31,8 @@ interface RequestBodyEditorProps {
  *   Persists to schema.rawJson.
  */
 export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
+  title = "Request Body Schema",
+  subtitle,
   mode,
   onModeChange,
   schema,
@@ -36,7 +40,14 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
 }) => {
   // ---- shared helpers --------------------------------------------------------
   const safeSchema: Schema = schema || { id: generateId() };
-  const fields: Parameter[] = (safeSchema.fields as Parameter[]) || [];
+  const rawFields = safeSchema.fields || [];
+  const fields: Parameter[] = React.useMemo(() => {
+    return rawFields.map((f, idx) => ({
+      ...f,
+      id: f.id || `f_${idx}_${f.name || generateId()}`,
+    }));
+  }, [rawFields]);
+
 
   // ---- field-builder helpers -------------------------------------------------
   const addField = () => {
@@ -90,9 +101,16 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
     <div className="flex flex-col gap-3 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
       {/* Header + mode tabs */}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Request Body Schema
-        </span>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {title}
+          </span>
+          {subtitle && (
+            <span className="text-[10px] text-muted-foreground/70">
+              {subtitle}
+            </span>
+          )}
+        </div>
 
         {/* Tab switcher */}
         <div className="flex items-center gap-0.5 bg-background/60 p-0.5 rounded-lg border border-border/50">
@@ -133,9 +151,9 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
               No fields yet. Add one below.
             </p>
           )}
-          {fields.map((f) => (
+          {fields.map((f, idx) => (
             <div
-              key={f.id}
+              key={f.id || `field_${idx}_${f.name}`}
               className="flex flex-col gap-1.5 rounded-lg border bg-background/50 p-2.5 group/f transition-all hover:border-primary/30 hover:shadow-sm"
             >
               <div className="flex items-center gap-2">
@@ -145,6 +163,7 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
                   value={f.name || ""}
                   onBlur={(e) => updateField(f.id, { name: e.target.value })}
                 />
+
                 <Select
                   value={f.type}
                   onValueChange={(v) => updateField(f.id, { type: v })}

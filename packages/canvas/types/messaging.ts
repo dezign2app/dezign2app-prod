@@ -1,6 +1,7 @@
 import type { Schema } from "./simulation";
-import type { ArchitectureMetadata } from "./common";
+import type { ArchitectureMetadata } from "./canvas-core";
 import type { KafkaTopic, KafkaBrokerConfig } from "../schemas";
+
 
 export type {
   KafkaTopic,

@@ -4,6 +4,25 @@ import {
   AnyMessagingResource,
   IdentityProvider,
   MessagingResourceType,
+  VersionChangeSummary,
+  ChangeSummary,
+  VersionNodeSnapshot,
+  VersionEdgeSnapshot,
+  VersionEndpointSnapshot,
+  VersionEventSnapshot,
+  VersionIdentityProviderSnapshot,
+  VersionTestCaseSnapshot,
+  VersionSnapshot,
+  VersionListItem,
+  ConfigItemType,
+  ActiveConfigItem,
+  EndpointWithNode,
+  EventWithNode,
+  IdentityProviderWithNode,
+  PendingEndpointRemoval,
+  PendingEventRemoval,
+  PendingIdentityProviderRemoval,
+  CanvasSnapshotState,
 } from "@workspace/canvas/types";
 import { NodeChange, EdgeChange, Connection } from "@xyflow/react";
 import { GraphSnapshot, SchemaSnapshot } from "./history/types";
@@ -19,58 +38,18 @@ export type {
   VersionTestCaseSnapshot,
   VersionSnapshot,
   VersionListItem,
-} from "@workspace/canvas/types";
-
-export type ConfigItemType =
-  | "endpoint"
-  | "event"
-  | "task"
-  | "searchIndex"
-  | "authRule"
-  | "identityProvider"
-  | "auth"
-  | "webApp"
-  | "webClient"
-  | "clientEvent"
-  | "eventTesting"
-  | "langgraphRoute"
-  | "payments"
-  | "zone"
-  | "entityFunctions"
-  | "database"
-  | "testUsers"
-  | "redisSchema"
-  | "transformer";
-
-export interface ActiveConfigItem {
-  type: ConfigItemType;
-  id: string;
-  nodeId: string;
-  edgeId?: string;
-  sourceId?: string;
-  targetNodeId?: string;
-  endpointId?: string;
-  initialTab?: "trigger" | "test-cases";
-}
-
-export type EndpointWithNode = Endpoint & { nodeId: string };
-export type EventWithNode = AnyMessagingResource & {
-  nodeId: string;
-  variant: "publish" | "consume";
+  ConfigItemType,
+  ActiveConfigItem,
+  EndpointWithNode,
+  EventWithNode,
+  IdentityProviderWithNode,
+  PendingEndpointRemoval,
+  PendingEventRemoval,
+  PendingIdentityProviderRemoval,
+  CanvasSnapshotState,
 };
-export type IdentityProviderWithNode = IdentityProvider & { nodeId: string };
 
-export type PendingEndpointRemoval = { nodeId: string; endpointId: string };
-export type PendingEventRemoval = { nodeId: string; eventId: string };
-export type PendingIdentityProviderRemoval = { nodeId: string; providerId: string };
 
-export interface CanvasSnapshotState {
-  nodes: BackendNode[];
-  edges: BackendEdge[];
-  endpoints: EndpointWithNode[];
-  events: EventWithNode[];
-  identityProviders: IdentityProviderWithNode[];
-}
 
 export interface BackendCanvasState {
   projectId: string | null;
