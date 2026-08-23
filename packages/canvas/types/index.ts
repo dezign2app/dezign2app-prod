@@ -4,7 +4,7 @@ export type { MessagingResourceType, MessagingNodeType };
 export * from "../techStack";
 export * from "../schemas";
 
-export * from "./common";
+export * from "./canvas-core";
 export * from "./auth";
 export * from "./simulation";
 export * from "./messaging";
@@ -14,4 +14,7 @@ export * from "./edges";
 export * from "./graph";
 export * from "./compiler";
 export * from "./versions";
+export * from "./pipeline";
+
+
 

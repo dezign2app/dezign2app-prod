@@ -293,15 +293,16 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         {pipelineExpanded && (
           <div className="px-3 pb-3">
             <PipelineStepEditor
-              steps={(item.pipelineSteps as PipelineStepDraft[]) || []}
+              steps={item.pipelineSteps || []}
               onChange={(steps) =>
-                updateEndpoint(item.id, { pipelineSteps: steps as any })
+                updateEndpoint(item.id, { pipelineSteps: steps })
               }
               endpoint={item}
               allNodes={allNodes}
               allEdges={allEdges}
               serviceNodeId={nodeId}
             />
+
           </div>
         )}
       </div>

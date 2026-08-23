@@ -100,7 +100,36 @@ export interface BaseNodeData {
   // Shared visual / misc
   authentication?: string;
   tags?: string[];
+  // Transformer node properties
+  functionName?: string;
+  scope?: "global" | "local";
+  targetServiceId?: string;
+  targetEndpointId?: string;
+  inputSchema?: {
+
+    id?: string;
+    name: string;
+    type: string;
+    required?: boolean;
+    description?: string;
+  }[];
+  inputSchemaMode?: "field_builder" | "raw_json";
+  inputSchemaRawJson?: string;
+  logicMode?: "natural_language" | "code";
+  prompt?: string;
+  code?: string;
+  returnSchema?: {
+    id?: string;
+    name: string;
+    type: string;
+    required?: boolean;
+    description?: string;
+  }[];
+  returnSchemaMode?: "field_builder" | "raw_json";
+  returnSchemaRawJson?: string;
+  isAsync?: boolean;
 }
+
 
 /** Database operation function (CRUD, index fetch, or custom query) */
 export interface DbOperationFunction {
@@ -390,6 +419,7 @@ export interface TransformerHelperNodeData {
   description?: string;
   scope: "global" | "local";
   targetServiceId?: string; // For local scope, which service this belongs to
+  targetEndpointId?: string; // Optional: specific endpoint within the service
 
   // Section 1: Input
   inputSchema: {
@@ -398,6 +428,8 @@ export interface TransformerHelperNodeData {
     required?: boolean;
     description?: string;
   }[];
+  inputSchemaMode?: "field_builder" | "raw_json";
+  inputSchemaRawJson?: string;
 
   // Section 2: Logic
   logicMode: "natural_language" | "code";
@@ -411,6 +443,8 @@ export interface TransformerHelperNodeData {
     required?: boolean;
     description?: string;
   }[];
+  returnSchemaMode?: "field_builder" | "raw_json";
+  returnSchemaRawJson?: string;
 
   isAsync?: boolean;
 }
@@ -420,12 +454,15 @@ export interface CanvasTransformerNodeData {
   functionName?: string;
   scope?: "global" | "local";
   targetServiceId?: string;
+  targetEndpointId?: string;
   inputSchema?: {
     name: string;
     type: string;
     required?: boolean;
     description?: string;
   }[];
+  inputSchemaMode?: "field_builder" | "raw_json";
+  inputSchemaRawJson?: string;
   logicMode?: "natural_language" | "code";
   prompt?: string;
   code?: string;
@@ -435,9 +472,12 @@ export interface CanvasTransformerNodeData {
     required?: boolean;
     description?: string;
   }[];
+  returnSchemaMode?: "field_builder" | "raw_json";
+  returnSchemaRawJson?: string;
   isAsync?: boolean;
   transformerHelpers?: TransformerHelperNodeData[];
 }
+
 
 /** Background worker node fields (canvas type). */
 export interface CanvasWorkerNodeData {

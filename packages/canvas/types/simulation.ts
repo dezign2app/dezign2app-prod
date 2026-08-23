@@ -1,6 +1,7 @@
-import type { JSONValue } from "./common";
+import type { JSONValue } from "./canvas-core";
 import type { BackendNodeType, BackendNode } from "./nodes";
 import type { BackendEdgeType, BackendEdge } from "./edges";
+
 
 export type Parameter = {
   id: string;
@@ -200,28 +201,7 @@ export interface EndpointInputType {
   pipelineSteps?: EndpointPipelineStepInput[];
 }
 
-/**
- * Lightweight inline type for endpoint pipeline steps as stored in EndpointInputType.
- * The canonical Zod schema lives in packages/canvas/schemas/shared.ts (PipelineStep).
- * This type is kept here to avoid circular imports between types/ and schemas/.
- */
-export type EndpointPipelineStepInput = {
-  id?: string;
-  name: string;
-  type: "transform" | "db_operation" | "redis_operation" | "kafka_publish" | "service_call" | "custom_code";
-  enabled?: boolean;
-  functionRef?: { name: string; importPath: string; signature?: string };
-  inputBindings: {
-    argName: string;
-    source:
-      | { kind: "req_body"; field: string }
-      | { kind: "req_params"; field: string }
-      | { kind: "req_query"; field: string }
-      | { kind: "req_headers"; field: string }
-      | { kind: "step_output"; stepId: string; field?: string }
-      | { kind: "literal"; value: string | number | boolean };
-  }[];
-  outputVariable: string;
-  outputSchema?: { name: string; type: string; required?: boolean; description?: string }[];
-  customCode?: string;
-};
+import type { PipelineStepDraft } from "./pipeline";
+
+export type EndpointPipelineStepInput = PipelineStepDraft;
+

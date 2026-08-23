@@ -11,117 +11,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import {
-  Shuffle,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { Shuffle } from "lucide-react";
 import { BusinessLogicBlock } from "../shared/BusinessLogicBlock";
+import { RequestBodyEditor, RequestBodyMode } from "./RequestBodyEditor";
+import { Parameter, Schema } from "@/types/canvas";
+import { toVarName } from "@/lib/compiler/utils";
 
 interface TransformerConfigProps {
   id: string;
   nodeId: string;
 }
-
-type SchemaField = {
-  name: string;
-  type: string;
-  required?: boolean;
-  description?: string;
-};
-
-const TS_TYPES = [
-  "string",
-  "number",
-  "boolean",
-  "string[]",
-  "number[]",
-  "Record<string, unknown>",
-  "unknown",
-  "Date",
-];
-
-const FieldList = ({
-  fields,
-  onChange,
-  placeholder,
-}: {
-  fields: SchemaField[];
-  onChange: (fields: SchemaField[]) => void;
-  placeholder?: string;
-}) => {
-  const add = () =>
-    onChange([...fields, { name: "", type: "string", required: true }]);
-  const remove = (idx: number) => onChange(fields.filter((_, i) => i !== idx));
-  const update = (idx: number, patch: Partial<SchemaField>) => {
-    const next = [...fields];
-    next[idx] = { ...next[idx]!, ...patch };
-    onChange(next);
-  };
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      {fields.length === 0 ? (
-        <div className="text-[11px] text-muted-foreground/50 italic py-1">
-          No fields defined yet. Click below to add one.
-        </div>
-      ) : (
-        fields.map((f, i) => (
-          <div
-            key={i}
-            className="grid grid-cols-[2fr_1.5fr_auto_auto] gap-1.5 items-center"
-          >
-            <Input
-              className="h-7 text-xs font-mono bg-background/60 border-border/60"
-              value={f.name}
-              onChange={(e) => update(i, { name: e.target.value })}
-              placeholder={placeholder ?? "fieldName"}
-            />
-            <Select
-              value={f.type}
-              onValueChange={(v) => update(i, { type: v })}
-            >
-              <SelectTrigger className="h-7 text-xs bg-background/60 border-border/60">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TS_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <button
-              className={`text-[10px] rounded px-1.5 py-0.5 border transition-colors ${
-                f.required === false
-                  ? "text-muted-foreground/50 border-border/40"
-                  : "text-foreground/80 border-border/60 bg-muted/40"
-              }`}
-              title={f.required === false ? "optional" : "required"}
-              onClick={() => update(i, { required: !f.required })}
-            >
-              {f.required === false ? "opt" : "req"}
-            </button>
-            <button
-              className="text-muted-foreground/40 hover:text-destructive transition-colors p-1"
-              onClick={() => remove(i)}
-            >
-              <Trash2 size={11} />
-            </button>
-          </div>
-        ))
-      )}
-      <button
-        className="flex items-center gap-1 text-[11px] font-medium text-foreground/70 hover:text-foreground transition-colors self-start pt-1"
-        onClick={add}
-      >
-        <Plus size={12} />
-        Add field
-      </button>
-    </div>
-  );
-};
 
 export const TransformerConfig = ({ id, nodeId }: TransformerConfigProps) => {
   const node = useBackendCanvasStore((s) =>
@@ -129,18 +28,46 @@ export const TransformerConfig = ({ id, nodeId }: TransformerConfigProps) => {
   );
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const allNodes = useBackendCanvasStore((s) => s.nodes);
+  const endpoints = useBackendCanvasStore((s) => s.endpoints);
 
   if (!node) return null;
 
   const data = node.data;
   const targetServiceNodes = allNodes.filter((n) => n.type === "service");
 
-  const inputSchema: SchemaField[] = data.inputSchema || [];
-  const returnSchema: SchemaField[] = data.returnSchema || [];
-  const logicMode = data.logicMode || "code";
-  const scope = data.scope || "global";
+  const currentServiceEndpoints = React.useMemo(() => {
+    if (!data.targetServiceId) return [];
+    return endpoints.filter((e) => e.nodeId === data.targetServiceId);
+  }, [endpoints, data.targetServiceId]);
 
-  const updateData = (patch: Record<string, unknown>) => {
+  const inputSchema: Parameter[] = React.useMemo(() => {
+    const raw = data.inputSchema || [];
+    return raw.map((f, idx) => ({
+      ...f,
+      id: f.id || `in_${idx}_${f.name || "field"}`,
+      required: f.required ?? true,
+    }));
+  }, [data.inputSchema]);
+
+  const returnSchema: Parameter[] = React.useMemo(() => {
+    const raw = data.returnSchema || [];
+    return raw.map((f, idx) => ({
+      ...f,
+      id: f.id || `out_${idx}_${f.name || "field"}`,
+      required: f.required ?? true,
+    }));
+  }, [data.returnSchema]);
+
+  const logicMode = data.logicMode || "code";
+  const scope = data.scope || "local";
+  const functionName = data.functionName || data.label || "transformData";
+
+  const inputSchemaMode: RequestBodyMode =
+    data.inputSchemaMode ?? (data.inputSchemaRawJson ? "raw_json" : "field_builder");
+  const returnSchemaMode: RequestBodyMode =
+    data.returnSchemaMode ?? (data.returnSchemaRawJson ? "raw_json" : "field_builder");
+
+  const updateData = (patch: Partial<typeof data>) => {
     updateNode(node.id, {
       data: {
         ...data,
@@ -150,115 +77,172 @@ export const TransformerConfig = ({ id, nodeId }: TransformerConfigProps) => {
   };
 
   return (
-    <div className="flex flex-col gap-6 pb-16">
-      {/* Header */}
-      <div className="flex items-center gap-3 pb-4 border-b border-border/50">
-        <div className="p-2.5 rounded-xl bg-secondary/40 text-foreground/80 border border-border/60">
-          <Shuffle size={18} />
+    <div className="flex flex-col gap-6 mt-6 pb-16">
+      {/* Header Banner */}
+      <div className="flex flex-col gap-2 border-b border-border/50 pb-6">
+        <div className="flex items-center gap-2.5">
+          <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-purple-500/15 text-purple-400 rounded border border-purple-500/20 shadow-sm flex items-center gap-1">
+            <Shuffle size={11} />
+            TRANSFORMER
+          </span>
+          <span className="text-lg font-semibold tracking-tight text-foreground font-mono">
+            {functionName}
+          </span>
         </div>
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">
-            Data Transformer Node
-          </h2>
-          <p className="text-[11px] text-muted-foreground">
-            Pure, reusable data transformation function.
-          </p>
-        </div>
+        <span className="text-sm text-muted-foreground">
+          Configure reusable data transformation function parameters, schemas, and logic.
+        </span>
       </div>
 
-      {/* Function name + Scope */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1">
-          <Label className="text-[11px] text-muted-foreground">
-            Function Name (camelCase)
+      <div className="flex gap-4">
+        {/* Function name */}
+        <div className="flex-1 flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+            Function Name
           </Label>
           <Input
             className="h-8 text-xs font-mono bg-background/60 border-border/60"
-            value={data.label || data.functionName || ""}
-            onChange={(e) =>
+            value={functionName}
+            onChange={(e) => {
+              const val = toVarName(e.target.value);
               updateData({
-                label: e.target.value,
-                functionName: e.target.value,
-              })
-            }
+                label: val,
+                functionName: val,
+              });
+            }}
             placeholder="e.g. slugifyProductInput"
           />
         </div>
-        <div className="flex flex-col gap-1">
-          <Label className="text-[11px] text-muted-foreground">Scope</Label>
+
+        {/* Scope */}
+        <div className="flex-1 flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+            Scope
+          </Label>
           <Select
             value={scope}
-            onValueChange={(v) => updateData({ scope: v as "global" | "local" })}
+            onValueChange={(v) => {
+              if (v === "global" || v === "local") {
+                updateData({ scope: v });
+              }
+            }}
           >
             <SelectTrigger className="h-8 text-xs bg-background/60 border-border/60">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="global">Global (@workspace/transformers)</SelectItem>
-              <SelectItem value="local">Local (Single Service)</SelectItem>
+              <SelectItem value="local" className="text-xs">
+                Local
+              </SelectItem>
+              <SelectItem value="global" className="text-xs">
+                Global
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {/* Target service if scope === 'local' */}
+      {/* Target service & Target endpoint when scope === 'local' */}
       {scope === "local" && (
-        <div className="flex flex-col gap-1">
-          <Label className="text-[11px] text-muted-foreground">
-            Target Service
-          </Label>
-          <Select
-            value={data.targetServiceId || ""}
-            onValueChange={(v) => updateData({ targetServiceId: v })}
-          >
-            <SelectTrigger className="h-8 text-xs bg-background/60 border-border/60">
-              <SelectValue placeholder="Select target service…" />
-            </SelectTrigger>
-            <SelectContent>
-              {targetServiceNodes.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.data?.label || s.id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex gap-6">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+              Target Service
+            </Label>
+            <Select
+              value={data.targetServiceId || ""}
+              onValueChange={(v) =>
+                updateData({
+                  targetServiceId: v,
+                  targetEndpointId: undefined,
+                })
+              }
+            >
+              <SelectTrigger className="h-8 text-xs bg-background/60 border-border/60 font-mono">
+                <SelectValue placeholder="Select target service…" />
+              </SelectTrigger>
+              <SelectContent>
+                {targetServiceNodes.map((s) => (
+                  <SelectItem key={s.id} value={s.id} className="text-xs font-mono">
+                    {s.data?.label || s.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex-1 flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+              Target Endpoint
+            </Label>
+            <Select
+              value={data.targetEndpointId || ""}
+              onValueChange={(v) =>
+                updateData({
+                  targetEndpointId: v || undefined,
+                })
+              }
+              disabled={!data.targetServiceId}
+            >
+              <SelectTrigger className="h-8 text-xs bg-background/60 border-border/60 font-mono">
+                <SelectValue placeholder={data.targetServiceId ? "Select target endpoint…" : "Select a service first"} />
+              </SelectTrigger>
+              <SelectContent>
+                {currentServiceEndpoints.length === 0 ? (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground italic">
+                    No endpoints in this service
+                  </div>
+                ) : (
+                  currentServiceEndpoints.map((ep) => (
+                    <SelectItem key={ep.id} value={ep.id} className="text-xs font-mono">
+                      <span className="font-bold text-[10px] px-1 py-0.2 rounded bg-primary/10 text-primary mr-1">
+                        {ep.type}
+                      </span>
+                      <span>{ep.name || ep.summary || ep.id}</span>
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       )}
 
+
+
       {/* Description */}
-      <div className="flex flex-col gap-1">
-        <Label className="text-[11px] text-muted-foreground">Description</Label>
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+          Description (optional)
+        </Label>
         <Input
           className="h-8 text-xs bg-background/60 border-border/60"
           value={data.description || ""}
           onChange={(e) => updateData({ description: e.target.value })}
-          placeholder="Brief description of this transformation"
+          placeholder="e.g. Sanitizes input parameters and generates slug"
         />
       </div>
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* 1. INPUT SCHEMA SECTION                                       */}
+      {/* 1. INPUT SCHEMA SECTION (Reusing RequestBodyEditor)           */}
       {/* ───────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 rounded-xl border border-border/60 p-4 bg-secondary/10">
-        <div className="flex items-center justify-between border-b border-border/40 pb-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-foreground">
-              1. Input Schema
-            </span>
-            <span className="text-[10px] font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded border border-border/50">
-              {inputSchema.length} field{inputSchema.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-          <span className="text-[10px] text-muted-foreground">
-            Parameters received by function
-          </span>
-        </div>
-        <FieldList
-          fields={inputSchema}
-          onChange={(fields) => updateData({ inputSchema: fields })}
-          placeholder="argName"
-        />
-      </div>
+      <RequestBodyEditor
+        title="1. Input Schema"
+        subtitle="Parameters passed into the transformer function"
+        mode={inputSchemaMode}
+        onModeChange={(inputSchemaMode) => updateData({ inputSchemaMode })}
+        schema={{
+          id: `transformer-in-${node.id}`,
+          fields: inputSchema,
+          rawJson: data.inputSchemaRawJson || "",
+        }}
+        onSchemaChange={(s: Schema) =>
+          updateData({
+            inputSchema: s.fields || [],
+            inputSchemaRawJson: s.rawJson || "",
+          })
+        }
+      />
 
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 2. TRANSFORMATION LOGIC SECTION (BusinessLogicBlock)          */}
@@ -274,7 +258,7 @@ export const TransformerConfig = ({ id, nodeId }: TransformerConfigProps) => {
           title="2. Transformation Logic"
           description="Pure TypeScript function body or natural language transformation instructions."
           promptPlaceholder="Describe how the input fields should be mapped and transformed into the return fields..."
-          codePlaceholder={`return {\n  slug: input.name.toLowerCase().replace(/\\s+/g, '-'),\n};`}
+          codePlaceholder={`return {\n  result: input.name.toLowerCase().replace(/\\s+/g, '-'),\n};`}
           codeLanguageLabel="TypeScript Function Body"
         />
 
@@ -285,33 +269,30 @@ export const TransformerConfig = ({ id, nodeId }: TransformerConfigProps) => {
             checked={!!data.isAsync}
             onChange={(e) => updateData({ isAsync: e.target.checked })}
           />
-          async function (returns Promise)
+          <span>async function (returns Promise)</span>
         </label>
       </div>
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* 3. RETURN SCHEMA SECTION                                      */}
+      {/* 3. RETURN SCHEMA SECTION (Reusing RequestBodyEditor)          */}
       {/* ───────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 rounded-xl border border-border/60 p-4 bg-secondary/10">
-        <div className="flex items-center justify-between border-b border-border/40 pb-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-foreground">
-              3. Return Schema
-            </span>
-            <span className="text-[10px] font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded border border-border/50">
-              {returnSchema.length} field{returnSchema.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-          <span className="text-[10px] text-muted-foreground">
-            Fields returned by function
-          </span>
-        </div>
-        <FieldList
-          fields={returnSchema}
-          onChange={(fields) => updateData({ returnSchema: fields })}
-          placeholder="returnField"
-        />
-      </div>
+      <RequestBodyEditor
+        title="3. Return Schema"
+        subtitle="Return object shape produced by the transformer"
+        mode={returnSchemaMode}
+        onModeChange={(returnSchemaMode) => updateData({ returnSchemaMode })}
+        schema={{
+          id: `transformer-out-${node.id}`,
+          fields: returnSchema,
+          rawJson: data.returnSchemaRawJson || "",
+        }}
+        onSchemaChange={(s: Schema) =>
+          updateData({
+            returnSchema: s.fields || [],
+            returnSchemaRawJson: s.rawJson || "",
+          })
+        }
+      />
     </div>
   );
 };
