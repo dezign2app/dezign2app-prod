@@ -140,7 +140,12 @@ export const pipelineStepSchema = z.object({
     name: z.string(),
     importPath: z.string(),
     signature: z.string().optional(),
+    isGlobal: z.boolean().optional(),
+    inputSchema: z.array(z.any()).optional(),
+    returnSchema: z.array(z.any()).optional(),
   }).optional(),
+  /** Optional reference to the canvas transformer node ID */
+  transformerNodeId: z.string().optional(),
   /** Explicit per-argument input bindings - user decides where every arg comes from */
   inputBindings: z.array(pipelineStepInputBindingSchema),
   /** Variable name assigned to this step's return value (usable by subsequent steps) */

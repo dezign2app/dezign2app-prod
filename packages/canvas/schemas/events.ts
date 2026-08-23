@@ -8,7 +8,12 @@ import {
   eventOrderingEnum,
   retryPolicyEnum,
 } from "./primitives";
-import { schemaModelSchema, architectureMetadataSchema } from "./shared";
+import {
+  schemaModelSchema,
+  architectureMetadataSchema,
+  pipelineStepSchema,
+  pipelineStepInputSchema,
+} from "./shared";
 
 export const publishedEventSchema = z.object({
   id: z.string(),
@@ -50,6 +55,7 @@ export const consumedEventSchema = z.object({
   code: z.string().optional(),
   prompt: z.string().optional(),
   functionBody: z.string().optional(),
+  pipelineSteps: z.array(pipelineStepSchema).optional(),
   payloadSchema: schemaModelSchema.default({ id: "dummy" }).optional(),
   eventId: z.string().default(""),
   brokerNodeId: z.string().default(""),
@@ -73,6 +79,7 @@ export const consumedEventInputSchema: z.ZodType<ConsumedEventInputType> = z
     code: z.string().optional(),
     prompt: z.string().optional(),
     functionBody: z.string().optional(),
+    pipelineSteps: z.array(pipelineStepInputSchema).optional(),
     targetNodeId: z.string().optional(),
     targetResourceId: z.string().optional(),
     brokerNodeId: z.string().optional(),

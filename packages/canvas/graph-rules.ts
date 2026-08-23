@@ -88,7 +88,16 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
   "page-out": ["page-section-in", "endpoint-in", "page-in", "page-ref-in"],
   "page-in": [],
   "page-section-in": ["page-in", "endpoint-in", "page-out"],
-  "transformer-out": ["endpoint-in", "task-in", "database-target", "resource-def-in", "langgraph-in"],
+  "transformer-in": [],
+  "transformer-out": [
+    "endpoint-in",
+    "consumed-event-in",
+    "task-in",
+    "database-target",
+    "resource-def-in",
+    "langgraph-in",
+    "transformer-in",
+  ],
   unknown: [],
 };
 
@@ -123,8 +132,10 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   "event-source→page-ref-in": "connection",
   "page-out→page-ref-in": "connection",
   "transformer-out→endpoint-in": "connection",
+  "transformer-out→consumed-event-in": "connection",
   "transformer-out→task-in": "connection",
   "transformer-out→database-target": "connection",
+  "transformer-out→transformer-in": "transformer-reference",
 };
 
 export const WEB_CLIENT_EVENTS = [

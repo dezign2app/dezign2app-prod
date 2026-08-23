@@ -402,6 +402,10 @@ export const createEdgeSlice = (
       return;
     }
 
+    if (get().edges.some((e) => e.id === edgeWithoutIndex.id)) {
+      return;
+    }
+
     const lastEdgeIndex = getLastIndex(get().edges);
     const fractionalIndex = generateKeyBetween(lastEdgeIndex, null);
     let edge = { ...edgeWithoutIndex, fractionalIndex };

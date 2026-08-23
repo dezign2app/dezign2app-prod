@@ -11,6 +11,8 @@ import {
 } from "@workspace/ui/components/select";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { Endpoint } from "@/types/canvas";
+import { cn } from "@workspace/ui/lib/utils";
+import { isEndpointPipelineUnconfigured } from "@/lib/utils/pipelineValidation";
 import { generateId } from "./utils";
 import { LocalInput } from "./LocalInput";
 
@@ -47,6 +49,13 @@ export const EndpointRow = ({
 }: EndpointRowProps) => {
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
+  );
+  const allNodes = useBackendCanvasStore((s) => s.nodes);
+  const allEdges = useBackendCanvasStore((s) => s.edges);
+
+  const isUnconfigured = React.useMemo(
+    () => isEndpointPipelineUnconfigured(item, nodeId, allNodes, allEdges),
+    [item, nodeId, allNodes, allEdges],
   );
 
   const isEndpointEmpty = () => {
@@ -205,10 +214,30 @@ export const EndpointRow = ({
               }}
             >
               <div className="flex items-center gap-2 overflow-hidden">
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 bg-secondary text-secondary-foreground">
+                <span
+                  className={cn(
+                    "px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 transition-colors",
+                    isUnconfigured
+                      ? "bg-destructive/20 text-destructive border border-destructive/40 shadow-sm"
+                      : "bg-secondary text-secondary-foreground",
+                  )}
+                >
                   {item.type || "GET"}
                 </span>
-                <span className="font-medium truncate">{item.name}</span>
+                <span
+                  className={cn(
+                    "font-medium truncate transition-colors",
+                    isUnconfigured && "text-destructive font-semibold",
+                  )}
+                >
+                  {item.name}
+                </span>
+                {isUnconfigured && (
+                  <span
+                    className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse shrink-0"
+                    title="Pipeline input variables not configured!"
+                  />
+                )}
               </div>
               <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-all">
                 <div

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useMemo } from "react";
-import { Endpoint, BackendNode, BackendEdge } from "@workspace/canvas/types";
-import { Plus } from "lucide-react";
+import React, { useMemo, useEffect } from "react";
+import { Endpoint, BackendNode, BackendEdge, AnyMessagingResource } from "@workspace/canvas/types";
+import { Plus, AlertTriangle } from "lucide-react";
 import {
   DragDropContext,
   Droppable,
@@ -20,6 +20,10 @@ import {
   ADDABLE_STEP_TYPES,
   generateId,
 } from "./utils";
+import {
+  getConnectedTransformersForEndpoint,
+  isStepInputUnconfigured,
+} from "@/lib/utils/pipelineValidation";
 
 export * from "./types";
 export * from "./utils";
@@ -30,11 +34,11 @@ export * from "./DbOperationStepSection";
 export * from "./ReturnResponseStepRow";
 export * from "./StepRow";
 
-
 export interface PipelineStepEditorProps {
   steps: PipelineStepDraft[];
   onChange: (steps: PipelineStepDraft[]) => void;
   endpoint?: Endpoint;
+  consumedEvent?: AnyMessagingResource;
   allNodes?: BackendNode[];
   allEdges?: BackendEdge[];
   serviceNodeId?: string;
@@ -44,17 +48,115 @@ export const PipelineStepEditor = ({
   steps,
   onChange,
   endpoint,
+  consumedEvent,
   allNodes = [],
   allEdges = [],
   serviceNodeId,
 }: PipelineStepEditorProps) => {
+  const isConsumer = Boolean(consumedEvent);
+
   // Separate draggable executable steps from the mandatory pinned return step
   const executableSteps = useMemo(
     () => steps.filter((s) => s.type !== "return_response"),
     [steps],
   );
 
+  const targetId = endpoint?.id || consumedEvent?.id;
+  const connectedTransformers = useMemo(() => {
+    if (!targetId || !serviceNodeId) return [];
+    return getConnectedTransformersForEndpoint(
+      targetId,
+      serviceNodeId,
+      allNodes,
+      allEdges,
+    );
+  }, [targetId, serviceNodeId, allNodes, allEdges]);
+
+  // Auto-synchronize connected transformers into the pipeline steps
+  useEffect(() => {
+    if (connectedTransformers.length === 0) return;
+
+    const missingTransformers = connectedTransformers.filter(
+      (ct) =>
+        !executableSteps.some(
+          (s) =>
+            s.type === "transform" &&
+            (s.functionRef?.name === ct.functionName ||
+              (s as any).transformerNodeId === ct.id),
+        ),
+    );
+
+    if (missingTransformers.length > 0) {
+      const newSteps: PipelineStepDraft[] = missingTransformers.map(
+        (ct, idx) => {
+          const stepNum = executableSteps.length + idx + 1;
+          const outputVar = `transformedData${stepNum}`;
+          return {
+            id: generateId(),
+            name: outputVar,
+            type: "transform",
+            enabled: true,
+            outputVariable: outputVar,
+            functionRef: {
+              name: ct.functionName,
+              importPath: ct.isGlobal
+                ? "@workspace/transformers"
+                : `@/services/${serviceNodeId}/transformers/${ct.functionName}`,
+              isGlobal: ct.isGlobal,
+              inputSchema: ct.inputSchema,
+              returnSchema: ct.returnSchema,
+            },
+            inputBindings: [],
+          };
+        },
+      );
+
+      if (isConsumer) {
+        onChange([...executableSteps, ...newSteps]);
+      } else {
+        const foundReturn = steps.find((s) => s.type === "return_response");
+        onChange([
+          ...executableSteps,
+          ...newSteps,
+          foundReturn || {
+            id: "return-response-step",
+            name: "Return Response",
+            type: "return_response",
+            enabled: true,
+            statusCode: endpoint?.type === "POST" ? 201 : 200,
+            inputBindings: [],
+            outputVariable: "",
+          },
+        ]);
+      }
+    }
+  }, [
+    connectedTransformers,
+    executableSteps,
+    isConsumer,
+    onChange,
+    serviceNodeId,
+    endpoint?.type,
+    steps,
+  ]);
+
+  const hasUnconfiguredInputs = useMemo(
+    () => executableSteps.some((s) => isStepInputUnconfigured(s, allNodes)),
+    [executableSteps, allNodes],
+  );
+
   const returnStep: PipelineStepDraft = useMemo(() => {
+    if (isConsumer) {
+      return {
+        id: "return-response-step",
+        name: "Return Response",
+        type: "return_response",
+        enabled: true,
+        statusCode: 200,
+        inputBindings: [],
+        outputVariable: "",
+      };
+    }
     const found = steps.find((s) => s.type === "return_response");
     if (found) return found;
     const defaultStatusCode = endpoint?.type === "POST" ? 201 : 200;
@@ -86,7 +188,7 @@ export const PipelineStepEditor = ({
       inputBindings: initialBindings,
       outputVariable: "",
     };
-  }, [steps, endpoint, executableSteps]);
+  }, [steps, endpoint, executableSteps, isConsumer]);
 
   const addStep = (type: StepType) => {
     const id = generateId();
@@ -112,18 +214,30 @@ export const PipelineStepEditor = ({
       inputBindings: [],
       outputVariable: defaultVar,
     };
-    onChange([...executableSteps, newStep, returnStep]);
+    if (isConsumer) {
+      onChange([...executableSteps, newStep]);
+    } else {
+      onChange([...executableSteps, newStep, returnStep]);
+    }
   };
 
   const updateStep = (index: number, updated: PipelineStepDraft) => {
     const next = [...executableSteps];
     next[index] = updated;
-    onChange([...next, returnStep]);
+    if (isConsumer) {
+      onChange(next);
+    } else {
+      onChange([...next, returnStep]);
+    }
   };
 
   const deleteStep = (index: number) => {
     const next = executableSteps.filter((_, i) => i !== index);
-    onChange([...next, returnStep]);
+    if (isConsumer) {
+      onChange(next);
+    } else {
+      onChange([...next, returnStep]);
+    }
   };
 
   const moveStep = (fromIndex: number, toIndex: number) => {
@@ -132,10 +246,15 @@ export const PipelineStepEditor = ({
     const [moved] = reordered.splice(fromIndex, 1);
     if (!moved) return;
     reordered.splice(toIndex, 0, moved);
-    onChange([...reordered, returnStep]);
+    if (isConsumer) {
+      onChange(reordered);
+    } else {
+      onChange([...reordered, returnStep]);
+    }
   };
 
   const updateReturnStep = (updated: PipelineStepDraft) => {
+    if (isConsumer) return;
     onChange([...executableSteps, updated]);
   };
 
@@ -147,6 +266,15 @@ export const PipelineStepEditor = ({
 
   return (
     <div className="flex flex-col gap-3">
+      {hasUnconfiguredInputs && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive text-xs">
+          <AlertTriangle size={14} className="shrink-0 text-destructive" />
+          <span className="font-medium text-[11px] leading-tight">
+            Pipeline has steps with unconfigured input variables. Map all required inputs below.
+          </span>
+        </div>
+      )}
+
       {/* Draggable step list */}
       {executableSteps.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border/40 p-4 text-center">
@@ -154,7 +282,9 @@ export const PipelineStepEditor = ({
             No pipeline steps configured yet.
           </p>
           <p className="text-[10px] text-muted-foreground/40 mt-0.5">
-            Add transform or DB operations below to define data flow before returning the response.
+            {isConsumer
+              ? "Add transform, DB operations, or downstream event publish steps to process incoming events."
+              : "Add transform or DB operations below to define data flow before returning the response."}
           </p>
         </div>
       ) : (
@@ -175,6 +305,7 @@ export const PipelineStepEditor = ({
                     index={i}
                     priorSteps={executableSteps.slice(0, i)}
                     endpoint={endpoint}
+                    consumedEvent={consumedEvent}
                     allNodes={allNodes}
                     allEdges={allEdges}
                     serviceNodeId={serviceNodeId}
@@ -211,16 +342,18 @@ export const PipelineStepEditor = ({
         })}
       </div>
 
-      {/* Mandatory Pinned Return Response Step */}
-      <div className="pt-2 border-t border-border/40">
-        <ReturnResponseStepRow
-          step={returnStep}
-          priorSteps={executableSteps}
-          endpoint={endpoint}
-          allNodes={allNodes}
-          onChange={updateReturnStep}
-        />
-      </div>
+      {/* Mandatory Pinned Return Response Step (Only for HTTP Endpoints) */}
+      {!isConsumer && (
+        <div className="pt-2 border-t border-border/40">
+          <ReturnResponseStepRow
+            step={returnStep}
+            priorSteps={executableSteps}
+            endpoint={endpoint}
+            allNodes={allNodes}
+            onChange={updateReturnStep}
+          />
+        </div>
+      )}
     </div>
   );
 };

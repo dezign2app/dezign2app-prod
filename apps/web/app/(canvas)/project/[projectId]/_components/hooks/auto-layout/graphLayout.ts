@@ -45,10 +45,25 @@ export function performGraphLayout({
   );
   if (graphNodes.length === 0) return;
 
-  const graphEdges = edges.filter(
-    (e: LayoutEdge) =>
-      e.type !== "database-connection" && e.type !== "foreign-key",
-  );
+  const graphEdges = edges.filter((e: LayoutEdge) => {
+    if (
+      e.type === "database-connection" ||
+      e.type === "foreign-key" ||
+      e.type === "transformer-reference" ||
+      e.type === "reference"
+    ) {
+      return false;
+    }
+    const sourceNode = graphNodes.find((n) => n.id === e.source);
+    const targetNode = graphNodes.find((n) => n.id === e.target);
+    if (
+      sourceNode?.type === "transformer" &&
+      targetNode?.type === "transformer_ref"
+    ) {
+      return false;
+    }
+    return true;
+  });
 
   // 1. Identify Target nodes (nodes that can have attached head nodes)
   const targetNodeIds = new Set<string>();

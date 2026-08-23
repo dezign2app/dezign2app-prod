@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { compileTransformerHelpers } from "../compileTransformerHelpers";
 import { renderPipeline, collectPipelineImports } from "../generators/routeGenerator/pipelineRenderer";
 import { generateEndpointRouteHandler } from "../generators/routeGenerator/endpointHandlerGenerator";
+import { generateConsumers } from "../generators/consumerGenerator";
 import { schemaToTsInterface, schemaToZodSchema } from "../generators/schemaToTypeScript";
 import { compileMonorepo } from "../compileMonorepo";
 import { BackendNode, BackendEdge, Endpoint } from "@workspace/canvas/types";
@@ -373,6 +374,125 @@ describe("Step Pipeline & Transformer Helpers", () => {
       expect(zodResult.code).toContain("specs: z.object({");
       expect(zodResult.code).toContain("switches: z.object({");
       expect(zodResult.code).toContain("tags: z.array(z.string())");
+    });
+  });
+
+  describe("Transformer & Transformer Ref Connection Validation", () => {
+    it("validates that transformer and transformer_ref nodes connect properly to endpoint-in handles", async () => {
+      const { isValidConnection } = await import("@workspace/canvas");
+
+      // 1. Transformer node -> Endpoint handle
+      const res1 = isValidConnection("transformer", "transformer-out", "service", "endpoint-in-ep1");
+      expect(res1.valid).toBe(true);
+      if (res1.valid) {
+        expect(res1.edgeType).toBe("connection");
+      }
+
+      // 2. Transformer Ref node -> Endpoint handle
+      const res2 = isValidConnection("transformer_ref", "transformer-out", "service", "endpoint-in-ep1");
+      expect(res2.valid).toBe(true);
+      if (res2.valid) {
+        expect(res2.edgeType).toBe("connection");
+      }
+    });
+
+    it("compiles standalone local transformer with multiple target endpoint IDs", () => {
+      const nodes: BackendNode[] = [
+        {
+          id: "service-1",
+          type: "service",
+          data: {
+            label: "AuthService",
+          },
+          position: { x: 0, y: 0 },
+          fractionalIndex: "a0",
+        },
+        {
+          id: "trans-local-multi",
+          type: "transformer",
+          data: {
+            label: "hashPassword",
+            functionName: "hashPassword",
+            scope: "local",
+            targetServiceId: "service-1",
+            targetEndpointIds: ["ep-register", "ep-reset-pw"],
+            inputSchema: [{ name: "password", type: "string", required: true }],
+            logicMode: "code",
+            code: "return { hash: `hashed_${input.password}` };",
+            returnSchema: [{ name: "hash", type: "string", required: true }],
+          },
+          position: { x: 400, y: 0 },
+          fractionalIndex: "a1",
+        },
+      ];
+
+      const result = compileTransformerHelpers(nodes);
+      const localFile = result.files.find((f) => f.filename.includes("apps/authservice/src/transformers/hashPassword.ts"));
+      expect(localFile).toBeDefined();
+      expect(localFile?.content).toContain("export function hashPassword");
+    });
+
+    it("validates that transformer and transformer_ref nodes connect properly to consumedEvents-in handles", async () => {
+      const { isValidConnection } = await import("@workspace/canvas");
+
+      // 1. Transformer node -> Consumed Event handle
+      const res1 = isValidConnection("transformer", "transformer-out", "service", "consumedEvents-in-ev1");
+      expect(res1.valid).toBe(true);
+      if (res1.valid) {
+        expect(res1.edgeType).toBe("connection");
+      }
+
+      // 2. Transformer Ref node -> Consumed Event handle
+      const res2 = isValidConnection("transformer_ref", "transformer-out", "service", "consumedEvents-in-ev1");
+      expect(res2.valid).toBe(true);
+      if (res2.valid) {
+        expect(res2.edgeType).toBe("connection");
+      }
+    });
+
+    it("compiles consumer handler with Step Pipeline and Transformer execution", () => {
+      const consumedEvents = [
+        {
+          id: "ev-order-created",
+          name: "order-created",
+          nodeId: "service-1",
+          variant: "consume" as const,
+          payloadSchema: {
+            id: "ps1",
+            rawJson: JSON.stringify({ orderId: "123", rawAmount: "100.50" }),
+          },
+          pipelineSteps: [
+            {
+              id: "step-1",
+              name: "normalizeOrder",
+              type: "transform" as const,
+              enabled: true,
+              functionRef: {
+                name: "sanitizeOrderPayload",
+                importPath: "../transformers/sanitizeOrderPayload",
+                isGlobal: false,
+              },
+              inputBindings: [
+                {
+                  argName: "rawAmount",
+                  source: {
+                    kind: "req_body" as const,
+                    field: "rawAmount",
+                  },
+                },
+              ],
+              outputVariable: "sanitizedOrder",
+            },
+          ],
+        },
+      ];
+
+      const files = generateConsumers("OrderService", consumedEvents as any);
+      const consumerFile = files.find((f) => f.filename === "src/consumer/orderCreated.ts");
+      expect(consumerFile).toBeDefined();
+      expect(consumerFile?.content).toContain("import { sanitizeOrderPayload } from \"../transformers/sanitizeOrderPayload\";");
+      expect(consumerFile?.content).toContain("const sanitizedOrder = sanitizeOrderPayload(");
+      expect(consumerFile?.content).toContain("rawAmount: validatedPayload.rawAmount");
     });
   });
 });

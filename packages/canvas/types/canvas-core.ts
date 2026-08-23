@@ -64,6 +64,7 @@ export type HandleKind =
   | "page-section-in"
   | "page-ref-in"
   | "transformer-out"
+  | "transformer-in"
 
   // --- Fallback ---
   | "unknown";
@@ -128,7 +129,8 @@ export type ConfigItemType =
   | "database"
   | "testUsers"
   | "redisSchema"
-  | "transformer";
+  | "transformer"
+  | "transformer_ref";
 
 export interface ActiveConfigItem {
   type: ConfigItemType;

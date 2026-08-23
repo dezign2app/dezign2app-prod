@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { schemaModelSchema } from "../shared";
+import { schemaModelSchema, pipelineStepSchema } from "../shared";
 import {
   ALL_TECH_STACK_VALUES,
   ALL_TECH_VERSION_VALUES,
@@ -50,6 +50,7 @@ export const resourceItemSchema = z.object({
   replication: z.string().optional(),
   publishedWhen: z.string().optional(),
   handlerLogic: z.string().optional(),
+  pipelineSteps: z.array(pipelineStepSchema).optional(),
   retryPolicy: z.string().optional(),
   maxRetries: z.number().optional(),
   deadLetterQueue: z.string().optional(),

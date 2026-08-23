@@ -15,6 +15,7 @@ import {
   HTTPConnectionEdge,
   MessagingEdge,
   IdentityConnectionEdge,
+  TransformerReferenceEdge,
 } from "../backend-nodes/CustomEdges";
 import { isValidConnection, type GraphNodeType } from "@workspace/canvas";
 import {
@@ -32,6 +33,8 @@ const edgeTypes = {
   connection: HTTPConnectionEdge,
   message: MessagingEdge,
   "identity-connection": IdentityConnectionEdge,
+  "transformer-reference": TransformerReferenceEdge,
+  reference: TransformerReferenceEdge,
 };
 
 export interface GraphViewProps {
@@ -123,7 +126,12 @@ export function GraphView({ projectId }: GraphViewProps) {
   }, [events, endpoints, nodes]);
 
   const graphEdges = React.useMemo(() => {
+    const seenIds = new Set<string>();
     return edges.filter((e) => {
+      if (!e.id || seenIds.has(e.id)) {
+        return false;
+      }
+      seenIds.add(e.id);
       if (e.type === "database-connection" || e.type === "foreign-key") {
         return false;
       }

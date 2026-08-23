@@ -87,7 +87,11 @@ export function useGraphAutoLayout(options?: UseGraphAutoLayoutOptions) {
   const edges: LayoutEdge[] =
     options?.edges ??
     store.edges.filter(
-      (e) => e.type !== "database-connection" && e.type !== "foreign-key",
+      (e) =>
+        e.type !== "database-connection" &&
+        e.type !== "foreign-key" &&
+        e.type !== "transformer-reference" &&
+        e.type !== "reference",
     );
   const onNodesChange = options?.onNodesChange ?? store.onNodesChange;
 

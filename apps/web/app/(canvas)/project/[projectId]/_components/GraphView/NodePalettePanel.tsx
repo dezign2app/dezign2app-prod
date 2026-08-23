@@ -86,6 +86,15 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
         <Shuffle className="w-3.5 h-3.5 mr-2 text-purple-400 shrink-0" />
         Transformer
       </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 border-purple-500/20"
+        onClick={() => onAddNode("transformer_ref" as GraphNodeType, "Transformer Ref")}
+      >
+        <Shuffle className="w-3.5 h-3.5 mr-2 text-purple-400/80 shrink-0" />
+        Transformer Ref
+      </Button>
 
       {/* MESSAGING */}
       <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">
