@@ -69,13 +69,13 @@ export const architectureMetadataSchema = z.object({
 // ---------------------------------------------------------------------------
 export const pipelineStepInputSourceSchema = z.discriminatedUnion("kind", [
   /** A field from req.body */
-  z.object({ kind: z.literal("req_body"), field: z.string() }),
+  z.object({ kind: z.literal("req_body"), field: z.string().optional() }),
   /** A field from req.params */
-  z.object({ kind: z.literal("req_params"), field: z.string() }),
+  z.object({ kind: z.literal("req_params"), field: z.string().optional() }),
   /** A field from req.query */
-  z.object({ kind: z.literal("req_query"), field: z.string() }),
+  z.object({ kind: z.literal("req_query"), field: z.string().optional() }),
   /** A field from req.headers */
-  z.object({ kind: z.literal("req_headers"), field: z.string() }),
+  z.object({ kind: z.literal("req_headers"), field: z.string().optional() }),
   /** A field (or the whole object) from a prior step's output variable */
   z.object({
     kind: z.literal("step_output"),
@@ -109,6 +109,7 @@ export const pipelineStepTypeEnum = z.enum([
   "kafka_publish", // publishKafkaEvent
   "service_call",  // HTTP / gRPC call to another service
   "custom_code",   // raw TypeScript block
+  "return_response", // explicit return response step
 ]);
 export type PipelineStepType = z.infer<typeof pipelineStepTypeEnum>;
 
@@ -124,6 +125,16 @@ export const pipelineStepSchema = z.object({
   name: z.string(),
   type: pipelineStepTypeEnum,
   enabled: z.boolean().optional().default(true),
+  /** HTTP status code for return_response step (e.g. 200, 201, 204) */
+  statusCode: z.number().optional(),
+  /** Mode for return_response step */
+  responseMode: z.string().optional(),
+  /** For DB/Redis operation steps: ID of the selected database node */
+  databaseId: z.string().optional(),
+  /** For DB/Redis operation steps: ID of the selected table/entity node */
+  tableNodeId: z.string().optional(),
+  /** For DB/Redis operation steps: ID of the selected operation */
+  operationId: z.string().optional(),
   /** Reference to the function being called (name + importPath from ReusableFunction / transformer) */
   functionRef: z.object({
     name: z.string(),
@@ -133,7 +144,7 @@ export const pipelineStepSchema = z.object({
   /** Explicit per-argument input bindings - user decides where every arg comes from */
   inputBindings: z.array(pipelineStepInputBindingSchema),
   /** Variable name assigned to this step's return value (usable by subsequent steps) */
-  outputVariable: z.string(),
+  outputVariable: z.string().optional().default(""),
   /** Declared output schema - fields available to downstream steps and response builder */
   outputSchema: z.array(pipelineStepOutputSchemaFieldSchema).optional(),
   /** For custom_code steps: raw TypeScript to inline */

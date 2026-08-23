@@ -27,23 +27,34 @@ export function resolveBinding(
   ctx: PipelineRenderContext,
 ): string {
   const { source } = binding;
+  if (!source) return "undefined";
+
   switch (source.kind) {
-    case "req_body":
-      return `${ctx.bodyVar}.${source.field}`;
-    case "req_params":
-      return `req.params.${source.field}`;
-    case "req_query":
-      return `req.query.${source.field}`;
-    case "req_headers":
-      return `(req.headers["${source.field}"] as string)`;
+    case "req_body": {
+      const field = source.field ? source.field.trim() : "";
+      return field ? `${ctx.bodyVar}.${field}` : ctx.bodyVar;
+    }
+    case "req_params": {
+      const field = source.field ? source.field.trim() : "";
+      return field ? `req.params.${field}` : "req.params";
+    }
+    case "req_query": {
+      const field = source.field ? source.field.trim() : "";
+      return field ? `req.query.${field}` : "req.query";
+    }
+    case "req_headers": {
+      const field = source.field ? source.field.trim() : "";
+      return field ? `(req.headers["${field}"] as string)` : "req.headers";
+    }
     case "step_output": {
       const varName = ctx.priorOutputs.get(source.stepId);
+      const field = source.field ? source.field.trim() : "";
       if (!varName) {
         // Fallback: use a descriptive placeholder so generated code still compiles
         const fallback = `/* step "${source.stepId}" not found */ undefined`;
-        return source.field ? `${fallback}?.${source.field}` : fallback;
+        return field ? `${fallback}?.${field}` : fallback;
       }
-      return source.field ? `${varName}.${source.field}` : varName;
+      return field ? `${varName}.${field}` : varName;
     }
     case "literal": {
       const v = source.value;
@@ -189,12 +200,38 @@ export function renderPipelineStep(
     // Custom code: inline the raw TypeScript block as-is
     // -------------------------------------------------------------------------
     case "custom_code": {
-      if (customCode) {
-        lines.push(`// --- Custom Step: ${step.name} ---`);
+      if (customCode && customCode.trim()) {
         customCode.split("\n").forEach((l) => lines.push(l));
-        // If the custom code doesn't declare the output variable itself, skip assignment
       } else {
         lines.push(`// [pipeline] custom_code step "${step.name}" has no code`);
+      }
+      break;
+    }
+
+    // -------------------------------------------------------------------------
+    // Return Response: emit final HTTP response return statement
+    // -------------------------------------------------------------------------
+    case "return_response": {
+      const statusCode = step.statusCode || 200;
+      const firstBinding = inputBindings[0];
+      if (
+        inputBindings.length === 1 &&
+        firstBinding &&
+        (firstBinding.argName === "data" ||
+          firstBinding.argName === "_spread" ||
+          !firstBinding.argName)
+      ) {
+        const expr = resolveBinding(firstBinding, ctx);
+        lines.push(`return res.status(${statusCode}).json(${expr});`);
+      } else if (inputBindings.length > 0) {
+        const fields = inputBindings
+          .map((b) => `  ${b.argName}: ${resolveBinding(b, ctx)}`)
+          .join(",\n");
+        lines.push(`return res.status(${statusCode}).json({\n${fields}\n});`);
+      } else {
+        lines.push(
+          `return res.status(${statusCode}).json({ status: ${statusCode}, message: "Success" });`,
+        );
       }
       break;
     }

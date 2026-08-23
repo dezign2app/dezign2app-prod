@@ -68,7 +68,11 @@ function typeStrToTsAndZod(typeStr: string): { ts: string; zod: string } {
   return { ts: "string", zod: "z.string()" };
 }
 
-function valToTsAndZod(val: unknown): { ts: string; zod: string } {
+function valToTsAndZod(
+  val: unknown,
+  depth = 1,
+  indent = 2,
+): { ts: string; zod: string } {
   if (val === null || val === undefined) {
     return { ts: "unknown", zod: "z.unknown()" };
   }
@@ -85,7 +89,7 @@ function valToTsAndZod(val: unknown): { ts: string; zod: string } {
     if (val.length === 0) {
       return { ts: "unknown[]", zod: "z.array(z.unknown())" };
     }
-    const elem = valToTsAndZod(val[0]);
+    const elem = valToTsAndZod(val[0], depth, indent);
     return { ts: `${elem.ts}[]`, zod: `z.array(${elem.zod})` };
   }
   if (typeof val === "object") {
@@ -94,19 +98,21 @@ function valToTsAndZod(val: unknown): { ts: string; zod: string } {
     if (keys.length === 0) {
       return { ts: "Record<string, unknown>", zod: "z.record(z.unknown())" };
     }
+    const currentIndent = " ".repeat(depth * indent);
+    const prevIndent = " ".repeat((depth - 1) * indent);
     const tsFields: string[] = [];
     const zodFields: string[] = [];
     for (const key of keys) {
-      const res = valToTsAndZod(obj[key]);
+      const res = valToTsAndZod(obj[key], depth + 1, indent);
       const validKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)
         ? key
         : JSON.stringify(key);
-      tsFields.push(`${validKey}: ${res.ts};`);
-      zodFields.push(`${validKey}: ${res.zod}`);
+      tsFields.push(`${currentIndent}${validKey}: ${res.ts};`);
+      zodFields.push(`${currentIndent}${validKey}: ${res.zod}`);
     }
     return {
-      ts: `{ ${tsFields.join(" ")} }`,
-      zod: `z.object({\n  ${zodFields.join(",\n  ")}\n})`,
+      ts: `{\n${tsFields.join("\n")}\n${prevIndent}}`,
+      zod: `z.object({\n${zodFields.join(",\n")}\n${prevIndent}})`,
     };
   }
   return { ts: "unknown", zod: "z.unknown()" };
@@ -205,16 +211,10 @@ export function schemaToTsInterface(
 
   const parsedJson = parseSchemaJson(schema.rawJson);
   if (parsedJson && typeof parsedJson === "object") {
-    const res = valToTsAndZod(parsedJson);
+    const res = valToTsAndZod(parsedJson, 1, 2);
     if (res.ts.startsWith("{")) {
-      const bodyStr = res.ts.slice(1, -1).trim();
-      const formattedLines = bodyStr
-        .split(";")
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .map((l) => `  ${l};`);
       return {
-        code: `export interface ${interfaceName} {\n${formattedLines.join("\n")}\n}\n`,
+        code: `export interface ${interfaceName} ${res.ts}\n`,
         hasContent: true,
       };
     }
@@ -253,7 +253,7 @@ export function schemaToZodSchema(
 
   const parsedJson = parseSchemaJson(schema.rawJson);
   if (parsedJson && typeof parsedJson === "object") {
-    const res = valToTsAndZod(parsedJson);
+    const res = valToTsAndZod(parsedJson, 1, 2);
     return {
       code: `export const ${schemaName} = ${res.zod};\n`,
       hasContent: true,

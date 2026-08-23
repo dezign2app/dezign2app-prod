@@ -4,16 +4,6 @@ import {
   ParameterEditor,
 } from "../backend-nodes/graph-nodes/Editors";
 import {
-  MessagingResourceList,
-  LocalInput,
-} from "../backend-nodes/graph-nodes/shared";
-import {
-  BusinessLogicBlock,
-  TableCrudConfig,
-  CrudOperation,
-  generateCodeWithAI,
-} from "../shared/BusinessLogicBlock";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -24,17 +14,9 @@ import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { useParams } from "next/navigation";
-import {
-  INTER_SERVICE_PROTOCOL_OPTIONS,
-  INTER_SERVICE_PROTOCOL_HTTP,
-  INTER_SERVICE_PROTOCOL_GRPC,
-  DEFAULT_INTER_SERVICE_PROTOCOL,
-  GRPC_DEFAULT_PORT,
-} from "@workspace/canvas";
 import { useCallerWebClientZone } from "./hooks/useCallerWebClientZone";
 import { AuthAwarenessBanner } from "./AuthAwarenessBanner";
 import { RequestBodyEditor } from "./RequestBodyEditor";
-import { ResponseBodyEditor } from "./ResponseBodyEditor";
 import { EndpointTestCasesSection } from "./endpoint-testing/EndpointTestCasesSection";
 import {
   PipelineStepEditor,
@@ -50,7 +32,7 @@ interface EndpointConfigProps {
 export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
   const paramsHook = useParams();
   const projectId = paramsHook.projectId as Id<"projects">;
-  const [pipelineExpanded, setPipelineExpanded] = React.useState(false);
+  const [pipelineExpanded, setPipelineExpanded] = React.useState(true);
 
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const updateEndpoint = useBackendCanvasStore((s) => s.updateEndpoint);
@@ -67,67 +49,6 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
 
   const item = endpoints.find((e) => e.id === id);
   if (!item) return null;
-
-  // Detect if this service has any outgoing edges to other service nodes
-  const hasOutgoingServiceEdge = allEdges.some(
-    (e) =>
-      e.source === nodeId &&
-      allNodes.find((n) => n.id === e.target)?.type === "service",
-  );
-
-  const availableTableNodes = allNodes
-    .filter(
-      (n) =>
-        n?.type === "entity" ||
-        n?.type === "redis_schema" ||
-        n?.type === "redis-cache",
-    )
-    .map((n) => ({
-      id: n.id,
-      label:
-        n.data?.label ||
-        (n.type === "redis_schema" || n.type === "redis-cache"
-          ? "Redis Cache"
-          : "Table"),
-    }));
-
-  const databaseNodeIds =
-    item.databaseNodeIds ||
-    (item.databaseNodeId && item.databaseNodeId !== "none"
-      ? [item.databaseNodeId]
-      : []);
-  const crudConfig: TableCrudConfig[] = databaseNodeIds.map((tableNodeId) => {
-    const rawOps = item.crudOperations?.[tableNodeId];
-    const operations: CrudOperation[] = Array.isArray(rawOps)
-      ? rawOps
-      : [];
-    const explanations = item.crudExplanations?.[tableNodeId] as
-      | Record<CrudOperation, string>
-      | undefined;
-    return { tableNodeId, operations, explanations };
-  });
-
-  const handleCrudConfigChange = (newCrudConfig: TableCrudConfig[]) => {
-    const newDbNodeIds = newCrudConfig
-      .map((c) => c.tableNodeId)
-      .filter(Boolean);
-    const newCrudOps: Record<string, string[]> = {};
-    const newCrudExplanations: Record<string, Record<string, string>> = {};
-    newCrudConfig.forEach((c) => {
-      if (c.tableNodeId) {
-        newCrudOps[c.tableNodeId] = c.operations;
-        if (c.explanations) {
-          newCrudExplanations[c.tableNodeId] = c.explanations;
-        }
-      }
-    });
-    updateEndpoint(item.id, {
-      databaseNodeIds: newDbNodeIds,
-      databaseNodeId: newDbNodeIds[0] || "none",
-      crudOperations: newCrudOps,
-      crudExplanations: newCrudExplanations,
-    });
-  };
 
   return (
     <div className="flex flex-col gap-6 mt-6 pb-12">
@@ -376,90 +297,14 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
               onChange={(steps) =>
                 updateEndpoint(item.id, { pipelineSteps: steps as any })
               }
+              endpoint={item}
+              allNodes={allNodes}
+              allEdges={allEdges}
+              serviceNodeId={nodeId}
             />
           </div>
         )}
       </div>
-
-      {/* ---------------------------------------------------------------- */}
-      {/* BUSINESS LOGIC (legacy / escape hatch)                           */}
-      {/* ---------------------------------------------------------------- */}
-      <BusinessLogicBlock
-        mode={item.logicMode || "natural_language"}
-        onModeChange={(logicMode) => updateEndpoint(item.id, { logicMode })}
-        prompt={item.businessLogic || item.prompt || ""}
-        onPromptChange={(val) =>
-          updateEndpoint(item.id, { businessLogic: val, prompt: val })
-        }
-        code={item.body || item.code || ""}
-        onCodeChange={(val) =>
-          updateEndpoint(item.id, { body: val, code: val })
-        }
-        title="Endpoint Business Logic"
-        description="Define endpoint processing steps or custom code handler"
-        crudConfig={crudConfig}
-        onCrudConfigChange={handleCrudConfigChange}
-        availableTableNodes={availableTableNodes}
-        allNodes={allNodes}
-        serviceNodeId={nodeId}
-        endpointId={item.id}
-        publishedEvents={item.publishedEvents || []}
-        endpointMethod={item.type || "POST"}
-        endpointPath={item.name || "/"}
-        onGenerateCode={async () => {
-          const generated = await generateCodeWithAI({
-            prompt: item.businessLogic || item.prompt || "",
-            crudConfig,
-            availableTableNodes,
-            publishedEvents: item.publishedEvents || [],
-            endpointMethod: item.type || "POST",
-            endpointPath: item.name || "/",
-            requestBody: item.requestBody,
-          });
-          updateEndpoint(item.id, {
-            logicMode: "code",
-            body: generated,
-            code: generated,
-          });
-        }}
-      />
-
-      <div className="flex flex-col gap-3 mt-2">
-        <MessagingResourceList
-          nodeId={nodeId}
-          title="Publish Events"
-          items={item.publishedEvents || []}
-          variant="publish"
-          resourceType="topics"
-          asCard={true}
-          onChange={(publishedEvents) =>
-            updateEndpoint(item.id, { publishedEvents })
-          }
-        />
-      </div>
-
-      <ResponseBodyEditor
-        mode={
-          (item.responseMode as any) === "custom_expression"
-            ? "custom_expression"
-            : item.responseMode === "raw_json" || item.responseBody?.rawJson
-            ? "raw_json"
-            : "field_builder"
-        }
-        onModeChange={(responseMode) =>
-          updateEndpoint(item.id, { responseMode: responseMode as any })
-        }
-        schema={item.responseBody}
-        onSchemaChange={(responseBody) =>
-          updateEndpoint(item.id, { responseBody })
-        }
-        expression={item.responseExpression || ""}
-        onExpressionChange={(responseExpression) =>
-          updateEndpoint(item.id, { responseExpression })
-        }
-        availableTableNodes={availableTableNodes}
-        allNodes={allNodes}
-      />
 
       <EndpointTestCasesSection
         endpoint={item}

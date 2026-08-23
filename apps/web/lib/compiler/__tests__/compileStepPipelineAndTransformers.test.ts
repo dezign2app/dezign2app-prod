@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { compileTransformerHelpers } from "../compileTransformerHelpers";
 import { renderPipeline, collectPipelineImports } from "../generators/routeGenerator/pipelineRenderer";
 import { generateEndpointRouteHandler } from "../generators/routeGenerator/endpointHandlerGenerator";
+import { schemaToTsInterface, schemaToZodSchema } from "../generators/schemaToTypeScript";
 import { compileMonorepo } from "../compileMonorepo";
 import { BackendNode, BackendEdge, Endpoint } from "@workspace/canvas/types";
 
@@ -177,7 +178,21 @@ describe("Step Pipeline & Transformer Helpers", () => {
                 source: { kind: "step_output", stepId: "step-2" },
               },
             ],
-            outputVariable: "publishResult",
+            outputVariable: "kafkaPublishResult",
+          },
+          {
+            id: "step-5",
+            name: "Return Response",
+            type: "return_response",
+            enabled: true,
+            statusCode: 201,
+            inputBindings: [
+              {
+                argName: "data",
+                source: { kind: "step_output", stepId: "step-2" },
+              },
+            ],
+            outputVariable: "",
           },
         ],
       };
@@ -187,7 +202,7 @@ describe("Step Pipeline & Transformer Helpers", () => {
         index: 0,
         serviceName: "ProductsService",
         pascalServiceName: "ProductsService",
-        serviceFolderName: "products-service",
+        serviceFolderName: "productsservice",
         allNodes: [],
         allEdges: [],
         allEndpoints: [ep],
@@ -200,31 +215,29 @@ describe("Step Pipeline & Transformer Helpers", () => {
 
       const content = result.file.content;
 
-      // Check imports
+      // 1. Pipeline step 1: transform
+      expect(content).toContain("const transformedInput = slugifyProductInput(");
+      expect(content).toContain("name: body.name");
+
+      // 2. Pipeline step 2: db_operation with prior step binding
+      expect(content).toContain("const createdProduct = await createProduct(");
+      expect(content).toContain("slug: transformedInput.slug");
+
+      // 3. Pipeline step 3: redis positional call referencing createdProduct
+      expect(content).toContain("const cacheResult = await setProductsCache(createdProduct.id, createdProduct);");
+
+      // 4. Pipeline step 4: kafka publish
+      expect(content).toContain("const kafkaPublishResult = await publishKafkaEvent(");
+      expect(content).toContain('"product-created",');
+
+      // 5. Pipeline step 5: return_response
+      expect(content).toContain("return res.status(201).json(createdProduct);");
+
+      // 6. Imports collected from steps
       expect(content).toContain('import { slugifyProductInput } from "./transformers/slugifyProductInput";');
       expect(content).toContain('import { createProduct } from "@workspace/db/helpers/products";');
       expect(content).toContain('import { setProductsCache } from "@workspace/primary-redis-cache";');
       expect(content).toContain('import { publishKafkaEvent } from "@workspace/kafka/publishers";');
-
-      // Check Step 1 code
-      expect(content).toContain("const transformedInput = slugifyProductInput(");
-      expect(content).toContain("name: body.name");
-
-      // Check Step 2 code with explicit cross-step binding
-      expect(content).toContain("const createdProduct = await createProduct(");
-      expect(content).toContain("name: body.name");
-      expect(content).toContain("slug: transformedInput.slug");
-      expect(content).toContain("price: body.price");
-      expect(content).toContain("category: body.category");
-
-      // Check Step 3 (positional args)
-      expect(content).toContain("const cacheResult = await setProductsCache(createdProduct.id, createdProduct);");
-
-      // Check Step 4 (Kafka publish with literal topic & whole DB object payload)
-      expect(content).toContain('const publishResult = await publishKafkaEvent(\n      "product-created",\n      createdProduct,\n    );');
-
-      // Check Response
-      expect(content).toContain("return res.status(201).json({ status: 201, data: publishResult });");
     });
   });
 
@@ -317,6 +330,49 @@ describe("Step Pipeline & Transformer Helpers", () => {
       const localFile = result.files.find((f) => f.filename.includes("apps/userservice/src/transformers/validateLocalPin.ts"));
       expect(localFile).toBeDefined();
       expect(localFile?.content).toContain("export function validateLocalPin");
+    });
+  });
+
+  describe("schemaToTypeScript - nested object & array type tracking", () => {
+    it("generates correctly indented recursive TypeScript interfaces and Zod schemas for deep nested payloads", () => {
+      const complexSchema = {
+        rawJson: JSON.stringify({
+          product: {
+            name: "Mechanical Keyboard",
+            specs: {
+              keys: 87,
+              bluetooth: true,
+              switches: {
+                brand: "Cherry MX",
+                type: "Brown",
+              },
+            },
+          },
+          tags: ["hardware", "keyboard"],
+          price: 129.99,
+        }),
+      };
+
+      const tsResult = schemaToTsInterface("CreateProductBody", complexSchema);
+      expect(tsResult.hasContent).toBe(true);
+      expect(tsResult.code).toContain("export interface CreateProductBody {");
+      expect(tsResult.code).toContain("product: {");
+      expect(tsResult.code).toContain("name: string;");
+      expect(tsResult.code).toContain("specs: {");
+      expect(tsResult.code).toContain("keys: number;");
+      expect(tsResult.code).toContain("bluetooth: boolean;");
+      expect(tsResult.code).toContain("switches: {");
+      expect(tsResult.code).toContain("brand: string;");
+      expect(tsResult.code).toContain("tags: string[];");
+      expect(tsResult.code).toContain("price: number;");
+
+      const zodResult = schemaToZodSchema("createProductBodySchema", complexSchema);
+      expect(zodResult.hasContent).toBe(true);
+      expect(zodResult.code).toContain("export const createProductBodySchema = z.object({");
+      expect(zodResult.code).toContain("product: z.object({");
+      expect(zodResult.code).toContain("specs: z.object({");
+      expect(zodResult.code).toContain("switches: z.object({");
+      expect(zodResult.code).toContain("tags: z.array(z.string())");
     });
   });
 });

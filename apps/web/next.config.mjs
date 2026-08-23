@@ -8,7 +8,12 @@ const __dirname = path.dirname(__filename);
 const nextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(__dirname, "../../"),
-  transpilePackages: ["@workspace/ui", "@wterm/dom", "@wterm/react"],
+  transpilePackages: [
+    "@workspace/ui",
+    "@workspace/canvas",
+    "@wterm/dom",
+    "@wterm/react",
+  ],
   crossOrigin: "use-credentials",
   experimental: {
     mcpServer: true,
