@@ -477,13 +477,20 @@ export async function ${handlerName}(
       routeHandlerCode += `    ${line}\n`;
     });
 
-    // Determine the response payload: use the last step's outputVariable
-    const lastStep = [...pipelineSteps].reverse().find((s: any) => s.enabled !== false);
-    const lastOutputVar = lastStep?.outputVariable || payloadVar;
-    const statusCode = ep.type === "POST" ? 201 : 200;
+    // Check if the pipeline includes an explicit return_response step
+    const hasReturnStep = pipelineSteps.some(
+      (s: any) => s.type === "return_response" && s.enabled !== false,
+    );
 
-    routeHandlerCode += `\n    logger.debug("Successfully generated response for ${path}");\n`;
-    routeHandlerCode += `    return res.status(${statusCode}).json({ status: ${statusCode}, data: ${lastOutputVar} });\n`;
+    if (!hasReturnStep) {
+      // Determine the response payload: use the last step's outputVariable
+      const lastStep = [...pipelineSteps].reverse().find((s: any) => s.enabled !== false);
+      const lastOutputVar = lastStep?.outputVariable || payloadVar;
+      const statusCode = ep.type === "POST" ? 201 : 200;
+
+      routeHandlerCode += `\n    logger.debug("Successfully generated response for ${path}");\n`;
+      routeHandlerCode += `    return res.status(${statusCode}).json({ status: ${statusCode}, data: ${lastOutputVar} });\n`;
+    }
     routeHandlerCode += `  } catch (err) {\n`;
     routeHandlerCode += `    const message = err instanceof Error ? err.message : String(err);\n`;
     routeHandlerCode += `    logger.error("Error in ${method.toUpperCase()} ${path}:", message);\n`;
