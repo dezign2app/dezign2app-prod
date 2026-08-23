@@ -135,6 +135,10 @@ export const pipelineStepSchema = z.object({
   tableNodeId: z.string().optional(),
   /** For DB/Redis operation steps: ID of the selected operation */
   operationId: z.string().optional(),
+  /** For Kafka/messaging publish steps: ID of the broker node */
+  brokerNodeId: z.string().optional(),
+  /** For Kafka/messaging publish steps: ID of the topic / messaging resource */
+  messagingResourceId: z.string().optional(),
   /** Reference to the function being called (name + importPath from ReusableFunction / transformer) */
   functionRef: z.object({
     name: z.string(),

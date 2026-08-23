@@ -31,10 +31,13 @@ import React from "react";
 // Constants & Metadata
 // ---------------------------------------------------------------------------
 
-export const STEP_TYPE_META: Record<
-  StepType,
-  { label: string; icon: React.ReactNode; color: string }
-> = {
+export interface StepTypeMeta {
+  label: string;
+  icon: React.ReactNode;
+  color: string;
+}
+
+export const STEP_TYPE_META: Record<StepType, StepTypeMeta> = {
   transform: {
     label: "Transform",
     icon: React.createElement(Shuffle, { size: 13 }),

@@ -31,7 +31,6 @@ export interface DbOperationStepSectionProps {
   onToggleAdvancedSettings: () => void;
   onChange: (updated: PipelineStepDraft) => void;
   onAutoMapArguments: () => void;
-  onPopulateAllExpectedArgs: () => void;
 }
 
 export const DbOperationStepSection = ({
@@ -44,7 +43,6 @@ export const DbOperationStepSection = ({
   onToggleAdvancedSettings,
   onChange,
   onAutoMapArguments,
-  onPopulateAllExpectedArgs,
 }: DbOperationStepSectionProps) => {
   const dbNodes = useMemo(
     () =>
@@ -306,18 +304,10 @@ export const DbOperationStepSection = ({
                 type="button"
                 className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border border-blue-500/30 transition-colors"
                 onClick={onAutoMapArguments}
-                title="Automatically map matching argument names from request body / path params"
+                title="Smart map missing arguments from route params, query, request body, and prior steps while preserving existing bindings"
               >
                 <Sparkles size={10} />
-                Auto-map matching fields
-              </button>
-              <button
-                type="button"
-                className="px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground rounded border border-border/50 hover:bg-muted/40 transition-colors"
-                onClick={onPopulateAllExpectedArgs}
-                title="Add empty binding rows for all expected fields"
-              >
-                + Populate all
+                Auto-map arguments
               </button>
             </div>
           </div>

@@ -274,13 +274,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         );
 
         return (
-          <div
-            className={`flex flex-col gap-2 border rounded-xl overflow-hidden transition-colors ${
-              isPipelineRed
-                ? "border-destructive/60 bg-destructive/5"
-                : "border-border/40"
-            }`}
-          >
+          <div className="flex flex-col gap-2 border border-border/40 rounded-xl overflow-hidden transition-colors">
             {/* Collapsible header */}
             <button
               className="flex items-center justify-between px-3 py-2.5 hover:bg-muted/20 transition-colors text-left"

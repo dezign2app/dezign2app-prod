@@ -181,17 +181,29 @@ export function renderPipelineStep(
         lines.push(`// [pipeline] step "${step.name}": missing functionRef`);
         break;
       }
+      const isGeneric = functionRef.name === "publishKafkaEvent";
       const topicBinding = inputBindings.find((b) => b.argName === "topic");
-      const payloadBinding = inputBindings.find((b) => b.argName === "payload");
+      const payloadBinding = inputBindings.find(
+        (b) => b.argName === "payload" || b.argName === "message" || b.argName === "data",
+      );
+      const keyBinding = inputBindings.find((b) => b.argName === "key");
+
       const topicExpr = topicBinding
         ? resolveBinding(topicBinding, ctx)
         : "/* topic */";
       const payloadExpr = payloadBinding
         ? resolveBinding(payloadBinding, ctx)
         : "/* payload */";
+      const keyExpr = keyBinding ? resolveBinding(keyBinding, ctx) : null;
+
       lines.push(`const ${outputVariable} = await ${functionRef.name}(`);
-      lines.push(`  ${topicExpr},`);
-      lines.push(`  ${payloadExpr},`);
+      if (isGeneric || topicBinding) {
+        lines.push(`  ${topicExpr},`);
+      }
+      lines.push(`  ${payloadExpr}${keyExpr ? `,` : ""}`);
+      if (keyExpr) {
+        lines.push(`  ${keyExpr},`);
+      }
       lines.push(`);`);
       break;
     }

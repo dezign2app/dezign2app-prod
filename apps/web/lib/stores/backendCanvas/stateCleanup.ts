@@ -1,4 +1,10 @@
-import { Endpoint } from "@workspace/canvas/types";
+import {
+  Endpoint,
+  PublishedEvent,
+  PipelineStep,
+  KafkaTopic,
+  MESSAGING_TYPES,
+} from "@workspace/canvas/types";
 import { BackendCanvasState } from "./types";
 
 export function cleanupDeletedNodesState(
@@ -82,8 +88,35 @@ export function cleanupDeletedNodesState(
           return { ...node, data: newData };
         }
       }
+
+      // Clean up transformerRef if referenced transformer was deleted
+      if (node.type === "transformer_ref" && node.data?.transformerRef) {
+        if (allIdsSet.has(node.data.transformerRef)) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              transformerRef: undefined,
+            },
+          };
+        }
+      }
+
       return node;
     });
+
+  // Track deleted transformer nodes and their names for pipeline step cleanup
+  const deletedTransformerNodes = currentState.nodes.filter(
+    (n) =>
+      n &&
+      (n.type === "transformer" || n.type === "transformer_ref") &&
+      allIdsSet.has(n.id),
+  );
+  const deletedTransformerNames = new Set(
+    deletedTransformerNodes
+      .map((n) => n.data?.functionName || n.data?.label)
+      .filter(Boolean),
+  );
 
   // 2. Events to remove (publishers & consumers)
   const eventsToDelete = currentState.events.filter((ev) =>
@@ -93,10 +126,33 @@ export function cleanupDeletedNodesState(
   const nextEvents = currentState.events
     .filter((ev) => !allIdsSet.has(ev.nodeId))
     .map((ev) => {
+      let evChanged = false;
+      let updatedEv = ev;
       if (ev.brokerNodeId && allIdsSet.has(ev.brokerNodeId)) {
-        return { ...ev, brokerNodeId: "" };
+        updatedEv = { ...updatedEv, brokerNodeId: "" };
+        evChanged = true;
       }
-      return ev;
+      if (
+        deletedTransformerNodes.length > 0 &&
+        updatedEv.pipelineSteps &&
+        updatedEv.pipelineSteps.length > 0
+      ) {
+        const filteredSteps = updatedEv.pipelineSteps.filter(
+          (s) =>
+            !(
+              s.type === "transform" &&
+              ((s.transformerNodeId && allIdsSet.has(s.transformerNodeId)) ||
+                (s.functionRef?.name &&
+                  (allIdsSet.has(s.functionRef.name) ||
+                    deletedTransformerNames.has(s.functionRef.name))))
+            ),
+        );
+        if (filteredSteps.length !== updatedEv.pipelineSteps.length) {
+          updatedEv = { ...updatedEv, pipelineSteps: filteredSteps };
+          evChanged = true;
+        }
+      }
+      return evChanged ? updatedEv : ev;
     });
 
   // 3. Endpoints to remove
@@ -113,6 +169,28 @@ export function cleanupDeletedNodesState(
       let newCrudOps = ep.crudOperations;
       let newCrudExp = ep.crudExplanations;
       let newPubEvents = ep.publishedEvents;
+      let newPipelineSteps = ep.pipelineSteps;
+
+      if (
+        deletedTransformerNodes.length > 0 &&
+        newPipelineSteps &&
+        newPipelineSteps.length > 0
+      ) {
+        const filteredSteps = newPipelineSteps.filter(
+          (s) =>
+            !(
+              s.type === "transform" &&
+              ((s.transformerNodeId && allIdsSet.has(s.transformerNodeId)) ||
+                (s.functionRef?.name &&
+                  (allIdsSet.has(s.functionRef.name) ||
+                    deletedTransformerNames.has(s.functionRef.name))))
+            ),
+        );
+        if (filteredSteps.length !== newPipelineSteps.length) {
+          changed = true;
+          newPipelineSteps = filteredSteps;
+        }
+      }
 
       if (newDbIds && newDbIds.some((id) => allIdsSet.has(id))) {
         newDbIds = newDbIds.filter((id) => !allIdsSet.has(id));
@@ -160,6 +238,7 @@ export function cleanupDeletedNodesState(
             crudOperations: newCrudOps,
             crudExplanations: newCrudExp,
             publishedEvents: newPubEvents,
+            pipelineSteps: newPipelineSteps,
           }
         : ep;
     });
@@ -324,6 +403,28 @@ export function cleanupDeletedEdgesState(
       if (dbNodeIdsSet.has(edge.target)) {
         targetDbId = edge.target;
       }
+
+      // Check if target is a Kafka / messaging broker node
+      const targetNode = currentState.nodes.find((n) => n.id === edge.target);
+      const isTargetMessaging = targetNode && MESSAGING_TYPES.has(targetNode.type);
+      if (isTargetMessaging && targetNode) {
+        nextEndpoints = nextEndpoints.map((ep) => {
+          if (ep.id === epId && ep.pipelineSteps && ep.pipelineSteps.length > 0) {
+            const updatedSteps = ep.pipelineSteps.filter((step) => {
+              if (step.type !== "kafka_publish") return true;
+              if (step.brokerNodeId === targetNode.id) return false;
+              return true;
+            });
+            if (updatedSteps.length !== ep.pipelineSteps.length) {
+              endpointsChanged = true;
+              const updatedEp = { ...ep, pipelineSteps: updatedSteps };
+              pendingEndpointUpserts.push(updatedEp);
+              return updatedEp;
+            }
+          }
+          return ep;
+        });
+      }
     } else {
       if (dbNodeIdsSet.has(edge.target)) {
         targetDbId = edge.target;
@@ -377,7 +478,7 @@ export function cleanupDeletedEdgesState(
       });
     }
 
-    // 2. Messaging Event -> Broker Node cleanup: fully delete the publish event when its edge is removed
+    // 2. Messaging Event -> Broker Node cleanup: fully delete the publish event & pipeline step when its edge is removed
     if (edge.sourceHandle?.startsWith("publishedEvents-out-")) {
       const eventId = edge.sourceHandle.replace("publishedEvents-out-", "");
 
@@ -392,21 +493,73 @@ export function cleanupDeletedEdgesState(
         });
       }
 
-      // Remove from endpoint.publishedEvents too, and re-sync the endpoint to DB
+      // Remove from endpoint.publishedEvents AND remove matching kafka_publish step from pipelineSteps
       nextEndpoints = nextEndpoints.map((ep) => {
-        if (ep.publishedEvents?.some((pev) => pev.id === eventId)) {
+        const matchingPub = ep.publishedEvents?.find((pev) => pev.id === eventId);
+        if (matchingPub) {
           endpointsChanged = true;
+          const updatedPubs = ep.publishedEvents?.filter((pev) => pev.id !== eventId) ?? [];
+
+          // Remove corresponding kafka_publish step from pipelineSteps
+          const updatedSteps = (ep.pipelineSteps ?? []).filter((step) => {
+            if (step.type !== "kafka_publish") return true;
+            if (step.brokerNodeId && step.brokerNodeId === matchingPub.brokerNodeId) {
+              if (!step.messagingResourceId || step.messagingResourceId === matchingPub.messagingResourceId) {
+                return false;
+              }
+            }
+            if (step.messagingResourceId && step.messagingResourceId === matchingPub.messagingResourceId) {
+              return false;
+            }
+            if (
+              matchingPub.name &&
+              (step.name === matchingPub.name ||
+                step.name === `Publish ${matchingPub.name}` ||
+                step.functionRef?.name?.toLowerCase().includes(
+                  matchingPub.name.toLowerCase().replace(/^publish\s*/i, ""),
+                ))
+            ) {
+              return false;
+            }
+            return true;
+          });
+
           const updatedEp = {
             ...ep,
-            publishedEvents: ep.publishedEvents.filter(
-              (pev) => pev.id !== eventId,
-            ),
+            publishedEvents: updatedPubs,
+            pipelineSteps: updatedSteps,
           };
           pendingEndpointUpserts.push(updatedEp);
           return updatedEp;
         }
         return ep;
       });
+    }
+
+    // Transformer -> Endpoint edge cleanup: remove transform step when edge is deleted
+    if (edge.targetHandle?.startsWith("endpoint-in-")) {
+      const epId = edge.targetHandle.replace("endpoint-in-", "");
+      const srcNode = currentState.nodes.find((n) => n.id === edge.source);
+      if (srcNode && (srcNode.type === "transformer" || srcNode.type === "transformer_ref")) {
+        const fnName = srcNode.data?.functionName || srcNode.data?.label;
+        nextEndpoints = nextEndpoints.map((ep) => {
+          if (ep.id === epId && ep.pipelineSteps && ep.pipelineSteps.length > 0) {
+            const updatedSteps = ep.pipelineSteps.filter((step) => {
+              if (step.type !== "transform") return true;
+              if (step.transformerNodeId === srcNode.id) return false;
+              if (fnName && step.functionRef?.name === fnName) return false;
+              return true;
+            });
+            if (updatedSteps.length !== ep.pipelineSteps.length) {
+              endpointsChanged = true;
+              const updatedEp = { ...ep, pipelineSteps: updatedSteps };
+              pendingEndpointUpserts.push(updatedEp);
+              return updatedEp;
+            }
+          }
+          return ep;
+        });
+      }
     }
 
     if (edge.targetHandle?.startsWith("consumedEvents-in-")) {
@@ -500,15 +653,6 @@ export function cleanupDeletedEdgesState(
     }
 
     // 5. Service <-> Messaging Broker Node cleanup: remove published & consumed event references if disconnected
-    const MESSAGING_TYPES = new Set([
-      "kafka",
-      "queue",
-      "eventstream",
-      "pubsub",
-      "redis-streams",
-      "sqs",
-      "redis-pubsub",
-    ]);
     const serviceNode = srcNode?.type === "service" ? srcNode : tgtNode?.type === "service" ? tgtNode : null;
     const brokerNode =
       srcNode && MESSAGING_TYPES.has(srcNode.type)
@@ -523,18 +667,18 @@ export function cleanupDeletedEdgesState(
         if ((e.source === serviceNode.id && e.target === brokerNode.id) || (e.target === serviceNode.id && e.source === brokerNode.id)) {
           return true;
         }
-        const topics = brokerNode.data?.topics || [];
-        if (e.source === serviceNode.id && e.targetHandle && topics.some((t: any) => e.targetHandle!.includes(t.id))) {
+        const topics: KafkaTopic[] = brokerNode.data?.topics || [];
+        if (e.source === serviceNode.id && e.targetHandle && topics.some((t: KafkaTopic) => e.targetHandle!.includes(t.id))) {
           return true;
         }
-        if (e.target === serviceNode.id && e.sourceHandle && topics.some((t: any) => e.sourceHandle!.includes(t.id))) {
+        if (e.target === serviceNode.id && e.sourceHandle && topics.some((t: KafkaTopic) => e.sourceHandle!.includes(t.id))) {
           return true;
         }
         return false;
       });
 
       if (!stillConnected) {
-        const brokerTopicIds = new Set((brokerNode.data?.topics || []).map((t: any) => t.id));
+        const brokerTopicIds = new Set((brokerNode.data?.topics || []).map((t: KafkaTopic) => t.id));
 
         // Clean up nextEvents
         const eventsToRemove = nextEvents.filter(
@@ -553,15 +697,42 @@ export function cleanupDeletedEdgesState(
 
         // Clean up nextEndpoints
         nextEndpoints = nextEndpoints.map((ep) => {
-          if (ep.nodeId === serviceNode.id && ep.publishedEvents && ep.publishedEvents.length > 0) {
-            const remainingPubs = ep.publishedEvents.filter(
-              (pe) =>
-                pe.brokerNodeId !== brokerNode.id &&
-                (!pe.messagingResourceId || !brokerTopicIds.has(pe.messagingResourceId)),
-            );
-            if (remainingPubs.length !== ep.publishedEvents.length) {
+          if (ep.nodeId === serviceNode.id) {
+            let epModified = false;
+            let updatedPubs = ep.publishedEvents;
+            if (ep.publishedEvents && ep.publishedEvents.length > 0) {
+              const remainingPubs = ep.publishedEvents.filter(
+                (pe: PublishedEvent) =>
+                  pe.brokerNodeId !== brokerNode.id &&
+                  (!pe.messagingResourceId || !brokerTopicIds.has(pe.messagingResourceId)),
+              );
+              if (remainingPubs.length !== ep.publishedEvents.length) {
+                epModified = true;
+                updatedPubs = remainingPubs;
+              }
+            }
+
+            let updatedSteps = ep.pipelineSteps;
+            if (ep.pipelineSteps && ep.pipelineSteps.length > 0) {
+              const remainingSteps = ep.pipelineSteps.filter((step: PipelineStep) => {
+                if (step.type !== "kafka_publish") return true;
+                if (step.brokerNodeId === brokerNode.id) return false;
+                if (step.messagingResourceId && brokerTopicIds.has(step.messagingResourceId)) return false;
+                return true;
+              });
+              if (remainingSteps.length !== ep.pipelineSteps.length) {
+                epModified = true;
+                updatedSteps = remainingSteps;
+              }
+            }
+
+            if (epModified) {
               endpointsChanged = true;
-              const updatedEp = { ...ep, publishedEvents: remainingPubs };
+              const updatedEp = {
+                ...ep,
+                publishedEvents: updatedPubs,
+                pipelineSteps: updatedSteps,
+              };
               pendingEndpointUpserts.push(updatedEp);
               return updatedEp;
             }
@@ -576,9 +747,9 @@ export function cleanupDeletedEdgesState(
           const newData = { ...liveSrvNode.data };
           if (newData.publishedEvents) {
             const remainingPubs = newData.publishedEvents.filter(
-              (pe: any) =>
-                pe.brokerNodeId !== brokerNode.id &&
-                (!pe.messagingResourceId || !brokerTopicIds.has(pe.messagingResourceId)),
+              (pe) =>
+                pe.targetNodeId !== brokerNode.id &&
+                (!pe.targetNodeId || !brokerTopicIds.has(pe.targetNodeId)),
             );
             if (remainingPubs.length !== newData.publishedEvents.length) {
               newData.publishedEvents = remainingPubs;
@@ -587,9 +758,9 @@ export function cleanupDeletedEdgesState(
           }
           if (newData.consumedEvents) {
             const remainingCons = newData.consumedEvents.filter(
-              (ce: any) =>
-                ce.brokerNodeId !== brokerNode.id &&
-                (!ce.messagingResourceId || !brokerTopicIds.has(ce.messagingResourceId)),
+              (ce) =>
+                ce.targetNodeId !== brokerNode.id &&
+                (!ce.targetNodeId || !brokerTopicIds.has(ce.targetNodeId)),
             );
             if (remainingCons.length !== newData.consumedEvents.length) {
               newData.consumedEvents = remainingCons;
@@ -597,17 +768,34 @@ export function cleanupDeletedEdgesState(
             }
           }
           if (newData.endpoints) {
-            const newEps = newData.endpoints.map((ep: any) => {
+            const newEps = newData.endpoints.map((ep) => {
+              let epChanged = false;
+              let filteredPubs = ep.publishedEvents;
               if (ep.publishedEvents) {
-                const filtered = ep.publishedEvents.filter(
-                  (pe: any) =>
+                filteredPubs = ep.publishedEvents.filter(
+                  (pe) =>
                     pe.brokerNodeId !== brokerNode.id &&
                     (!pe.messagingResourceId || !brokerTopicIds.has(pe.messagingResourceId)),
                 );
-                if (filtered.length !== ep.publishedEvents.length) {
-                  nodeDataChanged = true;
-                  return { ...ep, publishedEvents: filtered };
+                if (filteredPubs.length !== ep.publishedEvents.length) {
+                  epChanged = true;
                 }
+              }
+              let filteredSteps = ep.pipelineSteps;
+              if (ep.pipelineSteps) {
+                filteredSteps = ep.pipelineSteps.filter((step) => {
+                  if (step.type !== "kafka_publish") return true;
+                  if (step.brokerNodeId === brokerNode.id) return false;
+                  if (step.messagingResourceId && brokerTopicIds.has(step.messagingResourceId)) return false;
+                  return true;
+                });
+                if (filteredSteps.length !== ep.pipelineSteps.length) {
+                  epChanged = true;
+                }
+              }
+              if (epChanged) {
+                nodeDataChanged = true;
+                return { ...ep, publishedEvents: filteredPubs, pipelineSteps: filteredSteps };
               }
               return ep;
             });
@@ -621,6 +809,136 @@ export function cleanupDeletedEdgesState(
             nextNodes = nextNodes.map((n) => (n.id === serviceNode.id ? updatedNode : n));
             pendingNodeUpserts.push(updatedNode);
           }
+        }
+      }
+    }
+
+    // 6. Transformer / TransformerRef -> Service Endpoint / Event connection cleanup
+    const transformerNode =
+      srcNode && (srcNode.type === "transformer" || srcNode.type === "transformer_ref")
+        ? srcNode
+        : tgtNode && (tgtNode.type === "transformer" || tgtNode.type === "transformer_ref")
+        ? tgtNode
+        : null;
+
+    if (transformerNode) {
+      let targetEpId: string | null = null;
+      let targetEvId: string | null = null;
+
+      if (edge.targetHandle?.startsWith("endpoint-in-")) {
+        targetEpId = edge.targetHandle.replace("endpoint-in-", "");
+      } else if (edge.targetHandle?.startsWith("consumedEvents-in-")) {
+        targetEvId = edge.targetHandle.replace("consumedEvents-in-", "");
+      } else if (edge.sourceHandle?.startsWith("endpoint-in-")) {
+        targetEpId = edge.sourceHandle.replace("endpoint-in-", "");
+      } else if (edge.sourceHandle?.startsWith("consumedEvents-in-")) {
+        targetEvId = edge.sourceHandle.replace("consumedEvents-in-", "");
+      }
+
+      if (targetEpId || targetEvId) {
+        // Update transformer node data (targetEndpointIds / targetEventIds)
+        const currentLiveTNode =
+          nextNodes.find((n) => n.id === transformerNode.id) || transformerNode;
+        const currentEpIds: string[] =
+          currentLiveTNode.data?.targetEndpointIds ||
+          (currentLiveTNode.data?.targetEndpointId
+            ? [currentLiveTNode.data.targetEndpointId]
+            : []);
+        const currentEvIds: string[] =
+          currentLiveTNode.data?.targetEventIds ||
+          (currentLiveTNode.data?.targetEventId
+            ? [currentLiveTNode.data.targetEventId]
+            : []);
+
+        const nextEpIds = targetEpId
+          ? currentEpIds.filter((id) => id !== targetEpId)
+          : currentEpIds;
+        const nextEvIds = targetEvId
+          ? currentEvIds.filter((id) => id !== targetEvId)
+          : currentEvIds;
+
+        const hasRemainingTargets =
+          nextEpIds.length > 0 || nextEvIds.length > 0;
+
+        if (
+          nextEpIds.length !== currentEpIds.length ||
+          nextEvIds.length !== currentEvIds.length
+        ) {
+          nodesChanged = true;
+          const updatedTNode = {
+            ...currentLiveTNode,
+            data: {
+              ...currentLiveTNode.data,
+              targetEndpointIds: nextEpIds,
+              targetEndpointId: nextEpIds[0] || undefined,
+              targetEventIds: nextEvIds,
+              targetEventId: nextEvIds[0] || undefined,
+              targetServiceId: hasRemainingTargets
+                ? currentLiveTNode.data?.targetServiceId
+                : undefined,
+            },
+          };
+          nextNodes = nextNodes.map((n) =>
+            n.id === transformerNode.id ? updatedTNode : n,
+          );
+          pendingNodeUpserts.push(updatedTNode);
+        }
+
+        const fnName =
+          transformerNode.data?.functionName || transformerNode.data?.label;
+
+        // Clean up endpoint pipelineSteps
+        if (targetEpId) {
+          nextEndpoints = nextEndpoints.map((ep) => {
+            if (
+              ep.id === targetEpId &&
+              ep.pipelineSteps &&
+              ep.pipelineSteps.length > 0
+            ) {
+              const filteredSteps = ep.pipelineSteps.filter(
+                (s) =>
+                  !(
+                    s.type === "transform" &&
+                    (s.transformerNodeId === transformerNode.id ||
+                      (fnName && s.functionRef?.name === fnName))
+                  ),
+              );
+              if (filteredSteps.length !== ep.pipelineSteps.length) {
+                endpointsChanged = true;
+                const updatedEp = { ...ep, pipelineSteps: filteredSteps };
+                pendingEndpointUpserts.push(updatedEp);
+                return updatedEp;
+              }
+            }
+            return ep;
+          });
+        }
+
+        // Clean up event pipelineSteps
+        if (targetEvId) {
+          nextEvents = nextEvents.map((ev) => {
+            if (
+              ev.id === targetEvId &&
+              ev.pipelineSteps &&
+              ev.pipelineSteps.length > 0
+            ) {
+              const filteredSteps = ev.pipelineSteps.filter(
+                (s) =>
+                  !(
+                    s.type === "transform" &&
+                    (s.transformerNodeId === transformerNode.id ||
+                      (fnName && s.functionRef?.name === fnName))
+                  ),
+              );
+              if (filteredSteps.length !== ev.pipelineSteps.length) {
+                eventsChanged = true;
+                const updatedEv = { ...ev, pipelineSteps: filteredSteps };
+                pendingEventUpserts.push(updatedEv);
+                return updatedEv;
+              }
+            }
+            return ev;
+          });
         }
       }
     }
