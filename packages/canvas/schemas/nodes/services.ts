@@ -4,6 +4,8 @@ import {
   schemaModelInputSchema,
   parameterSchema,
   parameterInputSchema,
+  transformerHelperSchema,
+  transformerHelperInputSchema,
 } from "../shared";
 import { endpointSchema, endpointInputSchema } from "../endpoints";
 import {
@@ -281,6 +283,8 @@ export const serviceDataSchema = baseNodeDataSchema
         }),
       )
       .optional(),
+    /** Local data-transformation helper functions attached to this service */
+    transformerHelpers: z.array(transformerHelperSchema).optional(),
   })
   .strict();
 export type ServiceNodeData = z.infer<typeof serviceDataSchema>;
@@ -330,6 +334,8 @@ export const serviceDataInputSchema = baseNodeDataSchema
           .passthrough(),
       )
       .optional(),
+    /** Local data-transformation helper functions attached to this service */
+    transformerHelpers: z.array(transformerHelperInputSchema).optional(),
   })
   .passthrough();
 

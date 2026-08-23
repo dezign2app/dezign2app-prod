@@ -28,6 +28,7 @@ import {
   PaymentsNode,
   LangGraphNode,
   LangGraphStepNode,
+  TransformerNode,
 } from "./graph-nodes";
 import { SchemaGroupNode } from "./SchemaGroupNode";
 import { WebAppGroupNode } from "./WebAppGroupNode";
@@ -72,4 +73,5 @@ export const nodeTypes = {
   payments: PaymentsNode,
   langgraph: LangGraphNode,
   langgraph_step: LangGraphStepNode,
+  transformer: TransformerNode,
 };

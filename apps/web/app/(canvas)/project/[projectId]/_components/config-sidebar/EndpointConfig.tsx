@@ -36,6 +36,11 @@ import { AuthAwarenessBanner } from "./AuthAwarenessBanner";
 import { RequestBodyEditor } from "./RequestBodyEditor";
 import { ResponseBodyEditor } from "./ResponseBodyEditor";
 import { EndpointTestCasesSection } from "./endpoint-testing/EndpointTestCasesSection";
+import {
+  PipelineStepEditor,
+  type PipelineStepDraft,
+} from "./PipelineStepEditor";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface EndpointConfigProps {
   id: string;
@@ -45,6 +50,7 @@ interface EndpointConfigProps {
 export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
   const paramsHook = useParams();
   const projectId = paramsHook.projectId as Id<"projects">;
+  const [pipelineExpanded, setPipelineExpanded] = React.useState(false);
 
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const updateEndpoint = useBackendCanvasStore((s) => s.updateEndpoint);
@@ -334,6 +340,50 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
           updateEndpoint(item.id, { requestBody })
         }
       />
+      {/* ---------------------------------------------------------------- */}
+      {/* PIPELINE STEPS SECTION                                            */}
+      {/* ---------------------------------------------------------------- */}
+      <div className="flex flex-col gap-2 border border-border/40 rounded-xl overflow-hidden">
+        {/* Collapsible header */}
+        <button
+          className="flex items-center justify-between px-3 py-2.5 hover:bg-muted/20 transition-colors text-left"
+          onClick={() => setPipelineExpanded((v) => !v)}
+        >
+          <div>
+            <p className="text-[11px] font-semibold text-foreground/90">
+              Pipeline Steps
+              {item.pipelineSteps && item.pipelineSteps.length > 0 && (
+                <span className="ml-1.5 text-[9px] text-primary/70 font-mono bg-primary/10 px-1.5 py-0.5 rounded-full">
+                  {item.pipelineSteps.length} step{item.pipelineSteps.length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </p>
+            <p className="text-[9px] text-muted-foreground/60 mt-0.5">
+              Explicit field-level bindings per step — compiler generates exactly what you configure.
+            </p>
+          </div>
+          {pipelineExpanded ? (
+            <ChevronDown size={13} className="text-muted-foreground/50 shrink-0" />
+          ) : (
+            <ChevronRight size={13} className="text-muted-foreground/50 shrink-0" />
+          )}
+        </button>
+
+        {pipelineExpanded && (
+          <div className="px-3 pb-3">
+            <PipelineStepEditor
+              steps={(item.pipelineSteps as PipelineStepDraft[]) || []}
+              onChange={(steps) =>
+                updateEndpoint(item.id, { pipelineSteps: steps as any })
+              }
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* BUSINESS LOGIC (legacy / escape hatch)                           */}
+      {/* ---------------------------------------------------------------- */}
       <BusinessLogicBlock
         mode={item.logicMode || "natural_language"}
         onModeChange={(logicMode) => updateEndpoint(item.id, { logicMode })}

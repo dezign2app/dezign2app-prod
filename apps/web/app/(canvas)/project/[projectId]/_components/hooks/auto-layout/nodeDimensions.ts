@@ -208,6 +208,9 @@ export function getNodeDimensions(node: LayoutNode): {
     case "app": {
       return { width: 280, height: 180 };
     }
+    case "transformer": {
+      return { width: 240, height: 50 };
+    }
     case "group": {
       const data = getLayoutNodeData(node);
       const count =

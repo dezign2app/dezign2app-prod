@@ -39,7 +39,8 @@ export type ConfigItemType =
   | "entityFunctions"
   | "database"
   | "testUsers"
-  | "redisSchema";
+  | "redisSchema"
+  | "transformer";
 
 export interface ActiveConfigItem {
   type: ConfigItemType;

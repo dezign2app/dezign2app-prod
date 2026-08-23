@@ -32,6 +32,7 @@ import {
 } from "./ai";
 import { databaseDataSchema } from "./database";
 import { langgraphDataSchema, langgraphStepDataSchema } from "./langgraph";
+import { transformerNodeDataSchema } from "./transformer";
 
 export const nodeDataSchemas: Record<string, z.ZodSchema> = {
   queue: simpleDataSchema,
@@ -67,4 +68,5 @@ export const nodeDataSchemas: Record<string, z.ZodSchema> = {
   auth: authDataSchema,
   langgraph: langgraphDataSchema,
   langgraph_step: langgraphStepDataSchema,
+  transformer: transformerNodeDataSchema,
 };

@@ -38,6 +38,7 @@ const ALL_BACKEND_NODE_TYPES = [
   "langgraph",
   "langgraph_step",
   "page_ref",
+  "transformer",
 ] as const;
 
 export function isBackendNode(type: string): type is BackendNodeType {
@@ -204,11 +205,12 @@ export function classifyHandle(
     if (handleDirection === "target") return "page-section-in";
   }
 
-  if (id.startsWith("actions-")) return "action-target";
-  if (id.startsWith("task-in-")) return "task-in";
-  if (id.startsWith("task-out-")) return "task-out";
   if (id.startsWith("index-in-")) return "index-in";
   if (id.startsWith("index-out-")) return "index-out";
+
+  if (nodeType === "transformer" || id === "transformer-out" || id.startsWith("transformer-out")) {
+    return "transformer-out";
+  }
 
   if (
     nodeType === "database" ||

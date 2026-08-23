@@ -20,6 +20,7 @@ import { resolveEndpointTrace } from "../../traceResolver";
 import { pickDbFunctionsForEndpoint } from "./dbResolver";
 import { pickKafkaPublishFunction, toKafkaTopicKey } from "./kafkaResolver";
 import { buildResponsePayloadCode } from "./responseBuilder";
+import { renderPipeline, collectPipelineImports } from "./pipelineRenderer";
 
 export interface GenerateEndpointHandlerParams {
   ep: Endpoint & { nodeId: string };
@@ -191,6 +192,23 @@ export function generateEndpointRouteHandler(
     .map(([pkg, names]) => `import { ${Array.from(names).join(", ")} } from "${pkg}";`)
     .join("\n");
 
+  // Pre-collect pipeline step imports so they land in the file's import block
+  // (pipeline steps are processed later, but imports must be at the top)
+  const pipelineStepsEarly = (ep as any).pipelineSteps;
+  if (Array.isArray(pipelineStepsEarly) && pipelineStepsEarly.length > 0) {
+    const pipelineImports = collectPipelineImports(pipelineStepsEarly);
+    pipelineImports.forEach((names, importPath) => {
+      if (!extraImports.has(importPath)) {
+        extraImports.set(importPath, new Set());
+      }
+      names.forEach((n) => extraImports.get(importPath)!.add(n));
+    });
+  }
+
+  const allExtraImportLines = Array.from(extraImports.entries())
+    .map(([pkg, names]) => `import { ${Array.from(names).join(", ")} } from "${pkg}";`)
+    .join("\n");
+
   // Build imports from @workspace/types
   const typeImportsList = [
     `${pascalName}Params`,
@@ -210,8 +228,7 @@ import { createLogger } from "@workspace/logger";
 import {
   ${typeImportsList.join(",\n  ")}
 } from "@workspace/types";
-${extraImportLines ? `${extraImportLines}\n` : ""}
-const logger = createLogger("${serviceName}:${routeFileName}");
+${allExtraImportLines ? `${allExtraImportLines}\n` : ""}\nconst logger = createLogger("${serviceName}:${routeFileName}");
 
 type ${pascalName}ErrorResponse = {
   error: string;
@@ -437,6 +454,58 @@ export async function ${handlerName}(
   // Payload reference for DB and Messaging operations
   const payloadVar = hasValidatedBody ? "body" : "req.body";
 
+  // -----------------------------------------------------------------------
+  // PIPELINE MODE: if the endpoint has configured pipeline steps, render
+  // them with explicit per-argument bindings. No auto-inference is done.
+  // -----------------------------------------------------------------------
+  const pipelineSteps = (ep as any).pipelineSteps;
+  const hasPipelineSteps = Array.isArray(pipelineSteps) && pipelineSteps.length > 0;
+
+  if (hasPipelineSteps) {
+    // Collect imports needed by the pipeline steps and add to extraImports
+    const pipelineImports = collectPipelineImports(pipelineSteps);
+    pipelineImports.forEach((names, importPath) => {
+      if (!extraImports.has(importPath)) {
+        extraImports.set(importPath, new Set());
+      }
+      names.forEach((n) => extraImports.get(importPath)!.add(n));
+    });
+
+    // Render all pipeline steps into code lines (4-space indent for handler body)
+    const pipelineLines = renderPipeline(pipelineSteps, payloadVar);
+    pipelineLines.forEach((line) => {
+      routeHandlerCode += `    ${line}\n`;
+    });
+
+    // Determine the response payload: use the last step's outputVariable
+    const lastStep = [...pipelineSteps].reverse().find((s: any) => s.enabled !== false);
+    const lastOutputVar = lastStep?.outputVariable || payloadVar;
+    const statusCode = ep.type === "POST" ? 201 : 200;
+
+    routeHandlerCode += `\n    logger.debug("Successfully generated response for ${path}");\n`;
+    routeHandlerCode += `    return res.status(${statusCode}).json({ status: ${statusCode}, data: ${lastOutputVar} });\n`;
+    routeHandlerCode += `  } catch (err) {\n`;
+    routeHandlerCode += `    const message = err instanceof Error ? err.message : String(err);\n`;
+    routeHandlerCode += `    logger.error("Error in ${method.toUpperCase()} ${path}:", message);\n`;
+    routeHandlerCode += `    return res.status(500).json({ error: "Internal Server Error", details: message });\n`;
+    routeHandlerCode += `  }\n}\n`;
+
+    return {
+      file: {
+        filename: `src/routes/${routeFileName}.ts`,
+        language: "typescript",
+        content: routeHandlerCode,
+      },
+      routeImport: `import { ${handlerName} } from "./${routeFileName}";`,
+      routeRegistration: `router.${method}("${path}", ${handlerName});`,
+      requiresAuth,
+      authOptions,
+    };
+  }
+
+  // -----------------------------------------------------------------------
+  // LEGACY AUTO-INFERENCE MODE (backward compat when no pipeline steps set)
+  // -----------------------------------------------------------------------
   const targetVarMap = new Map<string, string>();
   const hasDbInCodeBlock = Boolean(
     codeBlock &&

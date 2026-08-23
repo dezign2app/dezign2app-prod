@@ -9,6 +9,7 @@ export * from "./compileLangGraphNode";
 export * from "./compileWebClientNode";
 export * from "./compileAuth";
 export * from "./compileUiPackage";
+export * from "./compileTransformerHelpers";
 export * from "./compileMonorepo";
 
 // Tech & Version Specific Compilers
