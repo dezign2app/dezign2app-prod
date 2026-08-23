@@ -7,6 +7,8 @@ import {
   schemaModelSchema,
   processingStepSchema,
   architectureMetadataSchema,
+  pipelineStepSchema,
+  pipelineStepInputSchema,
 } from "./shared";
 import { publishedEventSchema, publishedEventInputSchema } from "./events";
 import {
@@ -33,6 +35,8 @@ export const endpointSchema = z.object({
   simulationOutput: z.unknown().optional(),
   testCases: z.array(simulationTestCaseSchema).optional(),
   processingSteps: z.array(processingStepSchema).optional(),
+  /** Ordered pipeline steps with explicit per-argument field bindings */
+  pipelineSteps: z.array(pipelineStepSchema).optional(),
   publishedEvents: z.array(publishedEventSchema).optional(),
   metadata: architectureMetadataSchema.optional(),
   // Frontend-specific legacy fields
@@ -242,4 +246,6 @@ export const endpointInputSchema: z.ZodType<EndpointInputType> = z.object({
     .boolean()
     .optional()
     .describe("Whether Authorization: Bearer <token> header validation/forwarding is enabled for this endpoint (defaults to true). Set to false to disable auth for internal/unauthenticated calls."),
+  /** Ordered pipeline steps with explicit per-argument field bindings */
+  pipelineSteps: z.array(pipelineStepInputSchema).optional().describe("Ordered pipeline steps that define the exact data flow through this endpoint, with explicit field-level input bindings per argument."),
 }) as z.ZodType<EndpointInputType>;

@@ -22,7 +22,7 @@ import { generatePublisherFile, generatePublishersIndexFile } from "./generators
 import { generateConsumerFile, generateConsumersIndexFile } from "./generators/consumers";
 import { generateReusableFunctions } from "./generators/reusableFunctions";
 
-export * from "./utils";
+export { toTopicKey } from "./utils";
 export * from "./generators/packageFiles";
 export * from "./generators/topics";
 export * from "./generators/publishers";

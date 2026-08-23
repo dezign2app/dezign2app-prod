@@ -11,6 +11,7 @@ import {
   HardDrive,
   Network,
   ShieldCheck,
+  Shuffle,
 } from "lucide-react";
 import type { GraphNodeType } from "@workspace/canvas";
 
@@ -75,6 +76,15 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
       >
         <ShieldCheck className="w-3.5 h-3.5 mr-2 text-indigo-500" />
         Auth Node
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 border-purple-500/30"
+        onClick={() => onAddNode("transformer" as GraphNodeType, "Data Transformer")}
+      >
+        <Shuffle className="w-3.5 h-3.5 mr-2 text-purple-400 shrink-0" />
+        Transformer
       </Button>
 
       {/* MESSAGING */}

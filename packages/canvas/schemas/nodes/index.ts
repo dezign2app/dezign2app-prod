@@ -8,4 +8,5 @@ export * from "./gateway";
 export * from "./auth";
 export * from "./ai";
 export * from "./langgraph";
+export * from "./transformer";
 export * from "./registry";

@@ -72,7 +72,8 @@ export type BackendNodeType =
   | "payments"
   | "langgraph"
   | "langgraph_step"
-  | "page_ref";
+  | "page_ref"
+  | "transformer";
 
 /** Core fields present on every canvas node. */
 export interface BaseNodeData {
@@ -373,6 +374,69 @@ export interface CanvasServiceNodeData {
     handlerLogic?: string;
     targetNodeId?: string;
   }[];
+  /** Local data-transformation helper functions attached to this service */
+  transformerHelpers?: TransformerHelperNodeData[];
+}
+
+/**
+ * A small, pure data-transformation helper function.
+ * 3-section model: Input | Logic | Return.
+ * Scope: "local" means compiled into this service's src/helpers/.
+ *        "global" means compiled into packages/transformers.
+ */
+export interface TransformerHelperNodeData {
+  id: string;
+  name: string;             // camelCase function name, e.g. slugifyProductInput
+  description?: string;
+  scope: "global" | "local";
+  targetServiceId?: string; // For local scope, which service this belongs to
+
+  // Section 1: Input
+  inputSchema: {
+    name: string;
+    type: string;
+    required?: boolean;
+    description?: string;
+  }[];
+
+  // Section 2: Logic
+  logicMode: "natural_language" | "code";
+  prompt?: string;   // NL description of the transformation
+  code?: string;     // TypeScript function body (just the return expression, no function wrapper)
+
+  // Section 3: Return
+  returnSchema: {
+    name: string;
+    type: string;
+    required?: boolean;
+    description?: string;
+  }[];
+
+  isAsync?: boolean;
+}
+
+/** Standalone transformer node fields for canvas graph view. */
+export interface CanvasTransformerNodeData {
+  functionName?: string;
+  scope?: "global" | "local";
+  targetServiceId?: string;
+  inputSchema?: {
+    name: string;
+    type: string;
+    required?: boolean;
+    description?: string;
+  }[];
+  logicMode?: "natural_language" | "code";
+  prompt?: string;
+  code?: string;
+  returnSchema?: {
+    name: string;
+    type: string;
+    required?: boolean;
+    description?: string;
+  }[];
+  isAsync?: boolean;
+  transformerHelpers?: TransformerHelperNodeData[];
 }
 
 /** Background worker node fields (canvas type). */
@@ -569,7 +633,8 @@ export type BackendNodeData = BaseNodeData &
       CanvasPaymentsNodeData &
       CanvasLangGraphNodeData &
       CanvasLangGraphStepNodeData &
-      CanvasPageRefNodeData
+      CanvasPageRefNodeData &
+      CanvasTransformerNodeData
   >;
 
 export type BackendNode = {

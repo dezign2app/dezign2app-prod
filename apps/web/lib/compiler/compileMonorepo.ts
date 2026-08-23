@@ -16,6 +16,7 @@ import {
 import { generateRootReadme } from "./generators/readmeGenerator";
 import { generateDockerFiles } from "./generators/dockerGenerator";
 import { compileGrpcPackages } from "./grpc";
+import { compileTransformerHelpers } from "./compileTransformerHelpers";
 
 /**
  * Compiles the entire system architecture canvas into a production-ready
@@ -205,6 +206,12 @@ export function compileMonorepo(
       });
     });
     grpcPackageFolders.push(`packages/${packageFolder}`);
+  });
+
+  // 4.10 Generate Shared Transformer Helpers (@workspace/transformers & local helpers)
+  const compiledTransformers = compileTransformerHelpers(nodes, edges);
+  compiledTransformers.files.forEach((f) => {
+    files.push(f);
   });
 
   // 5. Generate Apps: apps/<sanitizedName> for Service Nodes

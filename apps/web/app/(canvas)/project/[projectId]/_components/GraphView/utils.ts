@@ -59,6 +59,20 @@ export function createGraphNodeData(
     prompts: type === "llm" || type === "mcp_server" ? [] : undefined,
     tools: type === "llm" || type === "mcp_server" ? [] : undefined,
     resources: type === "mcp_server" ? [] : undefined,
+    ...(type === "transformer"
+      ? {
+          functionName: "transformData",
+          scope: "global" as const,
+          inputSchema: [
+            { name: "name", type: "string", required: true },
+          ],
+          logicMode: "code" as const,
+          code: "return {\n  slug: input.name.toLowerCase().replace(/\\s+/g, '-'),\n};",
+          returnSchema: [
+            { name: "slug", type: "string", required: true },
+          ],
+        }
+      : {}),
     ...(type === "langgraph"
       ? {
           inputChannels: [],

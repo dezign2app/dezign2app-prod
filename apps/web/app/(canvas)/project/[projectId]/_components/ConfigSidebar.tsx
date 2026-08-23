@@ -27,6 +27,7 @@ import { EntityFunctionsConfig } from "./config-sidebar/EntityFunctionsConfig";
 import { DatabaseConfig } from "./config-sidebar/DatabaseConfig";
 import { TestUsersConfig } from "./config-sidebar/TestUsersConfig";
 import { RedisSchemaConfig } from "./config-sidebar/RedisSchemaConfig";
+import { TransformerConfig } from "./config-sidebar/TransformerConfig";
 
 export const ConfigSidebar = () => {
   const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
@@ -227,6 +228,8 @@ export const ConfigSidebar = () => {
             <TestUsersConfig id={id} nodeId={nodeId} />
           ) : type === "redisSchema" ? (
             <RedisSchemaConfig id={id} nodeId={nodeId} />
+          ) : type === "transformer" ? (
+            <TransformerConfig id={id} nodeId={nodeId} />
           ) : (
             <EventConfig id={id} nodeId={nodeId} />
           )}

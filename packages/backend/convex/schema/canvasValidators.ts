@@ -34,6 +34,7 @@ import {
   webAppDataSchema,
   langgraphDataSchema,
   langgraphStepDataSchema,
+  transformerNodeDataSchema,
   identityProviderSchema,
   publishedEventSchema,
   consumedEventSchema,
@@ -262,6 +263,7 @@ export const backendNodeDataValidator = v.union(
   zodToConvex(paymentsDataSchema),
   langgraphConvexDataValidator,
   zodToConvex(langgraphStepDataSchema),
+  zodToConvex(transformerNodeDataSchema),
   // Fallback for partial updates (label is always present on real nodes)
   v.object({
     label: v.string(),
