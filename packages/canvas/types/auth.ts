@@ -412,7 +412,7 @@ export interface AdapterConfig {
 
 export type BetterAuthV16NodeData = CanvasAuthNodeData & {
   label?: string;
-  port?: string;
+  port?: string | number;
   baseUrl?: string;
 };
 

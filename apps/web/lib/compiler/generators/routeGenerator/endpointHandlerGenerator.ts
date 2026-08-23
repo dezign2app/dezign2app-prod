@@ -448,12 +448,10 @@ export async function ${handlerName}(
         codeBlock.includes("db.")),
   );
 
-  const sqlOps = pickedDbOps.filter(
-    (op) => !op.fn.importPath.includes("@workspace/redis") && !op.fn.name.toLowerCase().includes("cache"),
-  );
-  const redisOps = pickedDbOps.filter(
-    (op) => op.fn.importPath.includes("@workspace/redis") || op.fn.name.toLowerCase().includes("cache"),
-  );
+  const isRedisOp = (op: any) =>
+    op.fn.importPath.includes("redis") || op.fn.name.toLowerCase().includes("cache");
+  const sqlOps = pickedDbOps.filter((op) => !isRedisOp(op));
+  const redisOps = pickedDbOps.filter((op) => isRedisOp(op));
 
   // 1. Redis Cache Lookup (Cache-Aside for GET requests)
   if (method === "get" && redisOps.length > 0 && !hasDbInCodeBlock) {
@@ -461,11 +459,14 @@ export async function ${handlerName}(
     if (readRedisOps.length > 0) {
       routeHandlerCode += `    // --- Redis Cache Lookup (Cache-Aside) ---\n`;
       readRedisOps.forEach((op) => {
-        const callExpr = op.callExpr.replace("PAYLOAD_VAR", payloadVar);
+        const callExpr = op.callExpr.replaceAll("PAYLOAD_VAR", payloadVar);
         const rawTableName = op.fn.targetName || "Cache";
         const cleanTableName = toVarName(rawTableName.toLowerCase().replace(/[^a-z0-9_]/g, "_"));
         const Pascal = toPascalCase(cleanTableName);
         const cachedVar = `cached${Pascal || "Data"}`;
+        if (op.tableNodeId) {
+          targetVarMap.set(op.tableNodeId, cachedVar);
+        }
         routeHandlerCode += `    const ${cachedVar} = ${callExpr};\n`;
         routeHandlerCode += `    if (${cachedVar} !== undefined && ${cachedVar} !== null) {\n`;
         routeHandlerCode += `      logger.debug("Returning cached ${rawTableName} data");\n`;
@@ -479,7 +480,7 @@ export async function ${handlerName}(
   if (sqlOps.length > 0 && !hasDbInCodeBlock) {
     routeHandlerCode += `    // --- Database Operation(s) (via @workspace/db prepared statement) ---\n`;
     sqlOps.forEach((op) => {
-      const callExpr = op.callExpr.replace("PAYLOAD_VAR", payloadVar);
+      const callExpr = op.callExpr.replaceAll("PAYLOAD_VAR", payloadVar);
       const rawTableName = op.fn.targetName || "record";
       const cleanTableName = toVarName(rawTableName.toLowerCase().replace(/[^a-z0-9_]/g, "_"));
       const Pascal = toPascalCase(cleanTableName);
@@ -516,16 +517,21 @@ export async function ${handlerName}(
     if (writeRedisOps.length > 0) {
       routeHandlerCode += `    // --- Update Redis Cache ---\n`;
       writeRedisOps.forEach((op) => {
-        let callExpr = op.callExpr.replace("PAYLOAD_VAR", payloadVar);
+        let callExpr = op.callExpr.replaceAll("PAYLOAD_VAR", payloadVar);
         if (sqlOps.length > 0) {
           const primarySql = sqlOps[0];
           const rawSqlName = primarySql?.fn.targetName || "record";
           const cleanSqlName = toVarName(rawSqlName.toLowerCase().replace(/[^a-z0-9_]/g, "_"));
           const sqlPascal = toPascalCase(cleanSqlName);
           const sqlVarName = primarySql?.operationKind === "create" ? `created${sqlPascal || "Record"}` : cleanSqlName;
-          callExpr = callExpr.replace(`${payloadVar}?.id`, `${payloadVar}?.id || ${sqlVarName}?.id`);
+          callExpr = callExpr.replaceAll(`((${payloadVar} as any)?.id || "default")`, `(${sqlVarName}?.id || (${payloadVar} as any)?.id || "default")`);
+          callExpr = callExpr.replaceAll(`${payloadVar}?.id`, `(${sqlVarName}?.id || (${payloadVar} as any)?.id || "default")`);
         }
-        routeHandlerCode += `    ${callExpr};\n\n`;
+        const varName = `${toVarName(op.fn.name)}Result`;
+        routeHandlerCode += `    const ${varName} = ${callExpr};\n\n`;
+        if (op.tableNodeId && sqlOps.length === 0) {
+          targetVarMap.set(op.tableNodeId, payloadVar);
+        }
       });
     }
   }
@@ -536,8 +542,9 @@ export async function ${handlerName}(
     if (deleteRedisOps.length > 0) {
       routeHandlerCode += `    // --- Invalidate Redis Cache ---\n`;
       deleteRedisOps.forEach((op) => {
-        const callExpr = op.callExpr.replace("PAYLOAD_VAR", payloadVar);
-        routeHandlerCode += `    ${callExpr};\n\n`;
+        let callExpr = op.callExpr.replaceAll("PAYLOAD_VAR", payloadVar);
+        const varName = `${toVarName(op.fn.name)}Result`;
+        routeHandlerCode += `    const ${varName} = ${callExpr};\n\n`;
       });
     }
   }

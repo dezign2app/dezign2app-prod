@@ -191,11 +191,13 @@ describe("Database Isolation & Multi-Engine Architecture under packages/db/*", (
 
     const monorepo = compileMonorepo([mysqlDbNode, productEntity], [], [], [], [], "MysqlApp");
 
-    const packageJsonFile = monorepo.files.find((f) => f.filename === "packages/db/primary-mysql/package.json");
+    const packageJsonFile = monorepo.files.find((f) => f.filename === "packages/db/package.json");
     expect(packageJsonFile).toBeDefined();
     expect(packageJsonFile?.content).toContain('"mysql2"');
+    const parsedPkg = JSON.parse(packageJsonFile!.content);
+    expect(parsedPkg.name).toBe("@workspace/db");
 
-    const connFile = monorepo.files.find((f) => f.filename === "packages/db/primary-mysql/connection.ts");
+    const connFile = monorepo.files.find((f) => f.filename === "packages/db/connection.ts");
     expect(connFile?.content).toContain('import mysql from "mysql2/promise"');
   });
 

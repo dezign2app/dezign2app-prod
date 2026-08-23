@@ -268,8 +268,9 @@ export function compileDatabaseNodes(
       dbNode.data?.provider ||
       dbNode.data?.dbType,
     );
-    const folderName = resolveDbFolderName(dbNode, existingFolders);
-    const packageName = `@workspace/db-${folderName}`;
+    const isSingleDb = dbNodes.length === 1;
+    const folderName = isSingleDb ? "" : resolveDbFolderName(dbNode, existingFolders);
+    const packageName = isSingleDb ? "@workspace/db" : `@workspace/db-${folderName}`;
 
     // Pass only the entities for this DB along with other non-entity nodes (for reference)
     const scopedNodes = [
@@ -314,7 +315,7 @@ export function compileDatabaseNodes(
     // Prefix files for top-level files array
     pkgResult.files.forEach((f) => {
       mergedFiles.push({
-        filename: `packages/db/${folderName}/${f.filename}`,
+        filename: folderName ? `packages/db/${folderName}/${f.filename}` : `packages/db/${f.filename}`,
         language: f.language,
         content: f.content,
       });
@@ -325,7 +326,7 @@ export function compileDatabaseNodes(
       packageFolder: folderName,
       dbEngine: engine,
       databaseNodeId: dbNode.id,
-      databaseLabel: dbNode.data?.label || folderName,
+      databaseLabel: dbNode.data?.label || folderName || "db",
       files: pkgResult.files,
       reusableFunctions: pkgResult.reusableFunctions,
     });

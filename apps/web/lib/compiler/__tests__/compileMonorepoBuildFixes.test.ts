@@ -80,7 +80,7 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
     expect(typesRouteFile).toBeDefined();
     expect(typesRouteFile?.content).toContain("export interface ProductsPostCreateProductResponse");
     expect(typesRouteFile?.content).toContain("data?: Products;");
-    expect(typesRouteFile?.content).toContain('import type { Products } from "@workspace/db";');
+    expect(typesRouteFile?.content).toContain('import type { Products } from "../entities";');
     expect(typesRouteFile?.content).toContain("export const productsPostCreateProductBodySchema");
 
     // 2. Verify apps/products/src/routes/postCreateProduct.ts imports ProductsPostCreateProductResponse

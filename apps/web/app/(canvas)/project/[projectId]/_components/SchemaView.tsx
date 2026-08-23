@@ -137,7 +137,17 @@ export function SchemaView({ projectId }: SchemaViewProps) {
   const handleAddRedisInstance = () => {
     const center = getCenterPosition();
     const { x, y } = getOffsetPosition(center.x - 75, center.y - 30, nodes);
-    const dbLabel = getUniqueNodeLabel(nodes, "Primary_Redis_Cache", "redis_instance");
+    const redisInstances = nodes.filter(
+      (n) => n.type === "redis_instance" || (n.type === "database" && n.data?.dbEngine === "redis"),
+    );
+    const dbLabel = getUniqueNodeLabel(
+      nodes,
+      redisInstances.length > 0 ? `Redis_${redisInstances.length + 1}` : "Primary_Redis_Cache",
+      "redis_instance",
+    );
+    const assignedPort = String(6379 + redisInstances.length);
+    const connEnv = redisInstances.length === 0 ? "REDIS_URL" : `REDIS_${redisInstances.length + 1}_URL`;
+
     addNode({
       id: crypto.randomUUID(),
       type: "redis_instance",
@@ -148,7 +158,9 @@ export function SchemaView({ projectId }: SchemaViewProps) {
         dbType: "key-value",
         dbCategory: "nosql",
         dbConnectionType: "env_var",
-        connectionStringEnv: "REDIS_URL",
+        connectionStringEnv: connEnv,
+        host: "localhost",
+        port: assignedPort,
         maxmemoryPolicy: "volatile-lru",
         maxmemory: "2gb",
         persistenceMode: "RDB+AOF",
@@ -313,6 +325,8 @@ export function SchemaView({ projectId }: SchemaViewProps) {
           dbCategory: "nosql",
           dbConnectionType: "env_var",
           connectionStringEnv: "REDIS_URL",
+          host: "localhost",
+          port: "6379",
           color: "#ef4444",
           isDefault: false,
         },

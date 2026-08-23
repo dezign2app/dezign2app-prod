@@ -16,13 +16,33 @@ export function buildResponsePayloadCode(
 
   if (mode === "inferred") {
     if (pickedDbOps.length > 0) {
-      const lastOp = pickedDbOps[pickedDbOps.length - 1];
-      const primaryVar =
-        lastOp && lastOp.tableNodeId && targetVarMap.get(lastOp.tableNodeId)
-          ? targetVarMap.get(lastOp.tableNodeId)!
-          : lastOp
-            ? `${lastOp.fn.name}Result`
+      const sqlOps = pickedDbOps.filter(
+        (op) => !op.fn.importPath.includes("redis") && !op.fn.name.toLowerCase().includes("cache"),
+      );
+      const primarySql =
+        sqlOps.find((op) => op.operationKind === "create" || op.operationKind === "update") || sqlOps[0];
+      const opToUse = primarySql || pickedDbOps[pickedDbOps.length - 1];
+      let primaryVar =
+        opToUse && opToUse.tableNodeId && targetVarMap.get(opToUse.tableNodeId)
+          ? targetVarMap.get(opToUse.tableNodeId)!
+          : opToUse
+            ? `${opToUse.fn.name}Result`
             : "result";
+
+      if (
+        primaryVar.endsWith("Result") &&
+        (primaryVar.toLowerCase().includes("cache") ||
+          primaryVar.toLowerCase().includes("set") ||
+          primaryVar.toLowerCase().includes("delete") ||
+          primaryVar.toLowerCase().includes("invalidate"))
+      ) {
+        if (primarySql && primarySql.tableNodeId && targetVarMap.get(primarySql.tableNodeId)) {
+          primaryVar = targetVarMap.get(primarySql.tableNodeId)!;
+        } else if (["post", "put", "patch"].includes(ep.type?.toLowerCase() || "")) {
+          primaryVar = "payload";
+        }
+      }
+
       return `{ status: ${statusCode}, message: "Successfully executed ${ep.type || "GET"} ${path}", data: ${primaryVar} }`;
     }
     return responseData;
@@ -56,11 +76,17 @@ export function buildResponsePayloadCode(
         const tableNodeId = parts[1];
         if (tableNodeId) {
           const mapVar = targetVarMap.get(tableNodeId);
-          if (mapVar) {
+          if (mapVar && !mapVar.endsWith("Result")) {
             targetVar = mapVar;
           }
         }
       }
+
+      const sqlOps = pickedDbOps.filter(
+        (op) => !op.fn.importPath.includes("redis") && !op.fn.name.toLowerCase().includes("cache"),
+      );
+      const primarySql =
+        sqlOps.find((op) => op.operationKind === "create" || op.operationKind === "update") || sqlOps[0];
 
       if (!targetVar && pickedDbOps.length > 0) {
         const cleanName = fieldName.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -73,18 +99,30 @@ export function buildResponsePayloadCode(
           );
         });
 
-        if (matchedOp) {
-          targetVar = (matchedOp.tableNodeId && targetVarMap.get(matchedOp.tableNodeId)) || `${matchedOp.fn.name}Result`;
-        } else if (cleanName === "data" || cleanName === "payload" || cleanName === "result") {
-          const lastOp = pickedDbOps[pickedDbOps.length - 1];
-          const firstOp = pickedDbOps[0];
-          const primaryOp =
-            pickedDbOps.find((op) => op.operationKind === "create" || op.operationKind === "update") || lastOp;
-          targetVar = primaryOp
-            ? (primaryOp.tableNodeId && targetVarMap.get(primaryOp.tableNodeId)) || `${primaryOp.fn.name}Result`
-            : firstOp
-              ? (firstOp.tableNodeId && targetVarMap.get(firstOp.tableNodeId)) || `${firstOp.fn.name}Result`
-              : "result";
+        if (
+          matchedOp &&
+          matchedOp.tableNodeId &&
+          targetVarMap.get(matchedOp.tableNodeId) &&
+          !targetVarMap.get(matchedOp.tableNodeId)!.endsWith("Result")
+        ) {
+          targetVar = targetVarMap.get(matchedOp.tableNodeId)!;
+        } else if (
+          cleanName === "data" ||
+          cleanName === "payload" ||
+          cleanName === "result" ||
+          (f.type && f.type.startsWith("db:"))
+        ) {
+          if (primarySql && primarySql.tableNodeId && targetVarMap.get(primarySql.tableNodeId)) {
+            targetVar = targetVarMap.get(primarySql.tableNodeId)!;
+          } else if (["post", "put", "patch"].includes(ep.type?.toLowerCase() || "")) {
+            targetVar = "payload";
+          } else {
+            const firstOp = pickedDbOps[0];
+            targetVar =
+              firstOp && firstOp.tableNodeId && targetVarMap.get(firstOp.tableNodeId)
+                ? targetVarMap.get(firstOp.tableNodeId)!
+                : "result";
+          }
         }
       }
 

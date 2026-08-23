@@ -161,7 +161,7 @@ export function resolveLinkedEndpoint(
     targetNode.type === "api_gateway" ||
     targetNode.type === "load_balancer"
   ) {
-    const gatewayPort = targetNode.data?.port || "8000";
+    const gatewayPort = String(targetNode.data?.port || "8000");
     const outgoingEdge = allEdges.find((e) => e.source === targetNode.id);
     if (outgoingEdge) {
       const downstreamNode = allNodes.find((n) => n.id === outgoingEdge.target);

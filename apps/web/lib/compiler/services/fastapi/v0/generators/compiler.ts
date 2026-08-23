@@ -29,7 +29,7 @@ export function compileFastAPIService(
       .replace(/[^a-z0-9]/g, "_")
       .replace(/_+/g, "_")
       .replace(/^_+|_+$/g, "") || "service";
-  const port = node.data.port || "8080";
+  const port = String(node.data.port || "8080");
   const cors = node.data.cors ?? true;
   const corsOrigins = node.data.corsOrigins || "*";
 

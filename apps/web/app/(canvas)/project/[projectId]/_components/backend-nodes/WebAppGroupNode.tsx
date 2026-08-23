@@ -20,7 +20,7 @@ export const WebAppGroupNode = ({
 
   const [isEditing, setIsEditing] = useState(data.label === "");
   const [editValue, setEditValue] = useState(data.label || "Customer Portal");
-  const [editPort, setEditPort] = useState(data.port || "3000");
+  const [editPort, setEditPort] = useState(data.port ? String(data.port) : "3000");
 
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -67,7 +67,7 @@ export const WebAppGroupNode = ({
         ...data,
         label: trimmed,
         appSlug: trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-        port: editPort.trim() || "3000",
+        port: String(editPort || "").trim() || "3000",
       },
     });
     setIsEditing(false);

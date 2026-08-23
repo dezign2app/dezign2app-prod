@@ -3,7 +3,7 @@ import type { GraphNodeType } from "@workspace/canvas";
 export function createGraphNodeData(
   type: GraphNodeType,
   label: string,
-  existingNodes: Array<{ type: string; data?: { port?: string; grpcPort?: string } }>,
+  existingNodes: Array<{ type: string; data?: { port?: string | number; grpcPort?: string | number } }>,
 ) {
   let initialPort: string | undefined = undefined;
   let initialGrpcPort: string | undefined = undefined;
@@ -11,7 +11,7 @@ export function createGraphNodeData(
     const existingPorts = new Set(
       existingNodes
         .filter((n) => n.type === "service")
-        .map((n) => parseInt(n.data?.port || "8080", 10))
+        .map((n) => parseInt(String(n.data?.port || "8080"), 10))
         .filter((p) => !isNaN(p)),
     );
     let nextPort = 8080;
@@ -23,7 +23,7 @@ export function createGraphNodeData(
     const existingGrpcPorts = new Set(
       existingNodes
         .filter((n) => n.type === "service")
-        .map((n) => parseInt(n.data?.grpcPort || "50051", 10))
+        .map((n) => parseInt(String(n.data?.grpcPort || "50051"), 10))
         .filter((p) => !isNaN(p)),
     );
     let nextGrpcPort = 50051;

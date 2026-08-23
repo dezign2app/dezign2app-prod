@@ -8,7 +8,7 @@ import {
 } from "../traceResolver";
 import { toEnvVarName } from "../utils";
 import { isServiceConnectedToKafka } from "../kafka";
-import { isServiceConnectedToRedis } from "../compileRedisNodes";
+import { compileRedisNodes, isServiceConnectedToRedis } from "../compileRedisNodes";
 import {
   INTER_SERVICE_PROTOCOL_GRPC,
   GRPC_DEFAULT_PORT,
@@ -183,12 +183,22 @@ export function generateConfigFiles(
   const kafkaPackageName = `@workspace/${kafkaPackageFolder}`;
 
   const hasRedis = isServiceConnectedToRedis(node, allNodes, allEdges, endpoints);
-  const redisPackageName = "@workspace/redis";
+  const compiledRedis = hasRedis ? compileRedisNodes(allNodes, allEdges) : { packages: [], files: [] };
+  const redisDeps: Record<string, string> = {};
+  if (hasRedis) {
+    if (compiledRedis.packages && compiledRedis.packages.length > 0) {
+      compiledRedis.packages.forEach((p) => {
+        redisDeps[p.packageName] = "workspace:*";
+      });
+    } else if (compiledRedis.packageName) {
+      redisDeps[compiledRedis.packageName] = "workspace:*";
+    }
+  }
 
   const dependencies: Record<string, string> = {
     ...(hasDb ? { "@workspace/db": "workspace:*" } : {}),
     ...(hasKafka ? { [kafkaPackageName]: "workspace:*" } : {}),
-    ...(hasRedis ? { [redisPackageName]: "workspace:*" } : {}),
+    ...redisDeps,
     "@workspace/logger": "workspace:*",
     "@workspace/types": "workspace:*",
     express: "^4.19.2",
@@ -274,6 +284,40 @@ export function generateConfigFiles(
     }
   });
 
+  const redisEnvLines: string[] = [];
+  if (hasRedis) {
+    if (compiledRedis.packages && compiledRedis.packages.length > 0) {
+      compiledRedis.packages.forEach((pkg) => {
+        const instNode = allNodes.find((n) => n.id === pkg.redisNodeId);
+        const host = instNode?.data?.host || "localhost";
+        const port = instNode?.data?.port ? String(instNode.data.port) : "6379";
+        const envKey =
+          instNode?.data?.connectionStringEnv ||
+          (pkg.packageFolder === "redis"
+            ? "REDIS_URL"
+            : `${pkg.packageFolder.toUpperCase().replace(/[^A-Z0-9_]/g, "_")}_URL`);
+        redisEnvLines.push(`${envKey}=redis://${host}:${port}`);
+        if (pkg.packageFolder === "redis" || redisEnvLines.length === 1) {
+          redisEnvLines.push(`REDIS_HOST=${host}`);
+          redisEnvLines.push(`REDIS_PORT=${port}`);
+        }
+      });
+    } else {
+      const primaryRedisNode = allNodes.find(
+        (n) =>
+          n.type === "redis_instance" ||
+          (n.type === "database" &&
+            (n.data?.dbEngine === "redis" || n.data?.dbType === "redis")),
+      );
+      const redisHost = primaryRedisNode?.data?.host || "localhost";
+      const redisPort = primaryRedisNode?.data?.port
+        ? String(primaryRedisNode.data.port)
+        : "6379";
+      redisEnvLines.push(`REDIS_HOST=${redisHost}`);
+      redisEnvLines.push(`REDIS_PORT=${redisPort}`);
+    }
+  }
+
   const grpcPort = node.data?.grpcPort || "50051";
   const envFile = `PORT=${port}
 GRPC_PORT=${grpcPort}
@@ -281,7 +325,7 @@ NODE_ENV=development
 LOG_LEVEL=info
 DATABASE_PATH=../../packages/db/sqlite.db
 DATABASE_URL=../../packages/db/sqlite.db
-${hasRedis ? `REDIS_HOST=localhost\nREDIS_PORT=6379\n` : ""}${connectedServiceEnvLines.length > 0 ? connectedServiceEnvLines.join("\n") + "\n" : ""}`;
+${redisEnvLines.length > 0 ? redisEnvLines.join("\n") + "\n" : ""}${connectedServiceEnvLines.length > 0 ? connectedServiceEnvLines.join("\n") + "\n" : ""}`;
 
 
 

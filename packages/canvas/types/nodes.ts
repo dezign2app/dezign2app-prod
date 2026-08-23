@@ -304,6 +304,8 @@ export interface CanvasDatabaseNodeData {
   dbFilePathEnv?: string;
   hostEnv?: string;
   portEnv?: string;
+  host?: string;
+  port?: string | number;
   databaseNameEnv?: string;
   usernameEnv?: string;
   passwordEnv?: string;
@@ -332,7 +334,7 @@ export interface CanvasServiceNodeData {
   corsOrigins?: string;
   rateLimit?: string;
   timeout?: string;
-  port?: string;
+  port?: string | number;
   grpcPort?: string;
   interServiceProtocol?: InterServiceProtocol;
   endpoints?: Endpoint[];
@@ -483,7 +485,7 @@ export interface CanvasAuthNodeData {
 export interface CanvasWebAppNodeData {
   appSlug?: string;
   framework?: string;
-  port?: string;
+  port?: string | number;
   routes?: Array<{
     id: string;
     name: string;
