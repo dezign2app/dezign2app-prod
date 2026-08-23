@@ -228,7 +228,7 @@ export const ConfigSidebar = () => {
             <TestUsersConfig id={id} nodeId={nodeId} />
           ) : type === "redisSchema" ? (
             <RedisSchemaConfig id={id} nodeId={nodeId} />
-          ) : type === "transformer" ? (
+          ) : type === "transformer" || type === "transformer_ref" ? (
             <TransformerConfig id={id} nodeId={nodeId} />
           ) : (
             <EventConfig id={id} nodeId={nodeId} />

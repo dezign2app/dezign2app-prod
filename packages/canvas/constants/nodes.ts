@@ -96,6 +96,8 @@ export const BACKEND_EDGE_DATABASE_CONNECTION = "database-connection" as const;
 export const BACKEND_EDGE_IDENTITY_CONNECTION = "identity-connection" as const;
 export const BACKEND_EDGE_MESSAGE = "message" as const;
 export const BACKEND_EDGE_CONNECTION = "connection" as const;
+export const BACKEND_EDGE_TRANSFORMER_REFERENCE = "transformer-reference" as const;
+export const BACKEND_EDGE_REFERENCE = "reference" as const;
 
 export const BACKEND_EDGE_TYPES = {
   FOREIGN_KEY: BACKEND_EDGE_FOREIGN_KEY,
@@ -103,4 +105,6 @@ export const BACKEND_EDGE_TYPES = {
   IDENTITY_CONNECTION: BACKEND_EDGE_IDENTITY_CONNECTION,
   MESSAGE: BACKEND_EDGE_MESSAGE,
   CONNECTION: BACKEND_EDGE_CONNECTION,
+  TRANSFORMER_REFERENCE: BACKEND_EDGE_TRANSFORMER_REFERENCE,
+  REFERENCE: BACKEND_EDGE_REFERENCE,
 } as const;

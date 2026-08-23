@@ -12,6 +12,7 @@ export { WorkerNode } from "./nodes/compute/WorkerNode";
 export { ServerlessNode } from "./nodes/compute/ServerlessNode";
 export { ActorNode } from "./nodes/compute/ActorNode";
 export { TransformerNode } from "./nodes/compute/TransformerNode";
+export { TransformerRefNode } from "./nodes/compute/TransformerRefNode";
 
 // Messaging nodes
 export { QueueNode } from "./nodes/messaging/QueueNode";

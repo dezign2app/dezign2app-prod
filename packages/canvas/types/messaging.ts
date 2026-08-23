@@ -1,6 +1,7 @@
 import type { Schema } from "./simulation";
 import type { ArchitectureMetadata } from "./canvas-core";
 import type { KafkaTopic, KafkaBrokerConfig } from "../schemas";
+import type { PipelineStep } from "../schemas/shared";
 
 
 export type {
@@ -169,6 +170,7 @@ export type ConsumedEvent = {
   maxRetries?: number;
   deadLetterQueue?: string; // e.g. "chat.failed.messages"
   isIdempotent: boolean;
+  pipelineSteps?: PipelineStep[];
 
   metadata?: ArchitectureMetadata;
 };
@@ -182,6 +184,7 @@ export type AnyMessagingResource = {
   publishedWhen?: string;
   payloadSchema?: Schema;
   handlerLogic?: string;
+  pipelineSteps?: PipelineStep[];
   body?: string;
   code?: string;
   prompt?: string;

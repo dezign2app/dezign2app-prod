@@ -5,6 +5,7 @@ import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { AnyMessagingResource, Schema } from "@/types/canvas";
+import { isEndpointPipelineUnconfigured } from "@/lib/utils/pipelineValidation";
 import { generateId } from "./utils";
 import { LocalInput } from "./LocalInput";
 
@@ -111,6 +112,11 @@ export const MessagingResourceRow = ({
     pubAbbr = "P";
     subAbbr = "C";
   }
+
+  const isConsumerUnconfigured = React.useMemo(() => {
+    if (!isConsumed) return false;
+    return isEndpointPipelineUnconfigured(item as any, nodeId, nodes, edges);
+  }, [isConsumed, item, nodeId, nodes, edges]);
 
   const isChannelEmpty = () => {
     const currentName = isEditing ? editingName : item.name || "";
@@ -333,12 +339,19 @@ export const MessagingResourceRow = ({
               <div className="flex items-center gap-2 overflow-hidden">
                 <span
                   className={cn(
-                    "font-medium truncate",
+                    "font-medium truncate transition-colors",
                     isConsumed && !resolvedTopicName && "text-muted-foreground/70 italic",
+                    isConsumerUnconfigured && "text-destructive font-semibold",
                   )}
                 >
                   {resolvedTopicName || (isConsumed ? "Select Topic..." : "Untitled Resource")}
                 </span>
+                {isConsumerUnconfigured && (
+                  <span
+                    className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse shrink-0"
+                    title="Consumer pipeline input variables not configured!"
+                  />
+                )}
                 {variant === "definition" && item.name && (
                   <span className="text-[9px] bg-secondary/80 text-muted-foreground px-1 py-0.5 rounded font-mono shrink-0">
                     {pubAbbr}: {publisherCount} &nbsp; {subAbbr}:{" "}

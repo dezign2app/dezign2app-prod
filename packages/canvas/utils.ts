@@ -39,6 +39,7 @@ const ALL_BACKEND_NODE_TYPES = [
   "langgraph_step",
   "page_ref",
   "transformer",
+  "transformer_ref",
 ] as const;
 
 export function isBackendNode(type: string): type is BackendNodeType {
@@ -192,6 +193,17 @@ export function classifyHandle(
     return handleDirection === "source" ? "page-out" : "page-section-in";
   }
 
+  // --- Transformers and Transformer Refs ---
+  if (id === "transformer-in" || id.startsWith("transformer-in")) {
+    return "transformer-in";
+  }
+  if (id === "transformer-out" || id.startsWith("transformer-out")) {
+    return "transformer-out";
+  }
+  if (nodeType === "transformer" || nodeType === "transformer_ref") {
+    return handleDirection === "target" ? "transformer-in" : "transformer-out";
+  }
+
   if (
     id.endsWith("-in") ||
     id.startsWith("public-in") ||
@@ -207,10 +219,6 @@ export function classifyHandle(
 
   if (id.startsWith("index-in-")) return "index-in";
   if (id.startsWith("index-out-")) return "index-out";
-
-  if (nodeType === "transformer" || id === "transformer-out" || id.startsWith("transformer-out")) {
-    return "transformer-out";
-  }
 
   if (
     nodeType === "database" ||

@@ -4,6 +4,10 @@ import { CompiledFile } from "@workspace/canvas/types";
 import { toVarName, toPascalCase } from "../utils";
 import { schemaToZodSchema } from "./schemaToTypeScript";
 import { resolveConsumerTrace } from "../traceResolver";
+import {
+  renderPipeline,
+  collectPipelineImports,
+} from "./routeGenerator/pipelineRenderer";
 
 export function generateConsumers(
   serviceName: string,
@@ -75,11 +79,24 @@ export function initConsumers(): void {
         typeImportsList.push(schemaName);
       }
 
+      const executableSteps = (ev.pipelineSteps || []).filter(
+        (s) => s.type !== "return_response",
+      );
+      const pipelineImports = collectPipelineImports(executableSteps);
+      const importStatements: string[] = [];
+      pipelineImports.forEach((names, importPath) => {
+        if (names.size > 0 && importPath) {
+          importStatements.push(
+            `import { ${Array.from(names).join(", ")} } from "${importPath}";`,
+          );
+        }
+      });
+
       let consumerCode = `import { createLogger } from "@workspace/logger";
 import {
   ${typeImportsList.join(",\n  ")}
 } from "@workspace/types";
-
+${importStatements.length > 0 ? importStatements.join("\n") + "\n" : ""}
 const logger = createLogger("${serviceName}:Consumer:${ev.name}");
 
 /**
@@ -126,6 +143,18 @@ export async function ${handlerName}(payload: ${payloadInterfaceName}): Promise<
 
       consumerCode += `    // =========================================================================\n`;
 
+      if (executableSteps.length > 0) {
+        consumerCode += `    // --- Step Pipeline Execution ---\n`;
+        const pipelineLines = renderPipeline(
+          executableSteps,
+          zodRes.hasContent ? "validatedPayload" : "payload",
+        );
+        pipelineLines.forEach((line) => {
+          consumerCode += `    ${line}\n`;
+        });
+        consumerCode += `\n`;
+      }
+
       const promptText = (ev.handlerLogic || ev.description || "").trim();
       const codeBlock = (ev.body || ev.code || ev.functionBody || "").trim();
 
@@ -136,7 +165,7 @@ export async function ${handlerName}(payload: ${payloadInterfaceName}): Promise<
             consumerCode += `    // STEP ${idx + 1}: ${line.trim()}\n`;
         });
         consumerCode += `\n`;
-      } else if (!codeBlock) {
+      } else if (!codeBlock && executableSteps.length === 0) {
         consumerCode += `    // STEP 1: Parse and validate event payload\n`;
         consumerCode += `    // STEP 2: Execute side effects / domain logic\n`;
       }

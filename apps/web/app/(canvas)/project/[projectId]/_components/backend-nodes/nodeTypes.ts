@@ -29,6 +29,7 @@ import {
   LangGraphNode,
   LangGraphStepNode,
   TransformerNode,
+  TransformerRefNode,
 } from "./graph-nodes";
 import { SchemaGroupNode } from "./SchemaGroupNode";
 import { WebAppGroupNode } from "./WebAppGroupNode";
@@ -74,4 +75,5 @@ export const nodeTypes = {
   langgraph: LangGraphNode,
   langgraph_step: LangGraphStepNode,
   transformer: TransformerNode,
+  transformer_ref: TransformerRefNode,
 };

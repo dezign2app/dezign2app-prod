@@ -144,7 +144,13 @@ export const EventConfig: React.FC<EventConfigProps> = ({ id, nodeId }) => {
       )}
 
       {isConsumed && (
-        <ConsumerConfig item={item} handleUpdate={handleUpdate} />
+        <ConsumerConfig
+          item={item}
+          handleUpdate={handleUpdate}
+          nodes={nodes}
+          edges={edges}
+          nodeId={nodeId}
+        />
       )}
 
       {isPublished && (

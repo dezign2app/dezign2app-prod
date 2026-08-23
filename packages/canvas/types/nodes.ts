@@ -73,7 +73,8 @@ export type BackendNodeType =
   | "langgraph"
   | "langgraph_step"
   | "page_ref"
-  | "transformer";
+  | "transformer"
+  | "transformer_ref";
 
 /** Core fields present on every canvas node. */
 export interface BaseNodeData {
@@ -105,8 +106,9 @@ export interface BaseNodeData {
   scope?: "global" | "local";
   targetServiceId?: string;
   targetEndpointId?: string;
+  targetEndpointIds?: string[];
+  transformerRef?: string;
   inputSchema?: {
-
     id?: string;
     name: string;
     type: string;
@@ -455,6 +457,7 @@ export interface CanvasTransformerNodeData {
   scope?: "global" | "local";
   targetServiceId?: string;
   targetEndpointId?: string;
+  targetEndpointIds?: string[];
   inputSchema?: {
     name: string;
     type: string;
@@ -476,6 +479,14 @@ export interface CanvasTransformerNodeData {
   returnSchemaRawJson?: string;
   isAsync?: boolean;
   transformerHelpers?: TransformerHelperNodeData[];
+}
+
+/** Transformer reference node fields (canvas type). */
+export interface CanvasTransformerRefNodeData {
+  transformerRef?: string;
+  targetServiceId?: string;
+  targetEndpointId?: string;
+  targetEndpointIds?: string[];
 }
 
 
@@ -674,7 +685,8 @@ export type BackendNodeData = BaseNodeData &
       CanvasLangGraphNodeData &
       CanvasLangGraphStepNodeData &
       CanvasPageRefNodeData &
-      CanvasTransformerNodeData
+      CanvasTransformerNodeData &
+      CanvasTransformerRefNodeData
   >;
 
 export type BackendNode = {

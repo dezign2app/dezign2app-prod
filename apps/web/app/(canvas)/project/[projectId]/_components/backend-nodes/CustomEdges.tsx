@@ -373,3 +373,87 @@ export const IdentityConnectionEdge = (props: EdgeProps<BackendEdge>) => {
     </>
   );
 };
+
+// 5. Transformer Reference Edge (Invisible reference edge between master transformer and transformer_ref nodes)
+export const TransformerReferenceEdge = (props: EdgeProps<BackendEdge>) => {
+  const isEdgeSelected = props.selected;
+  const sourceNode = useBackendCanvasStore((s) =>
+    s.nodes.find((n) => n.id === props.source),
+  );
+  const targetNode = useBackendCanvasStore((s) =>
+    s.nodes.find((n) => n.id === props.target),
+  );
+  const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
+
+  const isNodeSelected =
+    Boolean(sourceNode?.selected) ||
+    Boolean(targetNode?.selected) ||
+    activeConfigItem?.nodeId === props.source ||
+    activeConfigItem?.id === props.source ||
+    activeConfigItem?.nodeId === props.target ||
+    activeConfigItem?.id === props.target;
+
+  const isVisible = isEdgeSelected || isNodeSelected;
+
+  const {
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    style,
+  } = props;
+
+  const [edgePath] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetPosition,
+    targetX,
+    targetY,
+  });
+
+  if (!isVisible) {
+    return (
+      <BaseEdge
+        path={edgePath}
+        style={{
+          opacity: 0,
+          pointerEvents: "none",
+          strokeWidth: 0,
+        }}
+      />
+    );
+  }
+
+  return (
+    <>
+      <EdgeStyles />
+      <EdgeMarkers />
+
+      {/* Subtle purple background glow */}
+      <BaseEdge
+        path={edgePath}
+        style={{
+          ...style,
+          strokeWidth: 4,
+          stroke: "rgba(168, 85, 247, 0.25)",
+          filter: "drop-shadow(0 0 6px rgba(168, 85, 247, 0.6))",
+        }}
+      />
+
+      {/* Main purple dashed reference line */}
+      <BaseEdge
+        path={edgePath}
+        markerEnd="url(#arrow-purple)"
+        style={{
+          ...style,
+          strokeWidth: 1.5,
+          stroke: "#a855f7", // purple-500
+          strokeDasharray: "4, 4",
+        }}
+      />
+    </>
+  );
+};

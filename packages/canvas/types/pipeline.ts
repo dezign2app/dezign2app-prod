@@ -20,6 +20,9 @@ export interface StepFunctionRef {
   name: string;
   importPath: string;
   signature?: string;
+  isGlobal?: boolean;
+  inputSchema?: StepSchemaField[];
+  returnSchema?: StepSchemaField[];
 }
 
 export interface StepSchemaField {

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useMemo } from "react";
-import { Endpoint, BackendNode, BackendEdge } from "@workspace/canvas/types";
+import { Endpoint, BackendNode, BackendEdge, AnyMessagingResource } from "@workspace/canvas/types";
 
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -22,6 +22,7 @@ import {
   ArrowUp,
   ArrowDown,
   Check,
+  AlertTriangle,
 } from "lucide-react";
 import { Draggable } from "@hello-pangea/dnd";
 import { BindingSourceEditor } from "./BindingSourceEditor";
@@ -39,6 +40,7 @@ import {
   getAvailableTransformers,
 } from "./utils";
 import { toVarName } from "@/lib/compiler/utils";
+import { isStepInputUnconfigured } from "@/lib/utils/pipelineValidation";
 
 function isStepType(val: string): val is StepType {
   return val in STEP_TYPE_META;
@@ -49,6 +51,7 @@ export interface StepRowProps {
   index: number;
   priorSteps: PipelineStepDraft[];
   endpoint?: Endpoint;
+  consumedEvent?: AnyMessagingResource;
   allNodes: BackendNode[];
   allEdges: BackendEdge[];
   serviceNodeId?: string;
@@ -65,6 +68,7 @@ export const StepRow = ({
   index,
   priorSteps,
   endpoint,
+  consumedEvent,
   allNodes,
   allEdges,
   serviceNodeId,
@@ -79,10 +83,10 @@ export const StepRow = ({
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const meta = STEP_TYPE_META[step.type] || STEP_TYPE_META.custom_code;
 
-  // Available sources (request body, params, query, headers, prior steps)
+  // Available sources (request body, params, query, headers, prior steps, or event payload/metadata)
   const availableSources = useMemo(
-    () => getAvailableSources(endpoint, priorSteps, allNodes),
-    [endpoint, priorSteps, allNodes],
+    () => getAvailableSources(endpoint, priorSteps, allNodes, consumedEvent),
+    [endpoint, priorSteps, allNodes, consumedEvent],
   );
 
   // Available transformers
@@ -284,6 +288,11 @@ export const StepRow = ({
   const stepId = step.id || `step-${index}`;
   const displayVarName = step.outputVariable || step.name || `step${index + 1}Result`;
 
+  const isUnconfigured = useMemo(
+    () => isStepInputUnconfigured(step, allNodes),
+    [step, allNodes],
+  );
+
   return (
     <Draggable draggableId={stepId} index={index}>
       {(provided, snapshot) => (
@@ -295,6 +304,8 @@ export const StepRow = ({
           } ${
             snapshot.isDragging
               ? "border-primary shadow-xl shadow-black/25 bg-background z-50 ring-1 ring-primary/40"
+              : isUnconfigured
+              ? "border-destructive/60 bg-destructive/5 hover:border-destructive/80"
               : "border-border/60 bg-card/40 hover:border-border/80"
           }`}
         >
@@ -337,6 +348,14 @@ export const StepRow = ({
                 </span>
               )}
             </span>
+
+            {/* Unconfigured Warning Badge */}
+            {isUnconfigured && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-1 shrink-0">
+                <AlertTriangle size={10} />
+                Unconfigured
+              </span>
+            )}
 
             <div
               className="flex items-center gap-0.5 ml-1"
@@ -381,12 +400,18 @@ export const StepRow = ({
           {/* Expanded Step Body */}
           {expanded && (
             <div className="border-t border-border/40 px-3 pt-3 pb-3 flex flex-col gap-3.5">
+              {isUnconfigured && (
+                <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-destructive/40 bg-destructive/10 text-destructive text-[11px]">
+                  <AlertTriangle size={12} className="shrink-0" />
+                  <span>Input variables for this step are not configured. Map the arguments below.</span>
+                </div>
+              )}
+
               {/* Row 1: Output Variable Name + Step Type */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="flex flex-col gap-1">
                   <Label className="text-[10px] text-muted-foreground font-medium flex items-center justify-between">
                     <span>Output Variable Name</span>
-                    <span className="text-[9px] font-mono text-muted-foreground/50">const [name] = ...</span>
                   </Label>
                   <Input
                     className="h-7 text-xs font-mono bg-background/60 border-border/60"

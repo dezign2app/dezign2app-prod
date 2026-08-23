@@ -1,12 +1,18 @@
-import type { GraphNodeType } from "@workspace/canvas";
+import type {
+  BackendNodeType,
+  BackendNodeData,
+  BackendNode,
+} from "@workspace/canvas/types";
 
 export function createGraphNodeData(
-  type: GraphNodeType,
+  type: BackendNodeType,
   label: string,
-  existingNodes: Array<{ type: string; data?: { port?: string | number; grpcPort?: string | number } }>,
-) {
-  let initialPort: string | undefined = undefined;
-  let initialGrpcPort: string | undefined = undefined;
+  existingNodes: BackendNode[],
+): BackendNodeData {
+  const baseData: BackendNodeData = {
+    label,
+  };
+
   if (type === "service") {
     const existingPorts = new Set(
       existingNodes
@@ -18,7 +24,6 @@ export function createGraphNodeData(
     while (existingPorts.has(nextPort)) {
       nextPort++;
     }
-    initialPort = String(nextPort);
 
     const existingGrpcPorts = new Set(
       existingNodes
@@ -30,63 +35,146 @@ export function createGraphNodeData(
     while (existingGrpcPorts.has(nextGrpcPort)) {
       nextGrpcPort++;
     }
-    initialGrpcPort = String(nextGrpcPort);
+
+    return {
+      ...baseData,
+      port: String(nextPort),
+      grpcPort: String(nextGrpcPort),
+      inputs: [],
+      logic: [],
+      outputs: [],
+    };
   }
 
-  return {
-    label,
-    port: initialPort,
-    grpcPort: initialGrpcPort,
-    events: type === "webClient" ? [] : undefined,
-    inputs: type === "service" ? [] : undefined,
-    logic: type === "service" ? [] : undefined,
-    outputs: type === "service" ? [] : undefined,
-    actions: type === "external" ? [] : undefined,
-    topics: type === "kafka" ? [] : undefined,
-    streams: type === "redis-streams" ? [] : undefined,
-    queues: type === "sqs" ? [] : undefined,
-    channels: type === "redis-pubsub" ? [] : undefined,
-    buckets: type === "storage" ? [] : undefined,
-    kafkaBroker: type === "kafka" ? {} : undefined,
-    redisBroker: type === "redis-streams" ? {} : undefined,
-    sqsBroker: type === "sqs" ? {} : undefined,
-    tasks: type === "worker" ? [] : undefined,
-    endpoints:
-      type === "serverless" || type === "api_gateway" ? [] : undefined,
-    searchSources: type === "search_index" ? [] : undefined,
-    authRules: type === "api_gateway" ? [] : undefined,
-    targetGroups: type === "load_balancer" ? [] : undefined,
-    prompts: type === "llm" || type === "mcp_server" ? [] : undefined,
-    tools: type === "llm" || type === "mcp_server" ? [] : undefined,
-    resources: type === "mcp_server" ? [] : undefined,
-    ...(type === "transformer"
-      ? {
-          functionName: "transformData",
-          scope: "global" as const,
-          inputSchema: [
-            { name: "name", type: "string", required: true },
-          ],
-          logicMode: "code" as const,
-          code: "return {\n  slug: input.name.toLowerCase().replace(/\\s+/g, '-'),\n};",
-          returnSchema: [
-            { name: "slug", type: "string", required: true },
-          ],
-        }
-      : {}),
-    ...(type === "langgraph"
-      ? {
-          inputChannels: [],
-          stateChannels: [
-            {
-              key: "messages",
-              type: "messages" as const,
-              reducer: "add_messages" as const,
-              defaultValue: [],
-            },
-          ],
-          graphSteps: [],
-          graphEdges: [],
-        }
-      : {}),
-  };
+  if (type === "transformer") {
+    return {
+      ...baseData,
+      functionName: "transformData",
+      scope: "global",
+      inputSchema: [
+        { name: "name", type: "string", required: true },
+      ],
+      logicMode: "code",
+      code: "return {\n  slug: input.name.toLowerCase().replace(/\\s+/g, '-'),\n};",
+      returnSchema: [
+        { name: "slug", type: "string", required: true },
+      ],
+    };
+  }
+
+  if (type === "transformer_ref") {
+    return {
+      ...baseData,
+      label: "Transformer Ref",
+    };
+  }
+
+  if (type === "webClient") {
+    return {
+      ...baseData,
+      events: [],
+    };
+  }
+
+  if (type === "external") {
+    return {
+      ...baseData,
+      actions: [],
+    };
+  }
+
+  if (type === "kafka") {
+    return {
+      ...baseData,
+      topics: [],
+      kafkaBroker: {},
+    };
+  }
+
+  if (type === "redis-streams") {
+    return {
+      ...baseData,
+      streams: [],
+      redisBroker: {},
+    };
+  }
+
+  if (type === "sqs") {
+    return {
+      ...baseData,
+      queues: [],
+      sqsBroker: {},
+    };
+  }
+
+  if (type === "redis-pubsub") {
+    return {
+      ...baseData,
+      channels: [],
+    };
+  }
+
+  if (type === "storage") {
+    return {
+      ...baseData,
+      buckets: [],
+    };
+  }
+
+  if (type === "worker") {
+    return {
+      ...baseData,
+      tasks: [],
+    };
+  }
+
+  if (type === "serverless" || type === "api_gateway") {
+    return {
+      ...baseData,
+      endpoints: [],
+      ...(type === "api_gateway" ? { authRules: [] } : {}),
+    };
+  }
+
+  if (type === "search_index") {
+    return {
+      ...baseData,
+      searchSources: [],
+    };
+  }
+
+  if (type === "load_balancer") {
+    return {
+      ...baseData,
+      targetGroups: [],
+    };
+  }
+
+  if (type === "llm" || type === "mcp_server") {
+    return {
+      ...baseData,
+      prompts: [],
+      tools: [],
+      ...(type === "mcp_server" ? { resources: [] } : {}),
+    };
+  }
+
+  if (type === "langgraph") {
+    return {
+      ...baseData,
+      inputChannels: [],
+      stateChannels: [
+        {
+          key: "messages",
+          type: "messages",
+          reducer: "add_messages",
+          defaultValue: [],
+        },
+      ],
+      graphSteps: [],
+      graphEdges: [],
+    };
+  }
+
+  return baseData;
 }
