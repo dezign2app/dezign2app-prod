@@ -1,6 +1,7 @@
 import { Endpoint, TargetDbOperation, ReusableFunction } from "@workspace/canvas/types";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
+import { toFolderName } from "../../utils";
 
 function isValidDbOpKind(kind: string): kind is ReusableFunction["kind"] {
   return (
@@ -134,7 +135,19 @@ export function pickDbFunctionsForEndpoint(
     if (targetEntityNode) {
       const ops = getEntityDbOperations(targetEntityNode, allNodes);
       const varName = rawTableName.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const importPath = isRedis ? "@workspace/redis" : `@workspace/db/helpers/${varName}`;
+      let importPath = "@workspace/redis";
+      if (isRedis) {
+        const targetDbId = targetEntityNode?.data?.databaseId;
+        const parentInst = allNodes.find(
+          (n) => n.id === targetDbId || (n.nodeId && n.nodeId === targetDbId),
+        );
+        if (parentInst?.data?.label) {
+          const folder = toFolderName(parentInst.data.label);
+          importPath = `@workspace/${folder}`;
+        }
+      } else {
+        importPath = `@workspace/db/helpers/${varName}`;
+      }
       ops.forEach((op) => {
         if (op.enabled !== false) {
           const resolvedKind: ReusableFunction["kind"] = isValidDbOpKind(op.kind)
@@ -215,9 +228,9 @@ export function pickDbFunctionsForEndpoint(
           } else if (opLower.startsWith("set") || fn.kind === "create" || fn.kind === "update") {
             callExpr = isIdRoute
               ? `await ${fn.name}(req.params.id, PAYLOAD_VAR)`
-              : `await ${fn.name}(PAYLOAD_VAR?.id || "default", PAYLOAD_VAR)`;
+              : `await ${fn.name}(((PAYLOAD_VAR as any)?.id || "default"), PAYLOAD_VAR)`;
           } else if (opLower.startsWith("invalidate") || opLower.startsWith("delete") || fn.kind === "delete") {
-            callExpr = isIdRoute ? `await ${fn.name}(req.params.id)` : `await ${fn.name}(PAYLOAD_VAR?.id || "default")`;
+            callExpr = isIdRoute ? `await ${fn.name}(req.params.id)` : `await ${fn.name}((PAYLOAD_VAR as any)?.id || "default")`;
           } else {
             callExpr = `await ${fn.name}()`;
           }

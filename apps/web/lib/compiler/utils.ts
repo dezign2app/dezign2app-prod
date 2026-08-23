@@ -200,6 +200,14 @@ export function toEnvVarName(str: string): string {
   return env || "SERVICE";
 }
 
+export function toFolderName(label: string): string {
+  if (!label) return "item";
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "item";
+}
+
 export function toSingular(str: string): string {
   if (!str) return str;
   const lower = str.toLowerCase();

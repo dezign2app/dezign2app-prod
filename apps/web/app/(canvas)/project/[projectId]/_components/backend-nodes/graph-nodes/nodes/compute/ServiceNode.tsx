@@ -57,21 +57,21 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
 
   const [configOpen, setConfigOpen] = useState(false);
 
-  const currentPort = data.port?.trim() || "8080";
+  const currentPort = String(data.port ?? "").trim() || "8080";
   const conflictNode = nodes.find(
     (n) =>
       n?.id !== id &&
       n?.type === "service" &&
-      (n.data?.port?.trim() || "8080") === currentPort,
+      (String(n.data?.port ?? "").trim() || "8080") === currentPort,
   );
   const isPortOccupied = Boolean(conflictNode);
 
-  const currentGrpcPort = data.grpcPort?.trim() || "50051";
+  const currentGrpcPort = String(data.grpcPort ?? "").trim() || "50051";
   const grpcConflictNode = nodes.find(
     (n) =>
       n?.id !== id &&
       n?.type === "service" &&
-      (n.data?.grpcPort?.trim() || "50051") === currentGrpcPort,
+      (String(n.data?.grpcPort ?? "").trim() || "50051") === currentGrpcPort,
   );
   const isGrpcPortOccupied = Boolean(grpcConflictNode);
 
@@ -90,7 +90,7 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         (n) =>
           n?.id !== id &&
           n?.type === "service" &&
-          (n.data?.port?.trim() || "8080") === trimmedVal,
+          (String(n.data?.port ?? "").trim() || "8080") === trimmedVal,
       );
       if (occupiedByNode) {
         toast.error(
@@ -109,7 +109,7 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         (n) =>
           n?.id !== id &&
           n?.type === "service" &&
-          (n.data?.grpcPort?.trim() || "50051") === trimmedVal,
+          (String(n.data?.grpcPort ?? "").trim() || "50051") === trimmedVal,
       );
       if (occupiedByNode) {
         toast.error(

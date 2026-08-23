@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { DatabaseZap, Trash2, Settings, Key, Palette, HardDrive, ShieldCheck } from "lucide-react";
+import { DatabaseZap, Trash2, Settings, Key, Palette, HardDrive, ShieldCheck, Radio } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
@@ -26,6 +26,8 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
 
   const color = data.color || "#ef4444";
   const label = data.label || "Primary_Redis_Cache";
+  const port = String(data.port || "6379");
+  const host = data.host || "localhost";
   const [editingName, setEditingName] = useState(label);
   const [isEditingName, setIsEditingName] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -120,7 +122,18 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
           <div className="flex items-center gap-1 shrink-0 ml-2">
             <Badge
               variant="outline"
-              className="text-[10px] px-1.5 py-0 font-mono uppercase font-semibold"
+              className="text-[10px] px-1.5 py-0 font-mono font-bold"
+              style={{
+                backgroundColor: `${color}15`,
+                borderColor: `${color}40`,
+                color: color,
+              }}
+            >
+              :{port}
+            </Badge>
+            <Badge
+              variant="outline"
+              className="text-[10px] px-1.5 py-0 font-mono uppercase font-semibold hidden sm:inline-flex"
               style={{
                 backgroundColor: `${color}15`,
                 borderColor: `${color}40`,
@@ -192,6 +205,20 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
               );
             })}
           </div>
+        </div>
+
+        {/* Host & Port */}
+        <div className="flex items-center justify-between bg-muted/30 p-1.5 rounded-lg border border-border/40">
+          <div className="flex items-center text-muted-foreground gap-1.5">
+            <Radio size={12} className="shrink-0" style={{ color }} />
+            <span className="text-[11px] font-medium">Host : Port</span>
+          </div>
+          <code
+            className="text-[10px] font-mono font-bold bg-background px-1.5 py-0.5 rounded border border-border/60"
+            style={{ color }}
+          >
+            {host}:{port}
+          </code>
         </div>
 
         {/* ENV Connection */}

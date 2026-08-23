@@ -72,7 +72,7 @@ export function generateDockerFiles(options: DockerGeneratorOptions): CompiledFi
   services.forEach((srv) => {
     const srvNode = nodes.find((n) => n.id === srv.id);
     const techStack = srvNode?.data?.techStack || (srvNode?.type === "langgraph" ? "langgraph" : "express");
-    const port = srvNode?.data?.port || "8080";
+    const port = String(srvNode?.data?.port || "8080");
 
     const dockerfileContent = generateServiceDockerfile(techStack, srv.folderName, port);
     files.push({
@@ -91,7 +91,7 @@ export function generateDockerFiles(options: DockerGeneratorOptions): CompiledFi
     files.push({
       filename: `apps/${srv.folderName}/.env.example`,
       language: "dotenv",
-      content: generateServiceEnvExample(port, hasPostgres, hasSqlite, hasRedis, hasKafka, projectSlug, techStack),
+      content: generateServiceEnvExample(port, hasPostgres, hasSqlite, hasRedis, hasKafka, projectSlug, techStack, nodes),
     });
   });
 
@@ -145,7 +145,7 @@ export function generateDockerFiles(options: DockerGeneratorOptions): CompiledFi
     files.push({
       filename: "docker-compose.infra.yml",
       language: "yaml",
-      content: generateInfraDockerCompose({ projectSlug, hasPostgres, hasKafka, hasRedis }),
+      content: generateInfraDockerCompose({ projectSlug, hasPostgres, hasKafka, hasRedis, nodes }),
     });
   }
 
@@ -153,7 +153,7 @@ export function generateDockerFiles(options: DockerGeneratorOptions): CompiledFi
   files.push({
     filename: ".env.example",
     language: "dotenv",
-    content: generateRootEnvExample(hasPostgres, hasSqlite, hasRedis, hasKafka, projectSlug),
+    content: generateRootEnvExample(hasPostgres, hasSqlite, hasRedis, hasKafka, projectSlug, nodes),
   });
 
   // 6. scripts/sync-env.mjs - smart env merge (add new keys, keep existing values, remove deleted keys)
@@ -391,7 +391,7 @@ function generateRootDockerCompose(ctx: ComposeGeneratorContext): string {
   // 1. Backend Microservices
   services.forEach((srv) => {
     const srvNode = nodes.find((n) => n.id === srv.id);
-    const port = srvNode?.data?.port || "8080";
+    const port = String(srvNode?.data?.port || "8080");
 
     composeLines.push(`  ${srv.folderName}:`);
     composeLines.push(`    build:`);
@@ -415,9 +415,18 @@ function generateRootDockerCompose(ctx: ComposeGeneratorContext): string {
     }
 
     if (hasRedis) {
-      composeLines.push(`      - REDIS_URL=redis://redis:6379`);
+      const redisInstances = nodes.filter(
+        (n) =>
+          n.type === "redis_instance" ||
+          (n.type === "database" &&
+            (n.data?.dbEngine === "redis" || n.data?.dbType === "redis")),
+      );
+      const primaryRedis = redisInstances[0];
+      const rPort = primaryRedis?.data?.port ? String(primaryRedis.data.port) : "6379";
+      const envKey = primaryRedis?.data?.connectionStringEnv || "REDIS_URL";
+      composeLines.push(`      - ${envKey}=redis://redis:6379`);
       composeLines.push(`      - REDIS_HOST=redis`);
-      composeLines.push(`      - REDIS_PORT=6379`);
+      composeLines.push(`      - REDIS_PORT=${rPort}`);
     }
 
     if (hasKafka) {
@@ -432,7 +441,7 @@ function generateRootDockerCompose(ctx: ComposeGeneratorContext): string {
           const tgtSrv = services.find((s) => s.id === targetNode.id);
           if (tgtSrv) {
             const tgtLabel = targetNode.data?.label || targetNode.id;
-            const tgtPort = targetNode.data?.port || "8080";
+            const tgtPort = String(targetNode.data?.port || "8080");
             const envVarName = `${toEnvVarName(tgtLabel)}_BASE_URL`;
             composeLines.push(`      - ${envVarName}=http://${tgtSrv.folderName}:${tgtPort}`);
           }
@@ -479,7 +488,7 @@ function generateRootDockerCompose(ctx: ComposeGeneratorContext): string {
     if (services.length > 0) {
       const firstSrv = services[0]!;
       const srvNode = nodes.find((n) => n.id === firstSrv.id);
-      const srvPort = srvNode?.data?.port || "8080";
+      const srvPort = String(srvNode?.data?.port || "8080");
       composeLines.push(`      - NEXT_PUBLIC_API_URL=http://localhost:${srvPort}`);
     }
 
@@ -523,23 +532,57 @@ function generateRootDockerCompose(ctx: ComposeGeneratorContext): string {
 
   // 4. Infrastructure: Redis
   if (hasRedis) {
-    composeLines.push(`  redis:`);
-    composeLines.push(`    image: redis:7-alpine`);
-    composeLines.push(`    container_name: ${projectSlug}-redis`);
-    composeLines.push(`    restart: unless-stopped`);
-    composeLines.push(`    ports:`);
-    composeLines.push(`      - "6379:6379"`);
-    composeLines.push(`    volumes:`);
-    composeLines.push(`      - redis_data:/data`);
-    composeLines.push(`    command: redis-server --appendonly yes`);
-    composeLines.push(`    healthcheck:`);
-    composeLines.push(`      test: ["CMD", "redis-cli", "ping"]`);
-    composeLines.push(`      interval: 5s`);
-    composeLines.push(`      timeout: 3s`);
-    composeLines.push(`      retries: 5`);
-    composeLines.push(`    networks:`);
-    composeLines.push(`      - blueprint-network`);
-    composeLines.push(``);
+    const redisInstances = nodes.filter(
+      (n) =>
+        n.type === "redis_instance" ||
+        (n.type === "database" &&
+          (n.data?.dbEngine === "redis" || n.data?.dbType === "redis")),
+    );
+
+    if (redisInstances.length <= 1) {
+      const primaryRedis = redisInstances[0];
+      const rPort = primaryRedis?.data?.port ? String(primaryRedis.data.port) : "6379";
+      composeLines.push(`  redis:`);
+      composeLines.push(`    image: redis:7-alpine`);
+      composeLines.push(`    container_name: ${projectSlug}-redis`);
+      composeLines.push(`    restart: unless-stopped`);
+      composeLines.push(`    ports:`);
+      composeLines.push(`      - "${rPort}:6379"`);
+      composeLines.push(`    volumes:`);
+      composeLines.push(`      - redis_data:/data`);
+      composeLines.push(`    command: redis-server --appendonly yes`);
+      composeLines.push(`    healthcheck:`);
+      composeLines.push(`      test: ["CMD", "redis-cli", "ping"]`);
+      composeLines.push(`      interval: 5s`);
+      composeLines.push(`      timeout: 3s`);
+      composeLines.push(`      retries: 5`);
+      composeLines.push(`    networks:`);
+      composeLines.push(`      - blueprint-network`);
+      composeLines.push(``);
+    } else {
+      redisInstances.forEach((inst, idx) => {
+        const rPort = inst.data?.port ? String(inst.data.port) : String(6379 + idx);
+        const svcName =
+          inst.data?.label?.toLowerCase().replace(/[^a-z0-9_-]/g, "-") || `redis-${idx + 1}`;
+        composeLines.push(`  ${svcName}:`);
+        composeLines.push(`    image: redis:7-alpine`);
+        composeLines.push(`    container_name: ${projectSlug}-${svcName}`);
+        composeLines.push(`    restart: unless-stopped`);
+        composeLines.push(`    ports:`);
+        composeLines.push(`      - "${rPort}:6379"`);
+        composeLines.push(`    volumes:`);
+        composeLines.push(`      - ${svcName.replace(/-/g, "_")}_data:/data`);
+        composeLines.push(`    command: redis-server --appendonly yes`);
+        composeLines.push(`    healthcheck:`);
+        composeLines.push(`      test: ["CMD", "redis-cli", "ping"]`);
+        composeLines.push(`      interval: 5s`);
+        composeLines.push(`      timeout: 3s`);
+        composeLines.push(`      retries: 5`);
+        composeLines.push(`    networks:`);
+        composeLines.push(`      - blueprint-network`);
+        composeLines.push(``);
+      });
+    }
   }
 
   // 5. Infrastructure: Kafka
@@ -583,7 +626,23 @@ function generateRootDockerCompose(ctx: ComposeGeneratorContext): string {
 
   const volumes: string[] = [];
   if (hasPostgres) volumes.push("postgres_data:");
-  if (hasRedis) volumes.push("redis_data:");
+  if (hasRedis) {
+    const redisInstances = nodes.filter(
+      (n) =>
+        n.type === "redis_instance" ||
+        (n.type === "database" &&
+          (n.data?.dbEngine === "redis" || n.data?.dbType === "redis")),
+    );
+    if (redisInstances.length <= 1) {
+      volumes.push("redis_data:");
+    } else {
+      redisInstances.forEach((inst, idx) => {
+        const svcName =
+          inst.data?.label?.toLowerCase().replace(/[^a-z0-9_-]/g, "-") || `redis-${idx + 1}`;
+        volumes.push(`${svcName.replace(/-/g, "_")}_data:`);
+      });
+    }
+  }
   if (hasKafka) volumes.push("kafka_data:");
 
   if (volumes.length > 0) {
@@ -603,10 +662,11 @@ interface InfraComposeContext {
   hasPostgres: boolean;
   hasKafka: boolean;
   hasRedis: boolean;
+  nodes?: BackendNode[];
 }
 
 function generateInfraDockerCompose(ctx: InfraComposeContext): string {
-  const { projectSlug, hasPostgres, hasKafka, hasRedis } = ctx;
+  const { projectSlug, hasPostgres, hasKafka, hasRedis, nodes = [] } = ctx;
   const lines: string[] = [
     `# ==============================================================================`,
     `# ${projectSlug.toUpperCase()} - Infrastructure Only (Dev Mode)`,
@@ -641,21 +701,52 @@ function generateInfraDockerCompose(ctx: InfraComposeContext): string {
   }
 
   if (hasRedis) {
-    lines.push(`  redis:`);
-    lines.push(`    image: redis:7-alpine`);
-    lines.push(`    container_name: ${projectSlug}-redis-dev`);
-    lines.push(`    restart: unless-stopped`);
-    lines.push(`    ports:`);
-    lines.push(`      - "6379:6379"`);
-    lines.push(`    volumes:`);
-    lines.push(`      - redis_dev_data:/data`);
-    lines.push(`    command: redis-server --appendonly yes`);
-    lines.push(`    healthcheck:`);
-    lines.push(`      test: ["CMD", "redis-cli", "ping"]`);
-    lines.push(`      interval: 5s`);
-    lines.push(`      timeout: 3s`);
-    lines.push(`      retries: 5`);
-    lines.push(``);
+    const redisInstances = nodes.filter(
+      (n) =>
+        n.type === "redis_instance" ||
+        (n.type === "database" &&
+          (n.data?.dbEngine === "redis" || n.data?.dbType === "redis")),
+    );
+    if (redisInstances.length <= 1) {
+      const primaryRedis = redisInstances[0];
+      const rPort = primaryRedis?.data?.port ? String(primaryRedis.data.port) : "6379";
+      lines.push(`  redis:`);
+      lines.push(`    image: redis:7-alpine`);
+      lines.push(`    container_name: ${projectSlug}-redis-dev`);
+      lines.push(`    restart: unless-stopped`);
+      lines.push(`    ports:`);
+      lines.push(`      - "${rPort}:6379"`);
+      lines.push(`    volumes:`);
+      lines.push(`      - redis_dev_data:/data`);
+      lines.push(`    command: redis-server --appendonly yes`);
+      lines.push(`    healthcheck:`);
+      lines.push(`      test: ["CMD", "redis-cli", "ping"]`);
+      lines.push(`      interval: 5s`);
+      lines.push(`      timeout: 3s`);
+      lines.push(`      retries: 5`);
+      lines.push(``);
+    } else {
+      redisInstances.forEach((inst, idx) => {
+        const rPort = inst.data?.port ? String(inst.data.port) : String(6379 + idx);
+        const svcName =
+          inst.data?.label?.toLowerCase().replace(/[^a-z0-9_-]/g, "-") || `redis-${idx + 1}`;
+        lines.push(`  ${svcName}:`);
+        lines.push(`    image: redis:7-alpine`);
+        lines.push(`    container_name: ${projectSlug}-${svcName}-dev`);
+        lines.push(`    restart: unless-stopped`);
+        lines.push(`    ports:`);
+        lines.push(`      - "${rPort}:6379"`);
+        lines.push(`    volumes:`);
+        lines.push(`      - ${svcName.replace(/-/g, "_")}_dev_data:/data`);
+        lines.push(`    command: redis-server --appendonly yes`);
+        lines.push(`    healthcheck:`);
+        lines.push(`      test: ["CMD", "redis-cli", "ping"]`);
+        lines.push(`      interval: 5s`);
+        lines.push(`      timeout: 3s`);
+        lines.push(`      retries: 5`);
+        lines.push(``);
+      });
+    }
   }
 
   if (hasKafka) {
@@ -690,12 +781,28 @@ function generateInfraDockerCompose(ctx: InfraComposeContext): string {
 
   const volumes: string[] = [];
   if (hasPostgres) volumes.push("postgres_dev_data:");
-  if (hasRedis) volumes.push("redis_dev_data:");
+  if (hasRedis) {
+    const redisInstances = nodes.filter(
+      (n) =>
+        n.type === "redis_instance" ||
+        (n.type === "database" &&
+          (n.data?.dbEngine === "redis" || n.data?.dbType === "redis")),
+    );
+    if (redisInstances.length <= 1) {
+      volumes.push("redis_dev_data:");
+    } else {
+      redisInstances.forEach((inst, idx) => {
+        const svcName =
+          inst.data?.label?.toLowerCase().replace(/[^a-z0-9_-]/g, "-") || `redis-${idx + 1}`;
+        volumes.push(`${svcName.replace(/-/g, "_")}_dev_data:`);
+      });
+    }
+  }
   if (hasKafka) volumes.push("kafka_dev_data:");
 
   if (volumes.length > 0) {
     lines.push(`volumes:`);
-    volumes.forEach((v) => lines.push(`  ${v}`));
+    lines.push(`  ${volumes.join("\n  ")}`);
   }
 
   return lines.join("\n") + "\n";
@@ -711,6 +818,7 @@ function generateRootEnvExample(
   hasRedis: boolean,
   hasKafka: boolean,
   projectSlug: string,
+  nodes: BackendNode[] = [],
 ): string {
   const lines: string[] = [
     "# ==============================================================================",
@@ -735,10 +843,20 @@ function generateRootEnvExample(
   }
 
   if (hasRedis) {
+    const redisInstances = nodes.filter(
+      (n) =>
+        n.type === "redis_instance" ||
+        (n.type === "database" &&
+          (n.data?.dbEngine === "redis" || n.data?.dbType === "redis")),
+    );
+    const primaryRedis = redisInstances[0];
+    const rPort = primaryRedis?.data?.port ? String(primaryRedis.data.port) : "6379";
+    const rHost = primaryRedis?.data?.host || "localhost";
+    const envKey = primaryRedis?.data?.connectionStringEnv || "REDIS_URL";
     lines.push("# Redis (started by docker-compose.infra.yml)");
-    lines.push("REDIS_URL=redis://localhost:6379");
-    lines.push("REDIS_HOST=localhost");
-    lines.push("REDIS_PORT=6379");
+    lines.push(`${envKey}=redis://${rHost}:${rPort}`);
+    lines.push(`REDIS_HOST=${rHost}`);
+    lines.push(`REDIS_PORT=${rPort}`);
     lines.push("");
   }
 
@@ -759,6 +877,7 @@ function generateServiceEnvExample(
   hasKafka: boolean,
   projectSlug: string,
   techStack: string,
+  nodes: BackendNode[] = [],
 ): string {
   const lines: string[] = [
     "# Service .env.example",
@@ -782,9 +901,19 @@ function generateServiceEnvExample(
   }
 
   if (hasRedis) {
-    lines.push("REDIS_URL=redis://localhost:6379");
-    lines.push("REDIS_HOST=localhost");
-    lines.push("REDIS_PORT=6379");
+    const redisInstances = nodes.filter(
+      (n) =>
+        n.type === "redis_instance" ||
+        (n.type === "database" &&
+          (n.data?.dbEngine === "redis" || n.data?.dbType === "redis")),
+    );
+    const primaryRedis = redisInstances[0];
+    const rPort = primaryRedis?.data?.port ? String(primaryRedis.data.port) : "6379";
+    const rHost = primaryRedis?.data?.host || "localhost";
+    const envKey = primaryRedis?.data?.connectionStringEnv || "REDIS_URL";
+    lines.push(`${envKey}=redis://${rHost}:${rPort}`);
+    lines.push(`REDIS_HOST=${rHost}`);
+    lines.push(`REDIS_PORT=${rPort}`);
     lines.push("");
   }
 

@@ -165,9 +165,19 @@ export function compileMonorepo(
     });
   });
 
-  // 4.8 Generate Shared Package: packages/<redisFolder> (@workspace/<redisFolder>)
+  // 4.8 Generate Shared Package(s): packages/<redisFolder> (@workspace/<redisFolder>)
   const compiledRedis = compileRedisNodes(nodes, edges);
-  if (compiledRedis.files.length > 0) {
+  if (compiledRedis.packages && compiledRedis.packages.length > 0) {
+    compiledRedis.packages.forEach((pkg) => {
+      pkg.files.forEach((f) => {
+        files.push({
+          filename: `packages/${pkg.packageFolder}/${f.filename}`,
+          language: f.language,
+          content: f.content,
+        });
+      });
+    });
+  } else if (compiledRedis.files.length > 0) {
     const redisFolder = compiledRedis.packageFolder || "redis";
     compiledRedis.files.forEach((f) => {
       files.push({
@@ -441,13 +451,20 @@ export function compileMonorepo(
         ? ["packages/db"]
         : [];
 
+  const redisPackagePaths =
+    compiledRedis.packages && compiledRedis.packages.length > 0
+      ? compiledRedis.packages.map((p) => `packages/${p.packageFolder}`)
+      : compiledRedis.files.length > 0
+        ? [`packages/${compiledRedis.packageFolder || "redis"}`]
+        : [];
+
   const rawRootPaths = [
     "packages/ui",
     ...dbPackagePaths,
     "packages/logger",
     "packages/types",
     ...(compiledKafka.files.length > 0 ? [`packages/${compiledKafka.packageFolder}`] : []),
-    ...(compiledRedis.files.length > 0 ? ["packages/redis"] : []),
+    ...redisPackagePaths,
     ...grpcPackageFolders,
     ...servicesInfo.map((s) => `apps/${s.folderName}`),
     ...webClientsInfo.map((w) => `apps/${w.folderName}`),

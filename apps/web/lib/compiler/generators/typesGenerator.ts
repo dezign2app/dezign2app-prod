@@ -15,14 +15,75 @@ export interface ResponseFieldItem extends ParameterItem {
   selectedColumns?: string[];
 }
 
+function generateEntitiesModule(nodes: BackendNode[]): string {
+  const entityNodes = nodes.filter(
+    (n) => n.type === "entity" || n.type === "db_ref" || n.type === "redis_schema" || n.type === "redis-cache",
+  );
+
+  let code = `/**\n * Shared Data Models & Schemas\n */\n\n`;
+  const seenNames = new Set<string>();
+
+  entityNodes.forEach((node) => {
+    const rawName = node.data?.label || node.data?.tableRef || "Entity";
+    const pascal = toPascalCase(rawName);
+    if (!pascal || seenNames.has(pascal)) return;
+    seenNames.add(pascal);
+
+    const dataAny = node.data as any;
+    const cols: Array<{ name?: string; type?: string; isNotNull?: boolean; isPrimaryKey?: boolean; required?: boolean }> =
+      node.data?.columns || dataAny?.redisSchemaFields || dataAny?.fields || [];
+
+    if (cols.length === 0) {
+      code += `export interface ${pascal} {\n  id: string;\n  [key: string]: any;\n}\n\n`;
+      return;
+    }
+
+    const fieldLines = cols.map((col) => {
+      const fieldName = col.name || "field";
+      const isReq = col.isPrimaryKey || col.isNotNull || col.required;
+      let tsType = "string";
+      switch (col.type?.toLowerCase()) {
+        case "integer":
+        case "int":
+        case "number":
+        case "float":
+        case "double":
+        case "real":
+          tsType = "number";
+          break;
+        case "boolean":
+        case "bool":
+          tsType = "boolean";
+          break;
+        case "json":
+        case "object":
+          tsType = "Record<string, any>";
+          break;
+        default:
+          tsType = "string";
+      }
+      return `  ${fieldName}${isReq ? "" : "?"}: ${tsType};`;
+    });
+
+    fieldLines.push("  [key: string]: any;");
+    code += `export interface ${pascal} {\n${fieldLines.join("\n")}\n}\n\n`;
+  });
+
+  if (seenNames.size === 0) {
+    code += `export type GenericEntity = Record<string, any>;\n`;
+  }
+
+  return code;
+}
+
 function generateResponseInterface(
   interfaceName: string,
   responseFields: ResponseFieldItem[] = [],
   legacyResponseBody?: SchemaItem,
   nodes: BackendNode[] = [],
   ep?: Endpoint,
-): { code: string; dbImports: Set<string> } {
-  const dbImports = new Set<string>();
+): { code: string; entityImports: Set<string> } {
+  const entityImports = new Set<string>();
 
   // Resolve target DB entity type if endpoint is associated with database operations
   let dbEntityName: string | null = null;
@@ -39,7 +100,7 @@ function generateResponseInterface(
         const pascal = toPascalCase(rawTableName);
         if (pascal) {
           dbEntityName = pascal;
-          dbImports.add(pascal);
+          entityImports.add(pascal);
         }
       }
     }
@@ -63,14 +124,14 @@ function generateResponseInterface(
             legacy.code.slice(0, lastBraceIndex) +
             `  data?: ${defaultDataType};\n` +
             legacy.code.slice(lastBraceIndex);
-          return { code: augmentedCode, dbImports };
+          return { code: augmentedCode, entityImports };
         }
       }
-      return { code: legacy.code, dbImports };
+      return { code: legacy.code, entityImports };
     }
     return {
       code: `export interface ${interfaceName} {\n  status: number;\n  message: string;\n  data?: ${defaultDataType};\n}\n`,
-      dbImports,
+      entityImports,
     };
   }
 
@@ -90,7 +151,9 @@ function generateResponseInterface(
         tableNode?.data?.label || tableNode?.data?.tableRef || "Entity";
       const pascalEntity = toPascalCase(rawTableName);
 
-      dbImports.add(pascalEntity);
+      if (pascalEntity) {
+        entityImports.add(pascalEntity);
+      }
 
       const cols: string[] = field.selectedColumns || [];
       const hasPick = category.startsWith("partial") && cols.length > 0;
@@ -133,7 +196,7 @@ function generateResponseInterface(
   }
 
   const code = `export interface ${interfaceName} {\n${props.join("\n")}\n}\n`;
-  return { code, dbImports };
+  return { code, entityImports };
 }
 
 export function generateTypesPackage(
@@ -148,11 +211,7 @@ export function generateTypesPackage(
   const files: CompiledFile[] = [];
   const barrelExports: string[] = [];
 
-  const hasDb = nodes.some(
-    (n) => n.type === "database" || n.type === "entity" || n.type === "db_ref" || n.type === "auth",
-  );
-
-  // 1. package.json
+  // 1. package.json - Zero internal workspace dependencies to prevent cyclic dependencies
   const packageJson = JSON.stringify(
     {
       name: "@workspace/types",
@@ -170,7 +229,6 @@ export function generateTypesPackage(
         zod: "^3.24.2",
       },
       devDependencies: {
-        ...(hasDb ? { "@workspace/db": "workspace:*" } : {}),
         "@workspace/typescript-config": "workspace:*",
         typescript: "^5.3.3",
       },
@@ -202,6 +260,15 @@ export function generateTypesPackage(
     language: "json",
     content: tsconfig,
   });
+
+  // 2.5 Entities & Schemas: src/entities/index.ts
+  const entitiesModuleCode = generateEntitiesModule(nodes);
+  files.push({
+    filename: "src/entities/index.ts",
+    language: "typescript",
+    content: entitiesModuleCode,
+  });
+  barrelExports.push(`export * from "./entities";`);
 
   // 3. Service Folders: src/<serviceFolderName>/<routeFileName>.ts
   const endpointNodes = nodes.filter(
@@ -246,24 +313,12 @@ export function generateTypesPackage(
         nodeId: serviceNode.id,
       }));
     }
-    if (serviceNode.data?.routeGroups) {
-      for (const group of serviceNode.data.routeGroups) {
-        if (group.endpoints) {
-          const groupEndpoints = group.endpoints.map((ep) => ({
-            ...ep,
-            nodeId: serviceNode.id,
-          }));
-          nodeEndpoints = [...nodeEndpoints, ...groupEndpoints];
-        }
-      }
-    }
+
+    const routeFileExports: string[] = [];
+    const usedFileNames = new Set<string>();
 
     if (nodeEndpoints.length > 0) {
-      const routeFileExports: string[] = [];
-      const usedFileNames = new Set<string>();
-
       nodeEndpoints.forEach((ep, index) => {
-        const method = (ep.type || "GET").toLowerCase();
         let routeFileName = deriveRouteFileName(ep, index, rawServiceName);
 
         if (usedFileNames.has(routeFileName)) {
@@ -272,6 +327,7 @@ export function generateTypesPackage(
         usedFileNames.add(routeFileName);
 
         // Disambiguate type names with PascalCase Service Name to prevent TS2308 collisions across modules
+        const method = (ep.type || "GET").toLowerCase();
         const pascalName = `${pascalServiceName}${toPascalCase(routeFileName)}`;
         const schemaVarPrefix = `${serviceFolderName}${toPascalCase(routeFileName)}`;
         const isBodyMethod = ["post", "put", "patch"].includes(method);
@@ -308,12 +364,12 @@ export function generateTypesPackage(
           ep.requestBody,
         );
 
-        const dbImportStatement =
-          responseResInfo.dbImports.size > 0
-            ? `import type { ${Array.from(responseResInfo.dbImports).join(", ")} } from "@workspace/db";\n`
+        const entityImportStatement =
+          responseResInfo.entityImports.size > 0
+            ? `import type { ${Array.from(responseResInfo.entityImports).join(", ")} } from "../entities";\n`
             : "";
 
-        let singleRouteCode = `import { z } from "zod";\n${dbImportStatement}\n`;
+        let singleRouteCode = `import { z } from "zod";\n${entityImportStatement}\n`;
         singleRouteCode += `/**\n * ${ep.type || "GET"} ${ep.name || "/"}\n * Service: ${rawServiceName}\n * ${ep.summary || "Route Schema"}\n */\n`;
         singleRouteCode += `// --- Input Schemas ---\n`;
         singleRouteCode += paramsTypeRes.code + "\n";
@@ -360,8 +416,6 @@ export function generateTypesPackage(
   });
 
   // 4. Events Types: src/events/index.ts
-  // Always collect node-local events and merge them (de-duped by event ID) so that
-  // consumers importing types from @workspace/types never reference a missing export.
   const seenEventIds = new Set<string>(events.map((e) => e.id));
   const allEvents: (AnyMessagingResource & {
     nodeId: string;

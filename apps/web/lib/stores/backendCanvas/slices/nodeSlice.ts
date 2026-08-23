@@ -147,7 +147,7 @@ export const createNodeSlice = (
         const existingPorts = new Set(
           get()
             .nodes.filter((n) => n.type === "service")
-            .map((n) => parseInt(n.data?.port || "8080", 10))
+            .map((n) => parseInt(String(n.data?.port || "8080"), 10))
             .filter((p) => !isNaN(p)),
         );
         while (existingPorts.has(nextPort)) {
@@ -159,7 +159,7 @@ export const createNodeSlice = (
         const existingGrpcPorts = new Set(
           get()
             .nodes.filter((n) => n.type === "service")
-            .map((n) => parseInt(n.data?.grpcPort || "50051", 10))
+            .map((n) => parseInt(String(n.data?.grpcPort || "50051"), 10))
             .filter((p) => !isNaN(p)),
         );
         while (existingGrpcPorts.has(nextGrpcPort)) {

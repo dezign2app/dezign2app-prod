@@ -37,7 +37,7 @@ export function compileExpressV4Service(
       .replace(/[^a-z0-9]/g, "-")
       .replace(/^-+|-+$/g, "") ||
     "service";
-  const port = node.data?.port || "8080";
+  const port = String(node.data?.port || "8080");
   const cors = node.data?.cors || false;
   const corsOrigins = node.data?.corsOrigins || "*";
 

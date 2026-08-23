@@ -40,8 +40,18 @@ export interface CompiledKafkaResult {
   packageName: string;
 }
 
+export interface CompiledRedisPackage {
+  packageName: string;
+  packageFolder: string;
+  redisNodeId?: string;
+  redisLabel?: string;
+  files: CompiledFile[];
+  reusableFunctions: ReusableFunction[];
+}
+
 export interface CompiledRedisResult {
   files: CompiledFile[];
+  packages?: CompiledRedisPackage[];
   reusableFunctions?: ReusableFunction[];
   packageFolder?: string;
   packageName?: string;

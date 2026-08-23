@@ -1,5 +1,5 @@
 import React from "react";
-import { Database, Key, Server, Plus, Table2, Trash2, CheckCircle2, DatabaseZap, HardDrive } from "lucide-react";
+import { Database, Key, Server, Plus, Table2, Trash2, CheckCircle2, DatabaseZap, HardDrive, Radio, AlertTriangle } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
@@ -71,6 +71,20 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
   const dbFilePathEnv = data.dbFilePathEnv || DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv;
 
   const isRedis = dbNode.type === "redis_instance" || engine === "redis";
+
+  // Check for other Redis instances on the canvas to identify port conflicts
+  const allRedisInstances = nodes.filter(
+    (n) =>
+      (n.type === "redis_instance" || (n.type === "database" && n.data?.dbEngine === "redis")) &&
+      n.id !== nodeId,
+  );
+  const currentPort = String(data.port ?? (isRedis ? "6379" : "5432"));
+  const currentHost = data.host || "localhost";
+  const portConflict = allRedisInstances.find((inst) => {
+    const instPort = String(inst.data?.port || "6379");
+    const instHost = inst.data?.host || "localhost";
+    return instPort === currentPort && instHost === currentHost;
+  });
 
   const attachedEntities = nodes.filter(
     (n) =>
@@ -351,6 +365,88 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
           </div>
         </div>
       )}
+
+      {/* Network & Host / Port Configuration */}
+      <div className="space-y-4 pt-2 border-t border-border/40">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <Radio size={14} className={isRedis ? "text-red-500" : "text-amber-500"} />
+            Network & Connection (Host & Port)
+          </h3>
+          {isRedis && (
+            <Badge
+              variant="outline"
+              className="text-[10px] font-mono px-1.5 py-0 bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 font-semibold"
+            >
+              :{currentPort}
+            </Badge>
+          )}
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          {/* Host */}
+          <div className="col-span-2 space-y-1.5">
+            <Label className="text-xs font-semibold">Host / Hostname</Label>
+            <Input
+              value={data.host || "localhost"}
+              onChange={(e) => handleUpdateField("host", e.target.value)}
+              placeholder="localhost or 127.0.0.1"
+              className="h-8 text-xs font-mono"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              {isRedis ? "Redis daemon binding host (local or remote)." : "Database host address."}
+            </p>
+          </div>
+
+          {/* Port */}
+          <div className="col-span-1 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold">Port</Label>
+              {portConflict && (
+                <span title={`Conflict with ${portConflict.data?.label || "another instance"}`}>
+                  <AlertTriangle size={12} className="text-amber-500" />
+                </span>
+              )}
+            </div>
+            <Input
+              type="number"
+              value={data.port ?? (isRedis ? "6379" : "5432")}
+              onChange={(e) => {
+                const val = e.target.value ? e.target.value : undefined;
+                handleUpdateField("port", val);
+              }}
+              placeholder={isRedis ? "6379" : "5432"}
+              className={cn(
+                "h-8 text-xs font-mono",
+                portConflict && "border-amber-500/70 focus-visible:ring-amber-500/50"
+              )}
+            />
+            <p className="text-[10px] text-muted-foreground">
+              {isRedis ? "Default: 6379" : "Port"}
+            </p>
+          </div>
+        </div>
+
+        {/* Port Conflict Alert */}
+        {portConflict && (
+          <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs">
+            <AlertTriangle size={14} className="shrink-0 text-amber-500" />
+            <span className="text-[11px] leading-tight">
+              <strong>Port conflict:</strong> &quot;{portConflict.data?.label || "Another Redis Instance"}&quot; is also assigned port <strong>{currentPort}</strong> on <strong>{currentHost}</strong>. Assign unique ports (e.g. 6379, 6380, 6381) to avoid collision when running multiple instances.
+            </span>
+          </div>
+        )}
+
+        {/* Connection URL Live Preview */}
+        {isRedis && (
+          <div className="p-2.5 rounded-lg bg-secondary/30 border border-border/40 flex items-center justify-between text-xs font-mono">
+            <span className="text-muted-foreground text-[10px] uppercase font-sans font-bold">URI Preview:</span>
+            <code className="text-red-600 dark:text-red-400 text-xs font-bold truncate">
+              redis://{currentHost}:{currentPort}
+            </code>
+          </div>
+        )}
+      </div>
 
       {/* Environment Variable Configurations */}
       <div className="space-y-4 pt-2 border-t border-border/40">

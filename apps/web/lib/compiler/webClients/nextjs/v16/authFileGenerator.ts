@@ -103,7 +103,7 @@ export function generateAuthFilesAndDependencies({
 }: GenerateAuthFilesParams): void {
   // Generate Better Auth server files and SDK ONLY when an AuthNode is connected
   if (authNode) {
-    const authPort = authNode.data?.port || "3000";
+    const authPort = String(authNode.data?.port || "3000");
     const authBaseUrl = authNode.data?.baseUrl || `http://localhost:${authPort}`;
     const compiledAuth = compileAuth(authNode, endpoints, events, allNodes, allEdges, testCases);
 

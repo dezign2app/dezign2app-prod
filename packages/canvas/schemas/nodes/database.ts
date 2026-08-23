@@ -12,6 +12,8 @@ export const databaseDataSchema = baseNodeDataSchema.extend({
   dbFilePathEnv: z.string().optional(),
   hostEnv: z.string().optional(),
   portEnv: z.string().optional(),
+  host: z.string().optional(),
+  port: z.union([z.string(), z.number()]).optional(),
   databaseNameEnv: z.string().optional(),
   usernameEnv: z.string().optional(),
   passwordEnv: z.string().optional(),
