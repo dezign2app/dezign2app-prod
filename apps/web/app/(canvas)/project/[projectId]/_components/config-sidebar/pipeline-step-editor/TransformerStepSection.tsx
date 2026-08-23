@@ -2,7 +2,6 @@
 
 import React, { useMemo } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import {
   Select,
@@ -29,7 +28,6 @@ export interface TransformerStepSectionProps {
   expectedArgs: ExpectedArg[];
   onChange: (updated: PipelineStepDraft) => void;
   onAutoMapArguments: () => void;
-  onPopulateAllExpectedArgs: () => void;
 }
 
 export const TransformerStepSection = ({
@@ -40,7 +38,6 @@ export const TransformerStepSection = ({
   expectedArgs,
   onChange,
   onAutoMapArguments,
-  onPopulateAllExpectedArgs,
 }: TransformerStepSectionProps) => {
   const serviceTransformers = useMemo(
     () => availableTransformers.filter((t) => t.sourceType === "service_helper"),
@@ -62,22 +59,10 @@ export const TransformerStepSection = ({
 
   const selectedTransformerOptionId = useMemo(() => {
     if (selectedTransformer) return selectedTransformer.id;
-    if (step.functionRef?.name) return "__custom__";
     return undefined;
-  }, [selectedTransformer, step.functionRef?.name]);
+  }, [selectedTransformer]);
 
   const handleSelectTransformer = (transformerId: string) => {
-    if (transformerId === "__custom__") {
-      onChange({
-        ...step,
-        functionRef: {
-          name: step.functionRef?.name || "transformData",
-          importPath: step.functionRef?.importPath || "@workspace/transformers",
-        },
-      });
-      return;
-    }
-
     const t = availableTransformers.find((tr) => tr.id === transformerId || tr.name === transformerId);
     if (!t) return;
 
@@ -90,6 +75,7 @@ export const TransformerStepSection = ({
       ...step,
       name: defaultOutputVar,
       outputVariable: defaultOutputVar,
+      transformerNodeId: t.nodeId || t.id,
       functionRef: {
         name: t.name,
         importPath: t.importPath,
@@ -100,6 +86,46 @@ export const TransformerStepSection = ({
         required: r.required,
       })),
     });
+
+    // If this transformer is a canvas node and connected to an endpoint, ensure edge & targetEndpointIds exist
+    if (t.nodeId && serviceNodeId && endpointId) {
+      const store = useBackendCanvasStore.getState();
+      const targetHandle = `endpoint-in-${endpointId}`;
+      const edgeExists = store.edges.some(
+        (e) =>
+          e.source === t.nodeId &&
+          e.target === serviceNodeId &&
+          e.targetHandle === targetHandle,
+      );
+      if (!edgeExists) {
+        store.addEdge({
+          id: `edge-transformer-${t.nodeId}-${endpointId}-${Date.now()}`,
+          source: t.nodeId,
+          target: serviceNodeId,
+          sourceHandle: "transformer-out",
+          targetHandle,
+          type: "connection",
+        });
+      }
+
+      const tNode = store.nodes.find((n) => n.id === t.nodeId);
+      if (tNode?.data) {
+        const currentEpIds: string[] =
+          tNode.data.targetEndpointIds ||
+          (tNode.data.targetEndpointId ? [tNode.data.targetEndpointId] : []);
+        if (!currentEpIds.includes(endpointId)) {
+          const nextEpIds = [...currentEpIds, endpointId];
+          store.updateNode(t.nodeId, {
+            data: {
+              ...tNode.data,
+              targetServiceId: serviceNodeId,
+              targetEndpointIds: nextEpIds,
+              targetEndpointId: nextEpIds[0],
+            },
+          });
+        }
+      }
+    }
   };
 
   /**
@@ -129,6 +155,7 @@ export const TransformerStepSection = ({
         scope: "local",
         targetServiceId: serviceNodeId,
         targetEndpointId: endpointId,
+        targetEndpointIds: endpointId ? [endpointId] : [],
         inputSchema: [{ name: "input", type: "string", required: true }],
         returnSchema: [{ name: "result", type: "string", required: true }],
         logicMode: "code",
@@ -137,13 +164,25 @@ export const TransformerStepSection = ({
       },
     });
 
+    // 2. Add connection edge to endpoint if service and endpoint exist
+    if (serviceNodeId && endpointId) {
+      store.addEdge({
+        id: `edge-transformer-${id}-${endpointId}-${Date.now()}`,
+        source: id,
+        target: serviceNodeId,
+        sourceHandle: "transformer-out",
+        targetHandle: `endpoint-in-${endpointId}`,
+        type: "connection",
+      });
+    }
 
-    // 2. Bind current pipeline step to this new transformer
+    // 3. Bind current pipeline step to this new transformer
     const defaultOutputVar = `${fnName}Result`;
     onChange({
       ...step,
       name: defaultOutputVar,
       outputVariable: defaultOutputVar,
+      transformerNodeId: id,
       functionRef: {
         name: fnName,
         importPath: `./transformers/${fnName}`,
@@ -192,17 +231,13 @@ export const TransformerStepSection = ({
           <Shuffle size={10} /> Select Transformer
         </Label>
         <Select
-          value={selectedTransformerOptionId || "__custom__"}
+          value={selectedTransformerOptionId || ""}
           onValueChange={handleSelectTransformer}
         >
           <SelectTrigger className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full">
             <SelectValue placeholder="Choose a transformer..." />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__custom__" className="text-xs text-muted-foreground font-sans">
-              ✏️ Manual / External Import
-            </SelectItem>
-
             {serviceTransformers.length > 0 && (
               <div className="px-2 py-1 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30">
                 Service Helpers
@@ -300,46 +335,6 @@ export const TransformerStepSection = ({
         </div>
       )}
 
-      {/* Manual / External Function Configuration row if custom */}
-      {selectedTransformerOptionId === "__custom__" && (
-        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-purple-500/15">
-          <div className="flex flex-col gap-1">
-            <Label className="text-[10px] text-muted-foreground">Function name</Label>
-            <Input
-              className="h-7 text-xs font-mono bg-background/60 border-border/60"
-              value={step.functionRef?.name ?? ""}
-              onChange={(e) =>
-                onChange({
-                  ...step,
-                  functionRef: {
-                    ...(step.functionRef ?? { importPath: "@workspace/transformers" }),
-                    name: e.target.value,
-                  },
-                })
-              }
-              placeholder="e.g. formatUserResponse"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label className="text-[10px] text-muted-foreground">Import path</Label>
-            <Input
-              className="h-7 text-xs font-mono bg-background/60 border-border/60"
-              value={step.functionRef?.importPath ?? ""}
-              onChange={(e) =>
-                onChange({
-                  ...step,
-                  functionRef: {
-                    ...(step.functionRef ?? { name: "transformData" }),
-                    importPath: e.target.value,
-                  },
-                })
-              }
-              placeholder="e.g. @workspace/transformers"
-            />
-          </div>
-        </div>
-      )}
-
       {/* Expected arguments preview & quick mapping buttons */}
       {expectedArgs.length > 0 && (
         <div className="flex flex-col gap-1.5 pt-1 border-t border-purple-500/15">
@@ -367,18 +362,10 @@ export const TransformerStepSection = ({
                 type="button"
                 className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 border border-purple-500/30 transition-colors"
                 onClick={onAutoMapArguments}
-                title="Automatically map matching argument names from request body / params / prior steps"
+                title="Smart map missing arguments from route params, query, request body, and prior steps while preserving existing bindings"
               >
                 <Sparkles size={10} />
-                Auto-map matching fields
-              </button>
-              <button
-                type="button"
-                className="px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground rounded border border-border/50 hover:bg-muted/40 transition-colors"
-                onClick={onPopulateAllExpectedArgs}
-                title="Add empty binding rows for all expected fields"
-              >
-                + Populate all
+                Auto-map arguments
               </button>
             </div>
           </div>

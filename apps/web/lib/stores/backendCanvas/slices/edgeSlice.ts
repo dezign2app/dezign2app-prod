@@ -16,6 +16,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { BackendCanvasState } from "../types";
 import { cleanupDeletedEdgesState } from "../stateCleanup";
 import { getLastIndex, parseResourceHandle } from "../utils";
+import { toFolderName, toPascalCase } from "@/lib/compiler/utils";
 
 /** Narrows a plain string to MessagingResourceType without any cast. */
 function isMessagingResourceType(value: string): value is MessagingResourceType {
@@ -205,6 +206,50 @@ export const createEdgeSlice = (
       });
     }
 
+    // Transformer -> Endpoint or Event connection: sync transformer targetEndpointIds/targetEventIds
+    const isTransformerSource =
+      sourceNode.type === "transformer" || sourceNode.type === "transformer_ref";
+    const isTargetService = targetNode.type === "service";
+    if (isTransformerSource && isTargetService) {
+      if (connection.targetHandle?.startsWith("endpoint-in-")) {
+        const epId = connection.targetHandle.replace("endpoint-in-", "");
+        const currentEpIds: string[] =
+          sourceNode.data?.targetEndpointIds ||
+          (sourceNode.data?.targetEndpointId
+            ? [sourceNode.data.targetEndpointId]
+            : []);
+        if (!currentEpIds.includes(epId)) {
+          const nextEpIds = [...currentEpIds, epId];
+          get().updateNode(sourceNode.id, {
+            data: {
+              ...sourceNode.data,
+              targetServiceId: targetNode.id,
+              targetEndpointIds: nextEpIds,
+              targetEndpointId: nextEpIds[0],
+            },
+          });
+        }
+      } else if (connection.targetHandle?.startsWith("consumedEvents-in-")) {
+        const evId = connection.targetHandle.replace("consumedEvents-in-", "");
+        const currentEvIds: string[] =
+          sourceNode.data?.targetEventIds ||
+          (sourceNode.data?.targetEventId
+            ? [sourceNode.data.targetEventId]
+            : []);
+        if (!currentEvIds.includes(evId)) {
+          const nextEvIds = [...currentEvIds, evId];
+          get().updateNode(sourceNode.id, {
+            data: {
+              ...sourceNode.data,
+              targetServiceId: targetNode.id,
+              targetEventIds: nextEvIds,
+              targetEventId: nextEvIds[0],
+            },
+          });
+        }
+      }
+    }
+
     const isEndpointConnect = connection.sourceHandle?.startsWith("endpoint-out-");
     if (isEndpointConnect && connection.sourceHandle && connection.target) {
       const endpointId = connection.sourceHandle.replace("endpoint-out-", "");
@@ -284,6 +329,53 @@ export const createEdgeSlice = (
           ...(resolvedResourceType ? { resourceType: resolvedResourceType } : {}),
         };
 
+        // Auto-add Kafka / Messaging publish step to pipelineSteps
+        const existingSteps = endpoint.pipelineSteps ?? [];
+        const rawLabel = targetNode.data?.label || "kafka";
+        const packageFolder = toFolderName(rawLabel) || "kafka";
+        const fnName = topicName ? `publish${toPascalCase(topicName)}` : "publishKafkaEvent";
+
+        const hasMatchingStep = existingSteps.some(
+          (s) =>
+            s.type === "kafka_publish" &&
+            (s.functionRef?.name === fnName ||
+              (s as any).brokerNodeId === targetNode.id ||
+              (s as any).messagingResourceId === messagingResourceId),
+        );
+
+        let nextPipelineSteps = existingSteps;
+        if (!hasMatchingStep) {
+          const outputVar = `kafkaPublishResult`;
+          const newKafkaStep = {
+            id: `step-kafka-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            name: publisherName || `Publish to ${topicName || "Kafka"}`,
+            type: "kafka_publish" as const,
+            enabled: true,
+            outputVariable: outputVar,
+            functionRef: {
+              name: fnName,
+              importPath: `@workspace/${packageFolder}/publishers`,
+            },
+            inputBindings: [
+              ...(topicName ? [] : [{ argName: "topic", source: { kind: "literal" as const, value: topicName || "default-topic" } }]),
+              { argName: topicName ? "message" : "payload", source: { kind: "req_body" as const, field: "" } },
+            ],
+            brokerNodeId: targetNode.id,
+            messagingResourceId,
+          };
+
+          const returnIdx = existingSteps.findIndex((s) => s.type === "return_response");
+          if (returnIdx !== -1) {
+            nextPipelineSteps = [
+              ...existingSteps.slice(0, returnIdx),
+              newKafkaStep,
+              ...existingSteps.slice(returnIdx),
+            ];
+          } else {
+            nextPipelineSteps = [...existingSteps, newKafkaStep];
+          }
+        }
+
         // Record the direct endpoint→topic edge id so we can remove it
         const directEdgeId = newEdge.id;
 
@@ -291,6 +383,7 @@ export const createEdgeSlice = (
         // syncConfiguredEventEdge (creates publishedEvents-out-* → topic edge).
         get().updateEndpoint(endpointId, {
           publishedEvents: [...(endpoint.publishedEvents ?? []), newPublisher],
+          pipelineSteps: nextPipelineSteps,
         });
 
         // Remove the direct endpoint→topic edge that ReactFlow added before our

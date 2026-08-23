@@ -1,5 +1,6 @@
-import { BackendNode, BackendEdge, Endpoint, AnyMessagingResource } from "@/types/canvas";
+import { BackendNode, BackendEdge, Endpoint, AnyMessagingResource, KafkaTopic } from "@/types/canvas";
 import { PipelineStepDraft } from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/pipeline-step-editor/types";
+import { toFolderName, toPascalCase } from "@/lib/compiler/utils";
 
 /**
  * Returns all transformers (or transformer refs) connected via canvas edges to an endpoint or consumer.
@@ -79,6 +80,137 @@ export function getConnectedTransformersForEndpoint(
     returnSchema: any[];
     sourceNode: BackendNode;
   }>;
+}
+
+/**
+ * Returns all Kafka messaging nodes / topics connected via canvas edges or published events to an endpoint.
+ */
+export function getConnectedKafkaForEndpoint(
+  endpointId: string,
+  serviceNodeId: string,
+  allNodes: BackendNode[] = [],
+  allEdges: BackendEdge[] = [],
+  endpoint?: Endpoint,
+) {
+  const kafkaNodes = allNodes.filter(
+    (n) =>
+      n.type === "kafka" ||
+      n.type === "eventstream" ||
+      (n.type === "queue" &&
+        n.data?.implementation?.toLowerCase() === "kafka"),
+  );
+  if (kafkaNodes.length === 0) return [];
+  const kafkaNodeIds = new Set(kafkaNodes.map((k) => k.id));
+
+  const results: Array<{
+    id: string;
+    brokerNodeId: string;
+    brokerNode: BackendNode;
+    topicId?: string;
+    topicName: string;
+    packageFolder: string;
+    functionName: string;
+    importPath: string;
+    publisherName: string;
+  }> = [];
+  const seen = new Set<string>();
+
+  // 1. Direct or handle-based edges between endpoint/service and Kafka
+  const epOutHandle = `endpoint-out-${endpointId}`;
+  allEdges.forEach((edge) => {
+    if (!edge) return;
+    const isFromThisEndpoint =
+      (edge.source === serviceNodeId &&
+        (edge.sourceHandle === epOutHandle ||
+          edge.sourceHandle === endpointId ||
+          (edge.sourceHandle?.startsWith("publishedEvents-out-") &&
+            endpoint?.publishedEvents?.some(
+              (pe) => edge.sourceHandle === `publishedEvents-out-${pe.id}`,
+            )))) ||
+      (edge.target === serviceNodeId &&
+        (edge.targetHandle === epOutHandle || edge.targetHandle === endpointId));
+
+    const kafkaNodeId = isFromThisEndpoint
+      ? kafkaNodeIds.has(edge.target)
+        ? edge.target
+        : kafkaNodeIds.has(edge.source)
+        ? edge.source
+        : null
+      : null;
+
+    if (kafkaNodeId) {
+      const brokerNode = kafkaNodes.find((k) => k.id === kafkaNodeId);
+      if (!brokerNode) return;
+
+      const topics: KafkaTopic[] = brokerNode.data?.topics || [];
+      const handle = edge.targetHandle || edge.sourceHandle || "";
+      const matchTopicId = handle.match(/^([^:]+):in:(.+)$/)?.[2] || handle;
+      const matchedTopic =
+        topics.find((t) => t.id === matchTopicId || t.name === matchTopicId) ||
+        topics[0];
+
+      const topicName = matchedTopic?.name || "events";
+      const topicId = matchedTopic?.id || matchTopicId;
+      const packageFolder = toFolderName(brokerNode.data?.label || "kafka");
+      const key = `${brokerNode.id}:${topicId || topicName}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        results.push({
+          id: key,
+          brokerNodeId: brokerNode.id,
+          brokerNode,
+          topicId,
+          topicName,
+          packageFolder,
+          functionName: `publish${toPascalCase(topicName)}`,
+          importPath: `@workspace/${packageFolder}/publishers`,
+          publisherName: `Publish ${topicName}`,
+        });
+      }
+    }
+  });
+
+  // 2. Published events configured on this endpoint
+  if (endpoint?.publishedEvents) {
+    endpoint.publishedEvents.forEach((pub) => {
+      if (pub.brokerNodeId && kafkaNodeIds.has(pub.brokerNodeId)) {
+        const brokerNode = kafkaNodes.find((k) => k.id === pub.brokerNodeId);
+        if (!brokerNode) return;
+
+        const topics: KafkaTopic[] = brokerNode.data?.topics || [];
+        const matchedTopic =
+          topics.find(
+            (t) =>
+              t.id === pub.messagingResourceId ||
+              t.name === pub.messagingResourceId,
+          ) || topics[0];
+
+        const topicName =
+          matchedTopic?.name ||
+          pub.name?.replace(/^Publish\s+/i, "") ||
+          "events";
+        const topicId = pub.messagingResourceId || matchedTopic?.id;
+        const packageFolder = toFolderName(brokerNode.data?.label || "kafka");
+        const key = `${brokerNode.id}:${topicId || topicName}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push({
+            id: key,
+            brokerNodeId: brokerNode.id,
+            brokerNode,
+            topicId,
+            topicName,
+            packageFolder,
+            functionName: `publish${toPascalCase(topicName)}`,
+            importPath: `@workspace/${packageFolder}/publishers`,
+            publisherName: pub.name || `Publish ${topicName}`,
+          });
+        }
+      }
+    });
+  }
+
+  return results;
 }
 
 /**
@@ -223,6 +355,31 @@ export function isEndpointPipelineUnconfigured(
       );
 
       // If the connected transformer hasn't been added to the steps, or its inputs are unconfigured
+      if (!matchingStep || isStepInputUnconfigured(matchingStep, allNodes)) {
+        return true;
+      }
+    }
+  }
+
+  // Check 3: Are there Kafka brokers connected via canvas edges to this endpoint?
+  const connectedKafka = getConnectedKafkaForEndpoint(
+    endpointOrConsumer.id,
+    serviceNodeId,
+    allNodes,
+    allEdges,
+    endpointOrConsumer as any,
+  );
+
+  if (connectedKafka.length > 0) {
+    for (const ck of connectedKafka) {
+      const matchingStep = steps.find(
+        (s) =>
+          s.type === "kafka_publish" &&
+          (s.functionRef?.name === ck.functionName ||
+            (s as any).brokerNodeId === ck.brokerNodeId ||
+            (s as any).messagingResourceId === ck.topicId),
+      );
+
       if (!matchingStep || isStepInputUnconfigured(matchingStep, allNodes)) {
         return true;
       }

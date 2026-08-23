@@ -1,0 +1,319 @@
+"use client";
+
+import { useMemo, useCallback } from "react";
+import { Endpoint, BackendNode, BackendEdge, AnyMessagingResource } from "@workspace/canvas/types";
+import {
+  PipelineStepDraft,
+  StepBinding,
+  ExpectedArg,
+} from "./types";
+import {
+  STEP_TYPE_META,
+  getAvailableSources,
+  getAvailableTransformers,
+} from "./utils";
+import { toVarName } from "@/lib/compiler/utils";
+import { isStepInputUnconfigured } from "@/lib/utils/pipelineValidation";
+
+export interface UseStepRowStateProps {
+  step: PipelineStepDraft;
+  index: number;
+  priorSteps: PipelineStepDraft[];
+  endpoint?: Endpoint;
+  consumedEvent?: AnyMessagingResource;
+  allNodes: BackendNode[];
+  allEdges: BackendEdge[];
+  serviceNodeId?: string;
+  onChange: (updated: PipelineStepDraft) => void;
+}
+
+export function useStepRowState({
+  step,
+  index,
+  priorSteps,
+  endpoint,
+  consumedEvent,
+  allNodes,
+  allEdges,
+  serviceNodeId,
+  onChange,
+}: UseStepRowStateProps) {
+  const meta = STEP_TYPE_META[step.type] || STEP_TYPE_META.custom_code;
+
+  // Available sources (request body, params, query, headers, prior steps, or event payload/metadata)
+  const availableSources = useMemo(
+    () => getAvailableSources(endpoint, priorSteps, allNodes, consumedEvent),
+    [endpoint, priorSteps, allNodes, consumedEvent],
+  );
+
+  // Available transformers
+  const availableTransformers = useMemo(
+    () => getAvailableTransformers(allNodes, serviceNodeId, allEdges),
+    [allNodes, serviceNodeId, allEdges],
+  );
+
+  const selectedTransformer = useMemo(() => {
+    if (step.type !== "transform") return undefined;
+    return availableTransformers.find(
+      (t) =>
+        t.name === step.functionRef?.name ||
+        t.id === step.functionRef?.name,
+    );
+  }, [step.type, step.functionRef?.name, availableTransformers]);
+
+  // DB nodes & entities
+  const allEntityNodes = useMemo(
+    () =>
+      allNodes.filter(
+        (n) =>
+          n.type === "entity" ||
+          n.type === "redis_schema" ||
+          n.type === "redis-cache" ||
+          n.type === "db_ref",
+      ),
+    [allNodes],
+  );
+
+  const selectedDbId = step.databaseId || "all";
+  const selectedTableNode = useMemo(
+    () => allEntityNodes.find((n) => n.id === step.tableNodeId),
+    [allEntityNodes, step.tableNodeId],
+  );
+
+  // Expected arguments (for DB Operation or Transform)
+  const expectedArgs = useMemo((): ExpectedArg[] => {
+    if (step.type === "transform" && selectedTransformer) {
+      return selectedTransformer.inputSchema.map((f) => ({
+        name: f.name,
+        type: f.type || "string",
+        required: f.required !== false,
+      }));
+    }
+
+    if (step.type === "db_operation" && selectedTableNode) {
+      const columns = selectedTableNode.data?.columns || [];
+      const pkCol = columns.find((c) => c.isPrimaryKey) || columns[0];
+      const pkName = pkCol?.name || "id";
+      const pkType = pkCol?.type || "string";
+      const writableCols = columns.filter((c) => !c.isPrimaryKey);
+
+      const opName = (step.functionRef?.name || step.operationId || "").toLowerCase();
+      if (opName.includes("create") || opName.includes("insert")) {
+        return writableCols.map((c) => ({
+          name: toVarName(c.name),
+          type: c.type || "string",
+          required: c.isNotNull,
+        }));
+      }
+      if (opName.includes("update")) {
+        return [
+          { name: toVarName(pkName), type: pkType, required: true },
+          ...writableCols.map((c) => ({
+            name: toVarName(c.name),
+            type: c.type || "string",
+            required: false,
+          })),
+        ];
+      }
+      if (opName.includes("byid") || opName.includes("findone") || opName.includes("delete")) {
+        return [{ name: toVarName(pkName), type: pkType, required: true }];
+      }
+    }
+
+    if (step.type === "kafka_publish") {
+      const fnName = step.functionRef?.name || "";
+      if (fnName === "publishKafkaEvent") {
+        return [
+          { name: "topic", type: "string", required: true },
+          { name: "payload", type: "object", required: true },
+          { name: "key", type: "string", required: false },
+        ];
+      }
+      return [
+        { name: "message", type: "object", required: true },
+        { name: "key", type: "string", required: false },
+      ];
+    }
+
+    return [];
+  }, [step.type, selectedTransformer, selectedTableNode, step.functionRef?.name, step.operationId]);
+
+  // Auto-map arguments from route params / query / body / prior steps (preserving existing)
+  const handleAutoMapArguments = useCallback(() => {
+    if (expectedArgs.length === 0) return;
+    const reqBodySource = availableSources.find(
+      (s) => s.kind === "req_body" || s.id === "event_payload",
+    );
+    const reqParamsSource = availableSources.find((s) => s.kind === "req_params");
+    const reqQuerySource = availableSources.find((s) => s.kind === "req_query");
+    const reqHeadersSource = availableSources.find(
+      (s) => s.kind === "req_headers" || s.id === "event_metadata",
+    );
+
+    const existingBindingMap = new Map<string, StepBinding>();
+    step.inputBindings.forEach((b) => {
+      if (b.argName) {
+        existingBindingMap.set(b.argName.trim().toLowerCase(), b);
+      }
+    });
+
+    const newBindings: StepBinding[] = expectedArgs.map((arg): StepBinding => {
+      const normArg = arg.name.trim().toLowerCase();
+
+      // 1. If an existing configured binding exists for this arg, preserve it
+      const existing = existingBindingMap.get(normArg);
+      if (existing) {
+        const src = existing.source;
+        const isConfigured =
+          src.kind === "literal"
+            ? src.value !== undefined && src.value !== ""
+            : src.kind === "step_output"
+            ? Boolean(src.stepId)
+            : Boolean(src.field && src.field.trim() !== "");
+        if (isConfigured) {
+          return existing;
+        }
+      }
+
+      // 2. Path param match
+      const matchParam = reqParamsSource?.paths.find(
+        (p) => p.path.toLowerCase() === normArg,
+      );
+      if (matchParam) {
+        return {
+          argName: arg.name,
+          source: { kind: "req_params", field: matchParam.path },
+        };
+      }
+
+      // 3. Query param match
+      const matchQuery = reqQuerySource?.paths.find(
+        (p) => p.path.toLowerCase() === normArg,
+      );
+      if (matchQuery) {
+        return {
+          argName: arg.name,
+          source: { kind: "req_query", field: matchQuery.path },
+        };
+      }
+
+      // 4. Prior step outputs match
+      for (const ps of availableSources.filter((s) => s.kind === "step_output")) {
+        const matchStepField = ps.paths.find(
+          (p) => p.path.toLowerCase() === normArg,
+        );
+        if (matchStepField && ps.stepId) {
+          return {
+            argName: arg.name,
+            source: {
+              kind: "step_output",
+              stepId: ps.stepId,
+              field: matchStepField.path,
+            },
+          };
+        }
+      }
+
+      // 5. Request body / Event payload match
+      const matchBody = reqBodySource?.paths.find(
+        (p) =>
+          p.path.toLowerCase() === normArg ||
+          p.path.toLowerCase().endsWith(`.${normArg}`),
+      );
+      if (matchBody) {
+        return {
+          argName: arg.name,
+          source: { kind: "req_body", field: matchBody.path },
+        };
+      }
+
+      // 6. Header / Event Metadata match
+      const matchHeader = reqHeadersSource?.paths.find(
+        (p) => p.path.toLowerCase() === normArg,
+      );
+      if (matchHeader) {
+        return {
+          argName: arg.name,
+          source: { kind: "req_headers", field: matchHeader.path },
+        };
+      }
+
+      // 7. If existing had an unconfigured/blank binding, preserve it
+      if (existing) {
+        return existing;
+      }
+
+      // 8. Default fallback to request body / event payload
+      return {
+        argName: arg.name,
+        source: { kind: "req_body", field: arg.name },
+      };
+    });
+
+    // Also keep any extra custom bindings that the user manually added
+    const expectedArgNames = new Set(expectedArgs.map((a) => a.name.trim().toLowerCase()));
+    const extraCustomBindings = step.inputBindings.filter(
+      (b) => !expectedArgNames.has(b.argName.trim().toLowerCase()),
+    );
+
+    onChange({
+      ...step,
+      inputBindings: [...newBindings, ...extraCustomBindings],
+    });
+  }, [expectedArgs, availableSources, step, onChange]);
+
+  const updateBinding = useCallback(
+    (bi: number, updated: StepBinding) => {
+      const bindings = [...step.inputBindings];
+      bindings[bi] = updated;
+      onChange({ ...step, inputBindings: bindings });
+    },
+    [step, onChange],
+  );
+
+  const addBinding = useCallback(() => {
+    const newBinding: StepBinding = {
+      argName: "",
+      source: { kind: "req_body", field: "" },
+    };
+    onChange({
+      ...step,
+      inputBindings: [...step.inputBindings, newBinding],
+    });
+  }, [step, onChange]);
+
+  const removeBinding = useCallback(
+    (bi: number) => {
+      onChange({
+        ...step,
+        inputBindings: step.inputBindings.filter((_, i) => i !== bi),
+      });
+    },
+    [step, onChange],
+  );
+
+  const stepId = step.id || `step-${index}`;
+  const displayVarName = step.outputVariable || step.name || `step${index + 1}Result`;
+
+  const isUnconfigured = useMemo(
+    () => isStepInputUnconfigured(step, allNodes),
+    [step, allNodes],
+  );
+
+  return {
+    meta,
+    availableSources,
+    availableTransformers,
+    selectedTransformer,
+    selectedDbId,
+    selectedTableNode,
+    expectedArgs,
+    isUnconfigured,
+    stepId,
+    displayVarName,
+    handleAutoMapArguments,
+    updateBinding,
+    addBinding,
+    removeBinding,
+  };
+}

@@ -22,8 +22,10 @@ import {
 } from "./utils";
 import {
   getConnectedTransformersForEndpoint,
+  getConnectedKafkaForEndpoint,
   isStepInputUnconfigured,
 } from "@/lib/utils/pipelineValidation";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
 export * from "./types";
 export * from "./utils";
@@ -32,6 +34,11 @@ export * from "./BindingSourceEditor";
 export * from "./TransformerStepSection";
 export * from "./DbOperationStepSection";
 export * from "./ReturnResponseStepRow";
+export * from "./StepRowHeader";
+export * from "./ArgumentBindingsSection";
+export * from "./GenericFunctionRefSection";
+export * from "./CustomCodeSection";
+export * from "./useStepRowState";
 export * from "./StepRow";
 
 export interface PipelineStepEditorProps {
@@ -82,7 +89,7 @@ export const PipelineStepEditor = ({
           (s) =>
             s.type === "transform" &&
             (s.functionRef?.name === ct.functionName ||
-              (s as any).transformerNodeId === ct.id),
+              s.transformerNodeId === ct.id),
         ),
     );
 
@@ -106,6 +113,7 @@ export const PipelineStepEditor = ({
               inputSchema: ct.inputSchema,
               returnSchema: ct.returnSchema,
             },
+            transformerNodeId: ct.id,
             inputBindings: [],
           };
         },
@@ -132,6 +140,99 @@ export const PipelineStepEditor = ({
     }
   }, [
     connectedTransformers,
+    executableSteps,
+    isConsumer,
+    onChange,
+    serviceNodeId,
+    endpoint?.type,
+    steps,
+  ]);
+
+  const connectedKafka = useMemo(() => {
+    if (!targetId || !serviceNodeId) return [];
+    return getConnectedKafkaForEndpoint(
+      targetId,
+      serviceNodeId,
+      allNodes,
+      allEdges,
+      endpoint,
+    );
+  }, [targetId, serviceNodeId, allNodes, allEdges, endpoint]);
+
+  // Auto-synchronize connected Kafka topics into the pipeline steps
+  useEffect(() => {
+    if (connectedKafka.length === 0) return;
+
+    const missingKafka = connectedKafka.filter(
+      (ck) =>
+        !executableSteps.some(
+          (s) =>
+            s.type === "kafka_publish" &&
+            (s.functionRef?.name === ck.functionName ||
+              s.brokerNodeId === ck.brokerNodeId ||
+              s.messagingResourceId === ck.topicId),
+        ),
+    );
+
+    if (missingKafka.length > 0) {
+      const newKafkaSteps: PipelineStepDraft[] = missingKafka.map(
+        (ck, idx) => {
+          const stepNum = executableSteps.length + idx + 1;
+          const outputVar = `kafkaPublishResult${stepNum > 1 ? stepNum : ""}`;
+          return {
+            id: generateId(),
+            name: ck.publisherName || `Publish ${ck.topicName}`,
+            type: "kafka_publish",
+            enabled: true,
+            outputVariable: outputVar,
+            functionRef: {
+              name: ck.functionName,
+              importPath: ck.importPath,
+            },
+            inputBindings: [
+              ...(ck.functionName === "publishKafkaEvent"
+                ? [
+                    {
+                      argName: "topic",
+                      source: {
+                        kind: "literal" as const,
+                        value: ck.topicName || "events",
+                      },
+                    },
+                  ]
+                : []),
+              {
+                argName: ck.functionName === "publishKafkaEvent" ? "payload" : "message",
+                source: { kind: "req_body" as const, field: "" },
+              },
+            ],
+            brokerNodeId: ck.brokerNodeId,
+            messagingResourceId: ck.topicId,
+          };
+        },
+      );
+
+      if (isConsumer) {
+        onChange([...executableSteps, ...newKafkaSteps]);
+      } else {
+        const foundReturn = steps.find((s) => s.type === "return_response");
+        onChange([
+          ...executableSteps,
+          ...newKafkaSteps,
+          foundReturn || {
+            id: "return-response-step",
+            name: "Return Response",
+            type: "return_response",
+            enabled: true,
+            statusCode: endpoint?.type === "POST" ? 201 : 200,
+            inputBindings: [],
+            outputVariable: "",
+          },
+        ]);
+      }
+    }
+  }, [
+    connectedKafka,
     executableSteps,
     isConsumer,
     onChange,
@@ -232,6 +333,122 @@ export const PipelineStepEditor = ({
   };
 
   const deleteStep = (index: number) => {
+    const stepToDelete = executableSteps[index];
+    if (!stepToDelete) return;
+
+    if (stepToDelete.type === "transform") {
+      const store = useBackendCanvasStore.getState();
+      const fnName = stepToDelete.functionRef?.name;
+      const tNodeId = stepToDelete.transformerNodeId;
+
+      // Find matching transformer or transformer_ref nodes
+      const matchingTransformerNodes = store.nodes.filter(
+        (n) =>
+          (n.type === "transformer" || n.type === "transformer_ref") &&
+          (n.id === tNodeId ||
+            n.id === fnName ||
+            n.data?.functionName === fnName ||
+            n.data?.label === fnName ||
+            (n.type === "transformer_ref" && n.data?.transformerRef === fnName)),
+      );
+
+      const matchingNodeIds = new Set(matchingTransformerNodes.map((n) => n.id));
+
+      // Also check connectedTransformers for this endpoint/consumer
+      connectedTransformers.forEach((ct) => {
+        if (
+          ct.functionName === fnName ||
+          ct.id === tNodeId ||
+          ct.nodeId === tNodeId
+        ) {
+          matchingNodeIds.add(ct.id);
+          matchingNodeIds.add(ct.nodeId);
+          if (ct.masterId) matchingNodeIds.add(ct.masterId);
+        }
+      });
+
+      // 1. Delete matching canvas edges connecting this transformer to this service endpoint/event
+      const edgesToDelete = store.edges.filter((e) => {
+        if (!e) return false;
+        const isFromTransformer =
+          matchingNodeIds.has(e.source) || matchingNodeIds.has(e.target);
+        if (!isFromTransformer) return false;
+
+        const isToThisService =
+          Boolean(serviceNodeId) &&
+          (e.target === serviceNodeId || e.source === serviceNodeId);
+
+        const isToThisTargetHandle =
+          Boolean(targetId) &&
+          (e.targetHandle === `endpoint-in-${targetId}` ||
+            e.targetHandle === `consumedEvents-in-${targetId}` ||
+            e.targetHandle === targetId ||
+            e.sourceHandle === `endpoint-in-${targetId}` ||
+            e.sourceHandle === `consumedEvents-in-${targetId}`);
+
+        return isToThisService && isToThisTargetHandle;
+      });
+
+      edgesToDelete.forEach((e) => store.deleteEdge(e.id));
+
+      // 2. Clean up targetEndpointIds / targetEventIds on the transformer node(s)
+      matchingTransformerNodes.forEach((tNode) => {
+        if (tNode.data) {
+          const currentEpIds: string[] =
+            tNode.data.targetEndpointIds ||
+            (tNode.data.targetEndpointId ? [tNode.data.targetEndpointId] : []);
+          const currentEvIds: string[] =
+            tNode.data.targetEventIds ||
+            (tNode.data.targetEventId ? [tNode.data.targetEventId] : []);
+
+          const nextEpIds = targetId
+            ? currentEpIds.filter((id) => id !== targetId)
+            : currentEpIds;
+          const nextEvIds = targetId
+            ? currentEvIds.filter((id) => id !== targetId)
+            : currentEvIds;
+
+          const hasRemainingTargets =
+            nextEpIds.length > 0 || nextEvIds.length > 0;
+
+          store.updateNode(tNode.id, {
+            data: {
+              ...tNode.data,
+              targetEndpointIds: nextEpIds,
+              targetEndpointId: nextEpIds[0] || undefined,
+              targetEventIds: nextEvIds,
+              targetEventId: nextEvIds[0] || undefined,
+              targetServiceId: hasRemainingTargets
+                ? tNode.data.targetServiceId
+                : undefined,
+            },
+          });
+        }
+      });
+    }
+
+    if (stepToDelete.type === "kafka_publish") {
+      const store = useBackendCanvasStore.getState();
+      const brokerNodeId = stepToDelete.brokerNodeId;
+      const messagingResourceId = stepToDelete.messagingResourceId;
+
+      // Clean up matching publishedEvents on the endpoint if found
+      if (endpoint && endpoint.publishedEvents && (brokerNodeId || messagingResourceId)) {
+        const remainingPubs = endpoint.publishedEvents.filter(
+          (pe) =>
+            (brokerNodeId && pe.brokerNodeId === brokerNodeId) ||
+            (messagingResourceId && pe.messagingResourceId === messagingResourceId)
+              ? false
+              : true,
+        );
+        if (remainingPubs.length !== endpoint.publishedEvents.length) {
+          store.updateEndpoint(endpoint.id, {
+            publishedEvents: remainingPubs,
+          });
+        }
+      }
+    }
+
     const next = executableSteps.filter((_, i) => i !== index);
     if (isConsumer) {
       onChange(next);

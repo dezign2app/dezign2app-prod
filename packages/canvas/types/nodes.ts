@@ -107,6 +107,8 @@ export interface BaseNodeData {
   targetServiceId?: string;
   targetEndpointId?: string;
   targetEndpointIds?: string[];
+  targetEventId?: string;
+  targetEventIds?: string[];
   transformerRef?: string;
   inputSchema?: {
     id?: string;
@@ -458,6 +460,8 @@ export interface CanvasTransformerNodeData {
   targetServiceId?: string;
   targetEndpointId?: string;
   targetEndpointIds?: string[];
+  targetEventId?: string;
+  targetEventIds?: string[];
   inputSchema?: {
     name: string;
     type: string;
@@ -487,6 +491,8 @@ export interface CanvasTransformerRefNodeData {
   targetServiceId?: string;
   targetEndpointId?: string;
   targetEndpointIds?: string[];
+  targetEventId?: string;
+  targetEventIds?: string[];
 }
 
 

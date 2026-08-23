@@ -67,6 +67,9 @@ export interface AvailableTransformer {
   scope: "global" | "local";
   targetServiceId?: string;
   targetEndpointId?: string;
+  targetEndpointIds?: string[];
+  targetEventId?: string;
+  targetEventIds?: string[];
   sourceType: "service_helper" | "canvas_node";
   importPath: string;
   inputSchema: TransformerSchemaField[];

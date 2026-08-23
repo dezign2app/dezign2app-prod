@@ -238,4 +238,14 @@ export interface EventConfigProps {
   nodeId: string;
 }
 
+export const MESSAGING_TYPES = new Set([
+  "kafka",
+  "queue",
+  "eventstream",
+  "pubsub",
+  "redis-streams",
+  "sqs",
+  "redis-pubsub",
+]);
+
 
