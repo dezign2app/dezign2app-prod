@@ -218,4 +218,91 @@ describe("backendCanvasStore - Transformer state cleanup & synchronization", () 
     expect(updatedTrans?.data?.targetEndpointIds).toEqual(["ep-checkout"]);
     expect(updatedTrans?.data?.targetEndpointId).toBe("ep-checkout");
   });
+
+  it("automatically creates 1 transformer_ref node per service and routes global transformer edges through it", () => {
+    const store = useBackendCanvasStore.getState();
+
+    const serviceNode: BackendNode = {
+      id: "service-1",
+      type: "service",
+      position: { x: 500, y: 100 },
+      data: { label: "Billing Service" },
+      fractionalIndex: "a0",
+    };
+
+    const globalTransNode: BackendNode = {
+      id: "trans-global-1",
+      type: "transformer",
+      position: { x: 0, y: 100 },
+      data: {
+        label: "formatCurrency",
+        functionName: "formatCurrency",
+        scope: "global",
+      },
+      fractionalIndex: "a1",
+    };
+
+    store.setNodesAndEdges([serviceNode, globalTransNode], [], [], [], [], "proj-1");
+
+    // 1. Connect global transformer directly to endpoint 1 on service-1
+    useBackendCanvasStore.getState().onConnect({
+      source: "trans-global-1",
+      target: "service-1",
+      sourceHandle: "transformer-out",
+      targetHandle: "endpoint-in-ep-invoice",
+    });
+
+    const state1 = useBackendCanvasStore.getState();
+
+    // Verify exactly 1 transformer_ref node was created for service-1
+    const refNodes = state1.nodes.filter((n) => n.type === "transformer_ref");
+    expect(refNodes).toHaveLength(1);
+    const refNode = refNodes[0]!;
+    expect(refNode.data?.transformerRef).toBe("trans-global-1");
+    expect(refNode.data?.targetServiceId).toBe("service-1");
+    expect(refNode.data?.targetEndpointIds).toEqual(["ep-invoice"]);
+
+    // Verify edges: 1 transformer-reference edge (master -> ref) and 1 connection edge (ref -> service endpoint)
+    expect(state1.edges).toHaveLength(2);
+    const refLinkEdge = state1.edges.find((e) => e.type === "transformer-reference");
+    expect(refLinkEdge).toBeDefined();
+    expect(refLinkEdge?.source).toBe("trans-global-1");
+    expect(refLinkEdge?.target).toBe(refNode.id);
+
+    const connEdge1 = state1.edges.find((e) => e.type === "connection");
+    expect(connEdge1).toBeDefined();
+    expect(connEdge1?.source).toBe(refNode.id);
+    expect(connEdge1?.target).toBe("service-1");
+    expect(connEdge1?.targetHandle).toBe("endpoint-in-ep-invoice");
+
+    // Verify NO direct edge between trans-global-1 and service-1
+    const directEdge = state1.edges.find(
+      (e) => e.source === "trans-global-1" && e.target === "service-1",
+    );
+    expect(directEdge).toBeUndefined();
+
+    // 2. Connect the same global transformer to endpoint 2 on the same service-1
+    useBackendCanvasStore.getState().onConnect({
+      source: "trans-global-1",
+      target: "service-1",
+      sourceHandle: "transformer-out",
+      targetHandle: "endpoint-in-ep-receipt",
+    });
+
+    const state2 = useBackendCanvasStore.getState();
+
+    // Verify still exactly 1 transformer_ref node for service-1 (1 ref per service rule)
+    const refNodes2 = state2.nodes.filter((n) => n.type === "transformer_ref");
+    expect(refNodes2).toHaveLength(1);
+    expect(refNodes2[0]?.id).toBe(refNode.id);
+    expect(refNodes2[0]?.data?.targetEndpointIds).toEqual(["ep-invoice", "ep-receipt"]);
+
+    // Verify edges: 1 transformer-reference edge and 2 connection edges (both originating from the same ref node)
+    expect(state2.edges).toHaveLength(3);
+    const connEdges = state2.edges.filter((e) => e.type === "connection");
+    expect(connEdges).toHaveLength(2);
+    expect(connEdges.every((e) => e.source === refNode.id)).toBe(true);
+    expect(connEdges.map((e) => e.targetHandle)).toContain("endpoint-in-ep-invoice");
+    expect(connEdges.map((e) => e.targetHandle)).toContain("endpoint-in-ep-receipt");
+  });
 });
