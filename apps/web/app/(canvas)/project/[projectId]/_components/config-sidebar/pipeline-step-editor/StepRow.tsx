@@ -16,6 +16,9 @@ import { Draggable } from "@hello-pangea/dnd";
 import { StepRowHeader } from "./StepRowHeader";
 import { TransformerStepSection } from "./TransformerStepSection";
 import { DbOperationStepSection } from "./DbOperationStepSection";
+import { RedisOperationStepSection } from "./RedisOperationStepSection";
+import { KafkaPublishStepSection } from "./KafkaPublishStepSection";
+import { ServiceCallStepSection } from "./ServiceCallStepSection";
 import { GenericFunctionRefSection } from "./GenericFunctionRefSection";
 import { CustomCodeSection } from "./CustomCodeSection";
 import { ArgumentBindingsSection } from "./ArgumentBindingsSection";
@@ -157,6 +160,12 @@ export const StepRow = ({
                           ? `transformedData${index + 1}`
                           : v === "db_operation"
                           ? `dbResult${index + 1}`
+                          : v === "redis_operation"
+                          ? `cachedResult${index + 1}`
+                          : v === "kafka_publish"
+                          ? `publishResult${index + 1}`
+                          : v === "service_call"
+                          ? `serviceResponse${index + 1}`
                           : `step${index + 1}Result`;
                       onChange({
                         ...step,
@@ -225,6 +234,59 @@ export const StepRow = ({
                     >
                       {argumentBindingsSection}
                     </DbOperationStepSection>
+                  );
+                }
+
+                if (step.type === "redis_operation") {
+                  return (
+                    <RedisOperationStepSection
+                      step={step}
+                      allNodes={allNodes}
+                      allEdges={allEdges}
+                      expectedArgs={expectedArgs}
+                      selectedDbId={selectedDbId}
+                      showAdvancedSettings={showAdvancedSettings}
+                      onToggleAdvancedSettings={() => setShowAdvancedSettings((v) => !v)}
+                      onChange={onChange}
+                      onAutoMapArguments={handleAutoMapArguments}
+                    >
+                      {argumentBindingsSection}
+                    </RedisOperationStepSection>
+                  );
+                }
+
+                if (step.type === "kafka_publish") {
+                  return (
+                    <KafkaPublishStepSection
+                      step={step}
+                      allNodes={allNodes}
+                      allEdges={allEdges}
+                      expectedArgs={expectedArgs}
+                      showAdvancedSettings={showAdvancedSettings}
+                      onToggleAdvancedSettings={() => setShowAdvancedSettings((v) => !v)}
+                      onChange={onChange}
+                      onAutoMapArguments={handleAutoMapArguments}
+                    >
+                      {argumentBindingsSection}
+                    </KafkaPublishStepSection>
+                  );
+                }
+
+                if (step.type === "service_call") {
+                  return (
+                    <ServiceCallStepSection
+                      step={step}
+                      allNodes={allNodes}
+                      allEdges={allEdges}
+                      serviceNodeId={serviceNodeId}
+                      expectedArgs={expectedArgs}
+                      showAdvancedSettings={showAdvancedSettings}
+                      onToggleAdvancedSettings={() => setShowAdvancedSettings((v) => !v)}
+                      onChange={onChange}
+                      onAutoMapArguments={handleAutoMapArguments}
+                    >
+                      {argumentBindingsSection}
+                    </ServiceCallStepSection>
                   );
                 }
 
