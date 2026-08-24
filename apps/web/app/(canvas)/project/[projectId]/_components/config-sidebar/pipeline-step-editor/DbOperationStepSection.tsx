@@ -25,12 +25,13 @@ export interface DbOperationStepSectionProps {
   step: PipelineStepDraft;
   allNodes: BackendNode[];
   allEdges: BackendEdge[];
-  expectedArgs: ExpectedArg[];
+  expectedArgs?: ExpectedArg[];
   selectedDbId: string;
   showAdvancedSettings: boolean;
   onToggleAdvancedSettings: () => void;
   onChange: (updated: PipelineStepDraft) => void;
-  onAutoMapArguments: () => void;
+  onAutoMapArguments?: () => void;
+  children?: React.ReactNode;
 }
 
 export const DbOperationStepSection = ({
@@ -43,6 +44,7 @@ export const DbOperationStepSection = ({
   onToggleAdvancedSettings,
   onChange,
   onAutoMapArguments,
+  children,
 }: DbOperationStepSectionProps) => {
   const dbNodes = useMemo(
     () =>
@@ -167,10 +169,17 @@ export const DbOperationStepSection = ({
   };
 
   return (
-    <div className="flex flex-col gap-2.5 p-2.5 rounded-lg border border-blue-500/20 bg-blue-500/5">
-      <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-400">
-        <Database size={13} />
-        <span>Database & Table Operation</span>
+    <div className="flex flex-col gap-3 p-2.5 rounded-lg border border-blue-500/25 bg-blue-500/[0.04]">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-400">
+          <Database size={13} />
+          <span>Database & Table Operation</span>
+        </div>
+        {selectedOp && (
+          <span className="text-[10px] font-mono text-blue-300 bg-blue-500/15 border border-blue-500/25 px-1.5 py-0.2 rounded font-medium">
+            {selectedOp.name}
+          </span>
+        )}
       </div>
 
       <div className="flex flex-col gap-2.5">
@@ -278,7 +287,7 @@ export const DbOperationStepSection = ({
       </div>
 
       {/* Expected arguments preview & quick mapping buttons */}
-      {selectedOp && expectedArgs.length > 0 && (
+      {selectedOp && expectedArgs && expectedArgs.length > 0 && (
         <div className="flex flex-col gap-1.5 pt-1.5 border-t border-blue-500/15">
           <div className="flex items-center justify-between flex-wrap gap-1">
             <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -314,8 +323,11 @@ export const DbOperationStepSection = ({
         </div>
       )}
 
+      {/* Argument Bindings (Inputs for this DB Operation) */}
+      {children}
+
       {/* Advanced function settings toggle */}
-      <div className="flex flex-col gap-1.5 pt-1">
+      <div className="flex flex-col gap-1.5 pt-1 border-t border-blue-500/15">
         <button
           type="button"
           className="flex items-center gap-1 text-[9px] text-muted-foreground/60 hover:text-muted-foreground transition-colors self-start"
