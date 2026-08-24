@@ -21,6 +21,7 @@ export const publishedEventSchema = z.object({
   publishedWhen: z.string().default(DEFAULT_PUBLISH_TRIGGER_CONDITION),
   brokerNodeId: z.string().default(""),
   messagingResourceId: z.string().default(""),
+  resourceType: z.string().optional(),
   payloadSchema: schemaModelSchema.default({ id: "dummy" }),
   version: schemaVersionEnum.default("v1"),
   category: eventCategoryEnum.default("DOMAIN"),
