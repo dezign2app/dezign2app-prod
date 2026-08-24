@@ -9,7 +9,7 @@ import { StepBinding, ExpectedArg, AvailableSource } from "./types";
 
 export interface ArgumentBindingsSectionProps {
   bindings: StepBinding[];
-  expectedArgs: ExpectedArg[];
+  expectedArgs?: ExpectedArg[];
   availableSources: AvailableSource[];
   onAddBinding: () => void;
   onUpdateBinding: (index: number, updated: StepBinding) => void;
@@ -19,7 +19,7 @@ export interface ArgumentBindingsSectionProps {
 
 export const ArgumentBindingsSection = ({
   bindings,
-  expectedArgs,
+  expectedArgs = [],
   availableSources,
   onAddBinding,
   onUpdateBinding,
@@ -27,7 +27,7 @@ export const ArgumentBindingsSection = ({
   onAutoMapArguments,
 }: ArgumentBindingsSectionProps) => {
   return (
-    <div className="flex flex-col gap-2 pt-1 border-t border-border/30">
+    <div className="flex flex-col gap-2 pt-2 border-t border-border/30">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <Label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
@@ -75,7 +75,7 @@ export const ArgumentBindingsSection = ({
       {bindings.map((binding, bi) => (
         <div
           key={bi}
-          className="grid grid-cols-[1fr_auto_2.2fr_auto] gap-1.5 items-center bg-muted/15 p-1.5 rounded border border-border/40"
+          className="grid grid-cols-[1fr_auto_2.2fr_auto] gap-1.5 items-center bg-background/60 p-1.5 rounded border border-border/40"
         >
           {/* Arg name */}
           <Input
@@ -87,7 +87,7 @@ export const ArgumentBindingsSection = ({
             placeholder="argName"
           />
           {/* Arrow */}
-          <span className="text-[10px] text-muted-foreground/50 px-0.5">←</span>
+          <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
           {/* Source & Smart Path Editor */}
           <BindingSourceEditor
             binding={binding}

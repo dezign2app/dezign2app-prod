@@ -181,68 +181,86 @@ export const StepRow = ({
               </div>
 
               {/* Step Type Specific Sections */}
-              {step.type === "transform" && (
-                <TransformerStepSection
-                  step={step}
-                  availableTransformers={availableTransformers}
-                  serviceNodeId={serviceNodeId}
-                  endpointId={endpoint?.id}
-                  expectedArgs={expectedArgs}
-                  onChange={onChange}
-                  onAutoMapArguments={handleAutoMapArguments}
-                />
-              )}
+              {(() => {
+                const argumentBindingsSection = (
+                  <ArgumentBindingsSection
+                    bindings={step.inputBindings}
+                    expectedArgs={expectedArgs}
+                    availableSources={availableSources}
+                    onAddBinding={addBinding}
+                    onUpdateBinding={updateBinding}
+                    onRemoveBinding={removeBinding}
+                    onAutoMapArguments={handleAutoMapArguments}
+                  />
+                );
 
-              {step.type === "db_operation" && (
-                <DbOperationStepSection
-                  step={step}
-                  allNodes={allNodes}
-                  allEdges={allEdges}
-                  expectedArgs={expectedArgs}
-                  selectedDbId={selectedDbId}
-                  showAdvancedSettings={showAdvancedSettings}
-                  onToggleAdvancedSettings={() => setShowAdvancedSettings((v) => !v)}
-                  onChange={onChange}
-                  onAutoMapArguments={handleAutoMapArguments}
-                />
-              )}
+                if (step.type === "transform") {
+                  return (
+                    <TransformerStepSection
+                      step={step}
+                      availableTransformers={availableTransformers}
+                      serviceNodeId={serviceNodeId}
+                      endpointId={endpoint?.id}
+                      expectedArgs={expectedArgs}
+                      onChange={onChange}
+                      onAutoMapArguments={handleAutoMapArguments}
+                    >
+                      {argumentBindingsSection}
+                    </TransformerStepSection>
+                  );
+                }
 
-              {step.type !== "custom_code" && step.type !== "db_operation" && step.type !== "transform" && (
-                <GenericFunctionRefSection step={step} onChange={onChange} />
-              )}
+                if (step.type === "db_operation") {
+                  return (
+                    <DbOperationStepSection
+                      step={step}
+                      allNodes={allNodes}
+                      allEdges={allEdges}
+                      expectedArgs={expectedArgs}
+                      selectedDbId={selectedDbId}
+                      showAdvancedSettings={showAdvancedSettings}
+                      onToggleAdvancedSettings={() => setShowAdvancedSettings((v) => !v)}
+                      onChange={onChange}
+                      onAutoMapArguments={handleAutoMapArguments}
+                    >
+                      {argumentBindingsSection}
+                    </DbOperationStepSection>
+                  );
+                }
 
-              {step.type === "custom_code" && (
-                <CustomCodeSection step={step} onChange={onChange} />
-              )}
+                if (step.type === "custom_code") {
+                  return <CustomCodeSection step={step} onChange={onChange} />;
+                }
 
-              {/* Argument Bindings */}
-              {step.type !== "custom_code" && (
-                <ArgumentBindingsSection
-                  bindings={step.inputBindings}
-                  expectedArgs={expectedArgs}
-                  availableSources={availableSources}
-                  onAddBinding={addBinding}
-                  onUpdateBinding={updateBinding}
-                  onRemoveBinding={removeBinding}
-                  onAutoMapArguments={handleAutoMapArguments}
-                />
-              )}
+                return (
+                  <GenericFunctionRefSection step={step} onChange={onChange}>
+                    {argumentBindingsSection}
+                  </GenericFunctionRefSection>
+                );
+              })()}
 
               {/* Enable / Disable Step */}
-              <button
-                type="button"
-                className={`flex items-center gap-1.5 text-[10px] self-end transition-colors ${
-                  step.enabled === false
-                    ? "text-muted-foreground/50"
-                    : "text-primary/70 hover:text-primary"
-                }`}
-                onClick={() =>
-                  onChange({ ...step, enabled: step.enabled === false ? true : false })
-                }
-              >
-                <Check size={11} />
-                {step.enabled === false ? "Enable step" : "Disable step"}
-              </button>
+              <div className="flex items-center justify-between pt-1 border-t border-border/30">
+                <span className="text-[9px] text-muted-foreground/50 font-mono">
+                  {step.type !== "custom_code" && step.functionRef?.name
+                    ? `const ${displayVarName} = await ${step.functionRef.name}(...)`
+                    : `Step ${index + 1}`}
+                </span>
+                <button
+                  type="button"
+                  className={`flex items-center gap-1.5 text-[10px] transition-colors ${
+                    step.enabled === false
+                      ? "text-muted-foreground/50"
+                      : "text-primary/70 hover:text-primary"
+                  }`}
+                  onClick={() =>
+                    onChange({ ...step, enabled: step.enabled === false ? true : false })
+                  }
+                >
+                  <Check size={11} />
+                  {step.enabled === false ? "Enable step" : "Disable step"}
+                </button>
+              </div>
             </div>
           )}
         </div>

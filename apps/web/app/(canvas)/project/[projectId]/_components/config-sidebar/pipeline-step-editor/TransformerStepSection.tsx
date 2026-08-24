@@ -25,9 +25,10 @@ export interface TransformerStepSectionProps {
   availableTransformers: AvailableTransformer[];
   serviceNodeId?: string;
   endpointId?: string;
-  expectedArgs: ExpectedArg[];
+  expectedArgs?: ExpectedArg[];
   onChange: (updated: PipelineStepDraft) => void;
-  onAutoMapArguments: () => void;
+  onAutoMapArguments?: () => void;
+  children?: React.ReactNode;
 }
 
 export const TransformerStepSection = ({
@@ -38,6 +39,7 @@ export const TransformerStepSection = ({
   expectedArgs,
   onChange,
   onAutoMapArguments,
+  children,
 }: TransformerStepSectionProps) => {
   const serviceTransformers = useMemo(
     () => availableTransformers.filter((t) => t.sourceType === "service_helper"),
@@ -470,7 +472,7 @@ export const TransformerStepSection = ({
       )}
 
       {/* Expected arguments preview & quick mapping buttons */}
-      {expectedArgs.length > 0 && (
+      {expectedArgs && expectedArgs.length > 0 && (
         <div className="flex flex-col gap-1.5 pt-1 border-t border-purple-500/15">
           <div className="flex items-center justify-between flex-wrap gap-1">
             <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -505,6 +507,9 @@ export const TransformerStepSection = ({
           </div>
         </div>
       )}
+
+      {/* Argument Bindings (Inputs for this Transformer) */}
+      {children}
     </div>
   );
 };
