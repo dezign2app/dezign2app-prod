@@ -141,6 +141,7 @@ export type PublishedEvent = {
   // Topic Mapping
   brokerNodeId: string;
   messagingResourceId: string;
+  resourceType?: string;
 
   // Contract
   payloadSchema: Schema;

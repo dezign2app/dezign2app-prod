@@ -1,11 +1,5 @@
 import { BackendEdge } from "@/types/canvas";
-import {
-  isValidConnection,
-  MESSAGING_RESOURCE_TYPES,
-  DEFAULT_PUBLISH_TRIGGER_CONDITION,
-  DEFAULT_PUBLISHED_EVENT_DEFAULTS,
-} from "@workspace/canvas";
-import type { BackendNode, MessagingResourceType } from "@workspace/canvas";
+import { isValidConnection } from "@workspace/canvas";
 import {
   applyEdgeChanges,
   addEdge as addReactFlowEdge,
@@ -16,13 +10,15 @@ import { generateKeyBetween } from "fractional-indexing";
 import { BackendCanvasState } from "../types";
 import { cleanupDeletedEdgesState } from "../stateCleanup";
 import { getLastIndex, parseResourceHandle } from "../utils";
-import { toFolderName, toPascalCase } from "@/lib/compiler/utils";
-
-/** Narrows a plain string to MessagingResourceType without any cast. */
-function isMessagingResourceType(value: string): value is MessagingResourceType {
-  return MESSAGING_RESOURCE_TYPES.some((t) => t === value);
-}
-
+import {
+  validateDatabaseEngine,
+  autoDeriveForeignKeyHandles,
+  handleDatabaseConnect,
+  handleEventBrokerConnect,
+  handleTransformerConnect,
+  handleEndpointConnect,
+  handleForeignKeyConnect,
+} from "../edge";
 
 export interface EdgeSlice {
   edges: BackendEdge[];
@@ -107,25 +103,14 @@ export const createEdgeSlice = (
     }
 
     // Enforce matching DB engine (Redis DB -> Redis Entity, SQL DB -> SQL/Doc Entity)
-    if (sourceNode.type === "database" && targetNode.type === "entity") {
-      const isRedisDb = sourceNode.data?.dbEngine === "redis";
-      const isRedisEntity = targetNode.data?.dbType === "redis";
-      if (isRedisDb !== isRedisEntity) {
-        console.warn("Cannot connect Redis instance to SQL table or SQL database to Redis schema");
-        return;
-      }
+    if (!validateDatabaseEngine(sourceNode, targetNode)) {
+      return;
     }
 
     const edgeType = result.edgeType;
     const isSchema =
       edgeType === "foreign-key" || edgeType === "database-connection";
     get().pushHistorySnapshot(isSchema ? "schema" : "graph");
-    const isColumnToColumn = edgeType === "foreign-key";
-    const isPublishedConnect = connection.sourceHandle?.startsWith(
-      "publishedEvents-out-",
-    );
-    const isConsumedConnect =
-      connection.targetHandle?.startsWith("consumedEvents-in-");
 
     const parsedTarget = parseResourceHandle(connection.targetHandle);
     const parsedSource = parseResourceHandle(connection.sourceHandle);
@@ -157,461 +142,33 @@ export const createEdgeSlice = (
       pendingEdgeUpserts: [...get().pendingEdgeUpserts, newEdge],
     });
 
-    // Automatically sync databaseId on target entity / redis schema node when connecting database / redis instance -> entity / redis schema
-    if (
-      (sourceNode.type === "database" && targetNode.type === "entity") ||
-      (sourceNode.type === "redis_instance" && (targetNode.type === "redis_schema" || targetNode.type === "entity"))
-    ) {
-      get().updateNode(targetNode.id, {
-        data: {
-          ...targetNode.data,
-          databaseId: sourceNode.id,
-        },
-      });
-    }
+    const context = {
+      set,
+      get,
+      connection,
+      sourceNode,
+      targetNode,
+      newEdge,
+    };
 
-    // Automatically sync authNodeId on WebApp node when connecting Auth -> WebApp or WebApp -> Auth
-    if (sourceNode.type === "auth" && targetNode.type === "webApp") {
-      get().updateNode(targetNode.id, {
-        data: {
-          ...targetNode.data,
-          authNodeId: sourceNode.id,
-        },
-      });
-    }
-    if (sourceNode.type === "webApp" && targetNode.type === "auth") {
-      get().updateNode(sourceNode.id, {
-        data: {
-          ...sourceNode.data,
-          authNodeId: targetNode.id,
-        },
-      });
-    }
+    // 1. Synchronize Database, Redis, and Auth nodes
+    handleDatabaseConnect(context);
 
-    // Update targetNodeId on service events if connected via messaging handles
-    if (isPublishedConnect && connection.sourceHandle) {
-      const eventId = connection.sourceHandle.replace(
-        "publishedEvents-out-",
-        "",
-      );
-      get().updateEvent(eventId, {
-        brokerNodeId: connection.target ?? undefined,
-      });
-    }
+    // 2. Synchronize Event Broker IDs
+    handleEventBrokerConnect(context);
 
-    if (isConsumedConnect && connection.targetHandle) {
-      const eventId = connection.targetHandle.replace("consumedEvents-in-", "");
-      get().updateEvent(eventId, {
-        brokerNodeId: connection.source ?? undefined,
-      });
-    }
-
-    // Transformer -> Endpoint or Event connection: sync transformer targetEndpointIds/targetEventIds
-    const isTransformerSource =
-      sourceNode.type === "transformer" || sourceNode.type === "transformer_ref";
-    const isTargetService = targetNode.type === "service";
-
-    if (sourceNode.type === "transformer" && sourceNode.data?.scope === "global" && isTargetService) {
-      const serviceId = targetNode.id;
-      const targetHandle = connection.targetHandle ?? "";
-      const isEndpoint = targetHandle.startsWith("endpoint-in-");
-      const isConsumer = targetHandle.startsWith("consumedEvents-in-");
-      const targetId = isEndpoint
-        ? targetHandle.replace("endpoint-in-", "")
-        : isConsumer
-        ? targetHandle.replace("consumedEvents-in-", "")
-        : targetHandle;
-
-      const currentNodes = get().nodes;
-      const currentEdges = get().edges;
-      const fnName = sourceNode.data?.functionName || sourceNode.data?.label || "transformData";
-
-      // 1 Ref per service rule: Check if this service already has a transformer_ref node
-      const existingRefNode = currentNodes.find(
-        (n) =>
-          n.type === "transformer_ref" &&
-          (n.data?.targetServiceId === serviceId ||
-            currentEdges.some((e) => e.source === n.id && e.target === serviceId)),
-      );
-
-      let refNodeId = existingRefNode?.id;
-
-      if (!refNodeId) {
-        refNodeId = crypto.randomUUID();
-        const serviceX = targetNode.position?.x ?? 0;
-        const serviceY = targetNode.position?.y ?? 0;
-
-        const newRefNode: BackendNode = {
-          id: refNodeId,
-          type: "transformer_ref",
-          position: {
-            x: Math.max(0, serviceX - 300),
-            y: serviceY + 40,
-          },
-          data: {
-            label: `${fnName} (Ref)`,
-            transformerRef: sourceNode.id,
-            targetServiceId: serviceId,
-            targetEndpointId: isEndpoint ? targetId : undefined,
-            targetEndpointIds: isEndpoint && targetId ? [targetId] : [],
-            targetEventId: isConsumer ? targetId : undefined,
-            targetEventIds: isConsumer && targetId ? [targetId] : [],
-          },
-          fractionalIndex: generateKeyBetween(getLastIndex(currentNodes), null),
-        };
-        get().addNode(newRefNode);
-      } else {
-        const currentLiveRef = currentNodes.find((n) => n.id === refNodeId);
-        if (currentLiveRef?.data) {
-          if (isEndpoint && targetId) {
-            const curEpIds: string[] =
-              currentLiveRef.data.targetEndpointIds ||
-              (currentLiveRef.data.targetEndpointId ? [currentLiveRef.data.targetEndpointId] : []);
-            const nextEpIds = curEpIds.includes(targetId) ? curEpIds : [...curEpIds, targetId];
-            get().updateNode(refNodeId, {
-              data: {
-                ...currentLiveRef.data,
-                transformerRef: currentLiveRef.data.transformerRef || sourceNode.id,
-                targetServiceId: serviceId,
-                targetEndpointIds: nextEpIds,
-                targetEndpointId: nextEpIds[0],
-              },
-            });
-          } else if (isConsumer && targetId) {
-            const curEvIds: string[] =
-              currentLiveRef.data.targetEventIds ||
-              (currentLiveRef.data.targetEventId ? [currentLiveRef.data.targetEventId] : []);
-            const nextEvIds = curEvIds.includes(targetId) ? curEvIds : [...curEvIds, targetId];
-            get().updateNode(refNodeId, {
-              data: {
-                ...currentLiveRef.data,
-                transformerRef: currentLiveRef.data.transformerRef || sourceNode.id,
-                targetServiceId: serviceId,
-                targetEventIds: nextEvIds,
-                targetEventId: nextEvIds[0],
-              },
-            });
-          }
-        }
-      }
-
-      // Ensure reference edge from global transformer to transformer_ref
-      const refLinkExists = get().edges.some(
-        (e) =>
-          (e.type === "transformer-reference" || e.type === "reference") &&
-          e.source === sourceNode.id &&
-          e.target === refNodeId,
-      );
-      if (!refLinkExists) {
-        get().addEdge({
-          id: `edge-ref-link-${sourceNode.id}-${refNodeId}`,
-          source: sourceNode.id,
-          target: refNodeId,
-          sourceHandle: "transformer-out",
-          targetHandle: "transformer-in",
-          type: "transformer-reference",
-        });
-      }
-
-      // Ensure connection edge from transformer_ref to service
-      const refConnExists = get().edges.some(
-        (e) =>
-          e.source === refNodeId &&
-          e.target === serviceId &&
-          e.targetHandle === targetHandle,
-      );
-      if (!refConnExists) {
-        get().addEdge({
-          id: `edge-ref-${refNodeId}-${targetId || "conn"}-${Date.now()}`,
-          source: refNodeId,
-          target: serviceId,
-          sourceHandle: "transformer-out",
-          targetHandle,
-          type: "connection",
-        });
-      }
-
-      // Remove direct edge created by ReactFlow
-      const directEdgeId = newEdge.id;
-      set((state) => ({
-        edges: state.edges.filter((e) => e.id !== directEdgeId),
-        pendingEdgeUpserts: state.pendingEdgeUpserts.filter((e) => e.id !== directEdgeId),
-        pendingEdgeRemovals: [...state.pendingEdgeRemovals, directEdgeId],
-      }));
+    // 3. Handle Transformer connections (returns true if intercepted & direct edge removed)
+    if (handleTransformerConnect(context)) {
       return;
     }
 
-    if (isTransformerSource && isTargetService) {
-      if (connection.targetHandle?.startsWith("endpoint-in-")) {
-        const epId = connection.targetHandle.replace("endpoint-in-", "");
-        const currentEpIds: string[] =
-          sourceNode.data?.targetEndpointIds ||
-          (sourceNode.data?.targetEndpointId
-            ? [sourceNode.data.targetEndpointId]
-            : []);
-        if (!currentEpIds.includes(epId)) {
-          const nextEpIds = [...currentEpIds, epId];
-          get().updateNode(sourceNode.id, {
-            data: {
-              ...sourceNode.data,
-              targetServiceId: targetNode.id,
-              targetEndpointIds: nextEpIds,
-              targetEndpointId: nextEpIds[0],
-            },
-          });
-        }
-      } else if (connection.targetHandle?.startsWith("consumedEvents-in-")) {
-        const evId = connection.targetHandle.replace("consumedEvents-in-", "");
-        const currentEvIds: string[] =
-          sourceNode.data?.targetEventIds ||
-          (sourceNode.data?.targetEventId
-            ? [sourceNode.data.targetEventId]
-            : []);
-        if (!currentEvIds.includes(evId)) {
-          const nextEvIds = [...currentEvIds, evId];
-          get().updateNode(sourceNode.id, {
-            data: {
-              ...sourceNode.data,
-              targetServiceId: targetNode.id,
-              targetEventIds: nextEvIds,
-              targetEventId: nextEvIds[0],
-            },
-          });
-        }
-      }
+    // 4. Handle Endpoint connections (returns true if intercepted & direct edge removed)
+    if (handleEndpointConnect(context)) {
+      return;
     }
 
-    const isEndpointConnect = connection.sourceHandle?.startsWith("endpoint-out-");
-    if (isEndpointConnect && connection.sourceHandle && connection.target) {
-      const endpointId = connection.sourceHandle.replace("endpoint-out-", "");
-      const targetNode = get().nodes.find((n) => n.id === connection.target);
-      if (
-        targetNode &&
-        (targetNode.type === "db_ref" || targetNode.type === "database")
-      ) {
-        const endpoint = get().endpoints.find((e) => e.id === endpointId);
-        if (endpoint) {
-          const currentDbIds =
-            endpoint.databaseNodeIds ||
-            (endpoint.databaseNodeId && endpoint.databaseNodeId !== "none"
-              ? [endpoint.databaseNodeId]
-              : []);
-          if (!currentDbIds.includes(connection.target)) {
-            const newDbIds = [...currentDbIds, connection.target];
-            get().updateEndpoint(endpointId, {
-              databaseNodeIds: newDbIds,
-              databaseNodeId: newDbIds[0] || "none",
-            });
-          }
-        }
-      }
-
-      // ── Endpoint → Messaging node: auto-create a publisher and rewire edge ──
-      const MESSAGING_NODE_TYPES = [
-        "kafka",
-        "queue",
-        "eventstream",
-        "pubsub",
-        "redis-streams",
-        "sqs",
-        "redis-pubsub",
-      ] as const;
-      const isMessagingTarget =
-        targetNode &&
-        MESSAGING_NODE_TYPES.some((t) => t === targetNode.type);
-
-      if (isMessagingTarget && targetNode) {
-        const endpoint = get().endpoints.find((e) => e.id === endpointId);
-        if (!endpoint) return;
-
-        // Parse topic/resource ID from targetHandle, e.g. "topics:in:<topicId>"
-        const targetHandle = connection.targetHandle ?? "";
-        const resourceMatch = targetHandle.match(/^([^:]+):in:(.+)$/);
-        // Use optional chaining + nullish coalescing so both are always `string`
-        const messagingResourceId = resourceMatch?.[2] ?? "";
-        const rawResourceType = resourceMatch?.[1] ?? "";
-        const resolvedResourceType = isMessagingResourceType(rawResourceType)
-          ? rawResourceType
-          : undefined;
-
-        // Derive a human-readable publisher name
-        const endpointLabel =
-          endpoint.name || `${endpoint.type ?? "endpoint"} publisher`;
-        const topicNode = targetNode.data as {
-          topics?: { id: string; name: string }[];
-        };
-        const topicName =
-          messagingResourceId
-            ? (topicNode.topics?.find((t) => t.id === messagingResourceId)?.name ?? "")
-            : "";
-        const publisherName = topicName
-          ? `Publish ${topicName}`
-          : `${endpointLabel} publisher`;
-
-        // Build the new publisher — all fields are required strings here
-        const newEventId = `pub-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-        const newPublisher = {
-          id: newEventId,
-          name: publisherName,
-          publishedWhen: DEFAULT_PUBLISH_TRIGGER_CONDITION,
-          brokerNodeId: targetNode.id,
-          messagingResourceId,
-          ...DEFAULT_PUBLISHED_EVENT_DEFAULTS,
-          ...(resolvedResourceType ? { resourceType: resolvedResourceType } : {}),
-        };
-
-        // Auto-add Kafka / Messaging publish step to pipelineSteps
-        const existingSteps = endpoint.pipelineSteps ?? [];
-        const rawLabel = targetNode.data?.label || "kafka";
-        const packageFolder = toFolderName(rawLabel) || "kafka";
-        const fnName = topicName ? `publish${toPascalCase(topicName)}` : "publishKafkaEvent";
-
-        const hasMatchingStep = existingSteps.some(
-          (s) =>
-            s.type === "kafka_publish" &&
-            (s.functionRef?.name === fnName ||
-              (s as any).brokerNodeId === targetNode.id ||
-              (s as any).messagingResourceId === messagingResourceId),
-        );
-
-        let nextPipelineSteps = existingSteps;
-        if (!hasMatchingStep) {
-          const outputVar = `kafkaPublishResult`;
-          const newKafkaStep = {
-            id: `step-kafka-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            name: publisherName || `Publish to ${topicName || "Kafka"}`,
-            type: "kafka_publish" as const,
-            enabled: true,
-            outputVariable: outputVar,
-            functionRef: {
-              name: fnName,
-              importPath: `@workspace/${packageFolder}/publishers`,
-            },
-            inputBindings: [
-              ...(topicName ? [] : [{ argName: "topic", source: { kind: "literal" as const, value: topicName || "default-topic" } }]),
-              { argName: topicName ? "message" : "payload", source: { kind: "req_body" as const, field: "" } },
-            ],
-            brokerNodeId: targetNode.id,
-            messagingResourceId,
-          };
-
-          const returnIdx = existingSteps.findIndex((s) => s.type === "return_response");
-          if (returnIdx !== -1) {
-            nextPipelineSteps = [
-              ...existingSteps.slice(0, returnIdx),
-              newKafkaStep,
-              ...existingSteps.slice(returnIdx),
-            ];
-          } else {
-            nextPipelineSteps = [...existingSteps, newKafkaStep];
-          }
-        }
-
-        // Record the direct endpoint→topic edge id so we can remove it
-        const directEdgeId = newEdge.id;
-
-        // updateEndpoint handles: endpoint upsert, event upsert, and
-        // syncConfiguredEventEdge (creates publishedEvents-out-* → topic edge).
-        get().updateEndpoint(endpointId, {
-          publishedEvents: [...(endpoint.publishedEvents ?? []), newPublisher],
-          pipelineSteps: nextPipelineSteps,
-        });
-
-        // Remove the direct endpoint→topic edge that ReactFlow added before our
-        // interception. The correct publisher edge was already added by updateEndpoint.
-        set((state) => ({
-          edges: state.edges.filter((e) => e.id !== directEdgeId),
-          pendingEdgeUpserts: state.pendingEdgeUpserts.filter(
-            (e) => e.id !== directEdgeId,
-          ),
-          pendingEdgeRemovals: [...state.pendingEdgeRemovals, directEdgeId],
-        }));
-        return; // skip the column-FK check below
-      }
-    }
-
-    // Update source/target node's column to isForeignKey: true and populate references if it's a foreign key edge
-    if (isColumnToColumn) {
-      let sourceColIndex: number | undefined;
-      let targetColIndex: number | undefined;
-
-      if (connection.sourceHandle?.startsWith("source-")) {
-        sourceColIndex = parseInt(
-          connection.sourceHandle.replace("source-", ""),
-          10,
-        );
-      } else if (connection.sourceHandle?.startsWith("target-")) {
-        targetColIndex = parseInt(
-          connection.sourceHandle.replace("target-", ""),
-          10,
-        );
-      }
-
-      if (connection.targetHandle?.startsWith("target-")) {
-        targetColIndex = parseInt(
-          connection.targetHandle.replace("target-", ""),
-          10,
-        );
-      } else if (connection.targetHandle?.startsWith("source-")) {
-        sourceColIndex = parseInt(
-          connection.targetHandle.replace("source-", ""),
-          10,
-        );
-      }
-
-      if (
-        sourceColIndex !== undefined &&
-        !isNaN(sourceColIndex) &&
-        targetColIndex !== undefined &&
-        !isNaN(targetColIndex)
-      ) {
-        const sourceCol = sourceNode.data.columns?.[sourceColIndex];
-        const targetCol = targetNode.data.columns?.[targetColIndex];
-
-        if (sourceCol && targetCol) {
-          const isSourcePK =
-            sourceCol.isPrimaryKey ||
-            sourceCol.isUnique ||
-            sourceCol.name === "_id";
-          const isTargetPK =
-            targetCol.isPrimaryKey ||
-            targetCol.isUnique ||
-            targetCol.name === "_id";
-
-          let fkNode = sourceNode;
-          let fkCol = sourceCol;
-          let fkColIndex = sourceColIndex;
-          let refNode = targetNode;
-          let refCol = targetCol;
-
-          if (isSourcePK && !isTargetPK) {
-            fkNode = targetNode;
-            fkCol = targetCol;
-            fkColIndex = targetColIndex;
-            refNode = sourceNode;
-            refCol = sourceCol;
-          }
-
-          const refTable = refNode.data.label || "";
-          const refColName = refCol.name || "_id";
-
-          if (fkNode.data.columns) {
-            const newCols = [...fkNode.data.columns];
-            newCols[fkColIndex] = {
-              ...fkCol,
-              isForeignKey: true,
-              references: {
-                table: refTable,
-                column: refColName,
-              },
-            };
-            get().updateNode(fkNode.id, {
-              data: { ...fkNode.data, columns: newCols },
-            });
-          }
-        }
-      }
-    }
+    // 5. Handle Foreign Key column-to-column metadata updates
+    handleForeignKeyConnect(context);
   },
 
   addEdge: (edgeWithoutIndex) => {
@@ -637,41 +194,7 @@ export const createEdgeSlice = (
     // When AI creates a foreign-key edge (via add_edge) it never sets sourceHandle /
     // targetHandle, so ReactFlow falls back to the first handle it finds — which is
     // `database-entity-target` at the top of the card. Auto-derive column handles here.
-    if (
-      edge.type === "foreign-key" &&
-      (!edge.sourceHandle || !edge.targetHandle)
-    ) {
-      const nodes = get().nodes;
-      const sourceNode = nodes.find((n) => n.id === edge.source);
-      const targetNode = nodes.find((n) => n.id === edge.target);
-
-      if (
-        sourceNode?.type === "entity" &&
-        targetNode?.type === "entity" &&
-        sourceNode.data.columns &&
-        targetNode.data.columns
-      ) {
-        // Find the PK column on the source node
-        const pkIdx = sourceNode.data.columns.findIndex(
-          (c) => c.isPrimaryKey,
-        );
-        // Find the FK column on the target node that references the source table
-        const fkIdx = targetNode.data.columns.findIndex(
-          (c) =>
-            c.isForeignKey &&
-            c.references?.table === sourceNode.data.label,
-        );
-
-        if (pkIdx !== -1) {
-          edge = {
-            ...edge,
-            sourceHandle: `source-${pkIdx}`,
-            // Only set targetHandle if we found a matching FK column
-            targetHandle: fkIdx !== -1 ? `target-${fkIdx}` : edge.targetHandle,
-          };
-        }
-      }
-    }
+    edge = autoDeriveForeignKeyHandles(edge, nodes);
 
     const isSchema =
       edge.type === "foreign-key" || edge.type === "database-connection";
