@@ -14,6 +14,7 @@ import {
 } from "./utils";
 import { toVarName } from "@/lib/compiler/utils";
 import { isStepInputUnconfigured } from "@/lib/utils/pipelineValidation";
+import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 
 export interface UseStepRowStateProps {
   step: PipelineStepDraft;
@@ -80,7 +81,7 @@ export function useStepRowState({
     [allEntityNodes, step.tableNodeId],
   );
 
-  // Expected arguments (for DB Operation or Transform)
+  // Expected arguments (for DB Operation, Redis, Transform, Kafka, Service Call)
   const expectedArgs = useMemo((): ExpectedArg[] => {
     if (step.type === "transform" && selectedTransformer) {
       return selectedTransformer.inputSchema.map((f) => ({
@@ -120,6 +121,70 @@ export function useStepRowState({
       }
     }
 
+    if (step.type === "redis_operation") {
+      if (selectedTableNode && selectedTableNode.id !== "__direct__") {
+        const ops = getEntityDbOperations(selectedTableNode, allNodes);
+        const op = ops.find(
+          (o) => o.id === step.operationId || o.name === step.functionRef?.name,
+        );
+        if (op && op.params) {
+          return op.params.map((p) => ({
+            name: p.name,
+            type: p.type || "string",
+            required: p.required !== false,
+          }));
+        }
+      }
+
+      // Direct / Standard Redis Commands
+      const fn = (step.functionRef?.name || step.operationId || "").toLowerCase();
+      if (fn.includes("setex")) {
+        return [
+          { name: "key", type: "string", required: true },
+          { name: "seconds", type: "number", required: true },
+          { name: "value", type: "string", required: true },
+        ];
+      }
+      if (fn.includes("hset")) {
+        return [
+          { name: "key", type: "string", required: true },
+          { name: "field", type: "string", required: true },
+          { name: "value", type: "string", required: true },
+        ];
+      }
+      if (fn.includes("hget") || fn.includes("hdel")) {
+        return [
+          { name: "key", type: "string", required: true },
+          { name: "field", type: "string", required: true },
+        ];
+      }
+      if (fn.includes("set") || fn.includes("lpush") || fn.includes("rpush")) {
+        return [
+          { name: "key", type: "string", required: true },
+          { name: "value", type: "string", required: true },
+        ];
+      }
+      if (fn.includes("publish")) {
+        return [
+          { name: "channel", type: "string", required: true },
+          { name: "message", type: "string", required: true },
+        ];
+      }
+      if (fn.includes("xadd")) {
+        return [
+          { name: "stream", type: "string", required: true },
+          { name: "fields", type: "object", required: true },
+        ];
+      }
+      if (fn.includes("expire")) {
+        return [
+          { name: "key", type: "string", required: true },
+          { name: "seconds", type: "number", required: true },
+        ];
+      }
+      return [{ name: "key", type: "string", required: true }];
+    }
+
     if (step.type === "kafka_publish") {
       const fnName = step.functionRef?.name || "";
       if (fnName === "publishKafkaEvent") {
@@ -130,13 +195,67 @@ export function useStepRowState({
         ];
       }
       return [
-        { name: "message", type: "object", required: true },
+        { name: "payload", type: "object", required: true },
         { name: "key", type: "string", required: false },
       ];
     }
 
+    if (step.type === "service_call") {
+      const targetService = allNodes.find((n) => n.id === step.databaseId);
+      const endpoints: Endpoint[] = targetService?.data?.endpoints || [];
+      const targetEp = endpoints.find(
+        (ep) => ep.id === step.tableNodeId || ep.name === step.tableNodeId,
+      );
+      if (targetEp) {
+        const args: ExpectedArg[] = [];
+        if (targetEp.pathParams && targetEp.pathParams.length > 0) {
+          targetEp.pathParams.forEach((p) => {
+            args.push({ name: p.name, type: p.type || "string", required: true });
+          });
+        }
+        if (targetEp.queryParams && targetEp.queryParams.length > 0) {
+          targetEp.queryParams.forEach((q) => {
+            args.push({ name: q.name, type: q.type || "string", required: false });
+          });
+        }
+        if (
+          targetEp.requestBody &&
+          targetEp.requestBody.fields &&
+          targetEp.requestBody.fields.length > 0
+        ) {
+          targetEp.requestBody.fields.forEach((f) => {
+            args.push({
+              name: f.name,
+              type: f.type || "string",
+              required: f.required !== false,
+            });
+          });
+        } else if (
+          targetEp.type === "POST" ||
+          targetEp.type === "PUT" ||
+          targetEp.type === "PATCH"
+        ) {
+          args.push({ name: "body", type: "object", required: true });
+        }
+        return args;
+      }
+      return [
+        { name: "params", type: "object", required: false },
+        { name: "body", type: "object", required: false },
+      ];
+    }
+
     return [];
-  }, [step.type, selectedTransformer, selectedTableNode, step.functionRef?.name, step.operationId]);
+  }, [
+    step.type,
+    selectedTransformer,
+    selectedTableNode,
+    step.databaseId,
+    step.tableNodeId,
+    step.functionRef?.name,
+    step.operationId,
+    allNodes,
+  ]);
 
   // Auto-map arguments from route params / query / body / prior steps (preserving existing)
   const handleAutoMapArguments = useCallback(() => {
