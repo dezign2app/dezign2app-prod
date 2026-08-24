@@ -75,6 +75,7 @@ export interface AvailableTransformer {
   inputSchema: TransformerSchemaField[];
   returnSchema: TransformerSchemaField[];
   nodeId?: string;
+  transformerRefNodeId?: string;
   logicMode?: "code" | "natural_language";
   code?: string;
   prompt?: string;

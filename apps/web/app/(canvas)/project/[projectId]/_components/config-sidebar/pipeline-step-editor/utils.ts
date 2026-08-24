@@ -478,6 +478,14 @@ export function getAvailableTransformers(
         ? `./transformers/${fnName}`
         : "@workspace/transformers";
 
+      // Check if there's already a transformer_ref node for this service
+      const refNode = allNodes.find(
+        (n) =>
+          n.type === "transformer_ref" &&
+          (n.data?.targetServiceId === serviceNodeId ||
+            allEdges.some((e) => e.source === n.id && e.target === serviceNodeId)),
+      );
+
       transformers.push({
         id: tNode.id,
         name: fnName,
@@ -487,6 +495,7 @@ export function getAvailableTransformers(
         targetEndpointId: nodeData?.targetEndpointId,
         sourceType: "canvas_node",
         nodeId: tNode.id,
+        transformerRefNodeId: refNode?.id,
         importPath,
         inputSchema: nodeData?.inputSchema || [],
         returnSchema: nodeData?.returnSchema || [],
