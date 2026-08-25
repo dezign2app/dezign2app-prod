@@ -59,8 +59,8 @@ export function compileMonorepo(
     return folderName;
   };
 
-  // Helper to resolve unique folder name for web clients
-  const getUniqueWebClientFolder = (slug: string, defaultName: string) => {
+  // Helper to resolve unique folder name for web apps
+  const getUniqueWebAppFolder = (slug: string, defaultName: string) => {
     const base = (slug || defaultName).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || defaultName;
     let folderName = base;
     let counter = 1;
@@ -419,7 +419,7 @@ export function compileMonorepo(
     });
 
     appMap.forEach(({ appName, appSlug, pageNodes, webAppNode }) => {
-      const folderName = getUniqueWebClientFolder(appSlug, "web-app");
+      const folderName = getUniqueWebAppFolder(appSlug, "web-app");
       webClientsInfo.push({
         id: `web-app-${appSlug}`,
         name: appName,

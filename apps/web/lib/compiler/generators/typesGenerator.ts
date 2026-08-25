@@ -500,7 +500,7 @@ export function generateTypesPackage(
   // 5. Root Index barrel: src/index.ts
   const indexContent = `/**
  * Shared Type Definitions & Zod Validation Schemas
- * Reused across all microservices (@workspace/*) and frontend web clients
+ * Reused across all microservices (@workspace/*) and frontend web pages
  */
 ${barrelExports.join("\n")}
 `;

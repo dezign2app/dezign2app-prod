@@ -106,7 +106,7 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     expect(dbConnectionFile?.content).toContain('db.pragma("journal_mode = WAL")');
     expect(dbConnectionFile?.content).toContain('db.pragma("foreign_keys = ON")');
 
-    // 2. Verify Web Client .env and .env.example point to centralized packages/db/sqlite.db
+    // 2. Verify Web app .env and .env.example point to centralized packages/db/sqlite.db
     const webEnvFile = result.files.find(
       (f) => f.filename === "apps/customer-portal/.env",
     );
@@ -160,7 +160,7 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
       expect(targetTsconfig).toBeDefined();
     });
 
-    // 7. Verify Next.js web client has its own integrated auth route handler, auth client, and auth.ts
+    // 7. Verify Next.js web app has its own integrated auth route handler, auth client, and auth.ts
     const nextAuthRoute = result.files.find(
       (f) => f.filename === "apps/customer-portal/app/api/auth/[...all]/route.ts",
     );

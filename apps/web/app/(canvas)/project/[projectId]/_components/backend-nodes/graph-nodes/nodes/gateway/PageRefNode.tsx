@@ -52,7 +52,7 @@ export const PageRefNode = ({
       const srcNode = nodes.find((n) => n.id === edge.source);
       if (!srcNode) return null;
 
-      const srcLabel = srcNode.data?.label || "Web Client";
+      const srcLabel = srcNode.data?.label || "Web Page";
       const sourceHandle = edge.sourceHandle || "";
       let eventName = "Navigation Event";
 

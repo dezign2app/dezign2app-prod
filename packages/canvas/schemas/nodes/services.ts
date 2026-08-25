@@ -134,7 +134,7 @@ export const webClientDataSchema = simpleDataSchema.extend({
   route: z.string().optional(),
   targetServerId: z.string().optional(),
   targetRouteId: z.string().optional(),
-  headers: z.array(parameterSchema).optional().describe("Custom request headers sent by this web client page"),
+  headers: z.array(parameterSchema).optional().describe("Custom request headers sent by this web page"),
   pathParams: z.array(parameterSchema).optional().describe("URL path parameters for API requests"),
   queryParams: z.array(parameterSchema).optional().describe("URL query parameters for API requests"),
   requestBody: schemaModelSchema.optional().describe("Request body schema for API calls"),

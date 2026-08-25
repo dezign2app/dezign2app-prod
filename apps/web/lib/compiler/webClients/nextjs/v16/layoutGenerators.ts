@@ -11,8 +11,8 @@ import Link from "next/link";
 import "@workspace/ui/globals.css";
 
 export const metadata: Metadata = {
-  title: "${projectName} Web Client",
-  description: "Next.js Web Client generated from Blueprint architecture canvas",
+  title: "${projectName} Web Application",
+  description: "Next.js Web Application generated from Blueprint architecture canvas",
 };
 
 export default function RootLayout({
@@ -27,7 +27,7 @@ export default function RootLayout({
           <div className="max-w-5xl mx-auto flex items-center justify-between">
             <Link href="/" className="font-bold text-foreground flex items-center gap-2 text-sm hover:opacity-90 transition-opacity">
               <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
-              <span>Web Client App</span>
+              <span>Web Application</span>
             </Link>
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
               ${pagesNavLinks}

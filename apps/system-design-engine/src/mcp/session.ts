@@ -61,7 +61,7 @@ export async function createSession(
     "get_system_design_context",
     {
       description:
-        "PRIMARY TOOL FOR AI CODING AGENTS. Call this tool FIRST to retrieve structured architectural context (database entity schemas/relations, services, web clients, endpoints, data schemas, and test cases) directly from the project database. The project is determined automatically from your API key.",
+        "PRIMARY TOOL FOR AI CODING AGENTS. Call this tool FIRST to retrieve structured architectural context (database entity schemas/relations, services, web pages, endpoints, data schemas, and test cases) directly from the project database. The project is determined automatically from your API key.",
       inputSchema: {
         query: z
           .string()

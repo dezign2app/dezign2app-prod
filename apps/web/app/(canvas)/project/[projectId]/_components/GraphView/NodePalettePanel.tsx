@@ -32,33 +32,50 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
       <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-1 pb-1">
         Computing
       </div>
-      <Button
-        variant="outline"
-        size="sm"
-        className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 border-indigo-500/30"
-        onClick={() => onAddNode("webApp", "Web App")}
-      >
-        <Globe className="w-3.5 h-3.5 mr-2 text-indigo-400 shrink-0" />
-        Web App
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0"
-        onClick={() => onAddNode("webClient", "Page Client")}
-      >
-        <Globe className="w-3.5 h-3.5 mr-2 shrink-0" />
-        Page Client
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 border-indigo-500/20"
-        onClick={() => onAddNode("page_ref" as GraphNodeType, "Page Ref")}
-      >
-        <Compass className="w-3.5 h-3.5 mr-2 text-indigo-500 shrink-0" />
-        Page Ref
-      </Button>
+      {/* WEB APP / CLIENT GROUP */}
+      <div className="flex flex-col gap-1.5 p-1.5 rounded-lg bg-indigo-500/5 dark:bg-indigo-950/20 border border-indigo-500/25">
+        <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+          <Globe className="w-3 h-3 text-indigo-500" />
+          Web App
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+          onClick={() => onAddNode("webApp", "Web App")}
+        >
+          <Globe className="w-3.5 h-3.5 mr-2 text-indigo-500 shrink-0" />
+          Web App
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+          onClick={() => onAddNode("webClient", "Web Page")}
+        >
+          <Globe className="w-3.5 h-3.5 mr-2 text-indigo-500/80 shrink-0" />
+          Web Page
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+          onClick={() => onAddNode("page_ref" as GraphNodeType, "Page Ref")}
+        >
+          <Compass className="w-3.5 h-3.5 mr-2 text-indigo-500/80 shrink-0" />
+          Page Ref
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+          onClick={() => onAddNode("auth", "Auth Node")}
+        >
+          <ShieldCheck className="w-3.5 h-3.5 mr-2 text-indigo-500 shrink-0" />
+          Auth Node
+        </Button>
+      </div>
+
       <Button
         variant="outline"
         size="sm"
@@ -67,15 +84,6 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
       >
         <Server className="w-3.5 h-3.5 mr-2" />
         Service
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0"
-        onClick={() => onAddNode("auth", "Auth Node")}
-      >
-        <ShieldCheck className="w-3.5 h-3.5 mr-2 text-indigo-500" />
-        Auth Node
       </Button>
       {/* TRANSFORMERS GROUP */}
       <div className="flex flex-col gap-1.5 p-1.5 rounded-lg bg-purple-500/5 dark:bg-purple-950/20 border border-purple-500/25">

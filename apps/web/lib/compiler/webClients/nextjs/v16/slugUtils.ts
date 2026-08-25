@@ -17,6 +17,11 @@ export function labelToSlug(label: string, index: number): string {
     clean === "webclient" ||
     clean === "web-client" ||
     clean === "web-client-page" ||
+    clean === "web page" ||
+    clean === "web-page" ||
+    clean === "web page (route)" ||
+    clean === "web-page-route" ||
+    clean === "web-page-page" ||
     clean === "page-client"
   ) {
     return "home";

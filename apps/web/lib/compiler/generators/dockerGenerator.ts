@@ -14,11 +14,14 @@ export interface WebClientInfo {
   folderName: string;
 }
 
+export type WebAppInfo = WebClientInfo;
+
 export interface DockerGeneratorOptions {
   nodes: BackendNode[];
   edges: BackendEdge[];
   services: ServiceInfo[];
-  webClients: WebClientInfo[];
+  webApps?: WebAppInfo[];
+  webClients?: WebClientInfo[];
   projectName: string;
   hasKafka?: boolean;
   hasRedis?: boolean;
@@ -40,11 +43,13 @@ export function generateDockerFiles(options: DockerGeneratorOptions): CompiledFi
     nodes,
     edges,
     services,
-    webClients,
+    webApps: propWebApps,
+    webClients: propWebClients,
     projectName,
     hasKafka = false,
     hasRedis = false,
   } = options;
+  const webApps = propWebApps || propWebClients || [];
 
   const files: CompiledFile[] = [];
   const projectSlug = projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "blueprint";
@@ -95,8 +100,8 @@ export function generateDockerFiles(options: DockerGeneratorOptions): CompiledFi
     });
   });
 
-  // 2. Generate Per-WebClient Dockerfiles
-  webClients.forEach((client, idx) => {
+  // 2. Generate Per-WebApp Dockerfiles
+  webApps.forEach((client, idx) => {
     const webPort = idx === 0 ? "3000" : `${3000 + idx}`;
     // Dockerfile always exposes 3000 - Next.js internal container port.
     // docker-compose maps webPort:3000 on the host. Dev mode uses webPort natively.
@@ -113,7 +118,7 @@ export function generateDockerFiles(options: DockerGeneratorOptions): CompiledFi
       content: generateAppDockerignore("nextjs"),
     });
 
-    // Per-web-client .env.example uses webPort for native dev mode
+    // Per-web-app .env.example uses webPort for native dev mode
     files.push({
       filename: `apps/${client.folderName}/.env.example`,
       language: "dotenv",
@@ -126,7 +131,7 @@ export function generateDockerFiles(options: DockerGeneratorOptions): CompiledFi
     nodes,
     edges,
     services,
-    webClients,
+    webApps,
     projectSlug,
     hasPostgres,
     hasSqlite,
@@ -188,13 +193,13 @@ dist
   files.push({
     filename: "dev-setup.sh",
     language: "shell",
-    content: generateDevSetupSh(projectName, hasInfra, services, webClients),
+    content: generateDevSetupSh(projectName, hasInfra, services, webApps),
   });
 
   files.push({
     filename: "dev-setup.bat",
     language: "bat",
-    content: generateDevSetupBat(projectName, hasInfra, services, webClients),
+    content: generateDevSetupBat(projectName, hasInfra, services, webApps),
   });
 
   // 9. Production start scripts (full docker stack)
@@ -282,11 +287,11 @@ CMD ["pnpm", "--filter", "@workspace/${folderName}", "start"]
 }
 
 /**
- * Dockerfile generator for Next.js Web Client Applications
+ * Dockerfile generator for Next.js Web Applications
  */
 function generateNextjsDockerfile(folderName: string, port: string = "3000"): string {
   return `# ==============================================================================
-# Next.js Web Client Dockerfile (Turborepo Multi-Stage)
+# Next.js Web app Dockerfile (Turborepo Multi-Stage)
 # ==============================================================================
 FROM node:20-alpine AS base
 ENV PNPM_HOME="/pnpm"
@@ -351,7 +356,8 @@ interface ComposeGeneratorContext {
   nodes: BackendNode[];
   edges: BackendEdge[];
   services: ServiceInfo[];
-  webClients: WebClientInfo[];
+  webApps?: WebAppInfo[];
+  webClients?: WebClientInfo[];
   projectSlug: string;
   hasPostgres: boolean;
   hasSqlite: boolean;
@@ -364,13 +370,15 @@ function generateRootDockerCompose(ctx: ComposeGeneratorContext): string {
     nodes,
     edges,
     services,
-    webClients,
+    webApps: propWebApps,
+    webClients: propWebClients,
     projectSlug,
     hasPostgres,
     hasSqlite,
     hasKafka,
     hasRedis,
   } = ctx;
+  const webApps = propWebApps || propWebClients || [];
 
   const composeLines: string[] = [
     `# ==============================================================================`,
@@ -462,8 +470,8 @@ function generateRootDockerCompose(ctx: ComposeGeneratorContext): string {
     composeLines.push(``);
   });
 
-  // 2. Web Client Applications
-  webClients.forEach((client, idx) => {
+  // 2. Web Applications
+  webApps.forEach((client, idx) => {
     const webPort = idx === 0 ? "3000" : `${3000 + idx}`;
     composeLines.push(`  ${client.folderName}:`);
     composeLines.push(`    build:`);
@@ -934,7 +942,7 @@ function generateWebClientEnvExample(
   nodes: BackendNode[],
 ): string {
   const lines: string[] = [
-    "# Web Client .env.example",
+    "# Web app .env.example",
     "# Sync with: node ../../scripts/sync-env.mjs .env.example .env",
     "",
     "NODE_ENV=development",
@@ -1051,7 +1059,7 @@ function generateDevSetupSh(
   projectName: string,
   hasInfra: boolean,
   services: { name: string; folderName: string }[],
-  webClients: { name: string; folderName: string }[],
+  webApps: { name: string; folderName: string }[],
 ): string {
   const infraCheck = hasInfra
     ? "\nif ! command -v docker &> /dev/null; then\n  echo \"Docker not found: https://www.docker.com/products/docker-desktop\"\n  exit 1\nfi\n"
@@ -1061,7 +1069,7 @@ function generateDevSetupSh(
     : "";
   const portLines = [
     ...services.map((s) => `echo "  ${s.name}: http://localhost:8080"`),
-    ...webClients.map((w, i) => `echo "  ${w.name}: http://localhost:${i === 0 ? 3000 : 3000 + i}"`),
+    ...webApps.map((w, i) => `echo "  ${w.name}: http://localhost:${i === 0 ? 3000 : 3000 + i}"`),
   ].join("\n");
 
   return `#!/usr/bin/env bash
@@ -1088,7 +1096,7 @@ function generateDevSetupBat(
   projectName: string,
   hasInfra: boolean,
   services: { name: string; folderName: string }[],
-  webClients: { name: string; folderName: string }[],
+  webApps: { name: string; folderName: string }[],
 ): string {
   const infraCheck = hasInfra
     ? "\nwhere docker >nul 2>nul\nif %errorlevel% neq 0 ( echo Docker not found & pause & exit /b 1 )\n"
@@ -1098,7 +1106,7 @@ function generateDevSetupBat(
     : "";
   const portLines = [
     ...services.map((s) => `echo   ${s.name}: http://localhost:8080`),
-    ...webClients.map((w, i) => `echo   ${w.name}: http://localhost:${i === 0 ? 3000 : 3000 + i}`),
+    ...webApps.map((w, i) => `echo   ${w.name}: http://localhost:${i === 0 ? 3000 : 3000 + i}`),
   ].join("\n");
 
   return `@echo off

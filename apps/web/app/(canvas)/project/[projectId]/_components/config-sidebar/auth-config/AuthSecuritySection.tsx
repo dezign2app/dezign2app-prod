@@ -386,7 +386,7 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
                   <Globe className="w-3.5 h-3.5 text-primary" /> Trusted Origins & CORS List
                 </Label>
                 <p className="text-[11px] text-muted-foreground">
-                  Allowed web client origins for auth cookies and CORS credentials.
+                  Allowed web app origins for auth cookies and CORS credentials.
                 </p>
               </div>
               <Button
