@@ -87,6 +87,7 @@ export interface BarycenterRefinementParams {
   storeEndpoints: Array<{ id: string; nodeId: string }>;
   storeEvents: Array<{ id: string; nodeId: string }>;
   hangingEdges?: LayoutEdge[];
+  hangingRefEdges?: LayoutEdge[];
 }
 
 export function runBarycenterRefinement({
@@ -98,6 +99,7 @@ export function runBarycenterRefinement({
   storeEndpoints,
   storeEvents,
   hangingEdges = [],
+  hangingRefEdges = [],
 }: BarycenterRefinementParams): void {
   // Whether any entity nodes are present — used to tune gaps
   const hasEntityNodesLocal = flowNodes.some((n) => n.type === "entity");
@@ -337,9 +339,13 @@ export function runBarycenterRefinement({
         const hasHangingTransformersInRank = ids.some((id) =>
           hangingEdges.some((e) => e.target === id),
         );
-        const effectiveRankGap = hasHangingTransformersInRank
-          ? Math.max(minRankGap, 380)
-          : minRankGap;
+        const hasHangingReferencesInRank = ids.some((id) =>
+          hangingRefEdges.some((e) => e.source === id),
+        );
+        const effectiveRankGap =
+          hasHangingTransformersInRank || hasHangingReferencesInRank
+            ? Math.max(minRankGap, 400)
+            : minRankGap;
 
         if (lastRankMaxPrimary !== -Infinity) {
           const minAllowedCenter =
@@ -365,8 +371,12 @@ export function runBarycenterRefinement({
             positionsMap.set(id, { x, y });
 
             const nodeRight = x + maxNodeWidth;
-            if (nodeRight > currentRankMaxPrimary) {
-              currentRankMaxPrimary = nodeRight;
+            const hasDownstreamRefs = hangingRefEdges.some((e) => e.source === id);
+            const effectiveNodeRight = hasDownstreamRefs
+              ? nodeRight + 320
+              : nodeRight;
+            if (effectiveNodeRight > currentRankMaxPrimary) {
+              currentRankMaxPrimary = effectiveNodeRight;
             }
           });
         } else {
@@ -383,8 +393,12 @@ export function runBarycenterRefinement({
             positionsMap.set(id, { x, y });
 
             const nodeBottom = y + maxNodeHeight;
-            if (nodeBottom > currentRankMaxPrimary) {
-              currentRankMaxPrimary = nodeBottom;
+            const hasDownstreamRefs = hangingRefEdges.some((e) => e.source === id);
+            const effectiveNodeBottom = hasDownstreamRefs
+              ? nodeBottom + 160
+              : nodeBottom;
+            if (effectiveNodeBottom > currentRankMaxPrimary) {
+              currentRankMaxPrimary = effectiveNodeBottom;
             }
           });
         }
@@ -425,9 +439,13 @@ export function runBarycenterRefinement({
       const hasHangingTransformersInRank = ids.some((id) =>
         hangingEdges.some((e) => e.target === id),
       );
-      const effectiveRankGap = hasHangingTransformersInRank
-        ? Math.max(minRankGap, 380)
-        : minRankGap;
+      const hasHangingReferencesInRank = ids.some((id) =>
+        hangingRefEdges.some((e) => e.source === id),
+      );
+      const effectiveRankGap =
+        hasHangingTransformersInRank || hasHangingReferencesInRank
+          ? Math.max(minRankGap, 400)
+          : minRankGap;
 
       // Enforce clean rank separation from previous rank
       if (lastRankMaxPrimary !== -Infinity) {
@@ -447,15 +465,23 @@ export function runBarycenterRefinement({
           positionsMap.set(id, { x: secondaryPos - width / 2, y: cursor });
           cursor += height + nodeGap;
           const nodeRight = secondaryPos + width / 2;
-          if (nodeRight > currentRankMaxPrimary) {
-            currentRankMaxPrimary = nodeRight;
+          const hasDownstreamRefs = hangingRefEdges.some((e) => e.source === id);
+          const effectiveNodeRight = hasDownstreamRefs
+            ? nodeRight + 320
+            : nodeRight;
+          if (effectiveNodeRight > currentRankMaxPrimary) {
+            currentRankMaxPrimary = effectiveNodeRight;
           }
         } else {
           positionsMap.set(id, { x: cursor, y: secondaryPos - height / 2 });
           cursor += width + nodeGap;
           const nodeBottom = secondaryPos + height / 2;
-          if (nodeBottom > currentRankMaxPrimary) {
-            currentRankMaxPrimary = nodeBottom;
+          const hasDownstreamRefs = hangingRefEdges.some((e) => e.source === id);
+          const effectiveNodeBottom = hasDownstreamRefs
+            ? nodeBottom + 160
+            : nodeBottom;
+          if (effectiveNodeBottom > currentRankMaxPrimary) {
+            currentRankMaxPrimary = effectiveNodeBottom;
           }
         }
       });

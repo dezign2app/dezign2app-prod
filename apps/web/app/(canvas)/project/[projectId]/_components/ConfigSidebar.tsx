@@ -28,6 +28,8 @@ import { DatabaseConfig } from "./config-sidebar/DatabaseConfig";
 import { TestUsersConfig } from "./config-sidebar/TestUsersConfig";
 import { RedisSchemaConfig } from "./config-sidebar/RedisSchemaConfig";
 import { TransformerConfig } from "./config-sidebar/TransformerConfig";
+import { DatabaseTableRefConfig } from "./config-sidebar/DatabaseTableRefConfig";
+import { RedisCacheRefConfig } from "./config-sidebar/RedisCacheRefConfig";
 
 export const ConfigSidebar = () => {
   const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
@@ -228,6 +230,10 @@ export const ConfigSidebar = () => {
             <TestUsersConfig id={id} nodeId={nodeId} />
           ) : type === "redisSchema" ? (
             <RedisSchemaConfig id={id} nodeId={nodeId} />
+          ) : type === "db_ref" ? (
+            <DatabaseTableRefConfig id={id} nodeId={nodeId} />
+          ) : type === "redis_cache" ? (
+            <RedisCacheRefConfig id={id} nodeId={nodeId} />
           ) : type === "transformer" || type === "transformer_ref" ? (
             <TransformerConfig id={id} nodeId={nodeId} />
           ) : (
