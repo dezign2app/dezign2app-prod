@@ -1,4 +1,3 @@
-import { ChatGroq } from "@langchain/groq";
 import { StateGraph } from "@langchain/langgraph";
 import { GraphAnnotation } from "../state";
 import { createAgentNodes } from "./agentNodes";
@@ -9,30 +8,10 @@ import {
   afterTools,
   shouldContinueReflect,
 } from "./router";
-
-let apiKeyIndex = 0;
+import { createChatModel } from "../llmFactory";
 
 export function createGraph() {
-  const apiKeyStr = process.env.GROQ_API_KEY;
-  const model = process.env.GROQ_LLM_MODEL || "openai/gpt-oss-120b";
-  if (!apiKeyStr) {
-    throw new Error(
-      "Missing environment variable: GROQ_API_KEY",
-    );
-  }
-
-  const apiKeys = apiKeyStr
-    .split(",")
-    .map((k) => k.trim())
-    .filter((k) => k.length > 0);
-  if (apiKeys.length === 0) {
-    throw new Error("GROQ_API_KEY is empty or invalid");
-  }
-
-  const apiKey = apiKeys[apiKeyIndex];
-  apiKeyIndex = (apiKeyIndex + 1) % apiKeys.length;
-
-  const llm = new ChatGroq({ apiKey, model, temperature: 0, maxTokens: 4000 });
+  const llm = createChatModel({ temperature: 0, maxTokens: 4000 });
 
   const agentNodes = createAgentNodes(llm);
   const reqPlanNodes = createRequirementsAndPlanNodes(llm);

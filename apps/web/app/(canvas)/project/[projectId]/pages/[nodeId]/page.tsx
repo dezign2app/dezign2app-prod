@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -34,6 +34,14 @@ import { NodePaletteSidebar } from "../../_components/NodePaletteSidebar";
 import { Terminal } from "../../_components/terminal";
 import { PageAiPanel, Message } from "./_components/PageAiPanel";
 import { DevServerOfflineState } from "./_components/DevServerOfflineState";
+import {
+  JSONValue,
+  pageEditorStreamEventSchema,
+  type PageEditorStreamEvent,
+  pageRouteToFolderPath,
+  pageRouteToUrl,
+  parsePageRoute,
+} from "@workspace/canvas";
 
 export default function PageEditorPage({
   params,
@@ -50,6 +58,7 @@ export default function PageEditorPage({
     projectId: projectId as Id<"projects">,
   });
   const projectName = project?.name || "Blueprint";
+  const patchNodeData = useMutation(api.canvas.patchNodeData);
 
   const node = useBackendCanvasStore((s) => s.nodes.find((n) => n.id === nodeId));
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
@@ -82,10 +91,10 @@ export default function PageEditorPage({
   }, [nodes, edges, nodeId]);
 
   const port = connectedWebAppNode?.data?.port || "3000";
-  const pageRoute = node?.data?.label
-    ? node.data.label.startsWith("/") ? node.data.label : `/${node.data.label}`
-    : "/";
-  const pageName = typeof node?.data?.label === "string" && node.data.label ? node.data.label : nodeId;
+  const rawLabel = typeof node?.data?.label === "string" ? node.data.label : "";
+  const pageRoute = pageRouteToUrl(rawLabel);
+  const pageFolderSlug = pageRouteToFolderPath(rawLabel);
+  const pageName = parsePageRoute(rawLabel) || nodeId;
   const currentCode = typeof node?.data?.pageSourceCode === "string" ? node.data.pageSourceCode : undefined;
   const isAiEditing = Boolean(node?.data?.aiEditing);
 
@@ -170,14 +179,122 @@ export default function PageEditorPage({
     toast.info("Terminal opened — start dev server with 'pnpm dev'");
   };
 
-  // AI chat state
+  // Helper to resolve the live code context from disk or Convex
+  const resolveCurrentPageCode = useCallback(async (): Promise<{
+    code: string;
+    source: "disk" | "convex" | "none";
+    filePath: string;
+  }> => {
+    const rawSlug = typeof connectedWebAppNode?.data?.appSlug === "string" ? connectedWebAppNode.data.appSlug : "";
+    const rawLabel = typeof connectedWebAppNode?.data?.label === "string" ? connectedWebAppNode.data.label : "web-app";
+    const webAppSlug = (rawSlug || rawLabel).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+    const isRoot = !pageFolderSlug || pageFolderSlug === "/" || pageFolderSlug === "page" || pageFolderSlug === "(public)";
+
+    const candidatePaths: string[] = [
+      // Standard Monorepo root paths (used by Blueprint monorepo exports)
+      isRoot ? `apps/${webAppSlug}/app/(public)/page.tsx` : `apps/${webAppSlug}/app/(public)/${pageFolderSlug}/page.tsx`,
+      isRoot ? `apps/${webAppSlug}/app/(${webAppSlug})/page.tsx` : `apps/${webAppSlug}/app/(${webAppSlug})/${pageFolderSlug}/page.tsx`,
+      isRoot ? `apps/${webAppSlug}/app/(${pageFolderSlug})/page.tsx` : `apps/${webAppSlug}/app/(${pageFolderSlug})/page.tsx`,
+      isRoot ? `apps/${webAppSlug}/app/page.tsx` : `apps/${webAppSlug}/app/${pageFolderSlug}/page.tsx`,
+      // Direct WebApp folder paths
+      isRoot ? `app/(public)/page.tsx` : `app/(public)/${pageFolderSlug}/page.tsx`,
+      isRoot ? `app/(${webAppSlug})/page.tsx` : `app/(${webAppSlug})/${pageFolderSlug}/page.tsx`,
+      isRoot ? `app/(${pageFolderSlug})/page.tsx` : `app/(${pageFolderSlug})/page.tsx`,
+      isRoot ? `app/page.tsx` : `app/${pageFolderSlug}/page.tsx`,
+    ];
+
+    const defaultFilePath = isRoot
+      ? `apps/${webAppSlug}/app/(public)/page.tsx`
+      : `apps/${webAppSlug}/app/(public)/${pageFolderSlug}/page.tsx`;
+
+    // 1. Try reading the live file from disk via Electron
+    if (isElectron() && outputDir) {
+      const electronApi = getElectronAPI();
+      if (electronApi?.fs?.readFile) {
+        for (const relPath of candidatePaths) {
+          try {
+            const res = await electronApi.fs.readFile(outputDir, relPath);
+            if (res?.success && typeof res.content === "string" && res.content.trim().length > 0) {
+              console.log(`[PageEditor] Loaded live code from disk (${res.path}): ${res.content.length} chars`);
+              return { code: res.content, source: "disk", filePath: relPath };
+            }
+          } catch {}
+        }
+      }
+    }
+
+    // 2. Try Convex stored pageSourceCode
+    if (node?.data?.pageSourceCode && typeof node.data.pageSourceCode === "string" && node.data.pageSourceCode.trim().length > 0) {
+      console.log(`[PageEditor] Loaded code from Convex node data: ${node.data.pageSourceCode.length} chars`);
+      return { code: node.data.pageSourceCode, source: "convex", filePath: defaultFilePath };
+    }
+
+    return { code: "", source: "none", filePath: defaultFilePath };
+  }, [connectedWebAppNode, pageFolderSlug, outputDir, node]);
+
+  // AI chat state & abort controller
   const [messages, setMessages] = useState<Message[]>([]);
   const [prompt, setPrompt] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [streamingStatus, setStreamingStatus] = useState("");
+  const abortControllerRef = React.useRef<AbortController | null>(null);
+
+  const engineBaseUrl = process.env.NEXT_PUBLIC_SYSTEM_DESIGN_ENGINE_URL || "http://localhost:3002";
+
+  const handleStop = useCallback(async () => {
+    console.log(`[PageEditor] ⏹️ User clicked STOP button for node: "${nodeId}"`);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      console.log(`[PageEditor] ⏹️ Aborted browser stream fetch reader.`);
+    }
+
+    // Explicitly notify the backend engine to terminate the LangGraph pipeline
+    fetch(`${engineBaseUrl}/page-editor/stop`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nodeId, projectId }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log(`[PageEditor] ⏹️ Server response from /page-editor/stop:`, data);
+      })
+      .catch((err) => {
+        console.warn("[PageEditor] Non-blocking /stop notify error:", err);
+      });
+
+    setStreaming(false);
+    setStreamingContent("");
+    setStreamingStatus("");
+    if (node) {
+      updateNode(nodeId, { data: { ...node.data, aiEditing: false } });
+    }
+    try {
+      await patchNodeData({
+        projectId: projectId as Id<"projects">,
+        nodeId,
+        patch: { aiEditing: false },
+      });
+    } catch {}
+    toast.info("AI generation stopped");
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: "⏹️ Generation stopped by user.",
+        timestamp: new Date(),
+      },
+    ]);
+  }, [node, updateNode, nodeId, patchNodeData, projectId, engineBaseUrl]);
 
   const handleSend = useCallback(async () => {
     if (!prompt.trim() || isAiEditing || streaming) return;
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     const userMsg: Message = {
       id: crypto.randomUUID(),
@@ -189,29 +306,54 @@ export default function PageEditorPage({
     setPrompt("");
     setStreaming(true);
     setStreamingContent("");
+    setStreamingStatus("Analyzing existing code & planning UI...");
 
-    // Mark node as AI-editing in store (optimistic)
+    // Mark node as AI-editing in store (optimistic) and sync to Convex
     if (node) {
       updateNode(nodeId, { data: { ...node.data, aiEditing: true } });
     }
+    patchNodeData({
+      projectId: projectId as Id<"projects">,
+      nodeId,
+      patch: { aiEditing: true },
+    }).catch((err) => {
+      console.warn("[PageEditor] Non-blocking lock sync error:", err);
+    });
 
     try {
-      const engineUrl = "http://localhost:3002/page-editor";
+      // 1. Resolve live code from disk or Convex so the AI has 100% current code context
+      const resolved = await resolveCurrentPageCode();
+      const codeToSend = resolved.code || (typeof node?.data?.pageSourceCode === "string" ? node.data.pageSourceCode : "");
+
+      const engineUrl = `${engineBaseUrl}/page-editor`;
+      console.log("[PageEditor] Sending request to engine:", {
+        nodeId,
+        projectId,
+        pageName,
+        pageRoute,
+        codeLength: codeToSend.length,
+        codeSource: resolved.source,
+        filePath: resolved.filePath,
+        prompt: userMsg.content,
+      });
+
       const response = await fetch(engineUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({
           nodeId,
           projectId,
-          currentCode: currentCode || "",
+          currentCode: codeToSend,
           prompt: userMsg.content,
           pageName,
+          pageRoute,
           convexUrl,
         }),
       });
 
       if (!response.ok || !response.body) {
-        throw new Error(`Engine error: ${response.status}`);
+        throw new Error(`Engine error: ${response.status} ${response.statusText}`);
       }
 
       const reader = response.body.getReader();
@@ -220,6 +362,8 @@ export default function PageEditorPage({
       let buffer = "";
 
       while (true) {
+        if (abortController.signal.aborted) break;
+
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -229,45 +373,105 @@ export default function PageEditorPage({
 
         for (const line of lines) {
           if (!line.trim()) continue;
+          let jsonValue: JSONValue;
           try {
-            const event = JSON.parse(line);
-            if (event.type === "token") {
-              setStreamingContent((prev) => prev + event.content);
-            } else if (event.type === "done") {
-              finalCode = event.code;
-            } else if (event.type === "error") {
-              throw new Error(event.message);
-            }
-          } catch (e) {
-            // Ignore parse errors for partial lines
+            jsonValue = JSON.parse(line);
+          } catch {
+            // Incomplete JSON chunk in buffer, skip until next read
+            continue;
+          }
+
+          const parseResult = pageEditorStreamEventSchema.safeParse(jsonValue);
+          if (!parseResult.success) {
+            continue;
+          }
+
+          const event: PageEditorStreamEvent = parseResult.data;
+
+          console.log(
+            "[PageEditor] Stream event:",
+            event.type,
+            "message" in event
+              ? event.message
+              : "content" in event
+                ? `${event.content.length} chars`
+                : ""
+          );
+
+          if (event.type === "status") {
+            setStreamingStatus(event.message);
+          } else if (event.type === "token") {
+            setStreamingContent((prev) => prev + event.content);
+          } else if (event.type === "plan") {
+            // Optional: plan streaming
+          } else if (event.type === "done") {
+            finalCode = event.code;
+          } else if (event.type === "error") {
+            throw new Error(event.message || "Engine returned error");
           }
         }
       }
 
+      if (abortController.signal.aborted) {
+        console.log("[PageEditor] Aborted stream read.");
+        return;
+      }
+
+      if (!finalCode) {
+        throw new Error("UI generation finished without producing code. Please check system-design-engine terminal logs.");
+      }
+
+      console.log(`[PageEditor] UI generation finished successfully! Code length: ${finalCode.length} chars`);
+
       if (finalCode) {
+        // Update local store immediately
+        if (node) {
+          updateNode(nodeId, {
+            data: {
+              ...node.data,
+              pageSourceCode: finalCode,
+              aiEditing: false,
+            },
+          });
+        }
+
+        // Persist code to Convex from authenticated browser client
+        try {
+          await patchNodeData({
+            projectId: projectId as Id<"projects">,
+            nodeId,
+            patch: {
+              pageSourceCode: finalCode,
+              aiEditing: false,
+            },
+          });
+        } catch (convexErr) {
+          console.warn("[PageEditor] Failed to sync generated code to Convex:", convexErr);
+        }
+
         // Write to local disk via Electron bridge for HMR
         if (isElectron() && outputDir) {
           const electronApi = getElectronAPI();
           if (electronApi?.fs?.writeProject) {
-            // Determine the file path relative to outputDir
             const rawSlug = typeof connectedWebAppNode?.data?.appSlug === "string" ? connectedWebAppNode.data.appSlug : "";
             const rawLabel = typeof connectedWebAppNode?.data?.label === "string" ? connectedWebAppNode.data.label : "web-app";
-            const webAppSlug = (rawSlug || rawLabel)
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "-");
-            const pageSlug = pageRoute === "/" ? "" : pageRoute.replace(/^\//, "");
-            const filePath = pageSlug
-              ? `app/(${webAppSlug})/${pageSlug}/page.tsx`
-              : `app/(${webAppSlug})/page.tsx`;
+            const webAppSlug = (rawSlug || rawLabel).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+            const isRoot = !pageFolderSlug || pageFolderSlug === "/" || pageFolderSlug === "page" || pageFolderSlug === "(public)";
+
+            const targetFilePath = resolved.filePath || (isRoot
+              ? `apps/${webAppSlug}/app/(public)/page.tsx`
+              : `apps/${webAppSlug}/app/(public)/${pageFolderSlug}/page.tsx`);
 
             try {
               await electronApi.fs.writeProject(
                 outputDir,
-                [{ filename: filePath, content: finalCode }],
+                [{ filename: targetFilePath, content: finalCode }],
                 { cleanStale: false }
               );
-              toast.success("Page file updated — HMR should reload the preview");
-            } catch {
+              toast.success(`Page updated on disk (${targetFilePath}) — HMR should reload`);
+            } catch (diskErr) {
+              console.warn("[PageEditor] Failed to write to disk:", diskErr);
               toast.error("Could not write to disk — set your workspace folder in the terminal");
             }
           }
@@ -286,11 +490,25 @@ export default function PageEditorPage({
           },
         ]);
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.name === "AbortError" || abortController.signal.aborted) {
+        console.log("[PageEditor] Generation cancelled by user.");
+        return;
+      }
       const errorMessage = err instanceof Error ? err.message : "AI request failed";
+      console.error("[PageEditor] handleSend error:", err);
       toast.error(errorMessage);
       if (node) {
         updateNode(nodeId, { data: { ...node.data, aiEditing: false } });
+      }
+      try {
+        await patchNodeData({
+          projectId: projectId as Id<"projects">,
+          nodeId,
+          patch: { aiEditing: false },
+        });
+      } catch (e) {
+        console.warn("[PageEditor] Failed to sync unlock to Convex on error:", e);
       }
       setMessages((prev) => [
         ...prev,
@@ -304,8 +522,29 @@ export default function PageEditorPage({
     } finally {
       setStreaming(false);
       setStreamingContent("");
+      setStreamingStatus("");
+      abortControllerRef.current = null;
     }
-  }, [prompt, isAiEditing, streaming, nodeId, projectId, currentCode, pageName, convexUrl, node, updateNode, outputDir, connectedWebAppNode, pageRoute]);
+  }, [prompt, isAiEditing, streaming, nodeId, projectId, currentCode, pageName, convexUrl, node, updateNode, outputDir, connectedWebAppNode, pageFolderSlug, patchNodeData, resolveCurrentPageCode]);
+
+  const handleUnlock = async () => {
+    if (node) {
+      updateNode(nodeId, { data: { ...node.data, aiEditing: false } });
+    }
+    setStreaming(false);
+    setStreamingContent("");
+    setStreamingStatus("");
+    try {
+      await patchNodeData({
+        projectId: projectId as Id<"projects">,
+        nodeId,
+        patch: { aiEditing: false },
+      });
+    } catch (e) {
+      console.warn("[PageEditor] Failed to sync unlock to Convex:", e);
+    }
+    toast.success("Page unlocked");
+  };
 
   const handleReset = () => {
     if (!node) return;
@@ -313,6 +552,13 @@ export default function PageEditorPage({
     updateNode(nodeId, {
       data: { ...node.data, pageSourceCode: undefined, aiEditing: false },
     });
+    try {
+      patchNodeData({
+        projectId: projectId as Id<"projects">,
+        nodeId,
+        patch: { pageSourceCode: undefined, aiEditing: false },
+      });
+    } catch (e) {}
     toast.success("Page reset — compiler will regenerate on next build");
   };
 
@@ -541,19 +787,6 @@ export default function PageEditorPage({
                   title={`Preview: ${pageName}`}
                 />
               )}
-
-              {/* Overlay shown when AI is actively editing */}
-              {(streaming || isAiEditing) && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-sm pointer-events-none z-10">
-                  <div className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-background/95 border border-border shadow-2xl">
-                    <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
-                    <p className="text-sm font-medium text-foreground">AI is editing the page...</p>
-                    <p className="text-xs text-muted-foreground text-center max-w-xs">
-                      Changes will sync to your monorepo and reload automatically
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -575,11 +808,14 @@ export default function PageEditorPage({
           setPrompt={setPrompt}
           streaming={streaming}
           streamingContent={streamingContent}
+          streamingStatus={streamingStatus}
           isAiEditing={isAiEditing}
           outputDir={outputDir}
           pageName={pageName}
           onSend={handleSend}
+          onStop={handleStop}
           onReset={currentCode ? handleReset : undefined}
+          onUnlock={handleUnlock}
           hasCustomCode={Boolean(currentCode)}
         />
       </div>

@@ -25,6 +25,14 @@ export interface ElectronAPI {
       writtenCount?: number;
       totalCount?: number;
     }>;
+    readFile(
+      outputDir: string,
+      relativePath: string
+    ): Promise<{
+      success: boolean;
+      content: string | null;
+      path: string;
+    }>;
   };
 
   shell?: {

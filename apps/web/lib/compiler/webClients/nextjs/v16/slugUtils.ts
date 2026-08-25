@@ -6,6 +6,7 @@ export function labelToSlug(label: string, index: number): string {
     clean === "/" ||
     clean === "landing" ||
     clean === "landing page" ||
+    clean === "landing-page" ||
     clean === "landingpage" ||
     clean === "/landing" ||
     clean === "root" ||

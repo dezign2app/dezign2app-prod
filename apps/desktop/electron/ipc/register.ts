@@ -1,7 +1,7 @@
 import { ipcMain, shell } from "electron";
 import { getMainWindow } from "../window";
 import { openBrowserLogin } from "../services/auth";
-import { pickDirectory, writeProject, CompiledFile } from "../services/fileWriter";
+import { pickDirectory, writeProject, readProjectFile, CompiledFile } from "../services/fileWriter";
 import {
   runDockerPreflight,
   startDocker,
@@ -54,6 +54,13 @@ export function registerIpcHandlers(): void {
       options?: { cleanStale?: boolean }
     ) => {
       return writeProject(outputDir, files, options);
+    }
+  );
+
+  ipcMain.handle(
+    "fs:read-file",
+    async (_event, outputDir: string, relativePath: string) => {
+      return readProjectFile(outputDir, relativePath);
     }
   );
 

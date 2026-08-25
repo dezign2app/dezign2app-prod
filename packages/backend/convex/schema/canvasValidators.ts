@@ -183,6 +183,8 @@ export const webClientConvexDataValidator = v.object({
   route: v.optional(v.string()),
   targetServerId: v.optional(v.string()),
   targetRouteId: v.optional(v.string()),
+  pageSourceCode: v.optional(v.string()),
+  aiEditing: v.optional(v.boolean()),
   headers: v.optional(v.array(backendParameterValidator)),
   pathParams: v.optional(v.array(backendParameterValidator)),
   queryParams: v.optional(v.array(backendParameterValidator)),
@@ -280,6 +282,8 @@ export const backendNodeDataValidator = v.union(
     ),
     width: v.optional(v.number()),
     height: v.optional(v.number()),
+    pageSourceCode: v.optional(v.string()),
+    aiEditing: v.optional(v.boolean()),
   }),
 );
 

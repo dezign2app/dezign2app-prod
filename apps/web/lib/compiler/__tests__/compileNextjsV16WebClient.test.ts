@@ -193,5 +193,85 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
     const actionFile = result.files.find((f) => f.filename.endsWith("Action.tsx"));
     expect(actionFile).toBeDefined();
     expect(actionFile?.content).toContain("false"); // requireAuth boolean is false
+
+    // Verify page.tsx does NOT contain "Page Load Data" or pageLoad states when no pageLoad event configured
+    const pageFile = result.files.find((f) => f.filename.endsWith("page.tsx"));
+    expect(pageFile).toBeDefined();
+    expect(pageFile?.content).not.toContain("Page Load Data");
+    expect(pageFile?.content).not.toContain("pageLoadData");
+    expect(pageFile?.content).not.toContain("setPageLoadData");
+    expect(pageFile?.content).not.toContain("pageLoadLoading");
+  });
+
+  it("should include Page Load Data section only when pageLoad event is configured", () => {
+    const webClientWithLoad: BackendNode = {
+      id: "node-client-load",
+      type: "webClient",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/products",
+        appSlug: "store",
+        events: [
+          {
+            id: "evt-load",
+            name: "fetchProducts",
+            event: "pageLoad",
+          },
+        ],
+      },
+    };
+
+    const webClientWithoutLoad: BackendNode = {
+      id: "node-client-noload",
+      type: "webClient",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "/about",
+        appSlug: "store",
+        events: [
+          {
+            id: "evt-click",
+            name: "ContactUs",
+            event: "click",
+          },
+        ],
+      },
+    };
+
+    const resultWithLoad = compileNextjsV16WebClient(
+      [webClientWithLoad],
+      [],
+      [],
+      [webClientWithLoad],
+      [],
+      "TestProject",
+    );
+
+    const pageWithLoad = resultWithLoad.files.find((f) =>
+      f.filename.includes("products/page.tsx"),
+    );
+    expect(pageWithLoad).toBeDefined();
+    expect(pageWithLoad?.content).toContain("Page Load Data");
+    expect(pageWithLoad?.content).toContain("setPageLoadData");
+    expect(pageWithLoad?.content).toContain("useEffect");
+
+    const resultWithoutLoad = compileNextjsV16WebClient(
+      [webClientWithoutLoad],
+      [],
+      [],
+      [webClientWithoutLoad],
+      [],
+      "TestProject",
+    );
+
+    const pageWithoutLoad = resultWithoutLoad.files.find((f) =>
+      f.filename.includes("about/page.tsx"),
+    );
+    expect(pageWithoutLoad).toBeDefined();
+    expect(pageWithoutLoad?.content).not.toContain("Page Load Data");
+    expect(pageWithoutLoad?.content).not.toContain("setPageLoadData");
+    expect(pageWithoutLoad?.content).not.toContain("pageLoadData");
   });
 });

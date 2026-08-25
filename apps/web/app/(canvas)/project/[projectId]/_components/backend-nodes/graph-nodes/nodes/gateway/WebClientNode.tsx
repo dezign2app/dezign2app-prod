@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { WEB_CLIENT_EVENTS } from "@workspace/canvas";
+import { WEB_CLIENT_EVENTS, parsePageRoute } from "@workspace/canvas";
 
 const EVENT_OPTIONS = [...WEB_CLIENT_EVENTS];
 
@@ -592,22 +592,45 @@ export const WebClientNode = ({
           (data.accessType && data.accessType !== "public"),
       );
 
-  const cleanLabel = (data.label || "").trim().toLowerCase();
+  // Auto-sanitize existing labels with spaces to valid Next.js route format
+  React.useEffect(() => {
+    if (data.label && (data.label.includes(" ") || data.label !== parsePageRoute(data.label))) {
+      const parsed = parsePageRoute(data.label);
+      if (parsed !== data.label) {
+        updateNode(id, { data: { ...data, label: parsed } });
+      }
+    }
+  }, [id, data.label, updateNode]);
+
+  const rawLabel = data.label || "";
+  const normalizedLabel = parsePageRoute(rawLabel);
+  const cleanLabel = normalizedLabel.toLowerCase();
   const isLandingPage =
     data.isRoot === true ||
     cleanLabel === "/" ||
     cleanLabel === "home" ||
     cleanLabel === "index" ||
     cleanLabel === "landing" ||
-    cleanLabel === "landing page" ||
-    cleanLabel === "landingpage" ||
+    cleanLabel === "landing-page" ||
     cleanLabel === "root";
+
+  const displayRoute = isLandingPage
+    ? "/"
+    : data.label
+      ? data.label.startsWith("/")
+        ? data.label
+        : `/${data.label}`
+      : "/page-client";
+
+  const isLocked = Boolean(data.aiEditing);
 
   return (
     <div
       className={cn(
         "shadow-md rounded-xl bg-card border-2 min-w-[200px] max-w-[300px] flex flex-col transition-all duration-300 relative",
-        borderClass,
+        isLocked
+          ? "border-violet-500/80 ring-2 ring-violet-500/30"
+          : borderClass,
       )}
     >
       {/* Target handle from WebApp Section */}
@@ -628,7 +651,20 @@ export const WebClientNode = ({
         title={isLandingPage ? "Web Client (Landing Page /)" : "Web Client (page)"}
         selected={selected}
         rightElement={
-          isProtected ? (
+          isLocked ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                updateNode(id, { data: { ...data, aiEditing: false } });
+              }}
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-500/15 hover:bg-destructive/20 text-violet-600 dark:text-violet-400 hover:text-destructive border border-violet-500/30 text-[10px] font-mono shrink-0 ml-2 cursor-pointer transition-colors"
+              title="Locked: AI is actively editing this page. Click to force unlock."
+            >
+              <Lock size={10} className="shrink-0" />
+              <span className="text-[9px] font-semibold">Locked (Unlock)</span>
+            </button>
+          ) : isProtected ? (
             <div
               className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 text-[10px] font-mono shrink-0 ml-2"
               title="Protected Page (Authentication Required)"
@@ -646,9 +682,18 @@ export const WebClientNode = ({
         </span>
         <div className="flex items-center gap-1.5 shrink-0">
           {data.aiEditing && (
-            <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-violet-500/15 text-violet-500 border border-violet-500/30">
-              <Loader2 size={8} className="animate-spin" /> AI editing
-            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                updateNode(id, { data: { ...data, aiEditing: false } });
+              }}
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-violet-500/15 hover:bg-destructive/20 text-violet-500 hover:text-destructive border border-violet-500/30 cursor-pointer transition-colors"
+              title="Click to force unlock"
+            >
+              <Lock size={8} />
+              <Loader2 size={8} className="animate-spin" /> Locked (Unlock)
+            </button>
           )}
           {data.pageSourceCode && !data.aiEditing && (
             <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
@@ -670,28 +715,38 @@ export const WebClientNode = ({
 
       {/* Edit UI button strip */}
       <div className="px-3 py-1.5 border-b bg-muted/30 flex items-center justify-between nodrag">
-        <span className="text-[10px] text-muted-foreground font-mono truncate">
-          {data.label || "page"}
+        <span
+          className="text-[10px] text-muted-foreground font-mono truncate"
+          title={`Route: ${displayRoute}`}
+        >
+          {displayRoute}
         </span>
         <button
           type="button"
+          disabled={isLocked}
           onClick={(e) => {
             e.stopPropagation();
             if (projectId) router.push(`/project/${projectId}/pages/${id}`);
           }}
-          className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 border border-indigo-500/20 transition-all cursor-pointer"
-          title="Open visual page editor"
+          className={cn(
+            "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-all",
+            isLocked
+              ? "bg-muted text-muted-foreground border border-border cursor-not-allowed opacity-60"
+              : "bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 border border-indigo-500/20 cursor-pointer",
+          )}
+          title={isLocked ? "Locked: AI is actively editing this page" : "Open visual page editor"}
         >
-          <Pencil size={10} />
-          Edit UI
+          {isLocked ? <Lock size={10} /> : <Pencil size={10} />}
+          {isLocked ? "Locked" : "Edit UI"}
         </button>
       </div>
 
       {/* Description */}
       <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
         <Textarea
-          className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
+          className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50 disabled:opacity-60"
           placeholder="description"
+          disabled={isLocked}
           value={data.description || ""}
           onChange={(e) =>
             updateNode(id, { data: { ...data, description: e.target.value } })

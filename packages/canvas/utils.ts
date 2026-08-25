@@ -248,3 +248,97 @@ export function getEdgeType(
   const key = `${sourceKind}→${targetKind}`;
   return EDGE_TYPE_MAP[key] ?? "connection";
 }
+
+/**
+ * Meaningfully parses and normalizes a WebClient page label into a clean,
+ * valid Next.js App Router route slug and folder path (no spaces, URL/filesystem safe).
+ *
+ * It guarantees:
+ * 1. No spaces (replaced with hyphens `-`)
+ * 2. No disallowed filesystem/URL characters
+ * 3. Strips leading/trailing slashes so it can safely form Next.js folder paths (`app/(group)/<slug>/page.tsx`)
+ * 4. Preserves valid dynamic segments like `[id]`, `[...slug]`
+ * 5. Returns `"/"` for explicit root/landing page
+ *
+ * Examples:
+ * - "Page Client" -> "page-client"
+ * - "User Profile" -> "user-profile"
+ * - "/dashboard/user settings/" -> "dashboard/user-settings"
+ * - "Landing Page" -> "landing-page"
+ * - "/" -> "/"
+ * - "users/[id]" -> "users/[id]"
+ */
+export function parsePageRoute(raw: string): string {
+  if (!raw) return "page-client";
+  const trimmed = raw.trim();
+  if (trimmed === "/" || trimmed === "") return "/";
+
+  // Split into segments in case of nested paths (e.g. "dashboard/user profile")
+  const segments = trimmed
+    .split("/")
+    .map((seg) => {
+      const segTrimmed = seg.trim();
+      if (!segTrimmed) return "";
+
+      // Allow dynamic route segments like [id], [...slug], [[...slug]]
+      const isDynamic =
+        /^\[\[?\.\.\.[a-zA-Z0-9_-]+\]?\]$|^\[[a-zA-Z0-9_-]+\]$/.test(
+          segTrimmed,
+        );
+      if (isDynamic) {
+        return segTrimmed;
+      }
+
+      return segTrimmed
+        .toLowerCase()
+        // Replace spaces and underscores with hyphens
+        .replace(/[\s_]+/g, "-")
+        // Remove disallowed route folder characters (keep alphanumeric, hyphens, and dynamic brackets)
+        .replace(/[^a-z0-9\-[\]]/g, "")
+        // Collapse consecutive hyphens
+        .replace(/-+/g, "-")
+        // Trim leading and trailing hyphens in segment
+        .replace(/^-+|-+$/g, "");
+    })
+    .filter(Boolean);
+
+  if (segments.length === 0) return "/";
+
+  // Return clean relative path without leading/trailing slashes (e.g. "page-client", "dashboard/user-settings")
+  return segments.join("/");
+}
+
+/**
+ * Returns the relative folder path under `app/(group)/` for Next.js App Router.
+ * - "/" or "home" or "index" -> "" (maps to app/(group)/page.tsx)
+ * - "page-client" -> "page-client" (maps to app/(group)/page-client/page.tsx)
+ * - "dashboard/user-settings" -> "dashboard/user-settings"
+ */
+export function pageRouteToFolderPath(routeOrLabel: string): string {
+  const parsed = parsePageRoute(routeOrLabel);
+  const lower = parsed.toLowerCase();
+  if (
+    lower === "/" ||
+    lower === "home" ||
+    lower === "index" ||
+    lower === "landing" ||
+    lower === "landing-page" ||
+    lower === "root"
+  ) {
+    return "";
+  }
+  return parsed.replace(/^\/+|\/+$/g, "");
+}
+
+/**
+ * Returns the URL path for browser navigation or preview iframe.
+ * - "/" or "home" -> "/"
+ * - "page-client" -> "/page-client"
+ * - "dashboard/user-settings" -> "/dashboard/user-settings"
+ */
+export function pageRouteToUrl(routeOrLabel: string): string {
+  const folder = pageRouteToFolderPath(routeOrLabel);
+  return folder ? `/${folder}` : "/";
+}
+
+

@@ -51,7 +51,9 @@ export const addServiceNodeTool = tool(
     const existingNode = elements.nodes.find(
       (n) =>
         n.type === "service" &&
-        n.data?.label?.toLowerCase() === label.toLowerCase(),
+        n.data?.label &&
+        label &&
+        n.data.label.toLowerCase() === label.toLowerCase(),
     );
 
     const isUpdate = !!existingNode;
@@ -93,14 +95,24 @@ export const addServiceNodeTool = tool(
           id: item.id || makeId(),
         })),
         requestBody: {
-          id: ep.requestBody?.id || makeId(),
+          id:
+            ep.requestBody &&
+            "id" in ep.requestBody &&
+            typeof ep.requestBody.id === "string"
+              ? ep.requestBody.id
+              : makeId(),
           fields: (ep.requestBody?.fields ?? []).map((item) => ({
             ...item,
             id: item.id || makeId(),
           })),
         },
         responseBody: {
-          id: ep.responseBody?.id || makeId(),
+          id:
+            ep.responseBody &&
+            "id" in ep.responseBody &&
+            typeof ep.responseBody.id === "string"
+              ? ep.responseBody.id
+              : makeId(),
           fields: (
             ep.responseBody?.fields ?? [
               {
@@ -116,24 +128,26 @@ export const addServiceNodeTool = tool(
           ...step,
           id: step.id || makeId(),
           // zodToConvex doesn't support ZodCatch, so we manually sanitize enums here
-          operation: [
-            "passthrough",
-            "validate",
-            "pick",
-            "omit",
-            "rename",
-            "set",
-            "filter",
-            "map",
-            "db_get",
-            "db_get_many",
-            "db_insert",
-            "db_update",
-            "db_delete",
-            "return",
-          ].includes(step.operation as string)
-            ? step.operation
-            : "passthrough",
+          operation:
+            typeof step.operation === "string" &&
+            [
+              "passthrough",
+              "validate",
+              "pick",
+              "omit",
+              "rename",
+              "set",
+              "filter",
+              "map",
+              "db_get",
+              "db_get_many",
+              "db_insert",
+              "db_update",
+              "db_delete",
+              "return",
+            ].includes(step.operation)
+              ? step.operation
+              : "passthrough",
         })),
         publishedEvents: ep.publishedEvents?.map((pe) => ({
           ...pe,
@@ -146,13 +160,16 @@ export const addServiceNodeTool = tool(
       (ce: ConsumedEventInputType) => ({
         ...ce,
         id: ce.id || makeId(),
-        retryPolicy: ["NONE", "IMMEDIATE", "EXPONENTIAL"].includes(
-          ce.retryPolicy as string,
-        )
-          ? ce.retryPolicy
-          : "NONE",
+        retryPolicy:
+          "retryPolicy" in ce &&
+          typeof ce.retryPolicy === "string" &&
+          ["NONE", "IMMEDIATE", "EXPONENTIAL"].includes(ce.retryPolicy)
+            ? ce.retryPolicy
+            : "NONE",
         isIdempotent:
-          typeof ce.isIdempotent === "boolean" ? ce.isIdempotent : false,
+          "isIdempotent" in ce && typeof ce.isIdempotent === "boolean"
+            ? ce.isIdempotent
+            : false,
       }),
     );
 
@@ -160,31 +177,44 @@ export const addServiceNodeTool = tool(
       (pe: PublishedEventInputType) => ({
         ...pe,
         id: pe.id || makeId(),
-        version: ["v1", "v2", "v3"].includes(pe.version as string)
-          ? pe.version
-          : "v1",
-        category: [
-          "DOMAIN",
-          "INTEGRATION",
-          "INTERNAL",
-          "NOTIFICATION",
-        ].includes(pe.category as string)
-          ? pe.category
-          : "DOMAIN",
-        delivery: [
-          "EXACTLY_ONCE",
-          "AT_LEAST_ONCE",
-          "AT_MOST_ONCE",
-          "FIRE_AND_FORGET",
-        ].includes(pe.delivery as string)
-          ? pe.delivery
-          : "AT_LEAST_ONCE",
-        ordering: ["NONE", "GLOBAL", "PER_ENTITY", "PER_AGGREGATE"].includes(
-          pe.ordering as string,
-        )
-          ? pe.ordering
-          : "NONE",
-        deprecated: typeof pe.deprecated === "boolean" ? pe.deprecated : false,
+        version:
+          "version" in pe &&
+          typeof pe.version === "string" &&
+          ["v1", "v2", "v3"].includes(pe.version)
+            ? pe.version
+            : "v1",
+        category:
+          "category" in pe &&
+          typeof pe.category === "string" &&
+          [
+            "DOMAIN",
+            "INTEGRATION",
+            "INTERNAL",
+            "NOTIFICATION",
+          ].includes(pe.category)
+            ? pe.category
+            : "DOMAIN",
+        delivery:
+          "delivery" in pe &&
+          typeof pe.delivery === "string" &&
+          [
+            "EXACTLY_ONCE",
+            "AT_LEAST_ONCE",
+            "AT_MOST_ONCE",
+            "FIRE_AND_FORGET",
+          ].includes(pe.delivery)
+            ? pe.delivery
+            : "AT_LEAST_ONCE",
+        ordering:
+          "ordering" in pe &&
+          typeof pe.ordering === "string" &&
+          ["NONE", "GLOBAL", "PER_ENTITY", "PER_AGGREGATE"].includes(pe.ordering)
+            ? pe.ordering
+            : "NONE",
+        deprecated:
+          "deprecated" in pe && typeof pe.deprecated === "boolean"
+            ? pe.deprecated
+            : false,
       }),
     );
 

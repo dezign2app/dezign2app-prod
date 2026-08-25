@@ -3,10 +3,7 @@
  * `actions`) and stamp a unique `id` on every item that lacks one.
  */
 export function assignResourceIds<
-  T extends Record<
-    string,
-    string | number | boolean | object | null | undefined
-  >,
+  T extends Record<string, unknown>,
 >(data: T): T {
   const resourceKeys = ["topics", "queues", "channels", "streams", "actions"];
   const result = { ...data };

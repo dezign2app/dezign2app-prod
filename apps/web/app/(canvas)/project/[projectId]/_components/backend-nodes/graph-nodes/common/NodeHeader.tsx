@@ -15,6 +15,7 @@ import {
   WEB_CLIENT_TECH_OPTIONS,
   TechOption,
 } from "@/types/canvas";
+import { parsePageRoute } from "@workspace/canvas";
 import { LocalInput } from "./LocalInput";
 
 export interface NodeHeaderProps {
@@ -46,7 +47,12 @@ export const NodeHeader = ({
   const [name, setName] = useState(data.label);
 
   const handleSave = () => {
-    updateNode(id, { data: { ...data, label: name || "Untitled" } });
+    let finalLabel = name || "Untitled";
+    if (nodeType === "webClient") {
+      finalLabel = parsePageRoute(finalLabel);
+    }
+    updateNode(id, { data: { ...data, label: finalLabel } });
+    setName(finalLabel);
     setIsEditing(false);
   };
 
@@ -82,8 +88,15 @@ export const NodeHeader = ({
           {isEditing ? (
             <LocalInput
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="h-6 text-xs px-1 bg-background/50"
+              onChange={(e) => {
+                let val = e.target.value;
+                if (nodeType === "webClient") {
+                  // In real-time, replace spaces with hyphen for Next.js route format
+                  val = val.replace(/\s+/g, "-");
+                }
+                setName(val);
+              }}
+              className="h-6 text-xs px-1 bg-background/50 font-mono"
               autoFocus
               onKeyDown={(e: React.KeyboardEvent) => {
                 if (e.key === "Enter") handleSave();

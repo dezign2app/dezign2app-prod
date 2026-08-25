@@ -7,3 +7,4 @@ export * from "./edges";
 export * from "./identityProviders";
 export * from "./simulation";
 export * from "./utils";
+export * from "./page-editor";

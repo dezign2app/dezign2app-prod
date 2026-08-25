@@ -23,6 +23,10 @@ export interface ElectronAPI {
       files: CompiledFile[],
       options?: { cleanStale?: boolean }
     ): Promise<{ success: boolean; path: string; writtenCount?: number; totalCount?: number }>;
+    readFile(
+      outputDir: string,
+      relativePath: string
+    ): Promise<{ success: boolean; content: string | null; path: string }>;
   };
 
   /** Docker Compose runner */
@@ -112,6 +116,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       files: CompiledFile[],
       options?: { cleanStale?: boolean }
     ) => ipcRenderer.invoke("fs:write-project", outputDir, files, options),
+    readFile: (outputDir: string, relativePath: string) =>
+      ipcRenderer.invoke("fs:read-file", outputDir, relativePath),
   },
 
   docker: {

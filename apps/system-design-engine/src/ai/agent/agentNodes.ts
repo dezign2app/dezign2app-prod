@@ -19,8 +19,12 @@ import { getConvexClient, formatCanvasState } from "../utils";
 import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { sanitizeMessages } from "./utils";
+import { SupportedChatModel } from "../llmFactory";
 
-export function createAgentNodes(llm: ChatGroq) {
+export function createAgentNodes(llm: SupportedChatModel) {
+  if (!llm.bindTools) {
+    throw new Error("Configured LLM model does not support tool calling.");
+  }
   const modelWithTools = llm.bindTools(tools);
 
   const customToolNode = async (state: typeof GraphAnnotation.State) => {

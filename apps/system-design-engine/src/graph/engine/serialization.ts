@@ -5,7 +5,7 @@ import type {
   NodeId,
   EndpointSummary,
   TestCaseSummary,
-} from "../types";
+} from "@workspace/canvas";
 import { getAdjacentEdges } from "./adjacencyAndTraversal";
 import { formatEdgeLine, formatNodeDataLines } from "./formatters";
 

@@ -32,20 +32,70 @@ export function generatePageCode(
           .join("\n")}\n          </div>`;
 
   const hasAuth = Boolean(authNodeData);
+  const hasPageLoad = Boolean(
+    pageLoadFetchStatements && pageLoadFetchStatements.trim().length > 0
+  );
+  const reactHooks = hasPageLoad ? "useState, useEffect" : "useState";
 
-  return `"use client";
-
-import React, { useState, useEffect } from "react";
-import Link from "next/link";
-import { Button } from "@workspace/ui/components/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@workspace/ui/components/card";
-import { Badge } from "@workspace/ui/components/badge";
-${hasAuth ? `import { getAuthBearerToken } from "@/lib/auth-token";\n` : ""}${allImports ? `${allImports}\n` : ""}export default function ${pageMeta.componentName}() {
-  const [pageLoadData, setPageLoadData] = useState<Record<string, Record<string, string | number | boolean | null>> | null>(null);
+  const pageLoadStateJsx = hasPageLoad
+    ? `  const [pageLoadData, setPageLoadData] = useState<Record<string, Record<string, string | number | boolean | null>> | null>(null);
   const [pageLoadLoading, setPageLoadLoading] = useState<boolean>(false);
   const [pageLoadError, setPageLoadError] = useState<string | null>(null);
 
-  const [triggerLogs, setTriggerLogs] = useState<Array<{
+`
+    : "";
+
+  const pageLoadEffectJsx = hasPageLoad
+    ? `  useEffect(() => {
+    async function loadPageData() {
+      ${pageLoadFetchStatements}
+    }
+    loadPageData();
+  }, []);
+
+`
+    : "";
+
+  const pageLoadSectionJsx = hasPageLoad
+    ? `        {/* Section: Page Load Data */}
+        <Card className="border-border shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <div>
+              <CardTitle className="text-lg font-bold text-card-foreground">Page Load Data</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
+                Stringified JSON data loaded automatically on page mount
+              </CardDescription>
+            </div>
+            <Badge variant="secondary" className="font-mono">
+              {pageLoadLoading ? "Loading..." : pageLoadError ? "Error" : "pageLoad"}
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-muted/50 border border-border rounded-lg p-4 font-mono text-sm text-foreground overflow-x-auto shadow-inner min-h-[120px]">
+              <pre className="whitespace-pre-wrap font-mono">
+                {pageLoadLoading
+                  ? "// Loading page data from API endpoint..."
+                  : pageLoadError
+                  ? "// Error: " + pageLoadError
+                  : pageLoadData !== null
+                  ? JSON.stringify(pageLoadData, null, 2)
+                  : "// No pageLoad data available."}
+              </pre>
+            </div>
+          </CardContent>
+        </Card>
+
+`
+    : "";
+
+  return `"use client";
+
+import React, { ${reactHooks} } from "react";
+import Link from "next/link";
+import { Button } from "@workspace/ui/components/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@workspace/ui/components/card";
+${hasPageLoad ? `import { Badge } from "@workspace/ui/components/badge";\n` : ""}${hasAuth ? `import { getAuthBearerToken } from "@/lib/auth-token";\n` : ""}${allImports ? `${allImports}\n` : ""}export default function ${pageMeta.componentName}() {
+${pageLoadStateJsx}  const [triggerLogs, setTriggerLogs] = useState<Array<{
     id: string;
     eventName: string;
     eventType: string;
@@ -58,14 +108,7 @@ ${hasAuth ? `import { getAuthBearerToken } from "@/lib/auth-token";\n` : ""}${al
     error?: string;
   }>>([]);
 
-  useEffect(() => {
-    async function loadPageData() {
-      ${pageLoadFetchStatements}
-    }
-    loadPageData();
-  }, []);
-
-  const handleTriggerAction = async (
+${pageLoadEffectJsx}  const handleTriggerAction = async (
     eventName: string,
     eventType: string,
     url: string,
@@ -175,35 +218,7 @@ ${hasAuth ? `import { getAuthBearerToken } from "@/lib/auth-token";\n` : ""}${al
         {/* Page Header */}
         <${headerCompName} />
 
-        {/* Section 1: Page Load Data */}
-        <Card className="border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-            <div>
-              <CardTitle className="text-lg font-bold text-card-foreground">Page Load Data</CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">
-                Stringified JSON data loaded automatically on page mount
-              </CardDescription>
-            </div>
-            <Badge variant="secondary" className="font-mono">
-              {pageLoadLoading ? "Loading..." : pageLoadError ? "Error" : "pageLoad"}
-            </Badge>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-muted/50 border border-border rounded-lg p-4 font-mono text-sm text-foreground overflow-x-auto shadow-inner min-h-[120px]">
-              <pre className="whitespace-pre-wrap font-mono">
-                {pageLoadLoading
-                  ? "// Loading page data from API endpoint..."
-                  : pageLoadError
-                  ? "// Error: " + pageLoadError
-                  : pageLoadData !== null
-                  ? JSON.stringify(pageLoadData, null, 2)
-                  : "// No pageLoad data available."}
-              </pre>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Section 2: Page Buttons & Action Triggers */}
+${pageLoadSectionJsx}        {/* Section: Page Actions & Triggers */}
         <Card className="border-border shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-bold text-card-foreground">Page Actions & Triggers</CardTitle>
