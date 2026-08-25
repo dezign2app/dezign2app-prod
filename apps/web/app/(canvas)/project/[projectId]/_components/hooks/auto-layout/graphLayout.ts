@@ -12,6 +12,7 @@ import {
 import { getNodeDimensions } from "./nodeDimensions";
 import { runBarycenterRefinement } from "./barycenterLayout";
 import { layoutHeadNodes } from "./headNodeLayout";
+import { layoutHangingTransformerNodes } from "./hangingTransformerLayout";
 
 export interface PerformGraphLayoutOptions {
   nodes: LayoutNode[];
@@ -78,7 +79,7 @@ export function performGraphLayout({
     }
   });
 
-  // 2. Identify head-connection edges vs main flow edges
+  // 2. Identify head-connection edges vs hanging transformer edges vs main flow edges
   const isHeadConnectionEdge = (edge: LayoutEdge): boolean => {
     const isTargetMatch = targetNodeIds.has(edge.target);
     const isHeadHandle = HEAD_TARGET_HANDLES.has(edge.targetHandle ?? "");
@@ -88,20 +89,43 @@ export function performGraphLayout({
     return isTargetMatch && (isHeadHandle || isHeadSourceType);
   };
 
+  const isHangingTransformerEdge = (edge: LayoutEdge): boolean => {
+    const sourceNode = graphNodes.find((n: LayoutNode) => n.id === edge.source);
+    const targetNode = graphNodes.find((n: LayoutNode) => n.id === edge.target);
+    if (!sourceNode || !targetNode) return false;
+    const isTransType =
+      sourceNode.type === "transformer_ref" ||
+      sourceNode.type === "transformer";
+    return isTransType;
+  };
+
   const headEdges: LayoutEdge[] = graphEdges.filter(isHeadConnectionEdge);
+  const hangingEdges: LayoutEdge[] = graphEdges.filter(isHangingTransformerEdge);
+
   const flowEdges: LayoutEdge[] = graphEdges.filter(
-    (e: LayoutEdge) => !isHeadConnectionEdge(e),
+    (e: LayoutEdge) =>
+      !isHeadConnectionEdge(e) && !isHangingTransformerEdge(e),
   );
 
-  // 3. Identify attached head nodes
+  // 3. Identify attached head nodes and hanging transformer nodes
   const attachedHeadNodeIdSet = new Set<string>(
     headEdges.map((e: LayoutEdge) => e.source),
   );
   const attachedHeadNodes: LayoutNode[] = graphNodes.filter((n: LayoutNode) =>
     attachedHeadNodeIdSet.has(n.id),
   );
+
+  const hangingTransformerNodeIdSet = new Set<string>(
+    hangingEdges.map((e: LayoutEdge) => e.source),
+  );
+  const hangingTransformerNodes: LayoutNode[] = graphNodes.filter((n: LayoutNode) =>
+    hangingTransformerNodeIdSet.has(n.id),
+  );
+
   const mainGraphNodes: LayoutNode[] = graphNodes.filter(
-    (n: LayoutNode) => !attachedHeadNodeIdSet.has(n.id),
+    (n: LayoutNode) =>
+      !attachedHeadNodeIdSet.has(n.id) &&
+      !hangingTransformerNodeIdSet.has(n.id),
   );
 
   // 4. Run Dagre layout for mainGraphNodes and flowEdges
@@ -149,6 +173,7 @@ export function performGraphLayout({
     isHorizontal,
     storeEndpoints,
     storeEvents,
+    hangingEdges,
   });
 
   // 6. Layout attached head nodes grouped by category columns above each target node
@@ -158,6 +183,17 @@ export function performGraphLayout({
     positionsMap,
     headEdges,
     attachedHeadNodes,
+  });
+
+  // 6.5. Layout hanging transformer nodes in a dedicated column right before their connected service node
+  layoutHangingTransformerNodes({
+    nodes: graphNodes,
+    positionsMap,
+    hangingEdges,
+    hangingTransformerNodes,
+    isHorizontal,
+    storeEndpoints,
+    storeEvents,
   });
 
   // 6.6. Enforce positive canvas origin margin (minX >= 60, minY >= 60)
