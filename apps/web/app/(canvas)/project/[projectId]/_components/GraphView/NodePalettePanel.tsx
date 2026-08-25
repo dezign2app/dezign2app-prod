@@ -77,24 +77,31 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
         <ShieldCheck className="w-3.5 h-3.5 mr-2 text-indigo-500" />
         Auth Node
       </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 border-purple-500/30"
-        onClick={() => onAddNode("transformer" as GraphNodeType, "Data Transformer")}
-      >
-        <Shuffle className="w-3.5 h-3.5 mr-2 text-purple-400 shrink-0" />
-        Transformer
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 border-purple-500/20"
-        onClick={() => onAddNode("transformer_ref" as GraphNodeType, "Transformer Ref")}
-      >
-        <Shuffle className="w-3.5 h-3.5 mr-2 text-purple-400/80 shrink-0" />
-        Transformer Ref
-      </Button>
+      {/* TRANSFORMERS GROUP */}
+      <div className="flex flex-col gap-1.5 p-1.5 rounded-lg bg-purple-500/5 dark:bg-purple-950/20 border border-purple-500/25">
+        <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1">
+          <Shuffle className="w-3 h-3 text-purple-500" />
+          Transformer
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-purple-500/40 text-purple-600 dark:text-purple-400 hover:bg-purple-500/15 hover:text-purple-300"
+          onClick={() => onAddNode("transformer" as GraphNodeType, "Data Transformer")}
+        >
+          <Shuffle className="w-3.5 h-3.5 mr-2 text-purple-500 shrink-0" />
+          Transformer
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-purple-500/40 text-purple-600 dark:text-purple-400 hover:bg-purple-500/15 hover:text-purple-300"
+          onClick={() => onAddNode("transformer_ref" as GraphNodeType, "Global Ref")}
+        >
+          <Shuffle className="w-3.5 h-3.5 mr-2 text-purple-500/80 shrink-0" />
+          Global Ref
+        </Button>
+      </div>
 
       {/* MESSAGING */}
       <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">
