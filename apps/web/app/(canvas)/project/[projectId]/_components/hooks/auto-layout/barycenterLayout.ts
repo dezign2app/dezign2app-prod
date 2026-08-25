@@ -86,6 +86,7 @@ export interface BarycenterRefinementParams {
   isHorizontal: boolean;
   storeEndpoints: Array<{ id: string; nodeId: string }>;
   storeEvents: Array<{ id: string; nodeId: string }>;
+  hangingEdges?: LayoutEdge[];
 }
 
 export function runBarycenterRefinement({
@@ -96,6 +97,7 @@ export function runBarycenterRefinement({
   isHorizontal,
   storeEndpoints,
   storeEvents,
+  hangingEdges = [],
 }: BarycenterRefinementParams): void {
   // Whether any entity nodes are present — used to tune gaps
   const hasEntityNodesLocal = flowNodes.some((n) => n.type === "entity");
@@ -332,9 +334,16 @@ export function runBarycenterRefinement({
         const primarySpanHalf =
           (isHorizontal ? maxNodeWidth : maxNodeHeight) / 2;
 
+        const hasHangingTransformersInRank = ids.some((id) =>
+          hangingEdges.some((e) => e.target === id),
+        );
+        const effectiveRankGap = hasHangingTransformersInRank
+          ? Math.max(minRankGap, 380)
+          : minRankGap;
+
         if (lastRankMaxPrimary !== -Infinity) {
           const minAllowedCenter =
-            lastRankMaxPrimary + minRankGap + primarySpanHalf;
+            lastRankMaxPrimary + effectiveRankGap + primarySpanHalf;
           if (secondaryPos < minAllowedCenter) {
             secondaryPos = minAllowedCenter;
           }
@@ -413,9 +422,17 @@ export function runBarycenterRefinement({
         }),
       );
 
+      const hasHangingTransformersInRank = ids.some((id) =>
+        hangingEdges.some((e) => e.target === id),
+      );
+      const effectiveRankGap = hasHangingTransformersInRank
+        ? Math.max(minRankGap, 380)
+        : minRankGap;
+
       // Enforce clean rank separation from previous rank
       if (lastRankMaxPrimary !== -Infinity) {
-        const minAllowedCenter = lastRankMaxPrimary + minRankGap + maxHalfSize;
+        const minAllowedCenter =
+          lastRankMaxPrimary + effectiveRankGap + maxHalfSize;
         if (secondaryPos < minAllowedCenter) {
           secondaryPos = minAllowedCenter;
         }

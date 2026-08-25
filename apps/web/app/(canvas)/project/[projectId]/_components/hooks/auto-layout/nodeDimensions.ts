@@ -138,7 +138,6 @@ export function getNodeDimensions(node: LayoutNode): {
     case "db_ref":
     case "vector_db_ref":
     case "redis-cache":
-    case "transformer_ref":
       return { width: 280, height: 180 };
     case "end":
     case "END":
@@ -209,7 +208,8 @@ export function getNodeDimensions(node: LayoutNode): {
     case "app": {
       return { width: 280, height: 180 };
     }
-    case "transformer": {
+    case "transformer":
+    case "transformer_ref": {
       return { width: 240, height: 50 };
     }
     case "group": {
