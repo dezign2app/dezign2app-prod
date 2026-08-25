@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { NodeProps, Position, Handle } from "@xyflow/react";
-import { Globe, Plus, X, Play, Settings, FlaskConical, Lock } from "lucide-react";
+import { Globe, Plus, X, Play, Settings, FlaskConical, Lock, Pencil, Loader2 } from "lucide-react";
 import { BackendNode, Endpoint, UIEventItem } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useRouter } from "next/navigation";
 import {
   NodeHeader,
   generateId,
@@ -517,6 +518,11 @@ export const WebClientNode = ({
     simulation,
     Boolean(selected),
   );
+  const router = useRouter();
+  // Extract projectId from the URL path (/project/<projectId>/...)
+  const projectId = typeof window !== "undefined"
+    ? window.location.pathname.split("/project/")[1]?.split("/")[0] ?? ""
+    : "";
 
   // Find incoming WebApp edge connecting to this page
   const incomingEdge = edges.find((e) => {
@@ -638,16 +644,47 @@ export const WebClientNode = ({
         <span className="font-mono text-muted-foreground truncate">
           {connectedZoneName ? `Zone: ${connectedZoneName}` : "Unattached Page"}
         </span>
-        <span
-          className={cn(
-            "px-1.5 py-0.2 rounded font-medium border text-[9px]",
-            isCustomOverride
-              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
-              : "bg-secondary text-muted-foreground border-border/40",
+        <div className="flex items-center gap-1.5 shrink-0">
+          {data.aiEditing && (
+            <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-violet-500/15 text-violet-500 border border-violet-500/30">
+              <Loader2 size={8} className="animate-spin" /> AI editing
+            </span>
           )}
-        >
-          {isCustomOverride ? "Custom Rules" : "Inherits Section"}
+          {data.pageSourceCode && !data.aiEditing && (
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+              AI-edited
+            </span>
+          )}
+          <span
+            className={cn(
+              "px-1.5 py-0.2 rounded font-medium border text-[9px]",
+              isCustomOverride
+                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                : "bg-secondary text-muted-foreground border-border/40",
+            )}
+          >
+            {isCustomOverride ? "Custom Rules" : "Inherits Section"}
+          </span>
+        </div>
+      </div>
+
+      {/* Edit UI button strip */}
+      <div className="px-3 py-1.5 border-b bg-muted/30 flex items-center justify-between nodrag">
+        <span className="text-[10px] text-muted-foreground font-mono truncate">
+          {data.label || "page"}
         </span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (projectId) router.push(`/project/${projectId}/pages/${id}`);
+          }}
+          className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 border border-indigo-500/20 transition-all cursor-pointer"
+          title="Open visual page editor"
+        >
+          <Pencil size={10} />
+          Edit UI
+        </button>
       </div>
 
       {/* Description */}

@@ -14,6 +14,7 @@ import {
   Redo2,
   GitCommit,
   History,
+  PanelLeft,
 } from "lucide-react";
 import { BackendCanvasView } from "@/types/canvas";
 import { Button } from "@workspace/ui/components/button";
@@ -30,6 +31,8 @@ interface CanvasToolbarProps {
   projectId: string;
   view: BackendCanvasView;
   setView: (view: BackendCanvasView) => void;
+  paletteOpen: boolean;
+  setPaletteOpen: (open: boolean) => void;
   aiPanelOpen: boolean;
   setAiPanelOpen: (open: boolean) => void;
   onOpenCommit: () => void;
@@ -41,6 +44,8 @@ export function CanvasToolbar({
   projectId,
   view,
   setView,
+  paletteOpen,
+  setPaletteOpen,
   aiPanelOpen,
   setAiPanelOpen,
   onOpenCommit,
@@ -86,6 +91,24 @@ export function CanvasToolbar({
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
+
+        {/* Toggle Node Palette Button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={paletteOpen ? "secondary" : "ghost"}
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={() => setPaletteOpen(!paletteOpen)}
+            >
+              <PanelLeft className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            {paletteOpen ? "Hide Tools Palette" : "Show Tools Palette"}
+          </TooltipContent>
+        </Tooltip>
+
         <div className="font-medium text-sm truncate max-w-[180px]">
           {projectName}
         </div>

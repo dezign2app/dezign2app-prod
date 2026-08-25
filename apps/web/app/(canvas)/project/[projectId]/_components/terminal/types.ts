@@ -1,4 +1,4 @@
-export interface DockerCanvasTerminalProps {
+export interface TerminalProps {
   projectId: string;
   projectName?: string;
 }

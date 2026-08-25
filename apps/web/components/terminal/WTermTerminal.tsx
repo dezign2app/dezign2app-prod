@@ -410,7 +410,7 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
           onResize={onResize}
           autoResize={true}
           cursorBlink={true}
-          className="w-full h-full"
+          className="w-full h-full rounded-none!"
         />
 
         {logs.length === 0 && (

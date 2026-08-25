@@ -321,10 +321,13 @@ export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
       minWidth={300}
       maxWidth={800}
       enable={{ left: true }}
-      className="border-l bg-background shadow-xl flex flex-col h-full z-50 absolute right-0"
+      handleClasses={{
+        left: "w-1 bg-sidebar-border hover:bg-primary cursor-col-resize transition-colors z-50",
+      }}
+      className="pointer-events-auto h-full bg-sidebar/95 backdrop-blur-md border-l border-sidebar-border shadow-xl flex flex-col shrink-0 overflow-hidden font-sans z-20"
     >
-      <div className="flex items-center justify-between p-4 border-b shrink-0 bg-secondary/30 gap-2">
-        <div className="flex items-center text-sm font-medium whitespace-nowrap">
+      <div className="flex items-center justify-between p-4 border-b border-sidebar-border shrink-0 bg-sidebar-accent/30 gap-2">
+        <div className="flex items-center text-sm font-medium whitespace-nowrap text-sidebar-foreground">
           <Sparkles className="w-4 h-4 mr-2 text-primary" />
           AI Assistant <Badge className="ml-2">Beta</Badge>
         </div>
@@ -357,7 +360,7 @@ export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6 shrink-0"
+          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
           onClick={onClose}
         >
           <X className="w-4 h-4" />
@@ -426,7 +429,7 @@ export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
         </div>
       </div>
 
-      <div className="p-4 border-t bg-background shrink-0">
+      <div className="p-4 border-t border-sidebar-border bg-sidebar shrink-0">
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           <Textarea
             value={input}
@@ -438,7 +441,7 @@ export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
               }
             }}
             placeholder="Ask AI to design your system..."
-            className="flex-1"
+            className="flex-1 bg-sidebar-accent/50 border-sidebar-border text-sidebar-foreground"
             disabled={isLoading}
           />
           <Button

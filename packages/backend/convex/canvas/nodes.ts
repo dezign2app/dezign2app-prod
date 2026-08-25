@@ -159,3 +159,34 @@ export const removeBackendNode = mutation({
     }
   },
 });
+
+/**
+ * Lightweight mutation used by the system-design-engine page editor to
+ * patch specific fields on a node's `data` object without requiring the
+ * full node payload. Merges the provided fields into the existing data.
+ */
+export const patchNodeData = mutation({
+  args: {
+    projectId: v.id("projects"),
+    nodeId: v.string(),
+    patch: v.any(),
+  },
+  async handler(ctx, args) {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Not authenticated");
+
+    const existing = await ctx.db
+      .query("canvas_backend_nodes")
+      .withIndex("by_project_node", (q) =>
+        q.eq("projectId", args.projectId).eq("nodeId", args.nodeId),
+      )
+      .unique();
+
+    if (!existing) {
+      throw new ConvexError(`Node ${args.nodeId} not found in project ${args.projectId}`);
+    }
+
+    const mergedData = { ...(existing.data as Record<string, unknown>), ...args.patch };
+    await ctx.db.patch(existing._id, { data: mergedData });
+  },
+});

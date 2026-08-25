@@ -1,4 +1,4 @@
 "use client";
 
-export * from "./docker-terminal";
-export { DockerCanvasTerminal as default } from "./docker-terminal";
+export * from "./terminal";
+export { Terminal as default, Terminal as DockerCanvasTerminal } from "./terminal";

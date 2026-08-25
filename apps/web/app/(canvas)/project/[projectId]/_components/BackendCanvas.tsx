@@ -21,7 +21,6 @@ import { GraphView } from "./GraphView";
 import { SequenceView } from "./SequenceView";
 import { useChatStore } from "@/app/(protected)/_components/chat/chat-store";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
-import { DockerCanvasTerminal } from "./DockerCanvasTerminal";
 
 import { Loader2 } from "lucide-react";
 
@@ -142,7 +141,6 @@ export function BackendCanvas(props: BackendCanvasProps) {
       </AlertDialog>
       <ConfigSidebar />
       <ChatContainer />
-      <DockerCanvasTerminal projectId={props.projectId} projectName={props.projectName} />
     </>
   );
 }
