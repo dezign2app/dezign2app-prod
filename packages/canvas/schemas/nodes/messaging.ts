@@ -96,6 +96,7 @@ export const redisCacheDataSchema = baseNodeDataSchema
   .extend({
     description: z.string().optional(),
     schemaRef: z.string().optional(),
+    databaseId: z.string().optional(),
     caches: z.array(resourceItemSchema).optional(),
   })
   .strict();

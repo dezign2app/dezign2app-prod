@@ -25,6 +25,7 @@ import {
   AvailableSource,
   AvailableTransformer,
 } from "./types";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import React from "react";
 
 // ---------------------------------------------------------------------------
@@ -117,6 +118,31 @@ export function generateId(): string {
 // ---------------------------------------------------------------------------
 // Path Introspection Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Checks if a candidate source path matches an expected argument name.
+ * Supports exact match, dot-separated subpath match (e.g. "body.user.email" vs "email"),
+ * and case/format-insensitive match (e.g. "first_name" vs "firstName").
+ */
+export function isPathMatch(path: string, argName: string): boolean {
+  if (!path || !argName) return false;
+  const normArg = argName.trim().toLowerCase();
+  const normPath = path.trim().toLowerCase();
+
+  // 1. Exact match
+  if (normPath === normArg) return true;
+
+  // 2. Dot-suffix match (e.g., 'user.email' or 'data.items' ending with '.email' / '.items')
+  if (normPath.endsWith(`.${normArg}`)) return true;
+
+  // 3. Normalized alphanumeric match (handling snake_case vs camelCase, e.g., 'user_id' and 'userId')
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const cleanArg = normalize(argName);
+  const lastSegment = path.split(".").pop() || path;
+  const cleanPath = normalize(lastSegment);
+
+  return cleanPath.length > 0 && cleanPath === cleanArg;
+}
 
 export function extractPathsFromObject(
   obj: JSONValue | JSONObject | undefined | null,
@@ -509,4 +535,182 @@ export function getAvailableTransformers(
 
 
   return transformers;
+}
+
+// ---------------------------------------------------------------------------
+// Redis Cache Node & Edge Synchronization Helpers
+// ---------------------------------------------------------------------------
+
+export interface EnsureRedisCacheConnectionParams {
+  schemaId?: string;
+  instanceId?: string;
+  serviceNodeId?: string;
+  endpointId?: string;
+  consumedEventId?: string;
+}
+
+/**
+ * Ensures a RedisCacheNode (type="redis-cache") exists on canvas for the given schema/instance
+ * and connects the ServiceNode endpoint handle to it.
+ */
+export function ensureRedisCacheConnection({
+  schemaId,
+  instanceId,
+  serviceNodeId,
+  endpointId,
+  consumedEventId,
+}: EnsureRedisCacheConnectionParams): string | undefined {
+  if (!serviceNodeId) return undefined;
+  const store = useBackendCanvasStore.getState();
+  const allNodes = store.nodes;
+
+  // 1. Look for an existing redis-cache node
+  let cacheNode = allNodes.find(
+    (n) =>
+      n.type === "redis-cache" &&
+      ((schemaId && schemaId !== "__direct__" && (n.data?.schemaRef === schemaId || n.id === schemaId)) ||
+        (schemaId === "__direct__" && (n.data?.databaseId === instanceId || n.id === instanceId))),
+  );
+
+  // If not found by direct match, look by schemaRef
+  if (!cacheNode && schemaId && schemaId !== "__direct__" && schemaId !== "__none__") {
+    cacheNode = allNodes.find(
+      (n) => n.type === "redis-cache" && n.data?.schemaRef === schemaId,
+    );
+  }
+
+  // 2. If no redis-cache node exists, create one!
+  if (!cacheNode) {
+    const targetSchemaNode = allNodes.find((n) => n.id === schemaId);
+    const serviceNode = allNodes.find((n) => n.id === serviceNodeId);
+    const targetInstanceNode = allNodes.find(
+      (n) => n.id === (instanceId || targetSchemaNode?.data?.databaseId),
+    );
+
+    const schemaLabel =
+      targetSchemaNode?.data?.label ||
+      (schemaId === "__direct__"
+        ? `${targetInstanceNode?.data?.label || "Redis"} Direct`
+        : "Redis Cache");
+
+    const newCacheNodeId = crypto.randomUUID();
+    const basePos = serviceNode?.position || targetSchemaNode?.position || { x: 300, y: 200 };
+
+    const existingCacheNodes = allNodes.filter((n) => n.type === "redis-cache");
+    const yOffset = existingCacheNodes.length * 90;
+    const newPos = {
+      x: basePos.x + 380,
+      y: basePos.y + yOffset,
+    };
+
+    store.addNode({
+      id: newCacheNodeId,
+      type: "redis-cache",
+      position: newPos,
+      data: {
+        label: schemaLabel,
+        schemaRef:
+          schemaId && schemaId !== "__direct__" && schemaId !== "__none__"
+            ? schemaId
+            : undefined,
+        databaseId: instanceId || targetSchemaNode?.data?.databaseId,
+        description: `Reference to ${schemaLabel}`,
+      },
+    });
+
+    cacheNode = useBackendCanvasStore
+      .getState()
+      .nodes.find((n) => n.id === newCacheNodeId);
+  }
+
+  if (!cacheNode) return undefined;
+
+  // 3. Draw edge from ServiceNode endpoint/event to RedisCacheNode database-target handle
+  const sourceHandle = endpointId
+    ? `endpoint-out-${endpointId}`
+    : consumedEventId
+    ? `consumedEvents-in-${consumedEventId}`
+    : `endpoint-out-${serviceNodeId}`;
+
+  const currentEdges = useBackendCanvasStore.getState().edges;
+  const existingEdge = currentEdges.find(
+    (e) =>
+      e.source === serviceNodeId &&
+      e.target === cacheNode!.id &&
+      (e.sourceHandle === sourceHandle || !e.sourceHandle) &&
+      (e.targetHandle === "database-target" || !e.targetHandle),
+  );
+
+  if (!existingEdge) {
+    store.addEdge({
+      id: `edge-rediscache-${serviceNodeId}-${endpointId || consumedEventId || "ep"}-${cacheNode.id}-${Date.now()}`,
+      source: serviceNodeId,
+      target: cacheNode.id,
+      sourceHandle,
+      targetHandle: "database-target",
+      type: "connection",
+    });
+  }
+
+  return cacheNode.id;
+}
+
+export interface CleanupRedisCacheConnectionParams {
+  tableNodeId?: string;
+  databaseId?: string;
+  serviceNodeId?: string;
+  endpointId?: string;
+  consumedEventId?: string;
+  remainingSteps: PipelineStepDraft[];
+}
+
+/**
+ * Cleans up edge(s) connecting the service endpoint to a Redis cache node when
+ * the step is deleted or no longer references that cache node.
+ */
+export function cleanupRedisCacheConnection({
+  tableNodeId,
+  databaseId,
+  serviceNodeId,
+  endpointId,
+  consumedEventId,
+  remainingSteps,
+}: CleanupRedisCacheConnectionParams) {
+  if (!serviceNodeId) return;
+  const store = useBackendCanvasStore.getState();
+
+  // Check if any other redis_operation in remainingSteps still uses this tableNodeId / databaseId
+  const isStillUsed = remainingSteps.some(
+    (s) =>
+      s.type === "redis_operation" &&
+      ((tableNodeId && s.tableNodeId === tableNodeId) ||
+        (!tableNodeId && databaseId && s.databaseId === databaseId)),
+  );
+  if (isStillUsed) return;
+
+  // Find matching redis-cache nodes
+  const matchingCacheNodes = store.nodes.filter(
+    (n) =>
+      n.type === "redis-cache" &&
+      ((tableNodeId && (n.id === tableNodeId || n.data?.schemaRef === tableNodeId)) ||
+        (databaseId && n.data?.databaseId === databaseId)),
+  );
+
+  const matchingCacheNodeIds = new Set(matchingCacheNodes.map((n) => n.id));
+  if (tableNodeId) matchingCacheNodeIds.add(tableNodeId);
+
+  const sourceHandle = endpointId
+    ? `endpoint-out-${endpointId}`
+    : consumedEventId
+    ? `consumedEvents-in-${consumedEventId}`
+    : undefined;
+
+  const edgesToDelete = store.edges.filter((e) => {
+    if (e.source !== serviceNodeId) return false;
+    if (!matchingCacheNodeIds.has(e.target)) return false;
+    if (sourceHandle && e.sourceHandle && e.sourceHandle !== sourceHandle) return false;
+    return true;
+  });
+
+  edgesToDelete.forEach((e) => store.deleteEdge(e.id));
 }

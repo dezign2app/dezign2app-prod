@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
 import { DatabaseZap, Key, Clock, Server, Layers } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
@@ -36,7 +36,18 @@ export const RedisCacheNode = ({
     Boolean(selected),
   );
 
-  const redisSchemas = useBackendCanvasStore(
+  const redisInstances = useBackendCanvasStore(
+    useShallow((s) =>
+      s.nodes.filter(
+        (n) =>
+          n?.type === "redis_instance" ||
+          (n?.type === "database" &&
+            (n.data?.dbEngine === "redis" || n.data?.dbType === "redis")),
+      ),
+    ),
+  );
+
+  const allRedisSchemas = useBackendCanvasStore(
     useShallow((s) =>
       s.nodes.filter(
         (n) =>
@@ -46,10 +57,26 @@ export const RedisCacheNode = ({
     ),
   );
 
-  const selectedSchema = redisSchemas.find((s) => s.id === data.schemaRef);
+  const selectedSchema = allRedisSchemas.find((s) => s.id === data.schemaRef);
+  const selectedInstanceId = data.databaseId || selectedSchema?.data?.databaseId;
+  const selectedInstance = redisInstances.find((n) => n.id === selectedInstanceId);
   const parentInstance = nodes.find(
-    (n) => n.id === selectedSchema?.data?.databaseId,
+    (n) => n.id === (selectedSchema?.data?.databaseId || selectedInstanceId),
   );
+
+  const filteredSchemas = useMemo(() => {
+    if (!selectedInstanceId || selectedInstanceId === "__all__") return allRedisSchemas;
+    const directMatches = allRedisSchemas.filter(
+      (s) =>
+        s.data?.databaseId === selectedInstanceId ||
+        edges.some(
+          (e) =>
+            (e.source === selectedInstanceId && e.target === s.id) ||
+            (e.target === selectedInstanceId && e.source === s.id),
+        ),
+    );
+    return directMatches.length > 0 ? directMatches : allRedisSchemas;
+  }, [allRedisSchemas, selectedInstanceId, edges]);
 
   // Derive which service endpoints connect to this Redis cache node
   const incomingEdges = edges.filter((e) => e.target === id);
@@ -184,53 +211,118 @@ export const RedisCacheNode = ({
         />
       </div>
 
-      {/* Schema Selector */}
-      <div className="p-2.5 flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-            Target Redis Schema
-          </span>
-          {redisStructure && (
-            <Badge
-              variant="outline"
-              className="text-[9px] px-1.5 py-0 uppercase font-mono bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 font-bold"
-            >
-              {redisStructure}
-            </Badge>
-          )}
+      {/* Selectors: Redis Instance followed by Target Redis Schema */}
+      <div className="p-2.5 flex flex-col gap-2.5 nodrag">
+        {/* 1. Redis Instance Selector */}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+              <Server size={10} className="text-red-500" />
+              Redis Instance
+            </span>
+            {selectedInstance && (
+              <span className="text-[9px] font-mono text-muted-foreground/80 px-1 py-0.2 rounded bg-muted/50 border border-border/40">
+                {selectedInstance.data?.dbEngine || "redis"}
+              </span>
+            )}
+          </div>
+
+          <Select
+            value={selectedInstanceId || "__all__"}
+            onValueChange={(val) => {
+              const newInstanceId = val === "__all__" ? "" : val;
+              const currentSchema = allRedisSchemas.find((s) => s.id === data.schemaRef);
+              const belongsToNew =
+                !newInstanceId ||
+                (currentSchema &&
+                  (currentSchema.data?.databaseId === newInstanceId ||
+                    edges.some(
+                      (e) =>
+                        (e.source === newInstanceId && e.target === currentSchema.id) ||
+                        (e.target === newInstanceId && e.source === currentSchema.id),
+                    )));
+
+              updateNode(id, {
+                data: {
+                  ...data,
+                  databaseId: newInstanceId || undefined,
+                  schemaRef: belongsToNew ? data.schemaRef : undefined,
+                  label: belongsToNew ? data.label : "Redis Cache Ref",
+                },
+              });
+            }}
+          >
+            <SelectTrigger className="h-7 text-xs bg-background/80">
+              <SelectValue placeholder="Select Redis Instance..." />
+            </SelectTrigger>
+            <SelectContent className="z-[100]">
+              <SelectItem value="__all__" className="text-xs">
+                All Instances
+              </SelectItem>
+              {redisInstances.map((inst) => (
+                <SelectItem key={inst.id} value={inst.id} className="text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                    <span className="truncate">{inst.data?.label || "Redis Instance"}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <Select
-          value={data.schemaRef || ""}
-          onValueChange={(val) => {
-            const schema = redisSchemas.find((s) => s.id === val);
-            updateNode(id, {
-              data: {
-                ...data,
-                schemaRef: val,
-                label: schema?.data?.label || "Redis Cache Ref",
-                graphPosition: schema?.position,
-              },
-            });
-          }}
-        >
-          <SelectTrigger className="h-8 text-xs">
-            <SelectValue placeholder="Select a Redis Schema..." />
-          </SelectTrigger>
-          <SelectContent>
-            {redisSchemas.length === 0 ? (
-              <div className="p-2 text-xs text-muted-foreground italic">
-                No Redis schemas defined in Schema View
-              </div>
-            ) : (
-              redisSchemas.map((s) => (
-                <SelectItem key={s.id} value={s.id} className="text-xs">
-                  {s.data?.label || "Untitled Cache"}
-                </SelectItem>
-              ))
+        {/* 2. Target Redis Schema Selector */}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+              <DatabaseZap size={10} className="text-red-500" />
+              Redis Schema
+            </span>
+            {redisStructure && (
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1.5 py-0 uppercase font-mono bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 font-bold"
+              >
+                {redisStructure}
+              </Badge>
             )}
-          </SelectContent>
-        </Select>
+          </div>
+
+          <Select
+            value={data.schemaRef || ""}
+            onValueChange={(val) => {
+              const schema = allRedisSchemas.find((s) => s.id === val);
+              updateNode(id, {
+                data: {
+                  ...data,
+                  schemaRef: val,
+                  databaseId: schema?.data?.databaseId || selectedInstanceId || data.databaseId,
+                  label: schema?.data?.label || "Redis Cache Ref",
+                  graphPosition: schema?.position,
+                },
+              });
+            }}
+          >
+            <SelectTrigger className="h-7 text-xs bg-background/80">
+              <SelectValue placeholder="Select a Redis Schema..." />
+            </SelectTrigger>
+            <SelectContent className="z-[100]">
+              {filteredSchemas.length === 0 ? (
+                <div className="p-2 text-xs text-muted-foreground italic">
+                  {selectedInstanceId && selectedInstanceId !== "__all__"
+                    ? "No schemas for this Redis instance"
+                    : "No Redis schemas defined in Schema View"}
+                </div>
+              ) : (
+                filteredSchemas.map((s) => (
+                  <SelectItem key={s.id} value={s.id} className="text-xs">
+                    {s.data?.label || "Untitled Cache"}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        </div>
 
         {/* Selected Schema Metadata Preview */}
         {selectedSchema && (

@@ -120,6 +120,15 @@ export const pipelineStepOutputSchemaFieldSchema = z.object({
   description: z.string().optional(),
 });
 
+export const stepSchemaFieldSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(),
+  type: z.string(),
+  required: z.boolean().optional(),
+  description: z.string().optional(),
+  defaultValue: z.string().optional(),
+});
+
 export const pipelineStepSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -145,8 +154,8 @@ export const pipelineStepSchema = z.object({
     importPath: z.string(),
     signature: z.string().optional(),
     isGlobal: z.boolean().optional(),
-    inputSchema: z.array(z.any()).optional(),
-    returnSchema: z.array(z.any()).optional(),
+    inputSchema: z.array(stepSchemaFieldSchema).optional(),
+    returnSchema: z.array(stepSchemaFieldSchema).optional(),
   }).optional(),
   /** Optional reference to the canvas transformer node ID */
   transformerNodeId: z.string().optional(),
