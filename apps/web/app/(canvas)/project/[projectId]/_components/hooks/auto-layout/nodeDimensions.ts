@@ -135,10 +135,11 @@ export function getNodeDimensions(node: LayoutNode): {
     case "langgraph_middleware":
       return { width: 280, height: 160 };
     case "langgraph_memory":
+      return { width: 280, height: 160 };
     case "db_ref":
     case "vector_db_ref":
     case "redis-cache":
-      return { width: 280, height: 180 };
+      return { width: 240, height: 80 };
     case "end":
     case "END":
       return { width: 140, height: 60 };
@@ -212,6 +213,7 @@ export function getNodeDimensions(node: LayoutNode): {
     case "transformer_ref": {
       return { width: 240, height: 50 };
     }
+
     case "group": {
       const data = getLayoutNodeData(node);
       const count =

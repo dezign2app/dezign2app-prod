@@ -13,6 +13,10 @@ import { getNodeDimensions } from "./nodeDimensions";
 import { runBarycenterRefinement } from "./barycenterLayout";
 import { layoutHeadNodes } from "./headNodeLayout";
 import { layoutHangingTransformerNodes } from "./hangingTransformerLayout";
+import {
+  layoutHangingReferenceNodes,
+  REFERENCE_NODE_TYPES,
+} from "./hangingReferenceLayout";
 
 export interface PerformGraphLayoutOptions {
   nodes: LayoutNode[];
@@ -99,15 +103,24 @@ export function performGraphLayout({
     return isTransType;
   };
 
+  const isHangingReferenceEdge = (edge: LayoutEdge): boolean => {
+    const targetNode = graphNodes.find((n: LayoutNode) => n.id === edge.target);
+    if (!targetNode) return false;
+    return REFERENCE_NODE_TYPES.has(targetNode.type ?? "");
+  };
+
   const headEdges: LayoutEdge[] = graphEdges.filter(isHeadConnectionEdge);
   const hangingEdges: LayoutEdge[] = graphEdges.filter(isHangingTransformerEdge);
+  const hangingRefEdges: LayoutEdge[] = graphEdges.filter(isHangingReferenceEdge);
 
   const flowEdges: LayoutEdge[] = graphEdges.filter(
     (e: LayoutEdge) =>
-      !isHeadConnectionEdge(e) && !isHangingTransformerEdge(e),
+      !isHeadConnectionEdge(e) &&
+      !isHangingTransformerEdge(e) &&
+      !isHangingReferenceEdge(e),
   );
 
-  // 3. Identify attached head nodes and hanging transformer nodes
+  // 3. Identify attached head nodes, hanging transformer nodes, and hanging reference nodes
   const attachedHeadNodeIdSet = new Set<string>(
     headEdges.map((e: LayoutEdge) => e.source),
   );
@@ -122,10 +135,24 @@ export function performGraphLayout({
     hangingTransformerNodeIdSet.has(n.id),
   );
 
+  const hangingRefNodeIdSet = new Set<string>();
+  graphNodes.forEach((n: LayoutNode) => {
+    if (REFERENCE_NODE_TYPES.has(n.type ?? "")) {
+      hangingRefNodeIdSet.add(n.id);
+    }
+  });
+  hangingRefEdges.forEach((e: LayoutEdge) => {
+    hangingRefNodeIdSet.add(e.target);
+  });
+  const hangingRefNodes: LayoutNode[] = graphNodes.filter((n: LayoutNode) =>
+    hangingRefNodeIdSet.has(n.id),
+  );
+
   const mainGraphNodes: LayoutNode[] = graphNodes.filter(
     (n: LayoutNode) =>
       !attachedHeadNodeIdSet.has(n.id) &&
-      !hangingTransformerNodeIdSet.has(n.id),
+      !hangingTransformerNodeIdSet.has(n.id) &&
+      !hangingRefNodeIdSet.has(n.id),
   );
 
   // 4. Run Dagre layout for mainGraphNodes and flowEdges
@@ -134,7 +161,11 @@ export function performGraphLayout({
     rankdir: direction,
     marginx: 80,
     marginy: 80,
-    ranksep: isHorizontal ? 200 : 150,
+    ranksep: isHorizontal
+      ? hangingRefEdges.length > 0
+        ? 440
+        : 200
+      : 150,
     nodesep: 50,
   });
 
@@ -174,6 +205,7 @@ export function performGraphLayout({
     storeEndpoints,
     storeEvents,
     hangingEdges,
+    hangingRefEdges,
   });
 
   // 6. Layout attached head nodes grouped by category columns above each target node
@@ -191,6 +223,17 @@ export function performGraphLayout({
     positionsMap,
     hangingEdges,
     hangingTransformerNodes,
+    isHorizontal,
+    storeEndpoints,
+    storeEvents,
+  });
+
+  // 6.6. Layout hanging reference nodes (Table Ref, Redis Cache Ref, Vector DB Ref) in a dedicated column right after their connected service node
+  layoutHangingReferenceNodes({
+    nodes: graphNodes,
+    positionsMap,
+    hangingRefEdges,
+    hangingRefNodes,
     isHorizontal,
     storeEndpoints,
     storeEvents,

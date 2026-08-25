@@ -130,7 +130,10 @@ export type ConfigItemType =
   | "testUsers"
   | "redisSchema"
   | "transformer"
-  | "transformer_ref";
+  | "transformer_ref"
+  | "db_ref"
+  | "redis_cache"
+  | "vector_db_ref";
 
 export interface ActiveConfigItem {
   type: ConfigItemType;
