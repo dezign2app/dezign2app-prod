@@ -1,492 +1,147 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState } from "react";
 import { Resizable } from "re-resizable";
-import { X, Send, Sparkles, Loader2 } from "lucide-react";
-import { Button } from "@workspace/ui/components/button";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "@workspace/backend/_generated/api";
-import { Id } from "@workspace/backend/_generated/dataModel";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
-import { useReactFlow } from "@xyflow/react";
-import { Textarea } from "@workspace/ui/components/textarea";
-import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { ChevronLeft, Sparkles } from "lucide-react";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
-
-import { BackendCanvasView } from "@/types/canvas";
-import { Badge } from "@workspace/ui/components/badge";
-
-interface AiPanelProps {
-  projectId: string;
-  isOpen: boolean;
-  onClose: () => void;
-  setView?: (view: BackendCanvasView) => void;
-}
-
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-  isStreaming?: boolean;
-};
-
-interface SerializedEndpoint {
-  id?: string;
-  type?: string;
-  name?: string;
-  databaseNodeIds?: string[];
-  databaseNodeId?: string;
-}
-
-interface SerializedNodeData {
-  label?: string;
-  endpoints?: SerializedEndpoint[];
-  tableRef?: string;
-}
-
-function serializeBackendCanvasForAI(
-  nodes: Array<{ id: string; type: string; data?: SerializedNodeData }>,
-  edges: Array<{
-    source: string;
-    target: string;
-    type?: string;
-    sourceHandle?: string | null;
-    targetHandle?: string | null;
-  }>,
-) {
-  if (nodes.length === 0) return "Backend Canvas is empty.";
-
-  let output = "Backend Canvas Nodes:\n";
-  for (const node of nodes) {
-    const data = node.data ?? {};
-    output += `- [${node.type}] id: ${node.id}, label: "${data.label ?? ""}"`;
-
-    if (node.type === "service" && Array.isArray(data.endpoints)) {
-      output += "\n  Endpoints:\n";
-      output += data.endpoints
-        .map((endpoint) => {
-          const dbIds: string[] = [
-            ...(Array.isArray(endpoint.databaseNodeIds)
-              ? endpoint.databaseNodeIds
-              : []),
-            ...(endpoint.databaseNodeId ? [endpoint.databaseNodeId] : []),
-          ];
-          const uniqueDbIds = [...new Set(dbIds)];
-          const db =
-            uniqueDbIds.length > 0
-              ? ` databaseNodeIds=[${uniqueDbIds.join(", ")}]`
-              : "";
-          const epType = endpoint.type ?? "endpoint";
-          const epName = endpoint.name ?? "unnamed";
-          const epId = endpoint.id ?? "";
-          return `    - ${epType} ${epName} id=${epId} sourceHandle="endpoint-out-${epId}" targetHandle="endpoint-in-${epId}"${db}`;
-        })
-        .join("\n");
-    }
-
-    if (node.type === "db_ref") {
-      output += `\n  DB reference: tableRef=${data.tableRef ?? "unknown"} targetHandle="database-target"`;
-    }
-    output += "\n";
-  }
-
-  if (edges.length > 0) {
-    output += "\nConnections (use these to avoid duplicates):\n";
-    for (const edge of edges) {
-      output += `- ${edge.source} -> ${edge.target} [${edge.type ?? "connection"}] sourceHandle="${edge.sourceHandle ?? ""}" targetHandle="${edge.targetHandle ?? ""}"\n`;
-    }
-  }
-  return output;
-}
+import {
+  AiPanelProps,
+  useProjectChats,
+  useCanvasAiAssistant,
+  AiPanelHeader,
+  AiPanelHistory,
+  AiPanelChatView,
+} from "./ai-panel";
 
 export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
-  const [activeChatId, setActiveChatId] = useState<Id<"project_chats"> | null>(
-    null,
-  );
-  const [hasInitializedChat, setHasInitializedChat] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "assistant",
-      content: `Hi! I'm your AI Assistant. I can help you design your system architecture. What would you like to build?`,
-    },
-  ]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const backendNodes = useBackendCanvasStore((state) => state.nodes);
-  const backendEdges = useBackendCanvasStore((state) => state.edges);
-
-  const reactFlow = useReactFlow();
-
-  const chats = useQuery(api.project_chat.getChats, {
-    projectId: projectId as Id<"projects">,
-  });
-  const convexMessages = useQuery(
-    api.project_chat.getMessages,
-    activeChatId ? { chatId: activeChatId } : "skip",
-  );
-
-  const createChat = useMutation(api.project_chat.createChat);
-  const addMessage = useMutation(api.project_chat.addMessage);
-
-  // Initialize activeChatId if null and chats exist, but only once on load
-  useEffect(() => {
-    if (chats && !hasInitializedChat) {
-      if (chats.length > 0) {
-        setActiveChatId(chats[0]!._id);
-      }
-      setHasInitializedChat(true);
-    }
-  }, [chats, hasInitializedChat]);
-
-  // Sync messages when activeChatId or convexMessages changes
-  useEffect(() => {
-    if (convexMessages) {
-      if (convexMessages.length > 0) {
-        setMessages(
-          convexMessages.map((m) => ({
-            role: m.role as "user" | "assistant",
-            content: m.content,
-          })),
-        );
-      } else {
-        setMessages([
-          {
-            role: "assistant",
-            content: `Hi! I'm your AI Assistant. Will be live soon!`,
-          },
-        ]);
-      }
-    } else if (!activeChatId) {
-      setMessages([
-        {
-          role: "assistant",
-          content: `Hi! I'm your AI Assistant. I can help you design your system architecture. What would you like to build?`,
-        },
-      ]);
-    }
-  }, [convexMessages, activeChatId]);
-
-  const handleNewChat = () => {
-    setActiveChatId(null);
-  };
-
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  const handleSubmit = async (e?: React.SubmitEvent | React.KeyboardEvent) => {
-    if (e) e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    const userMessage = input.trim();
-    setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
-    setIsLoading(true);
-
-    let currentChatId = activeChatId;
-    if (!currentChatId) {
-      currentChatId = await createChat({
-        projectId: projectId as Id<"projects">,
-        title:
-          userMessage.substring(0, 40) + (userMessage.length > 40 ? "..." : ""),
-      });
-      setActiveChatId(currentChatId);
-    }
-
-    await addMessage({
-      chatId: currentChatId,
-      role: "user",
-      content: userMessage,
-    }).catch(console.error);
-
-    try {
-      // Use the live backend store so the AI receives endpoint IDs, DB-ref IDs,
-      // and existing edge handles needed to repair disconnected tables.
-      const canvasStateContext = serializeBackendCanvasForAI(
-        backendNodes,
-        backendEdges,
-      );
-
-      // Get current viewport center so AI can place nodes near the user
-      const viewportCenter = reactFlow.screenToFlowPosition({
-        x: window.innerWidth / 2,
-        y: window.innerHeight / 2,
-      });
-
-      const res = await fetch(`${window.location.origin}/api/canvas-ai`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId,
-          chatId: currentChatId,
-          canvasStateContext,
-          viewportCenter,
-        }),
-      });
-
-      if (!res.ok) throw new Error("API failed");
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No stream");
-
-      const decoder = new TextDecoder();
-      let assistantContent = "";
-
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "", isStreaming: true },
-      ]);
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n").filter((l) => l.trim() !== "");
-
-        for (const line of lines) {
-          try {
-            const data = JSON.parse(line);
-            if (data.type === "text") {
-              assistantContent += data.content;
-              setMessages((prev) => {
-                const newMsgs = [...prev];
-                const lastMsg = newMsgs[newMsgs.length - 1];
-                if (lastMsg) {
-                  lastMsg.content = assistantContent;
-                }
-                return newMsgs;
-              });
-            } else if (data.type === "tool_call") {
-              // The tool mutation is now executed directly on the backend by the agent.
-              const argsStr = data.message || "";
-              assistantContent += `\n*🔧 Tool used: \`${data.name}\`*${argsStr}\n`;
-
-              // Automatically switch tabs based on what the AI is building
-              if (setView) {
-                if (
-                  data.name === "add_schema_group" ||
-                  data.name === "add_single_schema" ||
-                  data.name === "add_schema_edge"
-                ) {
-                  setView("schema");
-                } else {
-                  setView("graph");
-                }
-              }
-
-              setMessages((prev) => {
-                const newMsgs = [...prev];
-                const lastMsg = newMsgs[newMsgs.length - 1];
-                if (lastMsg) {
-                  lastMsg.content = assistantContent;
-                }
-                return newMsgs;
-              });
-            }
-          } catch (e) {
-            console.error("Failed to parse chunk line", line);
-          }
-        }
-      }
-
-      setMessages((prev) => {
-        const newMsgs = [...prev];
-        const lastMsg = newMsgs[newMsgs.length - 1];
-        if (lastMsg) {
-          lastMsg.isStreaming = false;
-        }
-        return newMsgs;
-      });
-
-      if (assistantContent && currentChatId) {
-        addMessage({
-          chatId: currentChatId,
-          role: "assistant",
-          content: assistantContent,
-        }).catch(console.error);
-      }
-    } catch (error) {
-      console.error(error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "Sorry, I encountered an error. Please try again.",
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const aiPanelWidth = useSidebarStore((s) => s.aiPanelWidth);
   const setAiPanelWidth = useSidebarStore((s) => s.setAiPanelWidth);
+  const setAiPanelOpen = useSidebarStore((s) => s.setAiPanelOpen);
   const [isResizing, setIsResizing] = useState(false);
 
+  // 1. Hook: Manage conversation threads, messages & Convex persistence
+  const {
+    chats,
+    activeChatId,
+    setActiveChatId,
+    convexMessages,
+    messages,
+    setMessages,
+    showHistory,
+    setShowHistory,
+    searchQuery,
+    setSearchQuery,
+    deletingChatId,
+    filteredChats,
+    handleNewChat,
+    handleSelectChat,
+    handleDeleteChat,
+    handleClearHistory,
+    createChat,
+    addMessage,
+    updateChatTitleMutation,
+  } = useProjectChats({ projectId });
+
+  // 2. Hook: Manage canvas AI streaming, tool calls & submission
+  const {
+    input,
+    setInput,
+    isLoading,
+    streamingStatus,
+    handleSubmit,
+    handleStop,
+  } = useCanvasAiAssistant({
+    projectId,
+    activeChatId,
+    setActiveChatId,
+    convexMessages,
+    setMessages,
+    createChat,
+    addMessage,
+    updateChatTitleMutation,
+    setView,
+  });
+
   return (
-    <Resizable
-      size={{ width: isOpen ? aiPanelWidth : 0, height: "100%" }}
-      minWidth={isOpen ? 280 : 0}
-      maxWidth={800}
-      enable={{ left: isOpen }}
-      onResizeStart={() => setIsResizing(true)}
-      onResizeStop={(e, direction, ref, d) => {
-        setIsResizing(false);
-        setAiPanelWidth(aiPanelWidth + d.width);
-      }}
-      handleClasses={{
-        left: "w-1.5 bg-sidebar-border hover:bg-primary cursor-col-resize transition-colors z-50 hover:w-2",
-      }}
-      className={`h-full pointer-events-auto shrink-0 flex flex-col bg-sidebar/95 backdrop-blur-md border-l border-sidebar-border shadow-xl z-20 select-none font-sans overflow-hidden ${
-        isResizing
-          ? ""
-          : "transition-[width,opacity] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
-      } ${
-        isOpen ? "opacity-100" : "opacity-0 pointer-events-none border-l-0"
-      }`}
-    >
-      <div className="flex items-center justify-between p-4 border-b border-sidebar-border shrink-0 bg-sidebar-accent/30 gap-2">
-        <div className="flex items-center text-sm font-medium whitespace-nowrap text-sidebar-foreground">
-          <Sparkles className="w-4 h-4 mr-2 text-primary" />
-          AI Assistant <Badge className="ml-2">Beta</Badge>
-        </div>
-        {chats !== undefined && (
-          <div className="flex-1 px-2 overflow-hidden flex justify-end">
-            <Select
-              value={activeChatId || "new"}
-              onValueChange={(val) =>
-                val === "new"
-                  ? handleNewChat()
-                  : setActiveChatId(val as Id<"project_chats">)
-              }
-            >
-              <SelectTrigger className="h-7 text-xs bg-background/50 border-none shadow-none focus:ring-0 w-[140px]">
-                <SelectValue placeholder="Select a chat" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="new" className="font-semibold text-primary">
-                  + New Chat
-                </SelectItem>
-                {chats.map((c) => (
-                  <SelectItem key={c._id} value={c._id}>
-                    {c.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
-          onClick={onClose}
-        >
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
+    <>
+      {/* Floating Trigger Button on Canvas when AI panel is collapsed */}
+      <button
+        type="button"
+        onClick={() => setAiPanelOpen(true)}
+        className={`pointer-events-auto absolute top-3.5 right-3.5 z-30 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sidebar border border-sidebar-border shadow-md text-xs font-semibold text-sidebar-foreground hover:bg-sidebar-accent select-none group transition-all duration-200 ease-in-out ${
+          isOpen
+            ? "opacity-0 translate-x-4 pointer-events-none scale-95"
+            : "opacity-100 translate-x-0 pointer-events-auto scale-100"
+        }`}
+        title="Open AI Assistant"
+      >
+        <ChevronLeft className="w-3.5 h-3.5 text-muted-foreground group-hover:-translate-x-0.5 transition-transform" />
+        <Sparkles className="w-4 h-4 text-muted-foreground group-hover:text-sidebar-foreground transition-colors" />
+        <span className="font-semibold text-[11px]">AI Assistant</span>
+      </button>
 
-      <div className="flex-1 p-4 overflow-y-auto" ref={scrollRef}>
-        <div className="space-y-4">
-          {messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`flex flex-col ${
-                msg.role === "user" ? "items-end" : "items-start"
-              }`}
-            >
-              <div
-                className={`px-4 py-2 rounded-2xl max-w-[85%] text-sm ${
-                  msg.role === "user"
-                    ? "bg-primary text-primary-foreground rounded-br-none"
-                    : "bg-secondary text-secondary-foreground rounded-bl-none"
-                }`}
-              >
-                {msg.role === "assistant" ? (
-                  <div className="prose prose-sm dark:prose-invert prose-p:leading-snug prose-pre:bg-black/50">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        ol: ({ node, ...props }) => (
-                          <ol
-                            className="list-decimal ml-5 space-y-2"
-                            {...props}
-                          />
-                        ),
-                        ul: ({ node, ...props }) => (
-                          <ul className="list-disc ml-5 space-y-2" {...props} />
-                        ),
-                        li: ({ node, ...props }) => (
-                          <li
-                            className="pl-1 marker:text-foreground"
-                            {...props}
-                          />
-                        ),
-                        p: ({ node, ...props }) => (
-                          <p className="mb-2 last:mb-0" {...props} />
-                        ),
-                      }}
-                    >
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
-                ) : (
-                  msg.content
-                )}
-                {msg.isStreaming && (
-                  <span className="inline-block w-1.5 h-4 ml-1 bg-current animate-pulse align-middle" />
-                )}
-              </div>
-            </div>
-          ))}
-          {isLoading && messages[messages.length - 1]?.role === "user" && (
-            <div className="flex items-center text-xs text-muted-foreground ml-2">
-              <Loader2 className="w-3 h-3 mr-2 animate-spin" />
-              Thinking...
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Resizable Sidebar Panel */}
+      <Resizable
+        size={{ width: isOpen ? aiPanelWidth : 0, height: "100%" }}
+        minWidth={isOpen ? 280 : 0}
+        maxWidth={800}
+        enable={{ left: isOpen }}
+        onResizeStart={() => setIsResizing(true)}
+        onResizeStop={(e, direction, ref, d) => {
+          setIsResizing(false);
+          setAiPanelWidth(aiPanelWidth + d.width);
+        }}
+        handleClasses={{
+          left: "w-1.5 bg-sidebar-border hover:bg-muted-foreground/40 cursor-col-resize transition-colors z-30 hover:w-2",
+        }}
+        className={`h-full pointer-events-auto shrink-0 flex flex-col bg-sidebar border-l border-sidebar-border shadow-lg z-20 select-none font-sans overflow-hidden ${
+          isResizing
+            ? ""
+            : "transition-[width,opacity] duration-200 ease-in-out"
+        } ${
+          isOpen ? "opacity-100" : "opacity-0 pointer-events-none border-l-0"
+        }`}
+      >
+        {/* Top Header */}
+        <AiPanelHeader
+          showHistory={showHistory}
+          chatsCount={chats?.length}
+          hasMessages={messages.length > 0}
+          isLoading={isLoading}
+          onBackToChat={() => setShowHistory(false)}
+          onOpenHistory={() => setShowHistory(true)}
+          onNewChat={handleNewChat}
+          onClearHistory={activeChatId ? handleClearHistory : undefined}
+          onClose={onClose}
+        />
 
-      <div className="p-4 border-t border-sidebar-border bg-sidebar shrink-0">
-        <form onSubmit={handleSubmit} className="flex items-center gap-2">
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit(e);
-              }
-            }}
-            placeholder="Ask AI to design your system..."
-            className="flex-1 bg-sidebar-accent/50 border-sidebar-border text-sidebar-foreground"
-            disabled={isLoading}
+        {/* Body: Conversation History View OR Active Chat View */}
+        {showHistory ? (
+          <AiPanelHistory
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            chats={chats}
+            filteredChats={filteredChats}
+            activeChatId={activeChatId}
+            deletingChatId={deletingChatId}
+            onSelectChat={handleSelectChat}
+            onDeleteChat={handleDeleteChat}
+            onNewChat={handleNewChat}
           />
-          <Button
-            type="submit"
-            size="icon"
-            disabled={!input.trim() || isLoading}
-          >
-            <Send className="w-4 h-4" />
-          </Button>
-        </form>
-        <div className="text-[10px] text-muted-foreground text-center mt-2">
-          AI can make mistakes. Verify the generated design.
-        </div>
-      </div>
-    </Resizable>
+        ) : (
+          <AiPanelChatView
+            messages={messages}
+            input={input}
+            setInput={setInput}
+            isLoading={isLoading}
+            streamingStatus={streamingStatus}
+            onSubmit={handleSubmit}
+            onStop={handleStop}
+          />
+        )}
+      </Resizable>
+    </>
   );
 }
+
+export * from "./ai-panel";
