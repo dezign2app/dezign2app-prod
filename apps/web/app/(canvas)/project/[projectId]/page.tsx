@@ -16,6 +16,7 @@ import {
   IdentityProviderWithNode,
   useBackendCanvasStore,
 } from "@/lib/stores/backendCanvasStore";
+import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { CanvasToolbar } from "./_components/CanvasToolbar";
 import { BackendCanvas } from "./_components/BackendCanvas";
 import { NodePaletteSidebar } from "./_components/NodePaletteSidebar";
@@ -56,8 +57,10 @@ export default function ProjectCanvasPage({
     ]).withDefault("graph"),
   );
 
-  const [paletteOpen, setPaletteOpen] = useState(true);
-  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const paletteOpen = useSidebarStore((s) => s.paletteOpen);
+  const setPaletteOpen = useSidebarStore((s) => s.setPaletteOpen);
+  const aiPanelOpen = useSidebarStore((s) => s.aiPanelOpen);
+  const setAiPanelOpen = useSidebarStore((s) => s.setAiPanelOpen);
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [previewVersionId, setPreviewVersionId] = useState<Id<"project_versions"> | null>(null);

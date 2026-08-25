@@ -8,6 +8,7 @@ import {
 } from "@workspace/ui/components/sheet";
 import { ChevronLeft } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { EndpointConfig } from "./config-sidebar/EndpointConfig";
 import { WebClientEventConfig } from "./config-sidebar/WebClientEventConfig";
 import { EventConfig } from "./config-sidebar/EventConfig";
@@ -37,7 +38,8 @@ export const ConfigSidebar = () => {
     (s) => s.setActiveConfigItem,
   );
 
-  const [width, setWidth] = useState(540);
+  const width = useSidebarStore((s) => s.configSidebarWidth);
+  const setWidth = useSidebarStore((s) => s.setConfigSidebarWidth);
   const isDragging = useRef(false);
 
   type ConfigItem = NonNullable<typeof activeConfigItem>;

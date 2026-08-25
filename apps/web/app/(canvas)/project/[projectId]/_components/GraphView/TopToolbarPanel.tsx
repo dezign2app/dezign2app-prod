@@ -1,9 +1,11 @@
 import React from "react";
 import { Panel } from "@xyflow/react";
 import { Button } from "@workspace/ui/components/button";
+import { Badge } from "@workspace/ui/components/badge";
 import { LayoutTemplate, RotateCcw, Users } from "lucide-react";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { useTestUsersStore } from "../test-users/useTestUsersStore";
 
 interface TopToolbarPanelProps {
@@ -16,51 +18,71 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
   const simulation = useSimulationStore();
   const personas = useTestUsersStore((s) => s.personas);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
+  const aiPanelOpen = useSidebarStore((s) => s.aiPanelOpen);
+  const aiPanelWidth = useSidebarStore((s) => s.aiPanelWidth);
 
   return (
-    <Panel position="top-right" className="flex gap-2 flex-col">
-      <Button
-        variant="outline"
-        size="sm"
-        className="bg-sidebar dark:bg-sidebar shadow-sm text-xs"
-        onClick={() => onLayout("LR")}
-      >
-        <LayoutTemplate className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-        Auto layout
-      </Button>
-
-      <Button
-        variant="outline"
-        size="sm"
-        className="bg-sidebar dark:bg-sidebar shadow-sm text-xs gap-1.5"
-        onClick={() =>
-          setActiveConfigItem({
-            type: "testUsers",
-            id: "testUsers",
-            nodeId: "testUsers",
-          })
-        }
-        title="Manage Test Users & Database Seed Fixtures"
-      >
-        <Users className="w-3.5 h-3.5 text-muted-foreground" />
-        <span>Test Users</span>
-        <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-secondary text-muted-foreground border border-border/50">
-          {personas.length}
-        </span>
-      </Button>
-
-      {simulation.status !== "idle" && (
+    <Panel
+      position="top-right"
+      className="pointer-events-auto select-none transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-10"
+      style={{
+        top: "70px",
+        right: aiPanelOpen ? `${aiPanelWidth + 16}px` : "16px",
+      }}
+    >
+      <div className="flex items-center gap-1 p-1 rounded-xl bg-sidebar/95 backdrop-blur-md border border-sidebar-border shadow-lg">
         <Button
-          variant="destructive"
+          variant="ghost"
           size="sm"
-          className="shadow-sm text-xs"
-          onClick={simulation.clear}
+          className="h-7 px-2.5 text-xs text-sidebar-foreground hover:bg-sidebar-accent gap-1.5"
+          onClick={() => onLayout("LR")}
+          title="Auto-arrange nodes in left-to-right flow"
         >
-          <RotateCcw className="w-3.5 h-3.5 mr-2" />
-          Reset
+          <LayoutTemplate className="w-3.5 h-3.5 text-primary" />
+          <span>Auto layout</span>
         </Button>
-      )}
+
+        <div className="w-px h-4 bg-sidebar-border mx-0.5" />
+
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2.5 text-xs text-sidebar-foreground hover:bg-sidebar-accent gap-1.5"
+          onClick={() =>
+            setActiveConfigItem({
+              type: "testUsers",
+              id: "testUsers",
+              nodeId: "testUsers",
+            })
+          }
+          title="Manage Test Users & Database Seed Fixtures"
+        >
+          <Users className="w-3.5 h-3.5 text-primary" />
+          <span>Test Users</span>
+          <Badge
+            variant="secondary"
+            className="px-1.5 py-0 text-[10px] font-mono font-bold bg-sidebar-accent text-sidebar-foreground border border-sidebar-border"
+          >
+            {personas.length}
+          </Badge>
+        </Button>
+
+        {simulation.status !== "idle" && (
+          <>
+            <div className="w-px h-4 bg-sidebar-border mx-0.5" />
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-7 px-2.5 text-xs gap-1.5 shadow-sm"
+              onClick={simulation.clear}
+              title="Reset simulation state"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset</span>
+            </Button>
+          </>
+        )}
+      </div>
     </Panel>
   );
 };
-

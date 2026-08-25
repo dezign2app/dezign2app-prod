@@ -19,6 +19,7 @@ import {
 import { useReactFlow } from "@xyflow/react";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useSidebarStore } from "@/lib/stores/sidebarStore";
 
 import { BackendCanvasView } from "@/types/canvas";
 import { Badge } from "@workspace/ui/components/badge";
@@ -36,8 +37,22 @@ type Message = {
   isStreaming?: boolean;
 };
 
+interface SerializedEndpoint {
+  id?: string;
+  type?: string;
+  name?: string;
+  databaseNodeIds?: string[];
+  databaseNodeId?: string;
+}
+
+interface SerializedNodeData {
+  label?: string;
+  endpoints?: SerializedEndpoint[];
+  tableRef?: string;
+}
+
 function serializeBackendCanvasForAI(
-  nodes: Array<{ id: string; type: string; data: any }>,
+  nodes: Array<{ id: string; type: string; data?: SerializedNodeData }>,
   edges: Array<{
     source: string;
     target: string;
@@ -56,8 +71,8 @@ function serializeBackendCanvasForAI(
     if (node.type === "service" && Array.isArray(data.endpoints)) {
       output += "\n  Endpoints:\n";
       output += data.endpoints
-        .map((endpoint: any) => {
-          const dbIds = [
+        .map((endpoint) => {
+          const dbIds: string[] = [
             ...(Array.isArray(endpoint.databaseNodeIds)
               ? endpoint.databaseNodeIds
               : []),
@@ -68,7 +83,10 @@ function serializeBackendCanvasForAI(
             uniqueDbIds.length > 0
               ? ` databaseNodeIds=[${uniqueDbIds.join(", ")}]`
               : "";
-          return `    - ${endpoint.type} ${endpoint.name} id=${endpoint.id} sourceHandle="endpoint-out-${endpoint.id}" targetHandle="endpoint-in-${endpoint.id}"${db}`;
+          const epType = endpoint.type ?? "endpoint";
+          const epName = endpoint.name ?? "unnamed";
+          const epId = endpoint.id ?? "";
+          return `    - ${epType} ${epName} id=${epId} sourceHandle="endpoint-out-${epId}" targetHandle="endpoint-in-${epId}"${db}`;
         })
         .join("\n");
     }
@@ -313,18 +331,31 @@ export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
     }
   };
 
-  if (!isOpen) return null;
+  const aiPanelWidth = useSidebarStore((s) => s.aiPanelWidth);
+  const setAiPanelWidth = useSidebarStore((s) => s.setAiPanelWidth);
+  const [isResizing, setIsResizing] = useState(false);
 
   return (
     <Resizable
-      defaultSize={{ width: 400, height: "100%" }}
-      minWidth={300}
+      size={{ width: isOpen ? aiPanelWidth : 0, height: "100%" }}
+      minWidth={isOpen ? 280 : 0}
       maxWidth={800}
-      enable={{ left: true }}
-      handleClasses={{
-        left: "w-1 bg-sidebar-border hover:bg-primary cursor-col-resize transition-colors z-50",
+      enable={{ left: isOpen }}
+      onResizeStart={() => setIsResizing(true)}
+      onResizeStop={(e, direction, ref, d) => {
+        setIsResizing(false);
+        setAiPanelWidth(aiPanelWidth + d.width);
       }}
-      className="pointer-events-auto h-full bg-sidebar/95 backdrop-blur-md border-l border-sidebar-border shadow-xl flex flex-col shrink-0 overflow-hidden font-sans z-20"
+      handleClasses={{
+        left: "w-1.5 bg-sidebar-border hover:bg-primary cursor-col-resize transition-colors z-50 hover:w-2",
+      }}
+      className={`h-full pointer-events-auto shrink-0 flex flex-col bg-sidebar/95 backdrop-blur-md border-l border-sidebar-border shadow-xl z-20 select-none font-sans overflow-hidden ${
+        isResizing
+          ? ""
+          : "transition-[width,opacity] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+      } ${
+        isOpen ? "opacity-100" : "opacity-0 pointer-events-none border-l-0"
+      }`}
     >
       <div className="flex items-center justify-between p-4 border-b border-sidebar-border shrink-0 bg-sidebar-accent/30 gap-2">
         <div className="flex items-center text-sm font-medium whitespace-nowrap text-sidebar-foreground">

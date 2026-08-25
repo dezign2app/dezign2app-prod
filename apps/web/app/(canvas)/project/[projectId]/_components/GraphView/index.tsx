@@ -90,13 +90,21 @@ export function GraphView({ projectId }: GraphViewProps) {
   const validEndpointKeys = React.useMemo(() => {
     const keys = new Set(endpoints.map((ep) => `${ep.nodeId}::${ep.id}`));
     nodes.forEach((n) => {
-      (n.data?.endpoints as any[])?.forEach((ep: any) => {
-        if (ep?.id) keys.add(`${n.id}::${ep.id}`);
+      const nodeEndpoints = Array.isArray(n.data?.endpoints) ? n.data.endpoints : [];
+      nodeEndpoints.forEach((ep) => {
+        if (ep && typeof ep === "object" && "id" in ep && typeof ep.id === "string") {
+          keys.add(`${n.id}::${ep.id}`);
+        }
       });
-      (n.data?.routeGroups as any[])?.forEach((rg: any) => {
-        rg.endpoints?.forEach((ep: any) => {
-          if (ep?.id) keys.add(`${n.id}::${ep.id}`);
-        });
+      const routeGroups = Array.isArray(n.data?.routeGroups) ? n.data.routeGroups : [];
+      routeGroups.forEach((rg) => {
+        if (rg && typeof rg === "object" && "endpoints" in rg && Array.isArray(rg.endpoints)) {
+          rg.endpoints.forEach((ep) => {
+            if (ep && typeof ep === "object" && "id" in ep && typeof ep.id === "string") {
+              keys.add(`${n.id}::${ep.id}`);
+            }
+          });
+        }
       });
     });
     return keys;
@@ -110,16 +118,27 @@ export function GraphView({ projectId }: GraphViewProps) {
       });
     });
     nodes.forEach((n) => {
-      (n.data?.publishedEvents as any[])?.forEach((pev: any) => {
-        if (pev?.id) keys.add(`${n.id}::${pev.id}`);
+      const published = Array.isArray(n.data?.publishedEvents) ? n.data.publishedEvents : [];
+      published.forEach((pev) => {
+        if (pev && typeof pev === "object" && "id" in pev && typeof pev.id === "string") {
+          keys.add(`${n.id}::${pev.id}`);
+        }
       });
-      (n.data?.consumedEvents as any[])?.forEach((cev: any) => {
-        if (cev?.id) keys.add(`${n.id}::${cev.id}`);
+      const consumed = Array.isArray(n.data?.consumedEvents) ? n.data.consumedEvents : [];
+      consumed.forEach((cev) => {
+        if (cev && typeof cev === "object" && "id" in cev && typeof cev.id === "string") {
+          keys.add(`${n.id}::${cev.id}`);
+        }
       });
-      (n.data?.endpoints as any[])?.forEach((ep: any) => {
-        ep.publishedEvents?.forEach((pev: any) => {
-          if (pev?.id) keys.add(`${n.id}::${pev.id}`);
-        });
+      const nodeEndpoints = Array.isArray(n.data?.endpoints) ? n.data.endpoints : [];
+      nodeEndpoints.forEach((ep) => {
+        if (ep && typeof ep === "object" && "publishedEvents" in ep && Array.isArray(ep.publishedEvents)) {
+          ep.publishedEvents.forEach((pev) => {
+            if (pev && typeof pev === "object" && "id" in pev && typeof pev.id === "string") {
+              keys.add(`${n.id}::${pev.id}`);
+            }
+          });
+        }
       });
     });
     return keys;

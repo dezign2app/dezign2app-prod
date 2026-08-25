@@ -11,6 +11,7 @@ import {
 import { Button } from "@workspace/ui/components/button";
 import { PlusSquare, Database, LayoutTemplate, Server, DatabaseZap } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { nodeTypes } from "./backend-nodes/Nodes";
 import { ForeignKeyEdge } from "./backend-nodes/ForeignKeyEdge";
 import {
@@ -89,6 +90,9 @@ export function SchemaView({ projectId }: SchemaViewProps) {
     nodes: schemaNodes,
     edges: schemaEdges,
   });
+
+  const aiPanelOpen = useSidebarStore((s) => s.aiPanelOpen);
+  const aiPanelWidth = useSidebarStore((s) => s.aiPanelWidth);
 
   const hasFitted = useRef(false);
   useEffect(() => {
@@ -416,7 +420,14 @@ export function SchemaView({ projectId }: SchemaViewProps) {
         <Background gap={12} size={1} />
         <Controls />
         <MiniMap />
-        <Panel position="top-right" className="flex gap-2 flex-col p-1.5 bg-background/80 backdrop-blur-md border border-border/60 rounded-xl shadow-lg">
+        <Panel
+          position="top-right"
+          className="flex gap-2 flex-col p-1.5 bg-sidebar/95 backdrop-blur-md border border-sidebar-border rounded-xl shadow-lg pointer-events-auto select-none transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-10"
+          style={{
+            top: "70px",
+            right: aiPanelOpen ? `${aiPanelWidth + 16}px` : "16px",
+          }}
+        >
           {/* Relational & Vector Storage */}
           <div className="flex flex-col gap-1.5">
             <Button

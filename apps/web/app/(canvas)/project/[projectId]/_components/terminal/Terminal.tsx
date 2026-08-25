@@ -8,6 +8,7 @@ import { downloadMonorepoZip } from "./utils/terminalExportUtils";
 import { toast } from "sonner";
 import { WTermTerminalHandle } from "@/components/terminal";
 import { TerminalProps } from "./types";
+import { useSidebarStore } from "@/lib/stores/sidebarStore";
 
 import { useTerminalWorkspace } from "./hooks/useTerminalWorkspace";
 import { useMonorepoEndpoints } from "./hooks/useMonorepoEndpoints";
@@ -29,19 +30,23 @@ export function Terminal({
   const inElectron = isElectron();
   const terminalRefs = useRef<Map<string, WTermTerminalHandle | null>>(new Map());
 
-  // Drawer UI state
-  const [internalIsOpen, setInternalIsOpen] = useState<boolean>(false);
-  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
-  const handleToggleOpen = controlledOnToggleOpen || (() => setInternalIsOpen((prev) => !prev));
+  // Drawer UI state from local store
+  const storeTerminalOpen = useSidebarStore((s) => s.terminalOpen);
+  const storeToggleTerminal = useSidebarStore((s) => s.toggleTerminal);
+  const storeSetTerminalOpen = useSidebarStore((s) => s.setTerminalOpen);
+  const terminalHeight = useSidebarStore((s) => s.terminalHeight);
+  const setTerminalHeight = useSidebarStore((s) => s.setTerminalHeight);
+
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : storeTerminalOpen;
+  const handleToggleOpen = controlledOnToggleOpen || storeToggleTerminal;
   const handleClose = () => {
     if (controlledOnToggleOpen && isOpen) {
       controlledOnToggleOpen();
     } else {
-      setInternalIsOpen(false);
+      storeSetTerminalOpen(false);
     }
   };
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
-  const [terminalHeight, setTerminalHeight] = useState<number>(320);
   const [downloadingZip, setDownloadingZip] = useState<boolean>(false);
 
   // 1. Workspace directory persistence & folder picker
@@ -135,7 +140,7 @@ export function Terminal({
                 height: isExpanded ? "80vh" : terminalHeight,
               }}
               onResizeStop={(e, direction, ref, d) => {
-                setTerminalHeight((prev) =>
+                setTerminalHeight((prev: number) =>
                   Math.max(140, Math.min(800, prev + d.height)),
                 );
               }}
