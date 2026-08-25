@@ -144,9 +144,9 @@ export function TerminalEndpointsBar({
   }
 
   return (
-    <div className="flex items-center justify-between px-3 py-1 bg-zinc-900/70 border-b border-zinc-800/80 text-[11px] shrink-0">
+    <div className="flex items-center justify-between px-3 py-1 bg-sidebar-accent/30 border-b border-sidebar-border text-[11px] shrink-0">
       <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar py-0.5">
-        <span className="text-zinc-500 font-mono text-[10px] uppercase tracking-wider shrink-0 flex items-center gap-1">
+        <span className="text-muted-foreground font-mono text-[10px] uppercase tracking-wider shrink-0 flex items-center gap-1">
           <Globe className="w-3 h-3 text-sky-400" />
           <span>Live Endpoints:</span>
         </span>
@@ -162,7 +162,7 @@ export function TerminalEndpointsBar({
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => openExternalUrl(ep.url, e)}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700/60 text-zinc-300 hover:text-white transition-colors shrink-0 text-[11px] cursor-pointer"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sidebar-accent/60 hover:bg-sidebar-accent border border-sidebar-border text-sidebar-foreground transition-colors shrink-0 text-[11px] cursor-pointer"
               title={`${ep.name} (${ep.url}) • ${
                 isReachable ? "Online / Reachable" : "Offline / Unreachable"
               }`}
@@ -175,15 +175,15 @@ export function TerminalEndpointsBar({
                 }`}
               />
               <span className="font-medium">{ep.name}</span>
-              <span className="text-zinc-500 font-mono">:{ep.port}</span>
-              <ExternalLink className="w-2.5 h-2.5 text-zinc-500" />
+              <span className="text-muted-foreground font-mono">:{ep.port}</span>
+              <ExternalLink className="w-2.5 h-2.5 text-muted-foreground" />
             </a>
           );
         })}
       </div>
 
       <div className="flex items-center gap-1.5 pl-2 shrink-0">
-        <span className="text-[10px] bg-zinc-800/80 text-zinc-400 px-1.5 py-0.5 rounded font-mono border border-zinc-700/50">
+        <span className="text-[10px] bg-sidebar-accent text-muted-foreground px-1.5 py-0.5 rounded font-mono border border-sidebar-border">
           wterm WASM
         </span>
       </div>

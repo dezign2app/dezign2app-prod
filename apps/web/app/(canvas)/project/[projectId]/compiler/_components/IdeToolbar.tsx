@@ -23,6 +23,8 @@ interface IdeToolbarProps {
   onRunLocalhost: () => void;
   aiChatOpen: boolean;
   onToggleAiChat: () => void;
+  terminalOpen?: boolean;
+  onToggleTerminal?: () => void;
 }
 
 export function IdeToolbar({
@@ -35,6 +37,8 @@ export function IdeToolbar({
   onRunLocalhost,
   aiChatOpen,
   onToggleAiChat,
+  terminalOpen,
+  onToggleTerminal,
 }: IdeToolbarProps) {
   return (
     <div className="flex items-center justify-between h-13 px-4 bg-[#161b22] border-b border-border/40 shrink-0 text-slate-200 select-none">
@@ -76,6 +80,22 @@ export function IdeToolbar({
           <Play className="w-3.5 h-3.5 fill-emerald-400" />
           <span>Run in StackBlitz</span>
         </Button>
+
+        {onToggleTerminal && (
+          <Button
+            variant={terminalOpen ? "secondary" : "outline"}
+            size="sm"
+            onClick={onToggleTerminal}
+            className={`h-8 gap-1.5 text-xs ${
+              terminalOpen
+                ? "bg-primary/20 text-primary border-primary/40"
+                : "bg-slate-800/40 text-slate-300 border-slate-700 hover:bg-slate-800"
+            }`}
+          >
+            <Code className="w-3.5 h-3.5 text-primary" />
+            <span>Terminal</span>
+          </Button>
+        )}
 
         <Button
           variant={aiChatOpen ? "secondary" : "outline"}

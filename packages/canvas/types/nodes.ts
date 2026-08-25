@@ -132,6 +132,17 @@ export interface BaseNodeData {
   returnSchemaMode?: "field_builder" | "raw_json";
   returnSchemaRawJson?: string;
   isAsync?: boolean;
+  /**
+   * Page Visual Editor — AI-edited TSX source for this WebClient page.
+   * When present, the compiler emits this directly instead of regenerating.
+   * Stored in Convex so it syncs to all collaborators in real-time.
+   */
+  pageSourceCode?: string;
+  /**
+   * True while the AI agent is actively streaming a page edit.
+   * Blocks concurrent prompts. Cleared automatically when the AI finishes.
+   */
+  aiEditing?: boolean;
 }
 
 

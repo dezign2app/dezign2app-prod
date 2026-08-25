@@ -155,7 +155,7 @@ export function TerminalHeader({
   };
 
   return (
-    <div className="flex items-center justify-between h-9 bg-zinc-900 border-b border-zinc-800 shrink-0 px-2 select-none text-zinc-300">
+    <div className="flex items-center justify-between h-9 bg-sidebar border-b border-sidebar-border shrink-0 px-2 select-none text-sidebar-foreground">
       {/* Left: Dynamic Tabs Bar */}
       <div className="flex items-center h-full gap-0.5 overflow-x-auto hide-scrollbar max-w-[calc(100%-340px)]">
         {sessions.map((session, index) => {
@@ -169,8 +169,8 @@ export function TerminalHeader({
               onDoubleClick={() => handleStartRename(session)}
               className={`group relative flex items-center gap-1.5 h-full px-2.5 text-xs transition-colors border-b-2 cursor-pointer ${
                 isActive
-                  ? "bg-zinc-950 text-zinc-100 border-sky-500 font-semibold"
-                  : "bg-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border-transparent font-medium"
+                  ? "bg-sidebar-accent text-sidebar-foreground border-primary font-semibold"
+                  : "bg-transparent text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50 border-transparent font-medium"
               }`}
               title="Click to switch tab, double-click to rename"
             >
@@ -184,7 +184,7 @@ export function TerminalHeader({
                   onChange={(e) => setEditingTitle(e.target.value)}
                   onBlur={() => handleSaveRename(session.id)}
                   onKeyDown={(e) => handleKeyDown(e, session.id)}
-                  className="w-24 px-1 py-0.5 text-xs bg-zinc-800 text-white rounded border border-sky-500 outline-none"
+                  className="w-24 px-1 py-0.5 text-xs bg-sidebar-accent text-sidebar-foreground rounded border border-primary outline-none"
                   onClick={(e) => e.stopPropagation()}
                 />
               ) : (
@@ -204,7 +204,7 @@ export function TerminalHeader({
                   e.stopPropagation();
                   onCloseTab(session.id);
                 }}
-                className="p-0.5 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-opacity opacity-70 group-hover:opacity-100"
+                className="p-0.5 rounded text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent transition-opacity opacity-70 group-hover:opacity-100"
                 title="Close terminal (kill process)"
               >
                 <X className="w-3 h-3" />
@@ -219,7 +219,7 @@ export function TerminalHeader({
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded ml-1"
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent rounded ml-1"
               title="New Terminal"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -228,14 +228,14 @@ export function TerminalHeader({
           <DropdownMenuContent
             align="start"
             sideOffset={6}
-            className="w-48 bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs shadow-xl rounded-lg p-1 z-50"
+            className="w-48 bg-sidebar border border-sidebar-border text-sidebar-foreground text-xs shadow-xl rounded-lg p-1 z-50"
           >
-            <DropdownMenuLabel className="px-2 py-1 text-[10px] text-zinc-500 uppercase tracking-wider font-mono">
+            <DropdownMenuLabel className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wider font-mono">
               New Terminal
             </DropdownMenuLabel>
             <DropdownMenuItem
               onClick={() => onNewTab("shell")}
-              className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-800 rounded cursor-pointer"
+              className="flex items-center gap-2 px-2 py-1.5 hover:bg-sidebar-accent rounded cursor-pointer"
             >
               <TerminalIcon className="w-3.5 h-3.5 text-sky-400" />
               <span>Default Terminal</span>
@@ -245,14 +245,14 @@ export function TerminalHeader({
               <>
                 <DropdownMenuItem
                   onClick={() => onNewTab("powershell", "powershell.exe", "PowerShell")}
-                  className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-800 rounded cursor-pointer"
+                  className="flex items-center gap-2 px-2 py-1.5 hover:bg-sidebar-accent rounded cursor-pointer"
                 >
                   <TerminalIcon className="w-3.5 h-3.5 text-sky-400" />
                   <span>PowerShell</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => onNewTab("cmd", "cmd.exe", "Command Prompt")}
-                  className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-800 rounded cursor-pointer"
+                  className="flex items-center gap-2 px-2 py-1.5 hover:bg-sidebar-accent rounded cursor-pointer"
                 >
                   <Monitor className="w-3.5 h-3.5 text-amber-400" />
                   <span>Command Prompt (CMD)</span>
@@ -262,7 +262,7 @@ export function TerminalHeader({
 
             <DropdownMenuItem
               onClick={() => onNewTab("bash", "bash", "Bash")}
-              className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-800 rounded cursor-pointer"
+              className="flex items-center gap-2 px-2 py-1.5 hover:bg-sidebar-accent rounded cursor-pointer"
             >
               <Code2 className="w-3.5 h-3.5 text-emerald-400" />
               <span>Bash / Git Bash</span>
@@ -278,7 +278,7 @@ export function TerminalHeader({
           <button
             type="button"
             onClick={onForceSync}
-            className="flex items-center gap-1.5 h-6 px-2 text-[11px] rounded bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-700/60 transition-colors"
+            className="flex items-center gap-1.5 h-6 px-2 text-[11px] rounded bg-sidebar-accent/70 hover:bg-sidebar-accent border border-sidebar-border transition-colors text-sidebar-foreground"
             title={
               syncStatus === "syncing"
                 ? "Syncing canvas changes to disk..."
@@ -312,8 +312,8 @@ export function TerminalHeader({
               </>
             ) : (
               <>
-                <Zap className="w-3 h-3 text-zinc-400" />
-                <span className="text-zinc-400 font-mono hidden md:inline">
+                <Zap className="w-3 h-3 text-muted-foreground" />
+                <span className="text-muted-foreground font-mono hidden md:inline">
                   Auto-Sync
                 </span>
               </>
@@ -327,12 +327,12 @@ export function TerminalHeader({
             size="sm"
             variant="ghost"
             onClick={onPickDirectory}
-            className="h-6 px-2 text-[11px] gap-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+            className="h-6 px-2 text-[11px] gap-1.5 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
             title={
               outputDir ? `Workspace: ${outputDir}` : "Choose workspace directory"
             }
           >
-            <Folder className="w-3 h-3 text-zinc-400" />
+            <Folder className="w-3 h-3 text-muted-foreground" />
             <span className="max-w-[130px] truncate hidden sm:inline font-mono">
               {outputDir ? outputDir.split(/[\\/]/).pop() : "Folder..."}
             </span>
@@ -343,10 +343,10 @@ export function TerminalHeader({
             variant="ghost"
             onClick={onDownloadZip}
             disabled={downloadingZip}
-            className="h-6 px-2 text-[11px] gap-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+            className="h-6 px-2 text-[11px] gap-1.5 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
             title="Download complete monorepo ZIP"
           >
-            <Archive className="w-3 h-3 text-zinc-400" />
+            <Archive className="w-3 h-3 text-muted-foreground" />
             <span className="hidden sm:inline">
               {downloadingZip ? "Zipping..." : "ZIP"}
             </span>
@@ -359,7 +359,7 @@ export function TerminalHeader({
             size="sm"
             variant="ghost"
             onClick={onClearActiveTab}
-            className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+            className="h-6 w-6 p-0 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
             title="Clear terminal buffer (Ctrl+L / clear)"
           >
             <Trash2 className="w-3 h-3" />
@@ -371,7 +371,7 @@ export function TerminalHeader({
           size="sm"
           variant="ghost"
           onClick={onToggleExpand}
-          className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+          className="h-6 w-6 p-0 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
           title={isExpanded ? "Restore Size" : "Maximize Terminal"}
         >
           {isExpanded ? (
@@ -386,7 +386,7 @@ export function TerminalHeader({
           size="sm"
           variant="ghost"
           onClick={onClose}
-          className="h-6 w-6 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+          className="h-6 w-6 p-0 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
           title="Close Terminal Drawer"
         >
           <X className="w-3.5 h-3.5" />

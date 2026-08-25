@@ -18,7 +18,9 @@ import {
 } from "@/lib/stores/backendCanvasStore";
 import { CanvasToolbar } from "./_components/CanvasToolbar";
 import { BackendCanvas } from "./_components/BackendCanvas";
+import { NodePaletteSidebar } from "./_components/NodePaletteSidebar";
 import { AiPanel } from "./_components/AiPanel";
+import { Terminal } from "./_components/terminal";
 import { CreateCommitDialog } from "./_components/history/CreateCommitDialog";
 import { VersionHistoryDrawer } from "./_components/history/VersionHistoryDrawer";
 import { VersionPreviewBanner } from "./_components/history/VersionPreviewBanner";
@@ -54,6 +56,7 @@ export default function ProjectCanvasPage({
     ]).withDefault("graph"),
   );
 
+  const [paletteOpen, setPaletteOpen] = useState(true);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
@@ -206,49 +209,74 @@ export default function ProjectCanvasPage({
 
   return (
     <ReactFlowProvider>
-      <div className="flex flex-col h-full w-full relative">
-        <CanvasToolbar
-          projectName={project.name}
-          projectId={projectId}
-          view={view}
-          setView={setView}
-          aiPanelOpen={aiPanelOpen}
-          setAiPanelOpen={setAiPanelOpen}
-          onOpenCommit={() => setCommitDialogOpen(true)}
-          onOpenHistory={() => setHistoryDrawerOpen(true)}
-        />
-
-        {previewVersion && (
-          <VersionPreviewBanner
-            versionNumber={previewVersion.versionNumber}
-            title={previewVersion.title}
-            onExitPreview={() => setPreviewVersionId(null)}
-            onRestore={() => void handleRestoreFromPreview()}
-            isRestoring={isRestoring}
-          />
-        )}
-
-        <div className="flex-1 relative overflow-hidden flex">
-          <div className="flex-1 relative">
-            <BackendCanvas projectId={projectId} projectName={project.name} view={view} />
-          </div>
-
-          <AiPanel
-            projectId={projectId}
-            isOpen={aiPanelOpen}
-            onClose={() => setAiPanelOpen(false)}
-            setView={setView}
-          />
+      <div className="relative w-screen h-screen overflow-hidden bg-background text-foreground select-none">
+        {/* ========================================================================= */}
+        {/* LAYER 1: CANVAS (BACKWARD) - 100% Fullscreen, Unaffected by UI changes    */}
+        {/* ========================================================================= */}
+        <div className="absolute inset-0 w-full h-full z-0 overflow-hidden">
+          <BackendCanvas projectId={projectId} projectName={project.name} view={view} />
         </div>
 
-        {/* Create Checkpoint Modal */}
+        {/* ========================================================================= */}
+        {/* LAYER 2: TOOLBARS & SIDEBARS (FORWARD) - Non-overlapping UI Overlay Grid  */}
+        {/* ========================================================================= */}
+        <div className="absolute inset-0 w-full h-full z-20 pointer-events-none flex flex-col overflow-hidden">
+          {/* Top Toolbar & Banners */}
+          <div className="pointer-events-auto shrink-0">
+            <CanvasToolbar
+              projectName={project.name}
+              projectId={projectId}
+              view={view}
+              setView={setView}
+              paletteOpen={paletteOpen}
+              setPaletteOpen={setPaletteOpen}
+              aiPanelOpen={aiPanelOpen}
+              setAiPanelOpen={setAiPanelOpen}
+              onOpenCommit={() => setCommitDialogOpen(true)}
+              onOpenHistory={() => setHistoryDrawerOpen(true)}
+            />
+
+            {previewVersion && (
+              <VersionPreviewBanner
+                versionNumber={previewVersion.versionNumber}
+                title={previewVersion.title}
+                onExitPreview={() => setPreviewVersionId(null)}
+                onRestore={() => void handleRestoreFromPreview()}
+                isRestoring={isRestoring}
+              />
+            )}
+          </div>
+
+          {/* Middle Layout: Sidebars on Left/Right, Docked Terminal in Center */}
+          <div className="flex-1 min-h-0 w-full flex overflow-hidden relative pointer-events-none">
+            {/* Left: Node Palette Sidebar (Resizable or Canvas Trigger) */}
+            <NodePaletteSidebar
+              view={view}
+              isOpen={paletteOpen}
+              onToggle={() => setPaletteOpen(!paletteOpen)}
+            />
+
+            {/* Center Area: Transparent Canvas Pass-Through + Docked Bottom Terminal */}
+            <div className="flex-1 min-w-0 h-full flex flex-col justify-end pointer-events-none overflow-hidden relative">
+              <Terminal projectId={projectId} projectName={project.name} />
+            </div>
+
+            {/* Right: AI Assistant Sidebar (Resizable) */}
+            <AiPanel
+              projectId={projectId}
+              isOpen={aiPanelOpen}
+              onClose={() => setAiPanelOpen(false)}
+              setView={setView}
+            />
+          </div>
+        </div>
+
+        {/* Modals & Overlays */}
         <CreateCommitDialog
           projectId={projectId}
           isOpen={commitDialogOpen}
           onClose={() => setCommitDialogOpen(false)}
         />
-
-        {/* History Drawer */}
         <VersionHistoryDrawer
           projectId={projectId}
           isOpen={historyDrawerOpen}

@@ -270,10 +270,18 @@ export function generatePageAndComponentFiles({
       ? `app/${groupFolder}/page.tsx`
       : `app/${groupFolder}/${pageMeta.slug}/page.tsx`;
 
+    // If the node has AI-edited page source code, use it directly.
+    // This prevents compiler re-runs from overwriting UI edits made via
+    // the page visual editor. The AI-edited content is stored in Convex
+    // and syncs to all collaborators automatically.
+    const finalPageContent = node.data?.pageSourceCode
+      ? (node.data.pageSourceCode as string)
+      : pageCode;
+
     pageFiles.push({
       filename: targetFilePath,
       language: "typescript",
-      content: pageCode,
+      content: finalPageContent,
     });
   });
 

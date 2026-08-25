@@ -336,7 +336,6 @@ export function GraphView({ projectId }: GraphViewProps) {
         <Controls />
         <MiniMap />
         <TopToolbarPanel onLayout={handleLayout} />
-        <NodePalettePanel onAddNode={handleAddGraphNode} />
       </ReactFlow>
 
       <TestCaseDialogs
