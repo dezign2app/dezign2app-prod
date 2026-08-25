@@ -10,8 +10,9 @@ import {
 import { getConvexClient } from "../utils";
 import { api } from "@workspace/backend/_generated/api";
 import { sanitizeMessages, parseRequirementsWithRetry } from "./utils";
+import { SupportedChatModel } from "../llmFactory";
 
-export function createRequirementsAndPlanNodes(llm: ChatGroq) {
+export function createRequirementsAndPlanNodes(llm: SupportedChatModel) {
   const syncRequirements = async (
     state: typeof GraphAnnotation.State,
     config: RunnableConfig,

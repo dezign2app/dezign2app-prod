@@ -117,3 +117,36 @@ export async function writeProject(
     totalCount: files.length,
   };
 }
+
+export interface ReadFileResult {
+  success: boolean;
+  content: string | null;
+  path: string;
+}
+
+/**
+ * Reads a single file from the project directory.
+ */
+export async function readProjectFile(
+  outputDir: string,
+  relativePath: string
+): Promise<ReadFileResult> {
+  if (!outputDir || !relativePath) {
+    return { success: false, content: null, path: "" };
+  }
+
+  const fullPath = path.isAbsolute(relativePath)
+    ? relativePath
+    : path.join(outputDir, relativePath);
+
+  try {
+    if (fs.existsSync(fullPath)) {
+      const content = fs.readFileSync(fullPath, "utf-8");
+      return { success: true, content, path: fullPath };
+    }
+  } catch (err) {
+    console.warn(`[fileWriter] Failed to read ${fullPath}:`, err);
+  }
+
+  return { success: false, content: null, path: fullPath };
+}

@@ -1,4 +1,4 @@
-import type { CanvasElements } from "../types";
+import type { CanvasElements } from "@workspace/canvas";
 import { buildGraph } from "./builder";
 import { formatEdgeLine } from "./formatters";
 import {

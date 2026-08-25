@@ -22,6 +22,8 @@ export const baseNodeDataSchema = z.object({
   dbEngine: z.enum(ALL_DATABASE_ENGINE_VALUES).optional(),
   dbEngineVersion: z.enum(ALL_DATABASE_ENGINE_VERSION_VALUES).optional(),
   color: z.string().optional(),
+  pageSourceCode: z.string().optional(),
+  aiEditing: z.boolean().optional(),
 });
 
 export const resourceItemSchema = z.object({

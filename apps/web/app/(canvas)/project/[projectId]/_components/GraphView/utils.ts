@@ -3,6 +3,7 @@ import type {
   BackendNodeData,
   BackendNode,
 } from "@workspace/canvas/types";
+import { parsePageRoute } from "@workspace/canvas";
 
 export function createGraphNodeData(
   type: BackendNodeType,
@@ -72,6 +73,7 @@ export function createGraphNodeData(
   if (type === "webClient") {
     return {
       ...baseData,
+      label: parsePageRoute(label || "page-client"),
       events: [],
     };
   }

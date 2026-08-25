@@ -141,6 +141,8 @@ export const webClientDataSchema = simpleDataSchema.extend({
   requestBodyMode: z.enum(["field_builder", "raw_json"]).optional().describe("UI mode for request body schema"),
   summary: z.string().optional().describe("Summary description of client API call"),
   requireAuth: z.boolean().optional().describe("Whether Authorization: Bearer <token> is forwarded automatically (defaults to true)"),
+  pageSourceCode: z.string().optional().describe("AI-edited TSX source code for this WebClient page"),
+  aiEditing: z.boolean().optional().describe("Whether AI agent is actively streaming page edit"),
   events: z
     .array(
       z.object({
@@ -190,6 +192,8 @@ export const webClientDataInputSchema = baseNodeDataSchema.extend({
   requestBodyMode: z.enum(["field_builder", "raw_json"]).optional(),
   summary: z.string().optional(),
   requireAuth: z.boolean().optional(),
+  pageSourceCode: z.string().optional(),
+  aiEditing: z.boolean().optional(),
   events: z.array(clientEventInputSchema).optional(),
 });
 

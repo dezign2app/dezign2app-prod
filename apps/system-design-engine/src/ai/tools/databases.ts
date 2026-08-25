@@ -60,8 +60,18 @@ export const addSchemaTool = tool(
 export const addDbRefNodeTool = tool(
   async (input, config) => {
     const { label, type, data } = input;
-    const description = input.description || data?.description;
-    const tableRef = input.tableRef || data?.tableRef;
+    const description =
+      typeof input.description === "string"
+        ? input.description
+        : typeof data?.description === "string"
+          ? data.description
+          : undefined;
+    const tableRef =
+      typeof input.tableRef === "string"
+        ? input.tableRef
+        : typeof data?.tableRef === "string"
+          ? data.tableRef
+          : undefined;
     const state = config.configurable?.state as typeof GraphAnnotation.State;
     if (!state?.projectId) return "Error: projectId missing";
     const convex = getConvexClient(state);

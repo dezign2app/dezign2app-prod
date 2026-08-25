@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { Resizable } from "re-resizable";
-import { Sparkles, X, ChevronLeft, AlertTriangle, Send, Loader2, RefreshCw } from "lucide-react";
+import { Sparkles, X, ChevronLeft, AlertTriangle, Send, Loader2, RefreshCw, Unlock, Square } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
@@ -22,11 +22,14 @@ interface PageAiPanelProps {
   setPrompt: (prompt: string) => void;
   streaming: boolean;
   streamingContent: string;
+  streamingStatus?: string;
   isAiEditing: boolean;
   outputDir: string;
   pageName: string;
   onSend: () => void;
+  onStop?: () => void;
   onReset?: () => void;
+  onUnlock?: () => void;
   hasCustomCode?: boolean;
 }
 
@@ -38,11 +41,14 @@ export function PageAiPanel({
   setPrompt,
   streaming,
   streamingContent,
+  streamingStatus,
   isAiEditing,
   outputDir,
   pageName,
   onSend,
+  onStop,
   onReset,
+  onUnlock,
   hasCustomCode,
 }: PageAiPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -175,16 +181,29 @@ export function PageAiPanel({
 
         {(streaming || isAiEditing) && (
           <div className="flex flex-col items-start gap-1">
-            <div className="max-w-[90%] px-3 py-2 rounded-xl text-xs leading-relaxed bg-sidebar-accent/60 text-foreground border border-sidebar-border rounded-bl-none">
-              {streamingContent ? (
-                <pre className="font-mono text-[10px] text-emerald-400 whitespace-pre-wrap line-clamp-8">
+            <div className="max-w-[95%] w-full px-3 py-2.5 rounded-xl text-xs leading-relaxed bg-sidebar-accent/60 text-foreground border border-sidebar-border rounded-bl-none space-y-2">
+              <div className="flex items-center justify-between gap-2 text-violet-400 font-medium text-[11px]">
+                <div className="flex items-center gap-2 truncate">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                  <span className="truncate">{streamingStatus || "AI is generating code..."}</span>
+                </div>
+                {onStop && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={onStop}
+                    className="h-5 px-1.5 text-[10px] text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0 font-normal"
+                    title="Stop generation"
+                  >
+                    <Square className="w-2.5 h-2.5 mr-1 fill-current" /> Stop
+                  </Button>
+                )}
+              </div>
+              {streamingContent && (
+                <pre className="font-mono text-[10px] text-emerald-400 bg-background/80 p-2 rounded-md border border-sidebar-border/60 whitespace-pre-wrap line-clamp-8 overflow-hidden">
                   {streamingContent.slice(-400)}
                 </pre>
-              ) : (
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <Loader2 className="w-3 h-3 text-violet-400 animate-spin" />
-                  AI is generating code...
-                </span>
               )}
             </div>
           </div>
@@ -202,46 +221,67 @@ export function PageAiPanel({
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                onSend();
+                if (!streaming && !isAiEditing) {
+                  onSend();
+                }
               }
             }}
             disabled={isAiEditing || streaming}
             placeholder={
               isAiEditing
-                ? "AI is editing..."
+                ? "AI is editing... Click Stop to cancel."
                 : "Describe changes... (Enter to send, Shift+Enter for newline)"
             }
             rows={3}
             className="w-full text-xs bg-sidebar-accent/30 border border-sidebar-border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <div className="flex items-center justify-between gap-2">
-            {hasCustomCode && onReset ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-[11px] text-destructive hover:text-destructive hover:bg-destructive/10 px-2"
-                onClick={onReset}
-                title="Reset to compiler-generated version"
-              >
-                <RefreshCw className="w-3 h-3 mr-1" /> Reset
-              </Button>
-            ) : <div />}
-            <Button
-              onClick={onSend}
-              disabled={!prompt.trim() || isAiEditing || streaming}
-              size="sm"
-              className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white ml-auto"
-            >
-              {streaming || isAiEditing ? (
-                <>
-                  <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Editing...
-                </>
-              ) : (
-                <>
-                  <Send className="w-3 h-3 mr-1" /> Send
-                </>
+            <div className="flex items-center gap-1.5">
+              {hasCustomCode && onReset && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[11px] text-destructive hover:text-destructive hover:bg-destructive/10 px-2"
+                  onClick={onReset}
+                  title="Reset to compiler-generated version"
+                >
+                  <RefreshCw className="w-3 h-3 mr-1" /> Reset
+                </Button>
               )}
-            </Button>
+              {isAiEditing && onUnlock && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px] text-amber-500 hover:text-amber-600 border-amber-500/30 hover:bg-amber-500/10 px-2"
+                  onClick={onUnlock}
+                  title="Force unlock this node if generation is stuck"
+                >
+                  <Unlock className="w-3 h-3 mr-1" /> Unlock Page
+                </Button>
+              )}
+            </div>
+            {streaming || isAiEditing ? (
+              <Button
+                type="button"
+                onClick={onStop}
+                size="sm"
+                variant="destructive"
+                className="h-7 text-xs bg-red-600 hover:bg-red-700 text-white font-medium ml-auto flex items-center gap-1.5 shadow-sm"
+                title="Stop generation"
+              >
+                <Square className="w-3 h-3 fill-current" /> Stop
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={onSend}
+                disabled={!prompt.trim()}
+                size="sm"
+                className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white ml-auto flex items-center gap-1.5"
+              >
+                <Send className="w-3 h-3" /> Send
+              </Button>
+            )}
           </div>
         </div>
       </div>

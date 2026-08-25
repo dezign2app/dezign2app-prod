@@ -1,7 +1,7 @@
 import { BaseMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
 import { RunnableConfig } from "@langchain/core/runnables";
-import { ChatGroq } from "@langchain/groq";
 import { requirementsSchema } from "../state";
+import { SupportedChatModel } from "../llmFactory";
 
 export const sanitizeMessages = (messages: BaseMessage[]) => {
   return messages
@@ -19,7 +19,7 @@ export const sanitizeMessages = (messages: BaseMessage[]) => {
 };
 
 export const parseRequirementsWithRetry = async (
-  llm: ChatGroq,
+  llm: SupportedChatModel,
   prompt: string,
   config: RunnableConfig,
   maxAttempts = 2,

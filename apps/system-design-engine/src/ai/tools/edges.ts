@@ -135,14 +135,32 @@ export const addSchemaEdgeTool = tool(
       if (!targetEntity)
         return `Failed: target entity ${targetEntityId} not found`;
 
-      const sourceColumns = sourceEntity.data?.columns || [];
-      const targetColumns = targetEntity.data?.columns || [];
+      const sourceColumns =
+        sourceEntity.data &&
+        "columns" in sourceEntity.data &&
+        Array.isArray(sourceEntity.data.columns)
+          ? sourceEntity.data.columns
+          : [];
+      const targetColumns =
+        targetEntity.data &&
+        "columns" in targetEntity.data &&
+        Array.isArray(targetEntity.data.columns)
+          ? targetEntity.data.columns
+          : [];
 
       const sourceIndex = sourceColumns.findIndex(
-        (c: any) => c.name === sourceColumnName,
+        (c) =>
+          typeof c === "object" &&
+          c !== null &&
+          "name" in c &&
+          c.name === sourceColumnName,
       );
       const targetIndex = targetColumns.findIndex(
-        (c: any) => c.name === targetColumnName,
+        (c) =>
+          typeof c === "object" &&
+          c !== null &&
+          "name" in c &&
+          c.name === targetColumnName,
       );
 
       if (sourceIndex === -1)
