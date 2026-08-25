@@ -20,7 +20,8 @@ export function createUiEditorNodes(llm: SupportedChatModel) {
       state.prompt,
       state.currentCode || "",
       catalog,
-      state.canvasEndpoints || ""
+      state.canvasEndpoints || "",
+      state.chatHistory
     );
 
     const messages = [
@@ -64,7 +65,8 @@ export function createUiEditorNodes(llm: SupportedChatModel) {
       state.currentCode || "",
       state.plan || "",
       catalog,
-      state.canvasEndpoints || ""
+      state.canvasEndpoints || "",
+      state.chatHistory
     );
 
     const messages = [

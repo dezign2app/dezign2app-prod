@@ -99,12 +99,15 @@ pageEditorRouter.post("/stop", async (req, res) => {
       console.log(`🛑 [page-editor] <<< SUCCESS: LangGraph pipeline STOPPED for node: "${nodeId}" (${session.pageRoute || "/"})\n`);
     }
   } else if (!nodeId && activeSessions.size === 1) {
-    const [firstNodeId, session] = Array.from(activeSessions.entries())[0];
-    session.markDisconnected();
-    session.abortController.abort();
-    activeSessions.delete(firstNodeId);
-    wasStopped = true;
-    console.log(`🛑 [page-editor] <<< SUCCESS: Single active pipeline STOPPED for node: "${firstNodeId}" (${session.pageRoute || "/"})\n`);
+    const firstEntry = activeSessions.entries().next().value;
+    if (firstEntry) {
+      const [firstNodeId, session] = firstEntry;
+      session.markDisconnected();
+      session.abortController.abort();
+      activeSessions.delete(firstNodeId);
+      wasStopped = true;
+      console.log(`🛑 [page-editor] <<< SUCCESS: Single active pipeline STOPPED for node: "${firstNodeId}" (${session.pageRoute || "/"})\n`);
+    }
   } else {
     console.log(`⚠️ [page-editor] No active in-flight session found to stop for node: "${nodeId}"\n`);
   }
@@ -139,6 +142,8 @@ pageEditorRouter.post("/", async (req, res) => {
       pageRoute,
       convexUrl: bodyConvexUrl,
       token,
+      conversationId: bodyConversationId,
+      chatHistory: bodyChatHistory,
     } = parseResult.data;
 
     targetNodeId = nodeId;
@@ -154,6 +159,59 @@ pageEditorRouter.post("/", async (req, res) => {
       client.setAuth(token);
     }
 
+    // Resolve or initialize conversationId for UI design
+    let activeConversationId = bodyConversationId || "";
+    try {
+      if (!activeConversationId && projectId && nodeId) {
+        activeConversationId = await client.mutation(api.ai.conversations.getOrCreateNodeConversation, {
+          projectId: projectId as Id<"projects">,
+          nodeId,
+          type: "ui_design",
+          title: `UI Design: ${pageName || nodeId}`,
+        });
+        console.log(`[page-editor] Resolved active conversation ID: ${activeConversationId}`);
+      }
+    } catch (convErr) {
+      console.warn("[page-editor] Could not get or create node conversation:", convErr);
+    }
+
+    // Resolve chat history
+    let chatHistory: Array<{ role: string; content: string }> = bodyChatHistory || [];
+    if (chatHistory.length === 0 && activeConversationId) {
+      try {
+        const convexMessages = await client.query(api.ai.messages.getConversationMessages, {
+          conversationId: activeConversationId as Id<"conversations">,
+        });
+        if (Array.isArray(convexMessages) && convexMessages.length > 0) {
+          chatHistory = convexMessages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          }));
+          console.log(`[page-editor] Loaded ${chatHistory.length} previous messages from Convex conversation ${activeConversationId}`);
+        }
+      } catch (msgErr) {
+        console.warn("[page-editor] Could not load previous messages from Convex:", msgErr);
+      }
+    }
+
+    // Record user message in Convex if activeConversationId is present
+    if (activeConversationId && prompt) {
+      try {
+        // Check if user message is already latest in conversation to avoid duplicates
+        const lastMsg = chatHistory[chatHistory.length - 1];
+        if (!lastMsg || lastMsg.content !== prompt || (lastMsg.role !== "user" && lastMsg.role !== "USER")) {
+          await client.mutation(api.ai.messages.insertMessage, {
+            conversationId: activeConversationId as Id<"conversations">,
+            content: prompt,
+            role: "user",
+            createdAt: Date.now(),
+          });
+        }
+      } catch (userMsgErr) {
+        console.warn("[page-editor] Could not record user message in Convex:", userMsgErr);
+      }
+    }
+
     // Fetch canvas state to extract connected endpoints
     let canvasEndpoints = "";
     try {
@@ -166,9 +224,9 @@ pageEditorRouter.post("/", async (req, res) => {
     }
 
     console.log(`[page-editor] === Incoming Request for Node: ${nodeId} (${pageName || "Unnamed"}) ===`);
-    console.log(`[page-editor] Route: ${pageRoute}, ProjectId: ${projectId}`);
+    console.log(`[page-editor] Route: ${pageRoute}, ProjectId: ${projectId}, ConvId: ${activeConversationId || "none"}`);
     console.log(`[page-editor] Prompt: "${prompt}"`);
-    console.log(`[page-editor] Current code length: ${currentCode?.length || 0} chars`);
+    console.log(`[page-editor] Current code length: ${currentCode?.length || 0} chars | Chat history: ${chatHistory.length} msgs`);
 
     // Set streaming headers
     res.setHeader("Content-Type", "application/x-ndjson");
@@ -202,6 +260,8 @@ pageEditorRouter.post("/", async (req, res) => {
       projectId,
       convexUrl,
       token: token || "",
+      conversationId: activeConversationId,
+      chatHistory,
       pageName: pageName || nodeId,
       pageRoute: pageRoute || "/",
       currentCode: currentCode || "",
@@ -359,8 +419,32 @@ pageEditorRouter.post("/", async (req, res) => {
       console.warn("[page-editor] Direct Convex persistence skipped/unauthenticated (will be saved by web client):", convexErr?.message || convexErr);
     }
 
+    // Persist AI message response to Convex
+    if (activeConversationId) {
+      try {
+        const assistantSummary = `✅ Page updated! The UI for **${pageName || nodeId}** has been generated.`;
+        await client.mutation(api.ai.messages.insertMessage, {
+          conversationId: activeConversationId as Id<"conversations">,
+          content: assistantSummary,
+          role: "assistant",
+          plan: currentPlan || undefined,
+          createdAt: Date.now(),
+        });
+        console.log(`[page-editor] Persisted assistant message to Convex conversation ${activeConversationId}`);
+      } catch (msgPersistErr) {
+        console.warn("[page-editor] Could not persist assistant message to Convex:", msgPersistErr);
+      }
+    }
+
     console.log("[page-editor] Sending 'done' event to client.");
-    res.write(JSON.stringify({ type: "done", code: cleanCode, plan: currentPlan }) + "\n");
+    res.write(
+      JSON.stringify({
+        type: "done",
+        code: cleanCode,
+        plan: currentPlan,
+        conversationId: activeConversationId || undefined,
+      }) + "\n"
+    );
     res.end();
   } catch (error: any) {
     if (isClientDisconnected || error?.name === "AbortError") {

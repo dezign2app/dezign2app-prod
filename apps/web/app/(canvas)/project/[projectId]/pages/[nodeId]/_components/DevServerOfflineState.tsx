@@ -109,7 +109,7 @@ export function DevServerOfflineState({
           </Link>
 
           <div className="flex items-center gap-1 text-[11px] text-muted-foreground/80 font-medium">
-            <Sparkles className="w-3 h-3 text-violet-400" />
+            <Sparkles className="w-3 h-3 text-muted-foreground" />
             <span>AI Editor Available</span>
           </div>
         </div>

@@ -19,6 +19,7 @@ export const pageEditorDoneEventSchema = z.object({
   type: z.literal("done"),
   code: z.string(),
   plan: z.string().optional(),
+  conversationId: z.string().optional(),
 });
 
 export const pageEditorErrorEventSchema = z.object({
@@ -41,6 +42,13 @@ export type PageEditorDoneEvent = z.infer<typeof pageEditorDoneEventSchema>;
 export type PageEditorErrorEvent = z.infer<typeof pageEditorErrorEventSchema>;
 export type PageEditorStreamEvent = z.infer<typeof pageEditorStreamEventSchema>;
 
+export const pageEditorChatMessageSchema = z.object({
+  role: z.string(),
+  content: z.string(),
+});
+
+export type PageEditorChatMessage = z.infer<typeof pageEditorChatMessageSchema>;
+
 export const pageEditorRequestBodySchema = z.object({
   nodeId: z.string(),
   projectId: z.string(),
@@ -50,6 +58,8 @@ export const pageEditorRequestBodySchema = z.object({
   pageRoute: z.string().optional(),
   convexUrl: z.string().optional(),
   token: z.string().optional(),
+  conversationId: z.string().optional(),
+  chatHistory: z.array(pageEditorChatMessageSchema).optional(),
 });
 
 export type PageEditorRequestBody = z.infer<typeof pageEditorRequestBodySchema>;
