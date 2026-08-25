@@ -647,7 +647,7 @@ export function compileRawSqliteDatabase(
     "",
     "/**",
     " * Resolves the centralized SQLite database file path.",
-    " * Ensures all services, web clients, and packages connect to the exact same database instance.",
+    " * Ensures all services, web applications, and packages connect to the exact same database instance.",
     " */",
     "export function resolveDatabasePath(): string {",
     '  const envPath = process.env.DATABASE_PATH || process.env.DATABASE_URL;',

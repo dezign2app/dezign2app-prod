@@ -184,7 +184,7 @@ export default function CompilerPage({
       if (n.type === "webApp" && n.data?.port) {
         list.push({
           port: n.data.port,
-          name: n.data.label || "Web Client Application",
+          name: n.data.label || "Web Application",
           type: "Next.js App",
           url: `http://localhost:${n.data.port}`,
         });
@@ -200,7 +200,7 @@ export default function CompilerPage({
     if (list.length === 0) {
       list.push({
         port: "3000",
-        name: "Web Client",
+        name: "Web Application",
         type: "Next.js App",
         url: "http://localhost:3000",
       });

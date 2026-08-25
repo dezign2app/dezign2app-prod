@@ -170,7 +170,7 @@ export const EventNavigationSection: React.FC<EventNavigationSectionProps> = ({
               <SelectContent>
                 {pageNodes.length === 0 ? (
                   <div className="p-2 text-xs text-muted-foreground italic">
-                    No web client pages defined on canvas
+                    No web pages defined on canvas
                   </div>
                 ) : (
                   pageNodes.map((p) => {

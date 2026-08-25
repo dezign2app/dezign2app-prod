@@ -82,7 +82,7 @@ export const addClientNodeTool = tool(
         });
       }
 
-      let resultStr = `Added client node ${label} with ID ${nodeId} and ${events?.length || 0} events.`;
+      let resultStr = `Added web page node ${label} with ID ${nodeId} and ${events?.length || 0} events.`;
       if (processedEvents.length > 0) {
         resultStr +=
           `\nEvents:\n` +
@@ -93,17 +93,17 @@ export const addClientNodeTool = tool(
       return resultStr;
     } catch (error: unknown) {
       const e = error as Error;
-      return `Failed to add client node: ${e.message || String(error)}`;
+      return `Failed to add web page node: ${e.message || String(error)}`;
     }
   },
   {
     name: "add_client_node",
     description:
-      "Add a Web Client (frontend) node to the backend canvas, including a collection of user events on the page.",
+      "Add a Web Page (frontend) node to the backend canvas, including a collection of user events on the page.",
     schema: webClientDataInputSchema.extend({
       label: z
         .string()
-        .describe("Name of the client page/component (e.g., 'Login Page')"),
+        .describe("Name of the web page/component (e.g., 'Login Page', 'Dashboard')"),
     }),
   },
 );

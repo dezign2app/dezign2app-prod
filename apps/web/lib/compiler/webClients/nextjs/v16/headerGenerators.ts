@@ -50,13 +50,13 @@ export function WebClientIndexHeader() {
   return (
     <header className="border-b border-border pb-6">
       <div className="flex items-center gap-3 mb-2">
-        <h1 className="text-3xl font-extrabold tracking-tight text-foreground">${projectName} Web Client</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight text-foreground">${projectName} Web App</h1>
         <Badge variant="secondary">
           Next.js App
         </Badge>
       </div>
       <p className="text-muted-foreground text-sm">
-        Select a WebClient page below to interact with API trigger buttons and stringified JSON page load data.
+        Select a Web Page below to interact with API trigger buttons and stringified JSON page load data.
       </p>
     </header>
   );

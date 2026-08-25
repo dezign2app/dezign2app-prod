@@ -154,16 +154,16 @@ pageEditorRouter.post("/", async (req, res) => {
       return;
     }
 
-    const client = new ConvexHttpClient(convexUrl);
+    const convexClient = new ConvexHttpClient(convexUrl);
     if (token && typeof token === "string" && token.includes(".") && !token.startsWith("sk_")) {
-      client.setAuth(token);
+      convexClient.setAuth(token);
     }
 
     // Resolve or initialize conversationId for UI design
     let activeConversationId = bodyConversationId || "";
     try {
       if (!activeConversationId && projectId && nodeId) {
-        activeConversationId = await client.mutation(api.ai.conversations.getOrCreateNodeConversation, {
+        activeConversationId = await convexClient.mutation(api.ai.conversations.getOrCreateNodeConversation, {
           projectId: projectId as Id<"projects">,
           nodeId,
           type: "ui_design",
@@ -179,7 +179,7 @@ pageEditorRouter.post("/", async (req, res) => {
     let chatHistory: Array<{ role: string; content: string }> = bodyChatHistory || [];
     if (chatHistory.length === 0 && activeConversationId) {
       try {
-        const convexMessages = await client.query(api.ai.messages.getConversationMessages, {
+        const convexMessages = await convexClient.query(api.ai.messages.getConversationMessages, {
           conversationId: activeConversationId as Id<"conversations">,
         });
         if (Array.isArray(convexMessages) && convexMessages.length > 0) {
@@ -200,7 +200,7 @@ pageEditorRouter.post("/", async (req, res) => {
         // Check if user message is already latest in conversation to avoid duplicates
         const lastMsg = chatHistory[chatHistory.length - 1];
         if (!lastMsg || lastMsg.content !== prompt || (lastMsg.role !== "user" && lastMsg.role !== "USER")) {
-          await client.mutation(api.ai.messages.insertMessage, {
+          await convexClient.mutation(api.ai.messages.insertMessage, {
             conversationId: activeConversationId as Id<"conversations">,
             content: prompt,
             role: "user",
@@ -215,8 +215,8 @@ pageEditorRouter.post("/", async (req, res) => {
     // Fetch canvas state to extract connected endpoints
     let canvasEndpoints = "";
     try {
-      const elements = await client.query(api.canvas.getBackendElements, {
-        projectId: projectId as any,
+      const elements = await convexClient.query(api.canvas.getBackendElements, {
+        projectId: projectId as Id<"projects">,
       });
       canvasEndpoints = extractConnectedEndpoints(nodeId, elements);
     } catch (err) {
@@ -372,7 +372,7 @@ pageEditorRouter.post("/", async (req, res) => {
     if (isClientDisconnected || abortController.signal.aborted) {
       console.log(`🛑 [page-editor] Generation successfully TERMINATED. Skipping persistence for node ${nodeId}.`);
       try {
-        await client.mutation(api.canvas.patchNodeData, {
+        await convexClient.mutation(api.canvas.patchNodeData, {
           projectId: projectId as Id<"projects">,
           nodeId,
           patch: { aiEditing: false },
@@ -394,7 +394,7 @@ pageEditorRouter.post("/", async (req, res) => {
       res.write(JSON.stringify({ type: "error", message: "UI Generation returned empty output. Check engine logs." }) + "\n");
       res.end();
       try {
-        await client.mutation(api.canvas.patchNodeData, {
+        await convexClient.mutation(api.canvas.patchNodeData, {
           projectId: projectId as Id<"projects">,
           nodeId,
           patch: { aiEditing: false },
@@ -404,9 +404,9 @@ pageEditorRouter.post("/", async (req, res) => {
     }
 
     console.log(`[page-editor] Persisting generated code to Convex (${cleanCode.length} chars)...`);
-    // Persist to Convex (best-effort sync; web client also syncs with authenticated session)
+    // Persist to Convex (best-effort sync; web page also syncs with authenticated session)
     try {
-      await client.mutation(api.canvas.patchNodeData, {
+      await convexClient.mutation(api.canvas.patchNodeData, {
         projectId: projectId as Id<"projects">,
         nodeId,
         patch: {
@@ -416,14 +416,14 @@ pageEditorRouter.post("/", async (req, res) => {
       });
       console.log("[page-editor] Successfully updated Convex node data.");
     } catch (convexErr: any) {
-      console.warn("[page-editor] Direct Convex persistence skipped/unauthenticated (will be saved by web client):", convexErr?.message || convexErr);
+      console.warn("[page-editor] Direct Convex persistence skipped/unauthenticated (will be saved by web page ):", convexErr?.message || convexErr);
     }
 
     // Persist AI message response to Convex
     if (activeConversationId) {
       try {
         const assistantSummary = `✅ Page updated! The UI for **${pageName || nodeId}** has been generated.`;
-        await client.mutation(api.ai.messages.insertMessage, {
+        await convexClient.mutation(api.ai.messages.insertMessage, {
           conversationId: activeConversationId as Id<"conversations">,
           content: assistantSummary,
           role: "assistant",

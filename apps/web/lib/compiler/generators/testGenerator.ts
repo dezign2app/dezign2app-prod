@@ -249,7 +249,7 @@ describe("E2E Flow: ${tcName}", () => {
       });
     });
   } else {
-    // Generate individual E2E test files for each web client UI event if no custom cases exist
+    // Generate individual E2E test files for each web page UI event if no custom cases exist
     webClientNodes.forEach((webNode) => {
       const webEvents = webNode.data?.events || [];
       webEvents.forEach((ev: { id: string; name?: string; event?: string }, idx: number) => {
@@ -303,7 +303,7 @@ describe("E2E Flow: ${webNode.data?.label || "Page"} / ${ev.name || ev.event || 
       language: "typescript",
       content: `import { describe, it, expect } from "vitest";
 
-describe("Web Client E2E Health Check", () => {
+describe("Web App E2E Health Check", () => {
   it("should verify test setup operational", async () => {
     expect(true).toBe(true);
   });

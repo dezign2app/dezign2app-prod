@@ -100,11 +100,11 @@ export function DockerRunnerDialog({
   // Extract service endpoint URLs for direct browser navigation
   const serviceEndpoints: ServiceEndpointInfo[] = useMemo(() => {
     const endpointsList: ServiceEndpointInfo[] = [];
-    const webClients = monorepoResult.webClients || [];
+    const webApps = monorepoResult.webClients || [];
     const services = monorepoResult.services || [];
 
-    // Web Clients
-    webClients.forEach((w, idx) => {
+    // Web Applications (Frontend)
+    webApps.forEach((w, idx) => {
       const port = idx === 0 ? "3000" : `${3000 + idx}`;
       endpointsList.push({
         name: w.name || "Web Application",
@@ -310,7 +310,7 @@ export function DockerRunnerDialog({
             ) : (
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-medium">
                 <Globe className="w-3.5 h-3.5" />
-                <span>Web Client Mode</span>
+                <span>Browser Mode</span>
               </div>
             )}
           </div>

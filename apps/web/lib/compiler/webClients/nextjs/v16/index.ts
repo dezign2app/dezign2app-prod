@@ -124,7 +124,7 @@ export function compileNextjsV16WebClient(
     files.push(...generateFallbackRootIndex(projectName, pagesInfo));
   }
 
-  // 9. Web Client E2E Tests
+  // 9. Web page E2E Tests
   files.push(
     ...generateWebClientE2ETests(
       webClientNodes,

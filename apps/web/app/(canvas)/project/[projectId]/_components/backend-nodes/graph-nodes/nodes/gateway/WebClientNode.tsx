@@ -648,7 +648,7 @@ export const WebClientNode = ({
         data={data}
         nodeType="webClient"
         icon={Globe}
-        title={isLandingPage ? "Web Client (Landing Page /)" : "Web Client (page)"}
+        title={isLandingPage ? "Landing Page" : "Web Page"}
         selected={selected}
         rightElement={
           isLocked ? (

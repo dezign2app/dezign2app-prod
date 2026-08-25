@@ -329,10 +329,10 @@ export const WebClientConfig = ({
       <div className="flex flex-col gap-2 border-b border-border/50 pb-6">
         <div className="flex items-center gap-2.5">
           <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-emerald-500/15 text-emerald-500 rounded border border-emerald-500/20 shadow-sm flex items-center gap-1">
-            <Globe className="w-3 h-3" /> WEB CLIENT (PAGE)
+            <Globe className="w-3 h-3" /> WEB PAGE
           </span>
           <span className="text-lg font-semibold tracking-tight text-foreground">
-            {data.label || "Web Client Page"}
+            {data.label || "Web Page"}
           </span>
         </div>
         <p className="text-xs text-muted-foreground">

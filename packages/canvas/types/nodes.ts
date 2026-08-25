@@ -394,7 +394,7 @@ export interface CanvasServiceNodeData {
     basePath: string;
     endpoints: Endpoint[];
   }[];
-  // Graph-view event/logic lists (for web clients and services)
+  // Graph-view event/logic lists (for web pages and services)
   events?: UIEventItem[] | { id: string; name: string }[];
   inputs?: { id: string; name: string }[];
   logic?: { id: string; name: string }[];
@@ -637,7 +637,7 @@ export interface CanvasWebAppNodeData {
   corsOrigins?: string;
 }
 
-/** Web Client node fields (canvas type). */
+/** Web Page node fields (canvas type). */
 export interface CanvasWebClientNodeData {
   appName?: string;
   appSlug?: string;

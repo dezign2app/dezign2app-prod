@@ -2,7 +2,7 @@ import { CompiledFile } from "@workspace/canvas/types";
 
 /**
  * Generates the shared `@workspace/logger` package for the compiled monorepo.
- * Allows microservices and web client apps to use a unified logger controlled
+ * Allows microservices and web applications to use a unified logger controlled
  * via LOG_LEVEL or NEXT_PUBLIC_LOG_LEVEL environment variables.
  */
 export function generateLoggerPackage(): CompiledFile[] {

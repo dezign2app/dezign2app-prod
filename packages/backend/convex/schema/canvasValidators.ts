@@ -138,7 +138,7 @@ export const protectionRuleConvexValidator = v.object({
   ),
 });
 
-// Web Client Page Node Data Validator
+// Web Page Node Data Validator
 export const webClientConvexDataValidator = v.object({
   label: v.optional(v.string()),
   description: v.optional(v.string()),

@@ -13,10 +13,10 @@ describe("hangingTransformerLayout - Auto-Layout for Hanging Transformers", () =
         data: { label: "Web App" },
       },
       {
-        id: "web-client-1",
+        id: "web-page-1",
         type: "webClient",
         position: { x: 0, y: 0 },
-        data: { label: "Page Client" },
+        data: { label: "Web Page" },
       },
       {
         id: "trans-local-1",
@@ -41,14 +41,14 @@ describe("hangingTransformerLayout - Auto-Layout for Hanging Transformers", () =
 
     const edges: LayoutEdge[] = [
       {
-        id: "e-web-client",
+        id: "e-web-page",
         source: "web-app-1",
-        target: "web-client-1",
+        target: "web-page-1",
         type: "connection",
       },
       {
-        id: "e-client-service",
-        source: "web-client-1",
+        id: "e-page-service",
+        source: "web-page-1",
         target: "service-products",
         targetHandle: "endpoint-in-ep-test",
         type: "connection",
@@ -86,7 +86,7 @@ describe("hangingTransformerLayout - Auto-Layout for Hanging Transformers", () =
     );
 
     const webAppPos = posMap.get("web-app-1")!;
-    const webClientPos = posMap.get("web-client-1")!;
+    const webPagePos = posMap.get("web-page-1")!;
     const transPos = posMap.get("trans-local-1")!;
     const servicePos = posMap.get("service-products")!;
 
@@ -98,9 +98,9 @@ describe("hangingTransformerLayout - Auto-Layout for Hanging Transformers", () =
     expect(transPos.x).toBeLessThan(servicePos.x);
     expect(servicePos.x - (transPos.x + 240)).toBeCloseTo(80, 0);
 
-    // 3. Web client is upstream to the left of the transformer column
-    expect(webClientPos.x).toBeLessThan(transPos.x);
-    expect(webAppPos.x).toBeLessThan(webClientPos.x);
+    // 3. Web page is upstream to the left of the transformer column
+    expect(webPagePos.x).toBeLessThan(transPos.x);
+    expect(webAppPos.x).toBeLessThan(webPagePos.x);
   });
 
   it("positions global transformer_ref right before the service while master transformer remains separate", () => {

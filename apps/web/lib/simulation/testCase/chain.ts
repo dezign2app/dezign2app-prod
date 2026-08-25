@@ -115,7 +115,7 @@ export function buildInitialTrace(args: {
     trace.push({
       id: `${args.testCaseId}-nav-${i}`,
       kind: "client",
-      label: `Page Load: ${navNode?.data?.label || "Web Client"}`,
+      label: `Page Load: ${navNode?.data?.label || "Web Page"}`,
       status: "completed",
       nodeId: navNode?.id,
       edgeId: nextEdge?.id,

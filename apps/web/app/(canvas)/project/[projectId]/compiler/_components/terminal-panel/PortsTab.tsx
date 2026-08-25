@@ -49,7 +49,7 @@ export function PortsTab({ ports }: PortsTabProps) {
               <>
                 <tr className="hover:bg-slate-800/30">
                   <td className="px-3 py-2 font-bold text-emerald-400">3000</td>
-                  <td className="px-3 py-2">Web Client Application</td>
+                  <td className="px-3 py-2">Web Application</td>
                   <td className="px-3 py-2 text-slate-400">Next.js App</td>
                   <td className="px-3 py-2">
                     <a

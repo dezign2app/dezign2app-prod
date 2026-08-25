@@ -196,33 +196,50 @@ export function NodePaletteSidebar({
               <div className="text-[9px] uppercase font-bold text-muted-foreground px-1 pt-1">
                 Computing
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                onClick={() => handleAddGraphNode("webApp", "Web App")}
-              >
-                <Globe className="w-3.5 h-3.5 mr-2 text-indigo-400 shrink-0" />
-                Web App
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                onClick={() => handleAddGraphNode("webClient", "page-client")}
-              >
-                <Globe className="w-3.5 h-3.5 mr-2 shrink-0 text-muted-foreground" />
-                Page Client (Route)
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                onClick={() => handleAddGraphNode("page_ref", "Page Ref")}
-              >
-                <Compass className="w-3.5 h-3.5 mr-2 text-indigo-400 shrink-0" />
-                Page Ref
-              </Button>
+              {/* WEB APP / CLIENT GROUP */}
+              <div className="flex flex-col gap-1.5 p-1.5 rounded-lg bg-indigo-500/5 dark:bg-indigo-950/20 border border-indigo-500/25">
+                <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                  <Globe className="w-3 h-3 text-indigo-500" />
+                  Web App
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+                  onClick={() => handleAddGraphNode("webApp", "Web App")}
+                >
+                  <Globe className="w-3.5 h-3.5 mr-2 text-indigo-500 shrink-0" />
+                  Web App
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+                  onClick={() => handleAddGraphNode("webClient", "page-client")}
+                >
+                  <Globe className="w-3.5 h-3.5 mr-2 text-indigo-500/80 shrink-0" />
+                  Web Page
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+                  onClick={() => handleAddGraphNode("page_ref", "Page Ref")}
+                >
+                  <Compass className="w-3.5 h-3.5 mr-2 text-indigo-500/80 shrink-0" />
+                  Page Ref
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+                  onClick={() => handleAddGraphNode("auth", "Auth Node")}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 mr-2 text-indigo-500 shrink-0" />
+                  Auth Node
+                </Button>
+              </div>
+
               <Button
                 variant="outline"
                 size="sm"
@@ -231,15 +248,6 @@ export function NodePaletteSidebar({
               >
                 <Server className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Service
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                onClick={() => handleAddGraphNode("auth", "Auth Node")}
-              >
-                <ShieldCheck className="w-3.5 h-3.5 mr-2 text-indigo-400 shrink-0" />
-                Auth Node
               </Button>
               {/* TRANSFORMERS GROUP */}
               <div className="flex flex-col gap-1.5 p-1.5 rounded-lg bg-purple-500/5 dark:bg-purple-950/20 border border-purple-500/25">
