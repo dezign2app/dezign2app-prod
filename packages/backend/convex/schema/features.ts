@@ -16,15 +16,34 @@ export const featureTables = {
     organizationId: v.string(),
     userId: v.string(),
     title: v.string(),
-  }).index("by_user", ["userId"]),
+    type: v.optional(v.union(v.literal("node_building"), v.literal("ui_design"), v.string())),
+    projectId: v.optional(v.id("projects")),
+    nodeId: v.optional(v.string()),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_project", ["projectId"])
+    .index("by_project_type", ["projectId", "type"])
+    .index("by_project_node", ["projectId", "nodeId"])
+    .index("by_project_node_type", ["projectId", "nodeId", "type"])
+    .index("by_user_project_node_type", ["userId", "projectId", "nodeId", "type"]),
 
   messages: defineTable({
     conversationId: v.id("conversations"),
     content: v.string(),
-    role: v.union(v.literal("USER"), v.literal("AI"), v.literal("SYSTEM")),
+    role: v.union(
+      v.literal("USER"),
+      v.literal("AI"),
+      v.literal("SYSTEM"),
+      v.literal("user"),
+      v.literal("assistant"),
+      v.literal("system")
+    ),
     thinking: v.optional(v.string()),
     context: v.optional(v.array(v.any())),
     clientMessageId: v.optional(v.string()),
+    plan: v.optional(v.string()),
+    createdAt: v.optional(v.number()),
   }).index("by_conversation", ["conversationId"]),
 
   embeddings: defineTable({

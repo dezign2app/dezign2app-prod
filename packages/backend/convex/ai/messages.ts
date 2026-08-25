@@ -7,34 +7,51 @@ export const insertMessage = mutation({
     conversationId: v.id("conversations"),
     content: v.string(),
     thinking: v.optional(v.string()),
+    plan: v.optional(v.string()),
     context: v.optional(v.array(v.any())),
-    role: v.union(v.literal("USER"), v.literal("AI"), v.literal("SYSTEM")),
+    role: v.union(
+      v.literal("USER"),
+      v.literal("AI"),
+      v.literal("SYSTEM"),
+      v.literal("user"),
+      v.literal("assistant"),
+      v.literal("system"),
+    ),
     clientMessageId: v.optional(v.string()),
+    createdAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
     const {
       conversationId,
       content,
       role,
       context,
       thinking,
+      plan,
       clientMessageId,
+      createdAt,
     } = args;
-    if (!identity) {
-      throw new ConvexError({
-        code: "UNAUTHORIZED",
-        message: "User not authenticated",
-      });
-    }
-    return await ctx.db.insert("messages", {
+
+    const messageId = await ctx.db.insert("messages", {
       conversationId,
       content,
       role,
       thinking,
+      plan,
       context,
       clientMessageId,
+      createdAt: createdAt ?? Date.now(),
     });
+
+    try {
+      await ctx.db.patch(conversationId, {
+        updatedAt: Date.now(),
+      });
+    } catch {
+      // best-effort touch
+    }
+
+    return messageId;
   },
 });
 
@@ -42,23 +59,43 @@ export const updateMessage = mutation({
   args: {
     messageId: v.id("messages"),
     content: v.string(),
-    role: v.union(v.literal("USER"), v.literal("AI"), v.literal("SYSTEM")),
+    role: v.union(
+      v.literal("USER"),
+      v.literal("AI"),
+      v.literal("SYSTEM"),
+      v.literal("user"),
+      v.literal("assistant"),
+      v.literal("system"),
+    ),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
     const { messageId, content, role } = args;
-    if (!identity) {
-      throw new ConvexError({
-        code: "UNAUTHORIZED",
-        message: "User not authenticated",
-      });
-    }
     const existingMessage = await ctx.db.get(messageId);
 
     return await ctx.db.patch(messageId, {
-      content: `${existingMessage?.content}| ${content}`,
+      content: `${existingMessage?.content || ""}${content}`,
       role,
     });
+  },
+});
+
+/**
+ * Returns all messages in a conversation ordered chronologically (oldest to newest)
+ */
+export const getConversationMessages = query({
+  args: {
+    conversationId: v.id("conversations"),
+  },
+  handler: async (ctx, args) => {
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("by_conversation", (q) =>
+        q.eq("conversationId", args.conversationId),
+      )
+      .collect();
+
+    // Sort by _creationTime ascending
+    return messages.sort((a, b) => a._creationTime - b._creationTime);
   },
 });
 
@@ -68,18 +105,13 @@ export const listMessages = query({
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
     const { conversationId } = args;
     if (!conversationId)
       throw new ConvexError({
         code: "NOT_FOUND",
         message: "Conversation not found",
       });
-    if (!identity)
-      throw new ConvexError({
-        code: "UNAUTHORIZED",
-        message: "User not authenticated",
-      });
+
     const messages = await ctx.db
       .query("messages")
       .withIndex("by_conversation", (q) =>
@@ -97,18 +129,13 @@ export const getLastNMessages = query({
     n: v.number(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
     const { conversationId, n } = args;
     if (!conversationId)
       throw new ConvexError({
         code: "NOT_FOUND",
         message: "Conversation not found",
       });
-    if (!identity)
-      throw new ConvexError({
-        code: "UNAUTHORIZED",
-        message: "User not authenticated",
-      });
+
     const messages = await ctx.db
       .query("messages")
       .withIndex("by_conversation", (q) =>

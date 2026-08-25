@@ -2,14 +2,25 @@
  * Prompts for the UI Editor LangGraph Agent
  */
 
+function formatChatHistory(history?: Array<{ role: string; content: string }>): string {
+  if (!history || history.length === 0) return "";
+  const lines = history
+    .slice(-8)
+    .map((m) => `- **${m.role.toUpperCase()}**: ${m.content}`)
+    .join("\n");
+  return `### Recent Conversation History (Iterative Context):\n${lines}\n\n`;
+}
+
 export const uiPlannerPrompt = (
   pageName: string,
   pageRoute: string,
   userPrompt: string,
   currentCode: string,
   componentCatalog: string,
-  canvasEndpoints: string
+  canvasEndpoints: string,
+  chatHistory?: Array<{ role: string; content: string }>
 ) => {
+  const historySection = formatChatHistory(chatHistory);
   return `You are a Principal Frontend Architect and UI Designer planning a Next.js page implementation.
 
 ### Task
@@ -19,7 +30,7 @@ Page Name: "${pageName}"
 Page Route: "${pageRoute}"
 User Instruction: "${userPrompt}"
 
-${currentCode && currentCode.trim().length > 0 ? `### Existing Page Code:\n\`\`\`tsx\n${currentCode.slice(0, 12000)}\n\`\`\`\n**IMPORTANT**: Carefully analyze the existing components, state variables, tabs, metrics, dialogs, and styling above. You must iterate on and enhance this existing code according to the user instruction, preserving all working functionality unless explicitly requested to change.\n` : "### No Existing Code: Creating new page scaffold from scratch.\n"}
+${historySection}${currentCode && currentCode.trim().length > 0 ? `### Existing Page Code:\n\`\`\`tsx\n${currentCode.slice(0, 12000)}\n\`\`\`\n**IMPORTANT**: Carefully analyze the existing components, state variables, tabs, metrics, dialogs, and styling above. You must iterate on and enhance this existing code according to the user instruction, preserving all working functionality unless explicitly requested to change.\n` : "### No Existing Code: Creating new page scaffold from scratch.\n"}
 
 ${canvasEndpoints ? `### Connected Canvas Backend Endpoints:\n${canvasEndpoints}\n` : ""}
 
@@ -42,8 +53,10 @@ export const uiCodeGeneratorPrompt = (
   currentCode: string,
   plan: string,
   componentCatalog: string,
-  canvasEndpoints: string
+  canvasEndpoints: string,
+  chatHistory?: Array<{ role: string; content: string }>
 ) => {
+  const historySection = formatChatHistory(chatHistory);
   return `You are an expert Next.js (App Router), React 19, TypeScript, and Tailwind CSS v4 UI engineer.
 
 ### Task
@@ -52,7 +65,7 @@ Generate the COMPLETE, production-ready TSX page component based on the architec
 Page Route: "${pageRoute}" (${pageName})
 User Instruction: "${userPrompt}"
 
-### Architectural Plan:
+${historySection}### Architectural Plan:
 ${plan}
 
 ${currentCode && currentCode.trim().length > 0 ? `### Existing Code to Modify & Enhance:

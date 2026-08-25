@@ -12,6 +12,14 @@ export const UiEditorAnnotation = Annotation.Root({
     reducer: (_, y) => y,
     default: () => "",
   }),
+  conversationId: Annotation<string>({
+    reducer: (_, y) => y,
+    default: () => "",
+  }),
+  chatHistory: Annotation<Array<{ role: string; content: string }>>({
+    reducer: (_, y) => y,
+    default: () => [],
+  }),
   pageName: Annotation<string>({
     reducer: (_, y) => y,
     default: () => "",
