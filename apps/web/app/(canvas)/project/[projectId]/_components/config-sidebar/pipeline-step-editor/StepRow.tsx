@@ -245,6 +245,9 @@ export const StepRow = ({
                       allEdges={allEdges}
                       expectedArgs={expectedArgs}
                       selectedDbId={selectedDbId}
+                      serviceNodeId={serviceNodeId}
+                      endpointId={endpoint?.id}
+                      consumedEventId={consumedEvent?.id}
                       showAdvancedSettings={showAdvancedSettings}
                       onToggleAdvancedSettings={() => setShowAdvancedSettings((v) => !v)}
                       onChange={onChange}

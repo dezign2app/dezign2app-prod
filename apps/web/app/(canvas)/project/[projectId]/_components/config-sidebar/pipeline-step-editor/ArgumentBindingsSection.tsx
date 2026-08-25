@@ -62,7 +62,7 @@ export const ArgumentBindingsSection = ({
               className="text-[9px] text-primary/70 mt-0.5 cursor-pointer hover:underline"
               onClick={onAutoMapArguments}
             >
-              Click here to auto-map expected fields from Request Body.
+              Click here to auto-map matching fields from available sources.
             </p>
           ) : (
             <p className="text-[9px] text-muted-foreground/40 mt-0.5">

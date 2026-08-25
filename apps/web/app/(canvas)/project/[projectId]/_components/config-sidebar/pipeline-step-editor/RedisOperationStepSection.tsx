@@ -19,6 +19,7 @@ import {
 } from "@workspace/ui/components/select";
 import { Zap, Database, Code2, Settings2, Sparkles, Layers } from "lucide-react";
 import { PipelineStepDraft, ExpectedArg } from "./types";
+import { ensureRedisCacheConnection } from "./utils";
 
 export interface DirectRedisCommand {
   id: string;
@@ -241,6 +242,9 @@ export interface RedisOperationStepSectionProps {
   allEdges: BackendEdge[];
   expectedArgs?: ExpectedArg[];
   selectedDbId?: string;
+  serviceNodeId?: string;
+  endpointId?: string;
+  consumedEventId?: string;
   showAdvancedSettings: boolean;
   onToggleAdvancedSettings: () => void;
   onChange: (updated: PipelineStepDraft) => void;
@@ -254,6 +258,9 @@ export const RedisOperationStepSection = ({
   allEdges,
   expectedArgs,
   selectedDbId = "all",
+  serviceNodeId,
+  endpointId,
+  consumedEventId,
   showAdvancedSettings,
   onToggleAdvancedSettings,
   onChange,
@@ -332,6 +339,15 @@ export const RedisOperationStepSection = ({
       ...step,
       databaseId: cleanInstanceId,
     });
+    if (isDirectMode && serviceNodeId) {
+      ensureRedisCacheConnection({
+        schemaId: "__direct__",
+        instanceId: cleanInstanceId,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+      });
+    }
   };
 
   // Handle selecting a Redis Schema / Model
@@ -351,6 +367,16 @@ export const RedisOperationStepSection = ({
         name: varName,
         outputVariable: varName,
       });
+
+      if (serviceNodeId) {
+        ensureRedisCacheConnection({
+          schemaId: "__direct__",
+          instanceId: step.databaseId,
+          serviceNodeId,
+          endpointId,
+          consumedEventId,
+        });
+      }
       return;
     }
 
@@ -387,6 +413,16 @@ export const RedisOperationStepSection = ({
       name: varName,
       outputVariable: varName,
     });
+
+    if (serviceNodeId) {
+      ensureRedisCacheConnection({
+        schemaId,
+        instanceId: step.databaseId || targetNode.data?.databaseId,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+      });
+    }
   };
 
   // Handle selecting an Operation
@@ -412,6 +448,16 @@ export const RedisOperationStepSection = ({
         name: varName,
         outputVariable: varName,
       });
+
+      if (serviceNodeId) {
+        ensureRedisCacheConnection({
+          schemaId: "__direct__",
+          instanceId: step.databaseId,
+          serviceNodeId,
+          endpointId,
+          consumedEventId,
+        });
+      }
       return;
     }
 
@@ -436,6 +482,16 @@ export const RedisOperationStepSection = ({
       name: varName,
       outputVariable: varName,
     });
+
+    if (serviceNodeId) {
+      ensureRedisCacheConnection({
+        schemaId: selectedSchemaNode.id,
+        instanceId: step.databaseId || selectedSchemaNode.data?.databaseId,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+      });
+    }
   };
 
   return (

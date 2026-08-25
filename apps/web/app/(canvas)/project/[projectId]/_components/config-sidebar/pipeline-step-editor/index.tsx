@@ -19,6 +19,8 @@ import {
   STEP_TYPE_META,
   ADDABLE_STEP_TYPES,
   generateId,
+  ensureRedisCacheConnection,
+  cleanupRedisCacheConnection,
 } from "./utils";
 import {
   getConnectedTransformersForEndpoint,
@@ -182,6 +184,21 @@ export const PipelineStepEditor = ({
         (ck, idx) => {
           const stepNum = executableSteps.length + idx + 1;
           const outputVar = `kafkaPublishResult${stepNum > 1 ? stepNum : ""}`;
+          const inputBindings: StepBinding[] = [];
+          if (ck.functionName === "publishKafkaEvent") {
+            inputBindings.push({
+              argName: "topic",
+              source: {
+                kind: "literal",
+                value: ck.topicName || "events",
+              },
+            });
+          }
+          inputBindings.push({
+            argName: ck.functionName === "publishKafkaEvent" ? "payload" : "message",
+            source: { kind: "req_body", field: "" },
+          });
+
           return {
             id: generateId(),
             name: ck.publisherName || `Publish ${ck.topicName}`,
@@ -192,23 +209,7 @@ export const PipelineStepEditor = ({
               name: ck.functionName,
               importPath: ck.importPath,
             },
-            inputBindings: [
-              ...(ck.functionName === "publishKafkaEvent"
-                ? [
-                    {
-                      argName: "topic",
-                      source: {
-                        kind: "literal" as const,
-                        value: ck.topicName || "events",
-                      },
-                    },
-                  ]
-                : []),
-              {
-                argName: ck.functionName === "publishKafkaEvent" ? "payload" : "message",
-                source: { kind: "req_body" as const, field: "" },
-              },
-            ],
+            inputBindings,
             brokerNodeId: ck.brokerNodeId,
             messagingResourceId: ck.topicId,
           };
@@ -243,6 +244,25 @@ export const PipelineStepEditor = ({
     endpoint?.type,
     steps,
   ]);
+
+  // Auto-synchronize connected Redis cache nodes and edges for configured redis_operation steps
+  useEffect(() => {
+    if (!serviceNodeId || executableSteps.length === 0) return;
+    const redisSteps = executableSteps.filter(
+      (s) => s.type === "redis_operation" && s.tableNodeId && s.tableNodeId !== "__none__",
+    );
+    if (redisSteps.length === 0) return;
+
+    redisSteps.forEach((s) => {
+      ensureRedisCacheConnection({
+        schemaId: s.tableNodeId,
+        instanceId: s.databaseId,
+        serviceNodeId,
+        endpointId: endpoint?.id,
+        consumedEventId: consumedEvent?.id,
+      });
+    });
+  }, [executableSteps, serviceNodeId, endpoint?.id, consumedEvent?.id]);
 
   const hasUnconfiguredInputs = useMemo(
     () => executableSteps.some((s) => isStepInputUnconfigured(s, allNodes)),
@@ -326,6 +346,43 @@ export const PipelineStepEditor = ({
   };
 
   const updateStep = (index: number, updated: PipelineStepDraft) => {
+    const prevStep = executableSteps[index];
+    if (prevStep?.type === "redis_operation" && updated.type !== "redis_operation") {
+      const remainingSteps = executableSteps.filter((_, i) => i !== index);
+      cleanupRedisCacheConnection({
+        tableNodeId: prevStep.tableNodeId,
+        databaseId: prevStep.databaseId,
+        serviceNodeId,
+        endpointId: endpoint?.id,
+        consumedEventId: consumedEvent?.id,
+        remainingSteps,
+      });
+    } else if (
+      prevStep?.type === "redis_operation" &&
+      updated.type === "redis_operation" &&
+      prevStep.tableNodeId &&
+      prevStep.tableNodeId !== updated.tableNodeId
+    ) {
+      const otherSteps = executableSteps.filter((_, i) => i !== index);
+      cleanupRedisCacheConnection({
+        tableNodeId: prevStep.tableNodeId,
+        databaseId: prevStep.databaseId,
+        serviceNodeId,
+        endpointId: endpoint?.id,
+        consumedEventId: consumedEvent?.id,
+        remainingSteps: otherSteps,
+      });
+      if (updated.tableNodeId) {
+        ensureRedisCacheConnection({
+          schemaId: updated.tableNodeId,
+          instanceId: updated.databaseId,
+          serviceNodeId,
+          endpointId: endpoint?.id,
+          consumedEventId: consumedEvent?.id,
+        });
+      }
+    }
+
     const next = [...executableSteps];
     next[index] = updated;
     if (isConsumer) {
@@ -338,6 +395,18 @@ export const PipelineStepEditor = ({
   const deleteStep = (index: number) => {
     const stepToDelete = executableSteps[index];
     if (!stepToDelete) return;
+
+    if (stepToDelete.type === "redis_operation") {
+      const remainingSteps = executableSteps.filter((_, i) => i !== index);
+      cleanupRedisCacheConnection({
+        tableNodeId: stepToDelete.tableNodeId,
+        databaseId: stepToDelete.databaseId,
+        serviceNodeId,
+        endpointId: endpoint?.id,
+        consumedEventId: consumedEvent?.id,
+        remainingSteps,
+      });
+    }
 
     if (stepToDelete.type === "transform") {
       const store = useBackendCanvasStore.getState();

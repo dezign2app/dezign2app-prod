@@ -11,6 +11,7 @@ import {
   STEP_TYPE_META,
   getAvailableSources,
   getAvailableTransformers,
+  isPathMatch,
 } from "./utils";
 import { toVarName } from "@/lib/compiler/utils";
 import { isStepInputUnconfigured } from "@/lib/utils/pipelineValidation";
@@ -258,6 +259,7 @@ export function useStepRowState({
   ]);
 
   // Auto-map arguments from route params / query / body / prior steps (preserving existing)
+  // ONLY maps and adds fields that actually exist in available sources, preventing adding non-existent fields.
   const handleAutoMapArguments = useCallback(() => {
     if (expectedArgs.length === 0) return;
     const reqBodySource = availableSources.find(
@@ -276,11 +278,13 @@ export function useStepRowState({
       }
     });
 
-    const newBindings: StepBinding[] = expectedArgs.map((arg): StepBinding => {
+    const newBindings: StepBinding[] = [];
+
+    for (const arg of expectedArgs) {
       const normArg = arg.name.trim().toLowerCase();
+      const existing = existingBindingMap.get(normArg);
 
       // 1. If an existing configured binding exists for this arg, preserve it
-      const existing = existingBindingMap.get(normArg);
       if (existing) {
         const src = existing.source;
         const isConfigured =
@@ -290,87 +294,93 @@ export function useStepRowState({
             ? Boolean(src.stepId)
             : Boolean(src.field && src.field.trim() !== "");
         if (isConfigured) {
-          return existing;
+          newBindings.push(existing);
+          continue;
         }
       }
 
       // 2. Path param match
-      const matchParam = reqParamsSource?.paths.find(
-        (p) => p.path.toLowerCase() === normArg,
+      const matchParam = reqParamsSource?.paths.find((p) =>
+        isPathMatch(p.path, arg.name),
       );
       if (matchParam) {
-        return {
+        newBindings.push({
           argName: arg.name,
           source: { kind: "req_params", field: matchParam.path },
-        };
+        });
+        continue;
       }
 
       // 3. Query param match
-      const matchQuery = reqQuerySource?.paths.find(
-        (p) => p.path.toLowerCase() === normArg,
+      const matchQuery = reqQuerySource?.paths.find((p) =>
+        isPathMatch(p.path, arg.name),
       );
       if (matchQuery) {
-        return {
+        newBindings.push({
           argName: arg.name,
           source: { kind: "req_query", field: matchQuery.path },
-        };
+        });
+        continue;
       }
 
       // 4. Prior step outputs match
+      let stepMatched = false;
       for (const ps of availableSources.filter((s) => s.kind === "step_output")) {
-        const matchStepField = ps.paths.find(
-          (p) => p.path.toLowerCase() === normArg,
+        const matchStepField = ps.paths.find((p) =>
+          isPathMatch(p.path, arg.name),
         );
         if (matchStepField && ps.stepId) {
-          return {
+          newBindings.push({
             argName: arg.name,
             source: {
               kind: "step_output",
               stepId: ps.stepId,
               field: matchStepField.path,
             },
-          };
+          });
+          stepMatched = true;
+          break;
         }
       }
+      if (stepMatched) continue;
 
       // 5. Request body / Event payload match
-      const matchBody = reqBodySource?.paths.find(
-        (p) =>
-          p.path.toLowerCase() === normArg ||
-          p.path.toLowerCase().endsWith(`.${normArg}`),
+      const matchBody = reqBodySource?.paths.find((p) =>
+        isPathMatch(p.path, arg.name),
       );
       if (matchBody) {
-        return {
+        newBindings.push({
           argName: arg.name,
           source: { kind: "req_body", field: matchBody.path },
-        };
+        });
+        continue;
       }
 
       // 6. Header / Event Metadata match
-      const matchHeader = reqHeadersSource?.paths.find(
-        (p) => p.path.toLowerCase() === normArg,
+      const matchHeader = reqHeadersSource?.paths.find((p) =>
+        isPathMatch(p.path, arg.name),
       );
       if (matchHeader) {
-        return {
+        newBindings.push({
           argName: arg.name,
           source: { kind: "req_headers", field: matchHeader.path },
-        };
+        });
+        continue;
       }
 
-      // 7. If existing had an unconfigured/blank binding, preserve it
+      // 7. If existing was already present in inputBindings (even if unconfigured), preserve it
       if (existing) {
-        return existing;
+        newBindings.push(existing);
+        continue;
       }
 
-      // 8. Default fallback to request body / event payload
-      return {
-        argName: arg.name,
-        source: { kind: "req_body", field: arg.name },
-      };
-    });
+      // 8. If no matching field exists in any available source, do NOT add non-existent field
+    }
 
     // Also keep any extra custom bindings that the user manually added
-    const expectedArgNames = new Set(expectedArgs.map((a) => a.name.trim().toLowerCase()));
+    const expectedArgNames = new Set(
+      expectedArgs.map((a) => a.name.trim().toLowerCase()),
+    );
     const extraCustomBindings = step.inputBindings.filter(
       (b) => !expectedArgNames.has(b.argName.trim().toLowerCase()),
     );

@@ -81,6 +81,8 @@ export const KafkaPublishStepSection = ({
     const data = selectedBrokerNode.data || {};
     const resources: UnifiedBrokerResource[] = [];
 
+    type ResourceItemLike = { id?: string; name: string; description?: string; schema?: string };
+
     // Kafka Topics
     if (data.topics && Array.isArray(data.topics)) {
       data.topics.forEach((t: KafkaTopic) => {
@@ -96,7 +98,7 @@ export const KafkaPublishStepSection = ({
 
     // SQS Queues
     if (data.queues && Array.isArray(data.queues)) {
-      data.queues.forEach((q: any) => {
+      data.queues.forEach((q: ResourceItemLike) => {
         resources.push({
           id: q.id || q.name,
           name: q.name,
@@ -108,7 +110,7 @@ export const KafkaPublishStepSection = ({
 
     // Redis Streams
     if (data.streams && Array.isArray(data.streams)) {
-      data.streams.forEach((s: any) => {
+      data.streams.forEach((s: ResourceItemLike) => {
         resources.push({
           id: s.id || s.name,
           name: s.name,
@@ -120,7 +122,7 @@ export const KafkaPublishStepSection = ({
 
     // Redis PubSub Channels
     if (data.channels && Array.isArray(data.channels)) {
-      data.channels.forEach((c: any) => {
+      data.channels.forEach((c: ResourceItemLike) => {
         resources.push({
           id: c.id || c.name,
           name: c.name,
@@ -132,7 +134,7 @@ export const KafkaPublishStepSection = ({
 
     // Messages / Event Channels
     if (data.messages && Array.isArray(data.messages)) {
-      data.messages.forEach((m: any) => {
+      data.messages.forEach((m: ResourceItemLike) => {
         if (!resources.some((r) => r.name === m.name)) {
           resources.push({
             id: m.id || m.name,

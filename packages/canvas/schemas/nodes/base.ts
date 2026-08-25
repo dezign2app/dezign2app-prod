@@ -74,6 +74,7 @@ export const dbRefDataSchema = baseNodeDataSchema
   .extend({
     description: z.string().optional(),
     tableRef: z.string().optional(),
+    databaseId: z.string().optional(),
     graphPosition: z.object({ x: z.number(), y: z.number() }).optional(),
   })
   .strict();
