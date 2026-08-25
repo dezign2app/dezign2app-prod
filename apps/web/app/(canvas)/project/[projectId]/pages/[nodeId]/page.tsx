@@ -1,24 +1,38 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useBackendSync } from "../../_components/hooks/useBackendSync";
 import { isElectron, getElectronAPI } from "@/lib/electron";
-import { ArrowLeft, ExternalLink, RefreshCw, Sparkles, Pencil, Trash2, AlertTriangle } from "lucide-react";
-import { useRouter } from "next/navigation";
+import {
+  ArrowLeft,
+  ExternalLink,
+  RefreshCw,
+  Sparkles,
+  Pencil,
+  Trash2,
+  PanelLeft,
+  Code2,
+  Loader2,
+  Globe,
+} from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@workspace/ui/components/button";
+import { Badge } from "@workspace/ui/components/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@workspace/ui/components/tooltip";
 
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-}
+import { NodePaletteSidebar } from "../../_components/NodePaletteSidebar";
+import { Terminal } from "../../_components/terminal";
+import { PageAiPanel, Message } from "./_components/PageAiPanel";
+import { DevServerOfflineState } from "./_components/DevServerOfflineState";
 
 export default function PageEditorPage({
   params,
@@ -26,15 +40,29 @@ export default function PageEditorPage({
   params: Promise<{ projectId: string; nodeId: string }>;
 }) {
   const { projectId, nodeId } = React.use(params);
-  const router = useRouter();
 
-  // Sync canvas store
+  // Sync canvas store with Convex
   useBackendSync(projectId, "graph");
+
+  // Fetch project basic info
+  const project = useQuery(api.projects.getProjectById, {
+    projectId: projectId as Id<"projects">,
+  });
+  const projectName = project?.name || "Blueprint";
 
   const node = useBackendCanvasStore((s) => s.nodes.find((n) => n.id === nodeId));
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
+
+  // Layout UI states
+  const [paletteOpen, setPaletteOpen] = useState(true);
+  const [aiPanelOpen, setAiPanelOpen] = useState(true);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+
+  // Server status check states
+  const [isServerRunning, setIsServerRunning] = useState<boolean | null>(null);
+  const [isCheckingServer, setIsCheckingServer] = useState(true);
 
   // Find the connected WebApp node to get the port
   const connectedWebAppNode = React.useMemo(() => {
@@ -53,11 +81,11 @@ export default function PageEditorPage({
   const pageRoute = node?.data?.label
     ? node.data.label.startsWith("/") ? node.data.label : `/${node.data.label}`
     : "/";
-  const pageName = node?.data?.label || nodeId;
+  const pageName = (node?.data?.label as string) || nodeId;
   const currentCode = node?.data?.pageSourceCode as string | undefined;
   const isAiEditing = Boolean(node?.data?.aiEditing);
 
-  // Get workspace dir from localStorage (set by terminal folder picker)
+  // Get workspace dir from localStorage
   const outputDir =
     typeof window !== "undefined"
       ? localStorage.getItem(`workspace_dir_${projectId}`) ||
@@ -77,16 +105,72 @@ export default function PageEditorPage({
   // iframe key for forcing reloads
   const [iframeKey, setIframeKey] = useState(0);
 
+  // Check if the local dev server is running on the target port
+  const checkServerStatus = useCallback(async () => {
+    const numericPort = parseInt(String(port), 10);
+    if (isNaN(numericPort)) {
+      setIsServerRunning(false);
+      setIsCheckingServer(false);
+      return false;
+    }
+
+    setIsCheckingServer(true);
+
+    // 1. In Electron desktop mode: use native port check
+    if (isElectron()) {
+      const api = getElectronAPI();
+      if (api?.network?.isPortOpen) {
+        try {
+          const open = await api.network.isPortOpen(numericPort);
+          setIsServerRunning(open);
+          setIsCheckingServer(false);
+          return open;
+        } catch (e) {}
+      }
+    }
+
+    // 2. In Browser mode: fast ping
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1200);
+      await fetch(`http://localhost:${numericPort}`, {
+        method: "GET",
+        mode: "no-cors",
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      setIsServerRunning(true);
+      setIsCheckingServer(false);
+      return true;
+    } catch (e) {
+      setIsServerRunning(false);
+      setIsCheckingServer(false);
+      return false;
+    }
+  }, [port]);
+
+  React.useEffect(() => {
+    checkServerStatus();
+  }, [checkServerStatus, iframeKey]);
+
+  React.useEffect(() => {
+    if (isServerRunning === true) return;
+    const interval = setInterval(() => {
+      checkServerStatus();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isServerRunning, checkServerStatus]);
+
+  const handleStartDevServer = () => {
+    setTerminalOpen(true);
+    toast.info("Terminal opened — start dev server with 'pnpm dev'");
+  };
+
   // AI chat state
   const [messages, setMessages] = useState<Message[]>([]);
   const [prompt, setPrompt] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingContent]);
 
   const handleSend = useCallback(async () => {
     if (!prompt.trim() || isAiEditing || streaming) return;
@@ -175,7 +259,7 @@ export default function PageEditorPage({
               await electronApi.fs.writeProject(
                 outputDir,
                 [{ filename: filePath, content: finalCode }],
-                { cleanStale: false } // Never delete other files
+                { cleanStale: false }
               );
               toast.success("Page file updated — HMR should reload the preview");
             } catch (e) {
@@ -199,7 +283,6 @@ export default function PageEditorPage({
       }
     } catch (err: any) {
       toast.error(err.message || "AI request failed");
-      // Clear aiEditing on error
       if (node) {
         updateNode(nodeId, { data: { ...node.data, aiEditing: false } });
       }
@@ -229,218 +312,270 @@ export default function PageEditorPage({
 
   const previewUrl = `http://localhost:${port}${pageRoute}`;
 
+  if (project === undefined) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (project === null) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">Project not found.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0d1117] text-foreground font-sans">
-      {/* Top bar */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border/40 bg-[#161b22] shrink-0">
-        <button
-          onClick={() => router.push(`/project/${projectId}`)}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft size={14} />
-          Canvas
-        </button>
-        <span className="text-border/60">/</span>
-        <div className="flex items-center gap-2">
-          <Pencil size={13} className="text-indigo-400" />
-          <span className="text-sm font-medium text-foreground">{pageName}</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-            {pageRoute}
-          </span>
+    <div className="relative w-screen h-screen overflow-hidden bg-background text-foreground select-none flex flex-col font-sans">
+      {/* ========================================================================= */}
+      {/* TOP HEADER: Breadcrumbs, Controls, Quick Toggles                          */}
+      {/* ========================================================================= */}
+      <header className="h-12 px-3 border-b border-border/40 bg-sidebar/80 backdrop-blur-md flex items-center justify-between shrink-0 z-30 select-none">
+        {/* Left Side: Back button + Left Sidebar Toggle + Page Title / Breadcrumbs */}
+        <div className="flex items-center gap-2 min-w-0">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                asChild
+              >
+                <Link href={`/project/${projectId}`}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Back to Canvas</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={paletteOpen ? "secondary" : "ghost"}
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={() => setPaletteOpen(!paletteOpen)}
+              >
+                <PanelLeft className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{paletteOpen ? "Hide Palette" : "Show Palette"}</TooltipContent>
+          </Tooltip>
+
+          <div className="h-4 w-[1px] bg-border/60 mx-1 shrink-0" />
+
+          <div className="flex items-center gap-2 truncate text-xs">
+            <span className="text-muted-foreground truncate hidden sm:inline">{projectName}</span>
+            <span className="text-muted-foreground/60 hidden sm:inline">/</span>
+            <div className="flex items-center gap-1.5 font-medium text-foreground">
+              <Pencil className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+              <span className="truncate">{pageName}</span>
+            </div>
+            <Badge
+              variant="outline"
+              className="text-[10px] px-1.5 py-0 font-mono text-violet-400 border-violet-500/20 bg-violet-500/10 shrink-0"
+            >
+              {pageRoute}
+            </Badge>
+
+            {currentCode && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 font-medium text-emerald-400 border-emerald-500/20 bg-emerald-500/10 shrink-0 hidden md:inline-flex"
+              >
+                AI-edited
+              </Badge>
+            )}
+          </div>
         </div>
 
-        {currentCode && (
-          <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            AI-edited
+        {/* Center: Live Preview URL & Quick Actions */}
+        <div className="hidden lg:flex items-center gap-1 px-2 py-1 rounded-lg bg-sidebar-accent/30 border border-sidebar-border text-xs max-w-sm w-full mx-4">
+          <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <span className="font-mono text-[11px] text-muted-foreground truncate flex-1">
+            {previewUrl}
           </span>
-        )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground rounded"
+                onClick={() => setIframeKey((k) => k + 1)}
+              >
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Reload Preview</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground rounded"
+                asChild
+              >
+                <a href={previewUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Open in New Tab</TooltipContent>
+          </Tooltip>
+        </div>
 
-        <div className="ml-auto flex items-center gap-2">
-          <Link
-            href={`/project/${projectId}/compiler`}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+        {/* Right Side: Compiler Link, Reset, and AI Assistant Toggle */}
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs text-muted-foreground hover:text-foreground gap-1.5 px-2.5 hidden sm:flex"
+            asChild
           >
-            View in Compiler <ExternalLink size={11} />
-          </Link>
+            <Link href={`/project/${projectId}/compiler`}>
+              <Code2 className="h-3.5 w-3.5" />
+              Compiler
+            </Link>
+          </Button>
+
           {currentCode && (
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+              className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 gap-1 px-2"
               onClick={handleReset}
             >
-              <Trash2 size={12} className="mr-1" /> Reset to generated
+              <Trash2 className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">Reset</span>
             </Button>
           )}
-        </div>
-      </div>
 
-      {/* Main split layout */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Left — AI Chat Panel */}
-        <div className="w-[340px] shrink-0 flex flex-col border-r border-border/40 bg-[#0d1117]">
-          {/* Chat header */}
-          <div className="px-4 py-3 border-b border-border/30 flex items-center gap-2">
-            <Sparkles size={14} className="text-violet-400" />
-            <span className="text-sm font-semibold text-foreground">AI Page Editor</span>
-          </div>
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 text-sm">
-            {messages.length === 0 && !streaming && (
-              <div className="flex flex-col gap-3 py-4">
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Describe what you want to change on this page. The AI will edit the
-                  TSX code and sync it to all collaborators via Convex.
-                </p>
-                <div className="space-y-2">
-                  {[
-                    "Make it a dark sidebar layout",
-                    "Add a hero section with gradient",
-                    "Convert to a data table with filters",
-                    "Add a loading skeleton",
-                  ].map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      onClick={() => setPrompt(suggestion)}
-                      className="w-full text-left text-xs px-2.5 py-1.5 rounded border border-border/50 bg-secondary/20 hover:bg-secondary/40 text-muted-foreground hover:text-foreground transition-all"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-                {!outputDir && (
-                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-400">
-                    <AlertTriangle size={12} className="shrink-0 mt-0.5" />
-                    <span>
-                      No workspace folder set. Open the terminal and pick a folder
-                      to enable live disk sync and HMR preview.
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex flex-col gap-1 ${msg.role === "user" ? "items-end" : "items-start"}`}
-              >
-                <div
-                  className={`max-w-[90%] px-3 py-2 rounded-xl text-xs leading-relaxed ${
-                    msg.role === "user"
-                      ? "bg-indigo-500/20 text-foreground border border-indigo-500/20 rounded-br-none"
-                      : "bg-secondary/40 text-foreground border border-border/40 rounded-bl-none"
-                  }`}
-                >
-                  {msg.content}
-                </div>
-                <span className="text-[10px] text-muted-foreground/60">
-                  {msg.timestamp.toLocaleTimeString()}
-                </span>
-              </div>
-            ))}
-
-            {(streaming || isAiEditing) && (
-              <div className="flex flex-col items-start gap-1">
-                <div className="max-w-[90%] px-3 py-2 rounded-xl text-xs leading-relaxed bg-secondary/40 text-foreground border border-border/40 rounded-bl-none">
-                  {streamingContent ? (
-                    <span className="font-mono text-[10px] text-emerald-400 line-clamp-6">
-                      {streamingContent.slice(-400)}
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1.5 text-muted-foreground">
-                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
-                      AI is writing your page...
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input */}
-          <div className="p-3 border-t border-border/30">
-            <div className="flex flex-col gap-2">
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                disabled={isAiEditing || streaming}
-                placeholder={
-                  isAiEditing ? "AI is editing..." : "Describe what to change... (Enter to send)"
-                }
-                rows={3}
-                className="w-full text-xs bg-secondary/20 border border-border/50 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 placeholder:text-muted-foreground/50 disabled:opacity-50 disabled:cursor-not-allowed"
-              />
+          <Tooltip>
+            <TooltipTrigger asChild>
               <Button
-                onClick={handleSend}
-                disabled={!prompt.trim() || isAiEditing || streaming}
-                className="w-full h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
+                variant={aiPanelOpen ? "secondary" : "ghost"}
+                size="sm"
+                className="h-8 text-xs gap-1.5 px-2.5"
+                onClick={() => setAiPanelOpen(!aiPanelOpen)}
               >
-                <Sparkles size={12} className="mr-1.5" />
-                {streaming || isAiEditing ? "AI is editing..." : "Send to AI"}
+                <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+                <span className="hidden sm:inline">AI Assistant</span>
               </Button>
+            </TooltipTrigger>
+            <TooltipContent>{aiPanelOpen ? "Hide AI Assistant" : "Show AI Assistant"}</TooltipContent>
+          </Tooltip>
+        </div>
+      </header>
+
+      {/* ========================================================================= */}
+      {/* MAIN WORKSPACE: Left Sidebar + Center (Preview + Terminal) + Right AI     */}
+      {/* ========================================================================= */}
+      <div className="flex-1 min-h-0 w-full flex overflow-hidden relative">
+        {/* Left: Node Palette Sidebar */}
+        <NodePaletteSidebar
+          view="graph"
+          isOpen={paletteOpen}
+          onToggle={() => setPaletteOpen(!paletteOpen)}
+        />
+
+        {/* Center: Live Preview Viewport + Docked Terminal at bottom */}
+        <div className="flex-1 min-w-0 h-full flex flex-col pointer-events-none overflow-hidden relative">
+          {/* Live Preview Iframe Container */}
+          <div className="flex-1 min-h-0 w-full relative pointer-events-auto bg-background flex flex-col">
+            {/* Mobile/Tablet Preview URL header */}
+            <div className="lg:hidden flex items-center justify-between px-3 py-1.5 border-b border-border/30 bg-sidebar/50 text-xs shrink-0">
+              <span className="font-mono text-[11px] text-muted-foreground truncate">{previewUrl}</span>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground"
+                  onClick={() => setIframeKey((k) => k + 1)}
+                >
+                  <RefreshCw className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground"
+                  asChild
+                >
+                  <a href={previewUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </Button>
+              </div>
+            </div>
+
+            {/* Iframe Viewport or Dev Server Offline Placeholder */}
+            <div className="flex-1 relative w-full h-full bg-white overflow-hidden">
+              {isServerRunning === false ? (
+                <DevServerOfflineState
+                  projectId={projectId}
+                  port={port}
+                  pageRoute={pageRoute}
+                  pageName={pageName}
+                  isChecking={isCheckingServer}
+                  onRetry={() => {
+                    checkServerStatus();
+                    setIframeKey((k) => k + 1);
+                  }}
+                  onStartServer={handleStartDevServer}
+                />
+              ) : (
+                <iframe
+                  key={iframeKey}
+                  src={previewUrl}
+                  className="w-full h-full border-0"
+                  title={`Preview: ${pageName}`}
+                />
+              )}
+
+              {/* Overlay shown when AI is actively editing */}
+              {(streaming || isAiEditing) && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-sm pointer-events-none z-10">
+                  <div className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-background/95 border border-border shadow-2xl">
+                    <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+                    <p className="text-sm font-medium text-foreground">AI is editing the page...</p>
+                    <p className="text-xs text-muted-foreground text-center max-w-xs">
+                      Changes will sync to your monorepo and reload automatically
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Bottom Docked Terminal */}
+          <Terminal
+            projectId={projectId}
+            projectName={projectName}
+            isOpen={terminalOpen}
+            onToggleOpen={() => setTerminalOpen((prev) => !prev)}
+          />
         </div>
 
-        {/* Right — Live Preview */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Preview toolbar */}
-          <div className="flex items-center gap-3 px-4 py-2 border-b border-border/30 bg-[#161b22] shrink-0">
-            <span className="text-xs font-mono text-muted-foreground truncate flex-1">
-              {previewUrl}
-            </span>
-            <button
-              onClick={() => setIframeKey((k) => k + 1)}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              title="Reload preview"
-            >
-              <RefreshCw size={12} />
-              Reload
-            </button>
-            <a
-              href={previewUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
-            >
-              <ExternalLink size={12} />
-              Open
-            </a>
-          </div>
-
-          {/* iframe */}
-          <div className="flex-1 relative bg-white">
-            <iframe
-              key={iframeKey}
-              src={previewUrl}
-              className="w-full h-full border-0"
-              title={`Preview: ${pageName}`}
-              onError={() => {/* handled by iframe content */}}
-            />
-            {/* Overlay shown when AI is actively editing */}
-            {(streaming || isAiEditing) && (
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-sm pointer-events-none">
-                <div className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-background/90 border border-border/50 shadow-2xl">
-                  <div className="w-8 h-8 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
-                  <p className="text-sm font-medium text-foreground">AI is editing the page...</p>
-                  <p className="text-xs text-muted-foreground text-center max-w-48">
-                    Changes will sync to Convex and the preview will reload automatically
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Right: AI Assistant Sidebar */}
+        <PageAiPanel
+          isOpen={aiPanelOpen}
+          onToggle={() => setAiPanelOpen(!aiPanelOpen)}
+          messages={messages}
+          prompt={prompt}
+          setPrompt={setPrompt}
+          streaming={streaming}
+          streamingContent={streamingContent}
+          isAiEditing={isAiEditing}
+          outputDir={outputDir}
+          pageName={pageName}
+          onSend={handleSend}
+          onReset={currentCode ? handleReset : undefined}
+          hasCustomCode={Boolean(currentCode)}
+        />
       </div>
     </div>
   );
