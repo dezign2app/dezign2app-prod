@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Resizable } from "re-resizable";
 import { Sparkles, X, ChevronLeft, AlertTriangle, Send, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
+import { useSidebarStore } from "@/lib/stores/sidebarStore";
 
 export interface Message {
   id: string;
@@ -45,37 +46,54 @@ export function PageAiPanel({
   hasCustomCode,
 }: PageAiPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const aiPanelWidth = useSidebarStore((s) => s.aiPanelWidth);
+  const setAiPanelWidth = useSidebarStore((s) => s.setAiPanelWidth);
+  const [isResizing, setIsResizing] = useState(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent]);
 
-  if (!isOpen) {
-    return (
+  return (
+    <>
+      {/* Sleek Floating Trigger (CSS-only smooth fade & slide) */}
       <button
         type="button"
         onClick={onToggle}
-        className="pointer-events-auto absolute top-3 right-3 z-30 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sidebar/95 backdrop-blur-md border border-sidebar-border shadow-lg text-xs font-semibold text-sidebar-foreground hover:bg-sidebar-accent transition-all select-none group"
+        className={`pointer-events-auto absolute top-3 right-3 z-30 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sidebar/95 backdrop-blur-md border border-sidebar-border shadow-lg text-xs font-semibold text-sidebar-foreground hover:bg-sidebar-accent select-none group transition-all duration-300 ease-in-out ${
+          isOpen
+            ? "opacity-0 translate-x-4 pointer-events-none scale-95"
+            : "opacity-100 translate-x-0 pointer-events-auto scale-100"
+        }`}
         title="Open AI Assistant"
       >
         <ChevronLeft className="w-3.5 h-3.5 text-muted-foreground group-hover:-translate-x-0.5 transition-transform" />
         <Sparkles className="w-4 h-4 text-violet-400 group-hover:scale-110 transition-transform" />
         <span className="font-semibold text-[11px]">AI Assistant</span>
       </button>
-    );
-  }
 
-  return (
-    <Resizable
-      defaultSize={{ width: 340, height: "100%" }}
-      minWidth={280}
-      maxWidth={600}
-      enable={{ left: true }}
-      handleClasses={{
-        left: "w-1 bg-sidebar-border hover:bg-primary cursor-col-resize transition-colors z-30",
-      }}
-      className="pointer-events-auto h-full bg-sidebar border-l border-sidebar-border shadow-2xl flex flex-col shrink-0 overflow-hidden select-none font-sans z-20"
-    >
+      {/* Direct Resizable with Left-edge anchoring */}
+      <Resizable
+        size={{ width: isOpen ? aiPanelWidth : 0, height: "100%" }}
+        minWidth={isOpen ? 280 : 0}
+        maxWidth={800}
+        enable={{ left: isOpen }}
+        onResizeStart={() => setIsResizing(true)}
+        onResizeStop={(e, direction, ref, d) => {
+          setIsResizing(false);
+          setAiPanelWidth(aiPanelWidth + d.width);
+        }}
+        handleClasses={{
+          left: "w-1.5 bg-sidebar-border hover:bg-primary cursor-col-resize transition-colors z-30 hover:w-2",
+        }}
+        className={`h-full pointer-events-auto shrink-0 flex flex-col bg-sidebar border-l border-sidebar-border shadow-2xl z-20 select-none font-sans overflow-hidden ${
+          isResizing
+            ? ""
+            : "transition-[width,opacity] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+        } ${
+          isOpen ? "opacity-100" : "opacity-0 pointer-events-none border-l-0"
+        }`}
+      >
       {/* Header */}
       <div className="h-10 px-3 border-b border-sidebar-border flex items-center justify-between shrink-0 bg-sidebar-accent/20">
         <div className="flex items-center gap-2">
@@ -228,5 +246,6 @@ export function PageAiPanel({
         </div>
       </div>
     </Resizable>
-  );
+  </>
+);
 }

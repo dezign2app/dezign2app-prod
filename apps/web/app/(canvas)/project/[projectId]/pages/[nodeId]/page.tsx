@@ -5,6 +5,7 @@ import { useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { useBackendSync } from "../../_components/hooks/useBackendSync";
 import { isElectron, getElectronAPI } from "@/lib/electron";
 import {
@@ -55,10 +56,13 @@ export default function PageEditorPage({
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
 
-  // Layout UI states
-  const [paletteOpen, setPaletteOpen] = useState(true);
-  const [aiPanelOpen, setAiPanelOpen] = useState(true);
-  const [terminalOpen, setTerminalOpen] = useState(false);
+  // Layout UI states (shared and persisted across GraphView and UI Editor)
+  const paletteOpen = useSidebarStore((s) => s.paletteOpen);
+  const setPaletteOpen = useSidebarStore((s) => s.setPaletteOpen);
+  const aiPanelOpen = useSidebarStore((s) => s.aiPanelOpen);
+  const setAiPanelOpen = useSidebarStore((s) => s.setAiPanelOpen);
+  const terminalOpen = useSidebarStore((s) => s.terminalOpen);
+  const setTerminalOpen = useSidebarStore((s) => s.setTerminalOpen);
 
   // Server status check states
   const [isServerRunning, setIsServerRunning] = useState<boolean | null>(null);
@@ -81,8 +85,8 @@ export default function PageEditorPage({
   const pageRoute = node?.data?.label
     ? node.data.label.startsWith("/") ? node.data.label : `/${node.data.label}`
     : "/";
-  const pageName = (node?.data?.label as string) || nodeId;
-  const currentCode = node?.data?.pageSourceCode as string | undefined;
+  const pageName = typeof node?.data?.label === "string" && node.data.label ? node.data.label : nodeId;
+  const currentCode = typeof node?.data?.pageSourceCode === "string" ? node.data.pageSourceCode : undefined;
   const isAiEditing = Boolean(node?.data?.aiEditing);
 
   // Get workspace dir from localStorage
@@ -97,7 +101,7 @@ export default function PageEditorPage({
   // Get Convex URL for engine calls
   const convexUrl =
     typeof window !== "undefined"
-      ? (window as any).__convexUrl ||
+      ? (window as Window & { __convexUrl?: string }).__convexUrl ||
         process.env.NEXT_PUBLIC_CONVEX_URL ||
         ""
       : "";
@@ -246,10 +250,11 @@ export default function PageEditorPage({
           const electronApi = getElectronAPI();
           if (electronApi?.fs?.writeProject) {
             // Determine the file path relative to outputDir
-            const webAppSlug = (connectedWebAppNode?.data?.appSlug as string) ||
-              (connectedWebAppNode?.data?.label as string || "web-app")
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, "-");
+            const rawSlug = typeof connectedWebAppNode?.data?.appSlug === "string" ? connectedWebAppNode.data.appSlug : "";
+            const rawLabel = typeof connectedWebAppNode?.data?.label === "string" ? connectedWebAppNode.data.label : "web-app";
+            const webAppSlug = (rawSlug || rawLabel)
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "-");
             const pageSlug = pageRoute === "/" ? "" : pageRoute.replace(/^\//, "");
             const filePath = pageSlug
               ? `app/(${webAppSlug})/${pageSlug}/page.tsx`
@@ -262,7 +267,7 @@ export default function PageEditorPage({
                 { cleanStale: false }
               );
               toast.success("Page file updated — HMR should reload the preview");
-            } catch (e) {
+            } catch {
               toast.error("Could not write to disk — set your workspace folder in the terminal");
             }
           }
@@ -281,8 +286,9 @@ export default function PageEditorPage({
           },
         ]);
       }
-    } catch (err: any) {
-      toast.error(err.message || "AI request failed");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "AI request failed";
+      toast.error(errorMessage);
       if (node) {
         updateNode(nodeId, { data: { ...node.data, aiEditing: false } });
       }
@@ -291,7 +297,7 @@ export default function PageEditorPage({
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: `❌ Error: ${err.message || "AI request failed"}. Make sure the system-design-engine is running (\`pnpm dev\` in apps/system-design-engine).`,
+          content: `❌ Error: ${errorMessage}. Make sure the system-design-engine is running (\`pnpm dev\` in apps/system-design-engine).`,
           timestamp: new Date(),
         },
       ]);
