@@ -1,6 +1,8 @@
 export interface TerminalProps {
   projectId: string;
   projectName?: string;
+  isOpen?: boolean;
+  onToggleOpen?: () => void;
 }
 
 export type TerminalType =

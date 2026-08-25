@@ -17,6 +17,7 @@ import { FileExplorer } from "./_components/FileExplorer";
 import { TerminalPanel, TerminalLog, TerminalPanelTab } from "./_components/TerminalPanel";
 import { buildFileTree, getParentPaths } from "../_components/compiler";
 import { useBackendSync } from "../_components/hooks/useBackendSync";
+import { useTerminalWorkspace } from "../_components/terminal/hooks/useTerminalWorkspace";
 import { useStoreHydration } from "./_lib/useStoreHydration";
 import { useMonacoEditor } from "./_lib/useMonacoEditor";
 import { findEndpointForFile } from "./_lib/editorUtils";
@@ -30,6 +31,9 @@ export default function CompilerPage({
 
   // Flush canvas store changes to DB
   useBackendSync(projectId, "graph");
+
+  // Output directory workspace persistence (for desktop PTY / local sync)
+  const { outputDir } = useTerminalWorkspace(projectId);
 
   // Store selectors
   const storeProjectId = useBackendCanvasStore((s) => s.projectId);
@@ -109,21 +113,53 @@ export default function CompilerPage({
     }
     return true;
   });
-  const [terminalTab, setTerminalTab] = useState<TerminalPanelTab>("terminal");
-  const [terminalLogs, setTerminalLogs] = useState<TerminalLog[]>([
-    {
-      id: "1",
-      timestamp: new Date().toLocaleTimeString(),
-      type: "info",
-      text: `Monorepo workspace loaded (${files.length} files generated)`,
-    },
-    {
-      id: "2",
-      timestamp: new Date().toLocaleTimeString(),
-      type: "success",
-      text: `Compiler ready · Project: ${formattedProjectName}`,
-    },
-  ]);
+
+  const [terminalTab, setTerminalTab] = useState<TerminalPanelTab>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(`compiler_terminal_tab_${projectId}`);
+        if (saved && ["problems", "output", "terminal", "ports"].includes(saved)) {
+          return saved as TerminalPanelTab;
+        }
+      } catch (e) {}
+    }
+    return "terminal";
+  });
+
+  const [terminalLogs, setTerminalLogs] = useState<TerminalLog[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(`compiler_terminal_logs_${projectId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (e) {}
+    }
+    return [
+      {
+        id: "1",
+        timestamp: new Date().toLocaleTimeString(),
+        type: "info",
+        text: `Monorepo workspace loaded (${files.length} files generated)`,
+      },
+      {
+        id: "2",
+        timestamp: new Date().toLocaleTimeString(),
+        type: "success",
+        text: `Compiler ready · Project: ${formattedProjectName}`,
+      },
+    ];
+  });
+
+  const handleSelectTab = (tab: TerminalPanelTab) => {
+    setTerminalTab(tab);
+    try {
+      localStorage.setItem(`compiler_terminal_tab_${projectId}`, tab);
+    } catch (e) {}
+  };
 
   const handleToggleTerminal = () => {
     setTerminalOpen((prev) => {
@@ -137,6 +173,9 @@ export default function CompilerPage({
 
   const handleClearLogs = () => {
     setTerminalLogs([]);
+    try {
+      localStorage.setItem(`compiler_terminal_logs_${projectId}`, JSON.stringify([]));
+    } catch (e) {}
   };
 
   const detectedPorts = useMemo(() => {
@@ -385,12 +424,14 @@ export default function CompilerPage({
           />
 
           <TerminalPanel
+            projectId={projectId}
+            outputDir={outputDir}
             logs={terminalLogs}
             onClearLogs={handleClearLogs}
             isOpen={terminalOpen}
             onToggleOpen={handleToggleTerminal}
             activeTab={terminalTab}
-            onSelectTab={setTerminalTab}
+            onSelectTab={handleSelectTab}
             ports={detectedPorts}
           />
         </div>
@@ -424,7 +465,10 @@ export default function CompilerPage({
             type="button"
             onClick={() => {
               setTerminalOpen(true);
-              setTerminalTab("problems");
+              try {
+                localStorage.setItem(`compiler_terminal_open_${projectId}`, "true");
+              } catch (e) {}
+              handleSelectTab("problems");
             }}
             className="flex items-center gap-1 text-slate-300 hover:text-white transition-colors"
           >
@@ -437,8 +481,8 @@ export default function CompilerPage({
           <button
             type="button"
             onClick={() => {
-              setTerminalOpen((prev) => !prev);
-              setTerminalTab("terminal");
+              handleToggleTerminal();
+              handleSelectTab("terminal");
             }}
             className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-colors ${
               terminalOpen
@@ -454,7 +498,10 @@ export default function CompilerPage({
             type="button"
             onClick={() => {
               setTerminalOpen(true);
-              setTerminalTab("ports");
+              try {
+                localStorage.setItem(`compiler_terminal_open_${projectId}`, "true");
+              } catch (e) {}
+              handleSelectTab("ports");
             }}
             className="flex items-center gap-1 text-slate-300 hover:text-white transition-colors"
           >

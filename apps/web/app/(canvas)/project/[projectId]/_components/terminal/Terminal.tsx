@@ -23,12 +23,23 @@ import { TerminalDockButton } from "./components/TerminalDockButton";
 export function Terminal({
   projectId,
   projectName = "Blueprint",
+  isOpen: controlledIsOpen,
+  onToggleOpen: controlledOnToggleOpen,
 }: TerminalProps) {
   const inElectron = isElectron();
   const terminalRefs = useRef<Map<string, WTermTerminalHandle | null>>(new Map());
 
   // Drawer UI state
-  const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [internalIsOpen, setInternalIsOpen] = useState<boolean>(false);
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
+  const handleToggleOpen = controlledOnToggleOpen || (() => setInternalIsOpen((prev) => !prev));
+  const handleClose = () => {
+    if (controlledOnToggleOpen && isOpen) {
+      controlledOnToggleOpen();
+    } else {
+      setInternalIsOpen(false);
+    }
+  };
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [terminalHeight, setTerminalHeight] = useState<number>(320);
   const [downloadingZip, setDownloadingZip] = useState<boolean>(false);
@@ -154,7 +165,7 @@ export function Terminal({
                 onPickDirectory={handlePickDirectory}
                 isExpanded={isExpanded}
                 onToggleExpand={() => setIsExpanded(!isExpanded)}
-                onClose={() => setIsOpen(false)}
+                onClose={handleClose}
                 syncStatus={syncStatus}
                 lastSyncedAt={lastSyncedAt}
                 onForceSync={forceSyncNow}
@@ -196,7 +207,7 @@ export function Terminal({
       {/* VS Code Docked Bottom Status Strip */}
       <TerminalDockButton
         isOpen={isOpen}
-        onToggleOpen={() => setIsOpen(!isOpen)}
+        onToggleOpen={handleToggleOpen}
         sessionCount={sessions.length}
         hasRunningSession={hasRunningSession}
         outputDir={outputDir}
