@@ -48,7 +48,7 @@ export const NodeHeader = ({
 
   const handleSave = () => {
     let finalLabel = name || "Untitled";
-    if (nodeType === "webClient") {
+    if (nodeType === "webPage") {
       finalLabel = parsePageRoute(finalLabel);
     }
     updateNode(id, { data: { ...data, label: finalLabel } });
@@ -90,7 +90,7 @@ export const NodeHeader = ({
               value={name}
               onChange={(e) => {
                 let val = e.target.value;
-                if (nodeType === "webClient") {
+                if (nodeType === "webPage") {
                   // In real-time, replace spaces with hyphen for Next.js route format
                   val = val.replace(/\s+/g, "-");
                 }

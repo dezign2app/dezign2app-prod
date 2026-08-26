@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { compileNextjsV16WebClient } from "../webClients/nextjs/v16";
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { Endpoint } from "@workspace/canvas";
+import { Endpoint, CompiledFile } from "@workspace/canvas/types";
 
 describe("compileNextjsV16WebClient - Request Types & Inferred Form UI", () => {
   it("should infer TypeScript request types and generate interactive form inputs for field_builder endpoint", () => {
-    const webClientNode: BackendNode = {
+    const webPageNode: BackendNode = {
       id: "node-client-1",
-      type: "webClient",
+      type: "webPage",
       position: { x: 0, y: 0 },
       fractionalIndex: "a0",
       data: {
@@ -79,16 +79,16 @@ describe("compileNextjsV16WebClient - Request Types & Inferred Form UI", () => {
     ];
 
     const result = compileNextjsV16WebClient(
-      [webClientNode],
+      [webPageNode],
       endpoints,
       [],
-      [webClientNode, serviceNode],
+      [webPageNode, serviceNode],
       edges,
       "Monorepo App",
     );
 
     // Verify Action component file exists
-    const actionFile = result.files.find((f) =>
+    const actionFile = result.files.find((f: CompiledFile) =>
       f.filename.endsWith("CreateUserAction.tsx"),
     );
     expect(actionFile).toBeDefined();
@@ -125,9 +125,9 @@ describe("compileNextjsV16WebClient - Request Types & Inferred Form UI", () => {
   });
 
   it("should infer TypeScript types and render JSON textarea for raw_json endpoint", () => {
-    const webClientNode: BackendNode = {
+    const webPageNode: BackendNode = {
       id: "node-client-2",
-      type: "webClient",
+      type: "webPage",
       position: { x: 0, y: 0 },
       fractionalIndex: "a0",
       data: {
@@ -187,15 +187,15 @@ describe("compileNextjsV16WebClient - Request Types & Inferred Form UI", () => {
     ];
 
     const result = compileNextjsV16WebClient(
-      [webClientNode],
+      [webPageNode],
       endpoints,
       [],
-      [webClientNode, serviceNode],
+      [webPageNode, serviceNode],
       edges,
       "Monorepo App",
     );
 
-    const actionFile = result.files.find((f) =>
+    const actionFile = result.files.find((f: CompiledFile) =>
       f.filename.endsWith("SubmitCheckoutAction.tsx"),
     );
     expect(actionFile).toBeDefined();

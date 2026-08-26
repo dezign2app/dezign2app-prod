@@ -3,6 +3,8 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "declaration": false,
+    "declarationMap": false,
     "noEmit": true,
     "paths": {
       "@workspace/backend/*": ["../../packages/backend/convex/*"]

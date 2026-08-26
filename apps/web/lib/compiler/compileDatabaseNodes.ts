@@ -82,12 +82,11 @@ export function compileDatabaseNodes(
       return (
         other &&
         (other.type === "webApp" ||
-          other.type === "webClient" ||
+          other.type === "webPage" ||
           other.type === "service" ||
           other.type === "database" ||
           other.type === "entity" ||
-          other.type === "db_ref" ||
-          other.data?.isWebClient)
+          other.type === "db_ref")
       );
     });
     const hasRef = allNodes.some((other) => other.data?.authNodeId === n.id);

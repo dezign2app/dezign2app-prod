@@ -70,7 +70,7 @@ Ensure WebClient events are connected to Service endpoints, and Service endpoint
     - Use 'redis-streams' for Redis Streams messaging brokers. Store streams in 'data.streams'. Set broker configuration under 'data.redisBroker' (consumerGroup). Valid fields: delivery, ordering, retention.
     NEVER mix implementation fields across node types. These are now strictly enforced — a tool call with the wrong fields for a type will be rejected.
 
-    CRITICAL: For node types like 'external', 'sqs', 'redis-pubsub', 'redis-streams', 'group', or 'webClient', you MUST use the general 'add_node' tool and specify the 'type' in the arguments. DO NOT hallucinate tools like 'add_external', 'add_sqs_node', or 'add_redis_node'. Those tools do not exist.
+    CRITICAL: For node types like 'external', 'sqs', 'redis-pubsub', 'redis-streams', 'group', or 'webPage', you MUST use the general 'add_node' tool and specify the 'type' in the arguments. DO NOT hallucinate tools like 'add_external', 'add_sqs_node', or 'add_redis_node'. Those tools do not exist.
 
     ${requirementsBlock}
 

@@ -31,7 +31,7 @@ describe("compileMonorepo Docker generator and local runner manifests", () => {
 
     const webClientNode: BackendNode = {
       id: "node-web-client",
-      type: "webClient",
+      type: "webPage",
       position: { x: 150, y: -200 },
       fractionalIndex: "a2",
       data: {

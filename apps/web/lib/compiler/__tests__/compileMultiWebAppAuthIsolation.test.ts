@@ -19,13 +19,12 @@ describe("Multi-WebApp Auth Isolation & Scoping", () => {
 
     const page1: BackendNode = {
       id: "node-page-1",
-      type: "webClient",
+      type: "webPage",
       position: { x: 200, y: 0 },
       fractionalIndex: "a1",
       data: {
         label: "Dashboard",
         appSlug: "customer-portal",
-        isWebClient: true,
       },
     };
 
@@ -44,13 +43,12 @@ describe("Multi-WebApp Auth Isolation & Scoping", () => {
 
     const page2: BackendNode = {
       id: "node-page-2",
-      type: "webClient",
+      type: "webPage",
       position: { x: 200, y: 400 },
       fractionalIndex: "a3",
       data: {
         label: "Home",
         appSlug: "marketing-site",
-        isWebClient: true,
       },
     };
 
@@ -227,18 +225,18 @@ describe("Multi-WebApp Auth Isolation & Scoping", () => {
 
     const pageAdmin: BackendNode = {
       id: "node-page-admin",
-      type: "webClient",
+      type: "webPage",
       position: { x: 200, y: 0 },
       fractionalIndex: "a4",
-      data: { label: "AdminOverview", isWebClient: true },
+      data: { label: "AdminOverview" },
     };
 
     const pagePortal: BackendNode = {
       id: "node-page-portal",
-      type: "webClient",
+      type: "webPage",
       position: { x: 200, y: 300 },
       fractionalIndex: "a5",
-      data: { label: "PortalDashboard", isWebClient: true },
+      data: { label: "PortalDashboard" },
     };
 
     const edges: BackendEdge[] = [
@@ -320,10 +318,10 @@ describe("Multi-WebApp Auth Isolation & Scoping", () => {
 
     const page: BackendNode = {
       id: "node-page",
-      type: "webClient",
+      type: "webPage",
       position: { x: 200, y: 0 },
       fractionalIndex: "a1",
-      data: { label: "Articles", isWebClient: true },
+      data: { label: "Articles" },
     };
 
     // Disconnected Auth Node

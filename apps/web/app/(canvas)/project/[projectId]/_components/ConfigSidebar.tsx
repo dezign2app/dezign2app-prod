@@ -10,7 +10,7 @@ import { ChevronLeft } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { EndpointConfig } from "./config-sidebar/EndpointConfig";
-import { WebClientEventConfig } from "./config-sidebar/WebClientEventConfig";
+import { WebPageEventConfig } from "./config-sidebar/WebPageEventConfig";
 import { EventConfig } from "./config-sidebar/EventConfig";
 import { TaskConfig } from "./config-sidebar/TaskConfig";
 import { SearchIndexConfig } from "./config-sidebar/SearchIndexConfig";
@@ -18,7 +18,7 @@ import { AuthRuleConfig } from "./config-sidebar/AuthRuleConfig";
 import { IdentityProviderConfig } from "./config-sidebar/IdentityProviderConfig";
 import { AuthConfig } from "./config-sidebar/AuthConfig";
 import { WebAppConfig } from "./config-sidebar/WebAppConfig";
-import { WebClientConfig } from "./config-sidebar/WebClientConfig";
+import { WebPageConfig } from "./config-sidebar/WebPageConfig";
 import { PaymentsConfig } from "./config-sidebar/PaymentsConfig";
 import { ZoneConfig } from "./config-sidebar/ZoneConfig";
 import { EventTestingConfig } from "./config-sidebar/EventTestingConfig";
@@ -206,14 +206,14 @@ export const ConfigSidebar = () => {
             <AuthConfig id={id} nodeId={nodeId} />
           ) : type === "webApp" ? (
             <WebAppConfig id={id} nodeId={nodeId} />
-          ) : type === "webClient" ? (
-            <WebClientConfig id={id} nodeId={nodeId} />
+          ) : type === "webPage" ? (
+            <WebPageConfig id={id} nodeId={nodeId} />
           ) : type === "payments" ? (
             <PaymentsConfig id={id} nodeId={nodeId} />
           ) : type === "zone" ? (
             <ZoneConfig id={id} nodeId={nodeId} />
-          ) : type === "clientEvent" ? (
-            <WebClientEventConfig id={id} nodeId={nodeId} />
+          ) : type === "pageEvent" ? (
+            <WebPageEventConfig id={id} nodeId={nodeId} />
           ) : type === "eventTesting" ? (
             <EventTestingConfig
               id={id}

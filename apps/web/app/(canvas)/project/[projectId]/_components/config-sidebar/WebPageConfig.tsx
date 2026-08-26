@@ -22,15 +22,15 @@ import {
   CheckCircle2,
   Route,
 } from "lucide-react";
-import { WEB_CLIENT_EVENTS, Endpoint } from "@workspace/canvas";
+import { WEB_PAGE_EVENTS, Endpoint } from "@workspace/canvas";
 import { UIEventItem, Parameter, Schema } from "@/types/canvas";
 import { ParameterEditor } from "../backend-nodes/graph-nodes/Editors";
 import { AuthAwarenessBanner } from "./AuthAwarenessBanner";
 import { RequestBodyEditor, RequestBodyMode } from "./RequestBodyEditor";
 
-const EVENT_OPTIONS = [...WEB_CLIENT_EVENTS];
+const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
 
-export const WebClientConfig = ({
+export const WebPageConfig = ({
   id,
   nodeId,
 }: {
@@ -74,9 +74,9 @@ export const WebClientConfig = ({
 
   const events: UIEventItem[] = data.events || [];
 
-  // Available WebClient page nodes on canvas (excluding self)
+  // Available WebPage nodes on canvas (excluding self)
   const pageNodes = allNodes.filter(
-    (n) => n.type === "webClient" && n.id !== nodeId,
+    (n) => (n.type === "webPage") && n.id !== nodeId,
   );
 
   // Determine connected WebApp section name
@@ -115,7 +115,7 @@ export const WebClientConfig = ({
             (data.accessType && data.accessType !== "public"),
         );
 
-  // Find connected service endpoint via any edge connected to this WebClient node
+  // Find connected service endpoint via any edge connected to this WebPage node
   const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
   const connectedServiceEdge = allEdges.find(
     (e) =>
@@ -479,9 +479,6 @@ export const WebClientConfig = ({
         ) : (
           <div className="flex flex-col gap-4">
             {events.map((ev) => {
-              const navType = ev.navigationType || "link";
-              const navCond = ev.navigationCondition || "direct";
-
               // Check if connected to a PageRef node via an edge
               const connectedEdge = allEdges.find(
                 (e) => e.source === nodeId && e.sourceHandle === `events-${ev.id}`,

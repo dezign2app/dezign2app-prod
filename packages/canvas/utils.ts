@@ -16,7 +16,7 @@ const ALL_BACKEND_NODE_TYPES = [
   "redis_instance",
   "redis_schema",
   "entity",
-  "webClient",
+  "webPage",
   "external",
   "group",
   "db_ref",

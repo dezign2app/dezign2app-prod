@@ -53,7 +53,7 @@ export const protectionRuleSchema = z.object({
     })
     .optional(),
 });
-export type WebClientProtectionRule = z.infer<typeof protectionRuleSchema>;
+export type WebPageProtectionRule = z.infer<typeof protectionRuleSchema>;
 
 export const simulationCaseSchema = z.object({
   id: z.string().optional(),
@@ -111,7 +111,7 @@ export const clientEventInputSchema = z.object({
     .describe("Named repeatable inputs for client-triggered simulations"),
 });
 
-export const webClientDataSchema = simpleDataSchema.extend({
+export const webPageDataSchema = simpleDataSchema.extend({
   appName: z.string().optional().describe("Parent web application display name"),
   appSlug: z.string().optional().describe("Parent web application slug (e.g. customer-portal)"),
   accessType: z
@@ -170,7 +170,7 @@ export const webClientDataSchema = simpleDataSchema.extend({
     .optional(),
 });
 
-export const webClientDataInputSchema = baseNodeDataSchema.extend({
+export const webPageDataInputSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
   appName: z.string().optional(),
   appSlug: z.string().optional(),

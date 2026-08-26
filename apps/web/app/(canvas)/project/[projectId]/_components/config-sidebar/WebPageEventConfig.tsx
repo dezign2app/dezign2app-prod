@@ -2,17 +2,17 @@ import React, { useState, useEffect } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { Accordion } from "@workspace/ui/components/accordion";
 import { BackendNode, UIEventItem, Parameter, Schema } from "@/types/canvas";
-import { Endpoint, WEB_CLIENT_EVENTS } from "@workspace/canvas";
+import { Endpoint, WEB_PAGE_EVENTS } from "@workspace/canvas";
 import {
   TargetEndpointSection,
   EventPropertiesSection,
   EventNavigationSection,
   RequestConfigSection,
-} from "./web-client-event-config";
+} from "./web-page-event-config";
 import { RequestBodyMode } from "./RequestBodyEditor";
 import { generateId } from "../backend-nodes/graph-nodes/common";
 
-const EVENT_OPTIONS = [...WEB_CLIENT_EVENTS];
+const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
 
 const SERVER_NODE_TYPES = [
   "service",
@@ -50,12 +50,12 @@ function collectEndpoints(
   return results;
 }
 
-interface WebClientEventConfigProps {
+export interface WebPageEventConfigProps {
   id: string; // The event ID
   nodeId: string;
 }
 
-export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) => {
+export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
@@ -64,7 +64,7 @@ export const WebClientEventConfig = ({ id, nodeId }: WebClientEventConfigProps) 
   const onConnect = useBackendCanvasStore((s) => s.onConnect);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
 
-  // Find the parent WebClient node and the event item
+  // Find the parent WebPage node and the event item
   const parentNode = nodes.find((n) => n.id === nodeId);
   const currentEvents = parentNode?.data?.events || [];
   const item: UIEventItem | undefined = currentEvents.find((e) => e.id === id);

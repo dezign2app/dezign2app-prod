@@ -48,9 +48,9 @@ export const EventNavigationSection: React.FC<EventNavigationSectionProps> = ({
   const addEdge = useBackendCanvasStore((s) => s.addEdge);
 
   const parentNode = allNodes.find((n) => n.id === nodeId);
-  // Available WebClient / Page nodes on canvas (excluding self)
+  // Available WebPage nodes on canvas (excluding self)
   const pageNodes = allNodes.filter(
-    (n) => n.type === "webClient" && n.id !== nodeId,
+    (n) => (n.type === "webPage") && n.id !== nodeId,
   );
 
   // Check if connected to a PageRef node via an edge

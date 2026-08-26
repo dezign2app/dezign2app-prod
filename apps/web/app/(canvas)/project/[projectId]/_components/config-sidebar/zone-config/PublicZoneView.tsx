@@ -15,7 +15,7 @@ import { WebAppZone } from "@workspace/canvas";
 interface PublicZoneViewProps {
   currentZone: WebAppZone;
   connectedPages: BackendNode[];
-  allWebClientNodes: BackendNode[];
+  allWebPageNodes: BackendNode[];
   onCreateNewPage: () => void;
   onTogglePageConnection: (pageId: string, isConnected: boolean) => void;
 }
@@ -23,11 +23,11 @@ interface PublicZoneViewProps {
 export const PublicZoneView = ({
   currentZone,
   connectedPages,
-  allWebClientNodes,
+  allWebPageNodes,
   onCreateNewPage,
   onTogglePageConnection,
 }: PublicZoneViewProps) => {
-  const unattachedPages = allWebClientNodes.filter(
+  const unattachedPages = allWebPageNodes.filter(
     (w) => !connectedPages.some((p) => p.id === w.id),
   );
 

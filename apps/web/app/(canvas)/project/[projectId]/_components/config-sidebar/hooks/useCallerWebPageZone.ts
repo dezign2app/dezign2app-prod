@@ -1,7 +1,7 @@
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
 export interface CallerZoneInfo {
-  /** true if the calling WebClient page is in a protected/private zone */
+  /** true if the calling WebPage page is in a protected/private zone */
   isProtected: boolean;
   /** Human-readable zone name, e.g. "Private Section" */
   zoneName: string | null;
@@ -14,17 +14,17 @@ const DEFAULT_ZONES = [
 
 /**
  * Given the nodeId of a service/gateway and an endpointId, traces backwards through
- * the canvas edge graph to find the WebClient page that triggers this endpoint.
+ * the canvas edge graph to find the WebPage page that triggers this endpoint.
  * Returns whether that page lives in a protected zone.
  */
-export function useCallerWebClientZone(
+export function useCallerWebPageZone(
   nodeId: string,
   endpointId: string,
 ): CallerZoneInfo {
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
 
-  // Step 1 — find the edge that wires a WebClient event → this endpoint
+  // Step 1 — find the edge that wires a WebPage event → this endpoint
   // The targetHandle is of the form "endpoints-in-<endpointId>" or contains the endpointId
   const incomingEdge = edges.find(
     (e) =>
@@ -34,13 +34,13 @@ export function useCallerWebClientZone(
   );
   if (!incomingEdge) return { isProtected: false, zoneName: null };
 
-  const webClientNode = nodes.find((n) => n.id === incomingEdge.source);
-  if (!webClientNode || webClientNode.type !== "webClient") {
+  const webPageNode = nodes.find((n) => n.id === incomingEdge.source);
+  if (!webPageNode || (webPageNode.type !== "webPage")) {
     return { isProtected: false, zoneName: null };
   }
 
-  // Step 2 — If the WebClientNode has a local protectionOverride, use it
-  const data = webClientNode.data as {
+  // Step 2 — If the WebPageNode has a local protectionOverride, use it
+  const data = webPageNode.data as {
     useZoneDefault?: boolean;
     protectionOverride?: { accessType?: "public" | "protected" };
   };
@@ -52,8 +52,8 @@ export function useCallerWebClientZone(
 
   // Step 3 — trace to the connected WebApp node via a page-in / zone edge
   const webAppEdge = edges.find((e) => {
-    const isTarget = e.target === webClientNode.id;
-    const isSource = e.source === webClientNode.id;
+    const isTarget = e.target === webPageNode.id;
+    const isSource = e.source === webPageNode.id;
     if (!isTarget && !isSource) return false;
     const otherId = isSource ? e.target : e.source;
     const otherNode = nodes.find((n) => n.id === otherId);

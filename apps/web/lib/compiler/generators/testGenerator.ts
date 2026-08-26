@@ -2,7 +2,7 @@ import { BackendNode, BackendEdge, SimulationTestCase } from "@/types/canvas";
 import { Endpoint, AnyMessagingResource } from "@workspace/canvas/types";
 import { CompiledFile } from "@workspace/canvas/types";
 import { toVarName, toPascalCase, deriveRouteFileName } from "../utils";
-import { resolveLinkedEndpoint } from "../compileWebClientNode";
+import { resolveLinkedEndpoint } from "../compileWebPageNode";
 
 /**
  * Generates isolated Unit Tests for a Microservice's route handlers.

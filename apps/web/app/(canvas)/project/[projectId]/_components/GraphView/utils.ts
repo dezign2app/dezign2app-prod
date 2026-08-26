@@ -70,7 +70,7 @@ export function createGraphNodeData(
     };
   }
 
-  if (type === "webClient") {
+  if (type === "webPage") {
     return {
       ...baseData,
       label: parsePageRoute(label || "page-client"),

@@ -82,7 +82,7 @@ const backendTools = [
 - 'kafka': Apache Kafka broker (stores topics in data.topics)
 - 'redis-streams': Redis Streams broker (stores streams in data.streams)
 - 'entity': A database table/schema entity
-- 'webClient': A frontend client or page
+- 'webPage': A frontend client or page
 - 'external': An external third-party API
 - 'group': A logical grouping node`,
       parameters: {
@@ -99,7 +99,7 @@ const backendTools = [
               "redis-streams",
               "entity",
               "group",
-              "webClient",
+              "webPage",
               "external",
             ],
           },

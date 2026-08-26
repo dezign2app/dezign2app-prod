@@ -5,7 +5,7 @@ import { compileLangGraphNode } from "./compileLangGraphNode";
 import { compileDatabaseNodes } from "./compileDatabaseNodes";
 import { compileKafkaNodes } from "./compileKafkaNodes";
 import { compileRedisNodes } from "./compileRedisNodes";
-import { compileWebClientNodes } from "./compileWebClientNode";
+import { compileWebPageNodes } from "./compileWebPageNode";
 import { compileUiPackage } from "./compileUiPackage";
 import { generateLoggerPackage } from "./generators/loggerGenerator";
 import { generateTypesPackage } from "./generators/typesGenerator";
@@ -40,8 +40,8 @@ export function compileMonorepo(
   const entityNodes = nodes.filter(
     (n) => n.type === "entity" || n.type === "db_ref",
   );
-  const webClientNodes = nodes.filter(
-    (n) => n.type === "webClient" || n.data?.isWebClient,
+  const webPageNodes = nodes.filter(
+    (n) => n.type === "webPage",
   );
 
   const servicesInfo: { id: string; name: string; folderName: string }[] = [];
@@ -261,10 +261,10 @@ export function compileMonorepo(
     });
   });
 
-  // 6. Generate Web Apps: apps/<appSlug> for WebApp nodes & connected WebClient pages
+  // 6. Generate Web Apps: apps/<appSlug> for WebApp nodes & connected WebPage nodes
   const webAppNodes = nodes.filter((n) => n.type === "webApp");
 
-  if (webAppNodes.length > 0 || webClientNodes.length > 0) {
+  if (webAppNodes.length > 0 || webPageNodes.length > 0) {
     const appMap = new Map<string, { appName: string; appSlug: string; webAppNode?: BackendNode; pageNodes: BackendNode[] }>();
 
     // Process explicit WebApp nodes
@@ -306,8 +306,8 @@ export function compileMonorepo(
       });
     }
 
-    // Process page nodes (WebClient) and trace their section connections to WebApp nodes
-    webClientNodes.forEach((pageNode) => {
+    // Process page nodes (WebPage) and trace their section connections to WebApp nodes
+    webPageNodes.forEach((pageNode) => {
       // Find edge connecting this pageNode to a WebAppNode section (in either direction)
       const edgeToApp = edges.find(
         (e) =>
@@ -426,7 +426,7 @@ export function compileMonorepo(
         folderName,
       });
 
-      const webClientResult = compileWebClientNodes(
+      const webClientResult = compileWebPageNodes(
         pageNodes,
         endpoints,
         events,
@@ -499,7 +499,7 @@ export function compileMonorepo(
     generateRootReadme(
       projectName,
       servicesInfo.length,
-      webClientNodes.length,
+      webPageNodes.length,
       entityNodes.length,
       servicesInfo,
       webClientsInfo,

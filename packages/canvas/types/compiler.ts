@@ -57,9 +57,9 @@ export interface CompiledRedisResult {
   packageName?: string;
 }
 
-export interface CompiledWebClientResult {
-  webClientId: string;
-  webClientName: string;
+export interface CompiledWebPageResult {
+  webPageId: string;
+  webPageName: string;
   files: CompiledFile[];
 }
 

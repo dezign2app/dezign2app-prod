@@ -14,7 +14,7 @@ import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { useParams } from "next/navigation";
-import { useCallerWebClientZone } from "./hooks/useCallerWebClientZone";
+import { useCallerWebPageZone } from "./hooks/useCallerWebPageZone";
 import { AuthAwarenessBanner } from "./AuthAwarenessBanner";
 import { RequestBodyEditor } from "./RequestBodyEditor";
 import { EndpointTestCasesSection } from "./endpoint-testing/EndpointTestCasesSection";
@@ -46,7 +46,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
   const allEdges = useBackendCanvasStore((s) => s.edges);
 
   // Must be called before any early returns (rules of hooks)
-  const { isProtected, zoneName } = useCallerWebClientZone(nodeId, id);
+  const { isProtected, zoneName } = useCallerWebPageZone(nodeId, id);
 
   const item = endpoints.find((e) => e.id === id);
   if (!item) return null;

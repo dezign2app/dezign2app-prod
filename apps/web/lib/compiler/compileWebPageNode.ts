@@ -1,5 +1,5 @@
 import { BackendNode, BackendEdge, SimulationTestCase } from "@/types/canvas";
-import { Endpoint, AnyMessagingResource, CompiledWebClientResult } from "@workspace/canvas/types";
+import { Endpoint, AnyMessagingResource, CompiledWebPageResult } from "@workspace/canvas/types";
 import {
   compileNextjsV16WebClient,
   resolveLinkedEndpoint,
@@ -11,10 +11,10 @@ export { resolveLinkedEndpoint, getServicePort };
 export type { LinkedEndpointInfo };
 
 /**
- * Compiles a collection of WebClient nodes into a project based on techStack and techVersion
+ * Compiles a collection of WebPage nodes into a project based on techStack and techVersion
  */
-export function compileWebClientNodes(
-  webClientNodes: BackendNode[],
+export function compileWebPageNodes(
+  webPageNodes: BackendNode[],
   endpoints: (Endpoint & { nodeId: string })[] = [],
   events: (AnyMessagingResource & {
     nodeId: string;
@@ -26,9 +26,9 @@ export function compileWebClientNodes(
   testCases: SimulationTestCase[] = [],
   appSlug?: string,
   webAppNode?: BackendNode,
-): CompiledWebClientResult {
+): CompiledWebPageResult {
   return compileNextjsV16WebClient(
-    webClientNodes,
+    webPageNodes,
     endpoints,
     events,
     allNodes,

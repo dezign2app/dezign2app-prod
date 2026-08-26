@@ -40,8 +40,12 @@ export const upsertBackendNode = mutation({
     }
 
     if (args.type === "auth" && typeof args.data === "object" && args.data !== null) {
-      delete (args.data as Record<string, unknown>).dbNodeId;
-      delete (args.data as Record<string, unknown>).dbConnectionStringEnv;
+      if ("dbNodeId" in args.data) {
+        delete args.data.dbNodeId;
+      }
+      if ("dbConnectionStringEnv" in args.data) {
+        delete args.data.dbConnectionStringEnv;
+      }
     }
 
     if (
@@ -59,11 +63,8 @@ export const upsertBackendNode = mutation({
         (n) =>
           n.nodeId !== args.nodeId &&
           n.type === args.type &&
-          "label" in (n.data || {}) &&
-          typeof (n.data as Record<string, unknown>).label === "string" &&
-          (
-            (n.data as Record<string, unknown>).label as string
-          ).toLowerCase() === label.toLowerCase(),
+          n.data?.label &&
+          n.data.label.toLowerCase() === label.toLowerCase(),
       );
 
       if (exists) {
@@ -186,7 +187,7 @@ export const patchNodeData = mutation({
       throw new ConvexError(`Node ${args.nodeId} not found in project ${args.projectId}`);
     }
 
-    const mergedData = { ...(existing.data as Record<string, unknown>), ...args.patch };
+    const mergedData = { ...existing.data, ...args.patch };
     await ctx.db.patch(existing._id, { data: mergedData });
   },
 });

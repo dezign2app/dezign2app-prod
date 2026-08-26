@@ -6,7 +6,7 @@ export * from "./compileKafkaNodes";
 export * from "./compileRedisNodes";
 export * from "./compileServiceNode";
 export * from "./compileLangGraphNode";
-export * from "./compileWebClientNode";
+export * from "./compileWebPageNode";
 export * from "./compileAuth";
 export * from "./compileUiPackage";
 export * from "./compileTransformerHelpers";

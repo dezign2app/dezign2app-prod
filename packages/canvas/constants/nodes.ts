@@ -10,7 +10,7 @@ export const BACKEND_NODE_SQS = "sqs" as const;
 export const BACKEND_NODE_REDIS_PUBSUB = "redis-pubsub" as const;
 export const BACKEND_NODE_REDIS_CACHE = "redis-cache" as const;
 export const BACKEND_NODE_ENTITY = "entity" as const;
-export const BACKEND_NODE_WEB_CLIENT = "webClient" as const;
+export const BACKEND_NODE_WEB_PAGE = "webPage" as const;
 export const BACKEND_NODE_EXTERNAL = "external" as const;
 export const BACKEND_NODE_GROUP = "group" as const;
 export const BACKEND_NODE_DB_REF = "db_ref" as const;
@@ -68,7 +68,7 @@ export const BACKEND_NODE_TYPES = {
   REDIS_PUBSUB: BACKEND_NODE_REDIS_PUBSUB,
   REDIS_CACHE: BACKEND_NODE_REDIS_CACHE,
   ENTITY: BACKEND_NODE_ENTITY,
-  WEB_CLIENT: BACKEND_NODE_WEB_CLIENT,
+  WEB_PAGE: BACKEND_NODE_WEB_PAGE,
   EXTERNAL: BACKEND_NODE_EXTERNAL,
   GROUP: BACKEND_NODE_GROUP,
   DB_REF: BACKEND_NODE_DB_REF,

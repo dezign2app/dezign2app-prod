@@ -138,7 +138,7 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   "transformer-out→transformer-in": "transformer-reference",
 };
 
-export const WEB_CLIENT_EVENTS = [
+export const WEB_PAGE_EVENTS = [
   "pageLoad",
   "click",
   "hover",

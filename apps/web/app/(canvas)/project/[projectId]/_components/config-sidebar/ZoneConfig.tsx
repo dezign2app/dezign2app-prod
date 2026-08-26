@@ -144,9 +144,9 @@ export const ZoneConfig = ({
 
   const isPublicZone =
     currentZone.accessType === "public" || currentZone.id === "zone-public";
-  const allWebClientNodes = nodes.filter((n) => n.type === "webClient");
+  const allWebPageNodes = nodes.filter((n) => n.type === "webPage");
 
-  // Find connected WebClient pages
+  // Find connected WebPage pages
   const connectedEdges = edges.filter(
     (e) =>
       (e.target === nodeId && e.targetHandle === currentZone.handleId) ||
@@ -159,8 +159,8 @@ export const ZoneConfig = ({
     .filter((n): n is (typeof nodes)[0] => Boolean(n));
 
   const handleCreateNewPage = () => {
-    const totalWebClients = allWebClientNodes.length;
-    const newPageId = `webClient-${Date.now()}`;
+    const totalWebPages = allWebPageNodes.length;
+    const newPageId = `webPage-${Date.now()}`;
 
     const baseX = node?.position?.x ?? 100;
     const baseY = node?.position?.y ?? 100;
@@ -174,11 +174,11 @@ export const ZoneConfig = ({
     ];
     const suggestedLabel =
       pageSuggestions[connectedPages.length] ||
-      `Public Page ${totalWebClients + 1}`;
+      `Public Page ${totalWebPages + 1}`;
 
     const newPageNode = {
       id: newPageId,
-      type: "webClient" as const,
+      type: "webPage" as const,
       position: {
         x: baseX + 340,
         y: baseY + connectedPages.length * 150,
@@ -208,21 +208,22 @@ export const ZoneConfig = ({
     pageNodeId: string,
     isConnected: boolean,
   ) => {
-    // Strictly 1 web page belongs to 1 section -> clear all existing section edges for this page
-    const sectionEdges = edges.filter((e) => {
-      const isTarget = e.target === pageNodeId;
-      const isSource = e.source === pageNodeId;
-      if (!isTarget && !isSource) return false;
-      const otherId = isSource ? e.target : e.source;
-      const otherNode = nodes.find((n) => n.id === otherId);
-      return otherNode?.type === "webApp";
-    });
-
     if (isConnected) {
-      sectionEdges.forEach((e) => deleteEdge(e.id));
+      // Disconnect
+      const edgeToRemove = edges.find(
+        (e) =>
+          (e.source === nodeId &&
+            e.sourceHandle === currentZone.handleId &&
+            e.target === pageNodeId) ||
+          (e.target === nodeId &&
+            e.targetHandle === currentZone.handleId &&
+            e.source === pageNodeId),
+      );
+      if (edgeToRemove) {
+        deleteEdge(edgeToRemove.id);
+      }
     } else {
-      sectionEdges.forEach((e) => deleteEdge(e.id));
-
+      // Connect
       const newEdgeId = `edge-${nodeId}-${currentZone.handleId}-${pageNodeId}-page-in`;
       addEdge({
         id: newEdgeId,
@@ -241,7 +242,7 @@ export const ZoneConfig = ({
       <PublicZoneView
         currentZone={currentZone}
         connectedPages={connectedPages}
-        allWebClientNodes={allWebClientNodes}
+        allWebPageNodes={allWebPageNodes}
         onCreateNewPage={handleCreateNewPage}
         onTogglePageConnection={handleTogglePageConnection}
       />

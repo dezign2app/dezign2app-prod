@@ -149,18 +149,10 @@ export const addSchemaEdgeTool = tool(
           : [];
 
       const sourceIndex = sourceColumns.findIndex(
-        (c) =>
-          typeof c === "object" &&
-          c !== null &&
-          "name" in c &&
-          c.name === sourceColumnName,
+        (c) => c && typeof c === "object" && "name" in c && c.name === sourceColumnName,
       );
       const targetIndex = targetColumns.findIndex(
-        (c) =>
-          typeof c === "object" &&
-          c !== null &&
-          "name" in c &&
-          c.name === targetColumnName,
+        (c) => c && typeof c === "object" && "name" in c && c.name === targetColumnName,
       );
 
       if (sourceIndex === -1)

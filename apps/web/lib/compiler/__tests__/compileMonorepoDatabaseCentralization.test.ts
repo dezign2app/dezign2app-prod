@@ -7,7 +7,7 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
   it("should generate centralized database connection and consistent env configs across web, services, and auth", () => {
     const webNode: BackendNode = {
       id: "node-web-1",
-      type: "webClient",
+      type: "webPage",
       position: { x: 0, y: 0 },
       fractionalIndex: "a0",
       data: {
@@ -477,13 +477,12 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
 
     const webNode: BackendNode = {
       id: "node-web-1",
-      type: "webClient",
+      type: "webPage",
       position: { x: 200, y: 200 },
       fractionalIndex: "a2",
       data: {
         label: "Storefront",
         appSlug: "storefront",
-        isWebClient: true,
       },
     };
 

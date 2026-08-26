@@ -181,7 +181,7 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
 
     const webClientNode: BackendNode = {
       id: "node-page-1",
-      type: "webClient",
+      type: "webPage",
       position: { x: 0, y: 100 },
       fractionalIndex: "a1",
       data: {
@@ -340,7 +340,7 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
 
     const webClientNode: BackendNode = {
       id: "node-web-1",
-      type: "webClient",
+      type: "webPage",
       position: { x: 200, y: 0 },
       fractionalIndex: "a1",
       data: {

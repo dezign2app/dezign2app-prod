@@ -35,10 +35,10 @@ export const PageRefNode = ({
     Boolean(selected),
   );
 
-  // Available WebClient / Page nodes on canvas
+  // Available WebPage nodes on canvas
   const pageNodes = useBackendCanvasStore(
     useShallow((s) =>
-      s.nodes.filter((n) => n?.type === "webClient"),
+      s.nodes.filter((n) => n?.type === "webPage"),
     ),
   );
 

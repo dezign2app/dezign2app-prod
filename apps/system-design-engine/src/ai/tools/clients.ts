@@ -4,7 +4,7 @@ import { GraphAnnotation } from "../state";
 import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { getConvexClient } from "../utils";
-import { webClientDataInputSchema } from "../schemas";
+import { webPageDataInputSchema } from "../schemas";
 
 export const addClientNodeTool = tool(
   async (input, config) => {
@@ -34,7 +34,7 @@ export const addClientNodeTool = tool(
       await convex.mutation(api.canvas.upsertBackendNode, {
         projectId: state.projectId as Id<"projects">,
         nodeId,
-        type: "webClient",
+        type: "webPage",
         position,
         data: {
           label,
@@ -87,7 +87,7 @@ export const addClientNodeTool = tool(
         resultStr +=
           `\nEvents:\n` +
           processedEvents
-            .map((ev) => `- ${ev.name}: sourceHandle="events-${ev.id}"`)
+            .map((ev: { name?: string; id?: string }) => `- ${ev.name}: sourceHandle="events-${ev.id}"`)
             .join("\n");
       }
       return resultStr;
@@ -100,7 +100,7 @@ export const addClientNodeTool = tool(
     name: "add_client_node",
     description:
       "Add a Web Page (frontend) node to the backend canvas, including a collection of user events on the page.",
-    schema: webClientDataInputSchema.extend({
+    schema: webPageDataInputSchema.extend({
       label: z
         .string()
         .describe("Name of the web page/component (e.g., 'Login Page', 'Dashboard')"),

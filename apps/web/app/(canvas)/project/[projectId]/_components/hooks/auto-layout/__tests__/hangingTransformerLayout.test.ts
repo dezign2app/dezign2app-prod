@@ -14,7 +14,7 @@ describe("hangingTransformerLayout - Auto-Layout for Hanging Transformers", () =
       },
       {
         id: "web-page-1",
-        type: "webClient",
+        type: "webPage",
         position: { x: 0, y: 0 },
         data: { label: "Web Page" },
       },

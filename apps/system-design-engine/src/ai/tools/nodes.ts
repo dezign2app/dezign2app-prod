@@ -16,7 +16,7 @@ import {
   dbRefDataSchema,
   nodeDataSchemas,
   assignResourceIds,
-  webClientDataSchema,
+  webPageDataSchema,
   serviceDataSchema,
 } from "../schemas";
 
@@ -32,9 +32,9 @@ export const addNodeSchema = z.discriminatedUnion("type", [
     data: dbRefDataSchema.optional(),
   }),
   z.object({
-    type: z.literal("webClient"),
+    type: z.literal("webPage"),
     label: z.string(),
-    data: webClientDataSchema.optional(),
+    data: webPageDataSchema.optional(),
   }),
   z.object({
     type: z.literal("external"),
@@ -178,7 +178,7 @@ export const addNodeTool = tool(
 - 'kafka': Apache Kafka broker (data.topics, data.kafkaBroker)
 - 'redis-streams': Redis Streams broker (data.streams, data.redisBroker)
 - 'entity': A database table/schema entity (data.columns is required)
-- 'webClient': A frontend client or page
+- 'webPage': A frontend client or page
 - 'external': An external third-party API (data.actions, data.baseUrl)
 - 'group': A logical grouping node
 

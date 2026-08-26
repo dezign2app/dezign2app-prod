@@ -277,8 +277,8 @@ export function resolveEndpointTrace(
     const srcName = srcNode.data?.label || srcNode.id;
     const srcTypeStr = srcNode.type as string;
 
-    // A. WebClient Node
-    if (srcNode.type === "webClient" || (srcNode.data as any)?.isWebClient) {
+    // A. WebPage Node
+    if (srcNode.type === "webPage") {
       let eventDetail = "UI Action / Link";
       const srcEvents: UIEventItem[] =
         (srcNode.data?.events as UIEventItem[]) || [];
