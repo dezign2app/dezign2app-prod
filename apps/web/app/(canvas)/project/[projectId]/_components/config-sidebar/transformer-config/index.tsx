@@ -84,7 +84,7 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
   const currentServiceConsumedEvents = React.useMemo(() => {
     if (!activeServiceId) return [];
     const activeService = allNodes.find((n) => n.id === activeServiceId);
-    return ((activeService?.data as any)?.consumedEvents as any[]) || [];
+    return activeService?.data?.consumedEvents || [];
   }, [allNodes, activeServiceId]);
 
   const selectedEndpointIds: string[] = React.useMemo(() => {
@@ -94,11 +94,11 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
   }, [data.targetEndpointIds, data.targetEndpointId]);
 
   const selectedEventIds: string[] = React.useMemo(() => {
-    if (Array.isArray((data as any).targetEventIds))
-      return (data as any).targetEventIds;
-    if ((data as any).targetEventId) return [(data as any).targetEventId];
+    if (Array.isArray(data.targetEventIds))
+      return data.targetEventIds;
+    if (data.targetEventId) return [data.targetEventId];
     return [];
-  }, [(data as any).targetEventIds, (data as any).targetEventId]);
+  }, [data.targetEventIds, data.targetEventId]);
 
   const inputSchema: Parameter[] = React.useMemo(() => {
     const raw = data.inputSchema || [];
@@ -229,7 +229,7 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
       targetServiceId: activeServiceId,
       targetEventIds: next,
       targetEventId: next[0] || undefined,
-    } as any);
+    });
 
     syncLocalEdges(activeServiceId, selectedEndpointIds, next);
   };
@@ -259,7 +259,7 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
       targetServiceId: activeServiceId,
       targetEventIds: allIds,
       targetEventId: allIds[0] || undefined,
-    } as any);
+    });
     syncLocalEdges(activeServiceId, selectedEndpointIds, allIds);
   };
 
@@ -268,7 +268,7 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
       targetServiceId: activeServiceId,
       targetEventIds: [],
       targetEventId: undefined,
-    } as any);
+    });
     syncLocalEdges(activeServiceId, selectedEndpointIds, []);
   };
 
@@ -282,7 +282,7 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
       targetEndpointIds: [],
       targetEventId: undefined,
       targetEventIds: [],
-    } as any);
+    });
   };
 
   const handleScopeChange = (nextScope: "global" | "local") => {
@@ -296,7 +296,7 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
         targetEndpointIds: [],
         targetEventId: undefined,
         targetEventIds: [],
-      } as any);
+      });
     } else {
       updateData({
         scope: "local",
@@ -483,7 +483,7 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
 
     const serviceEndpoints = endpoints.filter((e) => e.nodeId === serviceId);
     const serviceConsumedEvents =
-      ((serviceNode.data as any)?.consumedEvents as any[]) || [];
+      serviceNode.data?.consumedEvents || [];
 
     const epIds = serviceEndpoints.map((e) => e.id);
     const evIds = serviceConsumedEvents.map((e) => e.id);

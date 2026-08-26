@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import Editor from "@monaco-editor/react";
+import Editor, { OnMount } from "@monaco-editor/react";
 import { Copy, Check, Download, FileCode, Lock } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { CompiledFile } from "@/lib/compiler";
@@ -9,7 +9,7 @@ import { getLanguageFromFilename } from "../_lib/editorUtils";
 
 export interface MonacoEditorPaneProps {
   activeFile: CompiledFile | undefined;
-  onMount: (editor: any, monaco: any) => void;
+  onMount: OnMount;
   onCopy: () => void;
   onDownload: () => void;
   copied: boolean;

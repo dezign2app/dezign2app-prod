@@ -21,7 +21,7 @@ export const ReceivedMessage = ({
         stage?: string;
         message?: string;
         type?: string;
-        [key: string]: any;
+        [key: string]: unknown;
       };
     } catch {
       // If it's a raw string that happens to have \\n literally instead of real newlines

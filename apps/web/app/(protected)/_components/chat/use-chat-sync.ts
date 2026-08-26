@@ -4,6 +4,17 @@ import { useEffect, useRef } from "react";
 import { useRealtime } from "@upstash/realtime/client";
 import { useChatStore, RESET_STREAMING_TEXT } from "./chat-store";
 
+export type StreamPayload =
+  | { type: "thinking"; content: string; _idx?: number }
+  | { type: "chat_token"; content: string; _idx?: number }
+  | { type: "error"; error?: string; _idx?: number }
+  | { type: "done"; _idx?: number }
+  | { type: string; content?: string; error?: string; _idx?: number };
+
+export interface RealtimeStreamEvent {
+  data?: string | StreamPayload;
+}
+
 export const useChatSync = (conversationId: string | null) => {
   const {
     setStreamingText,
@@ -50,11 +61,11 @@ export const useChatSync = (conversationId: string | null) => {
           return;
         }
 
-        const { history } = await response.json();
+        const { history } = (await response.json()) as { history: StreamPayload[] };
 
         setStreamingText(RESET_STREAMING_TEXT); // Clear first
         setStreamingThinking(RESET_STREAMING_TEXT); // Clear thinking too
-        history.forEach((payload: any) => {
+        history.forEach((payload: StreamPayload) => {
           const chunkId =
             payload._idx !== undefined
               ? `idx-${payload._idx}`
@@ -72,10 +83,10 @@ export const useChatSync = (conversationId: string | null) => {
     fetchHistory();
   }, [conversationId, sendingMessage, setStreamingText, setStreamingThinking]);
 
-  const applyPayload = (payload: any) => {
-    if (payload.type === "thinking") {
+  const applyPayload = (payload: StreamPayload) => {
+    if (payload.type === "thinking" && payload.content) {
       setStreamingThinking(payload.content);
-    } else if (payload.type === "chat_token") {
+    } else if (payload.type === "chat_token" && payload.content) {
       setStreamingText(payload.content);
     } else if (payload.type === "error") {
       setStreamingText(payload.error || "⚠️ Something went wrong.");
@@ -89,7 +100,7 @@ export const useChatSync = (conversationId: string | null) => {
     channels: conversationId ? [`agent:realtime:${conversationId}`] : [],
     events: ["message"],
     enabled: !!conversationId && !sendingMessage,
-    onData: (data: any) => {
+    onData: (data: RealtimeStreamEvent) => {
       const content = data.data;
       if (!content) return;
 

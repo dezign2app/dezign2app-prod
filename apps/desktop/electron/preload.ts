@@ -82,8 +82,8 @@ export interface ElectronAPI {
 // ─────────────────────────────────────────────
 //  Helper — event listener with cleanup
 // ─────────────────────────────────────────────
-function on(channel: string, cb: (...args: any[]) => void) {
-  const handler = (_: Electron.IpcRendererEvent, ...args: any[]) => cb(...args);
+function on(channel: string, cb: (...args: unknown[]) => void) {
+  const handler = (_: Electron.IpcRendererEvent, ...args: unknown[]) => cb(...args);
   ipcRenderer.on(channel, handler);
   return () => ipcRenderer.removeListener(channel, handler);
 }

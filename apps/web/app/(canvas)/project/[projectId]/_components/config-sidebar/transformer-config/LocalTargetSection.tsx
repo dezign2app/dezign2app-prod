@@ -9,14 +9,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { BackendNode, Endpoint } from "@/types/canvas";
+import { BackendNode, Endpoint, ConsumedEventItem } from "@/types/canvas";
 
 interface LocalTargetSectionProps {
   nodeId: string;
   activeServiceId?: string;
   targetServiceNodes: BackendNode[];
   currentServiceEndpoints: Endpoint[];
-  currentServiceConsumedEvents: any[];
+  currentServiceConsumedEvents: ConsumedEventItem[];
   selectedEndpointIds: string[];
   selectedEventIds: string[];
   onServiceChange: (serviceId: string) => void;

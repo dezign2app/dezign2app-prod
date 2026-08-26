@@ -23,8 +23,9 @@ generatorsRouter.post("/generate-code", async (req, res) => {
   try {
     const code = await generateBusinessLogicCode(req.body);
     res.json({ code });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Generate code error:", error);
-    res.status(500).json({ error: error?.message || "Failed to generate business logic code" });
+    const message = error instanceof Error ? error.message : "Failed to generate business logic code";
+    res.status(500).json({ error: message });
   }
 });

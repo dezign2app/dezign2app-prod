@@ -59,7 +59,7 @@ declare module "@xyflow/react" {
     targetY: number;
     sourcePosition: string;
     targetPosition: string;
-    data?: any;
+    data?: Record<string, unknown>;
     markerEnd?: string;
     markerStart?: string;
     style?: React.CSSProperties;
@@ -113,12 +113,12 @@ declare module "@xyflow/react" {
   export const Background: React.ComponentType<Record<string, unknown>>;
   export const Controls: React.ComponentType<Record<string, unknown>>;
   export const MiniMap: React.ComponentType<Record<string, unknown>>;
-  export const BaseEdge: React.ComponentType<any>;
+  export const BaseEdge: React.ComponentType<Record<string, unknown>>;
   export const EdgeLabelRenderer: React.ComponentType<{
     children?: React.ReactNode;
   }>;
-  export const NodeResizer: React.ComponentType<any>;
-  export const Panel: React.ComponentType<any>;
+  export const NodeResizer: React.ComponentType<Record<string, unknown>>;
+  export const Panel: React.ComponentType<Record<string, unknown>>;
   export const ReactFlowProvider: React.ComponentType<{
     children?: React.ReactNode;
   }>;
@@ -165,12 +165,23 @@ declare module "@xyflow/react" {
     edges: TEdge[],
   ): TEdge[];
 
+  export interface GetPathParams {
+    sourceX: number;
+    sourceY: number;
+    sourcePosition?: string;
+    targetX: number;
+    targetY: number;
+    targetPosition?: string;
+    borderRadius?: number;
+    offset?: number;
+  }
+
   export function getSmoothStepPath(
-    params: any,
+    params: GetPathParams,
   ): [string, number, number, number, number];
   export function getBezierPath(
-    params: any,
+    params: GetPathParams,
   ): [string, number, number, number, number];
 
-  export function addEdge(edgeParams: any, edges: any[]): any[];
+  export function addEdge<TEdge = Edge>(edgeParams: TEdge | Connection, edges: TEdge[]): TEdge[];
 }

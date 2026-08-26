@@ -101,10 +101,10 @@ export function resolveLinkedEndpoint(
 
     if (!ep && endpointId) {
       const consumed = targetNode.data?.consumedEvents?.find(
-        (e: any) => e.id === endpointId || e.name === endpointId,
+        (e) => e.id === endpointId || e.name === endpointId,
       );
       const published = targetNode.data?.publishedEvents?.find(
-        (e: any) => e.id === endpointId || e.name === endpointId,
+        (e) => e.id === endpointId || e.name === endpointId,
       );
       const eventMatch = consumed || published;
       if (eventMatch) {

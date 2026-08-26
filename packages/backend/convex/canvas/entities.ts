@@ -21,7 +21,7 @@ export const upsertBackendEndpoint = mutation({
       "upsertBackendEndpoint called with:",
       args.endpointId,
       "businessLogic:",
-      (args.data as any).businessLogic,
+      args.data.businessLogic,
     );
 
     const existing = await ctx.db
@@ -32,7 +32,7 @@ export const upsertBackendEndpoint = mutation({
       .unique();
 
     if (existing) {
-      await ctx.db.patch(existing._id, { data: args.data as any });
+      await ctx.db.patch(existing._id, { data: args.data });
     } else {
       await ctx.db.insert("canvas_backend_endpoints", {
         projectId: args.projectId,
@@ -86,7 +86,7 @@ export const upsertBackendIdentityProvider = mutation({
       .unique();
 
     if (existing) {
-      await ctx.db.patch(existing._id, { data: args.data as any });
+      await ctx.db.patch(existing._id, { data: args.data });
     } else {
       await ctx.db.insert("canvas_backend_identity_providers", {
         projectId: args.projectId,
@@ -143,7 +143,7 @@ export const upsertBackendEvent = mutation({
     if (existing) {
       await ctx.db.patch(existing._id, {
         variant: args.variant,
-        data: args.data as any,
+        data: args.data,
       });
     } else {
       await ctx.db.insert("canvas_backend_events", {

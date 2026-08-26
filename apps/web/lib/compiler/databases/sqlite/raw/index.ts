@@ -26,16 +26,11 @@ function toPascal(str: string): string {
 function getColumns(
   tableNode: BackendNode,
 ): { name: string; type: string; isPrimaryKey?: boolean; isUnique?: boolean; isForeignKey?: boolean; isNotNull?: boolean }[] {
-  const d = tableNode.data as any;
-  const cols =
-    d?.columns ||
-    d?.schema ||
-    d?.fields ||
-    d?.payload ||
-    d?.properties;
+  const cols = tableNode.data?.columns;
   if (cols && Array.isArray(cols) && cols.length > 0) {
-    return cols.map((c: any) => ({
+    return cols.map((c) => ({
       ...c,
+      isPrimaryKey: c.isPrimaryKey || c.isPrimary || c.primaryKey,
       name: toSqlIdentifier(c.name || "col", "col"),
     }));
   }

@@ -328,7 +328,18 @@ export function EndpointTestCasesSection({
                   <Label className="text-xs font-medium">Preset Template</Label>
                   <Select
                     value={newTcPreset}
-                    onValueChange={(val: any) => setNewTcPreset(val)}
+                    onValueChange={(val: string) => {
+                      if (
+                        val === "200_ok" ||
+                        val === "201_created" ||
+                        val === "400_bad_request" ||
+                        val === "401_unauthorized" ||
+                        val === "404_not_found" ||
+                        val === "custom"
+                      ) {
+                        setNewTcPreset(val);
+                      }
+                    }}
                   >
                     <SelectTrigger className="text-xs h-8 bg-background border-border/60">
                       <SelectValue placeholder="Select template" />
@@ -393,7 +404,11 @@ export function EndpointTestCasesSection({
       {/* Tabs for Auto-Generated vs Manual Test Cases */}
       <Tabs
         value={activeTab}
-        onValueChange={(v) => setActiveTab(v as any)}
+        onValueChange={(v: string) => {
+          if (v === "auto" || v === "manual") {
+            setActiveTab(v);
+          }
+        }}
         className="w-full"
       >
         <TabsList className="grid grid-cols-2 h-8 bg-background/60 p-0.5 rounded-lg border border-border/50 mb-2">

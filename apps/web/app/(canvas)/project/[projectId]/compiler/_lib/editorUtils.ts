@@ -90,9 +90,17 @@ export function getEditableLineRange(
 // Key-press classification (for read-only zone enforcement)
 // ---------------------------------------------------------------------------
 
-export function isEditingKey(e: any): boolean {
+export interface EditorKeyboardEvent {
+  browserEvent?: {
+    key?: string;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+  };
+}
+
+export function isEditingKey(e: EditorKeyboardEvent): boolean {
   const key = e.browserEvent?.key;
-  const isCtrlOrCmd = e.browserEvent?.ctrlKey || e.browserEvent?.metaKey;
+  const isCtrlOrCmd = Boolean(e.browserEvent?.ctrlKey || e.browserEvent?.metaKey);
 
   if (key === "Backspace" || key === "Delete" || key === "Enter") {
     return true;

@@ -257,9 +257,11 @@ export const ChatFooter = ({ conversationId }: ChatFooterProps) => {
                 }
                 case "response": {
                   flushPending();
-                  const chatOp = data.response?.operations?.find(
-                    (op: any) => op.type === "chat_response",
-                  );
+                  const chatOp = (
+                    data.response?.operations as
+                      | Array<{ type: string; content?: string }>
+                      | undefined
+                  )?.find((op) => op.type === "chat_response");
                   if (chatOp?.content && !aiResponseText.trim()) {
                     setStreamingText(chatOp.content);
                     aiResponseText += chatOp.content;

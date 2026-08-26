@@ -250,6 +250,13 @@ export type AuthRule =
     };
 
 // ---- Access Conditions & Rules ----
+export type SubscriptionStatus =
+  | "active"
+  | "trialing"
+  | "past_due"
+  | "canceled"
+  | "expired";
+
 export type ConditionPrimitive =
   | { type: "auth"; op: "signedIn" | "signedOut" }
   | { type: "org"; op: "required" | "notRequired" }
@@ -258,7 +265,7 @@ export type ConditionPrimitive =
   | {
       type: "subscriptionStatus";
       op: "statusIn" | "statusNotIn";
-      values: ("active" | "trialing" | "past_due" | "canceled" | "expired")[];
+      values: SubscriptionStatus[];
     }
   | { type: "plan"; op: "in" | "notIn"; values: string[] }
   | {
@@ -288,6 +295,7 @@ export type RedirectMap = Partial<Record<FailureReason, string>> & {
 export interface ProtectionRule {
   id: string;
   scope: "zone" | "page";
+  accessType?: "public" | "protected" | "private" | "role-gated" | "payment-gated" | "org-gated";
   conditions: ConditionNode;
   redirects: RedirectMap;
   customLogic?: { mode: "naturalLanguage" | "code"; prompt?: string; code?: string };

@@ -1,5 +1,5 @@
 import React from "react";
-import { WorkerTask, WorkerTaskTrigger, BackendNode } from "@/types/canvas";
+import { WorkerTask, WorkerTaskTrigger, BackendNode, BackendEdge } from "@/types/canvas";
 import {
   LocalInput,
   LocalTextarea,
@@ -17,6 +17,14 @@ import {
 import { Plus, Trash } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 
+export interface TaskTriggerOption {
+  id: string;
+  name?: string;
+  serviceId?: string;
+  triggerType: "event" | "resource" | "endpoint";
+  nodeName?: string;
+}
+
 const TriggerItemConfig = ({
   trigger,
   index,
@@ -27,7 +35,7 @@ const TriggerItemConfig = ({
 }: {
   trigger: WorkerTaskTrigger;
   index: number;
-  allTriggers: any[];
+  allTriggers: TaskTriggerOption[];
   triggerNodes: BackendNode[];
   onUpdate: (updates: Partial<WorkerTaskTrigger>) => void;
   onDelete: () => void;
@@ -45,7 +53,7 @@ const TriggerItemConfig = ({
 
   React.useEffect(() => {
     if (currentTrigger && currentTrigger.serviceId !== selectedServiceId) {
-      setSelectedServiceId(currentTrigger.serviceId);
+      setSelectedServiceId(currentTrigger.serviceId || "");
     }
   }, [currentTrigger?.serviceId]);
 
@@ -199,27 +207,29 @@ export const TaskConfig = ({ id, nodeId }: TaskConfigProps) => {
     });
   }, [nodes]);
 
-  const allTriggers = React.useMemo(() => {
+  const allTriggers: TaskTriggerOption[] = React.useMemo(() => {
     return [
       ...events
         .filter((e) => e.variant === "publish")
-        .map((e) => ({ ...e, serviceId: e.nodeId, triggerType: "event" })),
+        .map((e) => ({ ...e, serviceId: e.nodeId, triggerType: "event" as const })),
       ...messagingResources.map((r) => ({
         ...r,
         serviceId: r.brokerId,
-        triggerType: "resource",
+        triggerType: "resource" as const,
       })),
       ...endpoints.map((ep) => ({
-        id: ep.id,
-        name: `${ep.type} ${ep.name}`,
+        ...ep,
         serviceId: ep.nodeId,
-        triggerType: "endpoint",
+        triggerType: "endpoint" as const,
       })),
     ];
   }, [events, messagingResources, endpoints]);
 
   const triggerNodes = React.useMemo(() => {
-    const ids = new Set<string>(allTriggers.map((t) => t.serviceId));
+    const validIds = allTriggers
+      .map((t) => t.serviceId)
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+    const ids = new Set<string>(validIds);
     return Array.from(ids).flatMap((id) => {
       const n = nodes.find((n) => n.id === id);
       return n ? [n] : [];
@@ -242,27 +252,29 @@ export const TaskConfig = ({ id, nodeId }: TaskConfigProps) => {
     const existingEdges = edges.filter(
       (e) => e.target === nodeId && e.targetHandle === `task-in-${id}`,
     );
-    const desiredEdges: any[] = [];
+    interface DesiredEdge {
+      source: string;
+      sourceHandle: string;
+      sourceResourceId?: string;
+    }
+    const desiredEdges: DesiredEdge[] = [];
 
-    newTriggers.forEach((trigger) => {
-      if (trigger.type === "event" && trigger.value) {
-        const ev = events.find(
-          (e) => (e.name || e.id) === trigger.value || e.id === trigger.value,
-        );
+    newTriggers.forEach((tr) => {
+      if (tr.type === "event") {
+        const ev = events.find((e) => e.id === tr.value || e.name === tr.value);
         const res = messagingResources.find(
-          (r) => (r.name || r.id) === trigger.value || r.id === trigger.value,
+          (r) => r.id === tr.value || r.name === tr.value,
         );
         const ep = endpoints.find(
-          (e) =>
-            e.id === trigger.value || `${e.type} ${e.name}` === trigger.value,
+          (e) => e.id === tr.value || e.name === tr.value,
         );
 
-        let sourceNodeId = "";
-        let sourceHandleId = "";
+        let sourceNodeId: string | undefined;
+        let sourceHandleId: string | undefined;
 
         if (ev) {
           sourceNodeId = ev.nodeId;
-          sourceHandleId = `publishedEvents-out-${ev.id}`;
+          sourceHandleId = `events-out-${ev.id}`;
         } else if (res) {
           sourceNodeId = res.brokerId;
           sourceHandleId = `${res.type}:out:${res.id}`;
@@ -273,8 +285,8 @@ export const TaskConfig = ({ id, nodeId }: TaskConfigProps) => {
 
         if (sourceNodeId && sourceHandleId) {
           desiredEdges.push({
-            sourceNodeId,
-            sourceHandleId,
+            source: sourceNodeId,
+            sourceHandle: sourceHandleId,
             sourceResourceId: ev?.id || res?.id || ep?.id,
           });
         }
@@ -284,8 +296,8 @@ export const TaskConfig = ({ id, nodeId }: TaskConfigProps) => {
     existingEdges.forEach((ee) => {
       const isDesired = desiredEdges.some(
         (de) =>
-          de.sourceNodeId === ee.source &&
-          de.sourceHandleId === ee.sourceHandle,
+          de.source === ee.source &&
+          de.sourceHandle === ee.sourceHandle,
       );
       if (!isDesired) {
         deleteEdge(ee.id);
@@ -295,15 +307,15 @@ export const TaskConfig = ({ id, nodeId }: TaskConfigProps) => {
     desiredEdges.forEach((de) => {
       const exists = existingEdges.some(
         (ee) =>
-          ee.source === de.sourceNodeId &&
-          ee.sourceHandle === de.sourceHandleId,
+          ee.source === de.source &&
+          ee.sourceHandle === de.sourceHandle,
       );
       if (!exists) {
         addEdge({
           id: generateId(),
-          source: de.sourceNodeId,
+          source: de.source,
           target: nodeId,
-          sourceHandle: de.sourceHandleId,
+          sourceHandle: de.sourceHandle,
           targetHandle: `task-in-${id}`,
           type: "message",
           sourceResourceId: de.sourceResourceId,

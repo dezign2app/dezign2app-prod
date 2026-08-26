@@ -124,7 +124,7 @@ export function ToolRetryConfig({ data, onUpdate }: MiddlewareConfigProps) {
         </Label>
         <Select
           value={data.toolRetryConfig?.onFailure || "continue"}
-          onValueChange={(val: any) =>
+          onValueChange={(val: "continue" | "error") =>
             onUpdate({
               toolRetryConfig: {
                 ...data.toolRetryConfig,

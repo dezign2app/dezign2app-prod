@@ -47,9 +47,10 @@ export function createChatModel(options: CreateChatModelOptions = {}): Supported
         maxOutputTokens: maxTokens,
         streaming,
       });
-    } catch (err: any) {
-      console.error(`[llmFactory] Error initializing Gemini model (${modelName}):`, err?.message || err);
-      if (err?.stack) console.error(`[llmFactory] Stack:`, err.stack);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[llmFactory] Error initializing Gemini model (${modelName}):`, message);
+      if (err instanceof Error && err.stack) console.error(`[llmFactory] Stack:`, err.stack);
       throw err;
     }
   }
@@ -76,9 +77,10 @@ export function createChatModel(options: CreateChatModelOptions = {}): Supported
         maxTokens,
         streaming,
       });
-    } catch (err: any) {
-      console.error(`[llmFactory] Error initializing Groq model (${modelName}):`, err?.message || err);
-      if (err?.stack) console.error(`[llmFactory] Stack:`, err.stack);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[llmFactory] Error initializing Groq model (${modelName}):`, message);
+      if (err instanceof Error && err.stack) console.error(`[llmFactory] Stack:`, err.stack);
       throw err;
     }
   }

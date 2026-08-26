@@ -122,12 +122,13 @@ canvasAiRouter.post("/", async (req, res) => {
       }
     }
     res.end();
-  } catch (error: any) {
+  } catch (error) {
     console.error("API error:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
     if (!res.headersSent) {
       res
         .status(500)
-        .send(`Internal Server Error: ${error?.message || "Unknown error"}`);
+        .send(`Internal Server Error: ${message}`);
     } else {
       res.write(
         JSON.stringify({ type: "error", message: "Internal Server Error" }) +

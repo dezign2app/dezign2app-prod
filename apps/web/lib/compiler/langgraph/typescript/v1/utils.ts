@@ -214,7 +214,7 @@ export function buildCondition(
     case "is_not_null":
       return `${field} != null && ${field} !== ""`;
     case "has_tool_calls":
-      return `(Array.isArray((state as any).messages?.at(-1)?.tool_calls) && (state as any).messages.at(-1).tool_calls.length > 0)`;
+      return `(Array.isArray((state as { messages?: Array<{ tool_calls?: unknown[] }> }).messages?.at(-1)?.tool_calls) && ((state as { messages?: Array<{ tool_calls?: unknown[] }> }).messages?.at(-1)?.tool_calls?.length ?? 0) > 0)`;
     case "is_true":
       return `Boolean(${field})`;
     case "is_false":

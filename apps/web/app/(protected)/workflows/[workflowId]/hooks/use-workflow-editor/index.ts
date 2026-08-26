@@ -20,6 +20,7 @@ import type {
   WorkflowEditorEdge,
   WorkflowEditorNode,
   WorkflowSaveState,
+  StartNodeConfig,
 } from "../../_components/workflow-editor-types";
 import {
   serializeWorkflowGraph,
@@ -318,7 +319,7 @@ export const useWorkflowEditor = (workflowId: string) => {
   const canPublish = useMemo(() => {
     if (compileStatus !== "valid") return false;
     const startNode = nodes.find((node) => node.data.nodeType === "start");
-    return (startNode?.data.config as any)?.triggerType !== "manual";
+    return (startNode?.data.config as StartNodeConfig)?.triggerType !== "manual";
   }, [compileStatus, nodes]);
 
   const canRunWorkflow =

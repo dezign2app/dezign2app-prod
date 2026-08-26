@@ -62,7 +62,7 @@ export const WorkflowNodeInspector = () => {
   const definition = WORKFLOW_NODE_REGISTRY[selectedNode.data.nodeType];
   const typedConfig = selectedNode.data.config;
 
-  const updateConfig = (patch: Partial<WorkflowNodeConfig>) => {
+  const updateConfig = <T extends Record<string, unknown>>(patch: T) => {
     if (isReadOnly) {
       onBlockedAction();
       return;
@@ -91,7 +91,7 @@ export const WorkflowNodeInspector = () => {
           <StartNodeFields
             config={typedConfig as StartNodeConfig}
             isReadOnly={isReadOnly}
-            updateConfig={updateConfig as any}
+            updateConfig={updateConfig}
           />
         );
 
@@ -100,7 +100,7 @@ export const WorkflowNodeInspector = () => {
           <ConditionNodeFields
             config={typedConfig as ConditionNodeConfig}
             isReadOnly={isReadOnly}
-            updateConfig={updateConfig as any}
+            updateConfig={updateConfig}
           />
         );
 
@@ -110,7 +110,7 @@ export const WorkflowNodeInspector = () => {
             config={typedConfig as ApiNodeConfig}
             workflowSecrets={workflowSecrets}
             isReadOnly={isReadOnly}
-            updateConfig={updateConfig as any}
+            updateConfig={updateConfig}
           />
         );
 
@@ -120,7 +120,7 @@ export const WorkflowNodeInspector = () => {
             config={typedConfig as LlmNodeConfig}
             workflowSecrets={workflowSecrets}
             isReadOnly={isReadOnly}
-            updateConfig={updateConfig as any}
+            updateConfig={updateConfig}
           />
         );
 
@@ -129,7 +129,7 @@ export const WorkflowNodeInspector = () => {
           <EndNodeFields
             config={typedConfig as EndNodeConfig}
             isReadOnly={isReadOnly}
-            updateConfig={updateConfig as any}
+            updateConfig={updateConfig}
           />
         );
 

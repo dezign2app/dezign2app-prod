@@ -98,14 +98,14 @@ export const ServiceCallStepSection = ({
         id: `call-${serviceLabel}-${epName}`,
         name: `call${pascalService}${pascalEp}`,
         importPath: `@workspace/services/${folderName}`,
-        signature: `call${pascalService}${pascalEp}(params?: any, body?: any): Promise<any>`,
+        signature: `call${pascalService}${pascalEp}(params?: Record<string, unknown>, body?: Record<string, unknown>): Promise<unknown>`,
         description: `Dedicated RPC client for ${serviceLabel} [${method} ${selectedEndpoint?.name || "/"}]`,
       },
       {
         id: `http-${method.toLowerCase()}`,
         name: `httpClient.${method.toLowerCase()}`,
         importPath: "@workspace/http-client",
-        signature: `httpClient.${method.toLowerCase()}(url: string, data?: any): Promise<any>`,
+        signature: `httpClient.${method.toLowerCase()}(url: string, data?: Record<string, unknown>): Promise<unknown>`,
         description: `Direct HTTP ${method} client request`,
       },
     ];
@@ -175,7 +175,7 @@ export const ServiceCallStepSection = ({
       functionRef: {
         name: fnName,
         importPath: `@workspace/services/${folderName}`,
-        signature: `call${pascalService}${pascalEp}(params?: any, body?: any): Promise<any>`,
+        signature: `call${pascalService}${pascalEp}(params?: Record<string, unknown>, body?: Record<string, unknown>): Promise<unknown>`,
       },
       name: varName,
       outputVariable: varName,

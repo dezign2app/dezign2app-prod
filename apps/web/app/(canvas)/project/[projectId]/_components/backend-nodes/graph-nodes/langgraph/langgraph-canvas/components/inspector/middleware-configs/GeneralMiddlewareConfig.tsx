@@ -103,7 +103,7 @@ export function GeneralMiddlewareConfig({
           <Label className="text-xs font-semibold text-foreground">Type</Label>
           <Select
             value={currentType}
-            onValueChange={(val: any) => onUpdateMiddleware({ type: val })}
+            onValueChange={(val: MiddlewareNodeData["type"]) => onUpdateMiddleware({ type: val })}
           >
             <SelectTrigger className="h-8 text-xs bg-background">
               <SelectValue />

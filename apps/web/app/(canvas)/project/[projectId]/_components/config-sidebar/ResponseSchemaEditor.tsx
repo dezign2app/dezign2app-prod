@@ -117,7 +117,7 @@ export const ResponseSchemaEditor: React.FC<ResponseSchemaEditorProps> = ({
     if (!node?.data?.columns || !Array.isArray(node.data.columns)) {
       return ["id", "created_at"];
     }
-    return node.data.columns.map((c: any) => c.name || "field");
+    return node.data.columns.map((c) => c.name || "field");
   };
 
   const toggleColumnSelection = (fieldId: string, colName: string) => {

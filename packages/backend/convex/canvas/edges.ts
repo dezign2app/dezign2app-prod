@@ -112,7 +112,7 @@ export const upsertBackendEdge = mutation({
         type: validatedType,
         sourceHandle: args.sourceHandle,
         targetHandle: args.targetHandle,
-        data: enrichedData as any,
+        data: enrichedData,
         fractionalIndex: args.fractionalIndex,
         rulesVersion: RULES_VERSION,
       });
@@ -125,7 +125,7 @@ export const upsertBackendEdge = mutation({
         type: validatedType,
         sourceHandle: args.sourceHandle,
         targetHandle: args.targetHandle,
-        data: enrichedData as any,
+        data: enrichedData,
         fractionalIndex: args.fractionalIndex,
         rulesVersion: RULES_VERSION,
       });

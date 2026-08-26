@@ -70,8 +70,15 @@ export const handleAIResponse = async (response: Response) => {
   }
 };
 
+interface AiStreamResponse {
+  type?: string;
+  response?: {
+    operations?: Array<{ type?: string; [key: string]: unknown }>;
+  };
+}
+
 const processResponse = (
-  response: any,
+  response: AiStreamResponse,
   currentIntent: string | null,
   hasStartedStreaming: boolean,
 ) => {
@@ -79,7 +86,7 @@ const processResponse = (
     console.log(
       `🤖 processResponse: Processing operations. Streaming active: ${hasStartedStreaming}`,
     );
-    response.response.operations.forEach((op: any) => {
+    response.response.operations.forEach((op) => {
       console.log(`🤖 Operation: ${op.type} (Skipped due to removal)`);
     });
     return;

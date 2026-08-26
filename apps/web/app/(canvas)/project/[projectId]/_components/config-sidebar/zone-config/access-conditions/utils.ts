@@ -1,8 +1,8 @@
-import { ConditionPrimitive, SessionClaimConfig } from "@workspace/canvas";
+import { ConditionPrimitive, SessionClaimConfig, CanvasEntityColumn } from "@workspace/canvas";
 import { BackendNode } from "@/types/canvas";
 import { ClaimColumnInfo } from "./types";
 
-export function extractEnumValuesFromColDef(colDef?: {
+export function extractEnumValuesFromColDef(colDef?: CanvasEntityColumn | {
   type?: string;
   enumValues?: string[];
   options?: string[];
@@ -56,7 +56,7 @@ export function getClaimColumnInfo(
   );
 
   const colTypeUpper = (colDef?.type || "").toUpperCase();
-  const extractedEnums = extractEnumValuesFromColDef(colDef as any);
+  const extractedEnums = extractEnumValuesFromColDef(colDef);
 
   if (colTypeUpper.startsWith("ENUM") || colTypeUpper.includes("ENUM") || extractedEnums.length > 0) {
     return {
@@ -95,7 +95,7 @@ export const getClaimKey = (leaf: ConditionPrimitive): string => {
   if (leaf.type === "org") return "org";
   if (leaf.type === "access") return "access";
   if (leaf.type === "customClaim") return leaf.key;
-  return (leaf as any).type || "custom";
+  return "custom";
 };
 
 export const getClaimTag = (leaf: ConditionPrimitive): string => {

@@ -89,7 +89,7 @@ export const ForeignKeyEdge = (props: ForeignKeyEdgeProps) => {
   const targetCard = data?.targetCardinality || "N";
   const relationshipLabel = `${sourceCard} : ${targetCard}`;
 
-  const CARDINALITY_OPTIONS: Array<[string, string]> = [
+  const CARDINALITY_OPTIONS: Array<["1" | "N", "1" | "N"]> = [
     ["1", "N"],
     ["1", "1"],
     ["N", "N"],

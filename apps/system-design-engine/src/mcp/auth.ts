@@ -10,7 +10,14 @@ export interface AuthContext {
 
 const CONVEX_URL = process.env.CONVEX_URL || "";
 
-function verifyJWT(token: string): any {
+export interface JWTPayload {
+  sub?: string;
+  org_id?: string;
+  orgId?: string;
+  [key: string]: unknown;
+}
+
+function verifyJWT(token: string): JWTPayload | null {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) {
@@ -18,7 +25,7 @@ function verifyJWT(token: string): any {
       return null;
     }
 
-    const payload = JSON.parse(Buffer.from(parts[1]!, "base64").toString());
+    const payload = JSON.parse(Buffer.from(parts[1]!, "base64").toString()) as JWTPayload;
 
     console.log("[AUTH] JWT verified successfully, user:", payload.sub);
     return payload;

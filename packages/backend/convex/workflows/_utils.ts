@@ -33,7 +33,7 @@ export type WorkflowNodeInput = {
   label?: string;
   positionX: number;
   positionY: number;
-  config: any;
+  config: Record<string, unknown>;
 };
 export type WorkflowEdgeInput = {
   edgeKey: string;
@@ -140,13 +140,21 @@ export const requireIdentity = async (
   return identity;
 };
 
-export const getIdentityOrganizationId = (identity: any) =>
+export interface UserIdentityLike {
+  subject?: string;
+  org_id?: string | number;
+  orgId?: string | number;
+  isSystem?: boolean;
+  [key: string]: unknown;
+}
+
+export const getIdentityOrganizationId = (identity: UserIdentityLike) =>
   identity.org_id?.toString() ?? identity.orgId?.toString();
 
 export const assertWorkflowAccess = async (
   ctx: WorkflowContext,
   workflowId: Id<"workflows">,
-  identity: any,
+  identity: UserIdentityLike,
 ) => {
   const workflow = await ctx.db.get(workflowId);
   if (!workflow || workflow.isArchived) {
@@ -181,7 +189,7 @@ export const assertWorkflowAccess = async (
 export const assertWorkflowRunAccess = async (
   ctx: WorkflowContext,
   runId: Id<"workflow_runs">,
-  identity: any,
+  identity: UserIdentityLike,
 ) => {
   const run = await ctx.db.get(runId);
   if (!run) {
@@ -304,13 +312,16 @@ export const validateDraftGraph = (
       (edge) => edge.targetNodeKey === node.nodeKey,
     );
 
+    const isNonEmptyString = (val: unknown): boolean =>
+      typeof val === "string" && val.trim().length > 0;
+
     if (node.type === "start") {
       if (incomingEdges.length > 0)
         errors.push(`Start node "${node.nodeKey}" cannot have incoming edges.`);
       if ((node.config?.triggerType ?? "manual") === "cron") {
-        if (!node.config?.cronExpression?.trim())
+        if (!isNonEmptyString(node.config?.cronExpression))
           errors.push("Cron start nodes require a cron expression.");
-        if (!node.config?.timezone?.trim())
+        if (!isNonEmptyString(node.config?.timezone))
           errors.push("Cron start nodes require an explicit timezone.");
       }
     }
@@ -342,11 +353,11 @@ export const validateDraftGraph = (
 
     if (node.type === "end" && outgoingEdges.length > 0)
       errors.push(`End node "${node.nodeKey}" cannot have outgoing edges.`);
-    if (node.type === "api" && !node.config?.url?.trim())
+    if (node.type === "api" && !isNonEmptyString(node.config?.url))
       errors.push(`API node "${node.nodeKey}" requires a URL.`);
-    if (node.type === "llm" && !node.config?.model?.trim())
+    if (node.type === "llm" && !isNonEmptyString(node.config?.model))
       errors.push(`LLM "${node.nodeKey}" requires a model.`);
-    if (node.type === "end" && !node.config?.resultExpression?.trim())
+    if (node.type === "end" && !isNonEmptyString(node.config?.resultExpression))
       errors.push(`End node "${node.nodeKey}" requires a result expression.`);
   }
 

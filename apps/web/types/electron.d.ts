@@ -79,6 +79,11 @@ export interface ElectronAPI {
   network?: {
     isPortOpen(port: number): Promise<boolean>;
   };
+
+  workspace?: {
+    setPath?(path: string): void;
+    getPath?(): Promise<string | null>;
+  };
 }
 
 declare global {

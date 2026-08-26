@@ -135,7 +135,7 @@ export async function simulateTestCase(args: {
 
     // Merge client node configured headers and test case headers
     const clientHeaders: Record<string, string> = {};
-    (args.client.data?.headers || []).forEach((h: any) => {
+    (args.client.data?.headers || []).forEach((h) => {
       const hKey = (h.key || h.name || "").toLowerCase();
       const hVal = h.value || h.defaultValue || "";
       if (hKey) clientHeaders[hKey] = hVal;
@@ -153,7 +153,7 @@ export async function simulateTestCase(args: {
 
     // Merge client node query params and test case params
     const clientParams: Record<string, string> = {};
-    (args.client.data?.queryParams || []).forEach((p: any) => {
+    (args.client.data?.queryParams || []).forEach((p) => {
       const pKey = p.key || p.name;
       const pVal = p.value || p.defaultValue || "";
       if (pKey) clientParams[pKey] = pVal;

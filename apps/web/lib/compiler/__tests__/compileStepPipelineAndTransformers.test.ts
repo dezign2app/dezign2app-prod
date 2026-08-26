@@ -5,7 +5,7 @@ import { generateEndpointRouteHandler } from "../generators/routeGenerator/endpo
 import { generateConsumers } from "../generators/consumerGenerator";
 import { schemaToTsInterface, schemaToZodSchema } from "../generators/schemaToTypeScript";
 import { compileMonorepo } from "../compileMonorepo";
-import { BackendNode, BackendEdge, Endpoint } from "@workspace/canvas/types";
+import { BackendNode, BackendEdge, Endpoint, AnyMessagingResource } from "@workspace/canvas/types";
 
 describe("Step Pipeline & Transformer Helpers", () => {
   describe("compileTransformerHelpers", () => {
@@ -285,10 +285,10 @@ describe("Step Pipeline & Transformer Helpers", () => {
             label: "formatPhoneNumber",
             functionName: "formatPhoneNumber",
             scope: "global",
-            inputSchema: [{ name: "rawPhone", type: "string", required: true }],
+            inputSchema: [{ id: "p1", name: "rawPhone", type: "string", required: true }],
             logicMode: "code",
             code: "return { formatted: input.rawPhone.replace(/\\D/g, '') };",
-            returnSchema: [{ name: "formatted", type: "string", required: true }],
+            returnSchema: [{ id: "r1", name: "formatted", type: "string", required: true }],
           },
           position: { x: 100, y: 100 },
           fractionalIndex: "a0",
@@ -310,10 +310,10 @@ describe("Step Pipeline & Transformer Helpers", () => {
             functionName: "validateLocalPin",
             scope: "local",
             targetServiceId: "service-1",
-            inputSchema: [{ name: "pin", type: "string", required: true }],
+            inputSchema: [{ id: "p2", name: "pin", type: "string", required: true }],
             logicMode: "code",
             code: "return { isValid: input.pin.length === 6 };",
-            returnSchema: [{ name: "isValid", type: "boolean", required: true }],
+            returnSchema: [{ id: "r2", name: "isValid", type: "boolean", required: true }],
           },
           position: { x: 500, y: 100 },
           fractionalIndex: "a2",
@@ -416,10 +416,10 @@ describe("Step Pipeline & Transformer Helpers", () => {
             scope: "local",
             targetServiceId: "service-1",
             targetEndpointIds: ["ep-register", "ep-reset-pw"],
-            inputSchema: [{ name: "password", type: "string", required: true }],
+            inputSchema: [{ id: "p3", name: "password", type: "string", required: true }],
             logicMode: "code",
             code: "return { hash: `hashed_${input.password}` };",
-            returnSchema: [{ name: "hash", type: "string", required: true }],
+            returnSchema: [{ id: "r3", name: "hash", type: "string", required: true }],
           },
           position: { x: 400, y: 0 },
           fractionalIndex: "a1",
@@ -451,12 +451,15 @@ describe("Step Pipeline & Transformer Helpers", () => {
     });
 
     it("compiles consumer handler with Step Pipeline and Transformer execution", () => {
-      const consumedEvents = [
+      const consumedEvents: (AnyMessagingResource & {
+        nodeId: string;
+        variant: "publish" | "consume";
+      })[] = [
         {
-          id: "ev-order-created",
-          name: "order-created",
+          id: "evt-order-created",
+          name: "OrderCreated",
           nodeId: "service-1",
-          variant: "consume" as const,
+          variant: "consume",
           payloadSchema: {
             id: "ps1",
             rawJson: JSON.stringify({ orderId: "123", rawAmount: "100.50" }),
@@ -487,7 +490,7 @@ describe("Step Pipeline & Transformer Helpers", () => {
         },
       ];
 
-      const files = generateConsumers("OrderService", consumedEvents as any);
+      const files = generateConsumers("OrderService", consumedEvents);
       const consumerFile = files.find((f) => f.filename === "src/consumer/orderCreated.ts");
       expect(consumerFile).toBeDefined();
       expect(consumerFile?.content).toContain("import { sanitizeOrderPayload } from \"../transformers/sanitizeOrderPayload\";");

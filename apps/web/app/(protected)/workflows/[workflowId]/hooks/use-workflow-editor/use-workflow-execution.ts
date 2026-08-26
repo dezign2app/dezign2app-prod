@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { Id } from "@workspace/backend/_generated/dataModel";
+import type { Id, Doc } from "@workspace/backend/_generated/dataModel";
 import type {
   WorkflowBottomTab,
   WorkflowEditorEdge,
@@ -18,8 +18,8 @@ interface UseWorkflowExecutionOptions {
   nodes: WorkflowEditorNode[];
   edges: WorkflowEditorEdge[];
   selectedRunId: Id<"workflow_runs"> | null;
-  selectedRunEvents: any[] | undefined;
-  selectedRun: any;
+  selectedRunEvents: Doc<"workflow_run_events">[] | undefined;
+  selectedRun: Doc<"workflow_runs"> | null | undefined;
   getToken: (options?: { template?: string }) => Promise<string | null>;
   flushDraftSave: () => Promise<{
     compileStatus: string;

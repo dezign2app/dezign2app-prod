@@ -96,25 +96,25 @@ export class Logger {
     return \`[\${timestamp}] [\${level.toUpperCase()}] [\${this.scope}]\`;
   }
 
-  debug(message: string, ...meta: any[]): void {
+  debug(message: string, ...meta: unknown[]): void {
     if (this.shouldLog("debug")) {
       console.debug(\`\${this.formatHeader("debug")} \${message}\`, ...meta);
     }
   }
 
-  info(message: string, ...meta: any[]): void {
+  info(message: string, ...meta: unknown[]): void {
     if (this.shouldLog("info")) {
       console.info(\`\${this.formatHeader("info")} \${message}\`, ...meta);
     }
   }
 
-  warn(message: string, ...meta: any[]): void {
+  warn(message: string, ...meta: unknown[]): void {
     if (this.shouldLog("warn")) {
       console.warn(\`\${this.formatHeader("warn")} \${message}\`, ...meta);
     }
   }
 
-  error(message: string, ...meta: any[]): void {
+  error(message: string, ...meta: unknown[]): void {
     if (this.shouldLog("error")) {
       console.error(\`\${this.formatHeader("error")} \${message}\`, ...meta);
     }

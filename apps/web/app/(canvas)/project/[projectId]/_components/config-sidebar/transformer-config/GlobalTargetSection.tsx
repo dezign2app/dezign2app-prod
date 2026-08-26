@@ -54,7 +54,7 @@ export const GlobalTargetSection: React.FC<GlobalTargetSectionProps> = ({
           {targetServiceNodes.map((srv) => {
             const srvEndpoints = endpoints.filter((e) => e.nodeId === srv.id);
             const srvConsumedEvents =
-              ((srv.data as any)?.consumedEvents as any[]) || [];
+              srv.data?.consumedEvents || [];
             const { endpointIds: connectedEpIds, eventIds: connectedEvIds } =
               getGlobalServiceConnections(srv.id);
             const totalConnected = connectedEpIds.length + connectedEvIds.length;

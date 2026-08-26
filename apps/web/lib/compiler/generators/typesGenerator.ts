@@ -29,18 +29,16 @@ function generateEntitiesModule(nodes: BackendNode[]): string {
     if (!pascal || seenNames.has(pascal)) return;
     seenNames.add(pascal);
 
-    const dataAny = node.data as any;
-    const cols: Array<{ name?: string; type?: string; isNotNull?: boolean; isPrimaryKey?: boolean; required?: boolean }> =
-      node.data?.columns || dataAny?.redisSchemaFields || dataAny?.fields || [];
+    const cols = node.data?.columns || [];
 
     if (cols.length === 0) {
-      code += `export interface ${pascal} {\n  id: string;\n  [key: string]: any;\n}\n\n`;
+      code += `export interface ${pascal} {\n  id: string;\n  [key: string]: unknown;\n}\n\n`;
       return;
     }
 
     const fieldLines = cols.map((col) => {
       const fieldName = col.name || "field";
-      const isReq = col.isPrimaryKey || col.isNotNull || col.required;
+      const isReq = col.isPrimaryKey || col.isPrimary || col.primaryKey || col.isNotNull || col.required;
       let tsType = "string";
       switch (col.type?.toLowerCase()) {
         case "integer":
@@ -57,7 +55,7 @@ function generateEntitiesModule(nodes: BackendNode[]): string {
           break;
         case "json":
         case "object":
-          tsType = "Record<string, any>";
+          tsType = "Record<string, unknown>";
           break;
         default:
           tsType = "string";
@@ -65,12 +63,12 @@ function generateEntitiesModule(nodes: BackendNode[]): string {
       return `  ${fieldName}${isReq ? "" : "?"}: ${tsType};`;
     });
 
-    fieldLines.push("  [key: string]: any;");
+    fieldLines.push("  [key: string]: unknown;");
     code += `export interface ${pascal} {\n${fieldLines.join("\n")}\n}\n\n`;
   });
 
   if (seenNames.size === 0) {
-    code += `export type GenericEntity = Record<string, any>;\n`;
+    code += `export type GenericEntity = Record<string, unknown>;\n`;
   }
 
   return code;

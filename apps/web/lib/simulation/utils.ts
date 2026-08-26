@@ -229,7 +229,7 @@ export function findEndpoint(
         service.data.channels ||
         [];
       const resource =
-        resourceList.find((r: any) => r.id === resourceId) || resourceList[0];
+        resourceList.find((r) => r.id === resourceId) || resourceList[0];
       const name = resource?.name || service.data.label || "Topic";
       endpoint = {
         id: resource?.id || endpointId,
@@ -238,10 +238,10 @@ export function findEndpoint(
       };
     } else {
       const consumedEv = service.data.consumedEvents?.find(
-        (e: any) => e.id === endpointId,
+        (e) => e.id === endpointId,
       );
       const publishedEv = service.data.publishedEvents?.find(
-        (e: any) => e.id === endpointId,
+        (e) => e.id === endpointId,
       );
       const ev = consumedEv || publishedEv;
       if (ev) {

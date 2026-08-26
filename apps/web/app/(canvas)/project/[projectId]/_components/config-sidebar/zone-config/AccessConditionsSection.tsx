@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { ConditionPrimitive } from "@workspace/canvas";
+import { ConditionPrimitive, SubscriptionStatus } from "@workspace/canvas";
 import { AccessConditionsSectionProps } from "./access-conditions/types";
 import {
   getClaimColumnInfo,
@@ -20,6 +20,20 @@ import {
 import { ConfiguredClaimsBanner } from "./access-conditions/ConfiguredClaimsBanner";
 import { ConditionCard } from "./access-conditions/ConditionCard";
 import { ConnectedPagesList } from "./access-conditions/ConnectedPagesList";
+
+const VALID_SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
+  "active",
+  "trialing",
+  "past_due",
+  "canceled",
+  "expired",
+];
+
+const isSubscriptionStatus = (v: string): v is SubscriptionStatus =>
+  VALID_SUBSCRIPTION_STATUSES.includes(v as SubscriptionStatus);
+
+const filterSubscriptionStatuses = (vals: string[]): SubscriptionStatus[] =>
+  vals.filter(isSubscriptionStatus);
 
 export const AccessConditionsSection = ({
   isOpen,
@@ -46,7 +60,7 @@ export const AccessConditionsSection = ({
       existingVals.length > 0
         ? existingVals
         : colInfo.enumValues && colInfo.enumValues.length > 0
-        ? colInfo.enumValues
+        ? [colInfo.enumValues[0]!]
         : [];
 
     if (newClaimKey === "auth") {
@@ -61,7 +75,7 @@ export const AccessConditionsSection = ({
       onUpdateCondition(idx, {
         type: "subscriptionStatus",
         op: "statusIn",
-        values: defaultVals as any,
+        values: filterSubscriptionStatuses(defaultVals),
       });
     } else if (newClaimKey === "planId" || newClaimKey === "plan") {
       onUpdateCondition(idx, {
@@ -110,7 +124,7 @@ export const AccessConditionsSection = ({
       onUpdateCondition(idx, {
         type: "subscriptionStatus",
         op: newOp === "notIn" ? "statusNotIn" : "statusIn",
-        values: fallbackVals as any,
+        values: filterSubscriptionStatuses(fallbackVals),
       });
       return;
     }
@@ -168,7 +182,7 @@ export const AccessConditionsSection = ({
       onUpdateCondition(idx, {
         type: "subscriptionStatus",
         op: currentNormalizedOp === "notIn" ? "statusNotIn" : "statusIn",
-        values: parsedValues as any,
+        values: filterSubscriptionStatuses(parsedValues),
       });
     } else if (claimKey === "planId" || claimKey === "plan") {
       onUpdateCondition(idx, {
@@ -177,10 +191,11 @@ export const AccessConditionsSection = ({
         values: parsedValues,
       });
     } else {
+      const op: "in" | "notIn" = currentNormalizedOp === "notIn" ? "notIn" : "in";
       onUpdateCondition(idx, {
         type: "customClaim",
         key: claimKey,
-        op: (currentNormalizedOp === "notIn" ? "notIn" : "in") as any,
+        op,
         values: parsedValues,
       });
     }
@@ -191,11 +206,12 @@ export const AccessConditionsSection = ({
     if (!onUpdateCondition) return;
     const claimKey = getClaimKey(leaf);
     const currentNormalizedOp = getNormalizedOp(leaf);
+    const op: "eq" | "neq" = currentNormalizedOp === "neq" ? "neq" : "eq";
 
     onUpdateCondition(idx, {
       type: "customClaim",
       key: claimKey,
-      op: (currentNormalizedOp === "neq" ? "neq" : "eq") as any,
+      op,
       value: val,
     });
   };

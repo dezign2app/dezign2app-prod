@@ -27,7 +27,7 @@ export function FilesystemConfig({ data, onUpdate }: MiddlewareConfigProps) {
         </Label>
         <Select
           value={data.filesystemConfig?.backend || "composite"}
-          onValueChange={(val: any) =>
+          onValueChange={(val: "state" | "store" | "composite") =>
             onUpdate({
               filesystemConfig: {
                 ...data.filesystemConfig,

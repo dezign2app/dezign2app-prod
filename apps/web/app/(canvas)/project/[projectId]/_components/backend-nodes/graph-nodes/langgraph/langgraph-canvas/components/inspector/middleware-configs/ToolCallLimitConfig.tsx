@@ -85,7 +85,7 @@ export function ToolCallLimitConfig({ data, onUpdate }: MiddlewareConfigProps) {
         </Label>
         <Select
           value={data.toolCallLimitConfig?.exitBehavior || "continue"}
-          onValueChange={(val: any) =>
+          onValueChange={(val: "continue" | "error" | "end") =>
             onUpdate({
               toolCallLimitConfig: {
                 ...data.toolCallLimitConfig,

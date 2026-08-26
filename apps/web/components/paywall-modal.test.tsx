@@ -25,7 +25,14 @@ describe("PaywallModal", () => {
   const mockPush = vi.fn();
 
   beforeEach(() => {
-    vi.mocked(useRouter).mockReturnValue({ push: mockPush } as any);
+    vi.mocked(useRouter).mockReturnValue({
+      push: mockPush,
+      back: vi.fn(),
+      forward: vi.fn(),
+      refresh: vi.fn(),
+      replace: vi.fn(),
+      prefetch: vi.fn(),
+    });
     vi.mocked(usePathname).mockReturnValue("/project/123"); // required route by default
   });
 

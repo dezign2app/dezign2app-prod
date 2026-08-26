@@ -1309,7 +1309,7 @@ ${cacheHelperBarrelExports.join("\n")}
       instanceReusableFunctions.push({
         name: `get${typeName}Field`,
         importPath: packageName,
-        signature: `get${typeName}Field(${keyArgsSig ? `${keyArgsSig}, ` : ""}field: string): Promise<any>`,
+        signature: `get${typeName}Field(${keyArgsSig ? `${keyArgsSig}, ` : ""}field: string): Promise<string | number | boolean | null>`,
         targetName: varName,
         kind: "findById",
       });
@@ -1317,7 +1317,7 @@ ${cacheHelperBarrelExports.join("\n")}
       instanceReusableFunctions.push({
         name: `set${typeName}Field`,
         importPath: packageName,
-        signature: `set${typeName}Field(${keyArgsSig ? `${keyArgsSig}, ` : ""}field: string, value: any): Promise<void>`,
+        signature: `set${typeName}Field(${keyArgsSig ? `${keyArgsSig}, ` : ""}field: string, value: string | number | boolean): Promise<void>`,
         targetName: varName,
         kind: "update",
       });

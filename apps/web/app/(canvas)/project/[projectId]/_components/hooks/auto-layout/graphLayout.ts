@@ -17,6 +17,7 @@ import {
   layoutHangingReferenceNodes,
   REFERENCE_NODE_TYPES,
 } from "./hangingReferenceLayout";
+import type { EndpointWithNode, EventWithNode } from "@workspace/canvas";
 
 export interface PerformGraphLayoutOptions {
   nodes: LayoutNode[];
@@ -24,8 +25,8 @@ export interface PerformGraphLayoutOptions {
   onNodesChange?: (changes: PositionNodeChange[]) => void;
   fitView: (options?: { duration?: number; padding?: number }) => void;
   direction?: string;
-  storeEndpoints?: any[];
-  storeEvents?: any[];
+  storeEndpoints?: EndpointWithNode[];
+  storeEvents?: EventWithNode[];
 }
 
 export function performGraphLayout({

@@ -2,7 +2,41 @@ import { NextRequest, NextResponse } from "next/server";
 import Groq from "groq-sdk";
 import { generateSyncedEndpointCode } from "@/app/(canvas)/project/[projectId]/_components/shared/business-logic-block/generator";
 
-async function generateCodeWithGroq(body: any): Promise<string | null> {
+export interface GenerateCodeRequestBody {
+  endpointMethod?: string;
+  endpointPath?: string;
+  prompt?: string;
+  crudConfig?: Array<{
+    tableNodeId?: string;
+    tableName?: string;
+    operations?: string[];
+  }>;
+  publishedEvents?: Array<{
+    name?: string;
+    topic?: string;
+  }>;
+  availableTableNodes?: Array<{
+    id: string;
+    label?: string;
+  }>;
+  requestBody?: {
+    fields?: Array<{
+      name?: string;
+      type?: string;
+      required?: boolean;
+    }>;
+    rawJson?: string;
+  };
+  endpoint?: {
+    id: string;
+    name?: string;
+    type?: string;
+    description?: string;
+    path?: string;
+  };
+}
+
+async function generateCodeWithGroq(body: GenerateCodeRequestBody): Promise<string | null> {
   const apiKeyStr = process.env.GROQ_API_KEY;
   if (!apiKeyStr || apiKeyStr === "dummy_key") {
     console.warn("[GENERATE_CODE_API] GROQ_API_KEY is missing or set to dummy_key in environment.");
@@ -31,19 +65,19 @@ async function generateCodeWithGroq(body: any): Promise<string | null> {
 
   console.log(`[GENERATE_CODE_API] Starting direct Groq generation with ${apiKeys.length} key(s). Target method=${method}, path=${path}, model=${model}`);
 
-  const tableNames = crudList.map((c: any) => {
-    const tableObj = tableNodes.find((t: any) => t.id === c.tableNodeId);
+  const tableNames = crudList.map((c) => {
+    const tableObj = tableNodes.find((t) => t.id === c.tableNodeId);
     return tableObj?.label || c.tableName || c.tableNodeId || "Table";
   });
 
-  const eventNames = publishedEvents.map((e: any) => e.name || e.topic || "EVENT");
+  const eventNames = publishedEvents.map((e) => e.name || e.topic || "EVENT");
 
   let requestBodySchemaStr = "None specified";
   if (body.requestBody) {
     if (Array.isArray(body.requestBody.fields) && body.requestBody.fields.length > 0) {
       const fDefs = body.requestBody.fields
-        .filter((f: any) => f && f.name)
-        .map((f: any) => `${f.name}${f.required === false ? "?" : ""}: ${f.type || "string"}`);
+        .filter((f) => f && f.name)
+        .map((f) => `${f.name}${f.required === false ? "?" : ""}: ${f.type || "string"}`);
       if (fDefs.length > 0) {
         requestBodySchemaStr = `{ ${fDefs.join(", ")} }`;
       }
@@ -121,8 +155,9 @@ Strict Rules for Output:
             return cleaned;
           }
         }
-      } catch (err: any) {
-        console.warn(`[GENERATE_CODE_API] Groq attempt failed with key index ${keyIdx} (${maskedKey}) on model=${m}: ${err?.message || err}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[GENERATE_CODE_API] Groq attempt failed with key index ${keyIdx} (${maskedKey}) on model=${m}: ${message}`);
       }
     }
   }
@@ -166,8 +201,9 @@ export async function POST(req: NextRequest) {
           const errText = await response.text();
           console.warn(`[GENERATE_CODE_API] Engine responded error ${response.status}: ${errText}`);
         }
-      } catch (err: any) {
-        console.warn(`[GENERATE_CODE_API] Backend engine fetch failed/timed out: ${err?.message || err}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[GENERATE_CODE_API] Backend engine fetch failed/timed out: ${msg}`);
       }
     } else {
       console.log(`[GENERATE_CODE_API] No system design engine URL configured in env.`);
@@ -185,7 +221,8 @@ export async function POST(req: NextRequest) {
     const fallbackCode = generateSyncedEndpointCode(body);
     console.log(`[GENERATE_CODE_API] Deterministic code generated (length=${fallbackCode.length} chars)`);
     return NextResponse.json({ code: fallbackCode, source: "fallback" });
-  } catch (error: any) {
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : "Internal Server Error";
     console.error("[GENERATE_CODE_API] Unexpected error in /api/generate-code handler:", error);
     try {
       const fallbackCode = generateSyncedEndpointCode({});
@@ -194,7 +231,7 @@ export async function POST(req: NextRequest) {
     } catch (emergencyErr) {
       console.error("[GENERATE_CODE_API] Emergency fallback also failed:", emergencyErr);
       return NextResponse.json(
-        { error: error?.message || "Internal Server Error" },
+        { error: errorMsg },
         { status: 500 }
       );
     }

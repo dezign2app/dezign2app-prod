@@ -454,8 +454,9 @@ ${hasBodyFields ? `      // Form fields payload
         try {
           payloadBody = JSON.parse(rawJsonBody);
           setJsonError(null);
-        } catch (err: any) {
-          setJsonError("Invalid JSON: " + err.message);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          setJsonError("Invalid JSON: " + message);
           setIsSubmitting(false);
           return;
         }
