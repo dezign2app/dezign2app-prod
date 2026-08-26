@@ -144,7 +144,7 @@ export function NodePaletteSidebar({
                 className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                 onClick={() => addTableNode()}
               >
-                <PlusSquare className="w-3.5 h-3.5 mr-2 text-primary shrink-0" />
+                <PlusSquare className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Add Table
               </Button>
 
@@ -166,7 +166,7 @@ export function NodePaletteSidebar({
                   });
                 }}
               >
-                <Database className="w-3.5 h-3.5 mr-2 text-emerald-500 shrink-0" />
+                <Database className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Database Group
               </Button>
 
@@ -188,7 +188,7 @@ export function NodePaletteSidebar({
                   });
                 }}
               >
-                <DatabaseZap className="w-3.5 h-3.5 mr-2 text-red-500 shrink-0" />
+                <DatabaseZap className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Redis Instance
               </Button>
             </div>
@@ -199,137 +199,129 @@ export function NodePaletteSidebar({
                 Computing
               </div>
               {/* WEB APP / CLIENT GROUP */}
-              <div className="flex flex-col gap-1.5 p-1.5 rounded-lg bg-indigo-500/5 dark:bg-indigo-950/20 border border-indigo-500/25">
-                <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                  <Globe className="w-3 h-3 text-indigo-500" />
+              <div className="flex flex-col gap-1.5 p-1.5 rounded-lg bg-sidebar-accent/20 border border-sidebar-border/60">
+                <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Globe className="w-3 h-3 text-muted-foreground" />
                   Web App
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+                  className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                   onClick={() => handleAddGraphNode("webApp", "Web App")}
                 >
-                  <Globe className="w-3.5 h-3.5 mr-2 text-indigo-500 shrink-0" />
+                  <Globe className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   Web App
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+                  className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                   onClick={() => handleAddGraphNode("webPage", "page-client")}
                 >
-                  <Globe className="w-3.5 h-3.5 mr-2 text-indigo-500/80 shrink-0" />
+                  <Globe className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   Web Page
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+                  className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                   onClick={() => handleAddGraphNode("page_ref", "Page Ref")}
                 >
-                  <Compass className="w-3.5 h-3.5 mr-2 text-indigo-500/80 shrink-0" />
+                  <Compass className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   Page Ref
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+                  className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                   onClick={() => handleAddGraphNode("auth", "Auth Node")}
                 >
-                  <ShieldCheck className="w-3.5 h-3.5 mr-2 text-indigo-500 shrink-0" />
+                  <ShieldCheck className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   Auth Node
                 </Button>
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                onClick={() => handleAddGraphNode("service", "Service")}
-              >
-                <Server className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
-                Service
-              </Button>
-              {/* TRANSFORMERS GROUP */}
-              <div className="flex flex-col gap-1.5 p-1.5 rounded-lg bg-purple-500/5 dark:bg-purple-950/20 border border-purple-500/25">
-                <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1">
-                  <Shuffle className="w-3 h-3 text-purple-500" />
-                  Transformer
-                </div>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-purple-500/40 text-purple-600 dark:text-purple-400 hover:bg-purple-500/15 hover:text-purple-300"
-                  onClick={() =>
-                    handleAddGraphNode("transformer", "Data Transformer")
-                  }
-                >
-                  <Shuffle className="w-3.5 h-3.5 mr-2 text-purple-500 shrink-0" />
-                  Transformer
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-purple-500/40 text-purple-600 dark:text-purple-400 hover:bg-purple-500/15 hover:text-purple-300"
-                  onClick={() =>
-                    handleAddGraphNode("transformer_ref", "Global Ref")
-                  }
-                >
-                  <Shuffle className="w-3.5 h-3.5 mr-2 text-purple-500/80 shrink-0" />
-                  Global Ref
-                </Button>
-              </div>
-
-              {/* FRONTEND & UI GROUP */}
-              <div className="flex flex-col gap-1.5 p-1.5 rounded-lg bg-cyan-500/5 dark:bg-cyan-950/20 border border-cyan-500/25">
-                <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-cyan-600 dark:text-cyan-400 flex items-center gap-1">
-                  <Anchor className="w-3 h-3 text-cyan-500" />
-                  Frontend & UI
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-cyan-500/40 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/15 hover:text-cyan-300"
+                  className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                   onClick={() =>
                     handleAddGraphNode("hook", "useCustomHook")
                   }
                 >
-                  <Anchor className="w-3.5 h-3.5 mr-2 text-cyan-500 shrink-0" />
+                  <Anchor className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   React Hook
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-cyan-500/40 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/15 hover:text-cyan-300"
+                  className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                   onClick={() =>
                     handleAddGraphNode("hook_ref", "Hook Ref")
                   }
                 >
-                  <Anchor className="w-3.5 h-3.5 mr-2 text-cyan-500/80 shrink-0" />
+                  <Anchor className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   Hook Ref
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+                  className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                   onClick={() =>
                     handleAddGraphNode("component", "Component")
                   }
                 >
-                  <Layout className="w-3.5 h-3.5 mr-2 text-indigo-500 shrink-0" />
+                  <Layout className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   UI Component
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+                  className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                   onClick={() =>
                     handleAddGraphNode("component_ref", "Component Ref")
                   }
                 >
-                  <Layout className="w-3.5 h-3.5 mr-2 text-indigo-500/80 shrink-0" />
+                  <Layout className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   Component Ref
+                </Button>
+              </div>
+
+              {/* SERVICE & BACKEND GROUP */}
+              <div className="flex flex-col gap-1.5 p-1.5 rounded-lg bg-sidebar-accent/20 border border-sidebar-border/60">
+                <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Server className="w-3 h-3 text-muted-foreground" />
+                  Service & Backend
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
+                  onClick={() => handleAddGraphNode("service", "Service")}
+                >
+                  <Server className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
+                  Service
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
+                  onClick={() =>
+                    handleAddGraphNode("transformer", "Data Transformer")
+                  }
+                >
+                  <Shuffle className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
+                  Transformer
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
+                  onClick={() =>
+                    handleAddGraphNode("transformer_ref", "Global Ref")
+                  }
+                >
+                  <Shuffle className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
+                  Global Ref
                 </Button>
               </div>
 
@@ -343,7 +335,7 @@ export function NodePaletteSidebar({
                 className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                 onClick={() => handleAddGraphNode("kafka", "Kafka")}
               >
-                <Waves className="w-3.5 h-3.5 mr-2 text-emerald-400 shrink-0" />
+                <Waves className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Kafka
               </Button>
               <Button
@@ -354,7 +346,7 @@ export function NodePaletteSidebar({
                   handleAddGraphNode("redis-streams", "Redis Streams")
                 }
               >
-                <Waves className="w-3.5 h-3.5 mr-2 text-rose-400 shrink-0" />
+                <Waves className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Redis Streams
               </Button>
 
@@ -368,7 +360,7 @@ export function NodePaletteSidebar({
                 className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                 onClick={() => handleAddGraphNode("db_ref", "Database")}
               >
-                <Database className="w-3.5 h-3.5 mr-2 text-blue-400 shrink-0" />
+                <Database className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Database
               </Button>
               <Button
@@ -377,7 +369,7 @@ export function NodePaletteSidebar({
                 className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                 onClick={() => handleAddGraphNode("redis-cache", "Redis Cache")}
               >
-                <Database className="w-3.5 h-3.5 mr-2 text-red-400 shrink-0" />
+                <Database className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Redis Cache
               </Button>
               <Button
@@ -388,7 +380,7 @@ export function NodePaletteSidebar({
                   handleAddGraphNode("storage", "Storage Bucket")
                 }
               >
-                <HardDrive className="w-3.5 h-3.5 mr-2 text-amber-400 shrink-0" />
+                <HardDrive className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Storage Bucket
               </Button>
               <Button
@@ -399,7 +391,7 @@ export function NodePaletteSidebar({
                   handleAddGraphNode("vector_db_ref", "Vector DB")
                 }
               >
-                <Database className="w-3.5 h-3.5 mr-2 text-violet-400 shrink-0" />
+                <Database className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Vector DB
               </Button>
 
@@ -413,7 +405,7 @@ export function NodePaletteSidebar({
                 className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                 onClick={() => handleAddGraphNode("external", "External API")}
               >
-                <Globe className="w-3.5 h-3.5 mr-2 text-sky-400 shrink-0" />
+                <Globe className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 External API
               </Button>
 
@@ -429,7 +421,7 @@ export function NodePaletteSidebar({
                   handleAddGraphNode("langgraph", "LangGraph Agent")
                 }
               >
-                <Network className="w-3.5 h-3.5 mr-2 text-emerald-400 shrink-0" />
+                <Network className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 LangGraph Agent
               </Button>
             </div>
