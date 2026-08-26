@@ -109,7 +109,21 @@ export function createGraphNodeData(
     return {
       ...baseData,
       label: parsePageRoute(label || "page-client"),
-      events: [],
+      sections: [
+        {
+          id: `sec-${Date.now()}`,
+          name: "Main Section",
+          renderMode: "client" as const,
+          loadStrategy: "eager" as const,
+          actions: [
+            {
+              id: `evt-${Date.now()}`,
+              name: "pageLoad",
+              event: "pageLoad",
+            },
+          ],
+        },
+      ],
     };
   }
 

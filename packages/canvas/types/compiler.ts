@@ -114,3 +114,23 @@ export interface PageInfo {
   appSlug?: string;
   appName?: string;
 }
+
+export interface NodeConnectionDetail {
+  nodeId: string;
+  nodeName: string;
+  nodeType: string;
+  detail: string;
+  dataContext?: string;
+  isProtected?: boolean;
+}
+
+export interface EndpointTraceResult {
+  incoming: NodeConnectionDetail[];
+  outgoing: NodeConnectionDetail[];
+}
+
+export interface EventTraceResult {
+  incoming: NodeConnectionDetail[];
+  outgoing: NodeConnectionDetail[];
+}
+

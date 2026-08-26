@@ -5,6 +5,7 @@ import { Label } from "@workspace/ui/components/label";
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
+import { Textarea } from "@workspace/ui/components/textarea";
 import {
   Select,
   SelectContent,
@@ -21,9 +22,10 @@ import {
   Trash2,
   CheckCircle2,
   Route,
+  Sparkles,
 } from "lucide-react";
 import { WEB_PAGE_EVENTS, Endpoint } from "@workspace/canvas";
-import { UIEventItem, Parameter, Schema } from "@/types/canvas";
+import { UIEventItem, Parameter, Schema, PageSection } from "@/types/canvas";
 import { ParameterEditor } from "../backend-nodes/graph-nodes/Editors";
 import { AuthAwarenessBanner } from "./AuthAwarenessBanner";
 import { RequestBodyEditor, RequestBodyMode } from "./RequestBodyEditor";
@@ -439,202 +441,104 @@ export const WebPageConfig = ({
         </div>
       </div>
 
-      {/* ── CLIENT NAVIGATION & CONDITIONAL ROUTING SECTION ── */}
+      {/* ── AI PAGE PROMPTS & VISUAL STYLE ── */}
+      <div className="flex flex-col gap-4 p-4 rounded-xl bg-card border border-border/60 shadow-sm">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Sparkles className="w-4 h-4 text-indigo-400" />
+          <span>AI Page Generation Prompts</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Describe the purpose and visual style of this page to guide AI code generation.
+        </p>
+
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Page Purpose / Functional Overview</Label>
+            <Textarea
+              value={data.description || ""}
+              onChange={(e) => updateData({ description: e.target.value })}
+              placeholder="e.g. Analytics dashboard with interactive charts, real-time KPI metrics, and export capabilities..."
+              className="min-h-[80px] text-xs resize-none"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Page Theme & Visual Layout Prompt</Label>
+            <Textarea
+              value={data.uiPrompt || ""}
+              onChange={(e) => updateData({ uiPrompt: e.target.value })}
+              placeholder="e.g. Modern dark aesthetic with sleek glassmorphic cards, vibrant gradient accents, collapsible navigation sidebar, and responsive metric grid..."
+              className="min-h-[90px] text-xs resize-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── SECTIONS OVERVIEW ── */}
       <div className="flex flex-col gap-4 p-4 rounded-xl bg-card border border-border/60 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Compass className="w-4 h-4 text-indigo-500" />
-            <span>Page Navigation & Conditional Routing</span>
+            <Layers className="w-4 h-4 text-indigo-500" />
+            <span>Page Sections & Components</span>
           </div>
           <Button
             size="sm"
             variant="outline"
             className="h-7 text-xs border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10"
-            onClick={handleAddEvent}
+            onClick={() => {
+              const currentSections: PageSection[] = data.sections || [];
+              const newSec: PageSection = {
+                id: `sec-${crypto.randomUUID()}`,
+                name: `Section ${currentSections.length + 1}`,
+                renderMode: "client",
+                loadStrategy: "eager",
+                actions: [],
+              };
+              updateData({ sections: [...currentSections, newSec] });
+            }}
           >
             <Plus size={12} className="mr-1 text-indigo-500" />
-            Add Navigation Event
+            Add Section
           </Button>
         </div>
 
-        <p className="text-xs text-muted-foreground">
-          Configure how client actions navigate between pages using static declarative Next.js <code className="font-mono text-indigo-500">&lt;Link&gt;</code> or programmatic/conditional <code className="font-mono text-indigo-500">useRouter().push()</code>.
-        </p>
-
-        {events.length === 0 ? (
-          <div className="p-4 rounded-lg border border-dashed border-border/70 text-center flex flex-col items-center gap-2 bg-muted/20">
-            <Route className="w-6 h-6 text-muted-foreground/50" />
-            <span className="text-xs text-muted-foreground">
-              No navigation events configured for this page yet.
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs mt-1"
-              onClick={handleAddEvent}
-            >
-              <Plus size={12} className="mr-1" /> Add First Event
-            </Button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {events.map((ev) => {
-              // Check if connected to a PageRef node via an edge
-              const connectedEdge = allEdges.find(
-                (e) => e.source === nodeId && e.sourceHandle === `events-${ev.id}`,
-              );
-              const connectedPageRefNode = connectedEdge
-                ? allNodes.find((n) => n.id === connectedEdge.target && n.type === "page_ref")
-                : null;
-
-              return (
-                <div
-                  key={ev.id}
-                  className="flex flex-col gap-3 p-3.5 rounded-lg bg-muted/30 border border-border/60 hover:border-indigo-500/30 transition-all text-xs"
-                >
-                  {/* Event Name & Event Type */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <Input
-                        value={ev.name}
-                        onChange={(e) =>
-                          handleUpdateEvent(ev.id, { name: e.target.value })
-                        }
-                        placeholder="Action Name (e.g. NavigateToDashboard)"
-                        className="h-7 text-xs font-medium bg-background"
-                      />
-                      <Select
-                        value={ev.event || "navigateToPage"}
-                        onValueChange={(v) => {
-                          const navLinkType: "link" | "router" = "link";
-                          handleUpdateEvent(ev.id, {
-                            event: v,
-                            ...(v === "navigateToPage" ? { navigationType: navLinkType } : {}),
-                          });
-                          if (v === "navigateToPage") {
-                            if (!connectedEdge) {
-                              handleSpawnPageRefNode(ev.id);
-                            }
-                          } else {
-                            cleanupPageRefNodeForEvent(ev.id);
-                          }
-                        }}
-                      >
-                        <SelectTrigger className="h-7 text-xs w-[140px] shrink-0 bg-background">
-                          <SelectValue placeholder="Event type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {EVENT_OPTIONS.map((opt) => (
-                            <SelectItem key={opt} value={opt} className="text-xs">
-                              {opt}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                      onClick={() => handleDeleteEvent(ev.id)}
-                      title="Delete Navigation Event"
-                    >
-                      <Trash2 size={12} />
-                    </Button>
-                  </div>
-
-                  {/* Target Page Selection */}
-                  {(ev.event === "navigateToPage" || !ev.event) && (
-                    <div className="flex flex-col gap-2 pt-1 border-t border-border/40">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                          <Globe size={10} className="text-indigo-500" /> Target Page / Route
-                        </Label>
-                        {connectedPageRefNode && (
-                          <Badge variant="outline" className="text-[9px] font-mono bg-indigo-500/15 border-indigo-500/30 text-indigo-600 dark:text-indigo-400 shrink-0 flex items-center gap-1">
-                            <CheckCircle2 size={10} /> Connected PageRef
-                          </Badge>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Select
-                          value={
-                            ev.targetPageId ||
-                            connectedPageRefNode?.data?.targetPageId ||
-                            connectedPageRefNode?.data?.pageRefId ||
-                            ev.targetRoute ||
-                            ""
-                          }
-                          onValueChange={(v) => {
-                            const selectedP = pageNodes.find((p) => p.id === v);
-                            const pageLabel = selectedP?.data?.label || "Page";
-                            const cleanLabel = pageLabel.trim().toLowerCase();
-                            const isRoot =
-                              selectedP?.data?.isRoot === true ||
-                              cleanLabel === "/" ||
-                              cleanLabel === "home" ||
-                              cleanLabel === "index" ||
-                              cleanLabel === "landing";
-                            const path = selectedP
-                              ? isRoot
-                                ? "/"
-                                : `/${cleanLabel.replace(/\s+/g, "-")}`
-                              : v;
-
-                            handleUpdateEvent(ev.id, {
-                              targetPageId: selectedP ? v : undefined,
-                              targetRoute: path,
-                            });
-
-                            if (connectedPageRefNode) {
-                              updateNode(connectedPageRefNode.id, {
-                                data: {
-                                  ...connectedPageRefNode.data,
-                                  targetPageId: v,
-                                  pageRefId: v,
-                                  targetPageLabel: pageLabel,
-                                  label: `Ref: ${isRoot ? "/" : pageLabel}`,
-                                },
-                              });
-                            }
-                          }}
-                        >
-                          <SelectTrigger className="h-8 text-xs bg-background flex-1">
-                            <SelectValue placeholder="Select target web page..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {pageNodes.map((p) => {
-                              const label = p.data?.label || "Untitled Page";
-                              return (
-                                <SelectItem key={p.id} value={p.id} className="text-xs">
-                                  📄 {label}
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
-
-                        {!connectedPageRefNode && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 text-xs border-indigo-500/30 text-indigo-600 dark:text-indigo-400 shrink-0"
-                            onClick={() => handleSpawnPageRefNode(ev.id)}
-                            title="Spawn & Connect PageRef node on canvas"
-                          >
-                            <Plus size={11} className="mr-1" /> Connect PageRef
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )}
+        <div className="flex flex-col gap-2">
+          {(data.sections || []).length === 0 ? (
+            <div className="p-4 rounded-lg border border-dashed border-border/70 text-center flex flex-col items-center gap-2 bg-muted/20">
+              <span className="text-xs text-muted-foreground">
+                No sections defined yet. Each section compiles into its own component in <code className="font-mono text-primary">_components/</code>.
+              </span>
+            </div>
+          ) : (
+            (data.sections || []).map((sec: PageSection) => (
+              <div
+                key={sec.id}
+                className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border text-xs"
+              >
+                <div className="flex flex-col min-w-0">
+                  <span className="font-semibold text-foreground truncate">{sec.name}</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    {sec.renderMode || "client"} • {sec.loadStrategy || "eager"} • {(sec.actions || []).length} action{(sec.actions || []).length === 1 ? "" : "s"}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() =>
+                    useBackendCanvasStore.getState().setActiveConfigItem({
+                      type: "pageSection",
+                      id: sec.id,
+                      nodeId,
+                    })
+                  }
+                >
+                  Configure &rarr;
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       {/* Protection Rule Inheritance / Override */}

@@ -92,6 +92,35 @@ export const webPageSimulationCaseValidator = v.object({
   enabled: v.optional(v.boolean()),
 });
 
+// Protocol Validators
+export const sseConfigConvexValidator = v.object({
+  reconnectStrategy: v.optional(v.string()),
+  maxRetries: v.optional(v.number()),
+  retryDelayMs: v.optional(v.number()),
+  eventFilters: v.optional(v.array(v.string())),
+  withCredentials: v.optional(v.boolean()),
+});
+
+export const wsConfigConvexValidator = v.object({
+  payloadFormat: v.optional(v.string()),
+  heartbeatIntervalMs: v.optional(v.number()),
+  autoReconnect: v.optional(v.boolean()),
+});
+
+export const webRtcConfigConvexValidator = v.object({
+  signalingServerUrl: v.optional(v.string()),
+  peerRole: v.optional(v.string()),
+  audioConstraints: v.optional(v.boolean()),
+  videoConstraints: v.optional(v.boolean()),
+  dataChannel: v.optional(v.boolean()),
+});
+
+export const pollingConfigConvexValidator = v.object({
+  intervalMs: v.optional(v.number()),
+  maxRounds: v.optional(v.number()),
+  stopOnError: v.optional(v.boolean()),
+});
+
 // UI Event Item Validator
 export const webPageEventConvexValidator = v.object({
   id: v.optional(v.string()),
@@ -120,6 +149,28 @@ export const webPageEventConvexValidator = v.object({
     v.union(v.literal("field_builder"), v.literal("raw_json")),
   ),
   simulationCases: v.optional(v.array(webPageSimulationCaseValidator)),
+  description: v.optional(v.string()),
+  uiPrompt: v.optional(v.string()),
+  renderMode: v.optional(v.union(v.literal("server"), v.literal("client"))),
+  libraries: v.optional(v.array(v.string())),
+  sseConfig: v.optional(sseConfigConvexValidator),
+  wsConfig: v.optional(wsConfigConvexValidator),
+  webRtcConfig: v.optional(webRtcConfigConvexValidator),
+  pollingConfig: v.optional(pollingConfigConvexValidator),
+});
+
+// Page Section Validator
+export const pageSectionConvexValidator = v.object({
+  id: v.string(),
+  name: v.string(),
+  renderMode: v.optional(v.union(v.literal("server"), v.literal("client"))),
+  loadStrategy: v.optional(
+    v.union(v.literal("eager"), v.literal("dynamic"), v.literal("dynamic-no-ssr")),
+  ),
+  actions: v.array(webPageEventConvexValidator),
+  description: v.optional(v.string()),
+  uiPrompt: v.optional(v.string()),
+  libraries: v.optional(v.array(v.string())),
 });
 
 // Protection Rule Validator
@@ -197,6 +248,9 @@ export const webPageConvexDataValidator = v.object({
     v.union(v.literal("field_builder"), v.literal("raw_json")),
   ),
   events: v.optional(v.array(webPageEventConvexValidator)),
+  sections: v.optional(v.array(pageSectionConvexValidator)),
+  uiPrompt: v.optional(v.string()),
+  renderMode: v.optional(v.union(v.literal("server"), v.literal("client"))),
   protectionOverride: v.optional(protectionRuleConvexValidator),
 });
 

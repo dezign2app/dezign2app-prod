@@ -1,6 +1,5 @@
 import { BackendNode, BackendEdge, SimulationTestCase } from "@/types/canvas";
-import { Endpoint, AnyMessagingResource } from "@workspace/canvas/types";
-import { CompiledFile } from "@workspace/canvas/types";
+import { Endpoint, AnyMessagingResource, UIEventItem, PageSection, CompiledFile } from "@workspace/canvas/types";
 import { toVarName, toPascalCase, deriveRouteFileName } from "../utils";
 import { resolveLinkedEndpoint } from "../compileWebPageNode";
 
@@ -251,8 +250,12 @@ describe("E2E Flow: ${tcName}", () => {
   } else {
     // Generate individual E2E test files for each web page UI event if no custom cases exist
     webClientNodes.forEach((webNode) => {
-      const webEvents = webNode.data?.events || [];
-      webEvents.forEach((ev: { id: string; name?: string; event?: string }, idx: number) => {
+      const sections = webNode.data?.sections || [];
+      const webEvents: UIEventItem[] =
+        sections.length > 0
+          ? sections.flatMap((s) => s.actions)
+          : webNode.data?.events || [];
+      webEvents.forEach((ev, idx: number) => {
         const resolved = resolveLinkedEndpoint(
           webNode.id,
           ev.id,

@@ -70,6 +70,34 @@ export const simulationCaseSchema = z.object({
   enabled: z.boolean().optional(),
 });
 
+export const sseConfigSchema = z.object({
+  reconnectStrategy: z.string().optional(),
+  maxRetries: z.number().optional(),
+  retryDelayMs: z.number().optional(),
+  eventFilters: z.array(z.string()).optional(),
+  withCredentials: z.boolean().optional(),
+});
+
+export const wsConfigSchema = z.object({
+  payloadFormat: z.string().optional(),
+  heartbeatIntervalMs: z.number().optional(),
+  autoReconnect: z.boolean().optional(),
+});
+
+export const webRtcConfigSchema = z.object({
+  signalingServerUrl: z.string().optional(),
+  peerRole: z.string().optional(),
+  audioConstraints: z.boolean().optional(),
+  videoConstraints: z.boolean().optional(),
+  dataChannel: z.boolean().optional(),
+});
+
+export const pollingConfigSchema = z.object({
+  intervalMs: z.number().optional(),
+  maxRounds: z.number().optional(),
+  stopOnError: z.boolean().optional(),
+});
+
 export const clientEventInputSchema = z.object({
   id: z.string().optional().describe("Unique identifier for this event"),
   name: z
@@ -109,6 +137,27 @@ export const clientEventInputSchema = z.object({
     .array(simulationCaseSchema)
     .optional()
     .describe("Named repeatable inputs for client-triggered simulations"),
+  description: z.string().optional(),
+  uiPrompt: z.string().optional(),
+  renderMode: z.enum(["server", "client"]).optional(),
+  libraries: z.array(z.string()).optional(),
+  sseConfig: sseConfigSchema.optional(),
+  wsConfig: wsConfigSchema.optional(),
+  webRtcConfig: webRtcConfigSchema.optional(),
+  pollingConfig: pollingConfigSchema.optional(),
+});
+
+export const webPageEventSchema = clientEventInputSchema;
+
+export const pageSectionSchema = z.object({
+  id: z.string().describe("Unique identifier for this page section / component"),
+  name: z.string().describe("Component name / section title"),
+  renderMode: z.enum(["server", "client"]).optional().describe("Render mode for this component"),
+  loadStrategy: z.enum(["eager", "dynamic", "dynamic-no-ssr"]).optional().describe("Loading strategy"),
+  actions: z.array(webPageEventSchema).describe("Interactive actions inside this section"),
+  description: z.string().optional().describe("Functional description of what this section does"),
+  uiPrompt: z.string().optional().describe("Visual styling and theme prompt for this section"),
+  libraries: z.array(z.string()).optional().describe("Third-party libraries used in this section"),
 });
 
 export const webPageDataSchema = simpleDataSchema.extend({
@@ -143,31 +192,10 @@ export const webPageDataSchema = simpleDataSchema.extend({
   requireAuth: z.boolean().optional().describe("Whether Authorization: Bearer <token> is forwarded automatically (defaults to true)"),
   pageSourceCode: z.string().optional().describe("AI-edited TSX source code for this WebClient page"),
   aiEditing: z.boolean().optional().describe("Whether AI agent is actively streaming page edit"),
-  events: z
-    .array(
-      z.object({
-        id: z.string().optional(),
-        name: z.string(),
-        event: z.string().optional(),
-        schema: z.string().optional(),
-        navigationType: z.enum(["link", "router"]).optional(),
-        navigationCondition: z
-          .enum(["direct", "on_success", "on_condition", "on_error"])
-          .optional(),
-        targetRoute: z.string().optional(),
-        targetPageId: z.string().optional(),
-        conditionCode: z.string().optional(),
-        targetNodeId: z.string().optional(),
-        targetEndpointId: z.string().optional(),
-        headers: z.array(parameterSchema).optional(),
-        pathParams: z.array(parameterSchema).optional(),
-        queryParams: z.array(parameterSchema).optional(),
-        requestBody: schemaModelSchema.optional(),
-        requestBodyMode: z.enum(["field_builder", "raw_json"]).optional(),
-        simulationCases: z.array(simulationCaseSchema).optional(),
-      }),
-    )
-    .optional(),
+  events: z.array(clientEventInputSchema).optional(),
+  sections: z.array(pageSectionSchema).optional().describe("Sections hierarchy containing actions"),
+  uiPrompt: z.string().optional().describe("Page-level AI prompt"),
+  renderMode: z.enum(["server", "client"]).optional().describe("Page-level render mode"),
 });
 
 export const webPageDataInputSchema = baseNodeDataSchema.extend({
@@ -195,6 +223,9 @@ export const webPageDataInputSchema = baseNodeDataSchema.extend({
   pageSourceCode: z.string().optional(),
   aiEditing: z.boolean().optional(),
   events: z.array(clientEventInputSchema).optional(),
+  sections: z.array(pageSectionSchema).optional(),
+  uiPrompt: z.string().optional(),
+  renderMode: z.enum(["server", "client"]).optional(),
 });
 
 // --- WebApp Node ---

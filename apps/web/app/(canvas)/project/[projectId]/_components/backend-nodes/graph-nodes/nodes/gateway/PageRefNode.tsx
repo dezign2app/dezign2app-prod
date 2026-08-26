@@ -58,9 +58,14 @@ export const PageRefNode = ({
 
       if (sourceHandle.startsWith("events-")) {
         const eventId = sourceHandle.replace("events-", "");
-        const evtItem = srcNode.data?.events?.find((e: { id: string; name?: string; event?: string }) => e.id === eventId);
+        const sections = srcNode.data?.sections || [];
+        const actions =
+          sections.length > 0
+            ? sections.flatMap((s) => s.actions)
+            : srcNode.data?.events || [];
+        const evtItem = actions.find((e) => e.id === eventId);
         if (evtItem) {
-          eventName = evtItem.name || evtItem.event || "navigateToPage";
+          eventName = evtItem.name || (evtItem.event as string) || "navigateToPage";
         }
       }
 

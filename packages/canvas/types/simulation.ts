@@ -31,6 +31,17 @@ export type ParameterType = z.infer<typeof parameterTypeEnum>;
 
 
 // UI Specific Types
+export type PageSection = {
+  id: string;
+  name: string;
+  renderMode?: "server" | "client";
+  loadStrategy?: "eager" | "dynamic" | "dynamic-no-ssr";
+  actions: UIEventItem[];
+  description?: string;
+  uiPrompt?: string;
+  libraries?: string[];
+};
+
 export type UIEventItem = {
   id: string;
   name: string;
@@ -47,6 +58,47 @@ export type UIEventItem = {
   targetPageId?: string;
   conditionCode?: string;
   testCases?: SimulationTestCase[];
+  // AI context
+  description?: string;
+  uiPrompt?: string;
+  libraries?: string[];
+  renderMode?: "server" | "client";
+  // SSE config (when event === "sse")
+  sseConfig?: {
+    reconnectStrategy?: "none" | "exponential" | "linear";
+    maxRetries?: number;
+    retryDelay?: number;
+    eventTypes?: string[];
+    withCredentials?: boolean;
+    authMode?: "header" | "query" | "cookie" | "none";
+  };
+  // WebSocket config (when event === "websocket")
+  wsConfig?: {
+    protocol?: "json" | "binary" | "text";
+    reconnectOnDisconnect?: boolean;
+    heartbeatInterval?: number;
+    authMode?: "query-param" | "header" | "first-message" | "none";
+    messageHandlers?: { name: string; description: string }[];
+  };
+  // WebRTC config (when event === "webrtc")
+  webRtcConfig?: {
+    signalingServer?: string;
+    iceServers?: {
+      urls: string;
+      username?: string;
+      credential?: string;
+    }[];
+    mediaConstraints?: { audio: boolean; video: boolean };
+    hasDataChannel?: boolean;
+    role?: "initiator" | "responder" | "both";
+    description?: string;
+  };
+  // Polling config (when event === "polling")
+  pollingConfig?: {
+    intervalMs?: number;
+    stopOnError?: boolean;
+    maxRounds?: number;
+  };
 };
 
 /** A global simulation scenario. */

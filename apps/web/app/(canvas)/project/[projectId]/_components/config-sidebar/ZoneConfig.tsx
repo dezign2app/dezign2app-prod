@@ -186,7 +186,21 @@ export const ZoneConfig = ({
       data: {
         label: suggestedLabel,
         description: "Unprotected public page (e.g. landing, pricing, about)",
-        events: [],
+        sections: [
+          {
+            id: `sec-${Date.now()}`,
+            name: "Main Section",
+            renderMode: "client" as const,
+            loadStrategy: "eager" as const,
+            actions: [
+              {
+                id: `evt-${Date.now()}`,
+                name: "pageLoad",
+                event: "pageLoad",
+              },
+            ],
+          },
+        ],
         useZoneDefault: true,
       },
     };

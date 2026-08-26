@@ -87,7 +87,11 @@ export const EventTestingConfig: React.FC<EventTestingConfigProps> = ({
 
   // Resolution
   const parentNode = nodes.find((n) => n.id === nodeId);
-  const event = parentNode?.data?.events?.find((e) => e.id === id);
+  const sections = parentNode?.data?.sections || [];
+  const event =
+    sections.length > 0
+      ? sections.flatMap((s) => s.actions).find((e) => e.id === id)
+      : parentNode?.data?.events?.find((e) => e.id === id);
   const targetNode = nodes.find((n) => n.id === targetNodeId);
 
   const endpoint = resolveEndpoint(targetNode, endpointId, endpoints);
