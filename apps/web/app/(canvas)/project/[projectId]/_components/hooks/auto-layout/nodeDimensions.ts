@@ -73,6 +73,14 @@ export function getLayoutNodeData(node: LayoutNode): NodeHandleData | undefined 
     "publishedEvents" in node.data && Array.isArray(node.data.publishedEvents)
       ? node.data.publishedEvents
       : undefined;
+  const zones =
+    "zones" in node.data && Array.isArray(node.data.zones)
+      ? (node.data.zones as NodeHandleData["zones"])
+      : undefined;
+  const sections =
+    "sections" in node.data && Array.isArray(node.data.sections)
+      ? (node.data.sections as NodeHandleData["sections"])
+      : undefined;
 
   return {
     endpoints,
@@ -80,6 +88,8 @@ export function getLayoutNodeData(node: LayoutNode): NodeHandleData | undefined 
     topics,
     consumedEvents,
     publishedEvents,
+    zones,
+    sections,
   };
 }
 
@@ -208,6 +218,29 @@ export function getNodeDimensions(node: LayoutNode): {
     }
     case "app": {
       return { width: 280, height: 180 };
+    }
+    case "webApp": {
+      const data = getLayoutNodeData(node);
+      const zones = data?.zones || [];
+      const estHeight = Math.max(240, 180 + zones.length * 70);
+      return { width: 330, height: estHeight };
+    }
+    case "webPage": {
+      const data = getLayoutNodeData(node);
+      const sections = data?.sections || [];
+      const totalActions = sections.reduce(
+        (acc: number, s) => acc + (s.actions?.length || 0),
+        0,
+      );
+      const estHeight = 220 + sections.length * 34 + totalActions * 28;
+      const estWidth = 280;
+      if (isMeasured && measuredWidth !== undefined && measuredHeight !== undefined) {
+        return {
+          width: Math.max(measuredWidth, estWidth),
+          height: Math.max(measuredHeight, estHeight),
+        };
+      }
+      return { width: estWidth, height: Math.max(260, estHeight) };
     }
     case "transformer":
     case "transformer_ref":

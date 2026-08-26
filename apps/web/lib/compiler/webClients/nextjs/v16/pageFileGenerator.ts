@@ -1,5 +1,5 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { Endpoint, UIEventItem, CompiledFile } from "@workspace/canvas/types";
+import { Endpoint, UIEventItem, PageSection, CompiledFile } from "@workspace/canvas/types";
 import { PageInfo } from "./types";
 import { resolveLinkedEndpoint, resolvePageRefLink } from "./endpointResolver";
 import { labelToSlug, slugToComponentName } from "./slugUtils";
@@ -88,7 +88,11 @@ export function generatePageAndComponentFiles({
       nodeRequestBody = bodyObj;
     }
 
-    const nodeEvents: UIEventItem[] = node.data?.events || [];
+    const sections: PageSection[] = node.data?.sections || [];
+    const nodeEvents: UIEventItem[] =
+      sections.length > 0
+        ? sections.flatMap((s) => s.actions || [])
+        : node.data?.events || [];
     const pageLoadEvents = nodeEvents.filter(
       (e) => (e.event as string) === "pageLoad" || e.name === "pageLoad",
     );

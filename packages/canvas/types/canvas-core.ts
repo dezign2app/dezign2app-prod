@@ -19,6 +19,7 @@ export type HandleKind =
   | "pageload-in"
   | "sse-in"
   | "websocket-in"
+  | "webrtc-in"
 
   // --- Service messaging ---
   | "published-event-out"
@@ -126,6 +127,7 @@ export type ConfigItemType =
   | "auth"
   | "webApp"
   | "webPage"
+  | "pageSection"
   | "pageEvent"
   | "eventTesting"
   | "langgraphRoute"
@@ -149,11 +151,12 @@ export interface ActiveConfigItem {
   type: ConfigItemType;
   id: string;
   nodeId: string;
+  sectionId?: string;
   edgeId?: string;
   sourceId?: string;
   targetNodeId?: string;
   endpointId?: string;
-  initialTab?: "trigger" | "test-cases";
+  initialTab?: "trigger" | "test-cases" | "sse" | "ws" | "webrtc" | "polling";
 }
 
 export type EndpointWithNode = Endpoint & { nodeId: string };

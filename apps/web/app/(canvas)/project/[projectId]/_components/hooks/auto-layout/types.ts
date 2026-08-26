@@ -1,5 +1,5 @@
 import type { Node, Edge } from "@xyflow/react";
-import type { BackendNode, BackendEdge } from "@/types/canvas";
+import type { BackendNode, BackendEdge, WebAppZone, PageSection } from "@/types/canvas";
 
 export {
   HEAD_TARGET_HANDLES,
@@ -34,6 +34,8 @@ export interface NodeHandleData {
   topics?: Array<{ id?: string; _id?: string; name?: string }>;
   consumedEvents?: Array<string | { id?: string; _id?: string }>;
   publishedEvents?: Array<string | { id?: string; _id?: string }>;
+  zones?: WebAppZone[];
+  sections?: PageSection[];
 }
 
 export interface DagreNodeInfo {

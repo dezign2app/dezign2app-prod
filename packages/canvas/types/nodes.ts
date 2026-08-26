@@ -8,7 +8,7 @@ import type {
 } from "../techStack";
 import type { Endpoint, WorkerTask, SearchSource } from "../schemas";
 import type { InterServiceProtocol } from "../constants";
-import type { UIEventItem, Parameter, Schema } from "./simulation";
+import type { UIEventItem, Parameter, Schema, PageSection } from "./simulation";
 import type { MessagingNodeData } from "./messaging";
 import type {
   GatewayRoute,
@@ -735,6 +735,9 @@ export interface CanvasWebPageNodeData {
   useZoneDefault?: boolean;
   protectionOverride?: ProtectionRule;
   events?: UIEventItem[];
+  sections?: PageSection[];
+  uiPrompt?: string;
+  renderMode?: "server" | "client";
   headers?: Parameter[];
   pathParams?: Parameter[];
   queryParams?: Parameter[];

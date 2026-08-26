@@ -19,6 +19,7 @@ import { IdentityProviderConfig } from "./config-sidebar/IdentityProviderConfig"
 import { AuthConfig } from "./config-sidebar/AuthConfig";
 import { WebAppConfig } from "./config-sidebar/WebAppConfig";
 import { WebPageConfig } from "./config-sidebar/WebPageConfig";
+import { WebPageSectionConfig } from "./config-sidebar/WebPageSectionConfig";
 import { PaymentsConfig } from "./config-sidebar/PaymentsConfig";
 import { ZoneConfig } from "./config-sidebar/ZoneConfig";
 import { EventTestingConfig } from "./config-sidebar/EventTestingConfig";
@@ -210,6 +211,8 @@ export const ConfigSidebar = () => {
             <WebAppConfig id={id} nodeId={nodeId} />
           ) : type === "webPage" ? (
             <WebPageConfig id={id} nodeId={nodeId} />
+          ) : type === "pageSection" ? (
+            <WebPageSectionConfig id={id} nodeId={nodeId} />
           ) : type === "payments" ? (
             <PaymentsConfig id={id} nodeId={nodeId} />
           ) : type === "zone" ? (
@@ -222,7 +225,11 @@ export const ConfigSidebar = () => {
               nodeId={nodeId}
               targetNodeId={activeConfigItem.targetNodeId!}
               endpointId={activeConfigItem.endpointId!}
-              initialTab={activeConfigItem.initialTab}
+              initialTab={
+                activeConfigItem.initialTab === "test-cases"
+                  ? "test-cases"
+                  : "trigger"
+              }
             />
           ) : type === "langgraphRoute" ? (
             <LangGraphRouteConfig id={id} nodeId={nodeId} />

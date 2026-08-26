@@ -1,506 +1,24 @@
-import React, { useState } from "react";
+import React from "react";
 import { NodeProps, Position, Handle } from "@xyflow/react";
-import { Globe, Plus, X, Play, Settings, FlaskConical, Lock, Pencil, Loader2 } from "lucide-react";
-import { BackendNode, Endpoint, UIEventItem } from "@/types/canvas";
+import {
+  Globe,
+  Lock,
+  Pencil,
+  Loader2,
+  Settings2,
+} from "lucide-react";
+import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useRouter } from "next/navigation";
 import {
   NodeHeader,
-  generateId,
   useSimulationNodeState,
   getSimulationNodeBorderClass,
 } from "../../common";
-import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { WEB_PAGE_EVENTS, parsePageRoute } from "@workspace/canvas";
-
-const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
-
-export interface WebPageEventListProps {
-  nodeId: string;
-  items?: UIEventItem[];
-  updateNode: (id: string, changes: Partial<BackendNode>) => void;
-  data: BackendNode["data"];
-  onTriggerEvent: (triggerInfo: {
-    event: UIEventItem;
-    targetNode: BackendNode;
-    endpoint: Endpoint;
-  }) => void;
-  onManageTestCases: (info: {
-    event: UIEventItem;
-    targetNode: BackendNode;
-    endpoint: Endpoint;
-  }) => void;
-}
-
-const WebPageEventList = ({
-  nodeId,
-  items = [],
-  updateNode,
-  data,
-  onTriggerEvent,
-  onManageTestCases,
-}: WebPageEventListProps) => {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editEvent, setEditEvent] = useState("");
-  const [customEvent, setCustomEvent] = useState("");
-
-  const edges = useBackendCanvasStore((s) => s.edges);
-  const nodes = useBackendCanvasStore((s) => s.nodes);
-
-  const endpoints = useBackendCanvasStore((s) => s.endpoints);
-  const setActiveConfigItem = useBackendCanvasStore(
-    (s) => s.setActiveConfigItem,
-  );
-
-  const getLinkedEndpoint = (
-    eventId: string,
-    fromNodeId: string = nodeId,
-    depth: number = 0,
-  ): { targetNode: BackendNode; endpoint: Endpoint } | null => {
-    if (depth > 5) return null; // guard against cycles
-
-    const edge = edges.find(
-      (e) => e.source === fromNodeId && e.sourceHandle === `events-${eventId}`,
-    );
-    if (!edge || !edge.targetHandle) return null;
-
-    const targetNode = nodes.find((n) => n.id === edge.target);
-    if (!targetNode) return null;
-
-    // If the target handle is an incoming handle on another WebPage,
-    // follow the chain: find that event's outgoing connection to an endpoint.
-    if (
-      edge.targetHandle.startsWith("pageload-in-") ||
-      edge.targetHandle.startsWith("sse-in-") ||
-      edge.targetHandle.startsWith("websocket-in-") ||
-      edge.targetHandle.startsWith("ws-in-")
-    ) {
-      const targetEventId = edge.targetHandle.replace(
-        /^(pageload|sse|websocket|ws)-in-/,
-        "",
-      );
-      return getLinkedEndpoint(targetEventId, edge.target, depth + 1);
-    }
-
-    // Check if target is a messaging / broker node (e.g. Kafka, Queue, PubSub)
-    const messagingTypes: string[] = [
-      "kafka",
-      "sqs",
-      "redis-streams",
-      "redis-pubsub",
-      "pubsub",
-      "eventstream",
-      "queue",
-    ];
-    if (messagingTypes.includes(targetNode.type)) {
-      const resourceId = edge.targetHandle.includes(":")
-        ? edge.targetHandle.split(":").pop()
-        : edge.targetHandle.split("-in-").pop();
-      const resourceList =
-        targetNode.data?.topics ||
-        targetNode.data?.queues ||
-        targetNode.data?.streams ||
-        targetNode.data?.channels ||
-        [];
-      const resource =
-        resourceList.find(
-          (r: { id: string; name?: string }) => r.id === resourceId,
-        ) || resourceList[0];
-      const name = resource?.name || targetNode.data?.label || "Topic";
-      const endpoint: Endpoint = {
-        id: resource?.id || targetNode.id,
-        name: name,
-        type: targetNode.type.toUpperCase(),
-        summary: `Messaging Topic on ${targetNode.data?.label || "Kafka"}`,
-      };
-      return { targetNode, endpoint };
-    }
-
-    // Check if target handle is a consumed or published event on a service node
-    if (
-      edge.targetHandle.startsWith("consumedEvents-in-") ||
-      edge.targetHandle.startsWith("publishedEvents-out-") ||
-      edge.targetHandle.startsWith("publishedEvents-in-")
-    ) {
-      const eventIdMatch = edge.targetHandle.replace(
-        /^(consumedEvents|publishedEvents)-(in|out)-/,
-        "",
-      );
-      const consumedEv = targetNode.data?.consumedEvents?.find(
-        (e: { id: string; name?: string }) => e.id === eventIdMatch,
-      );
-      const publishedEv = targetNode.data?.publishedEvents?.find(
-        (e: { id: string; name?: string }) => e.id === eventIdMatch,
-      );
-      const ev = consumedEv || publishedEv;
-      const endpoint: Endpoint = {
-        id: ev?.id || eventIdMatch,
-        name: ev?.name || "Event Handler",
-        type: "EVENT",
-      };
-      return { targetNode, endpoint };
-    }
-
-    const parts = edge.targetHandle.split("-in-");
-    const endpointId = parts[parts.length - 1];
-    if (!endpointId) return null;
-
-    // Endpoints are persisted in a separate Convex collection and hydrated
-    // into the store, so they may not exist on targetNode.data.
-    let endpoint: Endpoint | undefined = endpoints.find(
-      (ep) => ep.nodeId === targetNode.id && ep.id === endpointId,
-    );
-
-    // Backward compatibility for older node snapshots that embedded endpoints.
-    if (!endpoint)
-      endpoint = targetNode.data?.endpoints?.find((ep) => ep.id === endpointId);
-
-    // Search grouped
-    if (!endpoint && targetNode.data?.routeGroups) {
-      for (const group of targetNode.data.routeGroups) {
-        endpoint = group.endpoints?.find((ep) => ep.id === endpointId);
-        if (endpoint) break;
-      }
-    }
-
-    if (!endpoint) return null;
-
-    return { targetNode, endpoint };
-  };
-
-  const handleAdd = () => {
-    const newItem = {
-      id: generateId(),
-      name: "New Action",
-      event: "click",
-    };
-    const newItems = [...items, newItem];
-    updateNode(nodeId, { data: { ...data, events: newItems } });
-    setEditingId(newItem.id);
-    setEditName("New Action");
-    setEditEvent("click");
-    setCustomEvent("");
-  };
-
-  const handleUpdate = (id: string, name: string, event: string) => {
-    const defaultNavType: "link" | "router" = "link";
-    const newItems = items.map((item) =>
-      item.id === id
-        ? {
-            ...item,
-            name,
-            event,
-            ...(event === "navigateToPage" ? { navigationType: defaultNavType } : {}),
-          }
-        : item,
-    );
-    updateNode(nodeId, { data: { ...data, events: newItems } });
-  };
-
-  const handleDelete = (id: string) => {
-    const store = useBackendCanvasStore.getState();
-    const existingEdge = store.edges.find(
-      (e) => e.source === nodeId && e.sourceHandle === `events-${id}`,
-    );
-    if (existingEdge) {
-      const targetNode = store.nodes.find((n) => n.id === existingEdge.target);
-      store.deleteEdge(existingEdge.id);
-      if (targetNode && targetNode.type === "page_ref") {
-        const remainingEdges = store.edges.filter(
-          (e) => e.target === targetNode.id && e.id !== existingEdge.id,
-        );
-        if (remainingEdges.length === 0) {
-          store.deleteNode(targetNode.id);
-        }
-      }
-    }
-    const newItems = items.filter((item) => item.id !== id);
-    updateNode(nodeId, { data: { ...data, events: newItems } });
-  };
-
-  const saveEvent = (id: string) => {
-    const finalEvent = editEvent === "other" ? customEvent : editEvent;
-    const finalName = editName.trim() || "Unnamed Action";
-    const trimmedEvent = finalEvent.trim();
-    handleUpdate(id, finalName, trimmedEvent);
-    setEditingId(null);
-
-    const store = useBackendCanvasStore.getState();
-    const existingEdge = store.edges.find(
-      (e) => e.source === nodeId && e.sourceHandle === `events-${id}`,
-    );
-
-    if (trimmedEvent === "navigateToPage") {
-      if (!existingEdge) {
-        const currentNode = store.nodes.find((n) => n.id === nodeId);
-        const pos = currentNode?.position || { x: 100, y: 100 };
-        const newRefId = crypto.randomUUID();
-
-        store.addNode({
-          id: newRefId,
-          type: "page_ref",
-          position: { x: pos.x + 320, y: pos.y + 50 },
-          data: {
-            label: "Page Ref",
-            description: "Target page reference for navigation",
-          },
-        });
-
-        store.addEdge({
-          id: `edge-${Date.now()}`,
-          source: nodeId,
-          target: newRefId,
-          sourceHandle: `events-${id}`,
-          targetHandle: "page-ref-in",
-          type: "connection",
-        });
-      }
-    } else {
-      // If event type changed away from navigateToPage, remove connected page_ref node & edge
-      if (existingEdge) {
-        const targetNode = store.nodes.find((n) => n.id === existingEdge.target);
-        store.deleteEdge(existingEdge.id);
-        if (targetNode && targetNode.type === "page_ref") {
-          const remainingEdges = store.edges.filter(
-            (e) => e.target === targetNode.id && e.id !== existingEdge.id,
-          );
-          if (remainingEdges.length === 0) {
-            store.deleteNode(targetNode.id);
-          }
-        }
-      }
-    }
-  };
-
-  if (!items.length && !editingId) {
-    return (
-      <div className="bg-secondary/20 p-1.5 border-t">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full h-6 text-xs text-muted-foreground hover:text-foreground"
-          onClick={handleAdd}
-        >
-          <Plus size={12} className="mr-1" /> Add event
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <div className="px-3 py-1 bg-secondary/40 border-t border-b text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex justify-between items-center group">
-        Events
-        <div
-          className="opacity-0 group-hover:opacity-100 cursor-pointer text-muted-foreground hover:text-foreground transition-all"
-          onClick={handleAdd}
-        >
-          <Plus size={12} />
-        </div>
-      </div>
-      <div className="flex flex-col">
-        {items.map((item) => {
-          const isEditing = editingId === item.id;
-          const link = getLinkedEndpoint(item.id);
-          const displayEvent = (item.event as string) || item.name;
-
-          const evtStr = (item.event as string) || "";
-          const evtLower = evtStr.toLowerCase();
-          const isPageLoad = evtStr === "pageLoad";
-          const isSse =
-            evtStr === "sse" || evtStr === "sseMessage" || evtLower === "sse";
-          const isWebsocket =
-            evtStr === "websocket" ||
-            evtStr === "ws" ||
-            evtStr === "websocketMessage" ||
-            evtLower === "websocket" ||
-            evtLower === "ws";
-
-          return (
-            <div
-              key={item.id}
-              className="flex flex-col px-3 py-1.5 border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20 nodrag"
-            >
-              <Handle
-                type="source"
-                position={Position.Right}
-                id={`events-${item.id}`}
-                className="w-2 h-2 -right-1"
-                style={{ top: "50%" }}
-              />
-              {isPageLoad && (
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id={`pageload-in-${item.id}`}
-                  className="w-2 h-2 -left-1"
-                  style={{ top: "50%" }}
-                />
-              )}
-              {isSse && (
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id={`sse-in-${item.id}`}
-                  className="w-2 h-2 -left-1"
-                  style={{ top: "50%" }}
-                />
-              )}
-              {isWebsocket && (
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id={`websocket-in-${item.id}`}
-                  className="w-2 h-2 -left-1"
-                  style={{ top: "50%" }}
-                />
-              )}
-              {isEditing ? (
-                <div
-                  className="flex flex-col gap-1.5 w-full"
-                  onBlur={(e) => {
-                    const related = e.relatedTarget as HTMLElement | null;
-                    if (related?.closest('[role="combobox"]')) return;
-                    if (related?.closest('[role="listbox"]')) return;
-                    if (related?.closest("[data-radix-popper-content-wrapper]"))
-                      return;
-
-                    if (!e.currentTarget.contains(related)) {
-                      saveEvent(item.id);
-                    }
-                  }}
-                >
-                  <Input
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    placeholder="Action name (e.g. sendMessage)"
-                    className="h-6 text-xs"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") saveEvent(item.id);
-                      if (e.key === "Escape") setEditingId(null);
-                    }}
-                  />
-                  <div className="flex items-center gap-1">
-                    <Select
-                      value={editEvent}
-                      onValueChange={(v) => setEditEvent(v)}
-                    >
-                      <SelectTrigger className="h-6 text-xs w-full bg-background focus:ring-1 focus:ring-ring focus:ring-offset-0">
-                        <SelectValue placeholder="Event type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {EVENT_OPTIONS.map((opt) => (
-                          <SelectItem key={opt} value={opt} className="text-xs">
-                            {opt}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    {editEvent === "other" && (
-                      <Input
-                        value={customEvent}
-                        onChange={(e) => setCustomEvent(e.target.value)}
-                        placeholder="Custom event"
-                        className="h-6 text-xs w-full"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") saveEvent(item.id);
-                          if (e.key === "Escape") setEditingId(null);
-                        }}
-                      />
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div
-                  className="flex items-center justify-between w-full cursor-pointer gap-2"
-                  onClick={() => {
-                    setEditingId(item.id);
-                    setEditName(item.name || "");
-                    const evt = item.event || item.name || "";
-                    const isStandard = (
-                      EVENT_OPTIONS as readonly string[]
-                    ).includes(evt);
-                    setEditEvent(isStandard ? evt : evt ? "other" : "click");
-                    setCustomEvent(isStandard ? "" : evt);
-                  }}
-                >
-                  <div className="flex flex-col gap-0.5 overflow-hidden">
-                    <span className="font-medium truncate">{item.name}</span>
-                    <span className="text-[9px] text-muted-foreground font-mono truncate">
-                      {displayEvent}
-                    </span>
-                  </div>
-                  <div
-                    className="flex items-center gap-1.5 shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {link && (
-                      <button
-                        type="button"
-                        className="flex items-center justify-center p-1 rounded hover:bg-green-500/10 text-green-500 transition-all cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onTriggerEvent({
-                            event: item,
-                            targetNode: link.targetNode,
-                            endpoint: link.endpoint,
-                          });
-                        }}
-                        title={`Trigger simulated request: ${link.endpoint.type || "GET"} ${link.endpoint.name}`}
-                      >
-                        <Play
-                          size={10}
-                          className="fill-green-600 text-green-600"
-                        />
-                      </button>
-                    )}
-                    <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-all">
-                      <div
-                        className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveConfigItem({
-                            type: "pageEvent",
-                            id: item.id,
-                            nodeId,
-                          });
-                        }}
-                      >
-                        <Settings size={12} />
-                      </div>
-                      <div
-                        className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(item.id);
-                        }}
-                      >
-                        <X size={12} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
-};
+import { parsePageRoute } from "@workspace/canvas";
+import { SectionList } from "./web-page";
 
 export const WebPageNode = ({
   id,
@@ -508,6 +26,7 @@ export const WebPageNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
   const simulation = useSimulationNodeState(id);
@@ -516,7 +35,6 @@ export const WebPageNode = ({
     Boolean(selected),
   );
   const router = useRouter();
-  // Extract projectId from the URL path (/project/<projectId>/...)
   const projectId = typeof window !== "undefined"
     ? window.location.pathname.split("/project/")[1]?.split("/")[0] ?? ""
     : "";
@@ -624,7 +142,7 @@ export const WebPageNode = ({
   return (
     <div
       className={cn(
-        "shadow-md rounded-xl bg-card border-2 min-w-[200px] max-w-[300px] flex flex-col transition-all duration-300 relative",
+        "shadow-md rounded-xl bg-card border-2 min-w-[240px] max-w-[320px] flex flex-col transition-all duration-300 relative",
         isLocked
           ? "border-violet-500/80 ring-2 ring-violet-500/30"
           : borderClass,
@@ -668,69 +186,38 @@ export const WebPageNode = ({
         title={isLandingPage ? "Landing Page" : "Web Page"}
         selected={selected}
         rightElement={
-          isLocked ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                updateNode(id, { data: { ...data, aiEditing: false } });
-              }}
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-500/15 hover:bg-destructive/20 text-violet-600 dark:text-violet-400 hover:text-destructive border border-violet-500/30 text-[10px] font-mono shrink-0 ml-2 cursor-pointer transition-colors"
-              title="Locked: AI is actively editing this page. Click to force unlock."
-            >
-              <Lock size={10} className="shrink-0" />
-              <span className="text-[9px] font-semibold">Locked (Unlock)</span>
-            </button>
-          ) : isProtected ? (
-            <div
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 text-[10px] font-mono shrink-0 ml-2"
-              title="Protected Page (Authentication Required)"
-            >
-              <Lock size={10} className="shrink-0" />
-            </div>
-          ) : null
+          <div className="flex items-center gap-1 shrink-0 ml-2">
+            {data.pageSourceCode && !isLocked && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+                AI-edited
+              </span>
+            )}
+            {isLocked ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateNode(id, { data: { ...data, aiEditing: false } });
+                }}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-500/15 hover:bg-destructive/20 text-violet-600 dark:text-violet-400 hover:text-destructive border border-violet-500/30 text-[10px] font-mono shrink-0 cursor-pointer transition-colors"
+                title="Locked: AI is actively editing this page. Click to force unlock."
+              >
+                <Lock size={10} className="shrink-0" />
+                <span className="text-[9px] font-semibold">Locked</span>
+              </button>
+            ) : isProtected ? (
+              <div
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 text-[10px] font-mono shrink-0"
+                title="Protected Page (Authentication Required)"
+              >
+                <Lock size={10} className="shrink-0" />
+              </div>
+            ) : null}
+          </div>
         }
       />
 
-      {/* Zone Membership & Rule Override Indicator Bar */}
-      <div className="px-3 py-1 bg-muted/70 border-b flex items-center justify-between gap-1 nodrag text-[10px]">
-        <span className="font-mono text-muted-foreground truncate">
-          {connectedZoneName ? `Zone: ${connectedZoneName}` : "Unattached Page"}
-        </span>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {data.aiEditing && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                updateNode(id, { data: { ...data, aiEditing: false } });
-              }}
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-violet-500/15 hover:bg-destructive/20 text-violet-500 hover:text-destructive border border-violet-500/30 cursor-pointer transition-colors"
-              title="Click to force unlock"
-            >
-              <Lock size={8} />
-              <Loader2 size={8} className="animate-spin" /> Locked (Unlock)
-            </button>
-          )}
-          {data.pageSourceCode && !data.aiEditing && (
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
-              AI-edited
-            </span>
-          )}
-          <span
-            className={cn(
-              "px-1.5 py-0.2 rounded font-medium border text-[9px]",
-              isCustomOverride
-                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
-                : "bg-secondary text-muted-foreground border-border/40",
-            )}
-          >
-            {isCustomOverride ? "Custom Rules" : "Inherits Section"}
-          </span>
-        </div>
-      </div>
-
-      {/* Edit UI button strip */}
+      {/* Edit UI & Page settings button strip */}
       <div className="px-3 py-1.5 border-b bg-muted/30 flex items-center justify-between nodrag">
         <span
           className="text-[10px] text-muted-foreground font-mono truncate"
@@ -738,24 +225,40 @@ export const WebPageNode = ({
         >
           {displayRoute}
         </span>
-        <button
-          type="button"
-          disabled={isLocked}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (projectId) router.push(`/project/${projectId}/pages/${id}`);
-          }}
-          className={cn(
-            "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-all",
-            isLocked
-              ? "bg-muted text-muted-foreground border border-border cursor-not-allowed opacity-60"
-              : "bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 border border-indigo-500/20 cursor-pointer",
-          )}
-          title={isLocked ? "Locked: AI is actively editing this page" : "Open visual page editor"}
-        >
-          {isLocked ? <Lock size={10} /> : <Pencil size={10} />}
-          {isLocked ? "Locked" : "Edit UI"}
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Page config / settings gear */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveConfigItem({ type: "webPage", id, nodeId: id });
+            }}
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+            title="Page settings & configuration"
+          >
+            <Settings2 size={12} />
+          </button>
+
+          {/* Edit UI (visual page editor) */}
+          <button
+            type="button"
+            disabled={isLocked}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (projectId) router.push(`/project/${projectId}/pages/${id}`);
+            }}
+            className={cn(
+              "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-all",
+              isLocked
+                ? "bg-muted text-muted-foreground border border-border cursor-not-allowed opacity-60"
+                : "bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 border border-indigo-500/20 cursor-pointer",
+            )}
+            title={isLocked ? "Locked: AI is actively editing this page" : "Open visual page editor"}
+          >
+            {isLocked ? <Lock size={10} /> : <Pencil size={10} />}
+            {isLocked ? "Locked" : "Edit UI"}
+          </button>
+        </div>
       </div>
 
       {/* Description */}
@@ -795,9 +298,10 @@ export const WebPageNode = ({
         </div>
       )}
 
-      <WebPageEventList
+      {/* Sections & Actions */}
+      <SectionList
         nodeId={id}
-        items={data.events}
+        sections={data.sections}
         updateNode={updateNode}
         data={data}
         onTriggerEvent={(triggerInfo) =>
@@ -810,17 +314,8 @@ export const WebPageNode = ({
             initialTab: "trigger",
           })
         }
-        onManageTestCases={(info) =>
-          useBackendCanvasStore.getState().setActiveConfigItem({
-            type: "eventTesting",
-            id: info.event.id,
-            nodeId: id,
-            targetNodeId: info.targetNode.id,
-            endpointId: info.endpoint.id,
-            initialTab: "test-cases",
-          })
-        }
       />
     </div>
   );
 };
+
