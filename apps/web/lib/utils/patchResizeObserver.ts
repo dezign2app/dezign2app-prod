@@ -6,9 +6,11 @@
  * "ResizeObserver loop completed with undelivered notifications" and
  * suppresses Next.js Turbopack dev error overlays for benign ResizeObserver events.
  */
+type PatchedResizeObserverConstructor = typeof ResizeObserver & { __isPatched?: boolean };
+
 if (typeof window !== "undefined") {
-  const OriginalResizeObserver = window.ResizeObserver;
-  if (OriginalResizeObserver && !(OriginalResizeObserver as any).__isPatched) {
+  const OriginalResizeObserver = window.ResizeObserver as PatchedResizeObserverConstructor | undefined;
+  if (OriginalResizeObserver && !OriginalResizeObserver.__isPatched) {
     class PatchedResizeObserver extends OriginalResizeObserver {
       constructor(callback: ResizeObserverCallback) {
         const wrappedCallback: ResizeObserverCallback = (entries, observer) => {
@@ -23,7 +25,7 @@ if (typeof window !== "undefined") {
         super(wrappedCallback);
       }
     }
-    (PatchedResizeObserver as any).__isPatched = true;
+    (PatchedResizeObserver as PatchedResizeObserverConstructor).__isPatched = true;
     window.ResizeObserver = PatchedResizeObserver;
   }
 

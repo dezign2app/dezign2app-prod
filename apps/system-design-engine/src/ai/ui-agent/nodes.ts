@@ -39,14 +39,15 @@ export function createUiEditorNodes(llm: SupportedChatModel) {
         componentCatalog: catalog,
         messages: [new AIMessage({ content: `[UI Plan]\n${planContent}` })],
       };
-    } catch (err: any) {
-      if (config?.signal?.aborted || err?.name === "AbortError") {
+    } catch (err) {
+      const isAbort = (err instanceof Error && err.name === "AbortError") || config?.signal?.aborted;
+      if (isAbort) {
         console.log("🛑 [ui-agent:uiPlanner] Aborted LLM invocation on user stop request.");
         throw err;
       }
-      console.error("[ui-agent:uiPlanner] Error during LLM planning:", err?.message || err);
-      if (err?.stack) console.error("[ui-agent:uiPlanner] Stack:", err.stack);
-      if (err?.errorDetails || err?.cause) console.error("[ui-agent:uiPlanner] Error details:", err.errorDetails || err.cause);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[ui-agent:uiPlanner] Error during LLM planning:", message);
+      if (err instanceof Error && err.stack) console.error("[ui-agent:uiPlanner] Stack:", err.stack);
       throw err;
     }
   };
@@ -90,14 +91,15 @@ export function createUiEditorNodes(llm: SupportedChatModel) {
         cleanCode,
         messages: [new AIMessage({ content: cleanCode })],
       };
-    } catch (err: any) {
-      if (config?.signal?.aborted || err?.name === "AbortError") {
+    } catch (err) {
+      const isAbort = (err instanceof Error && err.name === "AbortError") || config?.signal?.aborted;
+      if (isAbort) {
         console.log("🛑 [ui-agent:uiCodeGenerator] Aborted TSX generation on user stop request.");
         throw err;
       }
-      console.error("[ui-agent:uiCodeGenerator] Error during TSX generation:", err?.message || err);
-      if (err?.stack) console.error("[ui-agent:uiCodeGenerator] Stack:", err.stack);
-      if (err?.errorDetails || err?.cause) console.error("[ui-agent:uiCodeGenerator] Error details:", err.errorDetails || err.cause);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[ui-agent:uiCodeGenerator] Error during TSX generation:", message);
+      if (err instanceof Error && err.stack) console.error("[ui-agent:uiCodeGenerator] Stack:", err.stack);
       throw err;
     }
   };
@@ -155,14 +157,15 @@ export function createUiEditorNodes(llm: SupportedChatModel) {
         retryCount: 1, // incremented via reducer (x, y) => x + y
         messages: [new AIMessage({ content: cleanCode })],
       };
-    } catch (err: any) {
-      if (config?.signal?.aborted || err?.name === "AbortError") {
+    } catch (err) {
+      const isAbort = (err instanceof Error && err.name === "AbortError") || config?.signal?.aborted;
+      if (isAbort) {
         console.log("🛑 [ui-agent:uiRepair] Aborted TSX repair on user stop request.");
         throw err;
       }
-      console.error("[ui-agent:uiRepair] Error during TSX repair:", err?.message || err);
-      if (err?.stack) console.error("[ui-agent:uiRepair] Stack:", err.stack);
-      if (err?.errorDetails || err?.cause) console.error("[ui-agent:uiRepair] Error details:", err.errorDetails || err.cause);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[ui-agent:uiRepair] Error during TSX repair:", message);
+      if (err instanceof Error && err.stack) console.error("[ui-agent:uiRepair] Stack:", err.stack);
       throw err;
     }
   };

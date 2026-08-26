@@ -55,7 +55,7 @@ export async function generateCacheConfig(description: string) {
     if (parsed.payloadSchema && Array.isArray(parsed.payloadSchema)) {
       parsed.payloadSchema = {
         id: `schema-${Date.now()}`,
-        fields: parsed.payloadSchema.map((f: any, i: number) => ({
+        fields: parsed.payloadSchema.map((f: { id?: string; name?: string; type?: string; required?: boolean }, i: number) => ({
           id: f.id || `field-${i}`,
           name: f.name || "field",
           type: f.type || "string",

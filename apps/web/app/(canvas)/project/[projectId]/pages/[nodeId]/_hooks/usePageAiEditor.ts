@@ -3,13 +3,14 @@
 import { useState, useCallback, useRef } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
-import { Id } from "@workspace/backend/_generated/dataModel";
+import { Id, Doc } from "@workspace/backend/_generated/dataModel";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { toast } from "sonner";
 import {
   JSONValue,
   pageEditorStreamEventSchema,
   type PageEditorStreamEvent,
+  type BackendNode,
 } from "@workspace/canvas";
 import { Message } from "../_components/PageAiPanel";
 import { ResolvedCodeResult } from "./usePageCodeSync";
@@ -19,11 +20,11 @@ interface UsePageAiEditorOptions {
   nodeId: string;
   pageName: string;
   pageRoute: string;
-  node: any;
+  node: BackendNode | null | undefined;
   convexUrl: string;
   activeConversationId: Id<"conversations"> | null;
   setActiveConversationId: (id: Id<"conversations"> | null) => void;
-  convexMessages: any[] | undefined;
+  convexMessages: Doc<"messages">[] | undefined;
   setTransientMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   updateTitleOnFirstMessage: (convId: Id<"conversations">, prompt: string) => Promise<void>;
   resolveCurrentPageCode: () => Promise<ResolvedCodeResult>;
@@ -296,8 +297,8 @@ export function usePageAiEditor({
       if (onCodeUpdated) {
         setTimeout(onCodeUpdated, 1200);
       }
-    } catch (err: any) {
-      if (err?.name === "AbortError" || abortController.signal.aborted) {
+    } catch (err) {
+      if ((err instanceof Error && err.name === "AbortError") || abortController.signal.aborted) {
         console.log("[PageEditor] Generation cancelled by user.");
         return;
       }

@@ -1,6 +1,6 @@
-import type { HandleKind, BackendNodeType } from "./types";
+import type { HandleKind, BackendNodeType, BackendEdgeType } from "./types";
 import { CONNECTION_RULES, EDGE_TYPE_MAP } from "./graph-rules";
-import { MESSAGING_RESOURCE_TYPES, MESSAGING_NODE_TYPES } from "./constants";
+import { MESSAGING_RESOURCE_TYPES, MESSAGING_NODE_TYPES, BACKEND_EDGE_TYPES } from "./constants";
 
 const ALL_BACKEND_NODE_TYPES = [
   "service",
@@ -48,6 +48,10 @@ const ALL_BACKEND_NODE_TYPES = [
 
 export function isBackendNode(type: string): type is BackendNodeType {
   return ALL_BACKEND_NODE_TYPES.some((t) => t === type);
+}
+
+export function isBackendEdgeType(type: string): type is BackendEdgeType {
+  return Object.values(BACKEND_EDGE_TYPES).some((t) => t === type);
 }
 
 export function getUniqueNodeLabel(

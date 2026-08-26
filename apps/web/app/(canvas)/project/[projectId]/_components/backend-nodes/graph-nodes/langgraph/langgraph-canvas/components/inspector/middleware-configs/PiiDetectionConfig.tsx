@@ -28,7 +28,7 @@ export function PiiDetectionConfig({ data, onUpdate }: MiddlewareConfigProps) {
         </Label>
         <Select
           value={data.piiConfig?.piiType || "email"}
-          onValueChange={(val: any) =>
+          onValueChange={(val: "email" | "credit_card" | "ip" | "mac_address" | "url" | "ssn" | "phone_number" | "api_key" | "custom") =>
             onUpdate({
               piiConfig: {
                 ...data.piiConfig,
@@ -60,7 +60,7 @@ export function PiiDetectionConfig({ data, onUpdate }: MiddlewareConfigProps) {
         </Label>
         <Select
           value={data.piiConfig?.strategy || "redact"}
-          onValueChange={(val: any) =>
+          onValueChange={(val: "redact" | "mask" | "hash" | "block") =>
             onUpdate({
               piiConfig: {
                 ...data.piiConfig,

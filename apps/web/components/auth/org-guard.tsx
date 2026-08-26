@@ -31,8 +31,9 @@ export const OrganizationGuard = ({ children }: { children: ReactNode }) => {
     try {
       await orgActions.setActive({ organizationId: orgId });
       toast.success("Organization selected");
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to select organization");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to select organization";
+      toast.error(message);
     }
   };
 
@@ -56,8 +57,9 @@ export const OrganizationGuard = ({ children }: { children: ReactNode }) => {
         await orgActions.setActive({ organizationId: created.data.id });
         toast.success(`Organization "${orgName}" created!`);
       }
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to create organization");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to create organization";
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }

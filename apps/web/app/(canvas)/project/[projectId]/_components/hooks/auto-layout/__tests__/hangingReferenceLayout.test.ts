@@ -74,7 +74,7 @@ describe("hangingReferenceLayout - Auto-Layout for Hanging Reference Nodes (DB R
       onNodesChange,
       fitView,
       direction: "LR",
-      storeEndpoints: [{ id: "ep-test", nodeId: "service-products" }],
+      storeEndpoints: [{ id: "ep-test", nodeId: "service-products", name: "ep-test", type: "GET" }],
     });
 
     expect(appliedChanges.length).toBe(4);

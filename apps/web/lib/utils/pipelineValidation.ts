@@ -1,4 +1,4 @@
-import { BackendNode, BackendEdge, Endpoint, AnyMessagingResource, KafkaTopic } from "@/types/canvas";
+import { BackendNode, BackendEdge, Endpoint, AnyMessagingResource, KafkaTopic, PublishedEventItem, Parameter } from "@/types/canvas";
 import { PipelineStepDraft } from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/pipeline-step-editor/types";
 import { toFolderName, toPascalCase } from "@/lib/compiler/utils";
 
@@ -76,8 +76,8 @@ export function getConnectedTransformersForEndpoint(
     masterId?: string;
     functionName: string;
     isGlobal: boolean;
-    inputSchema: any[];
-    returnSchema: any[];
+    inputSchema: Parameter[];
+    returnSchema: Parameter[];
     sourceNode: BackendNode;
   }>;
 }
@@ -90,7 +90,7 @@ export function getConnectedKafkaForEndpoint(
   serviceNodeId: string,
   allNodes: BackendNode[] = [],
   allEdges: BackendEdge[] = [],
-  endpoint?: Endpoint,
+  endpoint?: Endpoint | { id: string; publishedEvents?: PublishedEventItem[] },
 ) {
   const kafkaNodes = allNodes.filter(
     (n) =>
@@ -323,6 +323,7 @@ export function isEndpointPipelineUnconfigured(
   endpointOrConsumer: {
     id: string;
     pipelineSteps?: PipelineStepDraft[];
+    publishedEvents?: PublishedEventItem[];
   },
   serviceNodeId: string,
   allNodes: BackendNode[] = [],
@@ -367,7 +368,7 @@ export function isEndpointPipelineUnconfigured(
     serviceNodeId,
     allNodes,
     allEdges,
-    endpointOrConsumer as any,
+    endpointOrConsumer,
   );
 
   if (connectedKafka.length > 0) {
@@ -376,8 +377,8 @@ export function isEndpointPipelineUnconfigured(
         (s) =>
           s.type === "kafka_publish" &&
           (s.functionRef?.name === ck.functionName ||
-            (s as any).brokerNodeId === ck.brokerNodeId ||
-            (s as any).messagingResourceId === ck.topicId),
+            s.brokerNodeId === ck.brokerNodeId ||
+            s.messagingResourceId === ck.topicId),
       );
 
       if (!matchingStep || isStepInputUnconfigured(matchingStep, allNodes)) {

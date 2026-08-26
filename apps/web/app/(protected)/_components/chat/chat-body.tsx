@@ -34,7 +34,7 @@ export const ChatBody = ({
     if (!streamingId || messages.length === 0) return;
 
     const persistedMessageFound = messages.some(
-      (m) => (m as any).clientMessageId === streamingId && m.role === "AI",
+      (m) => m.clientMessageId === streamingId && m.role === "AI",
     );
 
     if (persistedMessageFound) {
@@ -119,7 +119,7 @@ export const ChatBody = ({
             const hasCounterpart = streamingId
               ? messages.some(
                   (m) =>
-                    (m as any).clientMessageId === streamingId &&
+                    m.clientMessageId === streamingId &&
                     m.role === "AI",
                 )
               : lastIsAI;

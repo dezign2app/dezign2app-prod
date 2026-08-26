@@ -1,5 +1,5 @@
 import { httpRouter } from "convex/server";
-import { httpAction } from "./_generated/server";
+import { httpAction, ActionCtx } from "./_generated/server";
 import { api } from "./_generated/api";
 import { betterAuthComponentClient, createAuth } from "./auth";
 
@@ -8,7 +8,7 @@ const http = httpRouter();
 betterAuthComponentClient.registerRoutes(http, createAuth);
 
 const createCreemWebhookHandler =
-  (secretEnvKey: string) => async (ctx: any, request: Request) => {
+  (secretEnvKey: string) => async (ctx: ActionCtx, request: Request) => {
     console.log(`----- Incoming Webhook Request (${secretEnvKey}) -----`);
     const headerObj: Record<string, string> = {};
     request.headers.forEach((value, key) => {

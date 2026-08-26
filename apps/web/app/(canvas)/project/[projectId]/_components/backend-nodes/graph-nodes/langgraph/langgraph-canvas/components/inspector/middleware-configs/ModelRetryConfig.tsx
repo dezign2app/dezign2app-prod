@@ -124,7 +124,7 @@ export function ModelRetryConfig({ data, onUpdate }: MiddlewareConfigProps) {
         </Label>
         <Select
           value={data.modelRetryConfig?.onFailure || "continue"}
-          onValueChange={(val: any) =>
+          onValueChange={(val: "continue" | "error") =>
             onUpdate({
               modelRetryConfig: {
                 ...data.modelRetryConfig,

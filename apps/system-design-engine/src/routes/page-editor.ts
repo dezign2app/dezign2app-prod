@@ -5,6 +5,9 @@ import { createUiEditorGraph } from "../ai/ui-agent";
 import {
   pageEditorRequestBodySchema,
   type PageEditorStreamEvent,
+  type BackendNode,
+  type BackendEdge,
+  type Endpoint,
 } from "@workspace/canvas";
 import { Id } from "@workspace/backend/_generated/dataModel";
 
@@ -26,13 +29,16 @@ function formatStreamError(error: unknown): string {
 /**
  * Helper to extract connected service endpoints for the target node
  */
-function extractConnectedEndpoints(nodeId: string, elements: any): string {
+function extractConnectedEndpoints(
+  nodeId: string,
+  elements: { nodes?: BackendNode[]; edges?: BackendEdge[] } | null | undefined,
+): string {
   if (!elements || !Array.isArray(elements.nodes) || !Array.isArray(elements.edges)) {
     return "";
   }
 
   const { nodes, edges } = elements;
-  const targetNode = nodes.find((n: any) => n.id === nodeId);
+  const targetNode = nodes.find((n) => n.id === nodeId);
   if (!targetNode) return "";
 
   // Find parent or connected webApp node
@@ -44,21 +50,21 @@ function extractConnectedEndpoints(nodeId: string, elements: any): string {
 
   // Find service nodes directly connected or connected via WebApp
   const serviceNodes = nodes.filter(
-    (n: any) => n.type === "service" && (connectedNodeIds.has(n.id) || edges.some((e: any) => (e.source === n.id || e.target === n.id)))
+    (n) => n.type === "service" && (connectedNodeIds.has(n.id) || edges.some((e) => (e.source === n.id || e.target === n.id)))
   );
 
   if (serviceNodes.length === 0) return "";
 
   const summaries: string[] = [];
   for (const svc of serviceNodes) {
-    const serviceName = svc.data?.name || svc.data?.label || svc.id;
+    const serviceName = svc.data?.label || svc.id;
     const endpoints = svc.data?.endpoints || [];
     if (endpoints.length > 0) {
-      const epSummaries = endpoints.map((ep: any) => {
-        const method = (ep.method || "GET").toUpperCase();
-        const route = ep.route || ep.path || "/";
-        const reqFields = ep.requestBody?.fields?.map((f: any) => `${f.name}: ${f.type}`).join(", ");
-        const resFields = ep.responseBody?.fields?.map((f: any) => `${f.name}: ${f.type}`).join(", ");
+      const epSummaries = endpoints.map((ep: Endpoint) => {
+        const method = (ep.type || "GET").toUpperCase();
+        const route = ep.path || ep.name || "/";
+        const reqFields = ep.requestBody?.fields?.map((f) => `${f.name}: ${f.type || "string"}`).join(", ");
+        const resFields = ep.responseBody?.fields?.map((f) => `${f.name}: ${f.type || "string"}`).join(", ");
         return `  - ${method} ${route} ${reqFields ? `(Body: { ${reqFields} })` : ""} ${resFields ? `(Returns: { ${resFields} })` : ""}`;
       }).join("\n");
       summaries.push(`Service "${serviceName}":\n${epSummaries}`);
@@ -415,8 +421,9 @@ pageEditorRouter.post("/", async (req, res) => {
         },
       });
       console.log("[page-editor] Successfully updated Convex node data.");
-    } catch (convexErr: any) {
-      console.warn("[page-editor] Direct Convex persistence skipped/unauthenticated (will be saved by web page ):", convexErr?.message || convexErr);
+    } catch (convexErr) {
+      const errMsg = convexErr instanceof Error ? convexErr.message : String(convexErr);
+      console.warn("[page-editor] Direct Convex persistence skipped/unauthenticated (will be saved by web page ):", errMsg);
     }
 
     // Persist AI message response to Convex
@@ -446,8 +453,9 @@ pageEditorRouter.post("/", async (req, res) => {
       }) + "\n"
     );
     res.end();
-  } catch (error: any) {
-    if (isClientDisconnected || error?.name === "AbortError") {
+  } catch (error) {
+    const errObj = error as { name?: string; message?: string } | undefined;
+    if (isClientDisconnected || errObj?.name === "AbortError") {
       console.log(`🛑 [page-editor] Generation request aborted by user. Exited cleanly.`);
       try {
         if (req.body?.projectId && req.body?.nodeId) {

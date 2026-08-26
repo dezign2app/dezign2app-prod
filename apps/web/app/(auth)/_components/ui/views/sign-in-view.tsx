@@ -89,7 +89,7 @@ export const SignInView = () => {
       } else {
         setError(data.error || "Failed to exchange ticket");
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("[desktop-auth] Ticket exchange error:", err);
       setError("Invalid or expired sign-in ticket. Please try again.");
     } finally {
@@ -154,8 +154,9 @@ export const SignInView = () => {
         toast.success("Signed in successfully!");
         router.push(redirectUrl);
       }
-    } catch (err: any) {
-      setError(err?.message || "Sign in failed");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Sign in failed";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -169,8 +170,9 @@ export const SignInView = () => {
         provider,
         callbackURL: redirectUrl,
       });
-    } catch (err: any) {
-      toast.error(err?.message || `Failed to sign in with ${provider}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `Failed to sign in with ${provider}`;
+      toast.error(message);
       setSocialLoading(null);
     }
   };

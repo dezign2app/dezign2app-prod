@@ -94,7 +94,7 @@ export function DatabaseTableRefConfig({ id, nodeId }: DatabaseTableRefConfigPro
     "sql";
 
   const columns = selectedTable?.data?.columns || [];
-  const primaryKeyCol = columns.find((c: any) => c.isPrimary || c.primaryKey);
+  const primaryKeyCol = columns.find((c) => c.isPrimary || c.isPrimaryKey || c.primaryKey);
 
   const handleJumpToSchema = () => {
     // 1. Switch store view to "schema"
@@ -343,8 +343,8 @@ export function DatabaseTableRefConfig({ id, nodeId }: DatabaseTableRefConfigPro
                     No columns defined
                   </span>
                 ) : (
-                  columns.map((col: any, idx: number) => {
-                    const isPk = col.isPrimary || col.primaryKey;
+                  columns.map((col, idx) => {
+                    const isPk = col.isPrimary || col.isPrimaryKey || col.primaryKey;
                     return (
                       <div
                         key={idx}

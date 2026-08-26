@@ -29,7 +29,7 @@ export function LoggingTracingConfig({
         </Label>
         <Select
           value={data.loggingConfig?.logLevel || "info"}
-          onValueChange={(val: any) =>
+          onValueChange={(val: "debug" | "info" | "warn" | "error") =>
             onUpdate({
               loggingConfig: {
                 ...data.loggingConfig,
@@ -56,7 +56,7 @@ export function LoggingTracingConfig({
         </Label>
         <Select
           value={data.loggingConfig?.tracingTarget || "langsmith"}
-          onValueChange={(val: any) =>
+          onValueChange={(val: "convex" | "langsmith" | "opentelemetry") =>
             onUpdate({
               loggingConfig: {
                 logLevel: data.loggingConfig?.logLevel || "info",

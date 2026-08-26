@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Resizable } from "re-resizable";
 import { motion, AnimatePresence } from "framer-motion";
-import { isElectron } from "@/lib/electron";
+import { isElectron, getElectronAPI } from "@/lib/electron";
 import { downloadMonorepoZip } from "./utils/terminalExportUtils";
 import { toast } from "sonner";
 import { WTermTerminalHandle } from "@/components/terminal";
@@ -92,9 +92,10 @@ export function Terminal({
       setDownloadingZip(true);
       await downloadMonorepoZip(files, formattedProjectName);
       toast.success("Project downloaded successfully");
-    } catch (err: any) {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "An error occurred";
       toast.error("Failed to download project zip", {
-        description: err.message,
+        description: msg,
       });
     } finally {
       setDownloadingZip(false);
@@ -103,8 +104,9 @@ export function Terminal({
 
   // Sync session workspace paths whenever output directory is changed
   useEffect(() => {
-    if (outputDir && (window as any).electronAPI?.workspace?.setPath) {
-      (window as any).electronAPI.workspace.setPath(
+    const electronApi = getElectronAPI();
+    if (outputDir && electronApi?.workspace?.setPath) {
+      electronApi.workspace.setPath(
         `${outputDir}/${formattedProjectName}`,
       );
     }

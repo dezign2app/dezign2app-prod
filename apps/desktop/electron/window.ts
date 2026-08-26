@@ -187,10 +187,11 @@ export async function createMainWindow(): Promise<BrowserWindow> {
         }
         await mainWindow.loadURL(targetUrl);
         return;
-      } catch (err: any) {
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
         console.warn(
           `[window] Attempt ${attempt}/${maxRetries} failed to load ${targetUrl}:`,
-          err?.message
+          message
         );
         if (attempt === maxRetries) {
           if (mainWindow && !mainWindow.isDestroyed()) {

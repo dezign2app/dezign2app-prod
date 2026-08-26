@@ -12,7 +12,7 @@ function getGroqClient() {
   return groq;
 }
 
-const frontendTools = [
+const frontendTools: Groq.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
@@ -180,7 +180,7 @@ const backendTools = [
 ];
 
 export async function* streamCanvasAI(
-  messages: any[],
+  messages: Groq.Chat.Completions.ChatCompletionMessageParam[],
   canvasStateContext: string,
 ) {
   const tools = backendTools;
@@ -206,7 +206,7 @@ Be concise in your textual responses. Prefer using tools to update the canvas to
   const response = await client.chat.completions.create({
     model: "openai/gpt-oss-20b",
     messages: [{ role: "system", content: systemPrompt }, ...messages],
-    tools: tools as any,
+    tools,
     tool_choice: "auto",
     stream: true,
   });

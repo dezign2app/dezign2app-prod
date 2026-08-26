@@ -1,18 +1,20 @@
+export type LangGraphRouterBranchOperator =
+  | "eq"
+  | "neq"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "contains"
+  | "is_not_null"
+  | "has_tool_calls"
+  | "expression";
+
 export type LangGraphRouterBranch = {
   id: string;
   label: string;
   field: string;
-  operator:
-    | "eq"
-    | "neq"
-    | "gt"
-    | "gte"
-    | "lt"
-    | "lte"
-    | "contains"
-    | "is_not_null"
-    | "has_tool_calls"
-    | "expression";
+  operator: LangGraphRouterBranchOperator;
   value?: string;
   isDefault?: boolean;
   targetId?: string;

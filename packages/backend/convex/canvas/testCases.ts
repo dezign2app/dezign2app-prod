@@ -20,7 +20,7 @@ export const upsertBackendTestCase = mutation({
       .unique();
 
     if (existing) {
-      await ctx.db.patch(existing._id, { data: args.data as any });
+      await ctx.db.patch(existing._id, { data: args.data });
     } else {
       await ctx.db.insert("canvas_backend_test_cases", {
         projectId: args.projectId,

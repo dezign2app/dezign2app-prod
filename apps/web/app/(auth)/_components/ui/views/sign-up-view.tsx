@@ -101,8 +101,9 @@ export const SignUpView = () => {
 
       toast.success("Account created successfully!");
       router.push(redirectUrl);
-    } catch (err: any) {
-      setError(err?.message || "Sign up failed");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Sign up failed";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -116,8 +117,9 @@ export const SignUpView = () => {
         provider,
         callbackURL: redirectUrl,
       });
-    } catch (err: any) {
-      toast.error(err?.message || `Failed to sign up with ${provider}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `Failed to sign up with ${provider}`;
+      toast.error(message);
       setSocialLoading(null);
     }
   };

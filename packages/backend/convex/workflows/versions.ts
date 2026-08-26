@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { internal } from "../_generated/api";
+import { Id } from "../_generated/dataModel";
 import { assertWorkflowAccess, requireIdentity } from "./_utils";
 
 export const publishWorkflow = mutation({
@@ -103,7 +104,7 @@ export const publishWorkflow = mutation({
     // Handle Cron Trigger Scheduling (Explicit Cancellation)
     if (workflow.scheduledJobId) {
       try {
-        await ctx.scheduler.cancel(workflow.scheduledJobId as any);
+        await ctx.scheduler.cancel(workflow.scheduledJobId as Id<"_scheduled_functions">);
       } catch (e) {
         // Ignore if already gone
       }
@@ -156,7 +157,7 @@ export const unpublishWorkflow = mutation({
     // Cancel existing schedule if any
     if (workflow.scheduledJobId) {
       try {
-        await ctx.scheduler.cancel(workflow.scheduledJobId as any);
+        await ctx.scheduler.cancel(workflow.scheduledJobId as Id<"_scheduled_functions">);
       } catch (e) {
         // Ignore errors if the job is already gone
       }

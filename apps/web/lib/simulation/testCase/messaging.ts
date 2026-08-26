@@ -86,11 +86,9 @@ export async function simulateMessagingBrokerTestCase(args: {
       consumerService.data.endpoints?.find(
         (ep: Endpoint) => ep.id === consumedEventId,
       ) ??
-      (
-        consumerService.data.routeGroups?.flatMap(
-          (g: any) => g.endpoints,
-        ) as Endpoint[]
-      )?.find((ep: Endpoint) => ep.id === consumedEventId);
+      consumerService.data.routeGroups?.flatMap(
+        (g) => g.endpoints ?? [],
+      )?.find((ep) => ep.id === consumedEventId);
 
     let consumerBody: unknown = clone(args.testCase.request?.body);
 
@@ -148,7 +146,7 @@ export async function simulateMessagingBrokerTestCase(args: {
         "",
       );
       const clientEvent = clientNode.data.events?.find(
-        (ev: any) => ev.id === targetEventId,
+        (ev) => ev.id === targetEventId,
       );
       const eventSuffix = clientEvent?.name ? ` (${clientEvent.name})` : "";
 
@@ -236,13 +234,14 @@ export async function simulateMessagingPush(args: {
       const resourceId = pubEdge.targetHandle?.includes(":")
         ? pubEdge.targetHandle.split(":").pop()
         : pubEdge.targetHandle?.split("-in-").pop();
-      const resourceList = (brokerNode.data.topics ||
+      const resourceList: Array<{ id: string; name?: string }> =
+        brokerNode.data.topics ||
         brokerNode.data.queues ||
         brokerNode.data.streams ||
         brokerNode.data.channels ||
-        []) as any[];
+        [];
       const resource =
-        resourceList.find((r: any) => r.id === resourceId) || resourceList[0];
+        resourceList.find((r) => r.id === resourceId) || resourceList[0];
       eventLabel =
         resource?.name ||
         step.endpoint.name ||

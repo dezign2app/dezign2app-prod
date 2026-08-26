@@ -543,8 +543,10 @@ export const createNodeSlice = (
 
     BROKER_RESOURCE_KEYS.forEach((key) => {
       if (changes.data && key in changes.data) {
-        const oldList = ((updatedNode.data as any)?.[key] || []) as Array<{ id: string }>;
-        const newList = ((changes.data as any)[key] || []) as Array<{ id: string }>;
+        const oldData = updatedNode.data as unknown as Record<string, unknown>;
+        const newData = changes.data as unknown as Record<string, unknown>;
+        const oldList = (Array.isArray(oldData[key]) ? oldData[key] : []) as Array<{ id: string }>;
+        const newList = (Array.isArray(newData[key]) ? newData[key] : []) as Array<{ id: string }>;
         const newIds = new Set(newList.map((r) => r.id));
         const removedResourceIds = oldList
           .filter((r) => !newIds.has(r.id))

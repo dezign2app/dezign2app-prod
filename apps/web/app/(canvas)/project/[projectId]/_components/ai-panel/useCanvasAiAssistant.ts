@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { Id } from "@workspace/backend/_generated/dataModel";
+import { Id, Doc } from "@workspace/backend/_generated/dataModel";
 import { toast } from "sonner";
 import { BackendCanvasView } from "@/types/canvas";
 import { Message, SerializedNodeData } from "./types";
@@ -12,11 +12,11 @@ interface UseCanvasAiAssistantOptions {
   projectId: string;
   activeChatId: Id<"project_chats"> | null;
   setActiveChatId: (id: Id<"project_chats"> | null) => void;
-  convexMessages: any[] | undefined;
+  convexMessages: Doc<"project_chat_messages">[] | undefined;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   createChat: (args: { projectId: Id<"projects">; title: string }) => Promise<Id<"project_chats">>;
-  addMessage: (args: { chatId: Id<"project_chats">; role: "user" | "assistant"; content: string }) => Promise<any>;
-  updateChatTitleMutation: (args: { chatId: Id<"project_chats">; title: string }) => Promise<any>;
+  addMessage: (args: { chatId: Id<"project_chats">; role: "user" | "assistant"; content: string }) => Promise<unknown>;
+  updateChatTitleMutation: (args: { chatId: Id<"project_chats">; title: string }) => Promise<unknown>;
   setView?: (view: BackendCanvasView) => void;
 }
 
@@ -121,29 +121,35 @@ export function useCanvasAiAssistant({
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
-      let currentChatId = activeChatId;
-      if (!currentChatId) {
+      let currentChatId: Id<"project_chats"> | null = activeChatId;
+      if (!currentChatId && projectId) {
         try {
-          currentChatId = await createChat({
+          const newChatId = await createChat({
             projectId: projectId as Id<"projects">,
             title:
               userMessage.substring(0, 40) +
               (userMessage.length > 40 ? "..." : ""),
           });
-          setActiveChatId(currentChatId);
+          currentChatId = newChatId;
+          setActiveChatId(newChatId);
         } catch (err) {
           console.error("[useCanvasAiAssistant] Failed to create chat:", err);
           toast.error("Failed to create conversation");
           setIsLoading(false);
           return;
         }
-      } else if (!convexMessages || convexMessages.length === 0) {
+      } else if (currentChatId && (!convexMessages || convexMessages.length === 0)) {
         updateChatTitleMutation({
           chatId: currentChatId,
           title:
             userMessage.substring(0, 40) +
             (userMessage.length > 40 ? "..." : ""),
         }).catch(() => {});
+      }
+
+      if (!currentChatId) {
+        setIsLoading(false);
+        return;
       }
 
       const userMsgObj: Message = {
@@ -270,8 +276,8 @@ export function useCanvasAiAssistant({
             content: assistantContent,
           }).catch(console.error);
         }
-      } catch (error: any) {
-        if (error?.name === "AbortError" || abortController.signal.aborted) {
+      } catch (error) {
+        if ((error instanceof Error && error.name === "AbortError") || abortController.signal.aborted) {
           console.log("[useCanvasAiAssistant] Generation cancelled by user.");
           return;
         }

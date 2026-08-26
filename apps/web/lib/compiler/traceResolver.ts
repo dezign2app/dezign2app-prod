@@ -57,25 +57,16 @@ export function formatDatabaseColumnsContext(
   let targetNode = node;
 
   // If this is a Table Ref node, resolve the target Entity node
-  if (node.type === "db_ref" && (node.data as any)?.tableRef) {
+  if (node.type === "db_ref" && node.data?.tableRef) {
     const refEntity = allNodes.find(
-      (n) => n.id === (node.data as any).tableRef,
+      (n) => n.id === node.data?.tableRef,
     );
     if (refEntity) {
       targetNode = refEntity;
     }
   }
 
-  const columns = (targetNode.data as any)?.columns as
-    | Array<{
-        name: string;
-        type?: string;
-        isPrimaryKey?: boolean;
-        isNotNull?: boolean;
-        isUnique?: boolean;
-        isForeignKey?: boolean;
-      }>
-    | undefined;
+  const columns = targetNode.data?.columns;
 
   if (!columns || !Array.isArray(columns) || columns.length === 0) {
     return "Schema Fields: (No columns configured)";
@@ -142,9 +133,9 @@ export function formatEndpointPayloadContext(endpoint: Endpoint): string {
   // Headers
   if (Array.isArray(endpoint.headers) && endpoint.headers.length > 0) {
     const headersStr = endpoint.headers
-      .filter((h: any) => h && h.name)
+      .filter((h) => h && h.name)
       .map(
-        (h: any) =>
+        (h) =>
           `${h.name}${h.required === false ? "?" : ""}: ${h.type || "string"}`,
       )
       .join(", ");
@@ -154,9 +145,9 @@ export function formatEndpointPayloadContext(endpoint: Endpoint): string {
   // Path params
   if (Array.isArray(endpoint.pathParams) && endpoint.pathParams.length > 0) {
     const pathStr = endpoint.pathParams
-      .filter((p: any) => p && p.name)
+      .filter((p) => p && p.name)
       .map(
-        (p: any) =>
+        (p) =>
           `${p.name}${p.required === false ? "?" : ""}: ${p.type || "string"}`,
       )
       .join(", ");
@@ -166,9 +157,9 @@ export function formatEndpointPayloadContext(endpoint: Endpoint): string {
   // Query params
   if (Array.isArray(endpoint.queryParams) && endpoint.queryParams.length > 0) {
     const queryStr = endpoint.queryParams
-      .filter((q: any) => q && q.name)
+      .filter((q) => q && q.name)
       .map(
-        (q: any) =>
+        (q) =>
           `${q.name}${q.required === false ? "?" : ""}: ${q.type || "string"}`,
       )
       .join(", ");
@@ -176,13 +167,13 @@ export function formatEndpointPayloadContext(endpoint: Endpoint): string {
   }
 
   // Request body fields or rawJson
-  const reqBody = endpoint.requestBody as any;
+  const reqBody = endpoint.requestBody;
   if (reqBody) {
     if (Array.isArray(reqBody.fields) && reqBody.fields.length > 0) {
       const fieldsStr = reqBody.fields
-        .filter((f: any) => f && f.name)
+        .filter((f) => f && f.name)
         .map(
-          (f: any) =>
+          (f) =>
             `${f.name}${f.required === false ? "?" : ""}: ${f.type || "string"}`,
         )
         .join(", ");
@@ -197,12 +188,12 @@ export function formatEndpointPayloadContext(endpoint: Endpoint): string {
   }
 
   // Response body fields or rawJson
-  const resBody = endpoint.responseBody as any;
+  const resBody = endpoint.responseBody;
   if (resBody) {
     if (Array.isArray(resBody.fields) && resBody.fields.length > 0) {
       const resFieldsStr = resBody.fields
-        .filter((f: any) => f && f.name)
-        .map((f: any) => `${f.name}: ${f.type || "string"}`)
+        .filter((f) => f && f.name)
+        .map((f) => `${f.name}: ${f.type || "string"}`)
         .join(", ");
       if (resFieldsStr) parts.push(`Response: { ${resFieldsStr} }`);
     } else if (
@@ -292,7 +283,7 @@ export function resolveEndpointTrace(
 
       // Check if WebClient page is in a protected zone
       let isProtected = false;
-      const wcData = srcNode.data as any;
+      const wcData = srcNode.data;
       if (wcData?.useZoneDefault === false && wcData?.protectionOverride) {
         isProtected = wcData.protectionOverride.accessType === "protected";
       } else {
@@ -315,11 +306,11 @@ export function resolveEndpointTrace(
             webAppEdge.source === webAppNode?.id
               ? webAppEdge.sourceHandle
               : webAppEdge.targetHandle;
-          const zones = (webAppNode?.data as any)?.zones || [
+          const zones = webAppNode?.data?.zones || [
             { handleId: "public-in", name: "Public Section", accessType: "public" },
             { handleId: "private-in", name: "Private Section", accessType: "protected" },
           ];
-          const matchedZone = zones.find((z: any) => z.handleId === handleId);
+          const matchedZone = zones.find((z) => z.handleId === handleId);
           if (matchedZone) {
             isProtected =
               matchedZone.accessType === "protected" ||
@@ -351,7 +342,7 @@ export function resolveEndpointTrace(
       srcTypeStr === "database"
     ) {
       const tableName =
-        (srcNode.data as any)?.tableName ||
+        srcNode.data?.tableName ||
         srcName.toLowerCase().replace(/[^a-z0-9_]/g, "_");
       incoming.push({
         nodeId: srcNode.id,
@@ -381,7 +372,7 @@ export function resolveEndpointTrace(
         nodeName: srcName,
         nodeType:
           srcNode.type === "api_gateway" ? "API Gateway" : "Load Balancer",
-        detail: `Routed through gateway endpoint (Port ${(srcNode.data as any)?.port || "8000"})`,
+        detail: `Routed through gateway endpoint (Port ${srcNode.data?.port ? String(srcNode.data.port) : "8000"})`,
         dataContext: `Routes to ${epMethod} ${epPath}`,
       });
     }
@@ -426,7 +417,7 @@ export function resolveEndpointTrace(
     if (!tgtNode) return;
 
     const tgtName = tgtNode.data?.label || tgtNode.id;
-    const nodeData = tgtNode.data as any;
+    const nodeData = tgtNode.data;
     const nodeTypeStr = tgtNode.type as string;
 
     // A. Redis Cache Node
@@ -612,13 +603,12 @@ export function resolveConsumerTrace(
     const tgtNode = allNodes.find((n) => n.id === edge.target);
     if (!tgtNode) return;
     const tgtName = tgtNode.data?.label || tgtNode.id;
-    const nodeData = tgtNode.data as any;
-    const tgtTypeStr = tgtNode.type as string;
+    const nodeData = tgtNode.data;
+    const tgtTypeStr = tgtNode.type;
 
     if (
       tgtNode.type === "entity" ||
       tgtNode.type === "db_ref" ||
-      tgtTypeStr === "db" ||
       tgtTypeStr === "database"
     ) {
       const tableName =

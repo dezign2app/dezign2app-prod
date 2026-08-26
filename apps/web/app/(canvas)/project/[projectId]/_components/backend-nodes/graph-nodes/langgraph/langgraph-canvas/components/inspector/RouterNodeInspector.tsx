@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import type { LangGraphStateChannel } from "@/types/canvas";
-import type { StepNodeData } from "@workspace/canvas";
+import type { StepNodeData, LangGraphRouterBranchOperator } from "@workspace/canvas";
 
 interface RouterNodeInspectorProps {
   selectedStepData: StepNodeData;
@@ -228,9 +228,12 @@ export function RouterNodeInspector({
             <Label className="text-xs">Comparison Operator</Label>
             <Select
               value={activeBranch.operator}
-              onValueChange={(v: any) => {
+              onValueChange={(v: string) => {
                 const updated = [...branches];
-                updated[activeBranchIdx] = { ...activeBranch, operator: v };
+                updated[activeBranchIdx] = {
+                  ...activeBranch,
+                  operator: v as LangGraphRouterBranchOperator,
+                };
                 onUpdateStep({ routerConfig: { branches: updated } });
               }}
             >

@@ -1,5 +1,6 @@
 import { ConvexHttpClient } from "convex/browser";
 import { GraphAnnotation } from "./state";
+import type { BackendNodeData } from "@workspace/canvas";
 
 export function getConvexClient(state: typeof GraphAnnotation.State) {
   if (!state.convexUrl) throw new Error("Missing convexUrl in state");
@@ -10,60 +11,94 @@ export function getConvexClient(state: typeof GraphAnnotation.State) {
   return client;
 }
 
-export function formatToolCallLog(name: string, args: any): string {
+export interface ToolCallLogArgs {
+  label?: string;
+  type?: string;
+  groupLabel?: string;
+  source?: string;
+  target?: string;
+  id?: string;
+  data?: { label?: string };
+  [key: string]: unknown;
+}
+
+export function formatToolCallLog(
+  name: string,
+  args: ToolCallLogArgs | null | undefined,
+): string {
   if (!args || Object.keys(args).length === 0) return "";
 
+  const argsObj = args;
+
   if (name === "add_node") {
-    const label = args.label || args.data?.label || "Unknown Node";
-    return `\nAdded **${label}** (${args.type})`;
+    const label = argsObj.label || argsObj.data?.label || "Unknown Node";
+    return `\nAdded **${label}** (${argsObj.type})`;
   } else if (name === "add_service_node") {
-    const label = args.label || "Unknown Service";
+    const label = argsObj.label || "Unknown Service";
     return `\nAdded **${label}** (service)`;
   } else if (name === "add_client_node") {
-    const label = args.label || "Unknown Client";
+    const label = argsObj.label || "Unknown Client";
     return `\nAdded **${label}** (client)`;
   } else if (name === "add_schema_group") {
-    const label = args.groupLabel || "Unknown Schema Group";
+    const label = argsObj.groupLabel || "Unknown Schema Group";
     return `\nAdded **${label}** (schema group)`;
   } else if (name === "add_schema" || name === "add_single_schema") {
-    const label = args.label || "Unknown Schema";
+    const label = argsObj.label || "Unknown Schema";
     return `\nAdded **${label}** (schema)`;
   } else if (name === "add_kafka_node") {
-    const label = args.label || "Unknown Kafka Broker";
+    const label = argsObj.label || "Unknown Kafka Broker";
     return `\nAdded **${label}** (kafka)`;
   } else if (name === "add_edge") {
-    return `\nConnected **${args.source}** → **${args.target}** (${args.type || "edge"})`;
+    return `\nConnected **${argsObj.source}** → **${argsObj.target}** (${argsObj.type || "edge"})`;
   } else if (name === "update_node") {
-    return `\nUpdated node **${args.id}**`;
+    return `\nUpdated node **${argsObj.id}**`;
   } else if (name === "delete_node") {
-    return `\nDeleted node **${args.id}**`;
+    return `\nDeleted node **${argsObj.id}**`;
   } else if (name === "delete_edge") {
-    return `\nDeleted edge **${args.id}**`;
+    return `\nDeleted edge **${argsObj.id}**`;
   } else if (name === "add_db_ref_node") {
-    return `\nAdded **${args.label}** (database ref)`;
+    return `\nAdded **${argsObj.label}** (database ref)`;
   } else if (name === "add_schema_edge") {
     return `\nLinked relationships between tables.`;
   }
   return `\n\`\`\`json\n${JSON.stringify(args, null, 2)}\n\`\`\`\n`;
 }
 
-export function formatCanvasState(elements: any): string {
+export interface CanvasSnapshotElements {
+  nodes?: Array<{
+    nodeId: string;
+    type: string;
+    data: BackendNodeData;
+    [key: string]: unknown;
+  }>;
+  edges?: Array<{
+    source: string;
+    target: string;
+    type?: string;
+    sourceHandle?: string | null;
+    targetHandle?: string | null;
+    data?: { label?: string; [key: string]: unknown };
+    [key: string]: unknown;
+  }>;
+}
+
+export function formatCanvasState(elements: CanvasSnapshotElements | null | undefined): string {
   let output = "Canvas is empty.";
   if (elements && elements.nodes && elements.nodes.length > 0) {
     output = "Backend Canvas Nodes:\n";
-    elements.nodes.forEach((n: any) => {
+    elements.nodes.forEach((n) => {
       let extra = "";
       if (n.type === "entity" && n.data.columns) {
         extra +=
           `\n  Columns (use for 'sourceHandle'/'targetHandle'): ` +
-          (n.data.columns as any[])
-            .map((c) => `${c.name} (ID: ${c.id})`)
+          n.data.columns
+            .map((c) => `${c.name} (ID: ${c.name})`)
             .join(", ");
       }
       if (n.type === "service" && n.data.endpoints) {
         extra +=
           `\n  Endpoints: ` +
-          (n.data.endpoints as any[])
+          n.data.endpoints
             .map((ep) => {
               const dbTargets = [
                 ...(Array.isArray(ep.databaseNodeIds)
@@ -85,14 +120,14 @@ export function formatCanvasState(elements: any): string {
       if (n.type === "webPage" && n.data.events) {
         extra +=
           `\n  Events: ` +
-          (n.data.events as any[])
+          n.data.events
             .map((ev) => `${ev.name} (sourceHandle="events-${ev.id}")`)
             .join("\n    ");
       }
       if (n.type === "kafka" && n.data.topics) {
         extra +=
           `\n  Topics: ` +
-          (n.data.topics as any[])
+          n.data.topics
             .map(
               (t) =>
                 `${t.name} (targetHandle="topics:in:${t.id}", sourceHandle="topics:out:${t.id}")`,
@@ -104,12 +139,12 @@ export function formatCanvasState(elements: any): string {
 
     if (elements.edges && elements.edges.length > 0) {
       output += "\nConnections:\n";
-      elements.edges.forEach((e: any) => {
+      elements.edges.forEach((e) => {
         const sourceNode =
-          elements.nodes.find((n: any) => n.nodeId === e.source)?.data.label ||
+          elements.nodes?.find((n) => n.nodeId === e.source)?.data.label ||
           e.source;
         const targetNode =
-          elements.nodes.find((n: any) => n.nodeId === e.target)?.data.label ||
+          elements.nodes?.find((n) => n.nodeId === e.target)?.data.label ||
           e.target;
         const label = e.data?.label ? ` (label: ${e.data.label})` : "";
         output += `- ${sourceNode} (${e.source}) -> ${targetNode} (${e.target}) [${e.type}]${label} sourceHandle="${e.sourceHandle ?? ""}" targetHandle="${e.targetHandle ?? ""}"\n`;
@@ -120,21 +155,21 @@ export function formatCanvasState(elements: any): string {
     // of making it infer completeness from the total edge count. A canvas can
     // have many client/service edges while every database reference remains
     // disconnected.
-    const databaseRefs = elements.nodes.filter((n: any) => n.type === "db_ref");
+    const databaseRefs = (elements.nodes ?? []).filter((n) => n.type === "db_ref");
     const databaseEdges = (elements.edges ?? []).filter(
-      (e: any) =>
+      (e) =>
         e.sourceHandle?.startsWith("endpoints-out-") &&
         e.targetHandle === "database-target" &&
-        databaseRefs.some((db: any) => db.nodeId === e.target),
+        databaseRefs.some((db) => db.nodeId === e.target),
     );
     const auditLines: string[] = [];
 
-    for (const service of elements.nodes.filter(
-      (n: any) => n.type === "service",
+    for (const service of (elements.nodes ?? []).filter(
+      (n) => n.type === "service",
     )) {
       for (const endpoint of service.data?.endpoints ?? []) {
         const endpointEdges = databaseEdges.filter(
-          (e: any) =>
+          (e) =>
             e.source === service.nodeId &&
             e.sourceHandle === `endpoints-out-${endpoint.id}`,
         );
@@ -147,7 +182,7 @@ export function formatCanvasState(elements: any): string {
     }
 
     for (const db of databaseRefs) {
-      if (!databaseEdges.some((e: any) => e.target === db.nodeId)) {
+      if (!databaseEdges.some((e) => e.target === db.nodeId)) {
         auditLines.push(
           `- UNCONNECTED db_ref: ${db.nodeId} (label="${db.data?.label ?? ""}")`,
         );

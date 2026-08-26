@@ -228,9 +228,9 @@ export function pickDbFunctionsForEndpoint(
           } else if (opLower.startsWith("set") || fn.kind === "create" || fn.kind === "update") {
             callExpr = isIdRoute
               ? `await ${fn.name}(req.params.id, PAYLOAD_VAR)`
-              : `await ${fn.name}(((PAYLOAD_VAR as any)?.id || "default"), PAYLOAD_VAR)`;
+              : `await ${fn.name}(((PAYLOAD_VAR as { id?: string })?.id || "default"), PAYLOAD_VAR)`;
           } else if (opLower.startsWith("invalidate") || opLower.startsWith("delete") || fn.kind === "delete") {
-            callExpr = isIdRoute ? `await ${fn.name}(req.params.id)` : `await ${fn.name}((PAYLOAD_VAR as any)?.id || "default")`;
+            callExpr = isIdRoute ? `await ${fn.name}(req.params.id)` : `await ${fn.name}((PAYLOAD_VAR as { id?: string })?.id || "default")`;
           } else {
             callExpr = `await ${fn.name}()`;
           }

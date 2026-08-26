@@ -76,7 +76,7 @@ describe("hangingTransformerLayout - Auto-Layout for Hanging Transformers", () =
       onNodesChange,
       fitView,
       direction: "LR",
-      storeEndpoints: [{ id: "ep-test", nodeId: "service-products" }],
+      storeEndpoints: [{ id: "ep-test", nodeId: "service-products", name: "ep-test", type: "GET" }],
     });
 
     expect(appliedChanges.length).toBe(4);
@@ -165,7 +165,7 @@ describe("hangingTransformerLayout - Auto-Layout for Hanging Transformers", () =
       onNodesChange,
       fitView,
       direction: "LR",
-      storeEndpoints: [{ id: "ep-demo", nodeId: "service-products" }],
+      storeEndpoints: [{ id: "ep-demo", nodeId: "service-products", name: "ep-demo", type: "GET" }],
     });
 
     const posMap = new Map(
@@ -241,8 +241,8 @@ describe("hangingTransformerLayout - Auto-Layout for Hanging Transformers", () =
       fitView,
       direction: "LR",
       storeEndpoints: [
-        { id: "ep-1", nodeId: "service-1" },
-        { id: "ep-2", nodeId: "service-1" },
+        { id: "ep-1", nodeId: "service-1", name: "ep-1", type: "GET" },
+        { id: "ep-2", nodeId: "service-1", name: "ep-2", type: "GET" },
       ],
     });
 

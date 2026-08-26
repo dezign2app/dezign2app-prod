@@ -324,7 +324,7 @@ export interface LiveApiCallResult {
   status: number;
   statusText: string;
   headers: Record<string, string>;
-  body: any;
+  body: JSONValue;
   rawText?: string;
   latencyMs: number;
   sizeFormatted: string;
@@ -501,8 +501,8 @@ export function evaluateAssertions({
   }
 
   // 2. Response Body Partial / Exact Assertion
-  if (expectedBody !== undefined && expectedBody !== null && Object.keys(expectedBody as object).length > 0) {
-    const isBodyMatch = checkBodyMatches(actualBody, expectedBody);
+  if (expectedBody !== undefined && expectedBody !== null && typeof expectedBody === "object" && Object.keys(expectedBody).length > 0) {
+    const isBodyMatch = checkBodyMatches(actualBody as JSONValue, expectedBody as JSONValue);
     assertions.push({
       id: "body-check",
       name: "Response body matches expected structure",
@@ -535,8 +535,8 @@ export function evaluateAssertions({
  * Checks whether the actual body contains or matches the expected body.
  */
 function checkBodyMatches(
-  actual: any,
-  expected: any,
+  actual: JSONValue,
+  expected: JSONValue,
 ): { passed: boolean; detail: string } {
   if (actual === undefined || actual === null) {
     return { passed: false, detail: "Actual response body is empty or undefined" };
@@ -566,27 +566,34 @@ function checkBodyMatches(
     };
   }
 
+  if (typeof actual !== "object" || Array.isArray(actual)) {
+    return { passed: false, detail: "Expected object in response but received non-object" };
+  }
+
+  const actualObj = actual as Record<string, JSONValue>;
+  const expectedObj = expected as Record<string, JSONValue>;
+
   // Check object keys subset
   const missingKeys: string[] = [];
   const mismatchedKeys: string[] = [];
 
-  for (const [key, expVal] of Object.entries(expected)) {
-    if (!(key in actual)) {
+  for (const [key, expVal] of Object.entries(expectedObj)) {
+    if (!(key in actualObj)) {
       missingKeys.push(key);
     } else if (
       expVal !== null &&
       typeof expVal === "object" &&
       !Array.isArray(expVal)
     ) {
-      const sub = checkBodyMatches(actual[key], expVal);
+      const sub = checkBodyMatches(actualObj[key] as JSONValue, expVal);
       if (!sub.passed) mismatchedKeys.push(`${key} (${sub.detail})`);
     } else if (
       typeof expVal !== "object" &&
-      typeof actual[key] === typeof expVal &&
+      typeof actualObj[key] === typeof expVal &&
       expVal !== "" &&
-      actual[key] !== expVal
+      actualObj[key] !== expVal
     ) {
-      mismatchedKeys.push(`${key}: expected "${expVal}", got "${actual[key]}"`);
+      mismatchedKeys.push(`${key}: expected "${expVal}", got "${actualObj[key]}"`);
     }
   }
 

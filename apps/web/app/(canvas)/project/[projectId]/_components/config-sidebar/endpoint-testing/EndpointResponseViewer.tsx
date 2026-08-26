@@ -182,7 +182,11 @@ export function EndpointResponseViewer({
       {/* Tabs */}
       <Tabs
         value={activeTab}
-        onValueChange={(val) => setActiveTab(val as any)}
+        onValueChange={(val: string) => {
+          if (val === "body" || val === "headers" || val === "assertions") {
+            setActiveTab(val);
+          }
+        }}
         className="w-full"
       >
         <div className="flex items-center justify-between border-b pb-1">

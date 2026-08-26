@@ -3,12 +3,13 @@
 import { useCallback, useMemo } from "react";
 import { isElectron, getElectronAPI } from "@/lib/electron";
 import { toast } from "sonner";
+import type { BackendNode } from "@workspace/canvas";
 
 interface UsePageCodeSyncOptions {
-  connectedWebAppNode: any;
+  connectedWebAppNode: BackendNode | null | undefined;
   pageFolderSlug: string;
   outputDir: string;
-  node: any;
+  node: BackendNode | null | undefined;
 }
 
 export interface ResolvedCodeResult {

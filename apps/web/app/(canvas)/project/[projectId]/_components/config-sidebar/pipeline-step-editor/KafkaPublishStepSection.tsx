@@ -181,7 +181,7 @@ export const KafkaPublishStepSection = ({
           id: `publish-${selectedResource.name}`,
           name: `publish${pascalResource}`,
           importPath: `@workspace/${packageFolder}/publishers`,
-          signature: `publish${pascalResource}(payload: any, key?: string): Promise<void>`,
+          signature: `publish${pascalResource}(payload: Record<string, unknown>, key?: string): Promise<void>`,
           description: `Dedicated publisher for topic "${selectedResource.name}"`,
         });
       } else {
@@ -189,7 +189,7 @@ export const KafkaPublishStepSection = ({
           id: `publish-${selectedResource.name}`,
           name: `send${pascalResource}Message`,
           importPath: `@workspace/${packageFolder}/publishers`,
-          signature: `send${pascalResource}Message(message: any): Promise<void>`,
+          signature: `send${pascalResource}Message(message: Record<string, unknown>): Promise<void>`,
           description: `Publisher for ${selectedResource.kind} "${selectedResource.name}"`,
         });
       }
@@ -200,7 +200,7 @@ export const KafkaPublishStepSection = ({
       id: "publishKafkaEvent",
       name: "publishKafkaEvent",
       importPath: `@workspace/${packageFolder}/publishers`,
-      signature: "publishKafkaEvent(topic: string, payload: any, key?: string): Promise<void>",
+      signature: "publishKafkaEvent(topic: string, payload: Record<string, unknown>, key?: string): Promise<void>",
       description: "Generic dynamic Kafka producer function",
       isGeneric: true,
     });
@@ -314,7 +314,7 @@ export const KafkaPublishStepSection = ({
       functionRef: {
         name: fnName,
         importPath: `@workspace/${packageFolder}/publishers`,
-        signature: `publish${pascalName}(payload: any, key?: string): Promise<void>`,
+        signature: `publish${pascalName}(payload: Record<string, unknown>, key?: string): Promise<void>`,
       },
       name: varName,
       outputVariable: varName,

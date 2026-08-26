@@ -55,7 +55,7 @@ export function generatePageAndComponentFiles({
         : undefined);
 
     const nodeHeaders: Record<string, string> = {};
-    (node.data?.headers || []).forEach((h: any) => {
+    (node.data?.headers || []).forEach((h) => {
       const hKey = h.key || h.name;
       const hVal = h.value || h.defaultValue || "";
       if (hKey) {
@@ -64,7 +64,7 @@ export function generatePageAndComponentFiles({
     });
 
     const nodeQueryParams: Record<string, string> = {};
-    (node.data?.queryParams || []).forEach((p: any) => {
+    (node.data?.queryParams || []).forEach((p) => {
       const pKey = p.key || p.name;
       const pVal = p.value || p.defaultValue || "";
       if (pKey) {
@@ -78,8 +78,8 @@ export function generatePageAndComponentFiles({
         nodeRequestBody = JSON.parse(node.data.requestBody.rawJson);
       } catch {}
     } else if (node.data?.requestBody?.fields && node.data.requestBody.fields.length > 0) {
-      const bodyObj: Record<string, any> = {};
-      node.data.requestBody.fields.forEach((f: any) => {
+      const bodyObj: Record<string, unknown> = {};
+      node.data.requestBody.fields.forEach((f) => {
         const fKey = f.name || f.key;
         if (fKey) {
           bodyObj[fKey] = f.value ?? f.defaultValue ?? (f.type === "number" ? 0 : f.type === "boolean" ? true : `sample_${fKey}`);
@@ -142,11 +142,12 @@ export function generatePageAndComponentFiles({
       pageLoadFetchStatements = `setPageLoadLoading(true);
       setPageLoadError(null);
       try {
-        const results: Record<string, any> = {};
+        const results: Record<string, unknown> = {};
         ${statements.join("\n")}
         setPageLoadData(${pageLoadEvents.length === 1} ? results["${pageLoadEvents[0]?.name || "pageLoad"}"] : results);
-      } catch (err: any) {
-        setPageLoadError(err.message || "Failed to load page data");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to load page data";
+        setPageLoadError(message);
       } finally {
         setPageLoadLoading(false);
       }`;

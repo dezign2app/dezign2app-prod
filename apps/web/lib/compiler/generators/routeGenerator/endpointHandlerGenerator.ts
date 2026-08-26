@@ -194,7 +194,7 @@ export function generateEndpointRouteHandler(
 
   // Pre-collect pipeline step imports so they land in the file's import block
   // (pipeline steps are processed later, but imports must be at the top)
-  const pipelineStepsEarly = (ep as any).pipelineSteps;
+  const pipelineStepsEarly = ep.pipelineSteps;
   if (Array.isArray(pipelineStepsEarly) && pipelineStepsEarly.length > 0) {
     const pipelineImports = collectPipelineImports(pipelineStepsEarly);
     pipelineImports.forEach((names, importPath) => {
@@ -458,7 +458,7 @@ export async function ${handlerName}(
   // PIPELINE MODE: if the endpoint has configured pipeline steps, render
   // them with explicit per-argument bindings. No auto-inference is done.
   // -----------------------------------------------------------------------
-  const pipelineSteps = (ep as any).pipelineSteps;
+  const pipelineSteps = ep.pipelineSteps;
   const hasPipelineSteps = Array.isArray(pipelineSteps) && pipelineSteps.length > 0;
 
   if (hasPipelineSteps) {
@@ -479,12 +479,12 @@ export async function ${handlerName}(
 
     // Check if the pipeline includes an explicit return_response step
     const hasReturnStep = pipelineSteps.some(
-      (s: any) => s.type === "return_response" && s.enabled !== false,
+      (s) => s.type === "return_response" && s.enabled !== false,
     );
 
     if (!hasReturnStep) {
       // Determine the response payload: use the last step's outputVariable
-      const lastStep = [...pipelineSteps].reverse().find((s: any) => s.enabled !== false);
+      const lastStep = [...pipelineSteps].reverse().find((s) => s.enabled !== false);
       const lastOutputVar = lastStep?.outputVariable || payloadVar;
       const statusCode = ep.type === "POST" ? 201 : 200;
 
@@ -524,7 +524,7 @@ export async function ${handlerName}(
         codeBlock.includes("db.")),
   );
 
-  const isRedisOp = (op: any) =>
+  const isRedisOp = (op: { fn: { importPath: string; name: string } }) =>
     op.fn.importPath.includes("redis") || op.fn.name.toLowerCase().includes("cache");
   const sqlOps = pickedDbOps.filter((op) => !isRedisOp(op));
   const redisOps = pickedDbOps.filter((op) => isRedisOp(op));
@@ -600,8 +600,8 @@ export async function ${handlerName}(
           const cleanSqlName = toVarName(rawSqlName.toLowerCase().replace(/[^a-z0-9_]/g, "_"));
           const sqlPascal = toPascalCase(cleanSqlName);
           const sqlVarName = primarySql?.operationKind === "create" ? `created${sqlPascal || "Record"}` : cleanSqlName;
-          callExpr = callExpr.replaceAll(`((${payloadVar} as any)?.id || "default")`, `(${sqlVarName}?.id || (${payloadVar} as any)?.id || "default")`);
-          callExpr = callExpr.replaceAll(`${payloadVar}?.id`, `(${sqlVarName}?.id || (${payloadVar} as any)?.id || "default")`);
+          callExpr = callExpr.replaceAll(`((${payloadVar} as { id?: string })?.id || "default")`, `(${sqlVarName}?.id || (${payloadVar} as { id?: string })?.id || "default")`);
+          callExpr = callExpr.replaceAll(`${payloadVar}?.id`, `(${sqlVarName}?.id || (${payloadVar} as { id?: string })?.id || "default")`);
         }
         const varName = `${toVarName(op.fn.name)}Result`;
         routeHandlerCode += `    const ${varName} = ${callExpr};\n\n`;

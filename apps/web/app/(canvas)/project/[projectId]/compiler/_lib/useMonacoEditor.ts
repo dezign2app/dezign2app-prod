@@ -4,6 +4,7 @@ import React, { useEffect } from "react";
 import { toast } from "sonner";
 import { CompiledFile } from "@/lib/compiler";
 import { Endpoint } from "@workspace/canvas/types";
+import type { OnMount } from "@monaco-editor/react";
 import {
   getEditableLineRange,
   isEditingKey,
@@ -13,6 +14,9 @@ import {
   findEndpointForFile,
 } from "./editorUtils";
 
+type Monaco = Parameters<OnMount>[1];
+type EditorInstance = Parameters<OnMount>[0];
+
 export interface UseMonacoEditorOptions {
   activeFile: CompiledFile | undefined;
   endpoints: (Endpoint & { nodeId: string })[];
@@ -20,9 +24,9 @@ export interface UseMonacoEditorOptions {
 }
 
 export interface UseMonacoEditorReturn {
-  editorRef: React.MutableRefObject<any>;
-  monacoRef: React.MutableRefObject<any>;
-  handleEditorMount: (editor: any, monaco: any) => void;
+  editorRef: React.MutableRefObject<EditorInstance | null>;
+  monacoRef: React.MutableRefObject<Monaco | null>;
+  handleEditorMount: OnMount;
   handleEditorChange: (newContent: string | undefined) => void;
 }
 
@@ -46,8 +50,8 @@ export function useMonacoEditor({
 }: UseMonacoEditorOptions): UseMonacoEditorReturn {
   const debounceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   const activeFileRef = React.useRef(activeFile);
-  const editorRef = React.useRef<any>(null);
-  const monacoRef = React.useRef<any>(null);
+  const editorRef = React.useRef<EditorInstance | null>(null);
+  const monacoRef = React.useRef<Monaco | null>(null);
   const decorationsRef = React.useRef<string[]>([]);
 
   // Tracks which filename was last pushed into Monaco so we only reset the
@@ -135,11 +139,11 @@ export function useMonacoEditor({
     }
   }, [activeFile]);
 
-  const handleEditorMount = (editor: any, monaco: any) => {
+  const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    editor.onKeyDown((e: any) => {
+    editor.onKeyDown((e) => {
       const currentFile = activeFileRef.current;
       if (!currentFile) return;
 

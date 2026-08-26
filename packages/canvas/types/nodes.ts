@@ -34,6 +34,7 @@ import type {
   CanvasLangGraphStepNodeData,
   CanvasAINodeData,
 } from "./langgraph";
+import { PipelineStepDraft } from "./pipeline";
 
 export type BackendNodeType =
   | "service"
@@ -265,21 +266,33 @@ export interface RedisHyperLogLogConfig {
   precision?: string;
 }
 
+export interface CanvasEntityColumn {
+  name: string;
+  type: string;
+  isPrimaryKey?: boolean;
+  isPrimary?: boolean;
+  primaryKey?: boolean;
+  isForeignKey?: boolean;
+  isNotNull?: boolean;
+  isUnique?: boolean;
+  references?: { table: string; column: string };
+  enumValues?: string[];
+  options?: string[];
+  defaultValue?: string;
+  description?: string;
+  required?: boolean;
+}
+
+export type EntityColumn = CanvasEntityColumn;
+
 /** Database entity / table schema fields (canvas type). */
 export interface CanvasEntityNodeData {
+  tableName?: string;
   isSchemaGroup?: boolean;
   variant?: string;
   dbType?: "relational" | "document" | "vector" | "redis" | "key-value";
   /** Column definitions stored as part of the node. */
-  columns?: {
-    name: string;
-    type: string;
-    isPrimaryKey?: boolean;
-    isForeignKey?: boolean;
-    isNotNull?: boolean;
-    isUnique?: boolean;
-    references?: { table: string; column: string };
-  }[];
+  columns?: CanvasEntityColumn[];
   indexes?: {
     name: string;
     columns: string;
@@ -377,6 +390,40 @@ export interface CanvasDatabaseNodeData {
 
 
 /** Service / web-client node fields — endpoints, routing, CORS, etc. (canvas type). */
+export interface PublishedEventItem {
+  id: string;
+  name: string;
+  description?: string;
+  schema?: string;
+  version?: string;
+  targetNodeId?: string;
+  brokerNodeId?: string;
+  messagingResourceId?: string;
+  topic?: string;
+  payloadSchema?: Schema;
+  pipelineSteps?: PipelineStepDraft[];
+  [key: string]: unknown;
+}
+
+export interface ConsumedEventItem {
+  id: string;
+  name: string;
+  description?: string;
+  schema?: string;
+  retryPolicy?: string;
+  version?: string;
+  handlerLogic?: string;
+  targetNodeId?: string;
+  brokerNodeId?: string;
+  messagingResourceId?: string;
+  topic?: string;
+  payloadSchema?: Schema;
+  pipelineSteps?: PipelineStepDraft[];
+  nodeId?: string;
+  variant?: "consume" | "publish";
+  [key: string]: unknown;
+}
+
 export interface CanvasServiceNodeData {
   baseUrl?: string;
   cors?: boolean;
@@ -404,24 +451,8 @@ export interface CanvasServiceNodeData {
   logic?: { id: string; name: string }[];
   outputs?: { id: string; name: string }[];
   actions?: { id: string; name: string }[];
-  publishedEvents?: {
-    id: string;
-    name: string;
-    description?: string;
-    schema?: string;
-    version?: string;
-    targetNodeId?: string;
-  }[];
-  consumedEvents?: {
-    id: string;
-    name: string;
-    description?: string;
-    schema?: string;
-    retryPolicy?: string;
-    version?: string;
-    handlerLogic?: string;
-    targetNodeId?: string;
-  }[];
+  publishedEvents?: PublishedEventItem[];
+  consumedEvents?: ConsumedEventItem[];
   /** Local data-transformation helper functions attached to this service */
   transformerHelpers?: TransformerHelperNodeData[];
 }

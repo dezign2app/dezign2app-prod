@@ -104,8 +104,8 @@ export function handleEndpointConnect({
       (s) =>
         s.type === "kafka_publish" &&
         (s.functionRef?.name === fnName ||
-          (s as any).brokerNodeId === targetNode.id ||
-          (s as any).messagingResourceId === messagingResourceId),
+          s.brokerNodeId === targetNode.id ||
+          s.messagingResourceId === messagingResourceId),
     );
 
     let nextPipelineSteps = existingSteps;

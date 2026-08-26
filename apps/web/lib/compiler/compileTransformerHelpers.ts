@@ -131,9 +131,7 @@ export function compileTransformerHelpers(
 
   // Collect all helpers from all service nodes
   serviceNodes.forEach((svc) => {
-    const helpers = (svc.data as any).transformerHelpers as
-      | TransformerHelperNodeData[]
-      | undefined;
+    const helpers = svc.data?.transformerHelpers;
     if (!helpers || helpers.length === 0) return;
 
     helpers.forEach((h) => {
@@ -150,7 +148,7 @@ export function compileTransformerHelpers(
   // Collect standalone transformer nodes placed on the canvas
   const transformerNodes = allNodes.filter((n) => n.type === "transformer");
   transformerNodes.forEach((tNode) => {
-    const d = tNode.data as any;
+    const d = tNode.data;
     const fnName = toVarName(d.functionName || d.label || "transformData");
     const scope = d.scope || "global";
 

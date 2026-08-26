@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ConvexError } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
+import { Id } from "./_generated/dataModel";
 
 // Helper to hash an API key
 async function hashKey(key: string) {
@@ -89,8 +90,8 @@ export const listPaginated = query({
         let projectName: string | undefined;
         if (key.projectId) {
           try {
-            const project = await ctx.db.get(key.projectId as any);
-            projectName = (project as any)?.name;
+            const project = await ctx.db.get(key.projectId as Id<"projects">);
+            projectName = project?.name;
           } catch {
             // project may have been deleted
           }

@@ -366,16 +366,16 @@ export function RedisCacheRefConfig({ id, nodeId }: RedisCacheRefConfigProps) {
                   Fields ({fields.length})
                 </span>
                 <div className="max-h-[180px] overflow-y-auto flex flex-col gap-1 pr-1">
-                  {fields.map((f: any, idx: number) => (
+                  {fields.map((f, idx: number) => (
                     <div
                       key={idx}
                       className="flex items-center justify-between p-1.5 rounded-lg bg-background/60 border border-border/50 text-xs"
                     >
                       <span className="font-mono font-medium text-foreground truncate">
-                        {f.name || f.fieldName || "field"}
+                        {f.name || ("fieldName" in f ? String(f.fieldName) : "field")}
                       </span>
                       <span className="text-[10px] font-mono text-muted-foreground">
-                        {f.type || f.fieldType || "string"}
+                        {f.type || ("fieldType" in f ? String(f.fieldType) : "string")}
                       </span>
                     </div>
                   ))}

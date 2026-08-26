@@ -115,7 +115,7 @@ export const MessagingResourceRow = ({
 
   const isConsumerUnconfigured = React.useMemo(() => {
     if (!isConsumed) return false;
-    return isEndpointPipelineUnconfigured(item as any, nodeId, nodes, edges);
+    return isEndpointPipelineUnconfigured(item, nodeId, nodes, edges);
   }, [isConsumed, item, nodeId, nodes, edges]);
 
   const isChannelEmpty = () => {

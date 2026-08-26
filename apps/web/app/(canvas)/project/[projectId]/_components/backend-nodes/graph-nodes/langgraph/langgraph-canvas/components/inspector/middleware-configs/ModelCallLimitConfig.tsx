@@ -70,7 +70,7 @@ export function ModelCallLimitConfig({
         </Label>
         <Select
           value={data.modelCallLimitConfig?.exitBehavior || "end"}
-          onValueChange={(val: any) =>
+          onValueChange={(val: "end" | "error") =>
             onUpdate({
               modelCallLimitConfig: {
                 ...data.modelCallLimitConfig,
