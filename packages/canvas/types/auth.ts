@@ -411,7 +411,7 @@ export interface AuthOrganizationConfig {
   additionalTables?: AdditionalAuthTableConfig[];
 }
 
-import type { CanvasAuthNodeData } from "./nodes";
+import type { CanvasAuthNodeData } from "./infrastructure";
 
 export interface AdapterConfig {
   importStatement: string;
