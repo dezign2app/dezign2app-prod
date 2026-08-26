@@ -376,6 +376,6 @@ export const addServiceNodeTool = tool(
       "Add or update a complete microservice node on the backend canvas, including its REST endpoints, business logic, inputs, outputs, and message broker event publications/subscriptions. Automatically creates edges to connected message brokers (targetNodeId). If a service with the same label already exists, this tool will safely UPDATE it instead of creating duplicates.",
     schema: serviceDataInputSchema.extend({
       label: z.string().describe("Name of the service (e.g., 'User Service')"),
-    }) as z.ZodType<AddServiceNodeInput>,
+    }),
   },
 );

@@ -82,7 +82,7 @@ export function formatCanvasState(elements: any): string {
       if (n.type === "db_ref") {
         extra += `\n  Database target handle: targetHandle="database-target"${n.data.tableRef ? ` (tableRef=${n.data.tableRef})` : ""}`;
       }
-      if (n.type === "webClient" && n.data.events) {
+      if (n.type === "webPage" && n.data.events) {
         extra +=
           `\n  Events: ` +
           (n.data.events as any[])

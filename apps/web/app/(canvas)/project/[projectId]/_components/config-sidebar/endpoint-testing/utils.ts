@@ -13,7 +13,7 @@ export function getServiceDefaultPort(node?: BackendNode | null): string {
   if (node.data?.port) return String(node.data.port);
   const tech = (node.data?.techStack || "").toLowerCase();
   if (tech === "fastapi" || tech === "python") return "8000";
-  if (tech === "nextjs" || node.type === "webClient") return "3000";
+  if (tech === "nextjs" || node.type === "webPage") return "3000";
   return "8080";
 }
 

@@ -99,7 +99,7 @@ export class BackendCanvasAdapter implements CanvasAdapter<BackendDesignDoc> {
         if (pub) details.push(`Publishes: ${pub}`);
         if (sub) details.push(`Consumes: ${sub}`);
         if (details.length > 0) extra = `\n  ${details.join("\n  ")}`;
-      } else if (n.type === "webClient") {
+      } else if (n.type === "webPage") {
         const evs = n.data.events
           ?.map((ev) => `${ev.name} (id: ${ev.id})`)
           .join(", ");

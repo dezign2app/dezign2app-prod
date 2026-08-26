@@ -105,7 +105,7 @@ export function createMcpServer() {
     "redis-pubsub",
     "redis-cache",
     "entity",
-    "webClient",
+    "webPage",
     "external",
     "group",
     "db_ref",

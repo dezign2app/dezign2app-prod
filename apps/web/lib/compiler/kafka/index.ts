@@ -183,7 +183,7 @@ export function compileKafkaNodes(
 
   // If there are other service/app nodes present on canvas, verify that Kafka is actually connected
   const nonKafkaAppNodes = allNodes.filter(
-    (n) => n.type === "service" || n.type === "webApp" || n.type === "webClient" || n.type === "langgraph",
+    (n) => n.type === "service" || n.type === "webApp" || n.type === "webPage" || n.type === "langgraph",
   );
 
   if (nonKafkaAppNodes.length > 0) {

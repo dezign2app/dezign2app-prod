@@ -3,7 +3,7 @@ import { zodToConvex } from "convex-helpers/server/zod";
 import {
   serviceDataSchema,
   dbRefDataSchema,
-  webClientDataSchema,
+  webPageDataSchema,
   pageRefDataSchema,
   externalDataSchema,
   simpleDataSchema,
@@ -69,7 +69,7 @@ export const backendRequestBodyValidator = v.object({
 });
 
 // Simulation Case Validator
-export const webClientSimulationCaseValidator = v.object({
+export const webPageSimulationCaseValidator = v.object({
   id: v.optional(v.string()),
   name: v.string(),
   request: v.optional(
@@ -89,7 +89,7 @@ export const webClientSimulationCaseValidator = v.object({
 });
 
 // UI Event Item Validator
-export const webClientEventConvexValidator = v.object({
+export const webPageEventConvexValidator = v.object({
   id: v.optional(v.string()),
   name: v.string(),
   event: v.optional(v.string()),
@@ -115,7 +115,7 @@ export const webClientEventConvexValidator = v.object({
   requestBodyMode: v.optional(
     v.union(v.literal("field_builder"), v.literal("raw_json")),
   ),
-  simulationCases: v.optional(v.array(webClientSimulationCaseValidator)),
+  simulationCases: v.optional(v.array(webPageSimulationCaseValidator)),
 });
 
 // Protection Rule Validator
@@ -139,7 +139,7 @@ export const protectionRuleConvexValidator = v.object({
 });
 
 // Web Page Node Data Validator
-export const webClientConvexDataValidator = v.object({
+export const webPageConvexDataValidator = v.object({
   label: v.optional(v.string()),
   description: v.optional(v.string()),
   summary: v.optional(v.string()),
@@ -176,7 +176,7 @@ export const webClientConvexDataValidator = v.object({
   height: v.optional(v.number()),
   techStack: v.optional(v.string()),
   techVersion: v.optional(v.string()),
-  isWebClient: v.optional(v.boolean()),
+  isWebPage: v.optional(v.boolean()),
   isRoot: v.optional(v.boolean()),
   pageSlug: v.optional(v.string()),
   path: v.optional(v.string()),
@@ -192,11 +192,11 @@ export const webClientConvexDataValidator = v.object({
   requestBodyMode: v.optional(
     v.union(v.literal("field_builder"), v.literal("raw_json")),
   ),
-  events: v.optional(v.array(webClientEventConvexValidator)),
+  events: v.optional(v.array(webPageEventConvexValidator)),
   protectionOverride: v.optional(protectionRuleConvexValidator),
 });
 
-export const backendWebClientDataValidator = webClientConvexDataValidator;
+export const backendWebPageDataValidator = webPageConvexDataValidator;
 
 export const langgraphConvexDataValidator = v.object({
   label: v.optional(v.string()),
@@ -238,8 +238,7 @@ export const langgraphConvexDataValidator = v.object({
 export const backendNodeDataValidator = v.union(
   zodToConvex(serviceDataSchema),
   zodToConvex(dbRefDataSchema),
-  webClientConvexDataValidator,
-  zodToConvex(webClientDataSchema),
+  webPageConvexDataValidator,
   zodToConvex(pageRefDataSchema),
   zodToConvex(webAppDataSchema),
   zodToConvex(externalDataSchema),

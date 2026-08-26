@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { compileNextjsV16WebClient } from "../webClients/nextjs/v16";
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { Endpoint } from "@workspace/canvas/types";
+import { Endpoint, CompiledFile } from "@workspace/canvas/types";
 
 describe("compileNextjsV16WebClient with Bearer token & headers", () => {
   it("should generate lib/auth-token.ts and pass Bearer token to authenticated endpoints", () => {
-    const webClientNode: BackendNode = {
+    const webPageNode: BackendNode = {
       id: "node-client-1",
-      type: "webClient",
+      type: "webPage",
       position: { x: 0, y: 0 },
       fractionalIndex: "a0",
       data: {
@@ -101,37 +101,37 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
     ];
 
     const result = compileNextjsV16WebClient(
-      [webClientNode],
+      [webPageNode],
       endpoints,
       [],
-      [webClientNode, serviceNode, authNode],
+      [webPageNode, serviceNode, authNode],
       edges,
       "TestProject",
     );
 
     // 1. Verify lib/auth-token.ts was generated
-    const authTokenFile = result.files.find((f) => f.filename === "lib/auth-token.ts");
+    const authTokenFile = result.files.find((f: CompiledFile) => f.filename === "lib/auth-token.ts");
     expect(authTokenFile).toBeDefined();
     expect(authTokenFile?.content).toContain("export async function getAuthBearerToken()");
 
     // 2. Verify page.tsx includes Bearer token and headers in pageLoad
-    const pageFile = result.files.find((f) => f.filename.endsWith("page.tsx"));
+    const pageFile = result.files.find((f: CompiledFile) => f.filename.endsWith("page.tsx"));
     expect(pageFile).toBeDefined();
     expect(pageFile?.content).toContain("getAuthBearerToken");
     expect(pageFile?.content).toContain("X-Client-Id");
     expect(pageFile?.content).toContain("Authorization");
 
     // 3. Verify action button component passes requireAuth = true
-    const actionFile = result.files.find((f) => f.filename.endsWith("Action.tsx"));
+    const actionFile = result.files.find((f: CompiledFile) => f.filename.endsWith("Action.tsx"));
     expect(actionFile).toBeDefined();
     expect(actionFile?.content).toContain("true"); // requireAuth boolean
     expect(actionFile?.content).toContain("X-Client-Id");
   });
 
   it("should handle endpoints with requireAuth: false without requiring token", () => {
-    const webClientNode: BackendNode = {
+    const webPageNode: BackendNode = {
       id: "node-client-2",
-      type: "webClient",
+      type: "webPage",
       position: { x: 0, y: 0 },
       fractionalIndex: "a0",
       data: {
@@ -182,20 +182,20 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
     ];
 
     const result = compileNextjsV16WebClient(
-      [webClientNode],
+      [webPageNode],
       endpoints,
       [],
-      [webClientNode, serviceNode],
+      [webPageNode, serviceNode],
       edges,
       "TestProject",
     );
 
-    const actionFile = result.files.find((f) => f.filename.endsWith("Action.tsx"));
+    const actionFile = result.files.find((f: CompiledFile) => f.filename.endsWith("Action.tsx"));
     expect(actionFile).toBeDefined();
     expect(actionFile?.content).toContain("false"); // requireAuth boolean is false
 
     // Verify page.tsx does NOT contain "Page Load Data" or pageLoad states when no pageLoad event configured
-    const pageFile = result.files.find((f) => f.filename.endsWith("page.tsx"));
+    const pageFile = result.files.find((f: CompiledFile) => f.filename.endsWith("page.tsx"));
     expect(pageFile).toBeDefined();
     expect(pageFile?.content).not.toContain("Page Load Data");
     expect(pageFile?.content).not.toContain("pageLoadData");
@@ -204,9 +204,9 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
   });
 
   it("should include Page Load Data section only when pageLoad event is configured", () => {
-    const webClientWithLoad: BackendNode = {
+    const webPageWithLoad: BackendNode = {
       id: "node-client-load",
-      type: "webClient",
+      type: "webPage",
       position: { x: 0, y: 0 },
       fractionalIndex: "a0",
       data: {
@@ -222,9 +222,9 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
       },
     };
 
-    const webClientWithoutLoad: BackendNode = {
+    const webPageWithoutLoad: BackendNode = {
       id: "node-client-noload",
-      type: "webClient",
+      type: "webPage",
       position: { x: 0, y: 0 },
       fractionalIndex: "a1",
       data: {
@@ -241,15 +241,15 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
     };
 
     const resultWithLoad = compileNextjsV16WebClient(
-      [webClientWithLoad],
+      [webPageWithLoad],
       [],
       [],
-      [webClientWithLoad],
+      [webPageWithLoad],
       [],
       "TestProject",
     );
 
-    const pageWithLoad = resultWithLoad.files.find((f) =>
+    const pageWithLoad = resultWithLoad.files.find((f: CompiledFile) =>
       f.filename.includes("products/page.tsx"),
     );
     expect(pageWithLoad).toBeDefined();
@@ -258,15 +258,15 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
     expect(pageWithLoad?.content).toContain("useEffect");
 
     const resultWithoutLoad = compileNextjsV16WebClient(
-      [webClientWithoutLoad],
+      [webPageWithoutLoad],
       [],
       [],
-      [webClientWithoutLoad],
+      [webPageWithoutLoad],
       [],
       "TestProject",
     );
 
-    const pageWithoutLoad = resultWithoutLoad.files.find((f) =>
+    const pageWithoutLoad = resultWithoutLoad.files.find((f: CompiledFile) =>
       f.filename.includes("about/page.tsx"),
     );
     expect(pageWithoutLoad).toBeDefined();

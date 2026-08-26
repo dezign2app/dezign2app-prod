@@ -21,11 +21,11 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { WEB_CLIENT_EVENTS, parsePageRoute } from "@workspace/canvas";
+import { WEB_PAGE_EVENTS, parsePageRoute } from "@workspace/canvas";
 
-const EVENT_OPTIONS = [...WEB_CLIENT_EVENTS];
+const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
 
-export interface WebClientEventListProps {
+export interface WebPageEventListProps {
   nodeId: string;
   items?: UIEventItem[];
   updateNode: (id: string, changes: Partial<BackendNode>) => void;
@@ -42,14 +42,14 @@ export interface WebClientEventListProps {
   }) => void;
 }
 
-const WebClientEventList = ({
+const WebPageEventList = ({
   nodeId,
   items = [],
   updateNode,
   data,
   onTriggerEvent,
   onManageTestCases,
-}: WebClientEventListProps) => {
+}: WebPageEventListProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editEvent, setEditEvent] = useState("");
@@ -78,7 +78,7 @@ const WebClientEventList = ({
     const targetNode = nodes.find((n) => n.id === edge.target);
     if (!targetNode) return null;
 
-    // If the target handle is an incoming handle on another WebClient,
+    // If the target handle is an incoming handle on another WebPage,
     // follow the chain: find that event's outgoing connection to an endpoint.
     if (
       edge.targetHandle.startsWith("pageload-in-") ||
@@ -473,7 +473,7 @@ const WebClientEventList = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveConfigItem({
-                            type: "clientEvent",
+                            type: "pageEvent",
                             id: item.id,
                             nodeId,
                           });
@@ -502,15 +502,12 @@ const WebClientEventList = ({
   );
 };
 
-export const WebClientNode = ({
+export const WebPageNode = ({
   id,
   data,
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
-  const setActiveConfigItem = useBackendCanvasStore(
-    (s) => s.setActiveConfigItem,
-  );
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
   const simulation = useSimulationNodeState(id);
@@ -646,7 +643,7 @@ export const WebClientNode = ({
       <NodeHeader
         id={id}
         data={data}
-        nodeType="webClient"
+        nodeType="webPage"
         icon={Globe}
         title={isLandingPage ? "Landing Page" : "Web Page"}
         selected={selected}
@@ -778,7 +775,7 @@ export const WebClientNode = ({
         </div>
       )}
 
-      <WebClientEventList
+      <WebPageEventList
         nodeId={id}
         items={data.events}
         updateNode={updateNode}

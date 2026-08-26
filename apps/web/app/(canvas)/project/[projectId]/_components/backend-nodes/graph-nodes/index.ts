@@ -1,6 +1,6 @@
 // Gateway nodes
 export { WebAppNode } from "./nodes/gateway/WebAppNode";
-export { WebClientNode } from "./nodes/gateway/WebClientNode";
+export { WebPageNode } from "./nodes/gateway/WebPageNode";
 export { PageRefNode } from "./nodes/gateway/PageRefNode";
 export { APIGatewayNode } from "./nodes/gateway/APIGatewayNode";
 export { WebhookNode } from "./nodes/gateway/WebhookNode";

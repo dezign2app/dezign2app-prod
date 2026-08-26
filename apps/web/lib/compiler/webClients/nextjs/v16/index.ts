@@ -3,7 +3,7 @@ import {
   Endpoint,
   AnyMessagingResource,
   CompiledFile,
-  CompiledWebClientResult,
+  CompiledWebPageResult,
 } from "@workspace/canvas/types";
 import { generateWebClientE2ETests } from "../../../generators/testGenerator";
 
@@ -42,7 +42,7 @@ export function compileNextjsV16WebClient(
   testCases: SimulationTestCase[] = [],
   appSlug?: string,
   webAppNode?: BackendNode,
-): CompiledWebClientResult {
+): CompiledWebPageResult {
   const files: CompiledFile[] = [];
 
   const effectiveAppSlug =
@@ -136,16 +136,16 @@ export function compileNextjsV16WebClient(
     ),
   );
 
-  const webClientName =
+  const webPageName =
     webClientNodes.length === 1
       ? webClientNodes[0]?.data.label || "web-client"
       : "web-client";
-  const webClientId =
+  const webPageId =
     webClientNodes.length === 1 ? webClientNodes[0]!.id : "web-client";
 
   return {
-    webClientId,
-    webClientName,
+    webPageId,
+    webPageName,
     files,
   };
 }

@@ -33,12 +33,12 @@ const getConfiguredPages = (allNodes: BackendNode[]): ConfiguredPage[] => {
   const pagesList: ConfiguredPage[] = [];
   const seenPaths = new Set<string>();
 
-  // 1. WebClient nodes from Canvas
-  const webClientNodes = (allNodes || []).filter(
-    (n) => n.type === "webClient" || n.data?.isWebClient,
+  // 1. WebPage nodes from Canvas
+  const webPageNodes = (allNodes || []).filter(
+    (n) => n.type === "webPage",
   );
 
-  webClientNodes.forEach((node, idx) => {
+  webPageNodes.forEach((node, idx) => {
     const rawLabel = node.data?.label || `Page ${idx + 1}`;
     const cleanLabel = rawLabel.trim().toLowerCase();
     let path: string | undefined = node.data?.path || node.data?.pageSlug || node.data?.route;

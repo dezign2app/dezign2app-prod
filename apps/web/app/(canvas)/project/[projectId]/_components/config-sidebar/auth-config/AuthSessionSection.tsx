@@ -61,7 +61,7 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
       n.type === "entity" &&
       (!selectedDatabaseId || n.data?.databaseId === selectedDatabaseId),
   );
-  const serviceNodes = allNodes.filter((n) => n.type === "service" || n.type === "webClient");
+  const serviceNodes = allNodes.filter((n) => n.type === "service" || n.type === "webPage");
 
   const selectedUserSchemaId = data.userEntityId || data.userSchemaId;
   const selectedUserEntity = schemaEntities.find((n) => n.id === selectedUserSchemaId);

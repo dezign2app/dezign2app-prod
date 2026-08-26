@@ -16,7 +16,7 @@ export {
 } from "./graph-nodes/common/NodeHeader";
 
 export {
-  WebClientNode,
+  WebPageNode,
   ServiceNode,
   ExternalNode,
   MessagingNode,

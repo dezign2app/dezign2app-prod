@@ -127,13 +127,13 @@ export async function simulateMessagingBrokerTestCase(args: {
     const pushEdges = args.edges.filter((edge) => {
       if (edge.source !== consumerService.id) return false;
       return args.nodes.some(
-        (n) => n.id === edge.target && n.type === "webClient",
+        (n) => n.id === edge.target && n.type === "webPage",
       );
     });
 
     for (const pushEdge of pushEdges) {
       const clientNode = args.nodes.find(
-        (n) => n.id === pushEdge.target && n.type === "webClient",
+        (n) => n.id === pushEdge.target && n.type === "webPage",
       );
       if (!clientNode) continue;
 
@@ -344,10 +344,10 @@ export async function simulateMessagingPush(args: {
 
       const pushEdges = edges.filter((edge) => {
         if (edge.source !== consumerService.id) return false;
-        const isWebClientTarget = nodes.some(
-          (n) => n.id === edge.target && n.type === "webClient",
+        const isWebPageTarget = nodes.some(
+          (n) => n.id === edge.target && n.type === "webPage",
         );
-        if (!isWebClientTarget) return false;
+        if (!isWebPageTarget) return false;
 
         if (edge.sourceHandle) {
           const sh = edge.sourceHandle;
@@ -367,7 +367,7 @@ export async function simulateMessagingPush(args: {
 
       for (const pushEdge of pushEdges) {
         const clientNode = nodes.find(
-          (n) => n.id === pushEdge.target && n.type === "webClient",
+          (n) => n.id === pushEdge.target && n.type === "webPage",
         );
         if (!clientNode) continue;
 

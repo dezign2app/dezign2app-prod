@@ -47,7 +47,7 @@ export type BackendNodeType =
   | "redis-pubsub"
   | "redis-cache"
   | "entity"
-  | "webClient"
+  | "webPage"
   | "external"
   | "group"
   | "db_ref"
@@ -638,7 +638,7 @@ export interface CanvasWebAppNodeData {
 }
 
 /** Web Page node fields (canvas type). */
-export interface CanvasWebClientNodeData {
+export interface CanvasWebPageNodeData {
   appName?: string;
   appSlug?: string;
   accessType?: "public" | "private" | "role-gated" | "payment-gated" | "org-gated";
@@ -690,7 +690,7 @@ export type BackendNodeData = BaseNodeData &
       CanvasEntityNodeData &
       CanvasServiceNodeData &
       CanvasWebAppNodeData &
-      CanvasWebClientNodeData &
+      CanvasWebPageNodeData &
       MessagingNodeData &
       CanvasWorkerNodeData &
       CanvasServerlessNodeData &
