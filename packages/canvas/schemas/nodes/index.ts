@@ -9,4 +9,5 @@ export * from "./auth";
 export * from "./ai";
 export * from "./langgraph";
 export * from "./transformer";
+export * from "./frontend";
 export * from "./registry";

@@ -99,7 +99,9 @@ export function performGraphLayout({
     if (!sourceNode || !targetNode) return false;
     const isTransType =
       sourceNode.type === "transformer_ref" ||
-      sourceNode.type === "transformer";
+      sourceNode.type === "transformer" ||
+      sourceNode.type === "hook" ||
+      sourceNode.type === "hook_ref";
     return isTransType;
   };
 

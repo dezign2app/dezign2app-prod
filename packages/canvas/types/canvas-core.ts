@@ -65,6 +65,12 @@ export type HandleKind =
   | "page-ref-in"
   | "transformer-out"
   | "transformer-in"
+  | "hook-out"
+  | "hook-in"
+  | "component-out"
+  | "component-in"
+  | "slot-in"
+  | "slot-out"
 
   // --- Fallback ---
   | "unknown";
@@ -131,6 +137,10 @@ export type ConfigItemType =
   | "redisSchema"
   | "transformer"
   | "transformer_ref"
+  | "hook"
+  | "hook_ref"
+  | "component"
+  | "component_ref"
   | "db_ref"
   | "redis_cache"
   | "vector_db_ref";

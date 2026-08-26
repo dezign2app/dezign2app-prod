@@ -15,6 +15,8 @@ export const REFERENCE_NODE_TYPES = new Set<string>([
   "db_ref",
   "redis-cache",
   "vector_db_ref",
+  "component",
+  "component_ref",
 ]);
 
 /**

@@ -40,6 +40,7 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
     "sse-in",
     "websocket-in",
     "langgraph-in",
+    "hook-in",
   ],
   "resource-def-in": [],
   "resource-def-out": [
@@ -47,6 +48,7 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
     "task-in",
     "sse-in",
     "websocket-in",
+    "hook-in",
   ],
   "entity-column-source": ["entity-column-target"],
   "entity-column-target": [],
@@ -85,9 +87,9 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
   "auth-in": [],
   "injects-plugin-out": ["payments-plugin-in", "auth-in"],
   "payments-plugin-in": [],
-  "page-out": ["page-section-in", "endpoint-in", "page-in", "page-ref-in"],
+  "page-out": ["page-section-in", "endpoint-in", "page-in", "page-ref-in", "hook-in", "component-in"],
   "page-in": [],
-  "page-section-in": ["page-in", "endpoint-in", "page-out"],
+  "page-section-in": ["page-in", "endpoint-in", "page-out", "hook-in", "component-in"],
   "transformer-in": [],
   "transformer-out": [
     "endpoint-in",
@@ -98,6 +100,12 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
     "langgraph-in",
     "transformer-in",
   ],
+  "hook-in": [],
+  "hook-out": ["hook-in", "page-in", "component-in", "endpoint-in"],
+  "component-in": [],
+  "component-out": ["component-in", "page-in", "slot-in"],
+  "slot-in": [],
+  "slot-out": ["slot-in", "component-in", "page-in"],
   unknown: [],
 };
 
@@ -136,6 +144,15 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   "transformer-out→task-in": "connection",
   "transformer-out→database-target": "connection",
   "transformer-out→transformer-in": "transformer-reference",
+  // Frontend Hook & Component wiring edges
+  "endpoint-out→hook-in": "connection",
+  "resource-def-out→hook-in": "message",
+  "hook-out→hook-in": "reference",
+  "hook-out→page-in": "connection",
+  "hook-out→component-in": "connection",
+  "component-out→component-in": "reference",
+  "component-out→page-in": "connection",
+  "slot-out→slot-in": "connection",
 };
 
 export const WEB_PAGE_EVENTS = [

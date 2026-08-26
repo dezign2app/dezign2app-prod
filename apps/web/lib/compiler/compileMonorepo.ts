@@ -17,6 +17,7 @@ import { generateRootReadme } from "./generators/readmeGenerator";
 import { generateDockerFiles } from "./generators/dockerGenerator";
 import { compileGrpcPackages } from "./grpc";
 import { compileTransformerHelpers } from "./compileTransformerHelpers";
+import { compileFrontendNodes } from "./compileFrontendHelpers";
 
 /**
  * Compiles the entire system architecture canvas into a production-ready
@@ -106,6 +107,12 @@ export function compileMonorepo(
       language: f.language,
       content: f.content,
     });
+  });
+
+  // 3.1. Generate Frontend Hooks & Components
+  const compiledFrontend = compileFrontendNodes(nodes, edges, endpoints);
+  compiledFrontend.globalFiles.forEach((f) => {
+    files.push(f);
   });
 
   // 4. Generate Shared Database Packages under packages/db/* (@workspace/db or @workspace/db-<name>)
@@ -439,6 +446,19 @@ export function compileMonorepo(
       );
 
       webClientResult.files.forEach((f) => {
+        files.push({
+          filename: `apps/${folderName}/${f.filename}`,
+          language: f.language,
+          content: f.content,
+        });
+      });
+
+      // Push app-local frontend hooks and components
+      const appLocalItems =
+        compiledFrontend.appLocalFiles.get(appSlug) ||
+        compiledFrontend.appLocalFiles.get(folderName) ||
+        [];
+      appLocalItems.forEach((f) => {
         files.push({
           filename: `apps/${folderName}/${f.filename}`,
           language: f.language,
