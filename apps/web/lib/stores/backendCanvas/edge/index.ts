@@ -4,5 +4,6 @@ export * from "./autoDeriveHandles";
 export * from "./handlers/databaseConnect";
 export * from "./handlers/eventBrokerConnect";
 export * from "./handlers/transformerConnect";
+export * from "./handlers/frontendConnect";
 export * from "./handlers/endpointConnect";
 export * from "./handlers/foreignKeyConnect";

@@ -40,6 +40,10 @@ const ALL_BACKEND_NODE_TYPES = [
   "page_ref",
   "transformer",
   "transformer_ref",
+  "hook",
+  "hook_ref",
+  "component",
+  "component_ref",
 ] as const;
 
 export function isBackendNode(type: string): type is BackendNodeType {
@@ -202,6 +206,38 @@ export function classifyHandle(
   }
   if (nodeType === "transformer" || nodeType === "transformer_ref") {
     return handleDirection === "target" ? "transformer-in" : "transformer-out";
+  }
+
+  // --- Hooks and Hook Refs ---
+  if (id === "hook-in" || id.startsWith("hook-in") || id.startsWith("hooks-in")) {
+    return "hook-in";
+  }
+  if (id === "hook-out" || id.startsWith("hook-out") || id.startsWith("hooks-out")) {
+    return "hook-out";
+  }
+  if (nodeType === "hook" || nodeType === "hook_ref") {
+    return handleDirection === "target" ? "hook-in" : "hook-out";
+  }
+
+  // --- Components and Component Refs ---
+  if (
+    id === "component-in" ||
+    id.startsWith("component-in") ||
+    id.startsWith("components-in") ||
+    id.startsWith("slot-in")
+  ) {
+    return "component-in";
+  }
+  if (
+    id === "component-out" ||
+    id.startsWith("component-out") ||
+    id.startsWith("components-out") ||
+    id.startsWith("slot-out")
+  ) {
+    return "component-out";
+  }
+  if (nodeType === "component" || nodeType === "component_ref") {
+    return handleDirection === "target" ? "component-in" : "component-out";
   }
 
   if (

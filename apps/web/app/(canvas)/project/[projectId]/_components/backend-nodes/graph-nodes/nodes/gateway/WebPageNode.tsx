@@ -640,6 +640,26 @@ export const WebPageNode = ({
         title="Connect from WebApp section handle"
       />
 
+      {/* Target handle for incoming Hooks / Data layer */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="hooks-in"
+        className="w-2.5 h-2.5 !bg-cyan-500 rounded-full border-2 border-background -left-1.5"
+        style={{ top: "36px" }}
+        title="Connect Hook / Data Layer"
+      />
+
+      {/* Target handle for incoming UI Components / Layout Slots */}
+      <Handle
+        type="target"
+        position={Position.Right}
+        id="components-in"
+        className="w-2.5 h-2.5 !bg-indigo-500 rounded-full border-2 border-background -right-1.5"
+        style={{ top: "36px" }}
+        title="Connect UI Component Slot"
+      />
+
       <NodeHeader
         id={id}
         data={data}

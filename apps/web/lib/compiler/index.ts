@@ -10,6 +10,7 @@ export * from "./compileWebPageNode";
 export * from "./compileAuth";
 export * from "./compileUiPackage";
 export * from "./compileTransformerHelpers";
+export * from "./compileFrontendHelpers";
 export * from "./compileMonorepo";
 
 // Tech & Version Specific Compilers

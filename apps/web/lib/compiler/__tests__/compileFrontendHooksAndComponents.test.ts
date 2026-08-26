@@ -1,0 +1,193 @@
+import { describe, it, expect } from "vitest";
+import { BackendNode, BackendEdge } from "@/types/canvas";
+import { compileMonorepo } from "../compileMonorepo";
+import { compileFrontendNodes } from "../compileFrontendHelpers";
+
+describe("Frontend Hooks and Components Compilation", () => {
+  it("compiles global hooks and components to packages/ui/ and app-local items to their owning apps", () => {
+    // 1. WebApp Nodes
+    const adminApp: BackendNode = {
+      id: "webapp-admin",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Admin Portal",
+        appSlug: "admin-portal",
+      },
+    };
+
+    const storeApp: BackendNode = {
+      id: "webapp-store",
+      type: "webApp",
+      position: { x: 500, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Storefront",
+        appSlug: "storefront",
+      },
+    };
+
+    // 2. WebPage Nodes
+    const adminDashboard: BackendNode = {
+      id: "page-admin-dash",
+      type: "webPage",
+      position: { x: 0, y: 200 },
+      fractionalIndex: "a2",
+      data: {
+        label: "/dashboard",
+        appSlug: "admin-portal",
+      },
+    };
+
+    const storeHome: BackendNode = {
+      id: "page-store-home",
+      type: "webPage",
+      position: { x: 500, y: 200 },
+      fractionalIndex: "a3",
+      data: {
+        label: "/",
+        appSlug: "storefront",
+        isRoot: true,
+      },
+    };
+
+    // 3. Global Hook & Component
+    const globalHook: BackendNode = {
+      id: "hook-debounce",
+      type: "hook",
+      position: { x: 200, y: -200 },
+      fractionalIndex: "a4",
+      data: {
+        label: "useDebounce",
+        hookName: "useDebounce",
+        scope: "global",
+        inputParams: [{ id: "1", name: "value", type: "string", required: true }],
+        returnSchema: [{ id: "2", name: "debouncedValue", type: "string", required: true }],
+      },
+    };
+
+    const globalComponent: BackendNode = {
+      id: "comp-button",
+      type: "component",
+      position: { x: 350, y: -200 },
+      fractionalIndex: "a5",
+      data: {
+        label: "PrimaryButton",
+        componentName: "PrimaryButton",
+        scope: "global",
+        propsSchema: [{ id: "1", name: "label", type: "string", required: true }],
+      },
+    };
+
+    // 4. Local Hook & Component for Admin Portal
+    const adminHook: BackendNode = {
+      id: "hook-admin-stats",
+      type: "hook",
+      position: { x: -200, y: 200 },
+      fractionalIndex: "a6",
+      data: {
+        label: "useAdminStats",
+        hookName: "useAdminStats",
+        scope: "local",
+        targetWebAppId: "webapp-admin",
+      },
+    };
+
+    const adminComponent: BackendNode = {
+      id: "comp-admin-nav",
+      type: "component",
+      position: { x: -200, y: 300 },
+      fractionalIndex: "a7",
+      data: {
+        label: "AdminNavbar",
+        componentName: "AdminNavbar",
+        scope: "local",
+        targetWebAppId: "webapp-admin",
+        slotName: "header",
+      },
+    };
+
+    // 5. Local Component for Storefront
+    const storeComponent: BackendNode = {
+      id: "comp-cart-drawer",
+      type: "component",
+      position: { x: 700, y: 200 },
+      fractionalIndex: "a8",
+      data: {
+        label: "CartDrawer",
+        componentName: "CartDrawer",
+        scope: "local",
+        targetWebAppId: "webapp-store",
+        slotName: "sidebar",
+      },
+    };
+
+    const allNodes = [
+      adminApp,
+      storeApp,
+      adminDashboard,
+      storeHome,
+      globalHook,
+      globalComponent,
+      adminHook,
+      adminComponent,
+      storeComponent,
+    ];
+
+    const edges: BackendEdge[] = [
+      {
+        id: "edge-admin-page",
+        source: "webapp-admin",
+        target: "page-admin-dash",
+        type: "connection",
+        fractionalIndex: "e0",
+      },
+      {
+        id: "edge-store-page",
+        source: "webapp-store",
+        target: "page-store-home",
+        type: "connection",
+        fractionalIndex: "e1",
+      },
+    ];
+
+    // Compile Monorepo
+    const result = compileMonorepo(
+      allNodes,
+      [],
+      [],
+      edges,
+      [],
+      "MultiAppFrontendMonorepo",
+    );
+
+    const fileMap = new Map(result.files.map((f) => [f.filename, f.content]));
+
+    // 1. Verify Global Hook & Component in packages/ui/
+    expect(fileMap.has("packages/ui/src/hooks/useDebounce.ts")).toBe(true);
+    expect(fileMap.has("packages/ui/src/components/PrimaryButton.tsx")).toBe(true);
+
+    const debounceContent = fileMap.get("packages/ui/src/hooks/useDebounce.ts")!;
+    expect(debounceContent).toContain("export function useDebounce");
+    expect(debounceContent).toContain("DebounceArgs");
+
+    const btnContent = fileMap.get("packages/ui/src/components/PrimaryButton.tsx")!;
+    expect(btnContent).toContain("export function PrimaryButton");
+    expect(btnContent).toContain("PrimaryButtonProps");
+
+    // 2. Verify Admin-Local items in apps/admin-portal/
+    expect(fileMap.has("apps/admin-portal/hooks/useAdminStats.ts")).toBe(true);
+    expect(fileMap.has("apps/admin-portal/components/AdminNavbar.tsx")).toBe(true);
+
+    // 3. Verify Storefront-Local items in apps/storefront/
+    expect(fileMap.has("apps/storefront/components/CartDrawer.tsx")).toBe(true);
+
+    // 4. Verify Scope Isolation (Storefront must NOT have AdminNavbar or useAdminStats)
+    expect(fileMap.has("apps/storefront/components/AdminNavbar.tsx")).toBe(false);
+    expect(fileMap.has("apps/storefront/hooks/useAdminStats.ts")).toBe(false);
+
+    // 5. Verify Admin Portal must NOT have CartDrawer
+    expect(fileMap.has("apps/admin-portal/components/CartDrawer.tsx")).toBe(false);
+  });
+});

@@ -36,6 +36,12 @@ import {
   transformerNodeDataSchema,
   transformerRefDataSchema,
 } from "./transformer";
+import {
+  hookNodeDataSchema,
+  hookRefDataSchema,
+  componentNodeDataSchema,
+  componentRefDataSchema,
+} from "./frontend";
 
 export const nodeDataSchemas: Record<string, z.ZodSchema> = {
   queue: simpleDataSchema,
@@ -73,4 +79,8 @@ export const nodeDataSchemas: Record<string, z.ZodSchema> = {
   langgraph_step: langgraphStepDataSchema,
   transformer: transformerNodeDataSchema,
   transformer_ref: transformerRefDataSchema,
+  hook: hookNodeDataSchema,
+  hook_ref: hookRefDataSchema,
+  component: componentNodeDataSchema,
+  component_ref: componentRefDataSchema,
 };

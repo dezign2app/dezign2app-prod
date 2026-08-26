@@ -74,7 +74,11 @@ export type BackendNodeType =
   | "langgraph_step"
   | "page_ref"
   | "transformer"
-  | "transformer_ref";
+  | "transformer_ref"
+  | "hook"
+  | "hook_ref"
+  | "component"
+  | "component_ref";
 
 /** Core fields present on every canvas node. */
 export interface BaseNodeData {
@@ -506,6 +510,54 @@ export interface CanvasTransformerRefNodeData {
   targetEventIds?: string[];
 }
 
+/** Hook node fields for canvas graph view. */
+export interface CanvasHookNodeData {
+  hookName?: string;
+  scope?: "global" | "local";
+  targetWebAppId?: string;
+  targetPageId?: string;
+  targetEndpointId?: string;
+  targetEventId?: string;
+  hookRef?: string;
+  hookType?: "query" | "mutation" | "subscription" | "custom";
+  inputParams?: Parameter[];
+  returnSchema?: Parameter[];
+  logicMode?: "natural_language" | "code";
+  prompt?: string;
+  code?: string;
+}
+
+/** Hook reference node fields (canvas type). */
+export interface CanvasHookRefNodeData {
+  hookRef?: string;
+  targetWebAppId?: string;
+  targetPageId?: string;
+  targetPageIds?: string[];
+}
+
+/** Component node fields for canvas graph view. */
+export interface CanvasComponentNodeData {
+  componentName?: string;
+  scope?: "global" | "local";
+  targetWebAppId?: string;
+  targetPageId?: string;
+  slotName?: "header" | "main" | "sidebar" | "footer" | "modal" | "custom";
+  propsSchema?: Parameter[];
+  logicMode?: "natural_language" | "code";
+  prompt?: string;
+  code?: string;
+  componentRef?: string;
+}
+
+/** Component reference node fields (canvas type). */
+export interface CanvasComponentRefNodeData {
+  componentRef?: string;
+  targetWebAppId?: string;
+  targetPageId?: string;
+  targetPageIds?: string[];
+  slotName?: string;
+}
+
 
 /** Background worker node fields (canvas type). */
 export interface CanvasWorkerNodeData {
@@ -703,7 +755,11 @@ export type BackendNodeData = BaseNodeData &
       CanvasLangGraphStepNodeData &
       CanvasPageRefNodeData &
       CanvasTransformerNodeData &
-      CanvasTransformerRefNodeData
+      CanvasTransformerRefNodeData &
+      CanvasHookNodeData &
+      CanvasHookRefNodeData &
+      CanvasComponentNodeData &
+      CanvasComponentRefNodeData
   >;
 
 export type BackendNode = {

@@ -12,6 +12,8 @@ import {
   Network,
   ShieldCheck,
   Shuffle,
+  Anchor,
+  Layout,
 } from "lucide-react";
 import type { GraphNodeType } from "@workspace/canvas";
 
@@ -51,7 +53,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           variant="outline"
           size="sm"
           className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
-          onClick={() => onAddNode("webPage" as GraphNodeType, "Web Page")}
+          onClick={() => onAddNode("webPage", "Web Page")}
         >
           <Globe className="w-3.5 h-3.5 mr-2 text-indigo-500/80 shrink-0" />
           Web Page
@@ -60,7 +62,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           variant="outline"
           size="sm"
           className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
-          onClick={() => onAddNode("page_ref" as GraphNodeType, "Page Ref")}
+          onClick={() => onAddNode("page_ref", "Page Ref")}
         >
           <Compass className="w-3.5 h-3.5 mr-2 text-indigo-500/80 shrink-0" />
           Page Ref
@@ -95,7 +97,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           variant="outline"
           size="sm"
           className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-purple-500/40 text-purple-600 dark:text-purple-400 hover:bg-purple-500/15 hover:text-purple-300"
-          onClick={() => onAddNode("transformer" as GraphNodeType, "Data Transformer")}
+          onClick={() => onAddNode("transformer", "Data Transformer")}
         >
           <Shuffle className="w-3.5 h-3.5 mr-2 text-purple-500 shrink-0" />
           Transformer
@@ -104,10 +106,54 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           variant="outline"
           size="sm"
           className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-purple-500/40 text-purple-600 dark:text-purple-400 hover:bg-purple-500/15 hover:text-purple-300"
-          onClick={() => onAddNode("transformer_ref" as GraphNodeType, "Global Ref")}
+          onClick={() => onAddNode("transformer_ref", "Global Ref")}
         >
           <Shuffle className="w-3.5 h-3.5 mr-2 text-purple-500/80 shrink-0" />
           Global Ref
+        </Button>
+      </div>
+
+      {/* FRONTEND & UI GROUP */}
+      <div className="flex flex-col gap-1.5 p-1.5 rounded-lg bg-cyan-500/5 dark:bg-cyan-950/20 border border-cyan-500/25">
+        <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-cyan-600 dark:text-cyan-400 flex items-center gap-1">
+          <Anchor className="w-3 h-3 text-cyan-500" />
+          Frontend & UI
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-cyan-500/40 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/15 hover:text-cyan-300"
+          onClick={() => onAddNode("hook", "useCustomHook")}
+        >
+          <Anchor className="w-3.5 h-3.5 mr-2 text-cyan-500 shrink-0" />
+          React Hook
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-cyan-500/40 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/15 hover:text-cyan-300"
+          onClick={() => onAddNode("hook_ref", "Hook Ref")}
+        >
+          <Anchor className="w-3.5 h-3.5 mr-2 text-cyan-500/80 shrink-0" />
+          Hook Ref
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+          onClick={() => onAddNode("component", "Component")}
+        >
+          <Layout className="w-3.5 h-3.5 mr-2 text-indigo-500 shrink-0" />
+          UI Component
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0 w-full border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300"
+          onClick={() => onAddNode("component_ref", "Component Ref")}
+        >
+          <Layout className="w-3.5 h-3.5 mr-2 text-indigo-500/80 shrink-0" />
+          Component Ref
         </Button>
       </div>
 

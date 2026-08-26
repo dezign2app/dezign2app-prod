@@ -30,6 +30,10 @@ import {
   LangGraphStepNode,
   TransformerNode,
   TransformerRefNode,
+  HookNode,
+  HookRefNode,
+  ComponentNode,
+  ComponentRefNode,
 } from "./graph-nodes";
 import { SchemaGroupNode } from "./SchemaGroupNode";
 import { WebAppGroupNode } from "./WebAppGroupNode";
@@ -76,4 +80,8 @@ export const nodeTypes = {
   langgraph_step: LangGraphStepNode,
   transformer: TransformerNode,
   transformer_ref: TransformerRefNode,
+  hook: HookNode,
+  hook_ref: HookRefNode,
+  component: ComponentNode,
+  component_ref: ComponentRefNode,
 };

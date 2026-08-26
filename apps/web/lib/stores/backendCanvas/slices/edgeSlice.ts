@@ -16,6 +16,7 @@ import {
   handleDatabaseConnect,
   handleEventBrokerConnect,
   handleTransformerConnect,
+  handleFrontendConnect,
   handleEndpointConnect,
   handleForeignKeyConnect,
 } from "../edge";
@@ -162,12 +163,17 @@ export const createEdgeSlice = (
       return;
     }
 
-    // 4. Handle Endpoint connections (returns true if intercepted & direct edge removed)
+    // 4. Handle Frontend Hook & Component connections (returns true if intercepted & direct edge removed)
+    if (handleFrontendConnect(context)) {
+      return;
+    }
+
+    // 5. Handle Endpoint connections (returns true if intercepted & direct edge removed)
     if (handleEndpointConnect(context)) {
       return;
     }
 
-    // 5. Handle Foreign Key column-to-column metadata updates
+    // 6. Handle Foreign Key column-to-column metadata updates
     handleForeignKeyConnect(context);
   },
 

@@ -53,12 +53,12 @@ export function createGraphNodeData(
       functionName: "transformData",
       scope: "global",
       inputSchema: [
-        { name: "name", type: "string", required: true },
+        { id: "in_name", name: "name", type: "string", required: true },
       ],
       logicMode: "code",
       code: "return {\n  slug: input.name.toLowerCase().replace(/\\s+/g, '-'),\n};",
       returnSchema: [
-        { name: "slug", type: "string", required: true },
+        { id: "out_slug", name: "slug", type: "string", required: true },
       ],
     };
   }
@@ -67,6 +67,41 @@ export function createGraphNodeData(
     return {
       ...baseData,
       label: "Transformer Ref",
+    };
+  }
+
+  if (type === "hook") {
+    return {
+      ...baseData,
+      hookName: "useCustomHook",
+      scope: "global",
+      hookType: "query",
+      inputParams: [],
+      returnSchema: [],
+    };
+  }
+
+  if (type === "hook_ref") {
+    return {
+      ...baseData,
+      label: "Hook Ref",
+    };
+  }
+
+  if (type === "component") {
+    return {
+      ...baseData,
+      componentName: "CustomComponent",
+      scope: "global",
+      slotName: "main",
+      propsSchema: [],
+    };
+  }
+
+  if (type === "component_ref") {
+    return {
+      ...baseData,
+      label: "Component Ref",
     };
   }
 

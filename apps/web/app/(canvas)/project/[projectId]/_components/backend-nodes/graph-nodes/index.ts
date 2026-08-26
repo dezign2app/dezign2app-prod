@@ -42,3 +42,10 @@ export { PaymentsNode } from "./nodes/ai-security/PaymentsNode";
 // LangGraph nodes
 export { LangGraphNode } from "./langgraph/LangGraphNode";
 export { LangGraphStepNode } from "./langgraph/LangGraphStepNode";
+
+// Frontend nodes
+export { HookNode } from "./nodes/frontend/HookNode";
+export { HookRefNode } from "./nodes/frontend/HookRefNode";
+export { ComponentNode } from "./nodes/frontend/ComponentNode";
+export { ComponentRefNode } from "./nodes/frontend/ComponentRefNode";
+
