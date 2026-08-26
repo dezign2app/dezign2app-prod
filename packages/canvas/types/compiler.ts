@@ -1,5 +1,52 @@
-import type { ReusableFunction } from "./nodes";
+import type { ReusableFunction, BackendNode } from "./nodes";
+import type { BackendEdge } from "./edges";
 import type { Endpoint } from "../schemas";
+
+export interface ServiceInfo {
+  id: string;
+  name: string;
+  folderName: string;
+}
+
+export interface WebClientInfo {
+  id: string;
+  name: string;
+  folderName: string;
+}
+
+export type WebAppInfo = WebClientInfo;
+
+export interface DockerGeneratorOptions {
+  nodes: BackendNode[];
+  edges: BackendEdge[];
+  services: ServiceInfo[];
+  webApps?: WebAppInfo[];
+  webClients?: WebClientInfo[];
+  projectName: string;
+  hasKafka?: boolean;
+  hasRedis?: boolean;
+}
+
+export interface ComposeGeneratorContext {
+  nodes: BackendNode[];
+  edges: BackendEdge[];
+  services: ServiceInfo[];
+  webApps?: WebAppInfo[];
+  webClients?: WebClientInfo[];
+  projectSlug: string;
+  hasPostgres: boolean;
+  hasSqlite: boolean;
+  hasKafka: boolean;
+  hasRedis: boolean;
+}
+
+export interface InfraComposeContext {
+  projectSlug: string;
+  hasPostgres: boolean;
+  hasKafka: boolean;
+  hasRedis: boolean;
+  nodes?: BackendNode[];
+}
 
 export interface CompiledFile {
   filename: string;
