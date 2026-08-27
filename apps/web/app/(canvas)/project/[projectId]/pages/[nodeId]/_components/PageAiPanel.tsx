@@ -20,6 +20,10 @@ import {
   Search,
   Clock,
   Layers,
+  Wand2,
+  Check,
+  Copy,
+  Code2,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
@@ -33,11 +37,13 @@ import { useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { formatDistanceToNow } from "date-fns";
+import { toast } from "sonner";
 
 export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  plan?: string;
   timestamp: Date;
 }
 
@@ -53,20 +59,48 @@ interface PageAiPanelProps {
   isAiEditing: boolean;
   outputDir: string;
   pageName: string;
+  activeFilePath?: string;
   onSend: () => void;
   onStop?: () => void;
   onReset?: () => void;
   onUnlock?: () => void;
   onClearHistory?: () => void;
   hasCustomCode?: boolean;
-  // Conversation management props
   projectId?: string;
   nodeId?: string;
   activeConversationId?: string | null;
   onSelectConversation?: (conversationId: string) => void;
   onNewConversation?: () => void;
   onDeleteConversation?: (conversationId: string) => void;
+  onApplyCodeToEditor?: (code: string) => void;
 }
+
+const QUICK_ACTIONS = [
+  {
+    label: "Modern Dark Hero",
+    prompt: "Create a sleek dark modern hero section with glowing gradient accents, headline, CTA buttons, and feature badges.",
+  },
+  {
+    label: "Data Table & Filters",
+    prompt: "Build a responsive data table with status badges, search filter input, sorting controls, and pagination.",
+  },
+  {
+    label: "Card Grid & Stats",
+    prompt: "Add a grid of interactive metric cards with growth badges, trend icons, and smooth hover elevation.",
+  },
+  {
+    label: "Form with Validation",
+    prompt: "Create an interactive input form with clean validation states, error messages, and a submit button with loading state.",
+  },
+  {
+    label: "Navbar & Footer",
+    prompt: "Add a modern sticky navbar with logo and navigation links, plus a clean footer with social links and copyright.",
+  },
+  {
+    label: "Fix Styling / Alignment",
+    prompt: "Review and refine the Tailwind layout, spacing, typography, and responsive breakpoints for a polished look.",
+  },
+];
 
 export function PageAiPanel({
   isOpen,
@@ -80,6 +114,7 @@ export function PageAiPanel({
   isAiEditing,
   outputDir,
   pageName,
+  activeFilePath,
   onSend,
   onStop,
   onReset,
@@ -169,9 +204,13 @@ export function PageAiPanel({
     setShowHistory(false);
   };
 
+  const handleQuickAction = (quickPrompt: string) => {
+    setPrompt(quickPrompt);
+  };
+
   return (
     <>
-      {/* Floating Trigger Button */}
+      {/* Floating Trigger Button when closed */}
       <button
         type="button"
         onClick={onToggle}
@@ -183,14 +222,14 @@ export function PageAiPanel({
         title="Open AI Assistant"
       >
         <ChevronLeft className="w-3.5 h-3.5 text-muted-foreground group-hover:-translate-x-0.5 transition-transform" />
-        <Sparkles className="w-4 h-4 text-muted-foreground group-hover:text-sidebar-foreground transition-colors" />
+        <Sparkles className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
         <span className="font-semibold text-[11px]">AI Assistant</span>
       </button>
 
       {/* Resizable Sidebar Panel */}
       <Resizable
         size={{ width: isOpen ? aiPanelWidth : 0, height: "100%" }}
-        minWidth={isOpen ? 280 : 0}
+        minWidth={isOpen ? 300 : 0}
         maxWidth={800}
         enable={{ left: isOpen }}
         onResizeStart={() => setIsResizing(true)}
@@ -199,7 +238,7 @@ export function PageAiPanel({
           setAiPanelWidth(aiPanelWidth + d.width);
         }}
         handleClasses={{
-          left: "w-1.5 bg-sidebar-border hover:bg-muted-foreground/40 cursor-col-resize transition-colors z-30 hover:w-2",
+          left: "w-1.5 bg-sidebar-border hover:bg-primary/50 cursor-col-resize transition-colors z-30",
         }}
         className={`h-full pointer-events-auto shrink-0 flex flex-col bg-sidebar border-l border-sidebar-border shadow-lg z-20 select-none font-sans overflow-hidden ${
           isResizing
@@ -212,7 +251,7 @@ export function PageAiPanel({
         {/* ========================================================================= */}
         {/* HEADER: Dynamic based on Chat vs History View                            */}
         {/* ========================================================================= */}
-        <div className="h-10 px-3 border-b border-sidebar-border flex items-center justify-between shrink-0 bg-sidebar-accent/50">
+        <div className="h-10 px-3 border-b border-sidebar-border flex items-center justify-between shrink-0 bg-sidebar-accent/40">
           {showHistory ? (
             /* History Header */
             <>
@@ -272,12 +311,12 @@ export function PageAiPanel({
             /* Chat Header */
             <>
               <div className="flex items-center gap-2 min-w-0">
-                <Sparkles className="w-4 h-4 text-muted-foreground shrink-0" />
+                <Sparkles className="w-4 h-4 text-primary shrink-0" />
                 <span className="text-xs font-semibold tracking-wide uppercase text-sidebar-foreground truncate">
-                  AI Assistant
+                  AI Code Agent
                 </span>
-                <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-sidebar-accent text-muted-foreground border-sidebar-border shrink-0 font-normal">
-                  Page Editor
+                <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-primary/10 text-primary border-primary/30 shrink-0 font-normal">
+                  Live Sync
                 </Badge>
               </div>
               <div className="flex items-center gap-1">
@@ -355,7 +394,6 @@ export function PageAiPanel({
           <div className="flex-1 flex flex-col min-h-0 bg-sidebar">
             {/* Search & Scope Filter Bar */}
             <div className="p-2.5 border-b border-sidebar-border space-y-2 bg-sidebar">
-              {/* Search Bar */}
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
@@ -438,10 +476,9 @@ export function PageAiPanel({
                           : "bg-sidebar hover:bg-sidebar-accent/50 border-sidebar-border/70 hover:border-sidebar-border text-muted-foreground hover:text-sidebar-foreground"
                       }`}
                     >
-                      {/* Top Row: Title + Active Badge + Delete Button */}
                       <div className="flex items-center justify-between gap-2 min-w-0">
                         <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                          <MessageSquare className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                          <MessageSquare className="w-3.5 h-3.5 shrink-0 text-primary" />
                           <span className={`text-xs truncate ${isActive ? "text-sidebar-foreground font-semibold" : "text-sidebar-foreground"}`}>
                             {conv.title || "Untitled Conversation"}
                           </span>
@@ -473,7 +510,6 @@ export function PageAiPanel({
                         </div>
                       </div>
 
-                      {/* Bottom Row: Timestamp + Node badge if in All mode */}
                       <div className="flex items-center justify-between text-[10px] text-muted-foreground pl-5">
                         <div className="flex items-center gap-1">
                           <Clock className="w-3 h-3 text-muted-foreground" />
@@ -514,33 +550,48 @@ export function PageAiPanel({
             <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs bg-sidebar">
               {messages.length === 0 && !streaming && (
                 <div className="flex flex-col gap-3 py-2">
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Describe what you want to change on <strong className="text-sidebar-foreground">{pageName}</strong>. The AI will edit the TSX code and sync it in real time.
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-sidebar-foreground flex items-center gap-1.5">
+                      <Wand2 className="w-3.5 h-3.5 text-primary" />
+                      AI Assistant for <span className="text-primary">{pageName}</span>
+                    </p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Instruct the AI agent to edit TSX code, build responsive UI components, or fix styling. Changes will update the code editor and write to disk in real time.
+                    </p>
+                  </div>
 
-                  <div className="space-y-1.5">
-                    {[
-                      "Make it a dark modern sidebar layout",
-                      "Add a hero section with gradient and stats",
-                      "Convert to a data table with filters & pagination",
-                      "Add responsive cards with loading skeleton",
-                    ].map((suggestion) => (
-                      <button
-                        key={suggestion}
-                        type="button"
-                        onClick={() => setPrompt(suggestion)}
-                        className="w-full text-left text-xs px-2.5 py-1.5 rounded-md border border-sidebar-border bg-sidebar-accent/50 hover:bg-sidebar-accent text-sidebar-foreground transition-colors"
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
+                  {/* Preset Action Chips */}
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Quick UI Actions
+                    </span>
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {QUICK_ACTIONS.map((action) => (
+                        <button
+                          key={action.label}
+                          type="button"
+                          onClick={() => handleQuickAction(action.prompt)}
+                          className="w-full text-left p-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 hover:bg-sidebar-accent hover:border-primary/40 text-sidebar-foreground transition-all group"
+                        >
+                          <div className="flex items-center justify-between text-xs font-medium">
+                            <span className="group-hover:text-primary transition-colors">
+                              {action.label}
+                            </span>
+                            <Sparkles className="w-3 h-3 text-muted-foreground group-hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                          <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
+                            {action.prompt}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {!outputDir && (
-                    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-sidebar-accent border border-sidebar-border text-[11px] text-muted-foreground">
-                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-muted-foreground" />
+                    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" />
                       <span>
-                        No workspace folder set. Open the terminal below and pick a folder to enable live disk sync and instant HMR preview.
+                        No local folder selected. Pick your local repository folder in the terminal to enable instant file sync & HMR.
                       </span>
                     </div>
                   )}
@@ -556,12 +607,20 @@ export function PageAiPanel({
                     className={`max-w-[90%] px-3 py-2 rounded-xl text-xs leading-relaxed ${
                       msg.role === "user"
                         ? "bg-primary text-primary-foreground rounded-br-none"
-                        : "bg-sidebar-accent text-sidebar-foreground border border-sidebar-border rounded-bl-none"
+                        : "bg-sidebar-accent text-sidebar-foreground border border-sidebar-border rounded-bl-none shadow-sm"
                     }`}
                   >
-                    {msg.content}
+                    {msg.plan && (
+                      <div className="mb-2 p-2 rounded bg-sidebar/70 border border-sidebar-border/80 text-[11px] font-mono text-muted-foreground">
+                        <div className="flex items-center gap-1 text-primary font-semibold mb-1">
+                          <Code2 className="w-3 h-3" /> Plan:
+                        </div>
+                        <p className="whitespace-pre-wrap">{msg.plan}</p>
+                      </div>
+                    )}
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
                   </div>
-                  <span className="text-[10px] text-muted-foreground px-1">
+                  <span className="text-[10px] text-muted-foreground px-1 font-mono">
                     {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </span>
                 </div>
@@ -572,8 +631,8 @@ export function PageAiPanel({
                   <div className="max-w-[95%] w-full px-3 py-2.5 rounded-xl text-xs leading-relaxed bg-sidebar-accent text-sidebar-foreground border border-sidebar-border rounded-bl-none space-y-2">
                     <div className="flex items-center justify-between gap-2 text-sidebar-foreground font-medium text-[11px]">
                       <div className="flex items-center gap-2 truncate">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-muted-foreground" />
-                        <span className="truncate">{streamingStatus || "AI is generating code..."}</span>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-primary" />
+                        <span className="truncate">{streamingStatus || "AI agent is generating code..."}</span>
                       </div>
                       {onStop && (
                         <Button
@@ -601,7 +660,7 @@ export function PageAiPanel({
             </div>
 
             {/* Input Area */}
-            <div className="p-3 border-t border-sidebar-border bg-sidebar shrink-0">
+            <div className="p-3 border-t border-sidebar-border bg-sidebar shrink-0 space-y-2">
               <div className="flex flex-col gap-2">
                 <textarea
                   value={prompt}
@@ -609,7 +668,7 @@ export function PageAiPanel({
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
-                      if (!streaming && !isAiEditing) {
+                      if (!streaming && !isAiEditing && prompt.trim()) {
                         onSend();
                       }
                     }
@@ -617,12 +676,13 @@ export function PageAiPanel({
                   disabled={isAiEditing || streaming}
                   placeholder={
                     isAiEditing
-                      ? "AI is editing... Click Stop to cancel."
-                      : "Describe changes... (Enter to send, Shift+Enter for newline)"
+                      ? "AI agent is editing code... Click Stop to cancel."
+                      : `Describe code changes for ${pageName}... (Enter to send)`
                   }
                   rows={3}
-                  className="w-full text-xs bg-sidebar-accent border border-sidebar-border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-sidebar-ring text-sidebar-foreground placeholder:text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full text-xs bg-sidebar-accent border border-sidebar-border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary text-sidebar-foreground placeholder:text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed font-sans"
                 />
+
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5">
                     {hasCustomCode && onReset && (
@@ -644,10 +704,11 @@ export function PageAiPanel({
                         onClick={onUnlock}
                         title="Force unlock this node if generation is stuck"
                       >
-                        <Unlock className="w-3 h-3 mr-1" /> Unlock Page
+                        <Unlock className="w-3 h-3 mr-1" /> Unlock
                       </Button>
                     )}
                   </div>
+
                   {streaming || isAiEditing ? (
                     <Button
                       type="button"
@@ -665,9 +726,9 @@ export function PageAiPanel({
                       onClick={onSend}
                       disabled={!prompt.trim()}
                       size="sm"
-                      className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground ml-auto flex items-center gap-1.5"
+                      className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground ml-auto flex items-center gap-1.5 shadow-sm font-medium"
                     >
-                      <Send className="w-3 h-3" /> Send
+                      <Send className="w-3 h-3" /> Update Code
                     </Button>
                   )}
                 </div>

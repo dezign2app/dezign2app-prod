@@ -150,3 +150,122 @@ export async function readProjectFile(
 
   return { success: false, content: null, path: fullPath };
 }
+
+export interface DiskTreeNode {
+  name: string;
+  path: string;
+  isFolder: boolean;
+  children?: DiskTreeNode[];
+}
+
+export interface ListDirectoryResult {
+  success: boolean;
+  tree: DiskTreeNode[];
+  totalFiles: number;
+  path: string;
+}
+
+const NEVER_SHOW = new Set([
+  ".git",
+  ".DS_Store",
+  "Thumbs.db",
+]);
+
+function scanDirectoryRecursive(
+  rootDir: string,
+  subDir: string = "",
+  depth: number = 0,
+  maxDepth: number = 8
+): { nodes: DiskTreeNode[]; fileCount: number } {
+  if (!rootDir || !fs.existsSync(rootDir) || depth > maxDepth) {
+    return { nodes: [], fileCount: 0 };
+  }
+
+  const currentDir = subDir ? path.join(rootDir, subDir) : rootDir;
+  if (!fs.existsSync(currentDir)) {
+    return { nodes: [], fileCount: 0 };
+  }
+
+  let entries: fs.Dirent[] = [];
+  try {
+    entries = fs.readdirSync(currentDir, { withFileTypes: true });
+  } catch (e) {
+    return { nodes: [], fileCount: 0 };
+  }
+
+  const nodes: DiskTreeNode[] = [];
+  let totalFiles = 0;
+
+  // Limit depth inside heavy vendor folders like node_modules so directory scanning is instant
+  const isHeavyFolder =
+    subDir === "node_modules" ||
+    subDir.endsWith("/node_modules") ||
+    subDir.includes("node_modules/") ||
+    subDir === ".pnpm-store" ||
+    subDir.includes(".pnpm-store/");
+  const effectiveMaxDepth = isHeavyFolder ? Math.min(maxDepth, depth + 1) : maxDepth;
+
+  for (const entry of entries) {
+    if (NEVER_SHOW.has(entry.name)) {
+      continue;
+    }
+
+    const relPath = subDir
+      ? `${subDir}/${entry.name}`.replace(/\\/g, "/")
+      : entry.name;
+
+    if (entry.isDirectory()) {
+      const sub =
+        depth < effectiveMaxDepth
+          ? scanDirectoryRecursive(rootDir, relPath, depth + 1, effectiveMaxDepth)
+          : { nodes: [], fileCount: 0 };
+      totalFiles += sub.fileCount;
+      nodes.push({
+        name: entry.name,
+        path: relPath,
+        isFolder: true,
+        children: sub.nodes,
+      });
+    } else {
+      totalFiles += 1;
+      nodes.push({
+        name: entry.name,
+        path: relPath,
+        isFolder: false,
+      });
+    }
+  }
+
+  nodes.sort((a, b) => {
+    if (a.isFolder && !b.isFolder) return -1;
+    if (!a.isFolder && b.isFolder) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  return { nodes, fileCount: totalFiles };
+}
+
+/**
+ * Scans and returns the tree structure of files directly on the local filesystem.
+ */
+export async function listProjectDirectory(
+  outputDir: string
+): Promise<ListDirectoryResult> {
+  if (!outputDir || !fs.existsSync(outputDir)) {
+    return { success: false, tree: [], totalFiles: 0, path: outputDir || "" };
+  }
+
+  try {
+    const { nodes, fileCount } = scanDirectoryRecursive(outputDir);
+    return {
+      success: true,
+      tree: nodes,
+      totalFiles: fileCount,
+      path: outputDir,
+    };
+  } catch (err) {
+    console.warn(`[fileWriter] Failed to list directory ${outputDir}:`, err);
+    return { success: false, tree: [], totalFiles: 0, path: outputDir };
+  }
+}
+

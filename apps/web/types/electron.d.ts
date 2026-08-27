@@ -33,6 +33,14 @@ export interface ElectronAPI {
       content: string | null;
       path: string;
     }>;
+    listDirectory?(
+      outputDir: string
+    ): Promise<{
+      success: boolean;
+      tree: Array<{ name: string; path: string; isFolder: boolean; children?: Array<any> }>;
+      totalFiles: number;
+      path: string;
+    }>;
   };
 
   shell?: {
