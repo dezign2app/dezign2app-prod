@@ -93,26 +93,3 @@ export interface CanvasHookRefNodeData {
   targetPageId?: string;
   targetPageIds?: string[];
 }
-
-/** Component node fields for canvas graph view. */
-export interface CanvasComponentNodeData {
-  componentName?: string;
-  scope?: "global" | "local";
-  targetWebAppId?: string;
-  targetPageId?: string;
-  slotName?: "header" | "main" | "sidebar" | "footer" | "modal" | "custom";
-  propsSchema?: Parameter[];
-  logicMode?: "natural_language" | "code";
-  prompt?: string;
-  code?: string;
-  componentRef?: string;
-}
-
-/** Component reference node fields (canvas type). */
-export interface CanvasComponentRefNodeData {
-  componentRef?: string;
-  targetWebAppId?: string;
-  targetPageId?: string;
-  targetPageIds?: string[];
-  slotName?: string;
-}

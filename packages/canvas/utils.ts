@@ -42,8 +42,6 @@ const ALL_BACKEND_NODE_TYPES = [
   "transformer_ref",
   "hook",
   "hook_ref",
-  "component",
-  "component_ref",
 ] as const;
 
 export function isBackendNode(type: string): type is BackendNodeType {
@@ -239,9 +237,6 @@ export function classifyHandle(
     id.startsWith("slot-out")
   ) {
     return "component-out";
-  }
-  if (nodeType === "component" || nodeType === "component_ref") {
-    return handleDirection === "target" ? "component-in" : "component-out";
   }
 
   if (

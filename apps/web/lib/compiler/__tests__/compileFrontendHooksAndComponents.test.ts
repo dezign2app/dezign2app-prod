@@ -3,8 +3,8 @@ import { BackendNode, BackendEdge } from "@/types/canvas";
 import { compileMonorepo } from "../compileMonorepo";
 import { compileFrontendNodes } from "../compileFrontendHelpers";
 
-describe("Frontend Hooks and Components Compilation", () => {
-  it("compiles global hooks and components to packages/ui/ and app-local items to their owning apps", () => {
+describe("Frontend Hooks Compilation", () => {
+  it("compiles global hooks to packages/ui/ and app-local hooks to their owning apps", () => {
     // 1. WebApp Nodes
     const adminApp: BackendNode = {
       id: "webapp-admin",
@@ -52,7 +52,7 @@ describe("Frontend Hooks and Components Compilation", () => {
       },
     };
 
-    // 3. Global Hook & Component
+    // 3. Global Hook
     const globalHook: BackendNode = {
       id: "hook-debounce",
       type: "hook",
@@ -67,20 +67,7 @@ describe("Frontend Hooks and Components Compilation", () => {
       },
     };
 
-    const globalComponent: BackendNode = {
-      id: "comp-button",
-      type: "component",
-      position: { x: 350, y: -200 },
-      fractionalIndex: "a5",
-      data: {
-        label: "PrimaryButton",
-        componentName: "PrimaryButton",
-        scope: "global",
-        propsSchema: [{ id: "1", name: "label", type: "string", required: true }],
-      },
-    };
-
-    // 4. Local Hook & Component for Admin Portal
+    // 4. Local Hook for Admin Portal
     const adminHook: BackendNode = {
       id: "hook-admin-stats",
       type: "hook",
@@ -94,32 +81,17 @@ describe("Frontend Hooks and Components Compilation", () => {
       },
     };
 
-    const adminComponent: BackendNode = {
-      id: "comp-admin-nav",
-      type: "component",
-      position: { x: -200, y: 300 },
-      fractionalIndex: "a7",
-      data: {
-        label: "AdminNavbar",
-        componentName: "AdminNavbar",
-        scope: "local",
-        targetWebAppId: "webapp-admin",
-        slotName: "header",
-      },
-    };
-
-    // 5. Local Component for Storefront
-    const storeComponent: BackendNode = {
-      id: "comp-cart-drawer",
-      type: "component",
+    // 5. Local Hook for Storefront
+    const storeHook: BackendNode = {
+      id: "hook-cart-sync",
+      type: "hook",
       position: { x: 700, y: 200 },
       fractionalIndex: "a8",
       data: {
-        label: "CartDrawer",
-        componentName: "CartDrawer",
+        label: "useCartSync",
+        hookName: "useCartSync",
         scope: "local",
         targetWebAppId: "webapp-store",
-        slotName: "sidebar",
       },
     };
 
@@ -129,10 +101,8 @@ describe("Frontend Hooks and Components Compilation", () => {
       adminDashboard,
       storeHome,
       globalHook,
-      globalComponent,
       adminHook,
-      adminComponent,
-      storeComponent,
+      storeHook,
     ];
 
     const edges: BackendEdge[] = [
@@ -164,30 +134,21 @@ describe("Frontend Hooks and Components Compilation", () => {
 
     const fileMap = new Map(result.files.map((f) => [f.filename, f.content]));
 
-    // 1. Verify Global Hook & Component in packages/ui/
+    // 1. Verify Global Hook in packages/ui/
     expect(fileMap.has("packages/ui/src/hooks/useDebounce.ts")).toBe(true);
-    expect(fileMap.has("packages/ui/src/components/PrimaryButton.tsx")).toBe(true);
 
     const debounceContent = fileMap.get("packages/ui/src/hooks/useDebounce.ts")!;
     expect(debounceContent).toContain("export function useDebounce");
     expect(debounceContent).toContain("DebounceArgs");
 
-    const btnContent = fileMap.get("packages/ui/src/components/PrimaryButton.tsx")!;
-    expect(btnContent).toContain("export function PrimaryButton");
-    expect(btnContent).toContain("PrimaryButtonProps");
-
     // 2. Verify Admin-Local items in apps/admin-portal/
     expect(fileMap.has("apps/admin-portal/hooks/useAdminStats.ts")).toBe(true);
-    expect(fileMap.has("apps/admin-portal/components/AdminNavbar.tsx")).toBe(true);
 
     // 3. Verify Storefront-Local items in apps/storefront/
-    expect(fileMap.has("apps/storefront/components/CartDrawer.tsx")).toBe(true);
+    expect(fileMap.has("apps/storefront/hooks/useCartSync.ts")).toBe(true);
 
-    // 4. Verify Scope Isolation (Storefront must NOT have AdminNavbar or useAdminStats)
-    expect(fileMap.has("apps/storefront/components/AdminNavbar.tsx")).toBe(false);
+    // 4. Verify Scope Isolation
     expect(fileMap.has("apps/storefront/hooks/useAdminStats.ts")).toBe(false);
-
-    // 5. Verify Admin Portal must NOT have CartDrawer
-    expect(fileMap.has("apps/admin-portal/components/CartDrawer.tsx")).toBe(false);
+    expect(fileMap.has("apps/admin-portal/hooks/useCartSync.ts")).toBe(false);
   });
 });

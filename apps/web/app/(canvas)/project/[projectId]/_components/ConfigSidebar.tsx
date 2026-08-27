@@ -33,7 +33,6 @@ import { TransformerConfig } from "./config-sidebar/TransformerConfig";
 import { DatabaseTableRefConfig } from "./config-sidebar/DatabaseTableRefConfig";
 import { RedisCacheRefConfig } from "./config-sidebar/RedisCacheRefConfig";
 import { HookConfig } from "./config-sidebar/HookConfig";
-import { ComponentConfig } from "./config-sidebar/ComponentConfig";
 
 export const ConfigSidebar = () => {
   const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
@@ -249,8 +248,6 @@ export const ConfigSidebar = () => {
             <TransformerConfig id={id} nodeId={nodeId} />
           ) : type === "hook" || type === "hook_ref" ? (
             <HookConfig id={id} nodeId={nodeId} />
-          ) : type === "component" || type === "component_ref" ? (
-            <ComponentConfig id={id} nodeId={nodeId} />
           ) : (
             <EventConfig id={id} nodeId={nodeId} />
           )}

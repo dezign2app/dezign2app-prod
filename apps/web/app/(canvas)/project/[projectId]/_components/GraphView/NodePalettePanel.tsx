@@ -94,24 +94,6 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           <Anchor className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
           Hook Ref
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-          onClick={() => onAddNode("component", "Component")}
-        >
-          <Layout className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
-          UI Component
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-          onClick={() => onAddNode("component_ref", "Component Ref")}
-        >
-          <Layout className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
-          Component Ref
-        </Button>
       </div>
 
       {/* SERVICE & BACKEND GROUP */}

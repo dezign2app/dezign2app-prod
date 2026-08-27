@@ -36,8 +36,6 @@ export const BACKEND_NODE_TRANSFORMER = "transformer" as const;
 export const BACKEND_NODE_TRANSFORMER_REF = "transformer_ref" as const;
 export const BACKEND_NODE_HOOK = "hook" as const;
 export const BACKEND_NODE_HOOK_REF = "hook_ref" as const;
-export const BACKEND_NODE_COMPONENT = "component" as const;
-export const BACKEND_NODE_COMPONENT_REF = "component_ref" as const;
 
 export const NODE_TYPE_TO_RESOURCE_KIND: Record<string, string | undefined> = {
   kafka: "kafka",
@@ -60,8 +58,6 @@ export const NODE_TYPE_TO_RESOURCE_KIND: Record<string, string | undefined> = {
   langgraph_step: "langgraph_step",
   hook: "hook",
   hook_ref: "hook_ref",
-  component: "component",
-  component_ref: "component_ref",
 };
 
 export const BACKEND_NODE_TYPES = {
@@ -102,8 +98,6 @@ export const BACKEND_NODE_TYPES = {
   TRANSFORMER_REF: BACKEND_NODE_TRANSFORMER_REF,
   HOOK: BACKEND_NODE_HOOK,
   HOOK_REF: BACKEND_NODE_HOOK_REF,
-  COMPONENT: BACKEND_NODE_COMPONENT,
-  COMPONENT_REF: BACKEND_NODE_COMPONENT_REF,
 } as const;
 
 // ─── Backend Canvas Main Edge Types ───────────────────────────────────────────
