@@ -3,6 +3,11 @@ import type {
   PipelineStepType,
   PipelineStepInputBinding,
   PipelineStepInputSource,
+  ConditionOperator,
+  ConditionClause,
+  ConditionExpr,
+  SwitchCase,
+  ParallelBranch,
 } from "../schemas/shared";
 
 // ─── Step Binding & Source Types ──────────────────────────────────────────────
@@ -10,6 +15,14 @@ import type {
 export type StepSource = PipelineStepInputSource;
 
 export type StepBinding = PipelineStepInputBinding;
+
+export type {
+  ConditionOperator,
+  ConditionClause,
+  ConditionExpr,
+  SwitchCase,
+  ParallelBranch,
+};
 
 
 // ─── Step Types ───────────────────────────────────────────────────────────────

@@ -11,4 +11,9 @@ export type {
   AvailableTransformer,
   SchemaFieldRow,
   ExpectedArg,
+  ConditionOperator,
+  ConditionClause,
+  ConditionExpr,
+  SwitchCase,
+  ParallelBranch,
 } from "@workspace/canvas/types";

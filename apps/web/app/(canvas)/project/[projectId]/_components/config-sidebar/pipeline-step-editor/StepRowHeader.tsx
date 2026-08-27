@@ -68,19 +68,54 @@ export const StepRowHeader = ({
         {meta.label}
       </span>
 
-      {/* Variable assignment view */}
+      {/* Variable assignment / Control flow summary view */}
       <span className="text-xs font-mono font-medium text-foreground/90 flex-1 truncate flex items-center gap-1.5">
-        <span className="text-muted-foreground/45 font-normal select-none">const</span>
-        <span className="text-primary/95 font-semibold">{displayVarName}</span>
-        <span className="text-muted-foreground/35 font-normal select-none">=</span>
-        {step.functionRef?.name && (
-          <span className="text-[11px] text-muted-foreground/75 font-mono truncate max-w-[150px]">
-            {step.functionRef.name}(...)
+        {step.type === "condition" ? (
+          <span className="text-amber-300 font-semibold truncate">
+            if (condition) &#123; then: {step.thenSteps?.length || 0}, else: {step.elseSteps?.length || 0} &#125;
           </span>
+        ) : step.type === "try_catch" ? (
+          <span className="text-rose-300 font-semibold truncate">
+            try &#123; {step.trySteps?.length || 0} &#125; catch &#123; {step.catchSteps?.length || 0} &#125;
+          </span>
+        ) : step.type === "switch" ? (
+          <span className="text-indigo-300 font-semibold truncate">
+            switch ({step.switchCases?.length || 0} cases)
+          </span>
+        ) : step.type === "parallel" ? (
+          <span className="text-sky-300 font-semibold truncate">
+            parallel ({step.parallelBranches?.length || 0} branches)
+          </span>
+        ) : step.type === "loop" ? (
+          <span className="text-teal-300 font-semibold truncate">
+            for ({step.iteratorVariable || "item"} of items)
+          </span>
+        ) : step.type === "early_return" ? (
+          <span className="text-orange-300 font-semibold truncate">
+            return res.status({step.statusCode || 200})
+          </span>
+        ) : (
+          <>
+            <span className="text-muted-foreground/45 font-normal select-none">const</span>
+            <span className="text-primary/95 font-semibold">{displayVarName}</span>
+            <span className="text-muted-foreground/35 font-normal select-none">=</span>
+            {step.functionRef?.name && (
+              <span className="text-[11px] text-muted-foreground/75 font-mono truncate max-w-[150px]">
+                {step.functionRef.name}(...)
+              </span>
+            )}
+            {step.type === "custom_code" && (
+              <span className="text-[11px] text-muted-foreground/50 font-mono italic truncate max-w-[120px]">
+                {`{ /* code */ }`}
+              </span>
+            )}
+          </>
         )}
-        {step.type === "custom_code" && (
-          <span className="text-[11px] text-muted-foreground/50 font-mono italic truncate max-w-[120px]">
-            {`{ /* code */ }`}
+
+        {/* runIf Guard Badge */}
+        {step.runIf && (
+          <span className="text-[9px] font-sans font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0 ml-1">
+            ⚡ if
           </span>
         )}
       </span>

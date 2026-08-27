@@ -17,6 +17,12 @@ import {
   Cloud,
   Terminal,
   Send,
+  GitBranch,
+  ShieldAlert,
+  GitFork,
+  Layers,
+  Repeat,
+  LogOut,
 } from "lucide-react";
 import {
   StepType,
@@ -24,6 +30,7 @@ import {
   AvailablePath,
   AvailableSource,
   AvailableTransformer,
+  ConditionOperator,
 } from "./types";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import React from "react";
@@ -74,6 +81,36 @@ export const STEP_TYPE_META: Record<StepType, StepTypeMeta> = {
     icon: React.createElement(Send, { size: 13 }),
     color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
   },
+  condition: {
+    label: "If / Else",
+    icon: React.createElement(GitBranch, { size: 13 }),
+    color: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+  },
+  try_catch: {
+    label: "Try / Catch",
+    icon: React.createElement(ShieldAlert, { size: 13 }),
+    color: "text-rose-400 bg-rose-500/10 border-rose-500/20",
+  },
+  switch: {
+    label: "Switch",
+    icon: React.createElement(GitFork, { size: 13 }),
+    color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
+  },
+  parallel: {
+    label: "Parallel",
+    icon: React.createElement(Layers, { size: 13 }),
+    color: "text-sky-400 bg-sky-500/10 border-sky-500/20",
+  },
+  loop: {
+    label: "Loop",
+    icon: React.createElement(Repeat, { size: 13 }),
+    color: "text-teal-400 bg-teal-500/10 border-teal-500/20",
+  },
+  early_return: {
+    label: "Early Return",
+    icon: React.createElement(LogOut, { size: 13 }),
+    color: "text-orange-400 bg-orange-500/10 border-orange-500/20",
+  },
 };
 
 export const ADDABLE_STEP_TYPES: readonly StepType[] = [
@@ -83,7 +120,99 @@ export const ADDABLE_STEP_TYPES: readonly StepType[] = [
   "kafka_publish",
   "service_call",
   "custom_code",
+  "condition",
+  "try_catch",
+  "switch",
+  "parallel",
+  "loop",
+  "early_return",
 ];
+
+export const CONDITION_OPERATORS: readonly {
+  value: ConditionOperator;
+  label: string;
+  symbol: string;
+  unary?: boolean;
+}[] = [
+  { value: "eq", label: "Equals (==)", symbol: "==" },
+  { value: "neq", label: "Not Equals (!=)", symbol: "!=" },
+  { value: "gt", label: "Greater Than (>)", symbol: ">" },
+  { value: "gte", label: "Greater Than or Equal (>=)", symbol: ">=" },
+  { value: "lt", label: "Less Than (<)", symbol: "<" },
+  { value: "lte", label: "Less Than or Equal (<=)", symbol: "<=" },
+  { value: "truthy", label: "Is Truthy (true / non-empty)", symbol: "is truthy", unary: true },
+  { value: "falsy", label: "Is Falsy (false / null / empty)", symbol: "is falsy", unary: true },
+  { value: "exists", label: "Exists (not null / undefined)", symbol: "exists", unary: true },
+  { value: "not_exists", label: "Does Not Exist (null / undefined)", symbol: "not exists", unary: true },
+  { value: "contains", label: "Contains (substring / item)", symbol: "contains" },
+  { value: "starts_with", label: "Starts With", symbol: "starts with" },
+  { value: "ends_with", label: "Ends With", symbol: "ends with" },
+];
+
+export function isControlFlowStep(type: StepType): boolean {
+  return [
+    "condition",
+    "try_catch",
+    "switch",
+    "parallel",
+    "loop",
+    "early_return",
+  ].includes(type);
+}
+
+export function collectAllNestedSteps(step: PipelineStepDraft): PipelineStepDraft[] {
+  const nested: PipelineStepDraft[] = [];
+  if (step.thenSteps) {
+    step.thenSteps.forEach((s) => {
+      nested.push(s, ...collectAllNestedSteps(s));
+    });
+  }
+  if (step.elseSteps) {
+    step.elseSteps.forEach((s) => {
+      nested.push(s, ...collectAllNestedSteps(s));
+    });
+  }
+  if (step.trySteps) {
+    step.trySteps.forEach((s) => {
+      nested.push(s, ...collectAllNestedSteps(s));
+    });
+  }
+  if (step.catchSteps) {
+    step.catchSteps.forEach((s) => {
+      nested.push(s, ...collectAllNestedSteps(s));
+    });
+  }
+  if (step.switchCases) {
+    step.switchCases.forEach((c) => {
+      if (c.steps) {
+        c.steps.forEach((s) => {
+          nested.push(s, ...collectAllNestedSteps(s));
+        });
+      }
+    });
+  }
+  if (step.switchDefault) {
+    step.switchDefault.forEach((s) => {
+      nested.push(s, ...collectAllNestedSteps(s));
+    });
+  }
+  if (step.parallelBranches) {
+    step.parallelBranches.forEach((b) => {
+      if (b.steps) {
+        b.steps.forEach((s) => {
+          nested.push(s, ...collectAllNestedSteps(s));
+        });
+      }
+    });
+  }
+  if (step.loopBody) {
+    step.loopBody.forEach((s) => {
+      nested.push(s, ...collectAllNestedSteps(s));
+    });
+  }
+  return nested;
+}
+
 
 export const TS_TYPES: readonly string[] = [
   "string",
@@ -193,6 +322,7 @@ export function getAvailableSources(
   priorSteps: PipelineStepDraft[] = [],
   allNodes: BackendNode[] = [],
   consumedEvent?: AnyMessagingResource,
+  extraSources: AvailableSource[] = [],
 ): AvailableSource[] {
   const sources: AvailableSource[] = [];
 
@@ -392,7 +522,12 @@ export function getAvailableSources(
     });
   });
 
-  // 6. Literal Value
+  // 6. Injected Context / Extra Sources (e.g. caught error, loop item)
+  if (Array.isArray(extraSources) && extraSources.length > 0) {
+    sources.push(...extraSources);
+  }
+
+  // 7. Literal Value
   sources.push({
     id: "literal",
     label: "Literal Value",

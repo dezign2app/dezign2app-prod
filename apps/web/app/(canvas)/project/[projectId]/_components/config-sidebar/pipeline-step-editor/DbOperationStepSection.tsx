@@ -119,7 +119,9 @@ export const DbOperationStepSection = ({
       ? "@workspace/primary-redis-cache"
       : `@workspace/db/helpers/${toTableName(tableLabel)}`;
 
-    const varName = defaultOp ? `${toVarName(defaultOp.name)}Result` : step.outputVariable;
+    const varName = defaultOp
+      ? `${toVarName(defaultOp.name)}Result`
+      : step.outputVariable || step.name || "dbResult";
 
     onChange({
       ...step,

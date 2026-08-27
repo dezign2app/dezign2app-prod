@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useEffect } from "react";
-import { Endpoint, BackendNode, BackendEdge, AnyMessagingResource } from "@workspace/canvas/types";
+import { Endpoint, BackendNode, BackendEdge, AnyMessagingResource, AvailableSource } from "@workspace/canvas/types";
 import { Plus, AlertTriangle } from "lucide-react";
 import {
   DragDropContext,
@@ -38,6 +38,13 @@ export * from "./DbOperationStepSection";
 export * from "./RedisOperationStepSection";
 export * from "./KafkaPublishStepSection";
 export * from "./ServiceCallStepSection";
+export * from "./ConditionStepSection";
+export * from "./TryCatchStepSection";
+export * from "./SwitchStepSection";
+export * from "./ParallelStepSection";
+export * from "./LoopStepSection";
+export * from "./EarlyReturnStepSection";
+export * from "./ConditionExprEditor";
 export * from "./ReturnResponseStepRow";
 export * from "./StepRowHeader";
 export * from "./ArgumentBindingsSection";
@@ -54,6 +61,10 @@ export interface PipelineStepEditorProps {
   allNodes?: BackendNode[];
   allEdges?: BackendEdge[];
   serviceNodeId?: string;
+  depth?: number;
+  isNested?: boolean;
+  extraSources?: AvailableSource[];
+  droppableId?: string;
 }
 
 export const PipelineStepEditor = ({
@@ -64,6 +75,10 @@ export const PipelineStepEditor = ({
   allNodes = [],
   allEdges = [],
   serviceNodeId,
+  depth = 0,
+  isNested = false,
+  extraSources = [],
+  droppableId = "pipeline-steps-droppable",
 }: PipelineStepEditorProps) => {
   const isConsumer = Boolean(consumedEvent);
 
@@ -328,7 +343,68 @@ export const PipelineStepEditor = ({
         ? `publishResult${stepNum}`
         : type === "service_call"
         ? `serviceResponse${stepNum}`
+        : type === "condition"
+        ? `condition${stepNum}Result`
+        : type === "try_catch"
+        ? `tryCatch${stepNum}Result`
+        : type === "switch"
+        ? `switch${stepNum}Result`
+        : type === "parallel"
+        ? `parallel${stepNum}Results`
+        : type === "loop"
+        ? `loop${stepNum}Results`
+        : type === "early_return"
+        ? `earlyReturn${stepNum}`
         : `step${stepNum}Result`;
+
+    let initialFields: Partial<PipelineStepDraft> = {};
+    if (type === "condition") {
+      initialFields = {
+        conditionExpr: {
+          left: { kind: "req_body", field: "" },
+          operator: "truthy",
+        },
+        thenSteps: [],
+        elseSteps: [],
+      };
+    } else if (type === "try_catch") {
+      initialFields = {
+        trySteps: [],
+        catchSteps: [],
+      };
+    } else if (type === "switch") {
+      initialFields = {
+        switchSource: { kind: "req_body", field: "" },
+        switchCases: [
+          {
+            id: generateId(),
+            value: "option_1",
+            label: "Option 1",
+            steps: [],
+          },
+        ],
+        switchDefault: [],
+      };
+    } else if (type === "parallel") {
+      initialFields = {
+        parallelBranches: [
+          { id: generateId(), label: "Branch 1", steps: [] },
+          { id: generateId(), label: "Branch 2", steps: [] },
+        ],
+        failureMode: "all",
+      };
+    } else if (type === "loop") {
+      initialFields = {
+        loopSource: { kind: "req_body", field: "" },
+        iteratorVariable: "item",
+        loopBody: [],
+      };
+    } else if (type === "early_return") {
+      initialFields = {
+        statusCode: 404,
+        inputBindings: [],
+      };
+    }
 
     const newStep: PipelineStepDraft = {
       id,
@@ -337,8 +413,9 @@ export const PipelineStepEditor = ({
       enabled: true,
       inputBindings: [],
       outputVariable: defaultVar,
+      ...initialFields,
     };
-    if (isConsumer) {
+    if (isConsumer || isNested) {
       onChange([...executableSteps, newStep]);
     } else {
       onChange([...executableSteps, newStep, returnStep]);
@@ -385,7 +462,7 @@ export const PipelineStepEditor = ({
 
     const next = [...executableSteps];
     next[index] = updated;
-    if (isConsumer) {
+    if (isConsumer || isNested) {
       onChange(next);
     } else {
       onChange([...next, returnStep]);
@@ -522,7 +599,7 @@ export const PipelineStepEditor = ({
     }
 
     const next = executableSteps.filter((_, i) => i !== index);
-    if (isConsumer) {
+    if (isConsumer || isNested) {
       onChange(next);
     } else {
       onChange([...next, returnStep]);
@@ -535,7 +612,7 @@ export const PipelineStepEditor = ({
     const [moved] = reordered.splice(fromIndex, 1);
     if (!moved) return;
     reordered.splice(toIndex, 0, moved);
-    if (isConsumer) {
+    if (isConsumer || isNested) {
       onChange(reordered);
     } else {
       onChange([...reordered, returnStep]);
@@ -543,7 +620,7 @@ export const PipelineStepEditor = ({
   };
 
   const updateReturnStep = (updated: PipelineStepDraft) => {
-    if (isConsumer) return;
+    if (isConsumer || isNested) return;
     onChange([...executableSteps, updated]);
   };
 
@@ -555,7 +632,7 @@ export const PipelineStepEditor = ({
 
   return (
     <div className="flex flex-col gap-3">
-      {hasUnconfiguredInputs && (
+      {hasUnconfiguredInputs && !isNested && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive text-xs">
           <AlertTriangle size={14} className="shrink-0 text-destructive" />
           <span className="font-medium text-[11px] leading-tight">
@@ -573,12 +650,14 @@ export const PipelineStepEditor = ({
           <p className="text-[10px] text-muted-foreground/40 mt-0.5">
             {isConsumer
               ? "Add transform, DB operations, or downstream event publish steps to process incoming events."
-              : "Add transform or DB operations below to define data flow before returning the response."}
+              : isNested
+              ? "Add steps to execute inside this branch."
+              : "Add transform, DB operations, or control flow logic below."}
           </p>
         </div>
       ) : (
         <DragDropContext onDragEnd={handleDragEnd}>
-          <Droppable droppableId="pipeline-steps-droppable">
+          <Droppable droppableId={droppableId}>
             {(provided, snapshot) => (
               <div
                 ref={provided.innerRef}
@@ -598,6 +677,8 @@ export const PipelineStepEditor = ({
                     allNodes={allNodes}
                     allEdges={allEdges}
                     serviceNodeId={serviceNodeId}
+                    depth={depth}
+                    extraSources={extraSources}
                     onChange={(updated) => updateStep(i, updated)}
                     onDelete={() => deleteStep(i)}
                     isFirst={i === 0}
@@ -613,26 +694,34 @@ export const PipelineStepEditor = ({
         </DragDropContext>
       )}
 
-      {/* Add step buttons */}
-      <div className="flex flex-wrap gap-1.5 pt-1">
-        {ADDABLE_STEP_TYPES.map((type) => {
-          const meta = STEP_TYPE_META[type];
-          return (
-            <button
-              key={type}
-              type="button"
-              className={`flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded border transition-all duration-150 hover:brightness-110 active:scale-95 ${meta.color}`}
-              onClick={() => addStep(type)}
-            >
-              <Plus size={9} />
-              {meta.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Add step buttons / Depth Limit Guard */}
+      {depth >= 2 ? (
+        <div className="p-2 rounded border border-dashed border-border/40 text-center bg-muted/20">
+          <p className="text-[10px] text-muted-foreground/80">
+            Nesting depth limit reached (2 levels). For complex multi-level logic, use a Transformer node.
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {ADDABLE_STEP_TYPES.map((type) => {
+            const meta = STEP_TYPE_META[type];
+            return (
+              <button
+                key={type}
+                type="button"
+                className={`flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded border transition-all duration-150 hover:brightness-110 active:scale-95 ${meta.color}`}
+                onClick={() => addStep(type)}
+              >
+                <Plus size={9} />
+                {meta.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-      {/* Mandatory Pinned Return Response Step (Only for HTTP Endpoints) */}
-      {!isConsumer && (
+      {/* Mandatory Pinned Return Response Step (Only for top-level HTTP Endpoints) */}
+      {!isConsumer && !isNested && (
         <div className="pt-2 border-t border-border/40">
           <ReturnResponseStepRow
             step={returnStep}

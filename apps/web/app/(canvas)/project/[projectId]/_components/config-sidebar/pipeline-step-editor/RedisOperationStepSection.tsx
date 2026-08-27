@@ -397,7 +397,9 @@ export const RedisOperationStepSection = ({
     const targetInstance = redisInstances.find((i) => i.id === step.databaseId || i.id === targetNode.data?.databaseId);
     const instanceLabel = targetInstance?.data?.label || "primary-redis-cache";
     const importPath = `@workspace/${toFolderName(instanceLabel)}`;
-    const varName = defaultOp ? `${toVarName(defaultOp.name)}Result` : step.outputVariable;
+    const varName = defaultOp
+      ? `${toVarName(defaultOp.name)}Result`
+      : step.outputVariable || step.name || "cachedResult";
 
     onChange({
       ...step,

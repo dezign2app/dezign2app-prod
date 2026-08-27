@@ -350,7 +350,11 @@ export const backendNodeDataValidator = v.union(
 
 import { z } from "zod";
 
-export const backendEndpointDataValidator = zodToConvex(endpointSchema);
+export const backendEndpointDataValidator = zodToConvex(
+  endpointSchema.omit({ pipelineSteps: true }).extend({
+    pipelineSteps: z.array(z.any()).optional(),
+  }),
+);
 export const backendIdentityProviderDataValidator = zodToConvex(
   identityProviderSchema,
 );
@@ -361,6 +365,9 @@ export const backendIdentityProviderDataValidator = zodToConvex(
 export const backendEventDataValidator = zodToConvex(
   z.union([
     publishedEventSchema,
-    consumedEventSchema.extend({ retryPolicy: z.string().default("NONE") }),
+    consumedEventSchema.omit({ pipelineSteps: true }).extend({
+      pipelineSteps: z.array(z.any()).optional(),
+      retryPolicy: z.string().default("NONE"),
+    }),
   ]),
 );

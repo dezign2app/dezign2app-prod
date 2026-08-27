@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useCallback } from "react";
-import { Endpoint, BackendNode, BackendEdge, AnyMessagingResource } from "@workspace/canvas/types";
+import { Endpoint, BackendNode, BackendEdge, AnyMessagingResource, AvailableSource } from "@workspace/canvas/types";
 import {
   PipelineStepDraft,
   StepBinding,
@@ -26,6 +26,7 @@ export interface UseStepRowStateProps {
   allNodes: BackendNode[];
   allEdges: BackendEdge[];
   serviceNodeId?: string;
+  extraSources?: AvailableSource[];
   onChange: (updated: PipelineStepDraft) => void;
 }
 
@@ -38,14 +39,15 @@ export function useStepRowState({
   allNodes,
   allEdges,
   serviceNodeId,
+  extraSources = [],
   onChange,
 }: UseStepRowStateProps) {
   const meta = STEP_TYPE_META[step.type] || STEP_TYPE_META.custom_code;
 
   // Available sources (request body, params, query, headers, prior steps, or event payload/metadata)
   const availableSources = useMemo(
-    () => getAvailableSources(endpoint, priorSteps, allNodes, consumedEvent),
-    [endpoint, priorSteps, allNodes, consumedEvent],
+    () => getAvailableSources(endpoint, priorSteps, allNodes, consumedEvent, extraSources),
+    [endpoint, priorSteps, allNodes, consumedEvent, extraSources],
   );
 
   // Available transformers
@@ -272,7 +274,7 @@ export function useStepRowState({
     );
 
     const existingBindingMap = new Map<string, StepBinding>();
-    step.inputBindings.forEach((b) => {
+    (step.inputBindings || []).forEach((b) => {
       if (b.argName) {
         existingBindingMap.set(b.argName.trim().toLowerCase(), b);
       }
@@ -381,7 +383,7 @@ export function useStepRowState({
     const expectedArgNames = new Set(
       expectedArgs.map((a) => a.name.trim().toLowerCase()),
     );
-    const extraCustomBindings = step.inputBindings.filter(
+    const extraCustomBindings = (step.inputBindings || []).filter(
       (b) => !expectedArgNames.has(b.argName.trim().toLowerCase()),
     );
 
@@ -393,7 +395,7 @@ export function useStepRowState({
 
   const updateBinding = useCallback(
     (bi: number, updated: StepBinding) => {
-      const bindings = [...step.inputBindings];
+      const bindings = [...(step.inputBindings || [])];
       bindings[bi] = updated;
       onChange({ ...step, inputBindings: bindings });
     },
@@ -407,7 +409,7 @@ export function useStepRowState({
     };
     onChange({
       ...step,
-      inputBindings: [...step.inputBindings, newBinding],
+      inputBindings: [...(step.inputBindings || []), newBinding],
     });
   }, [step, onChange]);
 
@@ -415,7 +417,7 @@ export function useStepRowState({
     (bi: number) => {
       onChange({
         ...step,
-        inputBindings: step.inputBindings.filter((_, i) => i !== bi),
+        inputBindings: (step.inputBindings || []).filter((_, i) => i !== bi),
       });
     },
     [step, onChange],

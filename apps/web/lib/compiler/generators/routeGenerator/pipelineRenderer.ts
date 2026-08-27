@@ -1,4 +1,10 @@
-import { PipelineStep, PipelineStepInputBinding } from "@workspace/canvas/types";
+import {
+  PipelineStep,
+  PipelineStepInputBinding,
+  PipelineStepInputSource,
+  ConditionClause,
+  ConditionExpr,
+} from "@workspace/canvas/types";
 
 /**
  * Context available while rendering a pipeline step sequence.
@@ -13,20 +19,12 @@ export interface PipelineRenderContext {
 }
 
 /**
- * Resolves a single InputBinding into a TypeScript expression string.
- *
- * Examples:
- *   { kind: "req_body", field: "name" }          → "body.name"
- *   { kind: "req_params", field: "id" }           → "req.params.id"
- *   { kind: "step_output", stepId: "s1", field: "slug" } → "step1Var.slug"
- *   { kind: "step_output", stepId: "s1" }         → "step1Var" (whole object)
- *   { kind: "literal", value: 42 }                → "42"
+ * Resolves a single StepSource into a TypeScript expression string.
  */
-export function resolveBinding(
-  binding: PipelineStepInputBinding,
+export function resolveSource(
+  source: PipelineStepInputSource | undefined,
   ctx: PipelineRenderContext,
 ): string {
-  const { source } = binding;
   if (!source) return "undefined";
 
   switch (source.kind) {
@@ -47,10 +45,18 @@ export function resolveBinding(
       return field ? `(req.headers["${field}"] as string)` : "req.headers";
     }
     case "step_output": {
+      if (source.stepId === "__catch_error__") {
+        const field = source.field ? source.field.trim() : "";
+        return field ? `caughtError.${field}` : "caughtError";
+      }
+      if (source.stepId.startsWith("__iterator__")) {
+        const varName = source.stepId.replace("__iterator__", "") || "item";
+        const field = source.field ? source.field.trim() : "";
+        return field ? `${varName}.${field}` : varName;
+      }
       const varName = ctx.priorOutputs.get(source.stepId);
       const field = source.field ? source.field.trim() : "";
       if (!varName) {
-        // Fallback: use a descriptive placeholder so generated code still compiles
         const fallback = `/* step "${source.stepId}" not found */ undefined`;
         return field ? `${fallback}?.${field}` : fallback;
       }
@@ -58,7 +64,7 @@ export function resolveBinding(
     }
     case "literal": {
       const v = source.value;
-      return typeof v === "string" ? `"${v}"` : String(v);
+      return typeof v === "string" ? JSON.stringify(v) : String(v);
     }
     default:
       return "undefined";
@@ -66,12 +72,89 @@ export function resolveBinding(
 }
 
 /**
+ * Resolves a single InputBinding into a TypeScript expression string.
+ */
+export function resolveBinding(
+  binding: PipelineStepInputBinding,
+  ctx: PipelineRenderContext,
+): string {
+  return resolveSource(binding.source, ctx);
+}
+
+/**
+ * Compiles a single ConditionClause into a TypeScript boolean expression string.
+ */
+export function compileConditionClause(
+  clause: ConditionClause,
+  ctx: PipelineRenderContext,
+): string {
+  const leftExpr = resolveSource(clause.left, ctx);
+  const rightExpr = clause.right ? resolveSource(clause.right, ctx) : undefined;
+
+  switch (clause.operator) {
+    case "eq":
+      return `(${leftExpr} === ${rightExpr ?? "undefined"})`;
+    case "neq":
+      return `(${leftExpr} !== ${rightExpr ?? "undefined"})`;
+    case "gt":
+      return `(${leftExpr} > ${rightExpr ?? "0"})`;
+    case "gte":
+      return `(${leftExpr} >= ${rightExpr ?? "0"})`;
+    case "lt":
+      return `(${leftExpr} < ${rightExpr ?? "0"})`;
+    case "lte":
+      return `(${leftExpr} <= ${rightExpr ?? "0"})`;
+    case "truthy":
+      return `Boolean(${leftExpr})`;
+    case "falsy":
+      return `!${leftExpr}`;
+    case "exists":
+      return `(${leftExpr} !== null && ${leftExpr} !== undefined)`;
+    case "not_exists":
+      return `(${leftExpr} === null || ${leftExpr} === undefined)`;
+    case "contains":
+      return `(Array.isArray(${leftExpr}) ? ${leftExpr}.includes(${rightExpr}) : typeof ${leftExpr} === "string" ? ${leftExpr}.includes(${rightExpr}) : false)`;
+    case "starts_with":
+      return `(typeof ${leftExpr} === "string" && ${leftExpr}.startsWith(${rightExpr ?? '""'}))`;
+    case "ends_with":
+      return `(typeof ${leftExpr} === "string" && ${leftExpr}.endsWith(${rightExpr ?? '""'}))`;
+    default:
+      return `Boolean(${leftExpr})`;
+  }
+}
+
+/**
+ * Compiles a ConditionExpr (including AND / OR / NOT chains) into a TypeScript expression.
+ */
+export function compileConditionExpr(
+  expr: ConditionExpr | undefined,
+  ctx: PipelineRenderContext,
+): string {
+  if (!expr) return "true";
+
+  if ("and" in expr && Array.isArray(expr.and)) {
+    if (expr.and.length === 0) return "true";
+    return `(${expr.and.map((sub) => compileConditionExpr(sub, ctx)).join(" && ")})`;
+  }
+
+  if ("or" in expr && Array.isArray(expr.or)) {
+    if (expr.or.length === 0) return "true";
+    return `(${expr.or.map((sub) => compileConditionExpr(sub, ctx)).join(" || ")})`;
+  }
+
+  if ("not" in expr && expr.not) {
+    return `(!${compileConditionExpr(expr.not, ctx)})`;
+  }
+
+  if ("left" in expr && "operator" in expr) {
+    return compileConditionClause(expr as ConditionClause, ctx);
+  }
+
+  return "true";
+}
+
+/**
  * Builds the argument list for a function call expression from bindings.
- *
- * If there are no bindings the call is emitted as `fn()`.
- * If there is exactly one binding named "_spread" the value is passed positionally.
- * Otherwise all bindings are assembled into a single object literal `{ argA: exprA, argB: exprB }`.
- * Individual positional bindings can be forced by giving them a numeric argName ("0", "1", …).
  */
 export function buildArgList(
   bindings: PipelineStepInputBinding[],
@@ -101,6 +184,25 @@ export function buildArgList(
 }
 
 /**
+ * Helper to render nested sub-steps with context propagation.
+ */
+export function renderPipelineNested(
+  steps: PipelineStep[],
+  ctx: PipelineRenderContext,
+): string[] {
+  const lines: string[] = [];
+  for (const step of steps) {
+    if (step.enabled === false) continue;
+    const stepLines = renderPipelineStep(step, ctx);
+    lines.push(...stepLines);
+    if (step.outputVariable && step.id) {
+      ctx.priorOutputs.set(step.id, step.outputVariable);
+    }
+  }
+  return lines;
+}
+
+/**
  * Renders a single pipeline step into one or more lines of TypeScript.
  *
  * @param step    - The pipeline step configuration
@@ -113,8 +215,8 @@ export function renderPipelineStep(
 ): string[] {
   if (step.enabled === false) return [];
 
-  const lines: string[] = [];
-  const { outputVariable, functionRef, inputBindings, type, customCode } = step;
+  const rawLines: string[] = [];
+  const { outputVariable, functionRef, inputBindings = [], type, customCode } = step;
 
   switch (type) {
     // -------------------------------------------------------------------------
@@ -122,18 +224,18 @@ export function renderPipelineStep(
     // -------------------------------------------------------------------------
     case "transform": {
       if (!functionRef) {
-        lines.push(`// [pipeline] step "${step.name}": missing functionRef`);
+        rawLines.push(`// [pipeline] step "${step.name}": missing functionRef`);
         break;
       }
       const args = buildArgList(inputBindings, ctx);
       const isMultiLine = args.includes("\n");
       if (isMultiLine) {
-        lines.push(`const ${outputVariable} = ${functionRef.name}(`);
-        args.split("\n").forEach((l) => lines.push(`  ${l}`));
-        lines.push(`);`);
+        rawLines.push(`const ${outputVariable} = ${functionRef.name}(`);
+        args.split("\n").forEach((l) => rawLines.push(`  ${l}`));
+        rawLines.push(`);`);
       } else {
         const callExpr = args ? `${functionRef.name}(${args})` : `${functionRef.name}()`;
-        lines.push(`const ${outputVariable} = ${callExpr};`);
+        rawLines.push(`const ${outputVariable} = ${callExpr};`);
       }
       break;
     }
@@ -145,20 +247,20 @@ export function renderPipelineStep(
     case "redis_operation":
     case "service_call": {
       if (!functionRef) {
-        lines.push(`// [pipeline] step "${step.name}": missing functionRef`);
+        rawLines.push(`// [pipeline] step "${step.name}": missing functionRef`);
         break;
       }
       const args = buildArgList(inputBindings, ctx);
       const isMultiLine = args.includes("\n");
       if (isMultiLine) {
-        lines.push(`const ${outputVariable} = await ${functionRef.name}(`);
-        args.split("\n").forEach((l) => lines.push(`  ${l}`));
-        lines.push(`);`);
+        rawLines.push(`const ${outputVariable} = await ${functionRef.name}(`);
+        args.split("\n").forEach((l) => rawLines.push(`  ${l}`));
+        rawLines.push(`);`);
       } else {
         const callExpr = args
           ? `await ${functionRef.name}(${args})`
           : `await ${functionRef.name}()`;
-        lines.push(`const ${outputVariable} = ${callExpr};`);
+        rawLines.push(`const ${outputVariable} = ${callExpr};`);
       }
       // DB reads by ID get a 404 guard
       if (
@@ -166,9 +268,9 @@ export function renderPipelineStep(
         (functionRef.name.toLowerCase().includes("byid") ||
           functionRef.name.toLowerCase().includes("findone"))
       ) {
-        lines.push(`if (${outputVariable} === undefined || ${outputVariable} === null) {`);
-        lines.push(`  return res.status(404).json({ error: "Not found" });`);
-        lines.push(`}`);
+        rawLines.push(`if (${outputVariable} === undefined || ${outputVariable} === null) {`);
+        rawLines.push(`  return res.status(404).json({ error: "Not found" });`);
+        rawLines.push(`}`);
       }
       break;
     }
@@ -178,7 +280,7 @@ export function renderPipelineStep(
     // -------------------------------------------------------------------------
     case "kafka_publish": {
       if (!functionRef) {
-        lines.push(`// [pipeline] step "${step.name}": missing functionRef`);
+        rawLines.push(`// [pipeline] step "${step.name}": missing functionRef`);
         break;
       }
       const isGeneric = functionRef.name === "publishKafkaEvent";
@@ -196,15 +298,15 @@ export function renderPipelineStep(
         : "/* payload */";
       const keyExpr = keyBinding ? resolveBinding(keyBinding, ctx) : null;
 
-      lines.push(`const ${outputVariable} = await ${functionRef.name}(`);
+      rawLines.push(`const ${outputVariable} = await ${functionRef.name}(`);
       if (isGeneric || topicBinding) {
-        lines.push(`  ${topicExpr},`);
+        rawLines.push(`  ${topicExpr},`);
       }
-      lines.push(`  ${payloadExpr}${keyExpr ? `,` : ""}`);
+      rawLines.push(`  ${payloadExpr}${keyExpr ? `,` : ""}`);
       if (keyExpr) {
-        lines.push(`  ${keyExpr},`);
+        rawLines.push(`  ${keyExpr},`);
       }
-      lines.push(`);`);
+      rawLines.push(`);`);
       break;
     }
 
@@ -213,9 +315,151 @@ export function renderPipelineStep(
     // -------------------------------------------------------------------------
     case "custom_code": {
       if (customCode && customCode.trim()) {
-        customCode.split("\n").forEach((l) => lines.push(l));
+        customCode.split("\n").forEach((l) => rawLines.push(l));
       } else {
-        lines.push(`// [pipeline] custom_code step "${step.name}" has no code`);
+        rawLines.push(`// [pipeline] custom_code step "${step.name}" has no code`);
+      }
+      break;
+    }
+
+    // -------------------------------------------------------------------------
+    // Control Flow: Condition (if / else)
+    // -------------------------------------------------------------------------
+    case "condition": {
+      const condStr = compileConditionExpr(step.conditionExpr, ctx);
+      rawLines.push(`if (${condStr}) {`);
+      if (step.thenSteps && step.thenSteps.length > 0) {
+        const thenLines = renderPipelineNested(step.thenSteps, ctx);
+        thenLines.forEach((l) => rawLines.push(`  ${l}`));
+      }
+      if (step.elseSteps && step.elseSteps.length > 0) {
+        rawLines.push(`} else {`);
+        const elseLines = renderPipelineNested(step.elseSteps, ctx);
+        elseLines.forEach((l) => rawLines.push(`  ${l}`));
+      }
+      rawLines.push(`}`);
+      break;
+    }
+
+    // -------------------------------------------------------------------------
+    // Control Flow: Try / Catch
+    // -------------------------------------------------------------------------
+    case "try_catch": {
+      rawLines.push(`try {`);
+      if (step.trySteps && step.trySteps.length > 0) {
+        const tryLines = renderPipelineNested(step.trySteps, ctx);
+        tryLines.forEach((l) => rawLines.push(`  ${l}`));
+      }
+      rawLines.push(`} catch (caughtError) {`);
+      if (step.catchSteps && step.catchSteps.length > 0) {
+        const catchLines = renderPipelineNested(step.catchSteps, ctx);
+        catchLines.forEach((l) => rawLines.push(`  ${l}`));
+      } else {
+        rawLines.push(`  logger.error("Error in try_catch block:", caughtError);`);
+      }
+      rawLines.push(`}`);
+      break;
+    }
+
+    // -------------------------------------------------------------------------
+    // Control Flow: Switch
+    // -------------------------------------------------------------------------
+    case "switch": {
+      const switchTarget = resolveSource(step.switchSource, ctx);
+      rawLines.push(`switch (${switchTarget}) {`);
+      if (step.switchCases && step.switchCases.length > 0) {
+        step.switchCases.forEach((c) => {
+          const valStr = typeof c.value === "string" ? JSON.stringify(c.value) : String(c.value);
+          rawLines.push(`  case ${valStr}: {`);
+          if (c.steps && c.steps.length > 0) {
+            const caseLines = renderPipelineNested(c.steps, ctx);
+            caseLines.forEach((l) => rawLines.push(`    ${l}`));
+          }
+          rawLines.push(`    break;`);
+          rawLines.push(`  }`);
+        });
+      }
+      if (step.switchDefault && step.switchDefault.length > 0) {
+        rawLines.push(`  default: {`);
+        const defaultLines = renderPipelineNested(step.switchDefault, ctx);
+        defaultLines.forEach((l) => rawLines.push(`    ${l}`));
+        rawLines.push(`    break;`);
+        rawLines.push(`  }`);
+      }
+      rawLines.push(`}`);
+      break;
+    }
+
+    // -------------------------------------------------------------------------
+    // Control Flow: Parallel (Promise.all / allSettled)
+    // -------------------------------------------------------------------------
+    case "parallel": {
+      const outVar = outputVariable || `parallelResults`;
+      const isSettled = step.failureMode === "any";
+      const promiseMethod = isSettled ? "Promise.allSettled" : "Promise.all";
+      const branches = step.parallelBranches || [];
+
+      if (branches.length === 0) {
+        rawLines.push(`const ${outVar} = await ${promiseMethod}([]);`);
+      } else {
+        rawLines.push(`const ${outVar} = await ${promiseMethod}([`);
+        branches.forEach((b) => {
+          rawLines.push(`  (async () => {`);
+          if (b.label) rawLines.push(`    // Branch: ${b.label}`);
+          if (b.steps && b.steps.length > 0) {
+            const bLines = renderPipelineNested(b.steps, ctx);
+            bLines.forEach((l) => rawLines.push(`    ${l}`));
+          }
+          rawLines.push(`  })(),`);
+        });
+        rawLines.push(`]);`);
+      }
+      break;
+    }
+
+    // -------------------------------------------------------------------------
+    // Control Flow: Loop (Collection Iteration)
+    // -------------------------------------------------------------------------
+    case "loop": {
+      const outVar = outputVariable || `loopResults`;
+      const loopTarget = resolveSource(step.loopSource, ctx);
+      const iterVar = step.iteratorVariable || "item";
+
+      rawLines.push(`const ${outVar} = await Promise.all(`);
+      rawLines.push(`  (Array.isArray(${loopTarget}) ? ${loopTarget} : []).map(async (${iterVar}) => {`);
+      if (step.loopBody && step.loopBody.length > 0) {
+        const loopLines = renderPipelineNested(step.loopBody, ctx);
+        loopLines.forEach((l) => rawLines.push(`    ${l}`));
+      }
+      rawLines.push(`  })`);
+      rawLines.push(`);`);
+      break;
+    }
+
+    // -------------------------------------------------------------------------
+    // Early Return: Mid-pipeline short-circuit
+    // -------------------------------------------------------------------------
+    case "early_return": {
+      const statusCode = step.statusCode || 200;
+      const firstBinding = inputBindings[0];
+      if (
+        inputBindings.length === 1 &&
+        firstBinding &&
+        (firstBinding.argName === "data" ||
+          firstBinding.argName === "_spread" ||
+          !firstBinding.argName)
+      ) {
+        const expr = resolveBinding(firstBinding, ctx);
+        rawLines.push(`return res.status(${statusCode}).json(${expr});`);
+      } else if (inputBindings.length > 0) {
+        const fields = inputBindings
+          .map((b) => `  ${b.argName}: ${resolveBinding(b, ctx)}`)
+          .join(",\n");
+        rawLines.push(`return res.status(${statusCode}).json({\n${fields}\n});`);
+      } else {
+        rawLines.push(
+          `return res.status(${statusCode}).json({ status: ${statusCode}, message: "Early return" });`,
+        );
       }
       break;
     }
@@ -234,14 +478,14 @@ export function renderPipelineStep(
           !firstBinding.argName)
       ) {
         const expr = resolveBinding(firstBinding, ctx);
-        lines.push(`return res.status(${statusCode}).json(${expr});`);
+        rawLines.push(`return res.status(${statusCode}).json(${expr});`);
       } else if (inputBindings.length > 0) {
         const fields = inputBindings
           .map((b) => `  ${b.argName}: ${resolveBinding(b, ctx)}`)
           .join(",\n");
-        lines.push(`return res.status(${statusCode}).json({\n${fields}\n});`);
+        rawLines.push(`return res.status(${statusCode}).json({\n${fields}\n});`);
       } else {
-        lines.push(
+        rawLines.push(
           `return res.status(${statusCode}).json({ status: ${statusCode}, message: "Success" });`,
         );
       }
@@ -249,10 +493,20 @@ export function renderPipelineStep(
     }
 
     default:
-      lines.push(`// [pipeline] unknown step type "${type}"`);
+      rawLines.push(`// [pipeline] unknown step type "${type}"`);
   }
 
-  return lines;
+  // Wrap lines in runIf guard if specified
+  if (step.runIf) {
+    const guardExpr = compileConditionExpr(step.runIf, ctx);
+    return [
+      `if (${guardExpr}) {`,
+      ...rawLines.map((l) => `  ${l}`),
+      `}`,
+    ];
+  }
+
+  return rawLines;
 }
 
 /**
@@ -285,27 +539,44 @@ export function renderPipeline(
     allLines.push("");
 
     // Register this step's output so subsequent steps can reference it
-    ctx.priorOutputs.set(step.id, step.outputVariable);
+    if (step.outputVariable && step.id) {
+      ctx.priorOutputs.set(step.id, step.outputVariable);
+    }
   }
 
   return allLines;
 }
 
 /**
- * Builds an import map from the pipeline steps — de-duped by importPath.
+ * Builds an import map from the pipeline steps (including recursive nested branches).
  * Returns a map of { importPath -> Set<functionName> }.
  */
 export function collectPipelineImports(
   steps: PipelineStep[],
 ): Map<string, Set<string>> {
   const imports = new Map<string, Set<string>>();
-  for (const step of steps) {
-    if (!step.functionRef || step.enabled === false) continue;
-    const { name, importPath } = step.functionRef;
-    if (!imports.has(importPath)) {
-      imports.set(importPath, new Set());
+
+  function addStepImports(s: PipelineStep) {
+    if (s.functionRef && s.enabled !== false) {
+      const { name, importPath } = s.functionRef;
+      if (!imports.has(importPath)) {
+        imports.set(importPath, new Set());
+      }
+      imports.get(importPath)!.add(name);
     }
-    imports.get(importPath)!.add(name);
+    if (s.thenSteps) s.thenSteps.forEach(addStepImports);
+    if (s.elseSteps) s.elseSteps.forEach(addStepImports);
+    if (s.trySteps) s.trySteps.forEach(addStepImports);
+    if (s.catchSteps) s.catchSteps.forEach(addStepImports);
+    if (s.switchCases) s.switchCases.forEach((c) => c.steps?.forEach(addStepImports));
+    if (s.switchDefault) s.switchDefault.forEach(addStepImports);
+    if (s.parallelBranches) s.parallelBranches.forEach((b) => b.steps?.forEach(addStepImports));
+    if (s.loopBody) s.loopBody.forEach(addStepImports);
   }
+
+  for (const step of steps) {
+    addStepImports(step);
+  }
+
   return imports;
 }
