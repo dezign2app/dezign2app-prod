@@ -265,7 +265,7 @@ export const KafkaPublishStepSection = ({
       },
       name: varName,
       outputVariable: varName,
-      inputBindings: step.inputBindings.length > 0 ? step.inputBindings : initialBindings,
+      inputBindings: (step.inputBindings || []).length > 0 ? step.inputBindings : initialBindings,
     });
   };
 
@@ -298,8 +298,8 @@ export const KafkaPublishStepSection = ({
     const varName = `${toVarName(fnName)}Result`;
 
     const initialBindings: StepBinding[] =
-      step.inputBindings.length > 0
-        ? step.inputBindings
+      (step.inputBindings || []).length > 0
+        ? step.inputBindings!
         : [
             {
               argName: "payload",
@@ -330,7 +330,7 @@ export const KafkaPublishStepSection = ({
     const isGeneric = opt.name === "publishKafkaEvent";
     const varName = isGeneric ? "publishKafkaResult" : `${toVarName(opt.name)}Result`;
 
-    let bindings = [...step.inputBindings];
+    let bindings = [...(step.inputBindings || [])];
     if (isGeneric && !bindings.some((b) => b.argName === "topic")) {
       bindings = [
         {

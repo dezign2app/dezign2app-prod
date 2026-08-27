@@ -43,32 +43,32 @@ export const ReturnResponseStepRow = ({
   const statusCode = step.statusCode || (endpoint?.type === "POST" ? 201 : 200);
 
   const updateBinding = (bi: number, updated: StepBinding) => {
-    const bindings = [...step.inputBindings];
+    const bindings = [...(step.inputBindings || [])];
     bindings[bi] = updated;
     onChange({ ...step, inputBindings: bindings });
   };
 
   const addBinding = () => {
     const newBinding: StepBinding = {
-      argName: `field_${step.inputBindings.length + 1}`,
+      argName: `field_${(step.inputBindings || []).length + 1}`,
       source: { kind: "req_body", field: "" },
     };
     onChange({
       ...step,
-      inputBindings: [...step.inputBindings, newBinding],
+      inputBindings: [...(step.inputBindings || []), newBinding],
     });
   };
 
   const removeBinding = (bi: number) => {
     onChange({
       ...step,
-      inputBindings: step.inputBindings.filter((_, i) => i !== bi),
+      inputBindings: (step.inputBindings || []).filter((_, i) => i !== bi),
     });
   };
 
   // Build preview code
   const previewCode = useMemo(() => {
-    const bindings = step.inputBindings;
+    const bindings = step.inputBindings || [];
     if (bindings.length === 0) {
       return `res.status(${statusCode}).json({ status: ${statusCode}, message: "Success" });`;
     }
@@ -91,7 +91,7 @@ export const ReturnResponseStepRow = ({
         }
         case "req_body": {
           const field = source.field ? source.field.trim() : "";
-          return field ? `body.${field}` : "body";
+          return field ? `req.body.${field}` : "req.body";
         }
         case "req_params": {
           const field = source.field ? source.field.trim() : "";
@@ -103,19 +103,12 @@ export const ReturnResponseStepRow = ({
         }
         case "req_headers": {
           const field = source.field ? source.field.trim() : "";
-          return field ? `String(req.headers["${field}"])` : "req.headers";
+          return field ? `req.headers["${field}"]` : "req.headers";
         }
+        default:
+          return '""';
       }
     };
-
-    const b = bindings[0];
-    if (
-      bindings.length === 1 &&
-      b &&
-      (b.argName === "data" || b.argName === "_spread" || !b.argName)
-    ) {
-      return `res.status(${statusCode}).json(${getExprForBinding(b)});`;
-    }
 
     const fields = bindings
       .map((b) => `${b.argName}: ${getExprForBinding(b)}`)
@@ -208,7 +201,7 @@ export const ReturnResponseStepRow = ({
               </button>
             </div>
 
-            {step.inputBindings.length === 0 ? (
+            {(step.inputBindings || []).length === 0 ? (
               <div className="rounded border border-dashed border-border/40 p-2.5 text-center bg-muted/10">
                 <p className="text-[10px] text-muted-foreground/60">
                   Default response envelope will be returned.
@@ -240,7 +233,7 @@ export const ReturnResponseStepRow = ({
                 </p>
               </div>
             ) : (
-              step.inputBindings.map((binding, bi) => (
+              (step.inputBindings || []).map((binding, bi) => (
                 <div
                   key={bi}
                   className="grid grid-cols-[1fr_auto_2.2fr_auto] gap-1.5 items-center bg-muted/15 p-1.5 rounded border border-border/40"
@@ -263,7 +256,7 @@ export const ReturnResponseStepRow = ({
                     onChange={(updated) => updateBinding(bi, updated)}
                   />
                   {/* Delete button (only if more than 1 binding) */}
-                  {step.inputBindings.length > 1 ? (
+                  {(step.inputBindings || []).length > 1 ? (
                     <button
                       type="button"
                       className="text-muted-foreground/40 hover:text-destructive transition-colors p-1 rounded hover:bg-destructive/10"

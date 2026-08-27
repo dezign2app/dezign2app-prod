@@ -22,8 +22,15 @@ import { ServiceCallStepSection } from "./ServiceCallStepSection";
 import { GenericFunctionRefSection } from "./GenericFunctionRefSection";
 import { CustomCodeSection } from "./CustomCodeSection";
 import { ArgumentBindingsSection } from "./ArgumentBindingsSection";
+import { ConditionStepSection } from "./ConditionStepSection";
+import { TryCatchStepSection } from "./TryCatchStepSection";
+import { SwitchStepSection } from "./SwitchStepSection";
+import { ParallelStepSection } from "./ParallelStepSection";
+import { LoopStepSection } from "./LoopStepSection";
+import { EarlyReturnStepSection } from "./EarlyReturnStepSection";
+import { ConditionExprEditor } from "./ConditionExprEditor";
 import { useStepRowState } from "./useStepRowState";
-import { StepType, PipelineStepDraft } from "./types";
+import { StepType, PipelineStepDraft, AvailableSource } from "./types";
 import { STEP_TYPE_META, ADDABLE_STEP_TYPES } from "./utils";
 
 function isStepType(val: string): val is StepType {
@@ -39,6 +46,8 @@ export interface StepRowProps {
   allNodes: BackendNode[];
   allEdges: BackendEdge[];
   serviceNodeId?: string;
+  depth?: number;
+  extraSources?: AvailableSource[];
   onChange: (updated: PipelineStepDraft) => void;
   onDelete: () => void;
   isFirst: boolean;
@@ -56,6 +65,8 @@ export const StepRow = ({
   allNodes,
   allEdges,
   serviceNodeId,
+  depth = 0,
+  extraSources = [],
   onChange,
   onDelete,
   isFirst,
@@ -65,6 +76,7 @@ export const StepRow = ({
 }: StepRowProps) => {
   const [expanded, setExpanded] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [showRunIfGuard, setShowRunIfGuard] = useState(Boolean(step.runIf));
 
   const {
     meta,
@@ -88,6 +100,7 @@ export const StepRow = ({
     allNodes,
     allEdges,
     serviceNodeId,
+    extraSources,
     onChange,
   });
 
@@ -166,6 +179,18 @@ export const StepRow = ({
                           ? `publishResult${index + 1}`
                           : v === "service_call"
                           ? `serviceResponse${index + 1}`
+                          : v === "condition"
+                          ? `condition${index + 1}Result`
+                          : v === "try_catch"
+                          ? `tryCatch${index + 1}Result`
+                          : v === "switch"
+                          ? `switch${index + 1}Result`
+                          : v === "parallel"
+                          ? `parallel${index + 1}Results`
+                          : v === "loop"
+                          ? `loop${index + 1}Results`
+                          : v === "early_return"
+                          ? `earlyReturn${index + 1}`
                           : `step${index + 1}Result`;
                       onChange({
                         ...step,
@@ -193,7 +218,7 @@ export const StepRow = ({
               {(() => {
                 const argumentBindingsSection = (
                   <ArgumentBindingsSection
-                    bindings={step.inputBindings}
+                    bindings={step.inputBindings || []}
                     expectedArgs={expectedArgs}
                     availableSources={availableSources}
                     onAddBinding={addBinding}
@@ -202,6 +227,98 @@ export const StepRow = ({
                     onAutoMapArguments={handleAutoMapArguments}
                   />
                 );
+
+                if (step.type === "condition") {
+                  return (
+                    <ConditionStepSection
+                      step={step}
+                      availableSources={availableSources}
+                      endpoint={endpoint}
+                      consumedEvent={consumedEvent}
+                      allNodes={allNodes}
+                      allEdges={allEdges}
+                      serviceNodeId={serviceNodeId}
+                      depth={depth}
+                      onChange={onChange}
+                    />
+                  );
+                }
+
+                if (step.type === "try_catch") {
+                  return (
+                    <TryCatchStepSection
+                      step={step}
+                      availableSources={availableSources}
+                      endpoint={endpoint}
+                      consumedEvent={consumedEvent}
+                      allNodes={allNodes}
+                      allEdges={allEdges}
+                      serviceNodeId={serviceNodeId}
+                      depth={depth}
+                      onChange={onChange}
+                    />
+                  );
+                }
+
+                if (step.type === "switch") {
+                  return (
+                    <SwitchStepSection
+                      step={step}
+                      availableSources={availableSources}
+                      endpoint={endpoint}
+                      consumedEvent={consumedEvent}
+                      allNodes={allNodes}
+                      allEdges={allEdges}
+                      serviceNodeId={serviceNodeId}
+                      depth={depth}
+                      onChange={onChange}
+                    />
+                  );
+                }
+
+                if (step.type === "parallel") {
+                  return (
+                    <ParallelStepSection
+                      step={step}
+                      availableSources={availableSources}
+                      endpoint={endpoint}
+                      consumedEvent={consumedEvent}
+                      allNodes={allNodes}
+                      allEdges={allEdges}
+                      serviceNodeId={serviceNodeId}
+                      depth={depth}
+                      onChange={onChange}
+                    />
+                  );
+                }
+
+                if (step.type === "loop") {
+                  return (
+                    <LoopStepSection
+                      step={step}
+                      availableSources={availableSources}
+                      endpoint={endpoint}
+                      consumedEvent={consumedEvent}
+                      allNodes={allNodes}
+                      allEdges={allEdges}
+                      serviceNodeId={serviceNodeId}
+                      depth={depth}
+                      onChange={onChange}
+                    />
+                  );
+                }
+
+                if (step.type === "early_return") {
+                  return (
+                    <EarlyReturnStepSection
+                      step={step}
+                      availableSources={availableSources}
+                      expectedArgs={expectedArgs}
+                      onChange={onChange}
+                      onAutoMapArguments={handleAutoMapArguments}
+                    />
+                  );
+                }
 
                 if (step.type === "transform") {
                   return (
@@ -303,6 +420,57 @@ export const StepRow = ({
                   </GenericFunctionRefSection>
                 );
               })()}
+
+              {/* Conditional Execution Guard (runIf) */}
+              <div className="pt-2 border-t border-border/30 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold text-muted-foreground">
+                      Execution Guard (runIf)
+                    </span>
+                    {step.runIf && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-500/20 text-amber-300 font-mono">
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="text-[10px] text-primary/80 hover:text-primary font-medium transition-colors"
+                    onClick={() => {
+                      if (step.runIf) {
+                        setShowRunIfGuard(false);
+                        onChange({ ...step, runIf: undefined });
+                      } else {
+                        setShowRunIfGuard(true);
+                        onChange({
+                          ...step,
+                          runIf: {
+                            left: { kind: "req_body", field: "" },
+                            operator: "truthy",
+                          },
+                        });
+                      }
+                    }}
+                  >
+                    {step.runIf ? "Remove guard" : "+ Add runIf condition"}
+                  </button>
+                </div>
+
+                {showRunIfGuard && step.runIf && (
+                  <div className="p-2 rounded-md bg-amber-500/5 border border-amber-500/20">
+                    <span className="text-[9px] text-muted-foreground/80 block mb-1.5">
+                      This step will execute only if the condition evaluates to true at runtime.
+                    </span>
+                    <ConditionExprEditor
+                      expr={step.runIf}
+                      availableSources={availableSources}
+                      onChange={(runIf) => onChange({ ...step, runIf })}
+                      compact={true}
+                    />
+                  </div>
+                )}
+              </div>
 
               {/* Enable / Disable Step */}
               <div className="flex items-center justify-between pt-1 border-t border-border/30">

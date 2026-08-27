@@ -99,17 +99,72 @@ export const pipelineStepInputBindingSchema = z.object({
 export type PipelineStepInputBinding = z.infer<typeof pipelineStepInputBindingSchema>;
 
 // ---------------------------------------------------------------------------
+// Step Condition Expression
+// Supports single clauses, cross-source comparisons, and AND / OR / NOT chains
+// ---------------------------------------------------------------------------
+export const conditionOperatorEnum = z.enum([
+  "eq",
+  "neq",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "truthy",
+  "falsy",
+  "exists",
+  "not_exists",
+  "contains",
+  "starts_with",
+  "ends_with",
+]);
+export type ConditionOperator = z.infer<typeof conditionOperatorEnum>;
+
+export const conditionClauseSchema = z.object({
+  left: pipelineStepInputSourceSchema,
+  operator: conditionOperatorEnum,
+  right: pipelineStepInputSourceSchema.optional(),
+});
+export type ConditionClause = z.infer<typeof conditionClauseSchema>;
+
+export type ConditionExpr =
+  | ConditionClause
+  | { and: ConditionExpr[] }
+  | { or: ConditionExpr[] }
+  | { not: ConditionExpr };
+
+export const conditionExprSchema: z.ZodType<ConditionExpr> = z.lazy(() =>
+  z.union([
+    conditionClauseSchema,
+    z.object({
+      and: z.array(conditionExprSchema),
+    }),
+    z.object({
+      or: z.array(conditionExprSchema),
+    }),
+    z.object({
+      not: conditionExprSchema,
+    }),
+  ])
+);
+
+// ---------------------------------------------------------------------------
 // Pipeline Step
 // One ordered step in an endpoint or event handler
 // ---------------------------------------------------------------------------
 export const pipelineStepTypeEnum = z.enum([
-  "transform",     // call a transformer helper function
-  "db_operation",  // call a DB helper (createX, findById, etc.)
-  "redis_operation", // call a Redis cache helper
-  "kafka_publish", // publishKafkaEvent
-  "service_call",  // HTTP / gRPC call to another service
-  "custom_code",   // raw TypeScript block
-  "return_response", // explicit return response step
+  "transform",        // call a transformer helper function
+  "db_operation",     // call a DB helper (createX, findById, etc.)
+  "redis_operation",  // call a Redis cache helper
+  "kafka_publish",    // publishKafkaEvent
+  "service_call",     // HTTP / gRPC call to another service
+  "custom_code",      // raw TypeScript block
+  "return_response",  // explicit return response step
+  "condition",        // if / else branching
+  "try_catch",        // try / catch outcome branching
+  "switch",           // multi-way switch routing
+  "parallel",         // concurrent fan-out (Promise.all / allSettled)
+  "loop",             // collection iteration (forEach / map)
+  "early_return",     // mid-pipeline short circuit response
 ]);
 export type PipelineStepType = z.infer<typeof pipelineStepTypeEnum>;
 
@@ -129,50 +184,158 @@ export const stepSchemaFieldSchema = z.object({
   defaultValue: z.string().optional(),
 });
 
-export const pipelineStepSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  type: pipelineStepTypeEnum,
-  enabled: z.boolean().optional().default(true),
-  /** HTTP status code for return_response step (e.g. 200, 201, 204) */
-  statusCode: z.number().optional(),
-  /** Mode for return_response step */
-  responseMode: z.string().optional(),
-  /** For DB/Redis operation steps: ID of the selected database node */
-  databaseId: z.string().optional(),
-  /** For DB/Redis operation steps: ID of the selected table/entity node */
-  tableNodeId: z.string().optional(),
-  /** For DB/Redis operation steps: ID of the selected operation */
-  operationId: z.string().optional(),
-  /** For Kafka/messaging publish steps: ID of the broker node */
-  brokerNodeId: z.string().optional(),
-  /** For Kafka/messaging publish steps: ID of the topic / messaging resource */
-  messagingResourceId: z.string().optional(),
-  /** Reference to the function being called (name + importPath from ReusableFunction / transformer) */
-  functionRef: z.object({
-    name: z.string(),
-    importPath: z.string(),
-    signature: z.string().optional(),
-    isGlobal: z.boolean().optional(),
-    inputSchema: z.array(stepSchemaFieldSchema).optional(),
-    returnSchema: z.array(stepSchemaFieldSchema).optional(),
-  }).optional(),
-  /** Optional reference to the canvas transformer node ID */
-  transformerNodeId: z.string().optional(),
-  /** Explicit per-argument input bindings - user decides where every arg comes from */
-  inputBindings: z.array(pipelineStepInputBindingSchema),
-  /** Variable name assigned to this step's return value (usable by subsequent steps) */
-  outputVariable: z.string().optional().default(""),
-  /** Declared output schema - fields available to downstream steps and response builder */
-  outputSchema: z.array(pipelineStepOutputSchemaFieldSchema).optional(),
-  /** For custom_code steps: raw TypeScript to inline */
-  customCode: z.string().optional(),
-});
-export type PipelineStep = z.infer<typeof pipelineStepSchema>;
+export interface SwitchCase {
+  id?: string;
+  value: string | number | boolean;
+  label?: string;
+  steps: PipelineStep[];
+}
 
-export const pipelineStepInputSchema = pipelineStepSchema.extend({
-  id: z.string().optional(),
-});
+export const switchCaseSchema: z.ZodType<SwitchCase> = z.lazy(() =>
+  z.object({
+    id: z.string().optional(),
+    value: z.union([z.string(), z.number(), z.boolean()]),
+    label: z.string().optional(),
+    steps: z.array(pipelineStepSchema),
+  })
+);
+
+export interface ParallelBranch {
+  id?: string;
+  label?: string;
+  steps: PipelineStep[];
+}
+
+export const parallelBranchSchema: z.ZodType<ParallelBranch> = z.lazy(() =>
+  z.object({
+    id: z.string().optional(),
+    label: z.string().optional(),
+    steps: z.array(pipelineStepSchema),
+  })
+);
+
+export interface PipelineStep {
+  id: string;
+  name: string;
+  type: PipelineStepType;
+  enabled?: boolean;
+  /** Optional single-step skip guard */
+  runIf?: ConditionExpr;
+  /** HTTP status code for return_response / early_return step (e.g. 200, 201, 204, 400, 404, 500) */
+  statusCode?: number;
+  /** Mode for return_response step */
+  responseMode?: string;
+  /** For DB/Redis operation steps: ID of the selected database node */
+  databaseId?: string;
+  /** For DB/Redis operation steps: ID of the selected table/entity node */
+  tableNodeId?: string;
+  /** For DB/Redis operation steps: ID of the selected operation */
+  operationId?: string;
+  /** For Kafka/messaging publish steps: ID of the broker node */
+  brokerNodeId?: string;
+  /** For Kafka/messaging publish steps: ID of the topic / messaging resource */
+  messagingResourceId?: string;
+  /** Reference to the function being called (name + importPath from ReusableFunction / transformer) */
+  functionRef?: {
+    name: string;
+    importPath: string;
+    signature?: string;
+    isGlobal?: boolean;
+    inputSchema?: z.infer<typeof stepSchemaFieldSchema>[];
+    returnSchema?: z.infer<typeof stepSchemaFieldSchema>[];
+  };
+  /** Optional reference to the canvas transformer node ID */
+  transformerNodeId?: string;
+  /** Explicit per-argument input bindings - user decides where every arg comes from */
+  inputBindings?: PipelineStepInputBinding[];
+  /** Variable name assigned to this step's return value (usable by subsequent steps) */
+  outputVariable?: string;
+  /** Declared output schema - fields available to downstream steps and response builder */
+  outputSchema?: z.infer<typeof pipelineStepOutputSchemaFieldSchema>[];
+  /** For custom_code steps: raw TypeScript to inline */
+  customCode?: string;
+
+  // ─── Control Flow: condition step (if / else) ───
+  conditionExpr?: ConditionExpr;
+  thenSteps?: PipelineStep[];
+  elseSteps?: PipelineStep[];
+
+  // ─── Control Flow: try_catch step ───
+  trySteps?: PipelineStep[];
+  catchSteps?: PipelineStep[];
+
+  // ─── Control Flow: switch step ───
+  switchSource?: PipelineStepInputSource;
+  switchCases?: SwitchCase[];
+  switchDefault?: PipelineStep[];
+
+  // ─── Control Flow: parallel step ───
+  parallelBranches?: ParallelBranch[];
+  failureMode?: "all" | "any";
+
+  // ─── Control Flow: loop step ───
+  loopSource?: PipelineStepInputSource;
+  iteratorVariable?: string;
+  loopBody?: PipelineStep[];
+}
+
+export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    type: pipelineStepTypeEnum,
+    enabled: z.boolean().optional().default(true),
+    runIf: conditionExprSchema.optional(),
+    statusCode: z.number().optional(),
+    responseMode: z.string().optional(),
+    databaseId: z.string().optional(),
+    tableNodeId: z.string().optional(),
+    operationId: z.string().optional(),
+    brokerNodeId: z.string().optional(),
+    messagingResourceId: z.string().optional(),
+    functionRef: z
+      .object({
+        name: z.string(),
+        importPath: z.string(),
+        signature: z.string().optional(),
+        isGlobal: z.boolean().optional(),
+        inputSchema: z.array(stepSchemaFieldSchema).optional(),
+        returnSchema: z.array(stepSchemaFieldSchema).optional(),
+      })
+      .optional(),
+    transformerNodeId: z.string().optional(),
+    inputBindings: z.array(pipelineStepInputBindingSchema).optional().default([]),
+    outputVariable: z.string().optional().default(""),
+    outputSchema: z.array(pipelineStepOutputSchemaFieldSchema).optional(),
+    customCode: z.string().optional(),
+
+    conditionExpr: conditionExprSchema.optional(),
+    thenSteps: z.array(pipelineStepSchema).optional(),
+    elseSteps: z.array(pipelineStepSchema).optional(),
+
+    trySteps: z.array(pipelineStepSchema).optional(),
+    catchSteps: z.array(pipelineStepSchema).optional(),
+
+    switchSource: pipelineStepInputSourceSchema.optional(),
+    switchCases: z.array(switchCaseSchema).optional(),
+    switchDefault: z.array(pipelineStepSchema).optional(),
+
+    parallelBranches: z.array(parallelBranchSchema).optional(),
+    failureMode: z.enum(["all", "any"]).optional(),
+
+    loopSource: pipelineStepInputSourceSchema.optional(),
+    iteratorVariable: z.string().optional(),
+    loopBody: z.array(pipelineStepSchema).optional(),
+  })
+);
+
+export const pipelineStepInputSchema = z.lazy(() =>
+  pipelineStepSchema.and(
+    z.object({
+      id: z.string().optional(),
+    })
+  )
+);
 
 // ---------------------------------------------------------------------------
 // Transformer Helper Definition
