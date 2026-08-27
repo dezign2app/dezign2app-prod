@@ -122,12 +122,7 @@ export const WebPageNode = ({
   const cleanLabel = normalizedLabel.toLowerCase();
   const isLandingPage =
     data.isRoot === true ||
-    cleanLabel === "/" ||
-    cleanLabel === "home" ||
-    cleanLabel === "index" ||
-    cleanLabel === "landing" ||
-    cleanLabel === "landing-page" ||
-    cleanLabel === "root";
+    cleanLabel === "/";
 
   const displayRoute = isLandingPage
     ? "/"
@@ -135,7 +130,7 @@ export const WebPageNode = ({
       ? data.label.startsWith("/")
         ? data.label
         : `/${data.label}`
-      : "/page-client";
+      : "/page-server";
 
   const isLocked = Boolean(data.aiEditing);
 

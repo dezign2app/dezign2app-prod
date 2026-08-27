@@ -45,7 +45,7 @@ export const WebPageSectionConfig = ({ id, nodeId }: WebPageSectionConfigProps) 
 
   const [name, setName] = useState(section?.name || "");
   const [renderMode, setRenderMode] = useState<"server" | "client">(
-    section?.renderMode || "client",
+    section?.renderMode || "server",
   );
   const [loadStrategy, setLoadStrategy] = useState<
     "eager" | "dynamic" | "dynamic-no-ssr"
@@ -58,7 +58,7 @@ export const WebPageSectionConfig = ({ id, nodeId }: WebPageSectionConfigProps) 
   useEffect(() => {
     if (section) {
       setName(section.name || "");
-      setRenderMode(section.renderMode || "client");
+      setRenderMode(section.renderMode || "server");
       setLoadStrategy(section.loadStrategy || "eager");
       setDescription(section.description || "");
       setUiPrompt(section.uiPrompt || "");

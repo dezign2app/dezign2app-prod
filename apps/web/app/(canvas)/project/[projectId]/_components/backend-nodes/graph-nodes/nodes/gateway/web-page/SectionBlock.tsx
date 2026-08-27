@@ -41,7 +41,8 @@ export const SectionBlock = ({
 
   const handleToggleRenderMode = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const nextMode = section.renderMode === "server" ? "client" : "server";
+    const currentMode = section.renderMode || "server";
+    const nextMode = currentMode === "server" ? "client" : "server";
     const updated = sections.map((s) =>
       s.id === section.id ? { ...s, renderMode: nextMode as "server" | "client" } : s,
     );
@@ -100,7 +101,7 @@ export const SectionBlock = ({
     setIsOpen(true);
   };
 
-  const renderMode = section.renderMode || "client";
+  const renderMode = section.renderMode || "server";
   const loadStrategy = section.loadStrategy || "eager";
 
   return (
@@ -180,6 +181,16 @@ export const SectionBlock = ({
             title={`Load Strategy: ${loadStrategy} (Click to cycle eager/dynamic/no-ssr)`}
           >
             {loadStrategy === "dynamic-no-ssr" ? "no-ssr" : loadStrategy}
+          </button>
+
+          {/* Add Action to section */}
+          <button
+            type="button"
+            onClick={handleAddAction}
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary opacity-0 group/sec:opacity-100 transition-all cursor-pointer"
+            title="Add action"
+          >
+            <Plus size={11} />
           </button>
 
           {/* Section Settings Gear */}

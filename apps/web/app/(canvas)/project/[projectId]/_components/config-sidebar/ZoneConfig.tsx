@@ -190,7 +190,7 @@ export const ZoneConfig = ({
           {
             id: `sec-${Date.now()}`,
             name: "Main Section",
-            renderMode: "client" as const,
+            renderMode: "server" as const,
             loadStrategy: "eager" as const,
             actions: [
               {

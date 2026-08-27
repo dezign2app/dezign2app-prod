@@ -1,13 +1,13 @@
 import { PageInfo } from "./types";
 import { BackendNodeData } from "@workspace/canvas";
 import { isAuthPage } from "../../../compileAuth";
-import { EventComponentMeta } from "./eventGenerators";
+import { SectionMeta } from "./sectionGenerators";
 import { generateAuthPageCode } from "./authPageGenerators";
 
 export function generatePageCode(
   pageMeta: PageInfo,
   pageLoadFetchStatements: string,
-  eventComponents: EventComponentMeta[],
+  sectionsMeta: SectionMeta[],
   authNodeData?: BackendNodeData,
 ): string {
   const isAuth = isAuthPage(pageMeta, authNodeData);
@@ -16,20 +16,18 @@ export function generatePageCode(
     return generateAuthPageCode(pageMeta, authNodeData);
   }
 
-  const headerCompName = `${pageMeta.componentName}Header`;
-  const allImports = [
-    `import { ${headerCompName} } from "./_components/${headerCompName}";`,
-    ...eventComponents.map(
-      (c) => `import { ${c.componentName} } from "./_components/${c.componentName}";`
-    ),
-  ].join("\n");
+  const allImports = sectionsMeta
+    .map(
+      (s) => `import { ${s.componentName} } from "./_components/${s.folderName}";`
+    )
+    .join("\n");
 
-  const actionButtonsJsx =
-    eventComponents.length === 0
-      ? `<p className="text-muted-foreground text-sm italic">No click or trigger events configured for this page node.</p>`
-      : `<div className="flex flex-wrap gap-3">\n${eventComponents
-          .map((c) => `            <${c.componentName} onTrigger={handleTriggerAction} />`)
-          .join("\n")}\n          </div>`;
+  const sectionsJsx =
+    sectionsMeta.length === 0
+      ? `        <p className="text-muted-foreground text-sm italic">No sections configured for this page node.</p>`
+      : sectionsMeta
+          .map((s) => `        <${s.componentName} onTrigger={handleTriggerAction} />`)
+          .join("\n\n");
 
   const hasAuth = Boolean(authNodeData);
   const hasPageLoad = Boolean(
@@ -214,24 +212,10 @@ ${pageLoadEffectJsx}  const handleTriggerAction = async (
   return (
     <main className="min-h-screen bg-background text-foreground p-6 md:p-10 font-sans">
       <div className="max-w-5xl mx-auto space-y-8">
-        
-        {/* Page Header */}
-        <${headerCompName} />
+${pageLoadSectionJsx}        {/* Page Sections */}
+${sectionsJsx}
 
-${pageLoadSectionJsx}        {/* Section: Page Actions & Triggers */}
-        <Card className="border-border shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold text-card-foreground">Page Actions & Triggers</CardTitle>
-            <CardDescription className="text-xs text-muted-foreground">
-              Click buttons to trigger API requests and event handlers
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            ${actionButtonsJsx}
-          </CardContent>
-        </Card>
-
-        {/* Section 3: Trigger Output Logs */}
+        {/* Section: Trigger Output Logs */}
         <Card className="border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <div>

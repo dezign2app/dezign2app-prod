@@ -5,12 +5,13 @@ import { resolveLinkedEndpoint, resolvePageRefLink } from "./endpointResolver";
 import { labelToSlug, slugToComponentName } from "./slugUtils";
 import {
   generateEventComponent,
-  generatePageHeaderComponent,
+  generateSectionComponent,
   generateRootIndexHeaderComponent,
   generatePageCode,
   generateAuthFormComponent,
   generateRootIndexPage,
   EventComponentMeta,
+  SectionMeta,
 } from "./componentTemplates";
 import { isAuthPage } from "../../../compileAuth";
 
@@ -88,16 +89,33 @@ export function generatePageAndComponentFiles({
       nodeRequestBody = bodyObj;
     }
 
-    const sections: PageSection[] = node.data?.sections || [];
-    const nodeEvents: UIEventItem[] =
-      sections.length > 0
-        ? sections.flatMap((s) => s.actions || [])
-        : node.data?.events || [];
-    const pageLoadEvents = nodeEvents.filter(
+    const rawSections: PageSection[] = node.data?.sections || [];
+    const normalizedSections: PageSection[] =
+      rawSections.length > 0
+        ? rawSections
+        : node.data?.events && node.data.events.length > 0
+        ? [
+            {
+              id: "sec-default",
+              name: "Main Section",
+              renderMode: "server",
+              loadStrategy: "eager",
+              actions: node.data.events,
+            },
+          ]
+        : [
+            {
+              id: "sec-default",
+              name: "Main Section",
+              renderMode: "server",
+              loadStrategy: "eager",
+              actions: [],
+            },
+          ];
+
+    const allActions: UIEventItem[] = normalizedSections.flatMap((s) => s.actions || []);
+    const pageLoadEvents = allActions.filter(
       (e) => (e.event as string) === "pageLoad" || e.name === "pageLoad",
-    );
-    const actionEvents = nodeEvents.filter(
-      (e) => (e.event as string) !== "pageLoad" && e.name !== "pageLoad",
     );
 
     let pageLoadFetchStatements = "";
@@ -157,96 +175,124 @@ export function generatePageAndComponentFiles({
       }`;
     }
 
-    const eventComponentsMeta: EventComponentMeta[] = [];
+    const groupFolder = pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)";
+    const baseComponentsDir = pageMeta.isRoot
+      ? `app/${groupFolder}/_components`
+      : `app/${groupFolder}/${pageMeta.slug}/_components`;
 
-    actionEvents.forEach((evt, evtIdx) => {
-      const evtName = evt.name || `Action ${evtIdx + 1}`;
-      const evtType = evt.event || "click";
-      const compName = slugToComponentName(labelToSlug(evtName, evtIdx)).replace(/Page$/, "Action");
+    const sectionsMeta: SectionMeta[] = [];
 
-      let url = "";
-      let method = "POST";
-      let targetRoute: string | undefined = undefined;
-      let targetPageLabel: string | undefined = undefined;
-      let requireAuth = Boolean(effectiveAuthNode);
-      let link: ReturnType<typeof resolveLinkedEndpoint> = null;
+    normalizedSections.forEach((sec, secIdx) => {
+      const secName = sec.name || `Section ${secIdx + 1}`;
+      const secFolder = labelToSlug(secName, secIdx);
+      const baseComp = slugToComponentName(secFolder).replace(/Page$/, "");
+      const secCompName = baseComp.endsWith("Section") ? baseComp : `${baseComp}Section`;
+      const sectionDir = `${baseComponentsDir}/${secFolder}`;
 
-      if (evtType === "navigateToPage") {
-        const pageRefLink = resolvePageRefLink(
-          node.id,
-          evt.id,
-          allNodes,
-          allEdges,
-          evt.targetPageId,
-          evt.targetRoute,
-        );
-        targetRoute = pageRefLink.targetRoute;
-        targetPageLabel = pageRefLink.targetNodeName;
-      } else {
-        link = resolveLinkedEndpoint(
-          node.id,
-          evt.id,
-          allNodes,
-          allEdges,
-          endpoints,
-        );
-        url = link ? link.fullUrl : "";
-        method = link ? link.method : "POST";
-        requireAuth = Boolean(effectiveAuthNode) && (link ? link.requireAuth !== false : true);
-      }
+      const secActionMetas: EventComponentMeta[] = [];
+      const nonPageLoadActions = (sec.actions || []).filter(
+        (e) => (e.event as string) !== "pageLoad" && e.name !== "pageLoad",
+      );
 
-      eventComponentsMeta.push({
-        componentName: compName,
-        eventName: evtName,
-        eventType: evtType,
-        url,
-        method,
-        targetRoute,
-        targetPageLabel,
-        requireAuth,
-        customHeaders: Object.keys(nodeHeaders).length > 0 ? nodeHeaders : undefined,
-        queryParams: Object.keys(nodeQueryParams).length > 0 ? nodeQueryParams : undefined,
-        requestBody: nodeRequestBody,
-        eventItem: evt,
-        endpoint: link?.endpoint,
-      });
+      nonPageLoadActions.forEach((evt, evtIdx) => {
+        const evtName = evt.name || `Action ${evtIdx + 1}`;
+        const evtType = evt.event || "click";
+        const compName = slugToComponentName(labelToSlug(evtName, evtIdx)).replace(/Page$/, "Action");
 
-      const groupFolder = pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)";
-      const componentFilePath = pageMeta.isRoot
-        ? `app/${groupFolder}/_components/${compName}.tsx`
-        : `app/${groupFolder}/${pageMeta.slug}/_components/${compName}.tsx`;
+        let url = "";
+        let method = "POST";
+        let targetRoute: string | undefined = undefined;
+        let targetPageLabel: string | undefined = undefined;
+        let requireAuth = Boolean(effectiveAuthNode);
+        let link: ReturnType<typeof resolveLinkedEndpoint> = null;
 
-      pageFiles.push({
-        filename: componentFilePath,
-        language: "typescript",
-        content: generateEventComponent(
-          evtName,
-          evtType,
+        if (evtType === "navigateToPage") {
+          const pageRefLink = resolvePageRefLink(
+            node.id,
+            evt.id,
+            allNodes,
+            allEdges,
+            evt.targetPageId,
+            evt.targetRoute,
+          );
+          targetRoute = pageRefLink.targetRoute;
+          targetPageLabel = pageRefLink.targetNodeName;
+        } else {
+          link = resolveLinkedEndpoint(
+            node.id,
+            evt.id,
+            allNodes,
+            allEdges,
+            endpoints,
+          );
+          url = link ? link.fullUrl : "";
+          method = link ? link.method : "POST";
+          requireAuth = Boolean(effectiveAuthNode) && (link ? link.requireAuth !== false : true);
+        }
+
+        const actionMeta: EventComponentMeta = {
+          componentName: compName,
+          eventName: evtName,
+          eventType: evtType,
           url,
           method,
-          compName,
           targetRoute,
           targetPageLabel,
           requireAuth,
-          Object.keys(nodeHeaders).length > 0 ? nodeHeaders : undefined,
-          Object.keys(nodeQueryParams).length > 0 ? nodeQueryParams : undefined,
-          nodeRequestBody,
-          evt,
-          link?.endpoint,
-        ),
+          customHeaders: Object.keys(nodeHeaders).length > 0 ? nodeHeaders : undefined,
+          queryParams: Object.keys(nodeQueryParams).length > 0 ? nodeQueryParams : undefined,
+          requestBody: nodeRequestBody,
+          eventItem: evt,
+          endpoint: link?.endpoint,
+        };
+        secActionMetas.push(actionMeta);
+
+        // Action component file INSIDE section folder under _components
+        const componentFilePath = `${sectionDir}/${compName}.tsx`;
+        pageFiles.push({
+          filename: componentFilePath,
+          language: "typescript",
+          content: generateEventComponent(
+            evtName,
+            evtType,
+            url,
+            method,
+            compName,
+            targetRoute,
+            targetPageLabel,
+            requireAuth,
+            Object.keys(nodeHeaders).length > 0 ? nodeHeaders : undefined,
+            Object.keys(nodeQueryParams).length > 0 ? nodeQueryParams : undefined,
+            nodeRequestBody,
+            evt,
+            link?.endpoint,
+          ),
+        });
       });
-    });
 
-    const groupFolder = pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)";
-    const headerCompName = `${pageMeta.componentName}Header`;
-    const headerFilePath = pageMeta.isRoot
-      ? `app/${groupFolder}/_components/${headerCompName}.tsx`
-      : `app/${groupFolder}/${pageMeta.slug}/_components/${headerCompName}.tsx`;
+      // Section component file INSIDE section folder under _components
+      const sectionFilePath = `${sectionDir}/${secCompName}.tsx`;
+      pageFiles.push({
+        filename: sectionFilePath,
+        language: "typescript",
+        content: generateSectionComponent(sec, secCompName, secActionMetas),
+      });
 
-    pageFiles.push({
-      filename: headerFilePath,
-      language: "typescript",
-      content: generatePageHeaderComponent(pageMeta),
+      // Section index file re-exporting the section component
+      pageFiles.push({
+        filename: `${sectionDir}/index.ts`,
+        language: "typescript",
+        content: `export * from "./${secCompName}";\nexport { default } from "./${secCompName}";\n`,
+      });
+
+      sectionsMeta.push({
+        id: sec.id,
+        name: secName,
+        folderName: secFolder,
+        componentName: secCompName,
+        renderMode: sec.renderMode,
+        actions: secActionMetas,
+      });
     });
 
     const isAuth = isAuthPage(pageMeta, effectiveAuthNode?.data);
@@ -267,7 +313,7 @@ export function generatePageAndComponentFiles({
     const pageCode = generatePageCode(
       pageMeta,
       pageLoadFetchStatements,
-      eventComponentsMeta,
+      sectionsMeta,
       effectiveAuthNode?.data,
     );
 

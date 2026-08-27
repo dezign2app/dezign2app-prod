@@ -125,7 +125,7 @@ export async function ${handlerName}(payload: ${payloadInterfaceName}): Promise<
 
       if (trace.incoming.length > 0) {
         consumerCode += `    //\n    // 📥 EVENT SOURCE:\n`;
-        trace.incoming.forEach((inc) => {
+        trace.incoming.forEach((inc: { nodeType: string; nodeName: string; detail: string; dataContext?: string }) => {
           consumerCode += `    // - ${inc.nodeType}: "${inc.nodeName}" (${inc.detail})\n`;
           if (inc.dataContext)
             consumerCode += `    //   Details: ${inc.dataContext}\n`;
@@ -134,7 +134,7 @@ export async function ${handlerName}(payload: ${payloadInterfaceName}): Promise<
 
       if (trace.outgoing.length > 0) {
         consumerCode += `    //\n    // 🔗 RESOURCE DEPENDENCIES / SIDE EFFECTS:\n`;
-        trace.outgoing.forEach((out) => {
+        trace.outgoing.forEach((out: { nodeType: string; nodeName: string; detail: string; dataContext?: string }) => {
           consumerCode += `    // - ${out.nodeType}: "${out.nodeName}" (${out.detail})\n`;
           if (out.dataContext)
             consumerCode += `    //   Details: ${out.dataContext}\n`;

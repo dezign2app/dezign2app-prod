@@ -74,7 +74,8 @@ export function deriveRouteFileName(
     return pathStr
       .replace(/:([a-zA-Z0-9_]+)/g, "by_$1")
       .replace(/\{([a-zA-Z0-9_]+)\}/g, "by_$1")
-      .replace(/^\/+|\/+$/g, "");
+      .replace(/^[\/\s]+|[\/\s]+$/g, "")
+      .replace(/^(endpoint|route)[_\s-]+/i, "");
   }
 
   // 1. Try path name
@@ -94,7 +95,8 @@ export function deriveRouteFileName(
   if (ep.summary && ep.summary.trim()) {
     const rawSummary = ep.summary.trim();
     if (!isRandomId(rawSummary)) {
-      const stripped = rawSummary
+      const cleaned = cleanPathString(rawSummary);
+      const stripped = cleaned
         .replace(/^(GET|POST|PUT|PATCH|DELETE)\s+/i, "")
         .replace(new RegExp(`^(${method})\\s+`, "i"), "")
         .trim();
@@ -116,7 +118,8 @@ export function deriveRouteFileName(
       !firstLine.startsWith("const") &&
       !firstLine.startsWith("//")
     ) {
-      const stripped = firstLine
+      const cleaned = cleanPathString(firstLine);
+      const stripped = cleaned
         .replace(/^(GET|POST|PUT|PATCH|DELETE)\s+/i, "")
         .replace(new RegExp(`^(${method})\\s+`, "i"), "")
         .trim();
@@ -143,7 +146,7 @@ export function deriveRouteFileName(
     return toVarName(`${methodVerb}_${cleanServiceName}${suffix}`);
   }
 
-  return `${method}_endpoint_${index + 1}`;
+  return toVarName(`${method}_endpoint_${index + 1}`);
 }
 
 

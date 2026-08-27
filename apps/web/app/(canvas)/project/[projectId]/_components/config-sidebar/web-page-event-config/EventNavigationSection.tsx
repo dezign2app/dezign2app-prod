@@ -99,10 +99,7 @@ export const EventNavigationSection: React.FC<EventNavigationSectionProps> = ({
     const cleanLabel = pageLabel.trim().toLowerCase();
     const isRoot =
       selectedP?.data?.isRoot === true ||
-      cleanLabel === "/" ||
-      cleanLabel === "home" ||
-      cleanLabel === "index" ||
-      cleanLabel === "landing";
+      cleanLabel === "/";
     const path = selectedP
       ? isRoot
         ? "/"
@@ -178,9 +175,7 @@ export const EventNavigationSection: React.FC<EventNavigationSectionProps> = ({
                     const clean = label.trim().toLowerCase();
                     const isHome =
                       p.data?.isRoot === true ||
-                      clean === "/" ||
-                      clean === "home" ||
-                      clean === "index";
+                      clean === "/";
                     return (
                       <SelectItem key={p.id} value={p.id} className="text-xs">
                         <div className="flex items-center justify-between w-full gap-2">
