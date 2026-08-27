@@ -1,36 +1,29 @@
-import React from "react";
-import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { Input } from "@workspace/ui/components/input";
-import { Label } from "@workspace/ui/components/label";
-import { Checkbox } from "@workspace/ui/components/checkbox";
-import { Button } from "@workspace/ui/components/button";
-import { Badge } from "@workspace/ui/components/badge";
-import { Textarea } from "@workspace/ui/components/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
-import {
-  Globe,
-  Layers,
-  ShieldCheck,
-  Compass,
-  Plus,
-  Trash2,
-  CheckCircle2,
-  Route,
-  Sparkles,
-} from "lucide-react";
-import { WEB_PAGE_EVENTS, Endpoint } from "@workspace/canvas";
-import { UIEventItem, Parameter, Schema, PageSection } from "@/types/canvas";
-import { ParameterEditor } from "../backend-nodes/graph-nodes/Editors";
-import { AuthAwarenessBanner } from "./AuthAwarenessBanner";
-import { RequestBodyEditor, RequestBodyMode } from "./RequestBodyEditor";
+"use client";
 
-const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
+import React, { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { useMutation } from "convex/react";
+import { api } from "@workspace/backend/_generated/api";
+import { Id } from "@workspace/backend/_generated/dataModel";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { Endpoint, pageRouteToUrl, parsePageRoute } from "@workspace/canvas";
+import { Parameter, Schema, PageSection } from "@/types/canvas";
+import { RequestBodyMode } from "./RequestBodyEditor";
+import { useTerminalWorkspace } from "../terminal/hooks/useTerminalWorkspace";
+import { useWebPageCodeMismatch } from "./useWebPageCodeMismatch";
+import { PageCodeMismatchDialog } from "./PageCodeMismatchDialog";
+import { isElectron, getElectronAPI } from "@/lib/electron";
+import { toast } from "sonner";
+
+import {
+  WebPageHeaderSection,
+  WebPageParametersSection,
+  WebPageMembershipSection,
+  WebPageCodeSyncSection,
+  WebPageAiPromptsSection,
+  WebPageSectionsOverviewSection,
+  WebPageProtectionSection,
+} from "./web-page-config";
 
 export const WebPageConfig = ({
   id,
@@ -39,15 +32,20 @@ export const WebPageConfig = ({
   id: string;
   nodeId: string;
 }) => {
+  const router = useRouter();
   const node = useBackendCanvasStore((s) =>
     s.nodes.find((n) => n.id === nodeId),
   );
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const allEdges = useBackendCanvasStore((s) => s.edges);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
-  const addNode = useBackendCanvasStore((s) => s.addNode);
-  const addEdge = useBackendCanvasStore((s) => s.addEdge);
-  const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
+  const patchNodeData = useMutation(api.canvas.patchNodeData);
+
+  const projectId = typeof window !== "undefined"
+    ? window.location.pathname.split("/project/")[1]?.split("/")[0] ?? ""
+    : "";
+
+  const { outputDir } = useTerminalWorkspace(projectId);
 
   if (!node) return null;
 
@@ -65,7 +63,6 @@ export const WebPageConfig = ({
   const accessType = data.accessType || "public";
   const allowedRoles = data.allowedRoles || [];
   const requiredPlans = data.requiredPlans || [];
-  const allowedOrgRoles = data.allowedOrgRoles || [];
   const redirectTo =
     data.redirectTo ||
     (accessType === "payment-gated"
@@ -73,13 +70,6 @@ export const WebPageConfig = ({
       : accessType === "org-gated"
       ? "/select-org"
       : "/login");
-
-  const events: UIEventItem[] = data.events || [];
-
-  // Available WebPage nodes on canvas (excluding self)
-  const pageNodes = allNodes.filter(
-    (n) => (n.type === "webPage") && n.id !== nodeId,
-  );
 
   // Determine connected WebApp section name
   const incomingEdge = allEdges.find(
@@ -180,6 +170,153 @@ export const WebPageConfig = ({
     }
   }
 
+  // Hook to monitor real-time mismatch between local disk files and Convex server file / compiler baseline
+  const {
+    status: mismatchStatus,
+    serverCode,
+    detectedDiskPath,
+    defaultFilePath,
+    diffSummary,
+    localDiskCode,
+    hasCustomServerFile,
+    isSaving: isMismatchSaving,
+    dialogOpen: mismatchDialogOpen,
+    setDialogOpen: setMismatchDialogOpen,
+    pageName,
+    pageRoute,
+    checkDiskStatus,
+    mergeAllToServer,
+    mergeSelectedToServer,
+    overwriteLocalWithServer,
+    resetToCompilerBaseline,
+  } = useWebPageCodeMismatch({
+    projectId,
+    nodeId,
+    outputDir,
+    node,
+    connectedWebAppNode: connectedWebApp,
+    allNodes,
+    allEdges,
+    endpoints: allEndpoints,
+  });
+
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+
+  const handleGenerateAiCode = async () => {
+    if (isGeneratingAi) return;
+    const promptText = [
+      data.description ? `Page Purpose: ${data.description}` : "",
+      data.uiPrompt ? `Visual & Theme Style: ${data.uiPrompt}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    if (!promptText.trim()) {
+      toast.error("Please provide a page purpose or visual style prompt first.");
+      return;
+    }
+
+    setIsGeneratingAi(true);
+    toast.info("Generating UI code with AI...");
+
+    try {
+      const engineBaseUrl =
+        process.env.NEXT_PUBLIC_SYSTEM_DESIGN_ENGINE_URL || "http://localhost:3002";
+      const convexUrl =
+        typeof window !== "undefined"
+          ? (window as Window & { __convexUrl?: string }).__convexUrl ||
+            process.env.NEXT_PUBLIC_CONVEX_URL ||
+            ""
+          : "";
+
+      let token: string | undefined = undefined;
+      try {
+        const tokenRes = await fetch("/api/auth/token");
+        if (tokenRes.ok) {
+          const tokenData = await tokenRes.json();
+          token = tokenData.token;
+        }
+      } catch {}
+
+      const rawLabel = typeof data.label === "string" ? data.label : "";
+      const routeUrl = pageRouteToUrl(rawLabel);
+      const nameParsed = parsePageRoute(rawLabel) || nodeId;
+
+      const response = await fetch(`${engineBaseUrl}/page-editor`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nodeId,
+          projectId,
+          currentCode: serverCode || "",
+          prompt: promptText,
+          pageName: nameParsed,
+          pageRoute: routeUrl,
+          convexUrl,
+          token,
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Engine error: ${response.statusText}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let finalCode = "";
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed.type === "done" && parsed.code) {
+              finalCode = parsed.code;
+            }
+          } catch {}
+        }
+      }
+
+      if (finalCode) {
+        // 1. Direct sync to Convex backend
+        updateData({ pageSourceCode: finalCode, aiEditing: false });
+        await patchNodeData({
+          projectId: projectId as Id<"projects">,
+          nodeId,
+          patch: { pageSourceCode: finalCode, aiEditing: false },
+        });
+
+        // 2. Direct sync to local disk
+        if (isElectron() && outputDir) {
+          const api = getElectronAPI();
+          if (api?.fs?.writeProject) {
+            await api.fs.writeProject(
+              outputDir,
+              [{ filename: detectedDiskPath || defaultFilePath, content: finalCode }],
+              { cleanStale: false },
+            );
+          }
+        }
+
+        toast.success("AI code generated & synced to server file and disk!");
+        await checkDiskStatus();
+      } else {
+        toast.error("Generation completed without code output.");
+      }
+    } catch (err) {
+      console.error("[WebPageConfig] AI Generation error:", err);
+      toast.error(err instanceof Error ? err.message : "AI Generation failed");
+    } finally {
+      setIsGeneratingAi(false);
+    }
+  };
+
   // Resolve live page-level parameters and request body
   const resolvedPageEndpointRequestBody: Schema | undefined = connectedEndpoint?.requestBody
     ? {
@@ -210,7 +347,7 @@ export const WebPageConfig = ({
 
   const isAuthEnabled = data.requireAuth !== false;
 
-  const effectiveHeaders: Parameter[] = React.useMemo(() => {
+  const effectiveHeaders: Parameter[] = useMemo(() => {
     let baseHeaders =
       data.headers && data.headers.length > 0
         ? [...data.headers]
@@ -257,433 +394,120 @@ export const WebPageConfig = ({
     connectedEndpoint?.requestBodyMode ??
     (effectiveRequestBody.rawJson ? "raw_json" : "field_builder");
 
-  const handleAddEvent = () => {
-    const newEvent: UIEventItem = {
-      id: crypto.randomUUID(),
-      name: "New Navigation Action",
-      event: "navigateToPage",
-      navigationType: "link",
-      navigationCondition: "direct",
-    };
-    const updatedEvents = [...events, newEvent];
-    updateData({ events: updatedEvents });
-  };
-
-  const handleUpdateEvent = (eventId: string, changes: Partial<UIEventItem>) => {
-    const updatedEvents = events.map((ev) =>
-      ev.id === eventId ? { ...ev, ...changes } : ev,
-    );
-    updateData({ events: updatedEvents });
-  };
-
-  const cleanupPageRefNodeForEvent = (eventId: string) => {
-    const store = useBackendCanvasStore.getState();
-    const existingEdge = store.edges.find(
-      (e) => e.source === nodeId && e.sourceHandle === `events-${eventId}`,
-    );
-    if (existingEdge) {
-      const targetNode = store.nodes.find((n) => n.id === existingEdge.target);
-      store.deleteEdge(existingEdge.id);
-      if (targetNode && targetNode.type === "page_ref") {
-        const remainingEdges = store.edges.filter(
-          (e) => e.target === targetNode.id && e.id !== existingEdge.id,
-        );
-        if (remainingEdges.length === 0) {
-          store.deleteNode(targetNode.id);
-        }
-      }
-    }
-  };
-
-  const handleDeleteEvent = (eventId: string) => {
-    cleanupPageRefNodeForEvent(eventId);
-    const updatedEvents = events.filter((ev) => ev.id !== eventId);
-    updateData({ events: updatedEvents });
-  };
-
-  const handleSpawnPageRefNode = (eventId: string) => {
-    const pos = node.position || { x: 100, y: 100 };
-    const newRefId = crypto.randomUUID();
-
-    addNode({
-      id: newRefId,
-      type: "page_ref",
-      position: { x: pos.x + 340, y: pos.y + 60 },
-      data: {
-        label: "Page Ref",
-        description: "Target page reference for navigation",
-      },
-    });
-
-    addEdge({
-      id: `edge-${Date.now()}`,
-      source: nodeId,
-      target: newRefId,
-      sourceHandle: `events-${eventId}`,
-      targetHandle: "page-ref-in",
-      type: "connection",
-    });
-  };
-
   return (
     <div className="flex flex-col gap-6 mt-6 pb-12 text-foreground font-sans">
-      {/* Header */}
-      <div className="flex flex-col gap-2 border-b border-border/50 pb-6">
-        <div className="flex items-center gap-2.5">
-          <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-emerald-500/15 text-emerald-500 rounded border border-emerald-500/20 shadow-sm flex items-center gap-1">
-            <Globe className="w-3 h-3" /> WEB PAGE
-          </span>
-          <span className="text-lg font-semibold tracking-tight text-foreground">
-            {data.label || "Web Page"}
-          </span>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Configure frontend page details, client API parameters, and navigation routing.
-        </p>
-      </div>
-
-      {/* Auth awareness banner & Bearer token switch */}
-      <AuthAwarenessBanner
-        zoneName={connectedZoneName}
+      {/* 1. Header & Summary Section */}
+      <WebPageHeaderSection
+        label={data.label}
+        summary={data.summary}
+        description={data.description}
+        connectedZoneName={connectedZoneName}
         isProtected={isProtected}
         requireAuth={data.requireAuth !== false}
-        onRequireAuthChange={(requireAuth) => updateData({ requireAuth })}
+        onUpdateSummary={(summary) => updateData({ summary, description: summary })}
+        onUpdateRequireAuth={(requireAuth) => updateData({ requireAuth })}
       />
 
-      <div className="flex flex-col gap-2">
-        <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-          Summary
-        </Label>
-        <Input
-          className="bg-background/50 text-xs"
-          placeholder="e.g. Fetches or submits client data."
-          value={data.summary || data.description || ""}
-          onChange={(e) =>
-            updateData({ summary: e.target.value, description: e.target.value })
-          }
-        />
-      </div>
-
-      {connectedEndpoint && (
-        <div className="flex items-center justify-between p-2.5 rounded-lg bg-secondary/30 border border-border/50 text-xs">
-          <span className="text-[11px] text-muted-foreground">
-            synced with{" "}
-            <span className="font-mono font-medium text-foreground">
-              {connectedEndpoint.type || "GET"} {connectedEndpoint.name}
-            </span>
-          </span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-            Synced
-          </span>
-        </div>
-      )}
-
-      <ParameterEditor
-        title="Headers"
-        parameters={effectiveHeaders}
-        onChange={(headers) => updateData({ headers })}
-      />
-      <ParameterEditor
-        title="Path Params"
-        parameters={effectivePathParams}
-        onChange={(pathParams) => updateData({ pathParams })}
-      />
-      <ParameterEditor
-        title="Query Params"
-        parameters={effectiveQueryParams}
-        onChange={(queryParams) => updateData({ queryParams })}
-      />
-      <RequestBodyEditor
-        mode={effectiveRequestBodyMode}
-        onModeChange={(requestBodyMode) =>
-          updateData({ requestBodyMode })
-        }
-        schema={effectiveRequestBody}
-        onSchemaChange={(requestBody) =>
-          updateData({ requestBody })
-        }
+      {/* 2. Endpoint Parameters & Body Section */}
+      <WebPageParametersSection
+        connectedEndpoint={connectedEndpoint}
+        effectiveHeaders={effectiveHeaders}
+        effectivePathParams={effectivePathParams}
+        effectiveQueryParams={effectiveQueryParams}
+        effectiveRequestBody={effectiveRequestBody}
+        effectiveRequestBodyMode={effectiveRequestBodyMode}
+        onUpdateHeaders={(headers) => updateData({ headers })}
+        onUpdatePathParams={(pathParams) => updateData({ pathParams })}
+        onUpdateQueryParams={(queryParams) => updateData({ queryParams })}
+        onUpdateRequestBody={(requestBody) => updateData({ requestBody })}
+        onUpdateRequestBodyMode={(requestBodyMode) => updateData({ requestBodyMode })}
       />
 
-      {/* App & Zone Membership Section */}
-      <div className="flex flex-col gap-4 p-4 rounded-xl bg-card border border-border/60 shadow-sm">
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Layers className="w-4 h-4 text-indigo-400" />
-          <span>Page & Section Membership</span>
-        </div>
+      {/* 3. App & Zone Membership Section */}
+      <WebPageMembershipSection
+        label={data.label}
+        appSlug={appSlug}
+        connectedZoneName={connectedZoneName}
+        onUpdateLabel={(label) => updateData({ label })}
+        onUpdateAppSlug={(slug) => updateData({ appSlug: slug })}
+      />
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex flex-col gap-2">
-            <Label className="text-xs text-muted-foreground">Page Route Name</Label>
-            <Input
-              value={data.label || ""}
-              onChange={(e) => updateData({ label: e.target.value })}
-              placeholder="e.g. /dashboard/settings"
-              className="h-8 text-xs bg-background/50 font-mono"
-            />
-          </div>
+      {/* 4. Frontend Code & Local Repository Sync Section */}
+      <WebPageCodeSyncSection
+        hasCustomServerFile={hasCustomServerFile}
+        detectedDiskPath={detectedDiskPath}
+        defaultFilePath={defaultFilePath}
+        outputDir={outputDir}
+        mismatchStatus={mismatchStatus}
+        diffSummary={diffSummary}
+        isMismatchSaving={isMismatchSaving}
+        onOpenMismatchDialog={() => setMismatchDialogOpen(true)}
+        onMergeAllToServer={mergeAllToServer}
+        onOverwriteLocalWithServer={overwriteLocalWithServer}
+        onOpenPageStudio={() => {
+          if (projectId) router.push(`/project/${projectId}/pages/${nodeId}`);
+        }}
+        onResetToCompilerBaseline={resetToCompilerBaseline}
+      />
 
-          <div className="flex flex-col gap-2">
-            <Label className="text-xs text-muted-foreground">Target Monorepo App</Label>
-            <Input
-              value={appSlug}
-              onChange={(e) => updateData({ appSlug: e.target.value })}
-              placeholder="e.g. customer-portal"
-              className="h-8 text-xs font-mono bg-background/50"
-            />
-          </div>
-        </div>
+      {/* 5. AI Page Generation Prompts Section */}
+      <WebPageAiPromptsSection
+        description={data.description}
+        uiPrompt={data.uiPrompt}
+        isGeneratingAi={isGeneratingAi}
+        onUpdateDescription={(description) => updateData({ description })}
+        onUpdateUiPrompt={(uiPrompt) => updateData({ uiPrompt })}
+        onGenerateAiCode={handleGenerateAiCode}
+      />
 
-        <div className="p-3 bg-muted/40 rounded-lg border border-border/50 flex items-center justify-between text-xs mt-1">
-          <span className="text-muted-foreground">Connected WebApp Section:</span>
-          <span className="font-mono font-semibold text-foreground">
-            {connectedZoneName ? `🔒 ${connectedZoneName}` : "Unattached Page"}
-          </span>
-        </div>
-      </div>
+      {/* 6. Page Sections Overview Section */}
+      <WebPageSectionsOverviewSection
+        nodeId={nodeId}
+        sections={data.sections}
+        onAddSection={() => {
+          const currentSections: PageSection[] = data.sections || [];
+          const newSec: PageSection = {
+            id: `sec-${crypto.randomUUID()}`,
+            name: `Section ${currentSections.length + 1}`,
+            renderMode: "server",
+            loadStrategy: "eager",
+            actions: [],
+          };
+          updateData({ sections: [...currentSections, newSec] });
+        }}
+      />
 
-      {/* ── AI PAGE PROMPTS & VISUAL STYLE ── */}
-      <div className="flex flex-col gap-4 p-4 rounded-xl bg-card border border-border/60 shadow-sm">
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Sparkles className="w-4 h-4 text-indigo-400" />
-          <span>AI Page Generation Prompts</span>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Describe the purpose and visual style of this page to guide AI code generation.
-        </p>
+      {/* 7. Protection Rules Section */}
+      <WebPageProtectionSection
+        useZoneDefault={useZoneDefault}
+        accessType={accessType}
+        allowedRoles={allowedRoles}
+        requiredPlans={requiredPlans}
+        redirectTo={redirectTo}
+        isAuthPage={Boolean(data.isAuthPage)}
+        onUpdateUseZoneDefault={(useDefault) => updateData({ useZoneDefault: useDefault })}
+        onUpdateAccessType={(type, defaultRedirect) => updateData({ accessType: type, redirectTo: defaultRedirect })}
+        onUpdateAllowedRoles={(roles) => updateData({ allowedRoles: roles })}
+        onUpdateRequiredPlans={(plans) => updateData({ requiredPlans: plans })}
+        onUpdateRedirectTo={(target) => updateData({ redirectTo: target })}
+        onUpdateIsAuthPage={(isAuth) => updateData({ isAuthPage: isAuth })}
+      />
 
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Page Purpose / Functional Overview</Label>
-            <Textarea
-              value={data.description || ""}
-              onChange={(e) => updateData({ description: e.target.value })}
-              placeholder="e.g. Analytics dashboard with interactive charts, real-time KPI metrics, and export capabilities..."
-              className="min-h-[80px] text-xs resize-none"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Page Theme & Visual Layout Prompt</Label>
-            <Textarea
-              value={data.uiPrompt || ""}
-              onChange={(e) => updateData({ uiPrompt: e.target.value })}
-              placeholder="e.g. Modern dark aesthetic with sleek glassmorphic cards, vibrant gradient accents, collapsible navigation sidebar, and responsive metric grid..."
-              className="min-h-[90px] text-xs resize-none"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* ── SECTIONS OVERVIEW ── */}
-      <div className="flex flex-col gap-4 p-4 rounded-xl bg-card border border-border/60 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Layers className="w-4 h-4 text-indigo-500" />
-            <span>Page Sections & Components</span>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10"
-            onClick={() => {
-              const currentSections: PageSection[] = data.sections || [];
-              const newSec: PageSection = {
-                id: `sec-${crypto.randomUUID()}`,
-                name: `Section ${currentSections.length + 1}`,
-                renderMode: "server",
-                loadStrategy: "eager",
-                actions: [],
-              };
-              updateData({ sections: [...currentSections, newSec] });
-            }}
-          >
-            <Plus size={12} className="mr-1 text-indigo-500" />
-            Add Section
-          </Button>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          {(data.sections || []).length === 0 ? (
-            <div className="p-4 rounded-lg border border-dashed border-border/70 text-center flex flex-col items-center gap-2 bg-muted/20">
-              <span className="text-xs text-muted-foreground">
-                No sections defined yet. Each section compiles into its own component in <code className="font-mono text-primary">_components/</code>.
-              </span>
-            </div>
-          ) : (
-            (data.sections || []).map((sec: PageSection) => (
-              <div
-                key={sec.id}
-                className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border text-xs"
-              >
-                <div className="flex flex-col min-w-0">
-                  <span className="font-semibold text-foreground truncate">{sec.name}</span>
-                  <span className="text-[10px] text-muted-foreground font-mono">
-                    {sec.renderMode || "server"} • {sec.loadStrategy || "eager"} • {(sec.actions || []).length} action{(sec.actions || []).length === 1 ? "" : "s"}
-                  </span>
-                </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2 text-xs"
-                  onClick={() =>
-                    useBackendCanvasStore.getState().setActiveConfigItem({
-                      type: "pageSection",
-                      id: sec.id,
-                      nodeId,
-                    })
-                  }
-                >
-                  Configure &rarr;
-                </Button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Protection Rule Inheritance / Override */}
-      <div className="flex flex-col gap-4 p-4 rounded-xl bg-card border border-border/60 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Protection Rules</span>
-          </div>
-          <Select
-            value={useZoneDefault ? "zone" : "custom"}
-            onValueChange={(val) => updateData({ useZoneDefault: val === "zone" })}
-          >
-            <SelectTrigger className="h-8 text-xs w-[180px] bg-background/50">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="zone" className="text-xs">
-                Inherit Section Default Rules
-              </SelectItem>
-              <SelectItem value="custom" className="text-xs">
-                Custom Override for This Page
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {useZoneDefault ? (
-          <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-xs text-indigo-700 dark:text-indigo-300">
-            <p className="font-semibold mb-1">Inheriting Section Rules:</p>
-            <p className="text-[11px] text-muted-foreground">
-              This page automatically inherits all access conditions and failure redirect routes configured on the parent WebApp Section.
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4 pt-2 border-t border-border/40">
-            <div className="flex flex-col gap-2">
-              <Label className="text-xs text-muted-foreground">Custom Access Type</Label>
-              <Select
-                value={accessType}
-                onValueChange={(
-                  val: "public" | "private" | "role-gated" | "payment-gated" | "org-gated",
-                ) => {
-                  const defaultRedirect =
-                    val === "payment-gated"
-                      ? "/pricing"
-                      : val === "org-gated"
-                      ? "/select-org"
-                      : "/login";
-                  updateData({ accessType: val, redirectTo: defaultRedirect });
-                }}
-              >
-                <SelectTrigger className="h-9 text-xs font-medium bg-background/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="public" className="text-xs">
-                    🌐 Public (Open to anyone)
-                  </SelectItem>
-                  <SelectItem value="private" className="text-xs">
-                    🔒 Private (Authenticated user session required)
-                  </SelectItem>
-                  <SelectItem value="role-gated" className="text-xs">
-                    🛡️ Role-Gated (Specific user roles required)
-                  </SelectItem>
-                  <SelectItem value="payment-gated" className="text-xs">
-                    💳 Payment-Gated (Active paid plan tier required)
-                  </SelectItem>
-                  <SelectItem value="org-gated" className="text-xs">
-                    🏢 Organization-Gated (Active Organization required)
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {accessType === "role-gated" && (
-              <div className="flex flex-col gap-2">
-                <Label className="text-xs text-muted-foreground">
-                  Allowed Roles (comma-separated)
-                </Label>
-                <Input
-                  value={allowedRoles.join(", ")}
-                  onChange={(e) =>
-                    updateData({
-                      allowedRoles: e.target.value
-                        .split(",")
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                  placeholder="e.g. admin, superadmin"
-                  className="h-8 text-xs bg-background/50"
-                />
-              </div>
-            )}
-
-            {accessType === "payment-gated" && (
-              <div className="flex flex-col gap-2">
-                <Label className="text-xs text-muted-foreground">
-                  Required Plan Tiers (comma-separated)
-                </Label>
-                <Input
-                  value={requiredPlans.join(", ")}
-                  onChange={(e) =>
-                    updateData({
-                      requiredPlans: e.target.value
-                        .split(",")
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                  placeholder="e.g. pro, enterprise"
-                  className="h-8 text-xs bg-background/50"
-                />
-              </div>
-            )}
-
-            {accessType !== "public" && (
-              <div className="flex flex-col gap-2">
-                <Label className="text-xs text-muted-foreground">
-                  Unauthorized Redirect Target Route
-                </Label>
-                <Input
-                  value={redirectTo}
-                  onChange={(e) => updateData({ redirectTo: e.target.value })}
-                  placeholder="e.g. /login, /pricing"
-                  className="h-8 text-xs font-mono bg-background/50"
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Auth Page Checkbox */}
-        <div className="flex items-center gap-2.5 pt-2 border-t border-border/40">
-          <Checkbox
-            id="isAuthPage"
-            checked={Boolean(data.isAuthPage)}
-            onCheckedChange={(val) => updateData({ isAuthPage: Boolean(val) })}
-          />
-          <Label htmlFor="isAuthPage" className="text-xs font-normal cursor-pointer">
-            This page is the Login / Authentication entry page (unauthenticated target)
-          </Label>
-        </div>
-      </div>
+      {/* Granular Code Mismatch & Merge Dialog */}
+      <PageCodeMismatchDialog
+        open={mismatchDialogOpen}
+        onOpenChange={setMismatchDialogOpen}
+        pageName={pageName}
+        pageRoute={pageRoute}
+        filePath={detectedDiskPath || defaultFilePath}
+        serverCode={serverCode}
+        localDiskCode={localDiskCode}
+        diffSummary={diffSummary}
+        isSaving={isMismatchSaving}
+        onMergeAll={mergeAllToServer}
+        onMergeSelected={mergeSelectedToServer}
+        onOverwriteLocal={overwriteLocalWithServer}
+      />
     </div>
   );
 };
