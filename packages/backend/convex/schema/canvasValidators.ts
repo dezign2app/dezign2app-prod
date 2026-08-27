@@ -43,7 +43,187 @@ import {
   identityProviderSchema,
   publishedEventSchema,
   consumedEventSchema,
+  pipelineStepTypeEnum,
+  pipelineStepInputSourceSchema,
+  pipelineStepInputBindingSchema,
+  conditionClauseSchema,
+  pipelineStepOutputSchemaFieldSchema,
+  stepSchemaFieldSchema,
 } from "@workspace/canvas/schemas";
+import { z } from "zod";
+
+/**
+ * Convex-safe non-recursive condition expression schema.
+ */
+const safeConditionExprLevel1Schema = z.union([
+  conditionClauseSchema,
+  z.object({ and: z.array(z.any()) }),
+  z.object({ or: z.array(z.any()) }),
+  z.object({ not: z.any() }),
+]);
+
+const safeConditionExprSchema = z.union([
+  conditionClauseSchema,
+  z.object({
+    and: z.array(safeConditionExprLevel1Schema),
+  }),
+  z.object({
+    or: z.array(safeConditionExprLevel1Schema),
+  }),
+  z.object({
+    not: safeConditionExprLevel1Schema,
+  }),
+]);
+
+const safeSwitchCaseSchema = z.object({
+  id: z.string().optional(),
+  value: z.union([z.string(), z.number(), z.boolean()]),
+  label: z.string().optional(),
+  steps: z.array(z.any()),
+});
+
+const safeParallelBranchSchema = z.object({
+  id: z.string().optional(),
+  label: z.string().optional(),
+  steps: z.array(z.any()),
+});
+
+/**
+ * Full Convex-safe pipeline step schema with all exact field schemas.
+ */
+export const safePipelineStepSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: pipelineStepTypeEnum,
+  enabled: z.boolean().optional(),
+  runIf: safeConditionExprSchema.optional(),
+  statusCode: z.number().optional(),
+  responseMode: z.string().optional(),
+  databaseId: z.string().optional(),
+  tableNodeId: z.string().optional(),
+  operationId: z.string().optional(),
+  brokerNodeId: z.string().optional(),
+  messagingResourceId: z.string().optional(),
+  functionRef: z
+    .object({
+      name: z.string(),
+      importPath: z.string(),
+      signature: z.string().optional(),
+      isGlobal: z.boolean().optional(),
+      inputSchema: z.array(stepSchemaFieldSchema).optional(),
+      returnSchema: z.array(stepSchemaFieldSchema).optional(),
+    })
+    .optional(),
+  transformerNodeId: z.string().optional(),
+  inputBindings: z.array(pipelineStepInputBindingSchema).optional(),
+  outputVariable: z.string().optional(),
+  outputSchema: z.array(pipelineStepOutputSchemaFieldSchema).optional(),
+  customCode: z.string().optional(),
+
+  conditionExpr: safeConditionExprSchema.optional(),
+  thenSteps: z.array(z.any()).optional(),
+  elseSteps: z.array(z.any()).optional(),
+  trySteps: z.array(z.any()).optional(),
+  catchSteps: z.array(z.any()).optional(),
+  switchSource: pipelineStepInputSourceSchema.optional(),
+  switchCases: z.array(safeSwitchCaseSchema).optional(),
+  switchDefault: z.array(z.any()).optional(),
+  parallelBranches: z.array(safeParallelBranchSchema).optional(),
+  failureMode: z.enum(["all", "any"]).optional(),
+  loopSource: pipelineStepInputSourceSchema.optional(),
+  iteratorVariable: z.string().optional(),
+  loopBody: z.array(z.any()).optional(),
+});
+
+/**
+ * Convex-safe variants: strip recursive z.lazy() pipelineStepSchema
+ * (used in endpoints/events/routeGroups) and z.default() wrappers so
+ * zodToConvex can traverse without hitting a call-stack overflow.
+ */
+const safePublishedEventSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  publishedWhen: z.string().optional(),
+  brokerNodeId: z.string().optional(),
+  messagingResourceId: z.string().optional(),
+  resourceType: z.string().optional(),
+  payloadSchema: z.object({ id: z.string(), fields: z.array(z.any()).optional(), rawJson: z.string().optional(), mode: z.string().optional(), requestBodyMode: z.string().optional() }).optional(),
+  version: z.string().optional(),
+  category: z.string().optional(),
+  delivery: z.string().optional(),
+  ordering: z.string().optional(),
+  correlationId: z.string().optional(),
+  deprecated: z.boolean().optional(),
+  replacementEventId: z.string().optional(),
+  targetNodeId: z.string().optional(),
+  metadata: z.object({ createdAt: z.number().optional(), updatedAt: z.number().optional(), createdByAI: z.boolean().optional() }).optional(),
+});
+
+const safeEndpointSchema = endpointSchema
+  .omit({ pipelineSteps: true, publishedEvents: true })
+  .extend({
+    pipelineSteps: z.array(safePipelineStepSchema).optional(),
+    publishedEvents: z.array(safePublishedEventSchema).optional(),
+  });
+
+const safeConsumedEventSchema = consumedEventSchema
+  .omit({
+    pipelineSteps: true,
+    retryPolicy: true,
+    isIdempotent: true,
+    name: true,
+    eventId: true,
+    brokerNodeId: true,
+    messagingResourceId: true,
+  })
+  .extend({
+    pipelineSteps: z.array(safePipelineStepSchema).optional(),
+    retryPolicy: z.string().optional(),
+    isIdempotent: z.boolean().optional(),
+    name: z.string().optional(),
+    eventId: z.string().optional(),
+    brokerNodeId: z.string().optional(),
+    messagingResourceId: z.string().optional(),
+  });
+
+const safeRouteGroupSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  basePath: z.string(),
+  endpoints: z.array(safeEndpointSchema),
+});
+
+const safeServiceDataSchema = serviceDataSchema
+  .omit({
+    endpoints: true,
+    consumedEvents: true,
+    publishedEvents: true,
+    routeGroups: true,
+  })
+  .extend({
+    endpoints: z.array(safeEndpointSchema).optional(),
+    consumedEvents: z.array(safeConsumedEventSchema).optional(),
+    publishedEvents: z.array(safePublishedEventSchema).optional(),
+    routeGroups: z.array(safeRouteGroupSchema).optional(),
+  });
+
+const safeServerlessDataSchema = serverlessDataSchema
+  .omit({
+    endpoints: true,
+  })
+  .extend({
+    endpoints: z.array(safeEndpointSchema).optional(),
+  });
+
+const safeApiGatewayDataSchema = apiGatewayDataSchema
+  .omit({
+    endpoints: true,
+    routeGroups: true,
+  })
+  .extend({
+    endpoints: z.array(safeEndpointSchema).optional(),
+    routeGroups: z.array(safeRouteGroupSchema).optional(),
+  });
 
 // Test Case Data Validator
 export const backendTestCaseDataValidator = zodToConvex(
@@ -294,7 +474,7 @@ export const langgraphConvexDataValidator = v.object({
 // Node Data Validator
 // Using zodToConvex & explicit validators to keep database schemas in sync
 export const backendNodeDataValidator = v.union(
-  zodToConvex(serviceDataSchema),
+  zodToConvex(safeServiceDataSchema),
   zodToConvex(dbRefDataSchema),
   webPageConvexDataValidator,
   zodToConvex(pageRefDataSchema),
@@ -310,9 +490,9 @@ export const backendNodeDataValidator = v.union(
   zodToConvex(redisCacheDataSchema),
   zodToConvex(storageDataSchema),
   zodToConvex(workerDataSchema),
-  zodToConvex(serverlessDataSchema),
+  zodToConvex(safeServerlessDataSchema),
   zodToConvex(searchIndexDataSchema),
-  zodToConvex(apiGatewayDataSchema),
+  zodToConvex(safeApiGatewayDataSchema),
   zodToConvex(loadBalancerDataSchema),
   zodToConvex(webhookDataSchema),
   zodToConvex(llmDataSchema),
@@ -348,26 +528,12 @@ export const backendNodeDataValidator = v.union(
   }),
 );
 
-import { z } from "zod";
+export const backendEndpointDataValidator = zodToConvex(safeEndpointSchema);
 
-export const backendEndpointDataValidator = zodToConvex(
-  endpointSchema.omit({ pipelineSteps: true }).extend({
-    pipelineSteps: z.array(z.any()).optional(),
-  }),
-);
 export const backendIdentityProviderDataValidator = zodToConvex(
   identityProviderSchema,
 );
 
-// Use z.string() for retryPolicy in the DB validator — the app-layer Zod schema
-// (consumedEventSchema) enforces the strict enum on user input, but the DB should
-// accept any string to stay compatible with AnyMessagingResource (retryPolicy?: RetryPolicy | string).
 export const backendEventDataValidator = zodToConvex(
-  z.union([
-    publishedEventSchema,
-    consumedEventSchema.omit({ pipelineSteps: true }).extend({
-      pipelineSteps: z.array(z.any()).optional(),
-      retryPolicy: z.string().default("NONE"),
-    }),
-  ]),
+  z.union([safePublishedEventSchema, safeConsumedEventSchema]),
 );

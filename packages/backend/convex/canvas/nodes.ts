@@ -1,6 +1,5 @@
 import { v, ConvexError } from "convex/values";
 import { mutation } from "../_generated/server";
-import { nodeDataSchemas } from "@workspace/canvas";
 import { backendNodeDataValidator } from "../schema/canvasValidators";
 
 export const upsertBackendNode = mutation({
@@ -24,20 +23,6 @@ export const upsertBackendNode = mutation({
     });
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
-
-    const schema = nodeDataSchemas[args.type];
-    if (schema) {
-      // Validate the data against the strict Zod schema for this node type
-      const parsed = schema.safeParse(args.data);
-      if (!parsed.success) {
-        throw new ConvexError(
-          `Invalid data for node type '${args.type}': ${parsed.error.issues
-            .map((i) => `${i.path.join(".")}: ${i.message}`)
-            .join("; ")}`,
-        );
-      }
-      args.data = parsed.data;
-    }
 
     if (args.type === "auth" && typeof args.data === "object" && args.data !== null) {
       if ("dbNodeId" in args.data) {
