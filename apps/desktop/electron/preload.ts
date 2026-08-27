@@ -27,6 +27,14 @@ export interface ElectronAPI {
       outputDir: string,
       relativePath: string
     ): Promise<{ success: boolean; content: string | null; path: string }>;
+    listDirectory(
+      outputDir: string
+    ): Promise<{
+      success: boolean;
+      tree: Array<{ name: string; path: string; isFolder: boolean; children?: Array<any> }>;
+      totalFiles: number;
+      path: string;
+    }>;
   };
 
   /** Docker Compose runner */
@@ -118,6 +126,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ) => ipcRenderer.invoke("fs:write-project", outputDir, files, options),
     readFile: (outputDir: string, relativePath: string) =>
       ipcRenderer.invoke("fs:read-file", outputDir, relativePath),
+    listDirectory: (outputDir: string) =>
+      ipcRenderer.invoke("fs:list-directory", outputDir),
   },
 
   docker: {

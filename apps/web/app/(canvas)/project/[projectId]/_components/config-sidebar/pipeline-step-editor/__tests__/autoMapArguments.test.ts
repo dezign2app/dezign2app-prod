@@ -105,7 +105,7 @@ describe("pipeline-step-editor: useStepRowState handleAutoMapArguments", () => {
     });
 
     expect(onChange).toHaveBeenCalled();
-    const mappedArgNames = updatedStep.inputBindings.map((b) => b.argName);
+    const mappedArgNames = (updatedStep.inputBindings || []).map((b) => b.argName);
 
     // Should include existing matched fields:
     // 1. title (matched from req_body.title)
@@ -122,10 +122,10 @@ describe("pipeline-step-editor: useStepRowState handleAutoMapArguments", () => {
     expect(mappedArgNames).not.toContain("createdAt");
 
     // Verify correct source bindings
-    const titleBinding = updatedStep.inputBindings.find((b) => b.argName === "title");
+    const titleBinding = (updatedStep.inputBindings || []).find((b) => b.argName === "title");
     expect(titleBinding?.source).toEqual({ kind: "req_body", field: "title" });
 
-    const categoryIdBinding = updatedStep.inputBindings.find((b) => b.argName === "categoryId");
+    const categoryIdBinding = (updatedStep.inputBindings || []).find((b) => b.argName === "categoryId");
     expect(categoryIdBinding?.source).toEqual({ kind: "req_params", field: "categoryId" });
   });
 
@@ -173,16 +173,16 @@ describe("pipeline-step-editor: useStepRowState handleAutoMapArguments", () => {
     });
 
     expect(onChange).toHaveBeenCalled();
-    const mappedArgNames = updatedStep.inputBindings.map((b) => b.argName);
+    const mappedArgNames = (updatedStep.inputBindings || []).map((b) => b.argName);
 
     // Existing configured description should be preserved
     expect(mappedArgNames).toContain("description");
-    const descBinding = updatedStep.inputBindings.find((b) => b.argName === "description");
+    const descBinding = (updatedStep.inputBindings || []).find((b) => b.argName === "description");
     expect(descBinding?.source).toEqual({ kind: "literal", value: "Default description" });
 
     // Custom extra field should be preserved
     expect(mappedArgNames).toContain("customExtraField");
-    const extraBinding = updatedStep.inputBindings.find((b) => b.argName === "customExtraField");
+    const extraBinding = (updatedStep.inputBindings || []).find((b) => b.argName === "customExtraField");
     expect(extraBinding?.source).toEqual({ kind: "literal", value: "custom-val" });
 
     // Matched fields should still be added

@@ -8,10 +8,16 @@ import {
   RefreshCw,
   Sparkles,
   Pencil,
-  Trash2,
-  PanelLeft,
   Code2,
   Globe,
+  Columns2,
+  Terminal,
+  FolderSync,
+  Play,
+  Layers,
+  CheckCircle2,
+  XCircle,
+  Folder,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
@@ -21,16 +27,26 @@ import {
   TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 
-interface PageEditorHeaderProps {
+export type PageViewMode = "code" | "preview" | "split";
+
+export interface PageEditorHeaderProps {
   projectId: string;
   projectName: string;
   pageName: string;
   pageRoute: string;
   previewUrl: string;
   hasCustomCode: boolean;
-  paletteOpen: boolean;
+  viewMode: PageViewMode;
+  onChangeViewMode: (mode: PageViewMode) => void;
+  outputDir: string;
+  onPickDirectory?: () => void;
+  isServerRunning: boolean | null;
+  onStartDevServer: () => void;
+  explorerOpen: boolean;
+  onToggleExplorer: () => void;
+  terminalOpen: boolean;
+  onToggleTerminal: () => void;
   aiPanelOpen: boolean;
-  onTogglePalette: () => void;
   onToggleAiPanel: () => void;
   onReloadPreview: () => void;
   onReset?: () => void;
@@ -43,16 +59,28 @@ export function PageEditorHeader({
   pageRoute,
   previewUrl,
   hasCustomCode,
-  paletteOpen,
+  viewMode,
+  onChangeViewMode,
+  outputDir,
+  onPickDirectory,
+  isServerRunning,
+  onStartDevServer,
+  explorerOpen,
+  onToggleExplorer,
+  terminalOpen,
+  onToggleTerminal,
   aiPanelOpen,
-  onTogglePalette,
   onToggleAiPanel,
   onReloadPreview,
   onReset,
 }: PageEditorHeaderProps) {
+  const folderName = outputDir
+    ? outputDir.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || outputDir
+    : "";
+
   return (
-    <header className="h-12 px-3 border-b border-sidebar-border bg-sidebar/80 backdrop-blur-md flex items-center justify-between shrink-0 z-30 select-none">
-      {/* Left Side: Back button + Left Sidebar Toggle + Page Title / Breadcrumbs */}
+    <header className="h-12 px-3 border-b border-sidebar-border bg-sidebar/95 backdrop-blur-md flex items-center justify-between shrink-0 z-30 select-none font-sans">
+      {/* Left Side: Back button + Explorer Toggle + Breadcrumbs */}
       <div className="flex items-center gap-2 min-w-0">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -67,25 +95,26 @@ export function PageEditorHeader({
               </Link>
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Back to Canvas</TooltipContent>
+          <TooltipContent>Back to Project Canvas</TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant={paletteOpen ? "secondary" : "ghost"}
+              variant={explorerOpen ? "secondary" : "ghost"}
               size="icon"
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              onClick={onTogglePalette}
+              onClick={onToggleExplorer}
             >
-              <PanelLeft className="h-4 w-4" />
+              <Layers className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{paletteOpen ? "Hide Palette" : "Show Palette"}</TooltipContent>
+          <TooltipContent>{explorerOpen ? "Hide File Explorer" : "Show File Explorer"}</TooltipContent>
         </Tooltip>
 
         <div className="h-4 w-[1px] bg-sidebar-border mx-1 shrink-0" />
 
+        {/* Breadcrumb Title */}
         <div className="flex items-center gap-2 truncate text-xs">
           <span className="text-muted-foreground truncate hidden sm:inline">{projectName}</span>
           <span className="text-muted-foreground/60 hidden sm:inline">/</span>
@@ -103,89 +132,182 @@ export function PageEditorHeader({
           {hasCustomCode && (
             <Badge
               variant="outline"
-              className="text-[10px] px-1.5 py-0 font-medium text-sidebar-foreground border-sidebar-border bg-sidebar-accent shrink-0 hidden md:inline-flex"
+              className="text-[10px] px-1.5 py-0 font-medium text-primary border-primary/30 bg-primary/10 shrink-0 hidden md:inline-flex"
             >
-              AI-edited
+              AI-Customized
             </Badge>
           )}
         </div>
       </div>
 
-      {/* Center: Live Preview URL & Quick Actions */}
-      <div className="hidden lg:flex items-center gap-1 px-2 py-1 rounded-lg bg-sidebar-accent/50 border border-sidebar-border text-xs max-w-sm w-full mx-4">
-        <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-        <span className="font-mono text-[11px] text-muted-foreground truncate flex-1">
-          {previewUrl}
-        </span>
-        <Tooltip>
-          <TooltipTrigger asChild>
+      {/* Center: View Mode Segmented Controls + Dev Server Status */}
+      <div className="flex items-center gap-2">
+        {/* View Mode Toggle: Code | Preview | Split */}
+        <div className="flex items-center bg-sidebar-accent/80 border border-sidebar-border rounded-lg p-0.5 text-xs">
+          <button
+            type="button"
+            onClick={() => onChangeViewMode("code")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
+              viewMode === "code"
+                ? "bg-sidebar text-foreground shadow-sm font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Code2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Code</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onChangeViewMode("split")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
+              viewMode === "split"
+                ? "bg-sidebar text-foreground shadow-sm font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Columns2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Split</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onChangeViewMode("preview")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
+              viewMode === "preview"
+                ? "bg-sidebar text-foreground shadow-sm font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Preview</span>
+          </button>
+        </div>
+
+        {/* Dev Server Status & Quick Run */}
+        <div className="hidden lg:flex items-center gap-1.5 pl-2 border-l border-sidebar-border">
+          {isServerRunning === true ? (
+            <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px]">
+              <CheckCircle2 className="w-3 h-3" />
+              <span>Dev Server Online</span>
+            </div>
+          ) : (
             <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-muted-foreground hover:text-foreground rounded"
-              onClick={onReloadPreview}
+              variant="outline"
+              size="sm"
+              onClick={onStartDevServer}
+              className="h-7 px-2 text-[11px] border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 gap-1.5"
             >
-              <RefreshCw className="h-3 w-3" />
+              <Play className="w-3 h-3 fill-current" />
+              <span>Start Server</span>
             </Button>
-          </TooltipTrigger>
-          <TooltipContent>Reload Preview</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-muted-foreground hover:text-foreground rounded"
-              asChild
-            >
-              <a href={previewUrl} target="_blank" rel="noreferrer">
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Open in New Tab</TooltipContent>
-        </Tooltip>
+          )}
+
+          {/* Quick Preview Reload */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground rounded"
+                onClick={onReloadPreview}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Reload Live Preview</TooltipContent>
+          </Tooltip>
+
+          {/* Open Preview External */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground rounded"
+                asChild
+              >
+                <a href={previewUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Open Preview in New Tab ({previewUrl})</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
-      {/* Right Side: Compiler Link, Reset, and AI Assistant Toggle */}
+      {/* Right Side: Folder Indicator, Terminal Toggle, AI Assistant Toggle */}
       <div className="flex items-center gap-2 shrink-0">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 text-xs text-muted-foreground hover:text-foreground gap-1.5 px-2.5 hidden sm:flex"
-          asChild
-        >
-          <Link href={`/project/${projectId}/compiler`}>
-            <Code2 className="h-3.5 w-3.5" />
-            Compiler
-          </Link>
-        </Button>
-
-        {hasCustomCode && onReset && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 gap-1 px-2"
-            onClick={onReset}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            <span className="hidden md:inline">Reset</span>
-          </Button>
+        {/* Workspace Folder Badge */}
+        {outputDir && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onPickDirectory}
+                className="hidden xl:flex items-center gap-1.5 px-2 py-1 rounded-md bg-sidebar-accent/50 border border-sidebar-border text-[11px] text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+              >
+                <FolderSync className="w-3 h-3 text-emerald-400" />
+                <span className="font-mono max-w-[120px] truncate">{folderName}</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Local folder: {outputDir} (Click to change)</TooltipContent>
+          </Tooltip>
         )}
 
+        {/* Terminal Toggle Button */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant={aiPanelOpen ? "secondary" : "ghost"}
+              variant={terminalOpen ? "secondary" : "ghost"}
               size="sm"
-              className="h-8 text-xs gap-1.5 px-2.5 text-sidebar-foreground"
-              onClick={onToggleAiPanel}
+              className="h-8 text-xs gap-1.5 px-2.5 text-muted-foreground hover:text-foreground"
+              onClick={onToggleTerminal}
             >
-              <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="hidden sm:inline">AI Assistant</span>
+              <Terminal className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">Terminal</span>
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{aiPanelOpen ? "Hide AI Assistant" : "Show AI Assistant"}</TooltipContent>
+          <TooltipContent>{terminalOpen ? "Hide Terminal" : "Open Terminal (Run dev server)"}</TooltipContent>
+        </Tooltip>
+
+        {/* Full Project Compiler IDE Link */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-muted-foreground hover:text-foreground gap-1.5 px-2.5 hidden lg:flex"
+              asChild
+            >
+              <Link href={`/project/${projectId}/compiler`}>
+                <Code2 className="h-3.5 w-3.5" />
+                <span>Compiler</span>
+              </Link>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Open Full Monorepo Compiler IDE</TooltipContent>
+        </Tooltip>
+
+        {/* AI Assistant Sidebar Toggle */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={aiPanelOpen ? "default" : "outline"}
+              size="sm"
+              className={`h-8 text-xs gap-1.5 px-2.5 transition-colors ${
+                aiPanelOpen
+                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                  : "border-sidebar-border bg-sidebar hover:bg-sidebar-accent text-sidebar-foreground"
+              }`}
+              onClick={onToggleAiPanel}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span className="font-medium">AI Assistant</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{aiPanelOpen ? "Hide AI Assistant" : "Open AI Assistant & Agent"}</TooltipContent>
         </Tooltip>
       </div>
     </header>
