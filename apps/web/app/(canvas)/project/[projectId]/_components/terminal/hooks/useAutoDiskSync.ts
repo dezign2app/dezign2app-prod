@@ -72,7 +72,34 @@ export function useAutoDiskSync({
       setSyncError(null);
 
       try {
-        const result = await api.fs.writeProject(outputDir, targetFiles, { cleanStale });
+        // Protect frontend page files from being overwritten during automatic background compilation sync
+        // if they have been edited externally in another editor on disk.
+        const safeTargetFiles: CompiledFile[] = [];
+        for (const file of targetFiles) {
+          const isFrontendPageFile =
+            file.filename.endsWith("/page.tsx") ||
+            file.filename.endsWith("page.tsx") ||
+            file.filename.includes("/app/") && file.filename.endsWith(".tsx");
+
+          if (isFrontendPageFile && api.fs.readFile) {
+            try {
+              const diskCheck = await api.fs.readFile(outputDir, file.filename);
+              if (diskCheck?.success && typeof diskCheck.content === "string" && diskCheck.content.trim().length > 0) {
+                // If disk content differs from compiler output, preserve disk content during background auto-sync
+                if (diskCheck.content.trim() !== file.content.trim()) {
+                  safeTargetFiles.push({
+                    ...file,
+                    content: diskCheck.content,
+                  });
+                  continue;
+                }
+              }
+            } catch {}
+          }
+          safeTargetFiles.push(file);
+        }
+
+        const result = await api.fs.writeProject(outputDir, safeTargetFiles, { cleanStale });
         if (result?.success) {
           setSyncStatus("synced");
           setLastSyncedAt(new Date());
