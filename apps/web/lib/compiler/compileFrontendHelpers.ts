@@ -87,45 +87,7 @@ export function generateHookFile(
 }
 
 /**
- * Generates a React TSX Component file
- */
-export function generateComponentFile(
-  compNode: BackendNode,
-): CompiledFile {
-  const rawName = compNode.data?.componentName || compNode.data?.label || "CustomComponent";
-  const compName = toPascalCase(toVarName(rawName));
-  const propsSchema = compNode.data?.propsSchema || [];
-
-  const propsInterfaceName = `${compName}Props`;
-  const propFields =
-    propsSchema.length > 0
-      ? propsSchema
-          .map(
-            (p) =>
-              `  ${p.name}${p.required === false ? "?" : ""}: ${mapTypeToTs(p.type)};`,
-          )
-          .join("\n")
-      : "  className?: string;\n  children?: React.ReactNode;";
-
-  let body = "";
-  if (compNode.data?.code && compNode.data.code.trim()) {
-    body = compNode.data.code;
-  } else {
-    const slot = compNode.data?.slotName || "main";
-    body = `export function ${compName}(props: ${propsInterfaceName}) {\n  return (\n    <div className="p-4 rounded-xl border bg-card text-card-foreground shadow-sm transition-all" data-slot="${slot}">\n      <h3 className="text-sm font-semibold tracking-tight">${compName}</h3>\n      <p className="text-xs text-muted-foreground mt-1">Generated component in slot: ${slot}</p>\n    </div>\n  );\n}\n`;
-  }
-
-  const content = `"use client";\n\nimport React from "react";\n\nexport interface ${propsInterfaceName} {\n${propFields}\n}\n\n${body}\n`;
-
-  return {
-    filename: `components/${compName}.tsx`,
-    language: "typescript",
-    content,
-  };
-}
-
-/**
- * Compiles all frontend Hook and Component nodes into Global Packages and App-Local Directories
+ * Compiles all frontend Hook nodes into Global Packages and App-Local Directories
  */
 export function compileFrontendNodes(
   allNodes: BackendNode[],
@@ -136,7 +98,6 @@ export function compileFrontendNodes(
   const appLocalFiles = new Map<string, CompiledFile[]>();
 
   const hookNodes = allNodes.filter((n) => n.type === "hook");
-  const compNodes = allNodes.filter((n) => n.type === "component");
   const webAppNodes = allNodes.filter((n) => n.type === "webApp");
 
   // Helper to resolve appSlug for a node
@@ -158,7 +119,7 @@ export function compileFrontendNodes(
     );
   };
 
-  // 1. Process Hook Nodes
+  // Process Hook Nodes
   hookNodes.forEach((hNode) => {
     const file = generateHookFile(hNode, allNodes, endpoints);
     if (hNode.data?.scope === "global") {
@@ -168,23 +129,6 @@ export function compileFrontendNodes(
       });
     } else {
       const appSlug = getAppSlugForNode(hNode);
-      if (!appLocalFiles.has(appSlug)) {
-        appLocalFiles.set(appSlug, []);
-      }
-      appLocalFiles.get(appSlug)!.push(file);
-    }
-  });
-
-  // 2. Process Component Nodes
-  compNodes.forEach((cNode) => {
-    const file = generateComponentFile(cNode);
-    if (cNode.data?.scope === "global") {
-      globalFiles.push({
-        ...file,
-        filename: `packages/ui/src/${file.filename}`,
-      });
-    } else {
-      const appSlug = getAppSlugForNode(cNode);
       if (!appLocalFiles.has(appSlug)) {
         appLocalFiles.set(appSlug, []);
       }

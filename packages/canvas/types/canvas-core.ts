@@ -141,8 +141,6 @@ export type ConfigItemType =
   | "transformer_ref"
   | "hook"
   | "hook_ref"
-  | "component"
-  | "component_ref"
   | "db_ref"
   | "redis_cache"
   | "vector_db_ref";

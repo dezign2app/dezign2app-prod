@@ -25,8 +25,6 @@ import type {
   CanvasPageRefNodeData,
   CanvasHookNodeData,
   CanvasHookRefNodeData,
-  CanvasComponentNodeData,
-  CanvasComponentRefNodeData,
 } from "./web-app";
 import type {
   CanvasWorkerNodeData,
@@ -76,9 +74,7 @@ export type BackendNodeType =
   | "transformer"
   | "transformer_ref"
   | "hook"
-  | "hook_ref"
-  | "component"
-  | "component_ref";
+  | "hook_ref";
 
 /** Core fields present on every canvas node. */
 export interface BaseNodeData {
@@ -176,9 +172,7 @@ export type BackendNodeData = BaseNodeData &
       CanvasTransformerNodeData &
       CanvasTransformerRefNodeData &
       CanvasHookNodeData &
-      CanvasHookRefNodeData &
-      CanvasComponentNodeData &
-      CanvasComponentRefNodeData
+      CanvasHookRefNodeData
   >;
 
 export type BackendNode = {

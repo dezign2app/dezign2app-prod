@@ -245,9 +245,7 @@ export function getNodeDimensions(node: LayoutNode): {
     case "transformer":
     case "transformer_ref":
     case "hook":
-    case "hook_ref":
-    case "component":
-    case "component_ref": {
+    case "hook_ref": {
       return { width: 240, height: 50 };
     }
 

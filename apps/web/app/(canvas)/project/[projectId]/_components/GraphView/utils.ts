@@ -88,23 +88,6 @@ export function createGraphNodeData(
     };
   }
 
-  if (type === "component") {
-    return {
-      ...baseData,
-      componentName: "CustomComponent",
-      scope: "global",
-      slotName: "main",
-      propsSchema: [],
-    };
-  }
-
-  if (type === "component_ref") {
-    return {
-      ...baseData,
-      label: "Component Ref",
-    };
-  }
-
   if (type === "webPage") {
     return {
       ...baseData,
