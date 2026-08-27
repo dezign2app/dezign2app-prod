@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   DatabaseZap,
   Server,
@@ -30,6 +31,8 @@ interface RedisCacheRefConfigProps {
 }
 
 export function RedisCacheRefConfig({ id, nodeId }: RedisCacheRefConfigProps) {
+  const router = useRouter();
+  const projectId = useBackendCanvasStore((s) => s.projectId);
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
@@ -108,13 +111,10 @@ export function RedisCacheRefConfig({ id, nodeId }: RedisCacheRefConfigProps) {
     // 1. Switch store view to "schema"
     useBackendCanvasStore.getState().setView("schema");
 
-    // 2. Sync URL query state
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set("view", "schema");
-      window.history.pushState({}, "", url.toString());
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    } catch {}
+    // 2. Navigate to schema page if projectId available
+    if (projectId) {
+      router.push(`/project/${projectId}/schemas`);
+    }
 
     // 3. Open Redis Schema / Instance config in Schema View
     if (selectedSchema) {

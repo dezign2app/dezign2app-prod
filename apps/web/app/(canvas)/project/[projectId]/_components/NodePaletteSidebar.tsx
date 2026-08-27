@@ -662,10 +662,10 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
       <Button
         variant="outline"
         size="sm"
-        className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-amber-500/40 text-amber-600 dark:text-amber-400  text-xs justify-start h-8 shrink-0 w-full"
+        className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
         onClick={handleAddDatabase}
       >
-        <Server className="w-3.5 h-3.5 mr-2 text-amber-500 shrink-0" />
+        <Server className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
         Database
       </Button>
 
@@ -675,7 +675,7 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
         className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
         onClick={handleAddTable}
       >
-        <PlusSquare className="w-3.5 h-3.5 mr-2 shrink-0" />
+        <PlusSquare className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
         Table
       </Button>
 
@@ -685,39 +685,39 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
         className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
         onClick={handleAddVectorDb}
       >
-        <Database className="w-3.5 h-3.5 mr-2 text-violet-500 shrink-0" />
+        <Database className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
         Vector Collection
       </Button>
 
-      <div className="h-px bg-border/60 mx-1" />
+      <div className="h-px bg-sidebar-border mx-1" />
 
       {/* Redis */}
-      <div className="flex flex-col gap-1.5 p-1.5 rounded-lg bg-red-500/5 dark:bg-red-950/20 border border-red-500/25">
-        <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-red-600 dark:text-red-400 flex items-center gap-1">
-          <DatabaseZap className="w-3 h-3 text-red-500" />
+      <div className="flex flex-col gap-1.5 p-1.5 rounded-lg bg-sidebar-accent/20 border border-sidebar-border/60">
+        <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+          <DatabaseZap className="w-3 h-3 text-muted-foreground" />
           Redis
         </div>
         <Button
           variant="outline"
           size="sm"
-          className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-red-500/40 text-red-600 dark:text-red-400 text-xs justify-start h-8 shrink-0 w-full"
+          className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
           onClick={handleAddRedisInstance}
         >
-          <Server className="w-3.5 h-3.5 mr-2 text-red-500 shrink-0" />
+          <Server className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
           Redis Instance
         </Button>
         <Button
           variant="outline"
           size="sm"
-          className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-red-500/40 text-red-600 dark:text-red-400  text-xs justify-start h-8 shrink-0 w-full"
+          className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
           onClick={handleAddRedisSchema}
         >
-          <DatabaseZap className="w-3.5 h-3.5 mr-2 text-red-500 shrink-0" />
+          <DatabaseZap className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
           Redis Schema
         </Button>
       </div>
 
-      <div className="h-px bg-border/60 mx-1" />
+      <div className="h-px bg-sidebar-border mx-1" />
 
       {/* Auto-layout */}
       <Button
@@ -726,7 +726,7 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
         className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
         onClick={() => handleLayout("LR")}
       >
-        <LayoutTemplate className="w-3.5 h-3.5 mr-2 shrink-0" />
+        <LayoutTemplate className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
         Auto-layout
       </Button>
     </div>
