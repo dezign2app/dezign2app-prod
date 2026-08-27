@@ -309,7 +309,7 @@ export function getEdgeType(
  * - "users/[id]" -> "users/[id]"
  */
 export function parsePageRoute(raw: string): string {
-  if (!raw) return "page-client";
+  if (!raw) return "page-server";
   const trimmed = raw.trim();
   if (trimmed === "/" || trimmed === "") return "/";
 
@@ -357,14 +357,7 @@ export function parsePageRoute(raw: string): string {
 export function pageRouteToFolderPath(routeOrLabel: string): string {
   const parsed = parsePageRoute(routeOrLabel);
   const lower = parsed.toLowerCase();
-  if (
-    lower === "/" ||
-    lower === "home" ||
-    lower === "index" ||
-    lower === "landing" ||
-    lower === "landing-page" ||
-    lower === "root"
-  ) {
+  if (lower === "/") {
     return "";
   }
   return parsed.replace(/^\/+|\/+$/g, "");

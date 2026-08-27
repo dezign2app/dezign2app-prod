@@ -1,33 +1,10 @@
 export function labelToSlug(label: string, index: number): string {
   const clean = label.trim().toLowerCase();
-  if (
-    clean === "home" ||
-    clean === "index" ||
-    clean === "/" ||
-    clean === "landing" ||
-    clean === "landing page" ||
-    clean === "landing-page" ||
-    clean === "landingpage" ||
-    clean === "/landing" ||
-    clean === "root" ||
-    clean === "/root" ||
-    clean === "web client" ||
-    clean === "web client (page)" ||
-    clean === "web client(page)" ||
-    clean === "webclient" ||
-    clean === "web-client" ||
-    clean === "web-client-page" ||
-    clean === "web page" ||
-    clean === "web-page" ||
-    clean === "web page (route)" ||
-    clean === "web-page-route" ||
-    clean === "web-page-page" ||
-    clean === "page-client"
-  ) {
+  if (clean === "/") {
     return "home";
   }
   const slug = clean.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return slug || "home";
+  return slug || `page-${index + 1}`;
 }
 
 export function slugToComponentName(slug: string): string {

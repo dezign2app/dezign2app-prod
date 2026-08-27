@@ -490,7 +490,7 @@ export const WebPageConfig = ({
               const newSec: PageSection = {
                 id: `sec-${crypto.randomUUID()}`,
                 name: `Section ${currentSections.length + 1}`,
-                renderMode: "client",
+                renderMode: "server",
                 loadStrategy: "eager",
                 actions: [],
               };
@@ -518,7 +518,7 @@ export const WebPageConfig = ({
                 <div className="flex flex-col min-w-0">
                   <span className="font-semibold text-foreground truncate">{sec.name}</span>
                   <span className="text-[10px] text-muted-foreground font-mono">
-                    {sec.renderMode || "client"} • {sec.loadStrategy || "eager"} • {(sec.actions || []).length} action{(sec.actions || []).length === 1 ? "" : "s"}
+                    {sec.renderMode || "server"} • {sec.loadStrategy || "eager"} • {(sec.actions || []).length} action{(sec.actions || []).length === 1 ? "" : "s"}
                   </span>
                 </div>
                 <Button

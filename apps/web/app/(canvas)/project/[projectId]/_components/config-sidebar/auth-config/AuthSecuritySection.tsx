@@ -42,8 +42,8 @@ const getConfiguredPages = (allNodes: BackendNode[]): ConfiguredPage[] => {
     const rawLabel = node.data?.label || `Page ${idx + 1}`;
     const cleanLabel = rawLabel.trim().toLowerCase();
     let path: string | undefined = node.data?.path || node.data?.pageSlug || node.data?.route;
-    if (!path || cleanLabel === "/" || cleanLabel === "home" || cleanLabel === "landing" || cleanLabel === "root") {
-      const slug = labelToSlug(rawLabel, idx);
+    if (!path || cleanLabel === "/") {
+      const slug = cleanLabel === "/" ? "home" : labelToSlug(rawLabel, idx);
       path = slug === "home" ? "/" : `/${slug}`;
     }
     if (!path.startsWith("/")) path = `/${path}`;

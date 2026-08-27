@@ -169,7 +169,7 @@ export function NodePaletteSidebar({
                   variant="outline"
                   size="sm"
                   className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                  onClick={() => handleAddGraphNode("webPage", "page-client")}
+                  onClick={() => handleAddGraphNode("webPage", "page-server")}
                 >
                   <Globe className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   Web Page

@@ -73,17 +73,9 @@ export function resolvePagesInfo(
     const cleanLabel = rawLabel.trim().toLowerCase();
     const isRoot =
       node.data.isRoot === true ||
-      cleanLabel === "home" ||
-      cleanLabel === "index" ||
-      cleanLabel === "/" ||
-      cleanLabel === "landing" ||
-      cleanLabel === "landing page" ||
-      cleanLabel === "landingpage" ||
-      cleanLabel === "/landing" ||
-      cleanLabel === "root" ||
-      cleanLabel === "/root";
+      cleanLabel === "/";
     const routePath = isRoot ? "/" : `/${slug}`;
-    const componentName = slugToComponentName(slug);
+    const componentName = isRoot ? "HomePage" : slugToComponentName(slug);
 
     // Find edge connecting a webApp node handle to this webClient node handle
     const connectedEdge = allEdges.find((e) => {

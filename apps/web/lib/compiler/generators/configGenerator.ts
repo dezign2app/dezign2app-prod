@@ -398,10 +398,10 @@ dist
       const trace = resolveConsumerTrace(node, ev, allNodes, allEdges);
       readmeLines.push(`### Event: \`${ev.name}\``);
       readmeLines.push(
-        `- **Incoming Source**: ${trace.incoming.map((i) => `${i.nodeName} (${i.detail})`).join(", ")}`,
+        `- **Incoming Source**: ${trace.incoming.map((i: { nodeName: string; detail: string }) => `${i.nodeName} (${i.detail})`).join(", ")}`,
       );
       readmeLines.push(
-        `- **Outgoing Target**: ${trace.outgoing.map((o) => `${o.nodeName} (${o.detail})`).join(", ") || "Domain Logic"}`,
+        `- **Outgoing Target**: ${trace.outgoing.map((o: { nodeName: string; detail: string }) => `${o.nodeName} (${o.detail})`).join(", ") || "Domain Logic"}`,
       );
       readmeLines.push(``);
     });
@@ -416,7 +416,7 @@ dist
       const trace = resolveProducerTrace(node, ev, allNodes, allEdges);
       readmeLines.push(`### Event: \`${ev.name}\``);
       readmeLines.push(
-        `- **Destination Broker/Consumers**: ${trace.outgoing.map((o) => `${o.nodeName} (${o.detail})`).join(", ")}`,
+        `- **Destination Broker/Consumers**: ${trace.outgoing.map((o: { nodeName: string; detail: string }) => `${o.nodeName} (${o.detail})`).join(", ")}`,
       );
       readmeLines.push(``);
     });

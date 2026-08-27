@@ -85,10 +85,7 @@ export const PageRefNode = ({
     const cleanLabel = pageLabel.trim().toLowerCase();
     const isRoot =
       page?.data?.isRoot === true ||
-      cleanLabel === "/" ||
-      cleanLabel === "home" ||
-      cleanLabel === "index" ||
-      cleanLabel === "landing";
+      cleanLabel === "/";
 
     updateNode(id, {
       data: {
@@ -104,91 +101,92 @@ export const PageRefNode = ({
   const selectedCleanLabel = (selectedPage?.data?.label || "").trim().toLowerCase();
   const isSelectedLanding =
     selectedPage?.data?.isRoot === true ||
-    selectedCleanLabel === "/" ||
-    selectedCleanLabel === "home" ||
-    selectedCleanLabel === "index" ||
-    selectedCleanLabel === "landing";
+    selectedCleanLabel === "/";
 
   return (
     <div
       className={cn(
         "shadow-md rounded-xl bg-card border-2 min-w-[210px] max-w-[320px] flex flex-col transition-all duration-300 relative",
-        borderClass,
+        selected ? "border-indigo-500" : "border-transparent",
       )}
     >
       <Handle
         type="target"
         position={Position.Left}
-        id="page-ref-in"
+        id="ref-in"
         className="w-2.5 h-2.5 !bg-indigo-500 rounded-full border-2 border-background -left-1.5"
-        style={{ top: "20px" }}
-        title="Connect from WebClient event"
+        style={{ top: "18px" }}
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="ref-out"
+        className="w-2.5 h-2.5 !bg-indigo-500 rounded-full border-2 border-background -right-1.5"
+        style={{ top: "18px" }}
       />
 
-      <NodeHeader
-        id={id}
-        data={data}
-        nodeType="page_ref"
-        icon={Compass}
-        title="Page Reference"
-        colorClass="bg-indigo-500/10 text-indigo-700 dark:text-indigo-400"
-        selected={selected}
-      />
-
-      {/* Description */}
-      <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
-        <Textarea
-          className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
-          placeholder="description"
-          value={data.description || ""}
-          onChange={(e) =>
-            updateNode(id, { data: { ...data, description: e.target.value } })
-          }
-        />
+      <div className="p-3 bg-indigo-500/10 border-b flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="p-1 rounded bg-indigo-500/20 text-indigo-400 shrink-0">
+            <Compass size={14} />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
+              Page Ref
+            </span>
+            <span className="text-xs font-semibold text-foreground truncate">
+              {selectedPage ? selectedPage.data?.label || "Untitled Page" : "Select Target"}
+            </span>
+          </div>
+        </div>
+        {isSelectedLanding && (
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono shrink-0">
+            / (Root)
+          </span>
+        )}
       </div>
 
-      {/* Select Page Dropdown */}
-      <div className="p-3 flex flex-col gap-2">
-        <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-          <Globe size={11} className="text-indigo-500" /> Target Page
-        </label>
-        <Select
-          value={data.targetPageId || data.pageRefId || ""}
-          onValueChange={handlePageSelect}
-        >
-          <SelectTrigger className="h-8 text-xs bg-background">
-            <SelectValue placeholder="Select target page..." />
-          </SelectTrigger>
-          <SelectContent>
-            {pageNodes.length === 0 ? (
-              <div className="p-2 text-xs text-muted-foreground italic">
-                No pages defined on canvas
-              </div>
-            ) : (
-              pageNodes.map((p) => {
-                const label = p.data?.label || "Untitled Page";
-                const clean = label.trim().toLowerCase();
-                const isHome =
-                  p.data?.isRoot === true ||
-                  clean === "/" ||
-                  clean === "home" ||
-                  clean === "index";
-                return (
-                  <SelectItem key={p.id} value={p.id} className="text-xs">
-                    <div className="flex items-center justify-between w-full gap-2">
-                      <span className="font-medium truncate">{label}</span>
-                      {isHome && (
-                        <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-mono">
-                          / (Root)
-                        </span>
-                      )}
-                    </div>
-                  </SelectItem>
-                );
-              })
-            )}
-          </SelectContent>
-        </Select>
+      <div className="p-3 bg-secondary/5 flex flex-col gap-2 nodrag">
+        <div className="space-y-1">
+          <label className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
+            <Globe size={10} /> Target Page
+          </label>
+          <Select
+            value={data.targetPageId || ""}
+            onValueChange={handlePageSelect}
+          >
+            <SelectTrigger className="h-7 text-xs bg-background">
+              <SelectValue placeholder="Select a page to reference..." />
+            </SelectTrigger>
+            <SelectContent>
+              {pageNodes.length === 0 ? (
+                <div className="p-2 text-xs text-muted-foreground text-center">
+                  No pages defined on canvas
+                </div>
+              ) : (
+                pageNodes.map((p) => {
+                  const label = p.data?.label || "Untitled Page";
+                  const clean = label.trim().toLowerCase();
+                  const isHome =
+                    p.data?.isRoot === true ||
+                    clean === "/";
+                  return (
+                    <SelectItem key={p.id} value={p.id} className="text-xs">
+                      <div className="flex items-center justify-between w-full gap-2">
+                        <span className="font-medium truncate">{label}</span>
+                        {isHome && (
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-mono">
+                            / (Root)
+                          </span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  );
+                })
+              )}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
   );

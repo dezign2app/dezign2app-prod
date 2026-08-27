@@ -52,7 +52,7 @@ export async function ${funcName}(eventData: ${payloadInterfaceName}): Promise<v
 `;
       if (trace.outgoing.length > 0) {
         producerCode += `  //\n  // 📤 TARGET DESTINATIONS:\n`;
-        trace.outgoing.forEach((out) => {
+        trace.outgoing.forEach((out: { nodeType: string; nodeName: string; detail: string; dataContext?: string }) => {
           producerCode += `  // - ${out.nodeType}: "${out.nodeName}" (${out.detail})\n`;
           if (out.dataContext)
             producerCode += `  //   Details: ${out.dataContext}\n`;

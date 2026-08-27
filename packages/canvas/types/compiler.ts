@@ -176,8 +176,34 @@ export interface EndpointTraceResult {
   outgoing: NodeConnectionDetail[];
 }
 
+export interface SectionMeta {
+  id: string;
+  name: string;
+  folderName: string;
+  componentName: string;
+  renderMode?: "server" | "client";
+}
+
+export interface CompiledTypesResult {
+  files: CompiledFile[];
+}
+
+export interface DatabaseEntityInfo {
+  name: string;
+  pascalName: string;
+  singularName: string;
+  pluralName: string;
+  columns: {
+    name: string;
+    type?: string;
+    required?: boolean;
+    isPrimaryKey?: boolean;
+  }[];
+}
+
 export interface EventTraceResult {
   incoming: NodeConnectionDetail[];
   outgoing: NodeConnectionDetail[];
 }
+
 

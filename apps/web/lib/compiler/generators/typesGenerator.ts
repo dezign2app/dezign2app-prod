@@ -1,7 +1,13 @@
 import { BackendNode } from "@/types/canvas";
 import { Endpoint, AnyMessagingResource } from "@workspace/canvas/types";
 import { CompiledFile } from "@workspace/canvas/types";
-import { toVarName, toPascalCase, deriveRouteFileName } from "../utils";
+import {
+  toVarName,
+  toPascalCase,
+  toSingular,
+  toPlural,
+  deriveRouteFileName,
+} from "../utils";
 import {
   ParameterItem,
   SchemaItem,
@@ -15,13 +21,71 @@ export interface ResponseFieldItem extends ParameterItem {
   selectedColumns?: string[];
 }
 
-function generateEntitiesModule(nodes: BackendNode[]): string {
-  const entityNodes = nodes.filter(
-    (n) => n.type === "entity" || n.type === "db_ref" || n.type === "redis_schema" || n.type === "redis-cache",
-  );
-
+function generateEntitiesModule(
+  nodes: BackendNode[],
+  referencedEntityNames?: Set<string>,
+): string {
   let code = `/**\n * Shared Data Models & Schemas\n */\n\n`;
   const seenNames = new Set<string>();
+
+  function renderEntityInterface(pascal: string, rawName: string, cols: Array<{ name?: string; type?: string; isPrimaryKey?: boolean; isPrimary?: boolean; primaryKey?: boolean; isNotNull?: boolean; required?: boolean }>) {
+    const singularPascal = toPascalCase(toSingular(rawName));
+    const pluralPascal = toPascalCase(toPlural(rawName));
+
+    if (!cols || cols.length === 0) {
+      code += `export interface ${pascal} {\n  id: string;\n  [key: string]: unknown;\n}\n`;
+    } else {
+      const fieldLines = cols.map((col) => {
+        const fieldName = col.name || "field";
+        const isReq = col.isPrimaryKey || col.isPrimary || col.primaryKey || col.isNotNull || col.required;
+        let tsType = "string";
+        switch (col.type?.toLowerCase()) {
+          case "integer":
+          case "int":
+          case "number":
+          case "float":
+          case "double":
+          case "real":
+            tsType = "number";
+            break;
+          case "boolean":
+          case "bool":
+            tsType = "boolean";
+            break;
+          case "json":
+          case "object":
+            tsType = "Record<string, unknown>";
+            break;
+          default:
+            tsType = "string";
+        }
+        return `  ${fieldName}${isReq ? "" : "?"}: ${tsType};`;
+      });
+
+      fieldLines.push("  [key: string]: unknown;");
+      code += `export interface ${pascal} {\n${fieldLines.join("\n")}\n}\n`;
+    }
+
+    // Generate dual singular/plural type aliases so both "Product" and "Products" work seamlessly
+    if (singularPascal && singularPascal !== pascal && !seenNames.has(singularPascal)) {
+      seenNames.add(singularPascal);
+      code += `export type ${singularPascal} = ${pascal};\n`;
+    }
+    if (pluralPascal && pluralPascal !== pascal && !seenNames.has(pluralPascal)) {
+      seenNames.add(pluralPascal);
+      code += `export type ${pluralPascal} = ${pascal};\n`;
+    }
+    code += `\n`;
+  }
+
+  // 1. Entity and Ref nodes
+  const entityNodes = nodes.filter(
+    (n) =>
+      n.type === "entity" ||
+      n.type === "db_ref" ||
+      n.type === "redis_schema" ||
+      n.type === "redis-cache",
+  );
 
   entityNodes.forEach((node) => {
     const rawName = node.data?.label || node.data?.tableRef || "Entity";
@@ -30,42 +94,38 @@ function generateEntitiesModule(nodes: BackendNode[]): string {
     seenNames.add(pascal);
 
     const cols = node.data?.columns || [];
-
-    if (cols.length === 0) {
-      code += `export interface ${pascal} {\n  id: string;\n  [key: string]: unknown;\n}\n\n`;
-      return;
-    }
-
-    const fieldLines = cols.map((col) => {
-      const fieldName = col.name || "field";
-      const isReq = col.isPrimaryKey || col.isPrimary || col.primaryKey || col.isNotNull || col.required;
-      let tsType = "string";
-      switch (col.type?.toLowerCase()) {
-        case "integer":
-        case "int":
-        case "number":
-        case "float":
-        case "double":
-        case "real":
-          tsType = "number";
-          break;
-        case "boolean":
-        case "bool":
-          tsType = "boolean";
-          break;
-        case "json":
-        case "object":
-          tsType = "Record<string, unknown>";
-          break;
-        default:
-          tsType = "string";
-      }
-      return `  ${fieldName}${isReq ? "" : "?"}: ${tsType};`;
-    });
-
-    fieldLines.push("  [key: string]: unknown;");
-    code += `export interface ${pascal} {\n${fieldLines.join("\n")}\n}\n\n`;
+    renderEntityInterface(pascal, rawName, cols);
   });
+
+  // 2. Database nodes with embedded tables
+  const dbNodes = nodes.filter(
+    (n) => n.type === "database",
+  );
+
+  dbNodes.forEach((dbNode) => {
+    const tables: Array<{ name?: string; label?: string; tableRef?: string; columns?: Array<{ name?: string; type?: string }>; fields?: Array<{ name?: string; type?: string }> }> =
+      (dbNode.data as unknown as { tables?: Array<{ name?: string; label?: string; tableRef?: string; columns?: Array<{ name?: string; type?: string }>; fields?: Array<{ name?: string; type?: string }> }> })?.tables || [];
+    tables.forEach((tbl) => {
+      const rawName = tbl.name || tbl.label || tbl.tableRef || "Entity";
+      const pascal = toPascalCase(rawName);
+      if (!pascal || seenNames.has(pascal)) return;
+      seenNames.add(pascal);
+
+      const cols = tbl.columns || tbl.fields || [];
+      renderEntityInterface(pascal, rawName, cols);
+    });
+  });
+
+  // 3. Fallback for any entities referenced by endpoints (e.g. Products, Users)
+  if (referencedEntityNames) {
+    referencedEntityNames.forEach((entName) => {
+      const pascal = toPascalCase(entName);
+      if (pascal && !seenNames.has(pascal)) {
+        seenNames.add(pascal);
+        renderEntityInterface(pascal, entName, []);
+      }
+    });
+  }
 
   if (seenNames.size === 0) {
     code += `export type GenericEntity = Record<string, unknown>;\n`;
@@ -94,7 +154,16 @@ function generateResponseInterface(
     if (targetDbIds.length > 0) {
       const targetTable = nodes.find((n) => targetDbIds.includes(n.id));
       if (targetTable) {
-        const rawTableName = targetTable.data?.label || targetTable.data?.tableRef || "Entity";
+        let rawTableName = targetTable.data?.label || targetTable.data?.tableRef || "Entity";
+        const tableData = targetTable.data as unknown as { tables?: Array<{ id?: string; name?: string }> };
+        if (targetTable.type === "database" && tableData?.tables && tableData.tables.length > 0) {
+          const matchedTbl =
+            tableData.tables.find(
+              (t: { id?: string; name?: string }) =>
+                ep.crudOperations && (ep.crudOperations[t.id || ""] || ep.crudOperations[t.name || ""]),
+            ) || tableData.tables[0];
+          if (matchedTbl?.name) rawTableName = matchedTbl.name;
+        }
         const pascal = toPascalCase(rawTableName);
         if (pascal) {
           dbEntityName = pascal;
@@ -259,16 +328,8 @@ export function generateTypesPackage(
     content: tsconfig,
   });
 
-  // 2.5 Entities & Schemas: src/entities/index.ts
-  const entitiesModuleCode = generateEntitiesModule(nodes);
-  files.push({
-    filename: "src/entities/index.ts",
-    language: "typescript",
-    content: entitiesModuleCode,
-  });
-  barrelExports.push(`export * from "./entities";`);
-
-  // 3. Service Folders: src/<serviceFolderName>/<routeFileName>.ts
+  // 2. Scan all endpoints to discover all referenced entities before generating entities module
+  const referencedEntities = new Set<string>();
   const endpointNodes = nodes.filter(
     (n) =>
       n.type === "service" ||
@@ -277,6 +338,36 @@ export function generateTypesPackage(
       Boolean(n.data && (n.data.endpoints || n.data.routeGroups)),
   );
 
+  endpointNodes.forEach((serviceNode) => {
+    let nodeEndpoints = endpoints.filter(
+      (e) =>
+        e.nodeId === serviceNode.id ||
+        (e.nodeId &&
+          ((serviceNode.data?.label && e.nodeId === serviceNode.data.label) ||
+            (serviceNode.data?.label && e.nodeId === serviceNode.data.label.toLowerCase()))),
+    );
+    if (nodeEndpoints.length === 0 && serviceNode.data?.endpoints) {
+      nodeEndpoints = serviceNode.data.endpoints.map((ep) => ({
+        ...ep,
+        nodeId: serviceNode.id,
+      }));
+    }
+    nodeEndpoints.forEach((ep) => {
+      const res = generateResponseInterface("Temp", ep.responseFields, ep.responseBody, nodes, ep);
+      res.entityImports.forEach((ent) => referencedEntities.add(ent));
+    });
+  });
+
+  // 2.5 Entities & Schemas: src/entities/index.ts
+  const entitiesModuleCode = generateEntitiesModule(nodes, referencedEntities);
+  files.push({
+    filename: "src/entities/index.ts",
+    language: "typescript",
+    content: entitiesModuleCode,
+  });
+  barrelExports.push(`export * from "./entities";`);
+
+  // 3. Service Folders: src/<serviceFolderName>/<routeFileName>.ts
   const processedServiceFolders = new Set<string>();
 
   endpointNodes.forEach((serviceNode) => {

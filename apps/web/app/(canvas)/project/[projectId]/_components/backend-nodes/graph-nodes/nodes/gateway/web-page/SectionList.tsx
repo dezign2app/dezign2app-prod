@@ -1,9 +1,8 @@
 import React from "react";
-import { Plus, Layers } from "lucide-react";
+import { Plus } from "lucide-react";
 import { BackendNode, Endpoint, UIEventItem, PageSection } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { generateId } from "../../../common";
-import { Button } from "@workspace/ui/components/button";
 import { SectionBlock } from "./SectionBlock";
 
 export interface SectionListProps {
@@ -148,7 +147,7 @@ export const SectionList = ({
             {
               id: `sec-${generateId()}`,
               name: "Main Section",
-              renderMode: "client",
+              renderMode: "server",
               loadStrategy: "eager",
               actions: data.events,
             },
@@ -166,42 +165,24 @@ export const SectionList = ({
     const newSection: PageSection = {
       id: `sec-${generateId()}`,
       name: `Section ${sections.length + 1}`,
-      renderMode: "client",
+      renderMode: "server",
       loadStrategy: "eager",
       actions: [],
     };
     updateSections([...sections, newSection]);
   };
 
-  if (!sections.length) {
-    return (
-      <div className="bg-secondary/20 p-2 border-t">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full h-7 text-xs text-muted-foreground hover:text-foreground border border-dashed border-border/60 cursor-pointer"
-          onClick={handleAddSection}
-        >
-          <Plus size={12} className="mr-1" /> Add Section
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <>
-      <div className="px-3 py-1.5 bg-secondary/40 border-t border-b text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex justify-between items-center group">
-        <span className="flex items-center gap-1">
-          <Layers size={11} /> Sections & Actions
-        </span>
-        <button
-          type="button"
-          className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground text-[9px] font-medium transition-all cursor-pointer"
+      <div className="px-3 py-1 bg-secondary/40 border-t border-b text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex justify-between items-center group">
+        Sections & Actions
+        <div
+          className="opacity-0 group-hover:opacity-100 cursor-pointer text-muted-foreground hover:text-foreground transition-all"
           onClick={handleAddSection}
-          title="Add new section"
+          title="Add Section"
         >
-          <Plus size={10} /> Add Section
-        </button>
+          <Plus size={12} />
+        </div>
       </div>
 
       <div className="flex flex-col">
@@ -216,16 +197,8 @@ export const SectionList = ({
             onTriggerEvent={onTriggerEvent}
           />
         ))}
-
-        {/* Bottom Add Section quick action */}
-        <button
-          type="button"
-          onClick={handleAddSection}
-          className="flex items-center justify-center gap-1 py-1.5 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors border-t border-dashed border-border/50 cursor-pointer nodrag"
-        >
-          <Plus size={11} /> Add Section
-        </button>
       </div>
     </>
   );
 };
+

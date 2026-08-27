@@ -323,7 +323,7 @@ ${hasPathParams ? `  pathParams?: ${componentName}PathParams;\n` : ""}${hasQuery
 
   // Props Interface
   typeDefs.push(`export interface ${componentName}Props {
-  onTrigger: (
+  onTrigger?: (
     eventName: string,
     eventType: string,
     url: string,
@@ -462,7 +462,7 @@ ${hasBodyFields ? `      // Form fields payload
         }
       }
 ` : ""}
-      await onTrigger(
+      await onTrigger?.(
         "${eventName}",
         "${eventType}",
         finalUrl,

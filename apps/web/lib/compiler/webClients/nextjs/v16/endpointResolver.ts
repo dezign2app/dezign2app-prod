@@ -282,11 +282,7 @@ export function resolvePageRefLink(
       const cleanLabel = pageLabel.trim().toLowerCase();
       const isRoot =
         targetPageNode.data?.isRoot === true ||
-        cleanLabel === "/" ||
-        cleanLabel === "home" ||
-        cleanLabel === "index" ||
-        cleanLabel === "landing" ||
-        cleanLabel === "root";
+        cleanLabel === "/";
       const slug = isRoot
         ? "/"
         : `/${cleanLabel.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
