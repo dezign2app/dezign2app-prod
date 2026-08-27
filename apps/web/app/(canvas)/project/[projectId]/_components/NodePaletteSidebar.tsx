@@ -21,7 +21,17 @@ import {
   ChevronRight,
   Anchor,
   Layout,
+  LayoutTemplate,
 } from "lucide-react";
+import { useReactFlow } from "@xyflow/react";
+import {
+  getUniqueNodeLabel,
+  DEFAULT_DATABASE_NODE_LABEL,
+  DEFAULT_DATABASE_ENGINE,
+  DEFAULT_DATABASE_ENV_VARS,
+} from "@workspace/canvas";
+import { getOffsetPosition } from "./hooks/useCanvasHandlers";
+import { useSchemaAutoLayout } from "./hooks/useAutoLayout";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { createGraphNodeData } from "./GraphView/utils";
@@ -133,65 +143,7 @@ export function NodePaletteSidebar({
 
           {/* Body */}
           {view === "schema" ? (
-            <div className="flex-1 p-2.5 space-y-1.5 overflow-y-auto hide-scrollbar">
-              <div className="text-[9px] uppercase font-bold text-muted-foreground px-1 pt-1">
-                Tables & DBs
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                onClick={() => addTableNode()}
-              >
-                <PlusSquare className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
-                Add Table
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                onClick={() => {
-                  const x = 300 + (nodes.length % 5) * 40;
-                  const y = 200 + (nodes.length % 5) * 40;
-                  addNode({
-                    id: crypto.randomUUID(),
-                    type: "group",
-                    position: { x, y },
-                    style: { width: 480, height: 320 },
-                    width: 480,
-                    height: 320,
-                    data: { label: "Database Cluster", dbEngine: "postgres" },
-                  });
-                }}
-              >
-                <Database className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
-                Database Group
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                onClick={() => {
-                  const x = 300 + (nodes.length % 5) * 40;
-                  const y = 200 + (nodes.length % 5) * 40;
-                  addNode({
-                    id: crypto.randomUUID(),
-                    type: "redis_instance",
-                    position: { x, y },
-                    style: { width: 440, height: 300 },
-                    width: 440,
-                    height: 300,
-                    data: { label: "Redis Instance" },
-                  });
-                }}
-              >
-                <DatabaseZap className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
-                Redis Instance
-              </Button>
-            </div>
+            <SchemaViewBody nodes={nodes} addNode={addNode} />
           ) : (
             <div className="flex-1 p-2.5 space-y-1.5 overflow-y-auto hide-scrollbar">
               {/* COMPUTING */}
@@ -428,5 +380,355 @@ export function NodePaletteSidebar({
           )}
         </Resizable>
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Schema sidebar body – all add-node actions (previously floating right Panel)
+// ---------------------------------------------------------------------------
+interface SchemaViewBodyProps {
+  nodes: ReturnType<typeof useBackendCanvasStore.getState>["nodes"];
+  addNode: ReturnType<typeof useBackendCanvasStore.getState>["addNode"];
+}
+
+function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
+  const { screenToFlowPosition } = useReactFlow();
+  const schemaNodes = React.useMemo(
+    () =>
+      nodes.filter(
+        (n) =>
+          n.type === "entity" ||
+          n.type === "database" ||
+          n.type === "redis_instance" ||
+          n.type === "redis_schema",
+      ),
+    [nodes],
+  );
+  const { handleLayout } = useSchemaAutoLayout({ nodes: schemaNodes, edges: [] });
+
+  const getCenterPosition = () => {
+    if (typeof window === "undefined") return { x: 100, y: 100 };
+    return screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    });
+  };
+
+  const handleAddDatabase = () => {
+    const center = getCenterPosition();
+    const { x, y } = getOffsetPosition(center.x - 75, center.y - 30, nodes);
+    const dbLabel = getUniqueNodeLabel(nodes, DEFAULT_DATABASE_NODE_LABEL, "database");
+    addNode({
+      id: crypto.randomUUID(),
+      type: "database",
+      position: { x, y },
+      data: {
+        label: dbLabel,
+        dbEngine: DEFAULT_DATABASE_ENGINE,
+        dbType: "relational",
+        dbCategory: "sql",
+        dbConnectionType: "env_var",
+        connectionStringEnv: DEFAULT_DATABASE_ENV_VARS.connectionStringEnv,
+        dbFilePathEnv: DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv,
+        color: "#f59e0b",
+        isDefault: true,
+      },
+    });
+  };
+
+  const handleAddTable = () => {
+    const center = getCenterPosition();
+    const { x, y } = getOffsetPosition(center.x - 75, center.y - 30, nodes);
+
+    let dbNode = nodes.find((n) => n.type === "database" && n.data?.dbEngine !== "redis");
+    let dbId = dbNode?.id;
+
+    if (!dbId) {
+      dbId = crypto.randomUUID();
+      const dbLabel = getUniqueNodeLabel(nodes, DEFAULT_DATABASE_NODE_LABEL, "database");
+      addNode({
+        id: dbId,
+        type: "database",
+        position: { x: x - 250, y: y - 100 },
+        data: {
+          label: dbLabel,
+          dbEngine: DEFAULT_DATABASE_ENGINE,
+          dbType: "relational",
+          dbCategory: "sql",
+          dbConnectionType: "env_var",
+          connectionStringEnv: DEFAULT_DATABASE_ENV_VARS.connectionStringEnv,
+          dbFilePathEnv: DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv,
+          color: "#f59e0b",
+          isDefault: true,
+        },
+      });
+    }
+
+    const tableId = crypto.randomUUID();
+    const tableLabel = getUniqueNodeLabel(nodes, "Untitled_Table", "entity");
+    addNode({
+      id: tableId,
+      type: "entity",
+      position: { x, y },
+      data: {
+        label: tableLabel,
+        columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
+        indexes: [],
+        databaseId: dbId,
+      },
+    });
+
+    if (dbId) {
+      useBackendCanvasStore.getState().addEdge({
+        id: `edge-${dbId}-${tableId}`,
+        source: dbId,
+        target: tableId,
+        sourceHandle: "database-source",
+        targetHandle: "database-entity-target",
+        type: "database-connection",
+      });
+    }
+  };
+
+  const handleAddVectorDb = () => {
+    const center = getCenterPosition();
+    const { x, y } = getOffsetPosition(center.x - 75, center.y - 30, nodes);
+
+    let dbNode = nodes.find((n) => n.type === "database" && n.data?.dbEngine !== "redis");
+    let dbId = dbNode?.id;
+
+    if (!dbId) {
+      dbId = crypto.randomUUID();
+      const dbLabel = getUniqueNodeLabel(nodes, DEFAULT_DATABASE_NODE_LABEL, "database");
+      addNode({
+        id: dbId,
+        type: "database",
+        position: { x: x - 250, y: y - 100 },
+        data: {
+          label: dbLabel,
+          dbEngine: DEFAULT_DATABASE_ENGINE,
+          dbType: "relational",
+          dbCategory: "sql",
+          dbConnectionType: "env_var",
+          connectionStringEnv: DEFAULT_DATABASE_ENV_VARS.connectionStringEnv,
+          dbFilePathEnv: DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv,
+          color: "#f59e0b",
+          isDefault: true,
+        },
+      });
+    }
+
+    const tableId = crypto.randomUUID();
+    const vectorLabel = getUniqueNodeLabel(nodes, "Vector_Collection", "entity");
+    addNode({
+      id: tableId,
+      type: "entity",
+      position: { x, y },
+      data: {
+        label: vectorLabel,
+        dbType: "vector",
+        columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
+        databaseId: dbId,
+      },
+    });
+
+    if (dbId) {
+      useBackendCanvasStore.getState().addEdge({
+        id: `edge-${dbId}-${tableId}`,
+        source: dbId,
+        target: tableId,
+        sourceHandle: "database-source",
+        targetHandle: "database-entity-target",
+        type: "database-connection",
+      });
+    }
+  };
+
+  const handleAddRedisInstance = () => {
+    const center = getCenterPosition();
+    const { x, y } = getOffsetPosition(center.x - 75, center.y - 30, nodes);
+    const redisInstances = nodes.filter(
+      (n) => n.type === "redis_instance" || (n.type === "database" && n.data?.dbEngine === "redis"),
+    );
+    const dbLabel = getUniqueNodeLabel(
+      nodes,
+      redisInstances.length > 0 ? `Redis_${redisInstances.length + 1}` : "Primary_Redis_Cache",
+      "redis_instance",
+    );
+    const assignedPort = String(6379 + redisInstances.length);
+    const connEnv = redisInstances.length === 0 ? "REDIS_URL" : `REDIS_${redisInstances.length + 1}_URL`;
+
+    addNode({
+      id: crypto.randomUUID(),
+      type: "redis_instance",
+      position: { x, y },
+      data: {
+        label: dbLabel,
+        dbEngine: "redis",
+        dbType: "key-value",
+        dbCategory: "nosql",
+        dbConnectionType: "env_var",
+        connectionStringEnv: connEnv,
+        host: "localhost",
+        port: assignedPort,
+        maxmemoryPolicy: "volatile-lru",
+        maxmemory: "2gb",
+        persistenceMode: "RDB+AOF",
+        color: "#ef4444",
+        isDefault: false,
+      },
+    });
+  };
+
+  const handleAddRedisSchema = () => {
+    const center = getCenterPosition();
+    const { x, y } = getOffsetPosition(center.x - 75, center.y - 30, nodes);
+
+    let redisDbNode = nodes.find(
+      (n) => n.type === "redis_instance" || (n.type === "database" && n.data?.dbEngine === "redis"),
+    );
+    let dbId = redisDbNode?.id;
+
+    if (!dbId) {
+      dbId = crypto.randomUUID();
+      const redisInstances = nodes.filter(
+        (n) => n.type === "redis_instance" || (n.type === "database" && n.data?.dbEngine === "redis"),
+      );
+      const dbLabel = getUniqueNodeLabel(
+        nodes,
+        redisInstances.length > 0 ? `Redis_${redisInstances.length + 1}` : "Redis",
+        "redis_instance",
+      );
+      addNode({
+        id: dbId,
+        type: "redis_instance",
+        position: { x: x - 250, y: y - 100 },
+        data: {
+          label: dbLabel,
+          dbEngine: "redis",
+          dbType: "key-value",
+          dbCategory: "nosql",
+          dbConnectionType: "env_var",
+          connectionStringEnv: "REDIS_URL",
+          host: "localhost",
+          port: "6379",
+          color: "#ef4444",
+          isDefault: false,
+        },
+      });
+    }
+
+    const schemaId = crypto.randomUUID();
+    const redisSchemas = nodes.filter((n) => n.type === "redis_schema");
+    const redisLabel = getUniqueNodeLabel(
+      nodes,
+      redisSchemas.length > 0 ? `Cache_${redisSchemas.length + 1}` : "Cache",
+      "redis_schema",
+    );
+    addNode({
+      id: schemaId,
+      type: "redis_schema",
+      position: { x, y },
+      data: {
+        label: redisLabel,
+        dbType: "redis",
+        redisDataStructure: "hash",
+        keyTemplate: "",
+        columns: [],
+        hashConfig: { fields: [] },
+        databaseId: dbId,
+      },
+    });
+
+    if (dbId) {
+      useBackendCanvasStore.getState().addEdge({
+        id: `edge-${dbId}-${schemaId}`,
+        source: dbId,
+        target: schemaId,
+        sourceHandle: "database-source",
+        targetHandle: "database-entity-target",
+        type: "database-connection",
+      });
+    }
+  };
+
+  return (
+    <div className="flex-1 p-2.5 space-y-1.5 overflow-y-auto hide-scrollbar">
+      <div className="text-[9px] uppercase font-bold text-muted-foreground px-1 pt-1">
+        Tables & DBs
+      </div>
+
+      {/* SQL / Relational */}
+      <Button
+        variant="outline"
+        size="sm"
+        className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-amber-500/40 text-amber-600 dark:text-amber-400  text-xs justify-start h-8 shrink-0 w-full"
+        onClick={handleAddDatabase}
+      >
+        <Server className="w-3.5 h-3.5 mr-2 text-amber-500 shrink-0" />
+        Database
+      </Button>
+
+      <Button
+        variant="outline"
+        size="sm"
+        className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
+        onClick={handleAddTable}
+      >
+        <PlusSquare className="w-3.5 h-3.5 mr-2 shrink-0" />
+        Table
+      </Button>
+
+      <Button
+        variant="outline"
+        size="sm"
+        className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
+        onClick={handleAddVectorDb}
+      >
+        <Database className="w-3.5 h-3.5 mr-2 text-violet-500 shrink-0" />
+        Vector Collection
+      </Button>
+
+      <div className="h-px bg-border/60 mx-1" />
+
+      {/* Redis */}
+      <div className="flex flex-col gap-1.5 p-1.5 rounded-lg bg-red-500/5 dark:bg-red-950/20 border border-red-500/25">
+        <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-red-600 dark:text-red-400 flex items-center gap-1">
+          <DatabaseZap className="w-3 h-3 text-red-500" />
+          Redis
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-red-500/40 text-red-600 dark:text-red-400 text-xs justify-start h-8 shrink-0 w-full"
+          onClick={handleAddRedisInstance}
+        >
+          <Server className="w-3.5 h-3.5 mr-2 text-red-500 shrink-0" />
+          Redis Instance
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-red-500/40 text-red-600 dark:text-red-400  text-xs justify-start h-8 shrink-0 w-full"
+          onClick={handleAddRedisSchema}
+        >
+          <DatabaseZap className="w-3.5 h-3.5 mr-2 text-red-500 shrink-0" />
+          Redis Schema
+        </Button>
+      </div>
+
+      <div className="h-px bg-border/60 mx-1" />
+
+      {/* Auto-layout */}
+      <Button
+        variant="outline"
+        size="sm"
+        className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
+        onClick={() => handleLayout("LR")}
+      >
+        <LayoutTemplate className="w-3.5 h-3.5 mr-2 shrink-0" />
+        Auto-layout
+      </Button>
+    </div>
   );
 }

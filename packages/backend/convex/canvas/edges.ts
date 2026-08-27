@@ -1,10 +1,8 @@
 import { v, ConvexError } from "convex/values";
 import { mutation } from "../_generated/server";
-import {
-  isValidConnection,
-  isBackendNode,
-  RULES_VERSION,
-} from "@workspace/canvas";
+import { isValidConnection } from "@workspace/canvas/validators";
+import { isBackendNode } from "@workspace/canvas/utils";
+import { RULES_VERSION } from "@workspace/canvas/constants";
 import { backendEdgeDataValidator } from "../schema/canvasValidators";
 
 export const upsertBackendEdge = mutation({

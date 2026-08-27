@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { schemaModelSchema, pipelineStepSchema } from "../shared";
+import { schemaModelSchema } from "../shared";
 import {
   ALL_TECH_STACK_VALUES,
   ALL_TECH_VERSION_VALUES,
@@ -52,7 +52,12 @@ export const resourceItemSchema = z.object({
   replication: z.string().optional(),
   publishedWhen: z.string().optional(),
   handlerLogic: z.string().optional(),
-  pipelineSteps: z.array(pipelineStepSchema).optional(),
+  /**
+   * Pipeline steps stored as untyped any[] here to avoid zodToConvex
+   * stack overflow from the recursive z.lazy() pipelineStepSchema.
+   * Full typing is enforced at the endpoint/event level.
+   */
+  pipelineSteps: z.array(z.any()).optional(),
   retryPolicy: z.string().optional(),
   maxRetries: z.number().optional(),
   deadLetterQueue: z.string().optional(),
@@ -65,6 +70,7 @@ export const resourceItemSchema = z.object({
   schema: z.string().optional(),
   _legacyName: z.string().optional(),
 });
+
 
 export const simpleDataSchema = baseNodeDataSchema
   .extend({
