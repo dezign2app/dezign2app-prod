@@ -433,6 +433,14 @@ export default function CompilerPage({
             activeTab={terminalTab}
             onSelectTab={handleSelectTab}
             ports={detectedPorts}
+            outputLogs={[
+              `[Monorepo Compiler] ${formattedProjectName}`,
+              `✔ Compiled ${files.length} files across ${nodes.length} architecture nodes`,
+              `✔ Monorepo workspaces: apps/*, packages/*, services/*`,
+              `✔ TypeScript, Next.js, and Docker build configurations verified`,
+              `✔ ${detectedPorts.length} services configured with local ports`,
+              `[Ready] Waiting for dev or build triggers in Terminal...`,
+            ]}
           />
         </div>
 

@@ -4,6 +4,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Resizable } from "re-resizable";
 import { WTermTerminalHandle, cleanTerminalText } from "@/components/terminal";
 import { useDynamicTerminalSessions } from "../../_components/terminal/hooks/useDynamicTerminalSessions";
+import { usePortMonitor } from "../../_components/terminal/hooks/usePortMonitor";
 import { isElectron } from "@/lib/electron";
 import {
   TerminalLog,
@@ -131,8 +132,8 @@ export function TerminalPanel({
     }
   }, [projectId, sessions.length, createTerminal, inElectron]);
 
-  // Merge detected ports from active terminal processes with service ports
-  const mergedPorts = useMemo(() => {
+  // Raw combined list of endpoints & detected process ports
+  const rawPorts = useMemo(() => {
     const list: ServicePortInfo[] = [...ports];
     const existingPorts = new Set(list.map((p) => String(p.port)));
 
@@ -145,13 +146,17 @@ export function TerminalPanel({
           name: `Process Service (:${dp.port})`,
           type: "Dynamic Port",
           url: dp.url,
-          status: "running",
         });
       }
     });
 
     return list;
   }, [ports, allDetectedPorts]);
+
+  // Active Real-Time Port Monitoring (TCP sockets in Electron / fetch in Web)
+  const { monitoredPorts, activePortsCount, refreshPorts } = usePortMonitor({
+    ports: rawPorts,
+  });
 
   // Convert structured logs into ANSI colored terminal output for fallback standalone wterm
   const formattedLogs = useMemo(() => {
@@ -197,6 +202,10 @@ export function TerminalPanel({
           .map((l) => `[${l.timestamp}] [${l.type.toUpperCase()}] ${cleanTerminalText(l.text)}`)
           .join("\n");
       }
+    } else if (selectedTab === "ports") {
+      content = monitoredPorts
+        .map((p) => `Port ${p.port}: ${p.name} (${p.status || "inactive"}) - ${p.url || `http://localhost:${p.port}`}`)
+        .join("\n");
     }
     if (!content) return;
     navigator.clipboard.writeText(content);
@@ -244,13 +253,8 @@ export function TerminalPanel({
       <TerminalPanelHeader
         selectedTab={selectedTab}
         onTabChange={handleTabChange}
-        portsCount={mergedPorts.length}
+        portsCount={activePortsCount}
         sessions={sessions}
-        activeSessionId={activeSessionId}
-        activeSession={activeSession}
-        onSelectSession={selectTerminal}
-        onCloseSession={closeTerminal}
-        onCreateSession={createTerminal}
         isMaximized={isMaximized}
         onToggleMaximize={handleToggleMaximize}
         onToggleOpen={onToggleOpen}
@@ -261,7 +265,7 @@ export function TerminalPanel({
       />
 
       {/* Tab View Content */}
-      <div className="flex-1 min-h-0 bg-[#090d13] relative overflow-hidden font-mono text-xs">
+      <div className="w-full h-full flex flex-col flex-1 min-h-0 bg-[#090d13] relative overflow-hidden font-mono text-xs">
         {selectedTab === "terminal" && (
           <TerminalTab
             projectId={projectId}
@@ -270,6 +274,8 @@ export function TerminalPanel({
             terminalRefs={terminalRefs}
             onTerminalInput={writeToSession}
             onTerminalResize={resizeSession}
+            onSelectSession={selectTerminal}
+            onCloseSession={closeTerminal}
             onCreateSession={(type, shell, title) =>
               createTerminal({ type, shell, title })
             }
@@ -281,7 +287,9 @@ export function TerminalPanel({
 
         {selectedTab === "problems" && <ProblemsTab />}
 
-        {selectedTab === "ports" && <PortsTab ports={mergedPorts} />}
+        {selectedTab === "ports" && (
+          <PortsTab ports={monitoredPorts} onRefresh={refreshPorts} />
+        )}
       </div>
     </Resizable>
   );

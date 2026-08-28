@@ -1,24 +1,30 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Resizable } from "re-resizable";
 import { motion, AnimatePresence } from "framer-motion";
 import { isElectron, getElectronAPI } from "@/lib/electron";
 import { downloadMonorepoZip } from "./utils/terminalExportUtils";
 import { toast } from "sonner";
-import { WTermTerminalHandle } from "@/components/terminal";
-import { TerminalProps } from "./types";
+import { WTermTerminalHandle, cleanTerminalText } from "@/components/terminal";
+import { TerminalProps, TerminalType } from "./types";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 
 import { useTerminalWorkspace } from "./hooks/useTerminalWorkspace";
 import { useMonorepoEndpoints } from "./hooks/useMonorepoEndpoints";
 import { useDynamicTerminalSessions } from "./hooks/useDynamicTerminalSessions";
 import { useAutoDiskSync } from "./hooks/useAutoDiskSync";
+import { usePortMonitor } from "./hooks/usePortMonitor";
 
-import { TerminalHeader } from "./components/TerminalHeader";
-import { TerminalEndpointsBar } from "./components/TerminalEndpointsBar";
-import { TerminalViewport } from "./components/TerminalViewport";
-import { TerminalFooter } from "./components/TerminalFooter";
+import {
+  TerminalPanelHeader,
+  ProblemsTab,
+  OutputTab,
+  PortsTab,
+  TerminalTab,
+  TerminalPanelTab,
+  ServicePortInfo,
+} from "../../compiler/_components/terminal-panel";
 import { TerminalDockButton } from "./components/TerminalDockButton";
 
 export function Terminal({
@@ -46,8 +52,30 @@ export function Terminal({
       storeSetTerminalOpen(false);
     }
   };
+
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [downloadingZip, setDownloadingZip] = useState<boolean>(false);
+  const [copied, setCopied] = useState<boolean>(false);
+
+  // Tab State: Persistent per project
+  const [selectedTab, setSelectedTab] = useState<TerminalPanelTab>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(`canvas_terminal_tab_${projectId}`);
+        if (saved && ["problems", "output", "terminal", "ports"].includes(saved)) {
+          return saved as TerminalPanelTab;
+        }
+      } catch (e) {}
+    }
+    return "terminal";
+  });
+
+  const handleTabChange = (tab: TerminalPanelTab) => {
+    setSelectedTab(tab);
+    try {
+      localStorage.setItem(`canvas_terminal_tab_${projectId}`, tab);
+    } catch (e) {}
+  };
 
   // 1. Workspace directory persistence & folder picker
   const { outputDir, handlePickDirectory } = useTerminalWorkspace(projectId);
@@ -56,7 +84,7 @@ export function Terminal({
   const { formattedProjectName, files, serviceEndpoints } =
     useMonorepoEndpoints(projectName);
 
-  // 3. Dynamic User-Created Terminal Sessions (Persistent across drawers/nodes until closed)
+  // 3. Dynamic User-Created Terminal Sessions (Persistent across drawers/nodes)
   const {
     sessions,
     activeSessionId,
@@ -64,7 +92,6 @@ export function Terminal({
     createTerminal,
     closeTerminal,
     selectTerminal,
-    renameTerminal,
     clearTerminal,
     writeToSession,
     resizeSession,
@@ -78,7 +105,6 @@ export function Terminal({
   const {
     syncStatus,
     lastSyncedAt,
-    syncError,
     forceSyncNow,
   } = useAutoDiskSync({
     projectId,
@@ -122,11 +148,81 @@ export function Terminal({
     }
   }, [files, formattedProjectName]);
 
+  // Raw combined list of endpoints & detected process ports
+  const rawPorts = useMemo(() => {
+    const list: ServicePortInfo[] = serviceEndpoints.map((ep) => ({
+      port: ep.port,
+      name: ep.name,
+      type: ep.type === "web" ? "Next.js App" : "Backend Service",
+      url: ep.url,
+    }));
+
+    const existingPorts = new Set(list.map((p) => String(p.port)));
+
+    allDetectedPorts.forEach((dp) => {
+      const portStr = String(dp.port);
+      if (!existingPorts.has(portStr)) {
+        existingPorts.add(portStr);
+        list.push({
+          port: dp.port,
+          name: `Process Service (:${dp.port})`,
+          type: "Dynamic Port",
+          url: dp.url,
+        });
+      }
+    });
+
+    return list;
+  }, [serviceEndpoints, allDetectedPorts]);
+
+  // Active Real-Time Port Monitoring (TCP sockets in Electron / fetch in Web)
+  const { monitoredPorts, activePortsCount, refreshPorts } = usePortMonitor({
+    ports: rawPorts,
+  });
+
+  // Generate output logs for the Output Tab
+  const outputLogs = useMemo(() => {
+    return [
+      `[Monorepo Engine] ${formattedProjectName}`,
+      `✔ Compiled ${files.length} workspace files`,
+      `✔ Registered ${serviceEndpoints.length} canvas service endpoints`,
+      `✔ Environment: ${inElectron ? "Desktop Native (node-pty)" : "Web Simulated Engine"}`,
+      outputDir ? `✔ Workspace target: ${outputDir}` : `ℹ Default workspace: /workspace/${projectId}`,
+      `[Ready] Build and hot-reload watchers active.`,
+    ];
+  }, [formattedProjectName, files.length, serviceEndpoints.length, inElectron, outputDir, projectId]);
+
+  const handleCopyCurrentTab = () => {
+    let content = "";
+    if (selectedTab === "output") {
+      content = outputLogs.join("\n");
+    } else if (selectedTab === "terminal") {
+      if (activeSession && activeSession.logs.length > 0) {
+        content = activeSession.logs.map(cleanTerminalText).join("\n");
+      }
+    } else if (selectedTab === "ports") {
+      content = monitoredPorts
+        .map((p) => `Port ${p.port}: ${p.name} (${p.status || "inactive"}) - ${p.url || `http://localhost:${p.port}`}`)
+        .join("\n");
+    }
+    if (!content) return;
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    toast.success("Copied to clipboard!");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleClearCurrentTab = () => {
+    if (selectedTab === "terminal" && activeSessionId) {
+      clearTerminal(activeSessionId);
+    }
+  };
+
   const hasRunningSession = sessions.some((s) => s.status === "running");
 
   return (
     <>
-      {/* wterm-Powered VS Code-style Bottom Docked Terminal Panel */}
+      {/* VS Code-style Bottom Docked Terminal Panel */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -150,62 +246,60 @@ export function Terminal({
               maxHeight={800}
               enable={{ top: !isExpanded }}
               handleClasses={{
-                top: "h-1 bg-sidebar-border hover:bg-primary cursor-row-resize transition-colors z-30",
+                top: "h-1 bg-border/50 hover:bg-primary cursor-row-resize transition-colors z-30",
               }}
-              className="w-full flex flex-col bg-sidebar/95 backdrop-blur-md border-t border-sidebar-border shadow-2xl overflow-hidden"
+              className="w-full flex flex-col bg-[#090d13] border-t border-border/50 shadow-2xl overflow-hidden font-sans text-xs select-none relative"
             >
-              {/* Terminal Dynamic Tabs & Action Header */}
-              <TerminalHeader
-                inElectron={inElectron}
+              {/* VS Code Bottom Panel Header */}
+              <TerminalPanelHeader
+                selectedTab={selectedTab}
+                onTabChange={handleTabChange}
+                portsCount={activePortsCount}
                 sessions={sessions}
-                activeSessionId={activeSessionId}
-                onSelectTab={selectTerminal}
-                onCloseTab={closeTerminal}
-                onNewTab={(type, shell, title) =>
-                  createTerminal({ type, shell, title })
-                }
-                onRenameTab={renameTerminal}
-                onClearActiveTab={() => {
-                  if (activeSessionId) clearTerminal(activeSessionId);
-                }}
+                isMaximized={isExpanded}
+                onToggleMaximize={() => setIsExpanded(!isExpanded)}
+                onToggleOpen={handleClose}
+                onCopy={handleCopyCurrentTab}
+                copied={copied}
+                onClear={handleClearCurrentTab}
+                hasProjectId={Boolean(projectId)}
+                inElectron={inElectron}
                 outputDir={outputDir}
                 onPickDirectory={handlePickDirectory}
-                isExpanded={isExpanded}
-                onToggleExpand={() => setIsExpanded(!isExpanded)}
-                onClose={handleClose}
+                onDownloadZip={handleDownloadZip}
+                downloadingZip={downloadingZip}
                 syncStatus={syncStatus}
                 lastSyncedAt={lastSyncedAt}
                 onForceSync={forceSyncNow}
-                onDownloadZip={handleDownloadZip}
-                downloadingZip={downloadingZip}
               />
 
-              {/* Dynamic Service Endpoints Bar */}
-              <TerminalEndpointsBar
-                serviceEndpoints={serviceEndpoints}
-                detectedPorts={allDetectedPorts}
-              />
+              {/* Tab View Content */}
+              <div className="w-full h-full flex flex-col flex-1 min-h-0 bg-[#090d13] relative overflow-hidden font-mono text-xs">
+                {selectedTab === "terminal" && (
+                  <TerminalTab
+                    projectId={projectId}
+                    sessions={sessions}
+                    activeSessionId={activeSessionId}
+                    terminalRefs={terminalRefs}
+                    onTerminalInput={writeToSession}
+                    onTerminalResize={resizeSession}
+                    onSelectSession={selectTerminal}
+                    onCloseSession={closeTerminal}
+                    onCreateSession={(type?: TerminalType, shell?: string, title?: string) =>
+                      createTerminal({ type, shell, title })
+                    }
+                    formattedLogs={[]}
+                  />
+                )}
 
-              {/* Active Terminal Viewport */}
-              <TerminalViewport
-                sessions={sessions}
-                activeSessionId={activeSessionId}
-                terminalRefs={terminalRefs}
-                onTerminalInput={writeToSession}
-                onTerminalResize={resizeSession}
-                onNewTab={(type, shell, title) =>
-                  createTerminal({ type, shell, title })
-                }
-              />
+                {selectedTab === "output" && <OutputTab outputLogs={outputLogs} />}
 
-              {/* Terminal Status Footer */}
-              <TerminalFooter
-                activeTitle={activeSession?.title}
-                sessionCount={sessions.length}
-                outputDir={outputDir}
-                eventCount={activeSession?.logs.length || 0}
-                inElectron={inElectron}
-              />
+                {selectedTab === "problems" && <ProblemsTab />}
+
+                {selectedTab === "ports" && (
+                  <PortsTab ports={monitoredPorts} onRefresh={refreshPorts} />
+                )}
+              </div>
             </Resizable>
           </motion.div>
         )}

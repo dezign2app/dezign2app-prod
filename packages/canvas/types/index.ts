@@ -20,3 +20,4 @@ export * from "./graph";
 export * from "./compiler";
 export * from "./versions";
 export * from "./pipeline";
+export * from "./terminal";
