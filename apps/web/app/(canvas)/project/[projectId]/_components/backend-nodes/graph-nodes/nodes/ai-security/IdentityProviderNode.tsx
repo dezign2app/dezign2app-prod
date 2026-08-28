@@ -7,6 +7,16 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader, LocalInput, generateId } from "../../common";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { Button } from "@workspace/ui/components/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog";
 import { IdentityProvider } from "@workspace/canvas/types";
 import {
   ProviderPresetCombobox,
@@ -35,6 +45,7 @@ const ProviderRow = ({
     (s) => s.setActiveConfigItem,
   );
   const [localName, setLocalName] = useState(item.name || "");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const isProviderEmpty = () => {
     const currentName = isEditing ? localName : item.name || "";
@@ -195,11 +206,12 @@ const ProviderRow = ({
                   <Settings size={14} />
                 </div>
                 <div
-                  className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                  className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleDelete(item.id);
+                    setDeleteDialogOpen(true);
                   }}
+                  title="Delete Provider"
                 >
                   <Trash size={14} />
                 </div>
@@ -208,6 +220,44 @@ const ProviderRow = ({
           </div>
         )}
       </div>
+
+      {/* Delete Provider Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent
+          onClick={(e) => e.stopPropagation()}
+          className="bg-[#111216] border-zinc-800 text-zinc-100 max-w-md shadow-2xl ring-1 ring-white/10"
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-100 font-semibold">
+              Delete Identity Provider "{item.name || item.provider || "Provider"}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400 text-xs leading-relaxed">
+              Are you sure you want to delete this identity provider? Associated authentication routes and credentials will be removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteDialogOpen(false);
+              }}
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700 hover:text-zinc-100"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteDialogOpen(false);
+                handleDelete(item.id);
+              }}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+            >
+              Delete Provider
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

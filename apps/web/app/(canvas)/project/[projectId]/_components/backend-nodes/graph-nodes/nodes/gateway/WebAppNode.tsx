@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
 import {
   Globe,
@@ -6,12 +6,22 @@ import {
   Settings,
   ShieldCheck,
   Plus,
-  Trash2,
+  Trash,
   LayoutTemplate,
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { WebAppZone } from "@workspace/canvas/types";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader } from "../../common";
 
@@ -67,6 +77,7 @@ export const WebAppNode = ({
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
+  const [zoneToDelete, setZoneToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const appSlug =
     data.appSlug ||
@@ -352,12 +363,12 @@ export const WebAppNode = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDeleteZone(zone.id);
+                        setZoneToDelete({ id: zone.id, name: zone.name });
                       }}
                       className="p-1 hover:bg-destructive/15 rounded text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
                       title={`Delete ${zone.name}`}
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash className="w-3 h-3" />
                     </button>
                   )}
                 </div>
@@ -392,6 +403,42 @@ export const WebAppNode = ({
           <Plus className="w-3 h-3" /> Add Protected Section
         </button>
       </div>
+
+      {/* Delete Zone Confirmation Dialog */}
+      <AlertDialog open={!!zoneToDelete} onOpenChange={(open) => !open && setZoneToDelete(null)}>
+        <AlertDialogContent
+          onClick={(e) => e.stopPropagation()}
+          className="bg-[#111216] border-zinc-800 text-zinc-100 max-w-md shadow-2xl ring-1 ring-white/10"
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-100 font-semibold">
+              Delete Section "{zoneToDelete?.name}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400 text-xs leading-relaxed">
+              Are you sure you want to delete this access control section? Any connections from WebClient pages to this section handle will be unlinked.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setZoneToDelete(null)}
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700 hover:text-zinc-100"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (zoneToDelete) {
+                  handleDeleteZone(zoneToDelete.id);
+                  setZoneToDelete(null);
+                }
+              }}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+            >
+              Delete Section
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

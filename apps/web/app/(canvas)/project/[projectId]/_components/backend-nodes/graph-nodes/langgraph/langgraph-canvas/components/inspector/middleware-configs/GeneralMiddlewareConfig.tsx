@@ -1,7 +1,7 @@
 import React from "react";
 import {
   Shield,
-  Trash2,
+  Trash,
   UserCheck,
   Gauge,
   Activity,
@@ -75,7 +75,7 @@ export function GeneralMiddlewareConfig({
             onClick={onDeleteMiddleware}
             title="Delete Middleware"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash className="w-4 h-4" />
           </button>
         </div>
       </div>

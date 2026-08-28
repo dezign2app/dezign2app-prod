@@ -3,7 +3,7 @@
 import React, { useState, useRef } from "react";
 import {
   Image as ImageIcon,
-  Trash2,
+  Trash,
   Upload,
   Link as LinkIcon,
   Eye,
@@ -168,7 +168,7 @@ export const ReferralImagesUploader = ({
                   className="p-1 rounded text-red-400 hover:text-red-300 hover:bg-red-500/20 transition-colors"
                   title="Remove referral image"
                 >
-                  <Trash2 size={compact ? 10 : 12} />
+                  <Trash size={compact ? 10 : 12} />
                 </button>
               </div>
             </div>

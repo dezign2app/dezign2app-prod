@@ -15,7 +15,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@workspace/ui/components/accordion";
-import { Sparkles, Code2, Zap, Database, Plus, Trash2, Wand2 } from "lucide-react";
+import { Sparkles, Code2, Zap, Database, Plus, Trash, Wand2 } from "lucide-react";
 import {
   AuthHookConfig,
   EndpointHookConfig,
@@ -382,7 +382,7 @@ export const AuthHooksSection: React.FC<AuthConfigSectionProps> = ({
                         className="p-1 text-muted-foreground hover:text-destructive transition-colors shrink-0 ml-1"
                         title="Delete Hook"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash className="w-4 h-4" />
                       </button>
                     </div>
 
@@ -632,7 +632,7 @@ export const AuthHooksSection: React.FC<AuthConfigSectionProps> = ({
                         className="p-1 text-muted-foreground hover:text-destructive transition-colors shrink-0 ml-1"
                         title="Delete Hook"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash className="w-4 h-4" />
                       </button>
                     </div>
 

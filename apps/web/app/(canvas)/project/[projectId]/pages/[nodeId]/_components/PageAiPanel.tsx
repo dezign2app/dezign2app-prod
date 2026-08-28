@@ -13,7 +13,6 @@ import {
   RefreshCw,
   Unlock,
   Square,
-  Trash2,
   History,
   Plus,
   MessageSquare,
@@ -360,7 +359,7 @@ export function PageAiPanel({
                         className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded"
                         onClick={onClearHistory}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash className="w-3.5 h-3.5" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Clear current messages</TooltipContent>
@@ -504,7 +503,7 @@ export function PageAiPanel({
                             {isDeleting ? (
                               <Loader2 className="w-3 h-3 animate-spin" />
                             ) : (
-                              <Trash2 className="w-3 h-3" />
+                              <Trash className="w-3 h-3" />
                             )}
                           </Button>
                         </div>

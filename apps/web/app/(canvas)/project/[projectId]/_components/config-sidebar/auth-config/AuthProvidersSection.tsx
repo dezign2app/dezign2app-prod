@@ -15,7 +15,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@workspace/ui/components/accordion";
-import { Key, Plus, Trash2, Lock, ShieldCheck, GitMerge, ShieldAlert, Copy, Check, Info } from "lucide-react";
+import { Key, Plus, Trash, Lock, ShieldCheck, GitMerge, ShieldAlert, Copy, Check, Info } from "lucide-react";
 import {
   AUTH_FRAMEWORK_OPTIONS,
   BETTER_AUTH_VERSIONS,
@@ -636,7 +636,7 @@ export const AuthProvidersSection: React.FC<AuthConfigSectionProps> = ({
                               className="p-1 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
                               title="Remove provider"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>

@@ -18,7 +18,7 @@ import {
 import {
   SlidersHorizontal,
   Plus,
-  Trash2,
+  Trash,
   Clock,
   RefreshCw,
   ShieldCheck,
@@ -351,7 +351,7 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
                         }}
                         className="p-1 text-muted-foreground hover:text-destructive transition-colors shrink-0"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash className="w-3.5 h-3.5" />
                       </button>
                     </div>
 

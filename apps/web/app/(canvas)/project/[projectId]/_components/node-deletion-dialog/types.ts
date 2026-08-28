@@ -1,11 +1,107 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { Endpoint, AnyMessagingResource } from "@workspace/canvas/types";
 
+export interface DeletionColumnTarget {
+  type: "column";
+  nodeId: string;
+  column: {
+    name: string;
+    type?: string;
+    isPrimaryKey?: boolean;
+    isForeignKey?: boolean;
+    isUnique?: boolean;
+    isNotNull?: boolean;
+    references?: { table?: string; column?: string };
+  };
+  onConfirm: () => void;
+}
+
+export interface DeletionIndexTarget {
+  type: "index";
+  nodeId: string;
+  indexItem: {
+    name: string;
+    columns?: string;
+    isUnique?: boolean;
+  };
+  onConfirm: () => void;
+}
+
+export interface DeletionSectionTarget {
+  type: "section";
+  nodeId: string;
+  section: {
+    id: string;
+    name?: string;
+    type?: string;
+    title?: string;
+  };
+  onConfirm: () => void;
+}
+
+export interface DeletionZoneTarget {
+  type: "zone";
+  nodeId: string;
+  zone: {
+    id: string;
+    name?: string;
+    route?: string;
+  };
+  onConfirm: () => void;
+}
+
+export interface DeletionEndpointTarget {
+  type: "endpoint";
+  nodeId: string;
+  endpoint: {
+    id: string;
+    name?: string;
+    type?: string;
+  };
+  onConfirm: () => void;
+}
+
+export interface DeletionActionTarget {
+  type: "action";
+  nodeId: string;
+  sectionId?: string;
+  action: {
+    id: string;
+    name?: string;
+    event?: string;
+  };
+  onConfirm: () => void;
+}
+
+export interface DeletionGenericTarget {
+  type: "custom";
+  title?: string;
+  description?: string;
+  nodeId?: string;
+  itemLabel?: string;
+  itemType?: string;
+  onConfirm: () => void;
+}
+
+export type DeletionTarget =
+  | {
+      type: "nodes";
+      nodes: BackendNode[];
+    }
+  | DeletionColumnTarget
+  | DeletionIndexTarget
+  | DeletionSectionTarget
+  | DeletionActionTarget
+  | DeletionZoneTarget
+  | DeletionEndpointTarget
+  | DeletionGenericTarget;
+
 export interface NodeDeletionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  nodesPendingDeletion: BackendNode[];
-  projectId: string;
+  nodesPendingDeletion?: BackendNode[];
+  deletionTarget?: DeletionTarget;
+  projectId?: string;
   projectName?: string;
 }
 

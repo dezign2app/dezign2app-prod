@@ -4,7 +4,7 @@ import {
   History,
   RotateCcw,
   Clock,
-  Trash2,
+  Trash,
   MessageCircle,
   Pencil,
 } from "lucide-react";
@@ -223,7 +223,7 @@ export const VersionsTab = () => {
                               disabled={isReadOnly}
                               className="size-8 text-sidebar-foreground/40 hover:bg-destructive/10 hover:text-destructive"
                             >
-                              <Trash2 className="size-3.5" />
+                              <Trash className="size-3.5" />
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>

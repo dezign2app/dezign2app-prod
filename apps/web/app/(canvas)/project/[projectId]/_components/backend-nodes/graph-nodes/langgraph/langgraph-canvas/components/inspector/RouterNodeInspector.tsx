@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { GitBranch, Variable, Code2, Plus, Trash2 } from "lucide-react";
+import { GitBranch, Variable, Code2, Plus, Trash } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
@@ -123,7 +123,7 @@ export function RouterNodeInspector({
               onClick={() => handleDeleteRoute(activeBranch.id)}
               title="Delete current route"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash className="w-3.5 h-3.5" />
             </Button>
           )}
         </div>

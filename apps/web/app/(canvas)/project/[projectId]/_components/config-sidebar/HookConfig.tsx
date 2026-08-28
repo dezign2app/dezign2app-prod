@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { Anchor, Sparkles, Code2, Plus, Trash2 } from "lucide-react";
+import { Anchor, Sparkles, Code2, Plus, Trash } from "lucide-react";
 import { Parameter } from "@/types/canvas";
 import { Button } from "@workspace/ui/components/button";
 
@@ -326,7 +326,7 @@ export const HookConfig: React.FC<HookConfigProps> = ({ id, nodeId }) => {
                   onClick={() => removeParam("input", p.id)}
                   className="p-1 text-muted-foreground/50 hover:text-destructive transition-colors"
                 >
-                  <Trash2 size={12} />
+                  <Trash size={12} />
                 </button>
               </div>
             ))}

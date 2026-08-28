@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash } from "lucide-react";
 import { PipelineStepDraft, AvailableSource, ParallelBranch } from "./types";
 import { PipelineStepEditor } from "./index";
 import { generateId } from "./utils";
@@ -170,7 +170,7 @@ export const ParallelStepSection = ({
                       onClick={() => removeBranch(activeTab)}
                       title="Delete this branch"
                     >
-                      <Trash2 size={12} />
+                      <Trash size={12} />
                     </button>
                   )}
                 </div>

@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { ShieldCheck, Globe, ArrowRightLeft, Plus, Trash2, KeyRound } from "lucide-react";
+import { ShieldCheck, Globe, ArrowRightLeft, Plus, Trash, KeyRound } from "lucide-react";
 import { RedirectsConfig } from "@workspace/canvas";
 import { BackendNode } from "@/types/canvas";
 import { labelToSlug } from "@/lib/compiler/webClients/nextjs/v16/slugUtils";
@@ -424,7 +424,7 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
                     }}
                     className="p-1 text-muted-foreground hover:text-destructive shrink-0 cursor-pointer"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ))}

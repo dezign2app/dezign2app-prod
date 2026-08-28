@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Database, Table, Plus, Trash2, FunctionSquare, Check, Server } from "lucide-react";
+import { Database, Table, Plus, Trash, FunctionSquare, Check, Server } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import {
   Select,
@@ -362,7 +362,7 @@ function CrudConfigCard({
                 }}
                 className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>

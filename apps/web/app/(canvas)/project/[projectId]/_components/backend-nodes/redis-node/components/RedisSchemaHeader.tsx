@@ -1,5 +1,5 @@
 import React from "react";
-import { DatabaseZap, Settings, Trash2 } from "lucide-react";
+import { DatabaseZap, Settings, Trash } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
 import { Badge } from "@workspace/ui/components/badge";
@@ -109,7 +109,7 @@ export const RedisSchemaHeader = ({
             title="Delete Redis Schema"
             onClick={onDelete}
           >
-            <Trash2 size={14} />
+            <Trash size={14} />
           </div>
         </div>
       </div>

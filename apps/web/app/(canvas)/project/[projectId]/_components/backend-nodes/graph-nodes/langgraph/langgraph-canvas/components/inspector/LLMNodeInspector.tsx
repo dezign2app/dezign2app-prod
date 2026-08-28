@@ -1,5 +1,5 @@
 import React from "react";
-import { Trash2, Globe, Key, Code, Shield } from "lucide-react";
+import { Trash, Globe, Key, Code, Shield } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -70,7 +70,7 @@ export function LLMNodeInspector({
           className="h-7 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
           onClick={onDeleteStep}
         >
-          <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+          <Trash className="w-3.5 h-3.5 mr-1" /> Delete
         </Button>
       </div>
 

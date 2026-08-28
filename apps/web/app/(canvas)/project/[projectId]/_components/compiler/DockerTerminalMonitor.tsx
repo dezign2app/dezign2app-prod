@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Button } from "@workspace/ui/components/button";
 import {
   Terminal as TerminalIcon,
-  Trash2,
+  Trash,
   Copy,
   Check,
   ExternalLink,
@@ -165,7 +165,7 @@ export function DockerTerminalMonitor({
               className="h-7 px-2 text-xs gap-1 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 disabled:opacity-40"
               title="Clear Output"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash className="w-3.5 h-3.5" />
             </Button>
           )}
         </div>

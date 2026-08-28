@@ -8,7 +8,7 @@ import {
 } from "@xyflow/react";
 import {
   Globe,
-  Trash2,
+  Trash,
   Code,
   Key,
   Shield,
@@ -182,7 +182,7 @@ export const LangGraphCanvasLLMNode = ({
               }}
               title="Delete LLM"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash className="w-3.5 h-3.5" />
             </button>
           )}
         </div>

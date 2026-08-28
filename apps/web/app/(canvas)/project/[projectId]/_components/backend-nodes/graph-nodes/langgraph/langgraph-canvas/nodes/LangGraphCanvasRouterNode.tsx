@@ -1,6 +1,6 @@
 import React from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { GitBranch, Trash2 } from "lucide-react";
+import { GitBranch, Trash } from "lucide-react";
 import type { StepNode } from "@workspace/canvas";
 
 export function LangGraphCanvasRouterNode({
@@ -41,7 +41,7 @@ export function LangGraphCanvasRouterNode({
           }}
           title="Delete router"
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <Trash className="h-3.5 w-3.5" />
         </button>
       </div>
 

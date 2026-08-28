@@ -17,7 +17,7 @@ import {
   ChevronDown,
   ChevronRight,
   Plus,
-  Trash2,
+  Trash,
   Shuffle,
   Code2,
   AlignLeft,
@@ -111,7 +111,7 @@ const FieldListEditor = ({ fields, onChange, placeholder }: FieldListEditorProps
             className="text-muted-foreground/40 hover:text-destructive transition-colors"
             onClick={() => remove(i)}
           >
-            <Trash2 size={11} />
+            <Trash size={11} />
           </button>
         </div>
       ))}
@@ -187,7 +187,7 @@ const HelperCard = ({ helper, onChange, onDelete }: HelperCardProps) => {
             onDelete();
           }}
         >
-          <Trash2 size={11} />
+          <Trash size={11} />
         </button>
         {expanded ? (
           <ChevronDown size={12} className="text-muted-foreground/40 shrink-0" />

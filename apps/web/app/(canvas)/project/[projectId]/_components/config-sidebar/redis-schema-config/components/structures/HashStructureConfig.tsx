@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, Trash2, Clock } from "lucide-react";
+import { Plus, Trash, Clock } from "lucide-react";
 import { BackendNode, RedisHashField, isRedisHashFieldType } from "@/types/canvas";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
@@ -115,7 +115,7 @@ export const HashStructureConfig: React.FC<HashStructureConfigProps> = ({
                     });
                   }}
                 >
-                  <Trash2 size={12} />
+                  <Trash size={12} />
                 </Button>
               </div>
 

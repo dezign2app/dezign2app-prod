@@ -1,5 +1,5 @@
 import React from "react";
-import { Radio, Plus, Trash2 } from "lucide-react";
+import { Radio, Plus, Trash } from "lucide-react";
 import { BackendNode, RedisStreamConsumerGroup } from "@/types/canvas";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -123,7 +123,7 @@ export const StreamStructureConfig: React.FC<StreamStructureConfigProps> = ({
                 });
               }}
             >
-              <Trash2 size={12} />
+              <Trash size={12} />
             </Button>
           </div>
         ))}

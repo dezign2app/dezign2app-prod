@@ -13,7 +13,7 @@ import {
   Users,
   Plus,
   Pencil,
-  Trash2,
+  Trash,
   Copy,
   Check,
   KeyRound,
@@ -187,7 +187,7 @@ export function TestUsersSheet({ open, onOpenChange }: TestUsersSheetProps) {
                         className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
                         title="Delete Persona"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>

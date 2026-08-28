@@ -4,6 +4,7 @@ import { BackendNode } from "@/types/canvas";
 import { Input } from "@workspace/ui/components/input";
 import { cn } from "@workspace/ui/lib/utils";
 import { ColumnItem } from "./ColumnRow";
+import { NodeDeletionDialog } from "../../node-deletion-dialog/NodeDeletionDialog";
 
 export interface IndexListProps {
   id: string;
@@ -21,6 +22,10 @@ export const IndexList = ({
   updateNode,
 }: IndexListProps) => {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [indexToDelete, setIndexToDelete] = useState<{
+    index: number;
+    item: NonNullable<BackendNode["data"]["indexes"]>[0];
+  } | null>(null);
 
   const addIndex = () => {
     updateNode(id, {
@@ -182,11 +187,12 @@ export const IndexList = ({
                         </span>
                       )}
                       <div
-                        className="opacity-0 group-hover/row:opacity-100 flex items-center justify-center p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
+                        className="opacity-0 group-hover/row:opacity-100 flex items-center justify-center p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteIndex(i);
+                          setIndexToDelete({ index: i, item: idxObj });
                         }}
+                        title="Delete Index"
                       >
                         <Trash size={12} />
                       </div>
@@ -201,6 +207,22 @@ export const IndexList = ({
           );
         })}
       </div>
+
+      {indexToDelete && (
+        <NodeDeletionDialog
+          open={!!indexToDelete}
+          onOpenChange={(open) => !open && setIndexToDelete(null)}
+          deletionTarget={{
+            type: "index",
+            nodeId: id,
+            indexItem: indexToDelete.item,
+            onConfirm: () => {
+              deleteIndex(indexToDelete.index);
+              setIndexToDelete(null);
+            },
+          }}
+        />
+      )}
     </>
   );
 };

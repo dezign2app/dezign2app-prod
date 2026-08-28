@@ -16,7 +16,7 @@ import {
 import {
   Play,
   Settings,
-  Trash2,
+  Trash,
   Copy,
   Zap,
   Radio,
@@ -209,7 +209,7 @@ export const SectionActionCard: React.FC<SectionActionCardProps> = ({
             onClick={onDeleteAction}
             title="Delete Action"
           >
-            <Trash2 size={12} />
+            <Trash size={12} />
           </Button>
         </div>
       </div>

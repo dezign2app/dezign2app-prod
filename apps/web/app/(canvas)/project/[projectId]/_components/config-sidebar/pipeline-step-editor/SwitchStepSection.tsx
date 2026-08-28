@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash } from "lucide-react";
 import { SmartPathInput } from "./SmartPathInput";
 import { PipelineStepDraft, AvailableSource, StepSource, SwitchCase } from "./types";
 import { PipelineStepEditor } from "./index";
@@ -256,7 +256,7 @@ export const SwitchStepSection = ({
                       onClick={() => removeCase(caseIndex)}
                       title="Delete this case"
                     >
-                      <Trash2 size={12} />
+                      <Trash size={12} />
                     </button>
                   </div>
 

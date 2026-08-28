@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, AlertCircle, Trash2 } from "lucide-react";
+import { Check, AlertCircle, Trash } from "lucide-react";
 import { Switch } from "@workspace/ui/components/switch";
 import { Label } from "@workspace/ui/components/label";
 import {
@@ -218,7 +218,7 @@ export function ToolReturnBehaviorSection({
                       handleUpdateCommandConfig({ stateUpdates: newUpdates });
                     }}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash className="w-3.5 h-3.5" />
                   </button>
                 </div>
                 {update.mode === "expression" && (

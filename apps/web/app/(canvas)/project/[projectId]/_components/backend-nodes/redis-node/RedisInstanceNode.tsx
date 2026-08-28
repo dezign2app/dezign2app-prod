@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { DatabaseZap, Trash2, Settings, Key, Palette, HardDrive, ShieldCheck, Radio } from "lucide-react";
+import { DatabaseZap, Trash, Settings, Key, Palette, HardDrive, ShieldCheck, Radio } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
@@ -167,7 +167,7 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
                 requestDeleteNode(id);
               }}
             >
-              <Trash2 size={14} />
+              <Trash size={14} />
             </div>
           </div>
         </div>

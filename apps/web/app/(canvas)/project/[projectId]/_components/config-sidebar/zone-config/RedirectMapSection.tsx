@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowRight, Plus, ShieldAlert, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { ArrowRight, Plus, ShieldAlert, ChevronDown, ChevronRight, Trash } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import { Input } from "@workspace/ui/components/input";
 import {
@@ -129,7 +129,7 @@ export const RedirectMapSection = ({
                       className="p-1 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
                       title={`Delete ${reasonKey} redirect route`}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>

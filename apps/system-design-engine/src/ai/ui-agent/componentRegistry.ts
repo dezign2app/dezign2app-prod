@@ -285,7 +285,7 @@ export function formatComponentCatalog(): string {
   return `### Monorepo Design System Components (@workspace/ui)
 
 All standard UI components MUST be imported from \`@workspace/ui/components/<component-name>\` or utility \`cn\` from \`@workspace/ui/lib/utils\`.
-Icons should be imported from \`lucide-react\` (e.g. \`import { Search, Plus, Trash2, ArrowUpRight, TrendingUp, Filter, MoreVertical, RefreshCw, User, Settings } from "lucide-react";\`).
+Icons should be imported from \`lucide-react\` (e.g. \`import { Search, Plus, Trash, ArrowUpRight, TrendingUp, Filter, MoreVertical, RefreshCw, User, Settings } from "lucide-react";\`).
 
 Available Components:
 ${componentSummaries}

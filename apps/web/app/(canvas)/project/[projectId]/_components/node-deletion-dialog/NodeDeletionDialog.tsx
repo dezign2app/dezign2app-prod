@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { AlertDialog, AlertDialogContent } from "@workspace/ui/components/alert-dialog";
 import { Button } from "@workspace/ui/components/button";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash, Loader2 } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { computeNodeDeletionDiff } from "@/lib/compiler/nodeDeletionDiff";
@@ -22,12 +22,14 @@ import { NodeDeletionImpactSummary } from "./NodeDeletionImpactSummary";
 import { NodeDeletionFileTree } from "./NodeDeletionFileTree";
 import { NodeDeletionResizeHandle } from "./NodeDeletionResizeHandle";
 import { NodeDeletionCodePreview } from "./NodeDeletionCodePreview";
+import { computeSubItemDeletion } from "./computeSubItemDeletionDiff";
 
 export function NodeDeletionDialog({
   open,
   onOpenChange,
-  nodesPendingDeletion,
-  projectId,
+  nodesPendingDeletion = [],
+  deletionTarget,
+  projectId = "",
   projectName = "Blueprint",
 }: NodeDeletionDialogProps): React.JSX.Element {
   const nodes = useBackendCanvasStore((s) => s.nodes);
@@ -53,70 +55,95 @@ export function NodeDeletionDialog({
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
-  const nodeIdsToDelete = useMemo(() => {
-    return nodesPendingDeletion.map((n) => n.id);
-  }, [nodesPendingDeletion]);
+  const effectiveTarget = useMemo(() => {
+    if (deletionTarget) return deletionTarget;
+    if (nodesPendingDeletion.length > 0) {
+      return { type: "nodes" as const, nodes: nodesPendingDeletion };
+    }
+    return null;
+  }, [deletionTarget, nodesPendingDeletion]);
 
   const outputDir = useMemo(() => {
-    return getSavedWorkspaceDir(projectId);
+    return projectId ? getSavedWorkspaceDir(projectId) : null;
   }, [projectId]);
 
-  // Compute the exact node architecture impact on canvas
-  const architectureImpact = useMemo(() => {
-    if (!open || nodeIdsToDelete.length === 0) {
+  // Compute computation result (architecture impact and code diff)
+  const computationResult = useMemo(() => {
+    if (!open || !effectiveTarget) {
       return {
-        targetNodes: [],
-        severedConnections: [],
-        cascadeElements: [],
-        brokenReferences: [],
-        totalCanvasImpactCount: 0,
+        architectureImpact: {
+          targetNodes: [],
+          severedConnections: [],
+          cascadeElements: [],
+          brokenReferences: [],
+          totalCanvasImpactCount: 0,
+        },
+        diff: {
+          deletedNodes: [],
+          deletedFiles: [],
+          modifiedFiles: [],
+          addedFiles: [],
+          totalAffectedCount: 0,
+          filesBefore: [],
+          filesAfter: [],
+        },
       };
     }
 
-    return computeNodeArchitectureImpact(nodes, edges, endpoints, events, nodeIdsToDelete);
-  }, [open, nodes, edges, endpoints, events, nodeIdsToDelete]);
-
-  // Compute the file diff
-  const diff = useMemo(() => {
-    if (!open || nodeIdsToDelete.length === 0) {
-      return {
-        deletedNodes: [],
-        deletedFiles: [],
-        modifiedFiles: [],
-        addedFiles: [],
-        totalAffectedCount: 0,
-        filesBefore: [],
-        filesAfter: [],
-      };
-    }
-
-    try {
-      return computeNodeDeletionDiff(
+    if (effectiveTarget.type === "nodes") {
+      const nodeIdsToDelete = effectiveTarget.nodes.map((n) => n.id);
+      const architectureImpact = computeNodeArchitectureImpact(
         nodes,
+        edges,
         endpoints,
         events,
-        edges,
-        testCases,
-        projectName,
         nodeIdsToDelete,
       );
-    } catch (e) {
-      console.error("[NodeDeletionDialog] Error calculating diff:", e);
-      return {
-        deletedNodes: nodesPendingDeletion.map((n) => ({
-          id: n.id,
-          label: getNodeLabel(n),
-          type: n.type || "node",
-        })),
-        deletedFiles: [],
-        modifiedFiles: [],
-        addedFiles: [],
-        totalAffectedCount: 0,
-        filesBefore: [],
-        filesAfter: [],
-      };
+
+      let diff;
+      try {
+        diff = computeNodeDeletionDiff(
+          nodes,
+          endpoints,
+          events,
+          edges,
+          testCases,
+          projectName,
+          nodeIdsToDelete,
+        );
+      } catch (e) {
+        console.error("[NodeDeletionDialog] Error calculating diff:", e);
+        diff = {
+          deletedNodes: effectiveTarget.nodes.map((n) => ({
+            id: n.id,
+            label: getNodeLabel(n),
+            type: n.type || "node",
+          })),
+          deletedFiles: [],
+          modifiedFiles: [],
+          addedFiles: [],
+          totalAffectedCount: 0,
+          filesBefore: [],
+          filesAfter: [],
+        };
+      }
+
+      return { architectureImpact, diff };
     }
-  }, [open, nodes, endpoints, events, edges, testCases, projectName, nodeIdsToDelete, nodesPendingDeletion]);
+
+    // Granular sub-item deletion
+    return computeSubItemDeletion(
+      nodes,
+      endpoints,
+      events,
+      edges,
+      testCases,
+      projectName,
+      effectiveTarget,
+    );
+  }, [open, effectiveTarget, nodes, edges, endpoints, events, testCases, projectName]);
+
+  const { architectureImpact, diff } = computationResult;
 
   const filteredFiles: AffectedItem[] = useMemo(() => {
     const items: AffectedItem[] = [
@@ -200,81 +227,178 @@ export function NodeDeletionDialog({
   const handleMouseDownResize = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      e.stopPropagation();
       setIsDraggingSidebar(true);
 
       const startX = e.clientX;
       const startWidth = sidebarWidth;
 
-      const onMouseMove = (moveEvent: MouseEvent) => {
-        const deltaX = moveEvent.clientX - startX;
-        const newWidth = Math.min(Math.max(startWidth + deltaX, 180), 550);
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        const delta = moveEvent.clientX - startX;
+        const newWidth = Math.max(220, Math.min(500, startWidth + delta));
         setSidebarWidth(newWidth);
       };
 
-      const onMouseUp = () => {
+      const handleMouseUp = () => {
         setIsDraggingSidebar(false);
-        window.removeEventListener("mousemove", onMouseMove);
-        window.removeEventListener("mouseup", onMouseUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
       };
 
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-      window.addEventListener("mousemove", onMouseMove);
-      window.addEventListener("mouseup", onMouseUp);
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
     },
     [sidebarWidth],
   );
 
-  const handleCopyPath = (path: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCopyPath = (path: string) => {
     navigator.clipboard.writeText(path);
     setCopiedPath(path);
-    toast.success(`Copied path: ${path}`);
     setTimeout(() => setCopiedPath(null), 2000);
+    toast.success("Path copied to clipboard");
   };
 
   const handleCopyCode = () => {
     if (!activeFileDetails?.content) return;
     navigator.clipboard.writeText(activeFileDetails.content);
     setCopiedCode(true);
-    toast.success(`Copied file contents`);
     setTimeout(() => setCopiedCode(false), 2000);
+    toast.success("Code copied to clipboard");
   };
 
   const handleConfirmDelete = async () => {
+    setIsDeleting(true);
     try {
-      setIsDeleting(true);
-      if (deleteNodes) {
-        deleteNodes(nodeIdsToDelete);
-      } else {
-        nodeIdsToDelete.forEach((id) => deleteNode(id));
+      if (effectiveTarget && "onConfirm" in effectiveTarget && typeof effectiveTarget.onConfirm === "function") {
+        effectiveTarget.onConfirm();
+      } else if (effectiveTarget?.type === "nodes") {
+        const nodeIdsToDelete = effectiveTarget.nodes.map((n) => n.id);
+        if (deleteNodes) {
+          deleteNodes(nodeIdsToDelete);
+        } else {
+          nodeIdsToDelete.forEach((id) => deleteNode(id));
+        }
       }
       onOpenChange(false);
     } catch (err) {
       console.error("[NodeDeletionDialog] Deletion failed:", err);
-      toast.error("Failed to delete selected nodes");
+      toast.error("Failed to execute deletion");
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const primaryNodeLabel = useMemo(() => {
-    if (nodesPendingDeletion.length === 1 && nodesPendingDeletion[0]) {
-      return getNodeLabel(nodesPendingDeletion[0]);
+  // Header and Metadata Calculation
+  const headerMeta = useMemo(() => {
+    if (!effectiveTarget) {
+      return {
+        label: "Item",
+        type: "item",
+        title: "Delete Item?",
+        count: 0,
+      };
     }
-    return `${nodesPendingDeletion.length} Nodes`;
-  }, [nodesPendingDeletion]);
 
-  const primaryNodeType = nodesPendingDeletion[0]?.type || "node";
+    if (effectiveTarget.type === "nodes") {
+      const count = effectiveTarget.nodes.length;
+      const label = count === 1 && effectiveTarget.nodes[0] ? getNodeLabel(effectiveTarget.nodes[0]) : `${count} Nodes`;
+      const type = effectiveTarget.nodes[0]?.type || "node";
+      return {
+        label,
+        type,
+        title: count === 1 ? `Delete "${label}"?` : `Delete ${count} Selected Nodes?`,
+        count,
+      };
+    }
+
+    if (effectiveTarget.type === "column") {
+      const parent = nodes.find((n) => n.id === effectiveTarget.nodeId);
+      const table = parent?.data?.label || "Table";
+      return {
+        label: `${table}.${effectiveTarget.column.name}`,
+        type: "column",
+        title: `Delete Column "${table}.${effectiveTarget.column.name}"?`,
+        count: 1,
+      };
+    }
+
+    if (effectiveTarget.type === "index") {
+      const parent = nodes.find((n) => n.id === effectiveTarget.nodeId);
+      const table = parent?.data?.label || "Table";
+      return {
+        label: `${table} (${effectiveTarget.indexItem.name})`,
+        type: "index",
+        title: `Delete Index "${effectiveTarget.indexItem.name}"?`,
+        count: 1,
+      };
+    }
+
+    if (effectiveTarget.type === "section") {
+      const parent = nodes.find((n) => n.id === effectiveTarget.nodeId);
+      const page = parent?.data?.label || "Page";
+      const sectionName = effectiveTarget.section.name || effectiveTarget.section.title || "Section";
+      return {
+        label: `${page} → ${sectionName}`,
+        type: "section",
+        title: `Delete Section "${sectionName}"?`,
+        count: 1,
+      };
+    }
+
+    if (effectiveTarget.type === "action") {
+      const parent = nodes.find((n) => n.id === effectiveTarget.nodeId);
+      const page = parent?.data?.label || "Page";
+      const actionName = effectiveTarget.action.name || effectiveTarget.action.event || "Action";
+      return {
+        label: `${page} → ${actionName}`,
+        type: "action",
+        title: `Delete Action "${actionName}"?`,
+        count: 1,
+      };
+    }
+
+    if (effectiveTarget.type === "zone") {
+      const parent = nodes.find((n) => n.id === effectiveTarget.nodeId);
+      const app = parent?.data?.label || "WebApp";
+      const zoneName = effectiveTarget.zone.name || effectiveTarget.zone.route || "Zone";
+      return {
+        label: `${app} → ${zoneName}`,
+        type: "zone",
+        title: `Delete Access Zone "${zoneName}"?`,
+        count: 1,
+      };
+    }
+
+    if (effectiveTarget.type === "endpoint") {
+      const parent = nodes.find((n) => n.id === effectiveTarget.nodeId);
+      const service = parent?.data?.label || "Service";
+      return {
+        label: `${service} → ${effectiveTarget.endpoint.type || "GET"} ${effectiveTarget.endpoint.name}`,
+        type: "endpoint",
+        title: `Delete Endpoint "${effectiveTarget.endpoint.name}"?`,
+        count: 1,
+      };
+    }
+
+    return {
+      label: effectiveTarget.itemLabel || "Item",
+      type: effectiveTarget.itemType || "item",
+      title: effectiveTarget.title || `Delete "${effectiveTarget.itemLabel || "Item"}"?`,
+      count: 1,
+    };
+  }, [effectiveTarget, nodes]);
+
   const inDesktop = isElectron();
   const hasFiles = diff.totalAffectedCount > 0;
+
+  const targetNodeList = useMemo(() => {
+    if (effectiveTarget?.type === "nodes") return effectiveTarget.nodes;
+    return [];
+  }, [effectiveTarget]);
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent
+        onClick={(e) => e.stopPropagation()}
         className={cn(
           "p-0 overflow-hidden rounded-2xl border border-zinc-800 bg-[#111216] text-zinc-100 shadow-2xl ring-1 ring-white/5 flex flex-col outline-none transition-all duration-200",
           "w-[80vw] h-[80vh] !max-w-[1280px] min-w-[680px] min-h-[520px] max-h-[85vh]",
@@ -282,10 +406,11 @@ export function NodeDeletionDialog({
       >
         {/* Header Bar */}
         <NodeDeletionHeader
-          primaryNodeLabel={primaryNodeLabel}
-          nodeCount={nodesPendingDeletion.length}
-          primaryNodeType={primaryNodeType}
+          primaryNodeLabel={headerMeta.label}
+          nodeCount={headerMeta.count}
+          primaryNodeType={headerMeta.type}
           isDeleting={isDeleting}
+          titleOverride={headerMeta.title}
           onClose={() => onOpenChange(false)}
         />
 
@@ -311,7 +436,7 @@ export function NodeDeletionDialog({
             <div className="flex-1 overflow-hidden flex flex-col gap-2.5 min-h-0">
               {/* Impact summary row */}
               <NodeDeletionImpactSummary
-                nodesPendingDeletion={nodesPendingDeletion}
+                nodesPendingDeletion={targetNodeList}
                 deletedCount={diff.deletedFiles.length}
                 modifiedCount={diff.modifiedFiles.length}
                 inDesktop={inDesktop}
@@ -375,7 +500,7 @@ export function NodeDeletionDialog({
             disabled={isDeleting}
             onClick={() => onOpenChange(false)}
             variant={"secondary"}
-            className="h-8 px-3 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/50"
+            className="h-8 px-3 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/50 cursor-pointer"
           >
             Cancel
           </Button>
@@ -385,7 +510,7 @@ export function NodeDeletionDialog({
             onClick={handleConfirmDelete}
             disabled={isDeleting}
             variant={"destructive"}
-            className="h-8 px-3 text-xs font-medium bg-red-600 hover:bg-red-500 text-white"
+            className="h-8 px-3 text-xs font-medium bg-red-600 hover:bg-red-500 text-white cursor-pointer"
           >
             {isDeleting ? (
               <>
@@ -394,9 +519,9 @@ export function NodeDeletionDialog({
               </>
             ) : (
               <>
-                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                <Trash className="w-3.5 h-3.5 mr-1.5" />
                 <span>
-                  Confirm & Delete ({architectureImpact.totalCanvasImpactCount > 0 ? `${architectureImpact.totalCanvasImpactCount} affected` : "Node"})
+                  Confirm & Delete ({architectureImpact.totalCanvasImpactCount > 0 ? `${architectureImpact.totalCanvasImpactCount} affected` : headerMeta.type})
                 </span>
               </>
             )}

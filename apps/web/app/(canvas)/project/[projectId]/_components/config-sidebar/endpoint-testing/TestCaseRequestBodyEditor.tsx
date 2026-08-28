@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Plus, Trash, Braces, ListPlus, Trash2 } from "lucide-react";
+import { Plus, Trash, Braces, ListPlus } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
@@ -263,7 +263,7 @@ export const TestCaseRequestBodyEditor: React.FC<TestCaseRequestBodyEditorProps>
                 className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 rounded"
                 onClick={() => handleRemoveField(f.id)}
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash className="w-3.5 h-3.5" />
               </Button>
             </div>
           ))}

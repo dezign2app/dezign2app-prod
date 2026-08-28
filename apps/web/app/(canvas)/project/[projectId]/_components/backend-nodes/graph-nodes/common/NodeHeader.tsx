@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   Select,
@@ -126,7 +126,7 @@ export const NodeHeader = ({
             requestDeleteNode(id);
           }}
         >
-          <Trash2 size={14} />
+          <Trash size={14} />
         </div>
       </div>
 

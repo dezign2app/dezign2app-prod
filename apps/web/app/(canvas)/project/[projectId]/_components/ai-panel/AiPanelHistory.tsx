@@ -7,7 +7,7 @@ import {
   MessageSquare,
   Search,
   Clock,
-  Trash2,
+  Trash,
   Loader2,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
@@ -135,7 +135,7 @@ export function AiPanelHistory({
                       {isDeleting ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
                       ) : (
-                        <Trash2 className="w-3 h-3" />
+                        <Trash className="w-3 h-3" />
                       )}
                     </Button>
                   </div>

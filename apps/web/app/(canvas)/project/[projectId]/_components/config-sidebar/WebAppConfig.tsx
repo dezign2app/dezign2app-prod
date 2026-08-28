@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -17,7 +17,7 @@ import {
   Layers,
   ShieldCheck,
   Plus,
-  Trash2,
+  Trash,
   SlidersHorizontal,
 } from "lucide-react";
 import {
@@ -28,6 +28,16 @@ import {
 } from "@/types/canvas";
 import { WebAppZone } from "@workspace/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog";
 
 function isWebClientTechStack(val: string): val is WebClientTechStack {
   return WEB_CLIENT_TECH_OPTIONS.some((t) => t.value === val);
@@ -53,6 +63,7 @@ export const WebAppConfig = ({
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
   );
+  const [zoneToDelete, setZoneToDelete] = useState<{ id: string; name: string } | null>(null);
 
   if (!node) return null;
 
@@ -397,10 +408,11 @@ export const WebAppConfig = ({
                 </Button>
                 {zone.id !== "zone-public" && (
                   <button
-                    onClick={() => handleRemoveZone(zone.id)}
-                    className="p-1 text-muted-foreground hover:text-destructive"
+                    onClick={() => setZoneToDelete({ id: zone.id, name: zone.name })}
+                    className="p-1 text-muted-foreground hover:text-destructive cursor-pointer"
+                    title={`Delete ${zone.name}`}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
@@ -408,6 +420,42 @@ export const WebAppConfig = ({
           ))}
         </div>
       </div>
+
+      {/* Delete Section / Zone Dialog */}
+      <AlertDialog open={!!zoneToDelete} onOpenChange={(open) => !open && setZoneToDelete(null)}>
+        <AlertDialogContent
+          onClick={(e) => e.stopPropagation()}
+          className="bg-[#111216] border-zinc-800 text-zinc-100 max-w-md shadow-2xl ring-1 ring-white/10"
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-100 font-semibold">
+              Delete Section "{zoneToDelete?.name}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400 text-xs leading-relaxed">
+              Are you sure you want to delete this access control section from the Web App container? Connected page links to this section handle will be disconnected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setZoneToDelete(null)}
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700 hover:text-zinc-100"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (zoneToDelete) {
+                  handleRemoveZone(zoneToDelete.id);
+                  setZoneToDelete(null);
+                }
+              }}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+            >
+              Delete Section
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -6,7 +6,7 @@ import {
   Plus,
   Zap,
   Settings,
-  Trash2,
+  Trash,
   ChevronDown,
   ChevronRight,
   Shield,
@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
+import { NodeDeletionDialog } from "../../node-deletion-dialog/NodeDeletionDialog";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import type { PageSection, UIEventItem } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -47,6 +48,9 @@ export function WebPageSectionsOverviewSection({
   const toggleSectionCollapsed = useSectionCollapseStore((s) => s.toggleSectionCollapsed);
   const setSectionCollapsed = useSectionCollapseStore((s) => s.setSectionCollapsed);
   const deleteSectionCollapseState = useSectionCollapseStore((s) => s.deleteSectionCollapseState);
+
+  const [sectionToDelete, setSectionToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [actionToDelete, setActionToDelete] = useState<{ secId: string; actId: string; name: string } | null>(null);
 
   const toggleExpand = (secId: string) => {
     toggleSectionCollapsed(nodeId, secId);
@@ -310,11 +314,14 @@ export function WebPageSectionsOverviewSection({
                     {/* Delete Section */}
                     <button
                       type="button"
-                      onClick={(e) => handleDeleteSection(sec.id, e)}
-                      className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSectionToDelete({ id: sec.id, name: sec.name || "Untitled" });
+                      }}
+                      className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
                       title="Delete Section"
                     >
-                      <Trash2 size={13} />
+                      <Trash size={13} />
                     </button>
                   </div>
                 </div>
@@ -377,11 +384,14 @@ export function WebPageSectionsOverviewSection({
                               </Button>
                               <button
                                 type="button"
-                                onClick={(e) => handleDeleteActionFromSection(sec.id, act.id, e)}
-                                className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActionToDelete({ secId: sec.id, actId: act.id, name: act.name || "action" });
+                                }}
+                                className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"
                                 title="Delete Action"
                               >
-                                <Trash2 size={11} />
+                                <Trash size={11} />
                               </button>
                             </div>
                           </div>
@@ -395,6 +405,49 @@ export function WebPageSectionsOverviewSection({
           })
         )}
       </div>
+
+      {/* Delete Section Dialog */}
+      {sectionToDelete && (
+        <NodeDeletionDialog
+          open={!!sectionToDelete}
+          onOpenChange={(open) => !open && setSectionToDelete(null)}
+          deletionTarget={{
+            type: "section",
+            nodeId,
+            section: sections.find((s) => s.id === sectionToDelete.id) || {
+              id: sectionToDelete.id,
+              name: sectionToDelete.name,
+            },
+            onConfirm: () => {
+              const fakeEvent = { stopPropagation: () => {} } as unknown as React.MouseEvent;
+              handleDeleteSection(sectionToDelete.id, fakeEvent);
+              setSectionToDelete(null);
+            },
+          }}
+        />
+      )}
+
+      {/* Delete Action Dialog */}
+      {actionToDelete && (
+        <NodeDeletionDialog
+          open={!!actionToDelete}
+          onOpenChange={(open) => !open && setActionToDelete(null)}
+          deletionTarget={{
+            type: "action",
+            nodeId,
+            sectionId: actionToDelete.secId,
+            action: {
+              id: actionToDelete.actId,
+              name: actionToDelete.name,
+            },
+            onConfirm: () => {
+              const fakeEvent = { stopPropagation: () => {} } as unknown as React.MouseEvent;
+              handleDeleteActionFromSection(actionToDelete.secId, actionToDelete.actId, fakeEvent);
+              setActionToDelete(null);
+            },
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -3,7 +3,6 @@
 import React from "react";
 import {
   Terminal,
-  Trash2,
   Copy,
   Check,
   Maximize2,
@@ -266,7 +265,7 @@ export function TerminalPanelHeader({
           title="Clear Console / Terminal Buffer"
           className="h-6 px-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800"
         >
-          <Trash2 className="w-3.5 h-3.5" />
+          <Trash className="w-3.5 h-3.5" />
         </Button>
 
         {/* Maximize / Minimize Button */}

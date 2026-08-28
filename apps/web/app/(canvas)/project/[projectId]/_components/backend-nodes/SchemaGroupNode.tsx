@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { NodeProps, NodeResizer } from "@xyflow/react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
@@ -212,7 +212,7 @@ export const SchemaGroupNode = ({
             className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             onClick={handleDelete}
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash className="h-4 w-4" />
           </Button>
         </div>
       </div>

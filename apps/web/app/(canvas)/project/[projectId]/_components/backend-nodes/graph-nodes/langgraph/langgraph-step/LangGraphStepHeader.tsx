@@ -2,7 +2,7 @@ import React from "react";
 import { Handle, Position } from "@xyflow/react";
 import {
   Brain,
-  Trash2,
+  Trash,
   Wrench,
   Code2,
   Database,
@@ -132,7 +132,7 @@ export const LangGraphStepHeader: React.FC<LangGraphStepHeaderProps> = ({
         onClick={onDelete}
         title="Delete step node"
       >
-        <Trash2 className="w-3 h-3" />
+        <Trash className="w-3 h-3" />
       </Button>
     </div>
   );

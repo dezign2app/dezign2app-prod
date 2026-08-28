@@ -11,6 +11,16 @@ import {
 import { BackendNode, AuthRule, IdentityProvider } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Label } from "@workspace/ui/components/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader, EndpointList } from "../../common";
 import { Textarea } from "@workspace/ui/components/textarea";
@@ -44,6 +54,7 @@ export const APIGatewayNode = ({
     (s) => s.setActiveConfigItem,
   );
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [ruleToDelete, setRuleToDelete] = useState<{ id: string; name: string } | null>(null);
   const rules = data.authRules || [];
 
   const updateData = (changes: Partial<BackendNode["data"]>) =>
@@ -207,8 +218,8 @@ export const APIGatewayNode = ({
                 <button
                   type="button"
                   aria-label="Delete auth rule"
-                  className="text-muted-foreground hover:text-destructive"
-                  onClick={() => deleteRule(rule.id)}
+                  className="text-muted-foreground hover:text-destructive cursor-pointer"
+                  onClick={() => setRuleToDelete({ id: rule.id, name: rule.name || "Auth Rule" })}
                 >
                   <Trash size={13} />
                 </button>
@@ -222,6 +233,42 @@ export const APIGatewayNode = ({
           </div>
         )}
       </section>
+
+      {/* Delete Rule Confirmation Dialog */}
+      <AlertDialog open={!!ruleToDelete} onOpenChange={(open) => !open && setRuleToDelete(null)}>
+        <AlertDialogContent
+          onClick={(e) => e.stopPropagation()}
+          className="bg-[#111216] border-zinc-800 text-zinc-100 max-w-md shadow-2xl ring-1 ring-white/10"
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-100 font-semibold">
+              Delete Auth Rule "{ruleToDelete?.name}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400 text-xs leading-relaxed">
+              Are you sure you want to delete this auth rule policy from the API Gateway? Endpoints referencing this policy will revert to unauthenticated.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setRuleToDelete(null)}
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700 hover:text-zinc-100"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (ruleToDelete) {
+                  deleteRule(ruleToDelete.id);
+                  setRuleToDelete(null);
+                }
+              }}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+            >
+              Delete Rule
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <EndpointList nodeId={id} title="Endpoints" />
 
