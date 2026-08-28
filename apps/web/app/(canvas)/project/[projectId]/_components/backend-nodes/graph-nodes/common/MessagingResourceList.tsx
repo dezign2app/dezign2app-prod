@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Plus, X, Check, Settings } from "lucide-react";
+import { Plus, Trash, Check, Settings } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -272,7 +272,7 @@ export const MessagingResourceRow = ({
                   setEditingId(null);
                 }}
               >
-                <X size={14} />
+                <Trash size={14} />
               </Button>
             </div>
           ) : (
@@ -383,7 +383,7 @@ export const MessagingResourceRow = ({
                     handleDelete(item.id);
                   }}
                 >
-                  <X size={14} />
+                  <Trash size={14} />
                 </div>
               </div>
             </div>

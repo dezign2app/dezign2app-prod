@@ -6,10 +6,10 @@ import {
   ProtectionRule,
   WebAppZone,
   SessionClaimConfig,
-} from "@workspace/canvas";
-import {
   DEFAULT_ZONES,
   PRESET_TRIGGER_OPTIONS,
+} from "@workspace/canvas";
+import {
   PublicZoneView,
   ProtectedZoneHeader,
   AccessConditionsSection,

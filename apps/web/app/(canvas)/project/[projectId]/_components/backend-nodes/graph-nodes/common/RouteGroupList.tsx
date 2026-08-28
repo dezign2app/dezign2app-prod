@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
-import { Plus, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Trash, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { BackendNode, Endpoint } from "@/types/canvas";
 import { generateId } from "./utils";
@@ -248,7 +248,7 @@ export const RouteGroupEditor = ({
               deleteGroup();
             }}
           >
-            <X size={14} />
+            <Trash size={14} />
           </div>
         </div>
       </div>

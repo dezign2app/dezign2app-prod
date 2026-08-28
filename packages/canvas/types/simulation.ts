@@ -40,6 +40,8 @@ export type PageSection = {
   description?: string;
   uiPrompt?: string;
   libraries?: string[];
+  images?: string[];
+  primaryImageUrl?: string;
 };
 
 export type UIEventItem = {

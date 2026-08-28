@@ -13,7 +13,7 @@ import {
 import {
   Terminal as TerminalIcon,
   Plus,
-  X,
+  Trash,
   Folder,
   Archive,
   Maximize2,
@@ -207,7 +207,7 @@ export function TerminalHeader({
                 className="p-0.5 rounded text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent transition-opacity opacity-70 group-hover:opacity-100"
                 title="Close terminal (kill process)"
               >
-                <X className="w-3 h-3" />
+                <Trash className="w-3 h-3" />
               </button>
             </div>
           );
@@ -389,7 +389,7 @@ export function TerminalHeader({
           className="h-6 w-6 p-0 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
           title="Close Terminal Drawer"
         >
-          <X className="w-3.5 h-3.5" />
+          <Trash className="w-3.5 h-3.5" />
         </Button>
       </div>
     </div>

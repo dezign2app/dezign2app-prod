@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Plus, X, Sparkles, Check, Database } from "lucide-react";
+import { Plus, Trash, Sparkles, Check, Database } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
 import { Input } from "@workspace/ui/components/input";
@@ -314,7 +314,7 @@ export const ResponseSchemaEditor: React.FC<ResponseSchemaEditorProps> = ({
                       className="h-7 w-7 opacity-0 group-hover/field:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 transition-all rounded-full"
                       onClick={() => removeField(f.id)}
                     >
-                      <X size={14} />
+                      <Trash size={14} />
                     </Button>
                   </div>
 

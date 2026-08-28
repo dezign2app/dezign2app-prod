@@ -6,7 +6,7 @@ import {
   Plus,
   Monitor,
   Code2,
-  X,
+  Trash,
   ChevronRight,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
@@ -288,7 +288,7 @@ export function TerminalViewport({
                       className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-red-400 rounded transition-all"
                       title="Close Terminal"
                     >
-                      <X className="w-3 h-3" />
+                      <Trash className="w-3 h-3" />
                     </button>
                   )}
                 </div>

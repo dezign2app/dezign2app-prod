@@ -15,7 +15,7 @@ import {
   Code2,
   FileJson,
   Layers,
-  X,
+  Trash,
   RefreshCw,
   FolderPlus,
   HardDrive,
@@ -278,7 +278,7 @@ export function PageFileExplorer({
                 className="h-6 w-6 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent rounded"
                 onClick={onToggle}
               >
-                <X className="w-3.5 h-3.5" />
+                <Trash className="w-3.5 h-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Collapse File Explorer</TooltipContent>
@@ -336,7 +336,7 @@ export function PageFileExplorer({
                 onClick={() => setSearchFilter("")}
                 className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-sidebar-foreground"
               >
-                <X className="w-3 h-3" />
+                <Trash className="w-3 h-3" />
               </button>
             )}
           </div>

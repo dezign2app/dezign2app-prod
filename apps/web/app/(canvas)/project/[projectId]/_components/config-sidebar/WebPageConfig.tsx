@@ -14,6 +14,15 @@ import { useWebPageCodeMismatch } from "./useWebPageCodeMismatch";
 import { PageCodeMismatchDialog } from "./PageCodeMismatchDialog";
 import { isElectron, getElectronAPI } from "@/lib/electron";
 import { toast } from "sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
+import {
+  Layers,
+  Sparkles,
+  Shield,
+  FileCode,
+  Sliders,
+  Globe,
+} from "lucide-react";
 
 import {
   WebPageHeaderSection,
@@ -40,6 +49,8 @@ export const WebPageConfig = ({
   const allEdges = useBackendCanvasStore((s) => s.edges);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const patchNodeData = useMutation(api.canvas.patchNodeData);
+
+  const [activeTab, setActiveTab] = useState("sections");
 
   const projectId = typeof window !== "undefined"
     ? window.location.pathname.split("/project/")[1]?.split("/")[0] ?? ""
@@ -394,9 +405,11 @@ export const WebPageConfig = ({
     connectedEndpoint?.requestBodyMode ??
     (effectiveRequestBody.rawJson ? "raw_json" : "field_builder");
 
+  const sectionsCount = (data.sections || []).length;
+
   return (
-    <div className="flex flex-col gap-6 mt-6 pb-12 text-foreground font-sans">
-      {/* 1. Header & Summary Section */}
+    <div className="flex flex-col h-full font-sans text-foreground">
+      {/* Top Header Section */}
       <WebPageHeaderSection
         label={data.label}
         summary={data.summary}
@@ -408,90 +421,173 @@ export const WebPageConfig = ({
         onUpdateRequireAuth={(requireAuth) => updateData({ requireAuth })}
       />
 
-      {/* 2. Endpoint Parameters & Body Section */}
-      <WebPageParametersSection
-        connectedEndpoint={connectedEndpoint}
-        effectiveHeaders={effectiveHeaders}
-        effectivePathParams={effectivePathParams}
-        effectiveQueryParams={effectiveQueryParams}
-        effectiveRequestBody={effectiveRequestBody}
-        effectiveRequestBodyMode={effectiveRequestBodyMode}
-        onUpdateHeaders={(headers) => updateData({ headers })}
-        onUpdatePathParams={(pathParams) => updateData({ pathParams })}
-        onUpdateQueryParams={(queryParams) => updateData({ queryParams })}
-        onUpdateRequestBody={(requestBody) => updateData({ requestBody })}
-        onUpdateRequestBodyMode={(requestBodyMode) => updateData({ requestBodyMode })}
-      />
+      {/* Tabs Navigation */}
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="flex-1 flex flex-col overflow-hidden mt-4"
+      >
+        <div className="border-b border-border/50 pb-2 bg-background">
+          <TabsList className="grid w-full grid-cols-5 h-8 p-0.5 bg-secondary/50 border border-border/40 rounded-lg">
+            <TabsTrigger
+              value="sections"
+              className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1"
+            >
+              <Layers size={12} className="shrink-0" />
+              <span className="truncate">Sections</span>
+              {sectionsCount > 0 && (
+                <span className="px-1 py-0.2 rounded-full text-[9px] bg-secondary text-muted-foreground font-mono font-medium">
+                  {sectionsCount}
+                </span>
+              )}
+            </TabsTrigger>
 
-      {/* 3. App & Zone Membership Section */}
-      <WebPageMembershipSection
-        label={data.label}
-        appSlug={appSlug}
-        connectedZoneName={connectedZoneName}
-        onUpdateLabel={(label) => updateData({ label })}
-        onUpdateAppSlug={(slug) => updateData({ appSlug: slug })}
-      />
+            <TabsTrigger
+              value="api"
+              className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1"
+            >
+              <Sliders size={12} className="shrink-0" />
+              <span className="truncate">API</span>
+            </TabsTrigger>
 
-      {/* 4. Frontend Code & Local Repository Sync Section */}
-      <WebPageCodeSyncSection
-        hasCustomServerFile={hasCustomServerFile}
-        detectedDiskPath={detectedDiskPath}
-        defaultFilePath={defaultFilePath}
-        outputDir={outputDir}
-        mismatchStatus={mismatchStatus}
-        diffSummary={diffSummary}
-        isMismatchSaving={isMismatchSaving}
-        onOpenMismatchDialog={() => setMismatchDialogOpen(true)}
-        onMergeAllToServer={mergeAllToServer}
-        onOverwriteLocalWithServer={overwriteLocalWithServer}
-        onOpenPageStudio={() => {
-          if (projectId) router.push(`/project/${projectId}/pages/${nodeId}`);
-        }}
-        onResetToCompilerBaseline={resetToCompilerBaseline}
-      />
+            <TabsTrigger
+              value="code"
+              className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1"
+            >
+              <FileCode size={12} className="shrink-0" />
+              <span className="truncate">Sync</span>
+            </TabsTrigger>
 
-      {/* 5. AI Page Generation Prompts Section */}
-      <WebPageAiPromptsSection
-        description={data.description}
-        uiPrompt={data.uiPrompt}
-        isGeneratingAi={isGeneratingAi}
-        onUpdateDescription={(description) => updateData({ description })}
-        onUpdateUiPrompt={(uiPrompt) => updateData({ uiPrompt })}
-        onGenerateAiCode={handleGenerateAiCode}
-      />
+            <TabsTrigger
+              value="protection"
+              className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1"
+            >
+              <Shield size={12} className="shrink-0" />
+              <span className="truncate">Auth</span>
+            </TabsTrigger>
 
-      {/* 6. Page Sections Overview Section */}
-      <WebPageSectionsOverviewSection
-        nodeId={nodeId}
-        sections={data.sections}
-        onAddSection={() => {
-          const currentSections: PageSection[] = data.sections || [];
-          const newSec: PageSection = {
-            id: `sec-${crypto.randomUUID()}`,
-            name: `Section ${currentSections.length + 1}`,
-            renderMode: "server",
-            loadStrategy: "eager",
-            actions: [],
-          };
-          updateData({ sections: [...currentSections, newSec] });
-        }}
-      />
+            <TabsTrigger
+              value="ai"
+              className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1"
+            >
+              <Sparkles size={12} className="shrink-0" />
+              <span className="truncate">AI</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-      {/* 7. Protection Rules Section */}
-      <WebPageProtectionSection
-        useZoneDefault={useZoneDefault}
-        accessType={accessType}
-        allowedRoles={allowedRoles}
-        requiredPlans={requiredPlans}
-        redirectTo={redirectTo}
-        isAuthPage={Boolean(data.isAuthPage)}
-        onUpdateUseZoneDefault={(useDefault) => updateData({ useZoneDefault: useDefault })}
-        onUpdateAccessType={(type, defaultRedirect) => updateData({ accessType: type, redirectTo: defaultRedirect })}
-        onUpdateAllowedRoles={(roles) => updateData({ allowedRoles: roles })}
-        onUpdateRequiredPlans={(plans) => updateData({ requiredPlans: plans })}
-        onUpdateRedirectTo={(target) => updateData({ redirectTo: target })}
-        onUpdateIsAuthPage={(isAuth) => updateData({ isAuthPage: isAuth })}
-      />
+        {/* Tab 1: Sections & Membership */}
+        <TabsContent
+          value="sections"
+          className="flex-1 py-4 space-y-5 overflow-y-auto m-0 outline-none"
+        >
+          {/* Page Sections & Components */}
+          <WebPageSectionsOverviewSection
+            nodeId={nodeId}
+            sections={data.sections}
+            onUpdateSections={(sections) => updateData({ sections })}
+            onAddSection={(sectionName) => {
+              const currentSections: PageSection[] = data.sections || [];
+              const newSec: PageSection = {
+                id: `sec-${crypto.randomUUID()}`,
+                name: sectionName || `Section${currentSections.length + 1}`,
+                renderMode: "server",
+                loadStrategy: "eager",
+                actions: [],
+              };
+              updateData({ sections: [...currentSections, newSec] });
+            }}
+          />
+
+          {/* App & Zone Membership */}
+          <WebPageMembershipSection
+            label={data.label}
+            appSlug={appSlug}
+            connectedZoneName={connectedZoneName}
+            onUpdateLabel={(label) => updateData({ label })}
+            onUpdateAppSlug={(slug) => updateData({ appSlug: slug })}
+          />
+        </TabsContent>
+
+        {/* Tab 2: API Parameters & Request Body */}
+        <TabsContent
+          value="api"
+          className="flex-1 py-4 space-y-5 overflow-y-auto m-0 outline-none"
+        >
+          <WebPageParametersSection
+            connectedEndpoint={connectedEndpoint}
+            effectiveHeaders={effectiveHeaders}
+            effectivePathParams={effectivePathParams}
+            effectiveQueryParams={effectiveQueryParams}
+            effectiveRequestBody={effectiveRequestBody}
+            effectiveRequestBodyMode={effectiveRequestBodyMode}
+            onUpdateHeaders={(headers) => updateData({ headers })}
+            onUpdatePathParams={(pathParams) => updateData({ pathParams })}
+            onUpdateQueryParams={(queryParams) => updateData({ queryParams })}
+            onUpdateRequestBody={(requestBody) => updateData({ requestBody })}
+            onUpdateRequestBodyMode={(requestBodyMode) => updateData({ requestBodyMode })}
+          />
+        </TabsContent>
+
+        {/* Tab 3: Code Sync & Visual Studio */}
+        <TabsContent
+          value="code"
+          className="flex-1 py-4 space-y-5 overflow-y-auto m-0 outline-none"
+        >
+          <WebPageCodeSyncSection
+            hasCustomServerFile={hasCustomServerFile}
+            detectedDiskPath={detectedDiskPath}
+            defaultFilePath={defaultFilePath}
+            outputDir={outputDir}
+            mismatchStatus={mismatchStatus}
+            diffSummary={diffSummary}
+            isMismatchSaving={isMismatchSaving}
+            onOpenMismatchDialog={() => setMismatchDialogOpen(true)}
+            onMergeAllToServer={mergeAllToServer}
+            onOverwriteLocalWithServer={overwriteLocalWithServer}
+            onOpenPageStudio={() => {
+              if (projectId) router.push(`/project/${projectId}/pages/${nodeId}`);
+            }}
+            onResetToCompilerBaseline={resetToCompilerBaseline}
+          />
+        </TabsContent>
+
+        {/* Tab 4: Protection Rules & Access */}
+        <TabsContent
+          value="protection"
+          className="flex-1 py-4 space-y-5 overflow-y-auto m-0 outline-none"
+        >
+          <WebPageProtectionSection
+            useZoneDefault={useZoneDefault}
+            accessType={accessType}
+            allowedRoles={allowedRoles}
+            requiredPlans={requiredPlans}
+            redirectTo={redirectTo}
+            isAuthPage={Boolean(data.isAuthPage)}
+            onUpdateUseZoneDefault={(useDefault) => updateData({ useZoneDefault: useDefault })}
+            onUpdateAccessType={(type, defaultRedirect) => updateData({ accessType: type, redirectTo: defaultRedirect })}
+            onUpdateAllowedRoles={(roles) => updateData({ allowedRoles: roles })}
+            onUpdateRequiredPlans={(plans) => updateData({ requiredPlans: plans })}
+            onUpdateRedirectTo={(target) => updateData({ redirectTo: target })}
+            onUpdateIsAuthPage={(isAuth) => updateData({ isAuthPage: isAuth })}
+          />
+        </TabsContent>
+
+        {/* Tab 5: AI Page Generation Prompts */}
+        <TabsContent
+          value="ai"
+          className="flex-1 py-4 space-y-5 overflow-y-auto m-0 outline-none"
+        >
+          <WebPageAiPromptsSection
+            description={data.description}
+            uiPrompt={data.uiPrompt}
+            isGeneratingAi={isGeneratingAi}
+            onUpdateDescription={(description) => updateData({ description })}
+            onUpdateUiPrompt={(uiPrompt) => updateData({ uiPrompt })}
+            onGenerateAiCode={handleGenerateAiCode}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Granular Code Mismatch & Merge Dialog */}
       <PageCodeMismatchDialog

@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, X, Braces, ListPlus, Text, Code } from "lucide-react";
+import { Plus, Trash, Braces, ListPlus, Text, Code } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -234,7 +234,7 @@ export const ResponseBodyEditor: React.FC<ResponseBodyEditorProps> = ({
                   className="h-7 w-7 opacity-0 group-hover/f:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 transition-all rounded-full"
                   onClick={() => removeField(f.id)}
                 >
-                  <X size={14} />
+                  <Trash size={14} />
                 </Button>
               </div>
               {f.description !== undefined && (
@@ -252,7 +252,7 @@ export const ResponseBodyEditor: React.FC<ResponseBodyEditorProps> = ({
                     className="h-5 w-5 absolute right-0.5 top-0.5 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0 transition-all rounded"
                     onClick={() => updateField(f.id, { description: undefined })}
                   >
-                    <X size={10} />
+                    <Trash size={10} />
                   </Button>
                 </div>
               )}

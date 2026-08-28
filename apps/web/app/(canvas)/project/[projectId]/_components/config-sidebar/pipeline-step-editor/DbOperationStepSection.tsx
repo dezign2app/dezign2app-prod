@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Database, Table as TableIcon, Code2, Settings2, Sparkles } from "lucide-react";
+import { Database, Table as TableIcon, Code2, Settings, Sparkles } from "lucide-react";
 import { PipelineStepDraft, ExpectedArg } from "./types";
 
 export interface DbOperationStepSectionProps {
@@ -335,7 +335,7 @@ export const DbOperationStepSection = ({
           className="flex items-center gap-1 text-[9px] text-muted-foreground/60 hover:text-muted-foreground transition-colors self-start"
           onClick={onToggleAdvancedSettings}
         >
-          <Settings2 size={10} />
+          <Settings size={10} />
           <span>{showAdvancedSettings ? "Hide" : "Show"} Advanced Import & Function Overrides</span>
         </button>
 

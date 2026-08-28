@@ -2,7 +2,7 @@
 
 import React from "react";
 import {
-  X,
+  Trash,
   Sparkles,
   Trash2,
   History,
@@ -96,7 +96,7 @@ export function AiPanelHeader({
               onClick={onClose}
               title="Collapse AI Panel"
             >
-              <X className="w-3.5 h-3.5" />
+              <Trash className="w-3.5 h-3.5" />
             </Button>
           </div>
         </>
@@ -172,7 +172,7 @@ export function AiPanelHeader({
                   className="h-6 w-6 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent rounded"
                   onClick={onClose}
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <Trash className="w-3.5 h-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Collapse AI Panel</TooltipContent>

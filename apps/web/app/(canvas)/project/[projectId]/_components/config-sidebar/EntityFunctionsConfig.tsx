@@ -7,8 +7,8 @@ import {
   RotateCcw,
   Check,
   ChevronLeft,
-  Settings2,
-  X,
+  Settings,
+  Trash,
   Sparkles,
   Database,
 } from "lucide-react";
@@ -453,7 +453,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
                           updateSelectedOp({ params: updated });
                         }}
                       >
-                        <X size={12} />
+                        <Trash size={12} />
                       </Button>
                     )}
                   </div>
@@ -699,7 +699,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
                     className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
                     title="Configure operation"
                   >
-                    <Settings2 size={14} />
+                    <Settings size={14} />
                   </div>
                 </div>
               </div>
@@ -782,7 +782,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
                     className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
                     title="Configure operation"
                   >
-                    <Settings2 size={14} />
+                    <Settings size={14} />
                   </div>
                   <Button
                     variant="ghost"

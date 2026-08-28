@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Check, ChevronDown, ChevronUp, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Trash } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
@@ -245,7 +245,7 @@ export const ColumnRow = ({
                   handleDelete(index);
                 }}
               >
-                <X size={14} />
+                <Trash size={14} />
               </div>
             </div>
           </div>

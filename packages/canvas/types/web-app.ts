@@ -1,6 +1,41 @@
 import type { UIEventItem, PageSection, Parameter, Schema } from "./simulation";
 import type { WebAppZone, ProtectionRule, PaymentsPlanConfig } from "./auth";
 
+export type SectionIconName =
+  | "layout-grid"
+  | "table"
+  | "form-input"
+  | "message-square"
+  | "bar-chart-3"
+  | "box"
+  | "sparkles"
+  | "package";
+
+export interface SectionPreset {
+  id?: string;
+  label: string;
+  iconName?: SectionIconName;
+  desc: string;
+  renderMode: "server" | "client";
+  loadStrategy: "eager" | "dynamic" | "dynamic-no-ssr";
+  libraries: string[];
+  defaultActions: { name: string; event: string }[];
+  defaultDesc: string;
+  defaultUiPrompt: string;
+}
+
+export interface CategorizedLibrary {
+  category: string;
+  iconName?: SectionIconName;
+  libs: string[];
+}
+
+export interface PresetTriggerOption {
+  value: string;
+  label: string;
+  defaultRoute: string;
+}
+
 /** WebApp node fields (canvas type). */
 export interface CanvasWebAppNodeData {
   appSlug?: string;

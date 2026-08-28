@@ -8,7 +8,7 @@ import {
   Check,
   Maximize2,
   Minimize2,
-  X,
+  Trash,
   Radio,
   Folder,
   Archive,
@@ -292,7 +292,7 @@ export function TerminalPanelHeader({
           title="Close Panel"
           className="h-6 px-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
         >
-          <X className="w-3.5 h-3.5" />
+          <Trash className="w-3.5 h-3.5" />
         </Button>
       </div>
     </div>

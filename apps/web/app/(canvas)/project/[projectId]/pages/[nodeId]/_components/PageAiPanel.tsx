@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Resizable } from "re-resizable";
 import {
   Sparkles,
-  X,
+  Trash,
   ChevronLeft,
   ArrowLeft,
   AlertTriangle,
@@ -303,7 +303,7 @@ export function PageAiPanel({
                   onClick={onToggle}
                   title="Collapse AI Panel"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <Trash className="w-3.5 h-3.5" />
                 </Button>
               </div>
             </>
@@ -376,7 +376,7 @@ export function PageAiPanel({
                       className="h-6 w-6 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent rounded"
                       onClick={onToggle}
                     >
-                      <X className="w-3.5 h-3.5" />
+                      <Trash className="w-3.5 h-3.5" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Collapse AI Panel</TooltipContent>

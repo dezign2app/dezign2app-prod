@@ -1,6 +1,6 @@
 import React from "react";
 import { Handle, Position } from "@xyflow/react";
-import { GitBranch, Plus, X } from "lucide-react";
+import { GitBranch, Plus, Trash } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { BackendNode } from "@/types/canvas";
 
@@ -56,7 +56,7 @@ export const LangGraphConditionalRoutes: React.FC<
                 }}
                 title="Delete Route"
               >
-                <X className="w-3 h-3" />
+                <Trash className="w-3 h-3" />
               </Button>
               <Handle
                 type="source"

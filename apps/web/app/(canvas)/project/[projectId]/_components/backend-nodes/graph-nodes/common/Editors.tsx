@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, X, Text, Braces, ListPlus } from "lucide-react";
+import { Plus, Trash, Text, Braces, ListPlus } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -127,7 +127,7 @@ export const ProcessingStepsEditor = ({
                 className="h-7 w-7 opacity-0 group-hover/step:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 transition-all rounded-full"
                 onClick={() => removeStep(step.id)}
               >
-                <X size={14} />
+                <Trash size={14} />
               </Button>
             </div>
             {step.operation && step.operation !== "passthrough" && (
@@ -272,7 +272,7 @@ export const ParameterEditor = ({
                 className="h-7 w-7 opacity-0 group-hover/param:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 transition-all rounded-full"
                 onClick={() => removeParam(p.id)}
               >
-                <X size={14} />
+                <Trash size={14} />
               </Button>
             </div>
             {p.description !== undefined && (
@@ -291,7 +291,7 @@ export const ParameterEditor = ({
                   className="h-5 w-5 absolute right-0.5 top-0.5 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0 transition-all rounded"
                   onClick={() => updateParam(p.id, { description: undefined })}
                 >
-                  <X size={10} />
+                  <Trash size={10} />
                 </Button>
               </div>
             )}
@@ -620,7 +620,7 @@ export const SchemaEditor = ({
                       className="h-7 w-7 opacity-0 group-hover/f:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 transition-all rounded-full"
                       onClick={() => removeField(f.id)}
                     >
-                      <X size={14} />
+                      <Trash size={14} />
                     </Button>
                   </div>
                   {f.description !== undefined && (
@@ -638,7 +638,7 @@ export const SchemaEditor = ({
                         className="h-5 w-5 absolute right-0.5 top-0.5 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0 transition-all rounded"
                         onClick={() => updateField(f.id, { description: undefined })}
                       >
-                        <X size={10} />
+                        <Trash size={10} />
                       </Button>
                     </div>
                   )}

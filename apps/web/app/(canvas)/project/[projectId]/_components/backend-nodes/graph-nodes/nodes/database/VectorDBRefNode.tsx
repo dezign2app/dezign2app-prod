@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { Database, Layers, Settings2, Trash2 } from "lucide-react";
+import { Database, Layers, Settings, Trash2 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -92,7 +92,7 @@ export const VectorDBRefNode = ({
             onClick={handleOpenConfig}
             title="Configure Vector Collection"
           >
-            <Settings2 size={12} />
+            <Settings size={12} />
           </button>
           <button
             className="p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"

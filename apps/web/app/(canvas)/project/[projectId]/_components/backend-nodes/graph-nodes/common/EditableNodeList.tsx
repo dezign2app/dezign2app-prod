@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Plus, X } from "lucide-react";
+import { Plus, Trash } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import { BackendNode } from "@/types/canvas";
 import { generateId } from "./utils";
@@ -124,7 +124,7 @@ export const EditableNodeList = <T extends BaseItem>({
                       handleDelete(item.id);
                     }}
                   >
-                    <X size={12} />
+                    <Trash size={12} />
                   </div>
                 </div>
               )}

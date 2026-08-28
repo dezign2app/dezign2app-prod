@@ -6,7 +6,7 @@ import { cn } from "@workspace/ui/lib/utils";
 import { Label } from "@workspace/ui/components/label";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader, LocalInput, generateId } from "../../common";
-import { Settings, Plus, X, Check } from "lucide-react";
+import { Settings, Plus, Trash, Check } from "lucide-react";
 import { Textarea } from "@workspace/ui/components/textarea";
 import {
   Select,
@@ -307,7 +307,7 @@ const WorkerTaskList = ({
                         handleDelete(item.id);
                       }}
                     >
-                      <X size={14} />
+                      <Trash size={14} />
                     </div>
                   </div>
                 </div>

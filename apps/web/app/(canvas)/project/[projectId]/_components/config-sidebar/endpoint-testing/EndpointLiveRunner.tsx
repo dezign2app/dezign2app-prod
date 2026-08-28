@@ -15,7 +15,7 @@ import {
   Send,
   Loader2,
   Globe,
-  Settings2,
+  Settings,
   RefreshCw,
   SlidersHorizontal,
   Users,

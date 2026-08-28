@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, Trash } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { Input } from "@workspace/ui/components/input";
 import { cn } from "@workspace/ui/lib/utils";
@@ -188,7 +188,7 @@ export const IndexList = ({
                           deleteIndex(i);
                         }}
                       >
-                        <X size={12} />
+                        <Trash size={12} />
                       </div>
                     </div>
                   </div>
