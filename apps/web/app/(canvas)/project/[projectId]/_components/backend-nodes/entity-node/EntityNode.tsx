@@ -249,22 +249,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
               className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation();
-                const cols = data.columns || [];
-                const idxs = data.indexes || [];
-                const isEmpty = cols.length === 0 && idxs.length === 0;
-                const isInitial =
-                  cols.length === 1 &&
-                  cols[0]?.name === "_id" &&
-                  idxs.length === 0;
-
-                if (!isEmpty && !isInitial) {
-                  const node = useBackendCanvasStore
-                    .getState()
-                    .nodes.find((n) => n.id === id);
-                  if (node) setNodesPendingDeletion([node]);
-                } else {
-                  useBackendCanvasStore.getState().deleteNode(id);
-                }
+                useBackendCanvasStore.getState().requestDeleteNode(id);
               }}
             >
               <Trash2 size={14} />

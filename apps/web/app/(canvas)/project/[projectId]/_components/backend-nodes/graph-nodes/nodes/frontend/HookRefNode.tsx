@@ -25,7 +25,7 @@ export const HookRefNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
-  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
+  const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const edges = useBackendCanvasStore((s) => s.edges);
   const addEdge = useBackendCanvasStore((s) => s.addEdge);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
@@ -143,7 +143,7 @@ export const HookRefNode = ({
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    deleteNode(id);
+    requestDeleteNode(id);
   };
 
   return (

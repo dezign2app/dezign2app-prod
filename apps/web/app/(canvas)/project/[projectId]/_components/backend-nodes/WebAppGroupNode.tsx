@@ -75,13 +75,8 @@ export const WebAppGroupNode = ({
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const hasChildren = nodes.some((n) => n.parentId === id);
-    if (hasChildren || data.label) {
-      const node = nodes.find((n) => n.id === id);
-      if (node) setNodesPendingDeletion([node]);
-    } else {
-      deleteNode(id);
-    }
+    const node = nodes.find((n) => n.id === id);
+    if (node) setNodesPendingDeletion([node]);
   };
 
   return (

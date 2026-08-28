@@ -157,7 +157,7 @@ export const LangGraphNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
-  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
+  const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
   );
@@ -285,7 +285,7 @@ export const LangGraphNode = ({
             className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 nodrag"
             onClick={(e) => {
               e.stopPropagation();
-              deleteNode(id);
+              requestDeleteNode(id);
             }}
             title="Delete Node"
           >

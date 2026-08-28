@@ -116,6 +116,9 @@ export interface BackendCanvasState {
   ) => void;
   updateNode: (id: string, changes: Partial<BackendNode>) => void;
   deleteNode: (id: string) => void;
+  deleteNodes: (ids: string[]) => void;
+  requestDeleteNode: (id: string) => void;
+  requestDeleteNodes: (ids: string[]) => void;
   addEdge: (edge: Omit<BackendEdge, "fractionalIndex">) => void;
   updateEdge: (id: string, changes: Partial<BackendEdge>) => void;
   deleteEdge: (id: string) => void;

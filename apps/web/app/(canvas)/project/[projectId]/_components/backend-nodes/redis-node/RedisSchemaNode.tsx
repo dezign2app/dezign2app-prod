@@ -39,16 +39,7 @@ export const RedisSchemaNode = ({ id, data, selected }: NodeProps<BackendNode>) 
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const cols = data.columns || [];
-    const isEmpty = cols.length === 0;
-    if (!isEmpty) {
-      const node = useBackendCanvasStore
-        .getState()
-        .nodes.find((n) => n.id === id);
-      if (node) setNodesPendingDeletion([node]);
-    } else {
-      useBackendCanvasStore.getState().deleteNode(id);
-    }
+    useBackendCanvasStore.getState().requestDeleteNode(id);
   };
 
   const handleUpdateNodeWithSync = (

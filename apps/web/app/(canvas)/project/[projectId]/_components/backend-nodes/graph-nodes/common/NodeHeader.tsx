@@ -40,7 +40,7 @@ export const NodeHeader = ({
   rightElement,
 }: NodeHeaderProps) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
-  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
+  const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const [isEditing, setIsEditing] = useState(
     data.label === "" || data.label === "Untitled",
   );
@@ -123,7 +123,7 @@ export const NodeHeader = ({
           className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-black/10 transition-all cursor-pointer ml-1 shrink-0"
           onClick={(e) => {
             e.stopPropagation();
-            deleteNode(id);
+            requestDeleteNode(id);
           }}
         >
           <Trash2 size={14} />

@@ -26,7 +26,7 @@ export const LangGraphStepNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
-  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
+  const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(data.label || DEFAULT_STEP_LABEL);
 
@@ -90,7 +90,7 @@ export const LangGraphStepNode = ({
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    deleteNode(id);
+    requestDeleteNode(id);
   };
 
   const handleAddRoute = () => {

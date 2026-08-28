@@ -21,7 +21,9 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
   );
-  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
+  const requestDeleteNode = useBackendCanvasStore(
+    (s) => s.requestDeleteNode,
+  );
   const allNodes = useBackendCanvasStore((s) => s.nodes);
 
   const color = data.color || "#ef4444";
@@ -162,7 +164,7 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
               title="Delete Redis Instance"
               onClick={(e) => {
                 e.stopPropagation();
-                deleteNode(id);
+                requestDeleteNode(id);
               }}
             >
               <Trash2 size={14} />

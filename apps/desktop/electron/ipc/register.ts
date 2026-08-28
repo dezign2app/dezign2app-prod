@@ -1,7 +1,7 @@
 import { ipcMain, shell } from "electron";
 import { getMainWindow } from "../window";
 import { openBrowserLogin } from "../services/auth";
-import { pickDirectory, writeProject, readProjectFile, CompiledFile, listProjectDirectory } from "../services/fileWriter";
+import { pickDirectory, writeProject, readProjectFile, CompiledFile, listProjectDirectory, deleteProjectFiles } from "../services/fileWriter";
 import {
   runDockerPreflight,
   startDocker,
@@ -51,9 +51,16 @@ export function registerIpcHandlers(): void {
       _event,
       outputDir: string,
       files: CompiledFile[],
-      options?: { cleanStale?: boolean }
+      options?: { cleanStale?: boolean; deletedFiles?: string[] }
     ) => {
       return writeProject(outputDir, files, options);
+    }
+  );
+
+  ipcMain.handle(
+    "fs:delete-files",
+    async (_event, outputDir: string, relativePaths: string[]) => {
+      return deleteProjectFiles(outputDir, relativePaths);
     }
   );
 
