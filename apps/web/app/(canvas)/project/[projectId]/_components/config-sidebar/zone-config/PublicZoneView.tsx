@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Globe, Plus, Trash2 } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
@@ -11,22 +11,28 @@ import {
 } from "@workspace/ui/components/select";
 import { BackendNode } from "@/types/canvas";
 import { WebAppZone } from "@workspace/canvas";
+import { ZoneLayoutSection } from "./ZoneLayoutSection";
 
 interface PublicZoneViewProps {
   currentZone: WebAppZone;
+  webAppNodeId: string;
   connectedPages: BackendNode[];
   allWebPageNodes: BackendNode[];
   onCreateNewPage: () => void;
   onTogglePageConnection: (pageId: string, isConnected: boolean) => void;
+  onUpdateZone: (updatedZone: WebAppZone) => void;
 }
 
 export const PublicZoneView = ({
   currentZone,
+  webAppNodeId,
   connectedPages,
   allWebPageNodes,
   onCreateNewPage,
   onTogglePageConnection,
+  onUpdateZone,
 }: PublicZoneViewProps) => {
+  const [layoutOpen, setLayoutOpen] = useState(true);
   const unattachedPages = allWebPageNodes.filter(
     (w) => !connectedPages.some((p) => p.id === w.id),
   );
@@ -46,6 +52,15 @@ export const PublicZoneView = ({
           This section is for unprotected pages like landing, pricing, about, etc. No authentication or redirect rules required.
         </span>
       </div>
+
+      {/* Route Group Layout Section */}
+      <ZoneLayoutSection
+        isOpen={layoutOpen}
+        onToggle={() => setLayoutOpen((prev) => !prev)}
+        currentZone={currentZone}
+        webAppNodeId={webAppNodeId}
+        onUpdateZone={onUpdateZone}
+      />
 
       <div className="flex flex-col gap-4 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
         <div className="flex items-center justify-between">

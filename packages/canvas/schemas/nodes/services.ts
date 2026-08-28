@@ -268,6 +268,11 @@ export const webAppZoneSchema = z.object({
         .optional(),
     })
     .optional(),
+  hasLayout: z.boolean().optional(),
+  layoutDescription: z.string().optional(),
+  layoutSourceCode: z.string().optional(),
+  layoutImageUrl: z.string().optional(),
+  layoutImages: z.array(z.string()).optional(),
 });
 
 export const webAppDataSchema = baseNodeDataSchema

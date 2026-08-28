@@ -5,3 +5,4 @@ export * from "./AccessConditionsSection";
 export * from "./RedirectMapSection";
 export * from "./CustomLogicSection";
 export * from "./MiddlewareCodePreviewSection";
+export * from "./ZoneLayoutSection";
