@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Input } from "@workspace/ui/components/input";
-import { Check, X, Pencil } from "lucide-react";
+import { Check, Trash, Pencil } from "lucide-react";
 import { SimulationTestCase } from "@workspace/canvas";
 
 interface TestCaseAccordionHeaderProps {
@@ -67,7 +67,7 @@ export const TestCaseAccordionHeader: React.FC<TestCaseAccordionHeaderProps> = (
           className="p-1 hover:bg-secondary text-muted-foreground rounded transition-colors cursor-pointer"
           title="Cancel"
         >
-          <X className="w-3.5 h-3.5" />
+          <Trash className="w-3.5 h-3.5" />
         </span>
       </div>
     );

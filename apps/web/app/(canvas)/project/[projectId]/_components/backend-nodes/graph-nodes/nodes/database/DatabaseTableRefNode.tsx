@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { Database, Server, Table2, Settings2, Trash2 } from "lucide-react";
+import { Database, Server, Table2, Settings, Trash2 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -138,7 +138,7 @@ export const DatabaseTableRefNode = ({
             onClick={handleOpenConfig}
             title="Configure Database"
           >
-            <Settings2 size={12} />
+            <Settings size={12} />
           </button>
           <button
             className="p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"

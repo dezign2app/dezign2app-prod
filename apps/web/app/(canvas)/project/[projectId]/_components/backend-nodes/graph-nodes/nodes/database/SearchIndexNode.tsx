@@ -6,7 +6,7 @@ import {
   ChevronUp,
   Settings,
   Plus,
-  X,
+  Trash,
   Check,
 } from "lucide-react";
 import { BackendNode, SearchSource } from "@/types/canvas";
@@ -351,7 +351,7 @@ const SearchSourceList = ({
               className="opacity-0 group-hover/src:opacity-100 text-muted-foreground hover:text-destructive"
               onClick={() => removeSource(source.id)}
             >
-              <X size={13} />
+              <Trash size={13} />
             </button>
           </div>
           {!collapsed[source.id] && (
@@ -417,7 +417,7 @@ const SearchSourceList = ({
                           className="p-0.5 text-muted-foreground hover:text-destructive"
                           onClick={() => removeIndex(source.id, item.id)}
                         >
-                          <X size={13} />
+                          <Trash size={13} />
                         </button>
                       </div>
                     </div>
@@ -472,7 +472,7 @@ const SearchSourceList = ({
               setNewTable("");
             }}
           >
-            <X size={14} />
+            <Trash size={14} />
           </Button>
         </div>
       )}

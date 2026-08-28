@@ -14,6 +14,7 @@ import { getLastIndex } from "../utils";
 import { computeNodeDeletionDiff } from "@/lib/compiler/nodeDeletionDiff";
 import { handleNodeDeletionSync } from "@/lib/compiler/nodeDeletionSync";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
+import { useSectionCollapseStore } from "@/lib/stores/sectionCollapseStore";
 
 export interface NodeSlice {
   nodes: BackendNode[];
@@ -111,6 +112,7 @@ export const createNodeSlice = (
     }
 
     if (removedIds.length > 0) {
+      useSectionCollapseStore.getState().deleteNodeCollapseState(removedIds);
       updates = cleanupDeletedNodesState(currentState, removedIds);
       currentState = { ...currentState, ...updates };
     }
@@ -621,6 +623,7 @@ export const createNodeSlice = (
   },
 
   deleteNode: (id) => {
+    useSectionCollapseStore.getState().deleteNodeCollapseState(id);
     const currentState = get();
     const nodeToDelete = currentState.nodes.find((n) => n.id === id);
     const isSchema =
@@ -653,6 +656,7 @@ export const createNodeSlice = (
 
   deleteNodes: (ids) => {
     if (!ids || ids.length === 0) return;
+    useSectionCollapseStore.getState().deleteNodeCollapseState(ids);
     const currentState = get();
     const isSchema = currentState.nodes.some(
       (n) =>

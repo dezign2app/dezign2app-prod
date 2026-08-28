@@ -30,7 +30,7 @@ import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { useParams } from "next/navigation";
-import { Plus, FlaskConical, Sparkles, Pencil, Check, X } from "lucide-react";
+import { Plus, FlaskConical, Sparkles, Pencil, Check, Trash } from "lucide-react";
 import { SimulationTestCase } from "@workspace/canvas";
 import { TestCaseEditor } from "../../../config-sidebar/TestCaseEditor";
 import { Endpoint, BackendNode, UIEventItem } from "@/types/canvas";
@@ -98,7 +98,7 @@ const TestCaseAccordionHeader = ({
           className="p-1 hover:bg-secondary text-muted-foreground rounded transition-colors cursor-pointer"
           title="Cancel"
         >
-          <X className="w-3.5 h-3.5" />
+          <Trash className="w-3.5 h-3.5" />
         </span>
       </div>
     );

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Key, Settings, Plus, Check, X } from "lucide-react";
+import { Key, Settings, Plus, Check, Trash } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -201,7 +201,7 @@ const ProviderRow = ({
                     handleDelete(item.id);
                   }}
                 >
-                  <X size={14} />
+                  <Trash size={14} />
                 </div>
               </div>
             </div>

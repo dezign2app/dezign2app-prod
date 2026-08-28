@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { PRESET_TRIGGER_OPTIONS } from "./constants";
+import { PRESET_TRIGGER_OPTIONS } from "@workspace/canvas";
 
 interface RedirectMapSectionProps {
   isOpen: boolean;

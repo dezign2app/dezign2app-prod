@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Plus, X, Check, Settings } from "lucide-react";
+import { Plus, Trash, Check, Settings } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import {
   Select,
@@ -260,7 +260,7 @@ export const EndpointRow = ({
                     handleDelete(item.id);
                   }}
                 >
-                  <X size={14} />
+                  <Trash size={14} />
                 </div>
               </div>
             </div>
@@ -306,7 +306,7 @@ export const EndpointRow = ({
                           });
                         }}
                       >
-                        <X size={12} />
+                        <Trash size={12} />
                       </div>
                     </div>
                     <Handle

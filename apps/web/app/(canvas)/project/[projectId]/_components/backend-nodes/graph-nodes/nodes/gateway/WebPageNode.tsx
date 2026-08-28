@@ -4,8 +4,7 @@ import {
   Globe,
   Lock,
   Pencil,
-  Loader2,
-  Settings2,
+  Settings,
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -231,7 +230,7 @@ export const WebPageNode = ({
             className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
             title="Page settings & configuration"
           >
-            <Settings2 size={12} />
+            <Settings size={12} />
           </button>
 
           {/* Edit UI (visual page editor) */}

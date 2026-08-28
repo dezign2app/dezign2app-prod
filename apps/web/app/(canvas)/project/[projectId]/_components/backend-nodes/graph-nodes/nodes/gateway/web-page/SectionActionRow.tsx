@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Position, Handle } from "@xyflow/react";
-import { Play, Settings2, X } from "lucide-react";
+import { Play, Settings, Trash } from "lucide-react";
 import { BackendNode, Endpoint, UIEventItem, PageSection } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { Input } from "@workspace/ui/components/input";
@@ -348,7 +348,7 @@ export const SectionActionRow = ({
                 }}
                 title="Action configuration"
               >
-                <Settings2 size={11} />
+                <Settings size={11} />
               </button>
               <button
                 type="button"
@@ -359,7 +359,7 @@ export const SectionActionRow = ({
                 }}
                 title="Delete action"
               >
-                <X size={11} />
+                <Trash size={11} />
               </button>
             </div>
           </div>

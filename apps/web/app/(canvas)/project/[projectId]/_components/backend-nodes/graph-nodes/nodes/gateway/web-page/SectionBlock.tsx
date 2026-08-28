@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { Position, Handle, useUpdateNodeInternals } from "@xyflow/react";
-import { ChevronDown, ChevronRight, Settings2, X, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Settings, Trash, Plus, Trash2 } from "lucide-react";
 import { BackendNode, Endpoint, UIEventItem, PageSection } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { generateId } from "../../../common";
 import { Input } from "@workspace/ui/components/input";
 import { SectionActionRow } from "./SectionActionRow";
+
+import { useSectionCollapseStore } from "@/lib/stores/sectionCollapseStore";
 
 export interface SectionBlockProps {
   nodeId: string;
@@ -27,7 +29,18 @@ export const SectionBlock = ({
   getLinkedEndpoint,
   onTriggerEvent,
 }: SectionBlockProps) => {
-  const [isOpen, setIsOpen] = useState(true);
+  const isCollapsed = useSectionCollapseStore((s) =>
+    s.isSectionCollapsed(nodeId, section.id),
+  );
+  const setSectionCollapsed = useSectionCollapseStore((s) => s.setSectionCollapsed);
+  const toggleSectionCollapsed = useSectionCollapseStore(
+    (s) => s.toggleSectionCollapsed,
+  );
+  const deleteSectionCollapseState = useSectionCollapseStore(
+    (s) => s.deleteSectionCollapseState,
+  );
+
+  const isOpen = !isCollapsed;
   const [isEditingName, setIsEditingName] = useState(false);
   const [sectionName, setSectionName] = useState(section.name);
 
@@ -77,6 +90,7 @@ export const SectionBlock = ({
 
   const handleDeleteSection = (e: React.MouseEvent) => {
     e.stopPropagation();
+    deleteSectionCollapseState(nodeId, section.id);
     const store = useBackendCanvasStore.getState();
     section.actions.forEach((act) => {
       const edge = store.edges.find(
@@ -109,7 +123,7 @@ export const SectionBlock = ({
       s.id === section.id ? { ...s, actions: [...s.actions, newAction] } : s,
     );
     updateSections(updated);
-    setIsOpen(true);
+    setSectionCollapsed(nodeId, section.id, false);
   };
 
   const renderMode = section.renderMode || "server";
@@ -128,7 +142,7 @@ export const SectionBlock = ({
           "px-2.5 py-1.5 bg-secondary/30 hover:bg-secondary/50 flex items-center justify-between gap-1.5 cursor-pointer nodrag select-none transition-colors group/sec relative",
           isLastSection && !isOpen && "rounded-b-[10px]",
         )}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => toggleSectionCollapsed(nodeId, section.id)}
       >
         {/* Collapsed Handles: keep edges anchored to the section header when collapsed */}
         {!isOpen && (
@@ -207,7 +221,7 @@ export const SectionBlock = ({
             className="p-0.5 text-muted-foreground hover:text-foreground"
             onClick={(e) => {
               e.stopPropagation();
-              setIsOpen(!isOpen);
+              toggleSectionCollapsed(nodeId, section.id);
             }}
           >
             {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -277,7 +291,7 @@ export const SectionBlock = ({
           <button
             type="button"
             onClick={handleAddAction}
-            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary opacity-0 group/sec:opacity-100 transition-all cursor-pointer"
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
             title="Add action"
           >
             <Plus size={11} />
@@ -294,19 +308,19 @@ export const SectionBlock = ({
               })
             }
             className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
-            title="Configure section & AI prompt"
+            title="Configure section"
           >
-            <Settings2 size={11} />
+            <Settings size={11} />
           </button>
 
           {/* Delete Section */}
           <button
             type="button"
             onClick={handleDeleteSection}
-            className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group/sec:opacity-100 transition-all cursor-pointer"
+            className="p-1 rounded text-muted-foreground/70 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
             title="Delete section"
           >
-            <X size={11} />
+            <Trash2 size={11} />
           </button>
         </div>
       </div>

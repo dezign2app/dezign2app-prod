@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Zap, Database, Code2, Settings2, Sparkles, Layers } from "lucide-react";
+import { Zap, Database, Code2, Settings, Sparkles, Layers } from "lucide-react";
 import { PipelineStepDraft, ExpectedArg } from "./types";
 import { ensureRedisCacheConnection } from "./utils";
 
@@ -650,7 +650,7 @@ export const RedisOperationStepSection = ({
           className="flex items-center gap-1 text-[9px] text-muted-foreground/60 hover:text-muted-foreground transition-colors self-start"
           onClick={onToggleAdvancedSettings}
         >
-          <Settings2 size={10} />
+          <Settings size={10} />
           <span>{showAdvancedSettings ? "Hide" : "Show"} Advanced Import & Function Overrides</span>
         </button>
 

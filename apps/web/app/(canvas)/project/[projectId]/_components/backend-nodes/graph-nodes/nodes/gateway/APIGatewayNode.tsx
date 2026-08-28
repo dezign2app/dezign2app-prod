@@ -5,7 +5,7 @@ import {
   ChevronDown,
   ChevronUp,
   Plus,
-  X,
+  Trash,
   Settings,
 } from "lucide-react";
 import { BackendNode, AuthRule, IdentityProvider } from "@/types/canvas";
@@ -210,7 +210,7 @@ export const APIGatewayNode = ({
                   className="text-muted-foreground hover:text-destructive"
                   onClick={() => deleteRule(rule.id)}
                 >
-                  <X size={13} />
+                  <Trash size={13} />
                 </button>
               </div>
             </div>

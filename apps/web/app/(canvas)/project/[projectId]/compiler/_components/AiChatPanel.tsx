@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import {
   Sparkles,
-  X,
+  Trash,
   Send,
   Bot,
   User,
@@ -145,7 +145,7 @@ export function AiChatPanel({
           onClick={onClose}
           className="h-6 w-6 text-slate-400 hover:text-white"
         >
-          <X className="w-3.5 h-3.5" />
+          <Trash className="w-3.5 h-3.5" />
         </Button>
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Eraser, TerminalSquare, X } from "lucide-react";
+import { Eraser, TerminalSquare, Trash } from "lucide-react";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { Button } from "@workspace/ui/components/button";
 import { useEffect, useRef } from "react";
@@ -75,7 +75,7 @@ export function SimulationTerminal() {
           className="h-6 w-6 rounded-full"
           onClick={() => useSimulationStore.setState({ terminalOpen: false })}
         >
-          <X className="w-4 h-4" />
+          <Trash className="w-4 h-4" />
         </Button>
       </header>
       <div ref={innerRef} className="space-y-1 px-3 py-2 font-mono text-[10px]">

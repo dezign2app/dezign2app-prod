@@ -2,7 +2,7 @@
 
 import React from "react";
 import { AlertDialogTitle, AlertDialogDescription } from "@workspace/ui/components/alert-dialog";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, Trash } from "lucide-react";
 
 interface NodeDeletionHeaderProps {
   primaryNodeLabel: string;
@@ -47,7 +47,7 @@ export function NodeDeletionHeader({
         className="text-zinc-500 hover:text-zinc-300 p-1.5 rounded-lg hover:bg-zinc-800/60 transition-colors shrink-0"
         title="Close dialog"
       >
-        <X className="w-4 h-4" />
+        <Trash className="w-4 h-4" />
       </button>
     </div>
   );

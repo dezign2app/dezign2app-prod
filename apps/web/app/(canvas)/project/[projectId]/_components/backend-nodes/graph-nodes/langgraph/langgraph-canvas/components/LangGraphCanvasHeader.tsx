@@ -3,7 +3,7 @@ import {
   Network,
   Save,
   ArrowLeft,
-  X,
+  Trash,
   Check,
   Loader2,
   Code2,
@@ -105,7 +105,7 @@ export function LangGraphCanvasHeader({
           className="h-8 w-8 text-muted-foreground hover:text-foreground"
           onClick={onClose}
         >
-          <X className="w-4 h-4" />
+          <Trash className="w-4 h-4" />
         </Button>
       </div>
     </div>

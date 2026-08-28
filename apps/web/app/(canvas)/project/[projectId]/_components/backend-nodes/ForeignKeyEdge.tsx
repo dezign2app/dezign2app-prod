@@ -10,7 +10,7 @@ import {
 import { BackendEdge } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { cn } from "@workspace/ui/lib/utils";
-import { X } from "lucide-react";
+import { Trash } from "lucide-react";
 
 export type ForeignKeyEdgeProps = EdgeProps<BackendEdge> & {
   sourceHandle?: string | null;
@@ -276,7 +276,7 @@ export const ForeignKeyEdge = (props: ForeignKeyEdgeProps) => {
                 className="ml-0.5 rounded-full p-0.5 hover:bg-destructive/30 hover:text-destructive text-primary-foreground/80 transition-colors"
                 title="Delete connection"
               >
-                <X className="w-2.5 h-2.5" />
+                <Trash className="w-2.5 h-2.5" />
               </button>
             )}
           </div>

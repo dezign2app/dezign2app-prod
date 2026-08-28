@@ -1,7 +1,7 @@
 import React from "react";
 import {
   FileJson,
-  Settings2,
+  Settings,
   MessageSquare,
   AlertTriangle,
 } from "lucide-react";
@@ -62,7 +62,7 @@ export function AgentStructuredOutputSection({
           {/* Strategy Choice: Provider vs Tool vs Auto */}
           <div className="flex flex-col gap-2">
             <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-              <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
+              <Settings className="w-3.5 h-3.5 text-muted-foreground" />
               Response Strategy
             </Label>
             <Select

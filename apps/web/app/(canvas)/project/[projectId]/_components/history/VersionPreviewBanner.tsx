@@ -3,7 +3,7 @@
 import React from "react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
-import { Eye, RotateCcw, X, Loader2 } from "lucide-react";
+import { Eye, RotateCcw, Trash, Loader2 } from "lucide-react";
 
 interface VersionPreviewBannerProps {
   versionNumber: number;
@@ -56,7 +56,7 @@ export function VersionPreviewBanner({
           onClick={onExitPreview}
           disabled={isRestoring}
         >
-          <X className="w-3.5 h-3.5 mr-1" />
+          <Trash className="w-3.5 h-3.5 mr-1" />
           Exit Preview
         </Button>
       </div>

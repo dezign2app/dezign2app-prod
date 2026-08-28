@@ -13,7 +13,7 @@ import {
   Save,
   RotateCcw,
   Sparkles,
-  X,
+  Trash,
   Code2,
   CheckCircle2,
   AlertCircle,
@@ -195,7 +195,7 @@ export function PageCodeEditor({
                   className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-muted-foreground/20 text-muted-foreground hover:text-foreground transition-opacity"
                   title="Close tab"
                 >
-                  <X className="w-3 h-3" />
+                  <Trash className="w-3 h-3" />
                 </button>
               )}
             </div>

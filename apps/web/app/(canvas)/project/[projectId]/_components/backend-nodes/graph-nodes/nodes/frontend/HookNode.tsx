@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Anchor, Settings2, Trash2 } from "lucide-react";
+import { Anchor, Settings, Trash2 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -141,7 +141,7 @@ export const HookNode = ({
           onClick={handleOpenConfig}
           title="Configure Hook"
         >
-          <Settings2 size={13} />
+          <Settings size={13} />
         </button>
         <button
           className="p-1 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
