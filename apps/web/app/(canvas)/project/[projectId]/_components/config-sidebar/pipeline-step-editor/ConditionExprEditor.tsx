@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash } from "lucide-react";
 import { SmartPathInput } from "./SmartPathInput";
 import {
   ConditionExpr,
@@ -180,7 +180,7 @@ export const ConditionExprEditor = ({
                     onClick={() => removeClause(idx)}
                     title="Remove condition"
                   >
-                    <Trash2 size={12} />
+                    <Trash size={12} />
                   </button>
                 )}
               </div>

@@ -1,5 +1,5 @@
 import React from "react";
-import { Bot, Trash2, Sparkles } from "lucide-react";
+import { Bot, Trash, Sparkles } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import { LocalInput, LocalTextarea } from "../../../../../common";
 import type { AgentNodeData } from "../../../types";
@@ -39,7 +39,7 @@ export function AgentIdentitySection({
             onClick={onDeleteAgent}
             title="Delete Agent Node"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash className="w-4 h-4" />
           </button>
         </div>
       </div>

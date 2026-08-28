@@ -1,5 +1,5 @@
 import React from "react";
-import { Layers, RefreshCw, Trash2, Plus } from "lucide-react";
+import { Layers, RefreshCw, Trash, Plus } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import type { LangGraphStateChannel } from "@/types/canvas";
@@ -103,7 +103,7 @@ export const StateChannelMappingSection: React.FC<
                     onClick={() => onRemoveMapping(ch.key)}
                     title="Remove custom mapping"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash className="w-3.5 h-3.5" />
                   </Button>
                 )}
               </div>
@@ -144,7 +144,7 @@ export const StateChannelMappingSection: React.FC<
                 className="h-7 w-7 text-muted-foreground hover:text-destructive"
                 onClick={() => onRemoveCustomField(idx)}
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash className="w-3.5 h-3.5" />
               </Button>
             </div>
           </div>

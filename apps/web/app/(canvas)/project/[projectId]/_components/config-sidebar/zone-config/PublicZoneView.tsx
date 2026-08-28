@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Globe, Plus, Trash2 } from "lucide-react";
+import { Globe, Plus, Trash } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -137,7 +137,7 @@ export const PublicZoneView = ({
                       className="p-1 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
                       title="Detach page"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ))}

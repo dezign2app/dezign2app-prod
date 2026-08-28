@@ -1,7 +1,7 @@
 import React from "react";
 import {
   Database,
-  Trash2,
+  Trash,
   HardDrive,
   Key,
   Layers,
@@ -71,7 +71,7 @@ export function MemoryNodeInspector({
             onClick={onDeleteMemory}
             title="Delete Memory Node"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash className="w-4 h-4" />
           </button>
         </div>
       </div>

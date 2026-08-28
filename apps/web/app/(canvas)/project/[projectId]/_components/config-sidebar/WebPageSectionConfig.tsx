@@ -345,6 +345,8 @@ export const WebPageSectionConfig: React.FC<WebPageSectionConfigProps> = ({ id, 
       {/* Header Banner */}
       <div className="px-4">
         <SectionConfigHeader
+          nodeId={nodeId}
+          sectionId={section.id}
           pageLabel={parentNode.data?.label}
           sectionName={section.name}
           renderMode={renderMode}

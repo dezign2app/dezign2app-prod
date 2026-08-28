@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { NodeProps, NodeResizer, Handle, Position } from "@xyflow/react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
-import { Globe, ShieldCheck, Trash2, Layers } from "lucide-react";
+import { Globe, ShieldCheck, Trash, Layers } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
@@ -180,7 +180,7 @@ export const WebAppGroupNode = ({
               onClick={handleDelete}
               title="Delete App Container"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>

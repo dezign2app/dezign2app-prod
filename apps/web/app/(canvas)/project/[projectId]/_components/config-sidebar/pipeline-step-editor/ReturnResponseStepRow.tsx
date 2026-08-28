@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { ChevronDown, ChevronRight, Plus, Trash2, Send } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash, Send } from "lucide-react";
 import { BindingSourceEditor } from "./BindingSourceEditor";
 import { PipelineStepDraft, StepBinding } from "./types";
 import { getAvailableSources, HTTP_STATUS_OPTIONS } from "./utils";
@@ -263,7 +263,7 @@ export const ReturnResponseStepRow = ({
                       onClick={() => removeBinding(bi)}
                       title="Remove field"
                     >
-                      <Trash2 size={11} />
+                      <Trash size={11} />
                     </button>
                   ) : (
                     <div className="w-5" />

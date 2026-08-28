@@ -1,10 +1,13 @@
 "use client";
 
-import React from "react";
-import { Trash2 } from "lucide-react";
+import React, { useState } from "react";
+import { Trash } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
+import { NodeDeletionDialog } from "../../node-deletion-dialog/NodeDeletionDialog";
 
 interface SectionConfigHeaderProps {
+  nodeId?: string;
+  sectionId?: string;
   pageLabel?: string;
   sectionName?: string;
   renderMode?: "server" | "client";
@@ -12,11 +15,14 @@ interface SectionConfigHeaderProps {
 }
 
 export const SectionConfigHeader: React.FC<SectionConfigHeaderProps> = ({
+  nodeId,
+  sectionId,
   pageLabel,
   sectionName,
   renderMode = "server",
   onDelete,
 }) => {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const badgeLabel = renderMode === "client" ? "CLIENT" : "RSC";
 
   return (
@@ -36,15 +42,45 @@ export const SectionConfigHeader: React.FC<SectionConfigHeaderProps> = ({
       </div>
 
       {onDelete && (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onDelete}
-          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
-          title="Delete section"
-        >
-          <Trash2 size={15} />
-        </Button>
+        <>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setDeleteDialogOpen(true)}
+            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0 cursor-pointer"
+            title="Delete section"
+          >
+            <Trash size={15} />
+          </Button>
+
+          {nodeId && sectionId ? (
+            <NodeDeletionDialog
+              open={deleteDialogOpen}
+              onOpenChange={setDeleteDialogOpen}
+              deletionTarget={{
+                type: "section",
+                nodeId,
+                section: {
+                  id: sectionId,
+                  name: sectionName,
+                },
+                onConfirm: onDelete,
+              }}
+            />
+          ) : (
+            <NodeDeletionDialog
+              open={deleteDialogOpen}
+              onOpenChange={setDeleteDialogOpen}
+              deletionTarget={{
+                type: "custom",
+                itemLabel: sectionName || "Section",
+                itemType: "section",
+                title: `Delete Section "${sectionName || "Untitled"}"?`,
+                onConfirm: onDelete,
+              }}
+            />
+          )}
+        </>
       )}
     </div>
   );

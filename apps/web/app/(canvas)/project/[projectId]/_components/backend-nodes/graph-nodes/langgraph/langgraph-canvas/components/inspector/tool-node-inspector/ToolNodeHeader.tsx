@@ -1,5 +1,5 @@
 import React from "react";
-import { Wrench, Trash2 } from "lucide-react";
+import { Wrench, Trash } from "lucide-react";
 
 interface ToolNodeHeaderProps {
   name?: string;
@@ -34,7 +34,7 @@ export function ToolNodeHeader({
           onClick={onDeleteTool}
           title="Delete Tool Node"
         >
-          <Trash2 className="w-4 h-4" />
+          <Trash className="w-4 h-4" />
         </button>
       </div>
     </div>

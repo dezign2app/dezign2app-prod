@@ -22,7 +22,7 @@ import {
 } from "@workspace/ui/components/select";
 import {
   Plus,
-  Trash2,
+  Trash,
   Copy,
   Check,
   Database,
@@ -495,7 +495,7 @@ export function TestUserPersonaEditor({
                         onClick={() => handleRemoveRecord(recIndex)}
                         className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash className="w-3.5 h-3.5" />
                       </Button>
                     )}
                   </div>

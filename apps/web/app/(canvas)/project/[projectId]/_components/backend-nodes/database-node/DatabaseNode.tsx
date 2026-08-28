@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Trash2, Settings, Server, Table2, Key, Palette } from "lucide-react";
+import { Database, Trash, Settings, Server, Table2, Key, Palette } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
@@ -155,7 +155,7 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
                 requestDeleteNode(id);
               }}
             >
-              <Trash2 size={14} />
+              <Trash size={14} />
             </div>
           </div>
         </div>

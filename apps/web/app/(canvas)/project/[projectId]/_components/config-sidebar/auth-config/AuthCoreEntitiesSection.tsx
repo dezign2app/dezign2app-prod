@@ -18,7 +18,7 @@ import {
 import {
   UserCheck,
   Plus,
-  Trash2,
+  Trash,
   Table,
   Code2,
   AlertCircle,
@@ -909,7 +909,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
                             className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                             title="Remove function mapping"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>

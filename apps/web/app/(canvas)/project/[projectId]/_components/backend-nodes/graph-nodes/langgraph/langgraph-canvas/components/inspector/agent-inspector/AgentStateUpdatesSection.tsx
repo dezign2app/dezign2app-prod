@@ -1,5 +1,5 @@
 import React from "react";
-import { Zap, Plus, Trash2 } from "lucide-react";
+import { Zap, Plus, Trash } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Switch } from "@workspace/ui/components/switch";
@@ -143,7 +143,7 @@ export function AgentStateUpdatesSection({
                     onUpdateAgent({ stateUpdates: updated });
                   }}
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash className="w-3.5 h-3.5" />
                 </Button>
               </div>
 

@@ -6,7 +6,7 @@ import {
   ShieldCheck,
   Sparkles,
   ExternalLink,
-  Trash2,
+  Trash,
   Pencil,
   Plug,
   Zap,
@@ -289,7 +289,7 @@ export const LangGraphNode = ({
             }}
             title="Delete Node"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash className="w-3.5 h-3.5" />
           </Button>
         </div>
       </div>

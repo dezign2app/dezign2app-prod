@@ -10,10 +10,11 @@ import {
   Cpu,
   Layers,
   Unplug,
-  Trash2,
+  Trash,
   Link2Off,
   CheckCircle2,
   Info,
+  Zap,
 } from "lucide-react";
 import { NodeArchitectureImpact } from "./types";
 
@@ -58,6 +59,16 @@ function getNodeTypeIcon(type: string) {
     case "transformer":
     case "transformer_ref":
       return <Cpu className={iconClass} />;
+    case "column":
+    case "index":
+      return <Database className={iconClass} />;
+    case "section":
+    case "zone":
+      return <Globe className={iconClass} />;
+    case "action":
+      return <Zap className={iconClass} />;
+    case "endpoint":
+      return <Server className={iconClass} />;
     default:
       return <Layers className={iconClass} />;
   }
@@ -207,7 +218,7 @@ export function NodeArchitectureImpactView({
         {cascadeElements.length > 0 && (
           <div className="space-y-1.5">
             <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
-              <Trash2 className="w-3 h-3 text-zinc-500" /> Child Elements ({cascadeElements.length})
+              <Trash className="w-3 h-3 text-zinc-500" /> Child Elements ({cascadeElements.length})
             </span>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">

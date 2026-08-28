@@ -1,7 +1,7 @@
 import React from "react";
 import {
   Radio,
-  Trash2,
+  Trash,
   Zap,
   Plug,
   Globe,
@@ -106,7 +106,7 @@ export function OutputNodeInspector({
             onClick={onDeleteOutput}
             title="Delete Output Node"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash className="w-4 h-4" />
           </button>
         </div>
       </div>

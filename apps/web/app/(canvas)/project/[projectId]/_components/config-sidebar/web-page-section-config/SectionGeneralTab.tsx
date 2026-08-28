@@ -17,7 +17,7 @@ import {
   BarChart3,
   Box,
   Package,
-  Trash2,
+  Trash,
   type LucideIcon,
 } from "lucide-react";
 import { SECTION_PRESETS, SectionPreset, SectionIconName } from "@workspace/canvas";
@@ -229,7 +229,7 @@ export const SectionGeneralTab: React.FC<SectionGeneralTabProps> = ({
               onClick={onDelete}
               className="h-7 text-xs font-medium gap-1.5"
             >
-              <Trash2 size={12} />
+              <Trash size={12} />
               <span>Delete</span>
             </Button>
           </div>

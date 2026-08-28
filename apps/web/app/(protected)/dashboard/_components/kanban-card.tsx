@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { Draggable } from "@hello-pangea/dnd";
-import { Trash2, GripVertical } from "lucide-react";
+import { Trash, GripVertical } from "lucide-react";
 import { Doc, Id } from "@workspace/backend/_generated/dataModel";
 
 interface KanbanCardProps {
@@ -48,7 +48,7 @@ const KanbanCard = ({ task, index, onDelete, isPending }: KanbanCardProps) => {
               disabled={isPending}
               className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground/50 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Trash2 size={14} />
+              <Trash size={14} />
             </button>
           </div>
 

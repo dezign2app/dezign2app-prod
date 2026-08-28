@@ -6,7 +6,7 @@ import {
   Image as ImageIcon,
   Upload,
   Link as LinkIcon,
-  Trash2,
+  Trash,
   Eye,
   Plus,
   Sparkles,
@@ -315,7 +315,7 @@ export const SectionUiDesignTab: React.FC<SectionUiDesignTabProps> = ({
                       className="p-1 rounded text-red-400 hover:text-red-300 hover:bg-red-500/20 transition-colors"
                       title="Remove image"
                     >
-                      <Trash2 size={12} />
+                      <Trash size={12} />
                     </button>
                   </div>
                 </div>

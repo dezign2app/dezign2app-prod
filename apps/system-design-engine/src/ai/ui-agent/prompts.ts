@@ -89,7 +89,7 @@ ${componentCatalog}
 3. **Imports**:
    - Import UI components from \`@workspace/ui/components/<component-name>\` (e.g. \`import { Button } from "@workspace/ui/components/button";\`).
    - Import \`cn\` from \`@workspace/ui/lib/utils\`.
-   - Import icons from \`lucide-react\` (e.g. \`import { Search, Plus, Trash2, ArrowUpRight, TrendingUp, Sparkles, Filter } from "lucide-react";\`).
+   - Import icons from \`lucide-react\` (e.g. \`import { Search, Plus, Trash, ArrowUpRight, TrendingUp, Sparkles, Filter } from "lucide-react";\`).
 4. **Design Quality & Aesthetics**:
    - Modern, sleek, state-of-the-art UI with responsive flex/grid layouts, clean spacing (\`p-6\`, \`gap-4\`, \`space-y-6\`).
    - Use semantic Tailwind tokens (\`bg-background\`, \`text-foreground\`, \`bg-card\`, \`border-border\`, \`text-muted-foreground\`, \`bg-primary\`, \`text-primary-foreground\`).

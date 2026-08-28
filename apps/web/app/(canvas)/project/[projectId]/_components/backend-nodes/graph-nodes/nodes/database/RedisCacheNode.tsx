@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { DatabaseZap, Server, Layers, Settings, Trash2 } from "lucide-react";
+import { DatabaseZap, Server, Layers, Settings, Trash } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -139,7 +139,7 @@ export const RedisCacheNode = ({
             onClick={handleDelete}
             title="Delete Node"
           >
-            <Trash2 size={12} />
+            <Trash size={12} />
           </button>
         </div>
       </div>

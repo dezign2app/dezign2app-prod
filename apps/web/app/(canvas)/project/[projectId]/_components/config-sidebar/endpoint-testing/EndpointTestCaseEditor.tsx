@@ -25,7 +25,6 @@ import {
 } from "@workspace/ui/components/alert-dialog";
 import {
   Trash,
-  Trash2,
   Plus,
   Copy,
   Sliders,
@@ -433,7 +432,7 @@ export function EndpointTestCaseEditor({
                     className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 rounded"
                     onClick={() => handleRemoveHeader(header.id)}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash className="w-3.5 h-3.5" />
                   </Button>
                 </div>
               ))}
@@ -502,7 +501,7 @@ export function EndpointTestCaseEditor({
                       className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 rounded"
                       onClick={() => handleRemoveParam(param.id)}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash className="w-3.5 h-3.5" />
                     </Button>
                   </div>
                 ))
@@ -572,7 +571,7 @@ export function EndpointTestCaseEditor({
                       className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 rounded"
                       onClick={() => handleRemoveParam(param.id)}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash className="w-3.5 h-3.5" />
                     </Button>
                   </div>
                 ))

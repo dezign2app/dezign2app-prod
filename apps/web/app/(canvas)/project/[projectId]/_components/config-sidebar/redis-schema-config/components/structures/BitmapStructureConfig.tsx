@@ -1,5 +1,5 @@
 import React from "react";
-import { Binary, Plus, Trash2 } from "lucide-react";
+import { Binary, Plus, Trash } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
@@ -100,7 +100,7 @@ export const BitmapStructureConfig: React.FC<BitmapStructureConfigProps> = ({
                   updateData({ bitmapConfig: { bitDescriptions: updated } });
                 }}
               >
-                <Trash2 size={12} />
+                <Trash size={12} />
               </Button>
             </div>
           ))}

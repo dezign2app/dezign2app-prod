@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { Database, Server, Table2, Settings, Trash2 } from "lucide-react";
+import { Database, Server, Table2, Settings, Trash } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -145,7 +145,7 @@ export const DatabaseTableRefNode = ({
             onClick={handleDelete}
             title="Delete Node"
           >
-            <Trash2 size={12} />
+            <Trash size={12} />
           </button>
         </div>
       </div>

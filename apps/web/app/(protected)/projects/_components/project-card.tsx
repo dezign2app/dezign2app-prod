@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Pencil, Trash2, Copy, ExternalLink, FolderOpen } from "lucide-react";
+import { Pencil, Trash, Copy, ExternalLink, FolderOpen } from "lucide-react";
 import { Doc } from "@workspace/backend/_generated/dataModel";
 import {
   Card,
@@ -103,7 +103,7 @@ export const ProjectCard = ({ project, className }: ProjectCardProps) => {
     { isSeparator: true },
     {
       label: "Delete",
-      icon: <Trash2 size={14} />,
+      icon: <Trash size={14} />,
       variant: "destructive",
       onClick: (e) => {
         e?.preventDefault();

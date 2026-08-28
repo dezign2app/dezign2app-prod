@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { WEB_PAGE_EVENTS } from "@workspace/canvas";
+import { NodeDeletionDialog } from "../../../../../node-deletion-dialog";
 
 const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
 
@@ -38,6 +39,7 @@ export const SectionActionRow = ({
   const [editName, setEditName] = useState(action.name || "");
   const [editEvent, setEditEvent] = useState(action.event || "click");
   const [customEvent, setCustomEvent] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
@@ -355,7 +357,7 @@ export const SectionActionRow = ({
                 className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDelete();
+                  setDeleteDialogOpen(true);
                 }}
                 title="Delete action"
               >
@@ -365,6 +367,19 @@ export const SectionActionRow = ({
           </div>
         </div>
       )}
+
+      {/* Detailed Action Deletion Dialog */}
+      <NodeDeletionDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        deletionTarget={{
+          type: "action",
+          nodeId,
+          sectionId,
+          action,
+          onConfirm: handleDelete,
+        }}
+      />
     </div>
   );
 };

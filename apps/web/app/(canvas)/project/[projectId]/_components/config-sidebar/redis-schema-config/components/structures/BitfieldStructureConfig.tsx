@@ -1,5 +1,5 @@
 import React from "react";
-import { Binary, Plus, Trash2 } from "lucide-react";
+import { Binary, Plus, Trash } from "lucide-react";
 import { BackendNode, RedisBitfieldSubfield, isBitfieldOverflow } from "@/types/canvas";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
@@ -116,7 +116,7 @@ export const BitfieldStructureConfig: React.FC<BitfieldStructureConfigProps> = (
                   updateData({ bitfieldConfig: { fields: updated } });
                 }}
               >
-                <Trash2 size={12} />
+                <Trash size={12} />
               </Button>
             </div>
           ))}

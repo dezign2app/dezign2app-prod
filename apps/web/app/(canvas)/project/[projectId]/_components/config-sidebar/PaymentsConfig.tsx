@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { CreditCard, Plus, Trash2, PlugZap, ShieldCheck } from "lucide-react";
+import { CreditCard, Plus, Trash, PlugZap, ShieldCheck } from "lucide-react";
 import { PaymentsPlanConfig } from "@workspace/canvas";
 
 export const PaymentsConfig = ({
@@ -211,7 +211,7 @@ export const PaymentsConfig = ({
                   }}
                   className="p-1 text-muted-foreground hover:text-destructive"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>

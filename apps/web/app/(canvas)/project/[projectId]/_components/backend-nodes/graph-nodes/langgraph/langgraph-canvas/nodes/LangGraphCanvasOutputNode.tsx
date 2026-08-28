@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { NodeProps, Handle, Position, useReactFlow } from "@xyflow/react";
-import { Radio, Zap, Plug, Globe, Trash2 } from "lucide-react";
+import { Radio, Zap, Plug, Globe, Trash } from "lucide-react";
 import type { OutputNode, LangGraphCanvasNode } from "@workspace/canvas";
 import { LANGGRAPH_CANVAS_NODE_OUTPUT } from "../constants";
 
@@ -131,7 +131,7 @@ export const LangGraphCanvasOutputNode = ({
             className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
             title="Delete Output Channel"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash className="w-3.5 h-3.5" />
           </button>
         )}
       </div>

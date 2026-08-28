@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { NodeProps, Handle, Position, useReactFlow } from "@xyflow/react";
 import {
   Shield,
-  Trash2,
+  Trash,
   UserCheck,
   Gauge,
   Activity,
@@ -240,7 +240,7 @@ export const LangGraphCanvasMiddlewareNode = ({
             }}
             title="Delete Middleware"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash className="w-3.5 h-3.5" />
           </button>
         )}
       </div>

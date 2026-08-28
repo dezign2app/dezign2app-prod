@@ -1,5 +1,5 @@
 import React from "react";
-import { Database, Key, Server, Plus, Table2, Trash2, CheckCircle2, DatabaseZap, HardDrive, Radio, AlertTriangle } from "lucide-react";
+import { Database, Key, Server, Plus, Table2, Trash, CheckCircle2, DatabaseZap, HardDrive, Radio, AlertTriangle } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
@@ -557,7 +557,7 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
                     if (edge) store.deleteEdge(edge.id);
                   }}
                 >
-                  <Trash2 size={12} />
+                  <Trash size={12} />
                 </Button>
               </div>
             ))}

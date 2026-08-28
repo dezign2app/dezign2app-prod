@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { BindingSourceEditor } from "./BindingSourceEditor";
@@ -101,7 +101,7 @@ export const ArgumentBindingsSection = ({
             onClick={() => onRemoveBinding(bi)}
             title="Remove argument"
           >
-            <Trash2 size={11} />
+            <Trash size={11} />
           </button>
         </div>
       ))}

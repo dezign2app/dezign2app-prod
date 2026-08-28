@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { NodeProps, Handle, Position, useReactFlow } from "@xyflow/react";
-import { Database, Trash2, HardDrive, Key, Layers } from "lucide-react";
+import { Database, Trash, HardDrive, Key, Layers } from "lucide-react";
 import { Switch } from "@workspace/ui/components/switch";
 import {
   Select,
@@ -154,7 +154,7 @@ export const LangGraphCanvasMemoryNode = ({
             }}
             title="Delete Memory Node"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash className="w-4 h-4" />
           </button>
         )}
       </div>

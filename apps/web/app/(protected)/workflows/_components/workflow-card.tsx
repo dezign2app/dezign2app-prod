@@ -11,7 +11,7 @@ import {
   Clock3,
   Pencil,
   Rocket,
-  Trash2,
+  Trash,
   Workflow,
 } from "lucide-react";
 import { api } from "@workspace/backend/_generated/api";
@@ -165,7 +165,7 @@ export const WorkflowCard = ({
                 isReadOnly ? onBlockedAction() : setIsDeleteOpen(true)
               }
             >
-              <Trash2 className="size-3.5" />
+              <Trash className="size-3.5" />
               Delete
             </Button>
           </div>

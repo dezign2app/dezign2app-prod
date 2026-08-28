@@ -2,9 +2,8 @@
 
 import React from "react";
 import {
-  Trash,
   Sparkles,
-  Trash2,
+  Trash,
   History,
   Plus,
   ArrowLeft,
@@ -156,7 +155,7 @@ export function AiPanelHeader({
                     className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded"
                     onClick={onClearHistory}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash className="w-3.5 h-3.5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Clear current messages</TooltipContent>

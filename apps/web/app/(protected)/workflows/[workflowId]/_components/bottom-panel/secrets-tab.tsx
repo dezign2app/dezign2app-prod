@@ -7,7 +7,7 @@ import {
   KeyRound,
   Plus,
   ShieldCheck,
-  Trash2,
+  Trash,
   Pencil,
 } from "lucide-react";
 import { Id } from "@workspace/backend/_generated/dataModel";
@@ -119,7 +119,7 @@ export const SecretsTab = ({ onStartEdit }: SecretsTabProps) => {
                           size="icon"
                           className="size-8 text-sidebar-foreground/40 hover:text-destructive"
                         >
-                          <Trash2 className="size-3.5" />
+                          <Trash className="size-3.5" />
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>

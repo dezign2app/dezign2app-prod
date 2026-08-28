@@ -1,5 +1,5 @@
 import React from "react";
-import { Brain, Plus, Zap, Trash2 } from "lucide-react";
+import { Brain, Plus, Zap, Trash } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -48,7 +48,7 @@ export function StepNodeInspector({
           className="h-7 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
           onClick={onDeleteStep}
         >
-          <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete Step
+          <Trash className="w-3.5 h-3.5 mr-1" /> Delete Step
         </Button>
       </div>
 
@@ -214,7 +214,7 @@ export function StepNodeInspector({
                     onUpdateStep({ stateUpdates: updated });
                   }}
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash className="w-3.5 h-3.5" />
                 </Button>
               </div>
 

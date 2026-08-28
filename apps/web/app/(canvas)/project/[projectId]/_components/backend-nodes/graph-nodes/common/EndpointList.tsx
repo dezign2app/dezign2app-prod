@@ -3,6 +3,16 @@ import { Handle, Position } from "@xyflow/react";
 import { Plus, Trash, Check, Settings } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -50,6 +60,7 @@ export const EndpointRow = ({
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
   );
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const allEdges = useBackendCanvasStore((s) => s.edges);
 
@@ -254,11 +265,12 @@ export const EndpointRow = ({
                   <Settings size={14} />
                 </div>
                 <div
-                  className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                  className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleDelete(item.id);
+                    setDeleteDialogOpen(true);
                   }}
+                  title="Delete Endpoint"
                 >
                   <Trash size={14} />
                 </div>
@@ -322,6 +334,44 @@ export const EndpointRow = ({
           </div>
         )}
       </div>
+
+      {/* Delete Endpoint Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent
+          onClick={(e) => e.stopPropagation()}
+          className="bg-[#111216] border-zinc-800 text-zinc-100 max-w-md shadow-2xl ring-1 ring-white/10"
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-100 font-semibold">
+              Delete Endpoint "{item.name || `${item.type} Endpoint`}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400 text-xs leading-relaxed">
+              Are you sure you want to delete this endpoint? All pipeline logic, response schemas, and canvas connection handles tied to this endpoint will be removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteDialogOpen(false);
+              }}
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700 hover:text-zinc-100"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteDialogOpen(false);
+                handleDelete(item.id);
+              }}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+            >
+              Delete Endpoint
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

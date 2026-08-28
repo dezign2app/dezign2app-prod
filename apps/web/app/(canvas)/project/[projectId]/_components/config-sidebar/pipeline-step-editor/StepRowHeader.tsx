@@ -7,7 +7,7 @@ import {
   GripVertical,
   ArrowUp,
   ArrowDown,
-  Trash2,
+  Trash,
   AlertTriangle,
 } from "lucide-react";
 import { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
@@ -158,7 +158,7 @@ export const StepRowHeader = ({
           onClick={onDelete}
           title="Delete step"
         >
-          <Trash2 size={11} />
+          <Trash size={11} />
         </button>
       </div>
       {expanded ? (

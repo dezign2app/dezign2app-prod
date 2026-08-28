@@ -1,5 +1,5 @@
 import React from "react";
-import { Trash2, Database, Key } from "lucide-react";
+import { Trash, Database, Key } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -102,7 +102,7 @@ export const ConditionCard: React.FC<ConditionCardProps> = ({
           className="p-1 text-muted-foreground hover:text-destructive transition-colors cursor-pointer shrink-0"
           title="Delete condition"
         >
-          <Trash2 className="w-3.5 h-3.5" />
+          <Trash className="w-3.5 h-3.5" />
         </button>
       </div>
 

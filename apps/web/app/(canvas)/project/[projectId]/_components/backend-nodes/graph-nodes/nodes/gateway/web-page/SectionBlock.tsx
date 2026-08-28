@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Position, Handle, useUpdateNodeInternals } from "@xyflow/react";
-import { ChevronDown, ChevronRight, Settings, Trash, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Settings, Trash, Plus } from "lucide-react";
 import { BackendNode, Endpoint, UIEventItem, PageSection } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -9,6 +9,7 @@ import { Input } from "@workspace/ui/components/input";
 import { SectionActionRow } from "./SectionActionRow";
 
 import { useSectionCollapseStore } from "@/lib/stores/sectionCollapseStore";
+import { NodeDeletionDialog } from "../../../../../node-deletion-dialog";
 
 export interface SectionBlockProps {
   nodeId: string;
@@ -43,6 +44,7 @@ export const SectionBlock = ({
   const isOpen = !isCollapsed;
   const [isEditingName, setIsEditingName] = useState(false);
   const [sectionName, setSectionName] = useState(section.name);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const updateNodeInternals = useUpdateNodeInternals();
 
@@ -88,8 +90,7 @@ export const SectionBlock = ({
     updateSections(updated);
   };
 
-  const handleDeleteSection = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDeleteSection = () => {
     deleteSectionCollapseState(nodeId, section.id);
     const store = useBackendCanvasStore.getState();
     section.actions.forEach((act) => {
@@ -316,11 +317,14 @@ export const SectionBlock = ({
           {/* Delete Section */}
           <button
             type="button"
-            onClick={handleDeleteSection}
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteDialogOpen(true);
+            }}
             className="p-1 rounded text-muted-foreground/70 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
             title="Delete section"
           >
-            <Trash2 size={11} />
+            <Trash size={11} />
           </button>
         </div>
       </div>
@@ -362,6 +366,18 @@ export const SectionBlock = ({
           </button>
         </div>
       )}
+
+      {/* Detailed Section Deletion Dialog */}
+      <NodeDeletionDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        deletionTarget={{
+          type: "section",
+          nodeId,
+          section,
+          onConfirm: handleDeleteSection,
+        }}
+      />
     </div>
   );
 };

@@ -18,7 +18,6 @@ import {
   Archive,
   Maximize2,
   Minimize2,
-  Trash2,
   RefreshCw,
   CheckCircle2,
   AlertTriangle,
@@ -362,7 +361,7 @@ export function TerminalHeader({
             className="h-6 w-6 p-0 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
             title="Clear terminal buffer (Ctrl+L / clear)"
           >
-            <Trash2 className="w-3 h-3" />
+            <Trash className="w-3 h-3" />
           </Button>
         )}
 

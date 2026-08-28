@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Table2, Trash2, Settings } from "lucide-react";
+import { Database, Table2, Trash, Settings } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
@@ -252,7 +252,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                 useBackendCanvasStore.getState().requestDeleteNode(id);
               }}
             >
-              <Trash2 size={14} />
+              <Trash size={14} />
             </div>
           </div>
         </div>

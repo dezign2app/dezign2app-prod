@@ -17,6 +17,7 @@ import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import { COLUMN_TYPES } from "@/lib/schema/columnTypes";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { NodeDeletionDialog } from "../../node-deletion-dialog/NodeDeletionDialog";
 
 export type ColumnItem = NonNullable<BackendNode["data"]["columns"]>[0];
 
@@ -55,6 +56,7 @@ export const ColumnRow = ({
 }: ColumnRowProps) => {
   const [expanded, setExpanded] = useState(false);
   const [isSelectOpen, setIsSelectOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const nodes = useBackendCanvasStore((s) => s.nodes);
 
   const entityNodes = nodes.filter((n) => n.type === "entity");
@@ -239,11 +241,12 @@ export const ColumnRow = ({
                 {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </div>
               <div
-                className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDelete(index);
+                  setDeleteDialogOpen(true);
                 }}
+                title="Delete Column"
               >
                 <Trash size={14} />
               </div>
@@ -411,6 +414,19 @@ export const ColumnRow = ({
             )}
           </div>
         </div>
+      )}
+
+      {nodeId && (
+        <NodeDeletionDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          deletionTarget={{
+            type: "column",
+            nodeId,
+            column: col,
+            onConfirm: () => handleDelete(index),
+          }}
+        />
       )}
     </div>
   );

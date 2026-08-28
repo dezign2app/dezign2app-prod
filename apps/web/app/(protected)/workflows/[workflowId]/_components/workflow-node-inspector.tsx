@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Trash2 } from "lucide-react";
+import { Trash } from "lucide-react";
 import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -198,7 +198,7 @@ export const WorkflowNodeInspector = () => {
                       : onDeleteNode(selectedNode.id)
                   }
                 >
-                  <Trash2 className="size-3.5" />
+                  <Trash className="size-3.5" />
                   Delete Node
                 </Button>
               </div>

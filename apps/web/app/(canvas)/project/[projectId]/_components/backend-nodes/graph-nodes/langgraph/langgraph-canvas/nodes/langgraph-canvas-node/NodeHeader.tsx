@@ -1,5 +1,5 @@
 import React from "react";
-import { Bot, Sparkles, ChevronUp, ChevronDown, Trash2 } from "lucide-react";
+import { Bot, Sparkles, ChevronUp, ChevronDown, Trash } from "lucide-react";
 import { LocalInput } from "../../../../common";
 
 interface NodeHeaderProps {
@@ -103,7 +103,7 @@ export const NodeHeader: React.FC<NodeHeaderProps> = ({
           }}
           title="Delete Node"
         >
-          <Trash2 className="w-4 h-4" />
+          <Trash className="w-4 h-4" />
         </button>
       </div>
     </div>

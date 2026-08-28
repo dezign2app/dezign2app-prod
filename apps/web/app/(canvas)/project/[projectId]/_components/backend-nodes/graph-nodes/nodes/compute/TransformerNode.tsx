@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Shuffle, Settings, Trash2 } from "lucide-react";
+import { Shuffle, Settings, Trash } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -136,7 +136,7 @@ export const TransformerNode = ({
           onClick={handleDelete}
           title="Delete Node"
         >
-          <Trash2 size={13} />
+          <Trash size={13} />
         </button>
       </div>
 
