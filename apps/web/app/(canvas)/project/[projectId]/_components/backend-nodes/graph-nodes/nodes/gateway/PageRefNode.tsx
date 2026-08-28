@@ -146,7 +146,7 @@ export const PageRefNode = ({
         )}
       </div>
 
-      <div className="p-3 bg-secondary/5 flex flex-col gap-2 nodrag">
+      <div className="p-3 bg-secondary/5 flex flex-col gap-2 nodrag rounded-b-[10px]">
         <div className="space-y-1">
           <label className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
             <Globe size={10} /> Target Page

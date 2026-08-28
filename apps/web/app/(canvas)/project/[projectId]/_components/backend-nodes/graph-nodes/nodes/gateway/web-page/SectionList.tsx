@@ -1,6 +1,7 @@
 import React from "react";
 import { Plus } from "lucide-react";
 import { BackendNode, Endpoint, UIEventItem, PageSection } from "@/types/canvas";
+import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { generateId } from "../../../common";
 import { SectionBlock } from "./SectionBlock";
@@ -174,7 +175,12 @@ export const SectionList = ({
 
   return (
     <>
-      <div className="px-3 py-1 bg-secondary/40 border-t border-b text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex justify-between items-center group">
+      <div
+        className={cn(
+          "px-3 py-1 bg-secondary/40 border-t border-b text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex justify-between items-center group",
+          sections.length === 0 && "border-b-0 rounded-b-[10px]",
+        )}
+      >
         Sections & Actions
         <div
           className="opacity-0 group-hover:opacity-100 cursor-pointer text-muted-foreground hover:text-foreground transition-all"
@@ -186,12 +192,13 @@ export const SectionList = ({
       </div>
 
       <div className="flex flex-col">
-        {sections.map((section) => (
+        {sections.map((section, index) => (
           <SectionBlock
             key={section.id}
             nodeId={nodeId}
             section={section}
             sections={sections}
+            isLastSection={index === sections.length - 1}
             updateSections={updateSections}
             getLinkedEndpoint={getLinkedEndpoint}
             onTriggerEvent={onTriggerEvent}

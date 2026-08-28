@@ -149,11 +149,14 @@ declare module "@xyflow/react" {
     setEdges: (edges: TEdge[] | ((edges: TEdge[]) => TEdge[])) => void;
     getNodes: () => TNode[];
     getEdges: () => TEdge[];
+    updateNodeInternals: (nodeId: string | string[]) => void;
     deleteElements: (params: {
       nodes?: { id: string }[];
       edges?: { id: string }[];
     }) => void;
   };
+
+  export function useUpdateNodeInternals(): (nodeId: string | string[]) => void;
 
   export function applyNodeChanges<TNode = Node>(
     changes: NodeChange<TNode>[],

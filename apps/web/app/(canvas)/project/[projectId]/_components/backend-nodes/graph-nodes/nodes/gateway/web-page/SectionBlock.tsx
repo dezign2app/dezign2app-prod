@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { Position, Handle, useUpdateNodeInternals } from "@xyflow/react";
 import { ChevronDown, ChevronRight, Settings2, X, Plus } from "lucide-react";
 import { BackendNode, Endpoint, UIEventItem, PageSection } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -11,6 +12,7 @@ export interface SectionBlockProps {
   nodeId: string;
   section: PageSection;
   sections: PageSection[];
+  isLastSection?: boolean;
   updateSections: (sections: PageSection[]) => void;
   getLinkedEndpoint: (actionId: string) => { targetNode: BackendNode; endpoint: Endpoint } | null;
   onTriggerEvent: (triggerInfo: { event: UIEventItem; targetNode: BackendNode; endpoint: Endpoint }) => void;
@@ -20,6 +22,7 @@ export const SectionBlock = ({
   nodeId,
   section,
   sections,
+  isLastSection,
   updateSections,
   getLinkedEndpoint,
   onTriggerEvent,
@@ -27,6 +30,14 @@ export const SectionBlock = ({
   const [isOpen, setIsOpen] = useState(true);
   const [isEditingName, setIsEditingName] = useState(false);
   const [sectionName, setSectionName] = useState(section.name);
+
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    if (typeof updateNodeInternals === "function") {
+      updateNodeInternals(nodeId);
+    }
+  }, [isOpen, section.actions, nodeId, updateNodeInternals]);
 
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
@@ -105,12 +116,91 @@ export const SectionBlock = ({
   const loadStrategy = section.loadStrategy || "eager";
 
   return (
-    <div className="flex flex-col border-b last:border-b-0 bg-card/60">
+    <div
+      className={cn(
+        "flex flex-col border-b last:border-b-0 bg-card/60",
+        isLastSection && "rounded-b-[10px]",
+      )}
+    >
       {/* Section Header */}
       <div
-        className="px-2.5 py-1.5 bg-secondary/30 hover:bg-secondary/50 flex items-center justify-between gap-1.5 cursor-pointer nodrag select-none transition-colors group/sec"
+        className={cn(
+          "px-2.5 py-1.5 bg-secondary/30 hover:bg-secondary/50 flex items-center justify-between gap-1.5 cursor-pointer nodrag select-none transition-colors group/sec relative",
+          isLastSection && !isOpen && "rounded-b-[10px]",
+        )}
         onClick={() => setIsOpen(!isOpen)}
       >
+        {/* Collapsed Handles: keep edges anchored to the section header when collapsed */}
+        {!isOpen && (
+          <>
+            {section.actions.map((act) => {
+              const evtStr = (act.event as string) || "";
+              const evtLower = evtStr.toLowerCase();
+              const isPageLoad = evtStr === "pageLoad";
+              const isSse =
+                evtStr === "sse" || evtStr === "sseMessage" || evtLower === "sse";
+              const isWebsocket =
+                evtStr === "websocket" ||
+                evtStr === "ws" ||
+                evtStr === "websocketMessage" ||
+                evtLower === "websocket" ||
+                evtLower === "ws";
+              const isWebrtc = evtStr === "webrtc" || evtLower === "webrtc";
+
+              return (
+                <React.Fragment key={act.id}>
+                  {/* Right outgoing event handle */}
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={`events-${act.id}`}
+                    className="w-2 h-2 -right-1"
+                    style={{ top: "50%" }}
+                  />
+
+                  {/* Protocol / Inbound Left handles */}
+                  {isPageLoad && (
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={`pageload-in-${act.id}`}
+                      className="w-2 h-2 -left-1 !bg-emerald-500"
+                      style={{ top: "50%" }}
+                    />
+                  )}
+                  {isSse && (
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={`sse-in-${act.id}`}
+                      className="w-2 h-2 -left-1 !bg-amber-500"
+                      style={{ top: "50%" }}
+                    />
+                  )}
+                  {isWebsocket && (
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={`websocket-in-${act.id}`}
+                      className="w-2 h-2 -left-1 !bg-cyan-500"
+                      style={{ top: "50%" }}
+                    />
+                  )}
+                  {isWebrtc && (
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={`webrtc-in-${act.id}`}
+                      className="w-2 h-2 -left-1 !bg-purple-500"
+                      style={{ top: "50%" }}
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </>
+        )}
+
         <div className="flex items-center gap-1 min-w-0 flex-1">
           <button
             type="button"
@@ -223,7 +313,12 @@ export const SectionBlock = ({
 
       {/* Section Actions Body */}
       {isOpen && (
-        <div className="flex flex-col bg-background/40">
+        <div
+          className={cn(
+            "flex flex-col bg-background/40",
+            isLastSection && "rounded-b-[10px]",
+          )}
+        >
           {section.actions.map((act) => (
             <SectionActionRow
               key={act.id}
@@ -241,7 +336,13 @@ export const SectionBlock = ({
           <button
             type="button"
             onClick={handleAddAction}
-            className="flex items-center justify-center gap-1 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors border-t border-dashed border-border/40 cursor-pointer nodrag"
+            className={cn(
+              "flex items-center justify-center gap-1 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors cursor-pointer nodrag",
+              section.actions.length === 0
+                ? "border-t border-dashed border-border/40"
+                : "border-t-0",
+              isLastSection && "rounded-b-[10px]",
+            )}
           >
             <Plus size={10} /> Add action
           </button>

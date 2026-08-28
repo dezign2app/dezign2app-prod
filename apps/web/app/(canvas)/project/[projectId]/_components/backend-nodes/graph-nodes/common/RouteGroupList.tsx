@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Handle, Position } from "@xyflow/react";
+import React, { useState, useEffect } from "react";
+import { Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
 import { Plus, X, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { BackendNode, Endpoint } from "@/types/canvas";
@@ -27,6 +27,14 @@ export const RouteGroupEditor = ({
   const [nameValue, setNameValue] = useState(group.name || "");
   const [editingBasePath, setEditingBasePath] = useState(false);
   const [basePathValue, setBasePathValue] = useState(group.basePath || "");
+
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    if (typeof updateNodeInternals === "function") {
+      updateNodeInternals(nodeId);
+    }
+  }, [collapsed, group.endpoints, nodeId, updateNodeInternals]);
 
   // Endpoint editing state
   const [editingEndpointId, setEditingEndpointId] = useState<string | null>(
@@ -121,9 +129,42 @@ export const RouteGroupEditor = ({
 
       {/* Group Header */}
       <div
-        className="px-3 py-1.5 bg-blue-500/5 flex items-center justify-between group/grp cursor-pointer nodrag"
+        className="px-3 py-1.5 bg-blue-500/5 flex items-center justify-between group/grp cursor-pointer nodrag relative"
         onClick={() => setCollapsed(!collapsed)}
       >
+        {collapsed && (
+          <>
+            {endpoints.map((ep) => (
+              <React.Fragment key={ep.id}>
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id={`endpoint-in-${ep.id}`}
+                  className="w-2 h-2 -left-1"
+                  style={{ top: "50%" }}
+                />
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={`endpoint-out-${ep.id}`}
+                  className="w-2 h-2 -right-1"
+                  style={{ top: "50%" }}
+                />
+                {ep.publishedEvents?.map((ev) => (
+                  <Handle
+                    key={ev.id}
+                    type="source"
+                    position={Position.Right}
+                    id={`publishedEvents-out-${ev.id}`}
+                    className="w-2 h-2 -right-1"
+                    style={{ top: "50%" }}
+                  />
+                ))}
+              </React.Fragment>
+            ))}
+          </>
+        )}
+
         <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
           <div className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-all shrink-0">
             {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}

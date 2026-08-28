@@ -193,7 +193,7 @@ export const SectionActionRow = ({
   };
 
   return (
-    <div className="flex flex-col px-3 py-1.5 border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20 nodrag">
+    <div className="flex flex-col px-3 py-1.5 border-b border-border/40 text-xs relative group/row hover:bg-secondary/20 nodrag">
       {/* Right outgoing event handle */}
       <Handle
         type="source"
