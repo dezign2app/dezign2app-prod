@@ -15,6 +15,8 @@ export const DEFAULT_ZONES: WebAppZone[] = [
     name: "Public Section",
     handleId: "public-in",
     accessType: "public",
+    hasLayout: true,
+    layoutDescription: "Public layout with top navigation bar, logo, and auth links",
     rule: {
       id: "rule-public",
       scope: "zone",
@@ -27,6 +29,8 @@ export const DEFAULT_ZONES: WebAppZone[] = [
     name: "Private Section",
     handleId: "private-in",
     accessType: "protected",
+    hasLayout: true,
+    layoutDescription: "Protected app layout with sidebar navigation, user profile, and session check",
     rule: {
       id: "rule-private",
       scope: "zone",

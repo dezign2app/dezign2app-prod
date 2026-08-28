@@ -16,6 +16,7 @@ import {
   RedirectMapSection,
   CustomLogicSection,
   MiddlewareCodePreviewSection,
+  ZoneLayoutSection,
 } from "./zone-config";
 
 export const ZoneConfig = ({
@@ -39,6 +40,7 @@ export const ZoneConfig = ({
   );
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    layout: true,
     conditions: true,
     redirects: true,
     custom: true,
@@ -250,15 +252,24 @@ export const ZoneConfig = ({
     }
   };
 
+  const handleUpdateZone = (updatedZone: WebAppZone) => {
+    const updatedZones = zones.some((z) => z.id === currentZone.id)
+      ? zones.map((z) => (z.id === currentZone.id ? updatedZone : z))
+      : [...zones, updatedZone];
+    updateNode(nodeId, { data: { ...data, zones: updatedZones } });
+  };
+
   // Render Public Section View
   if (isPublicZone) {
     return (
       <PublicZoneView
         currentZone={currentZone}
+        webAppNodeId={nodeId}
         connectedPages={connectedPages}
         allWebPageNodes={allWebPageNodes}
         onCreateNewPage={handleCreateNewPage}
         onTogglePageConnection={handleTogglePageConnection}
+        onUpdateZone={handleUpdateZone}
       />
     );
   }
@@ -429,6 +440,14 @@ export const ZoneConfig = ({
       />
 
       <div className="flex flex-col gap-6">
+        <ZoneLayoutSection
+          isOpen={openSections.layout ?? true}
+          onToggle={() => toggleSection("layout")}
+          currentZone={currentZone}
+          webAppNodeId={nodeId}
+          onUpdateZone={handleUpdateZone}
+        />
+
         <AccessConditionsSection
           isOpen={openSections.conditions ?? true}
           onToggle={() => toggleSection("conditions")}

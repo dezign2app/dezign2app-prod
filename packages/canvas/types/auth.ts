@@ -308,6 +308,11 @@ export interface WebAppZone {
   handleId: string;
   accessType: "public" | "protected";
   rule: ProtectionRule;
+  hasLayout?: boolean;
+  layoutDescription?: string;
+  layoutSourceCode?: string;
+  layoutImageUrl?: string;
+  layoutImages?: string[];
 }
 
 // ---- Session Claims ----

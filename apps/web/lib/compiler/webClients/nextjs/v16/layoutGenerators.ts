@@ -1,5 +1,5 @@
 import { PageInfo } from "./types";
-import { CompiledFile } from "@workspace/canvas/types";
+import { CompiledFile, BackendNode, WebAppZone } from "@workspace/canvas/types";
 import { slugToComponentName } from "./slugUtils";
 
 export function generateRootLayout(
@@ -42,16 +42,23 @@ export default function RootLayout({
 `;
 }
 
-export function generateSectionLayout(groupName: string, isAuthConnected: boolean = true): string {
+export function generateSectionLayout(
+  groupName: string,
+  isAuthConnected: boolean = true,
+  layoutDescription?: string,
+): string {
   const isPublic = groupName === "public";
   const badgeVariant = isPublic ? "secondary" : "outline";
   const sectionTitle = groupName.charAt(0).toUpperCase() + groupName.slice(1);
   const componentName = slugToComponentName(groupName) + "Layout";
+  const descriptionDoc = layoutDescription
+    ? `\n/**\n * Layout Specification:\n * ${layoutDescription.replace(/\n/g, "\n * ")}\n */`
+    : "";
 
   if (isPublic || !isAuthConnected) {
     return `import React from "react";
 import { Badge } from "@workspace/ui/components/badge";
-
+${descriptionDoc}
 export default function ${componentName}({
   children,
 }: {
@@ -78,7 +85,7 @@ export default function ${componentName}({
 
   return `import React from "react";
 import { Badge } from "@workspace/ui/components/badge";
-
+${descriptionDoc}
 /**
  * Next.js 16 Protected Section Layout
  * Tier 2 Validation: Deep session verification via requireSession() helper
@@ -123,7 +130,11 @@ export default async function ${componentName}({
 /**
  * Generates section layout files for all route groups present in pagesInfo
  */
-export function generateRouteGroupLayouts(pagesInfo: PageInfo[], isAuthConnected: boolean = true): CompiledFile[] {
+export function generateRouteGroupLayouts(
+  pagesInfo: PageInfo[],
+  isAuthConnected: boolean = true,
+  webAppNode?: BackendNode,
+): CompiledFile[] {
   const files: CompiledFile[] = [];
   const routeGroups = new Set<string>();
   pagesInfo.forEach((p) => {
@@ -131,11 +142,31 @@ export function generateRouteGroupLayouts(pagesInfo: PageInfo[], isAuthConnected
   });
   if (routeGroups.size === 0) routeGroups.add("public");
 
+  const zones: WebAppZone[] = Array.isArray(webAppNode?.data?.zones)
+    ? webAppNode.data.zones
+    : [];
+
   routeGroups.forEach((groupName) => {
+    const matchedZone = zones.find(
+      (z) =>
+        z.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") === groupName ||
+        (groupName === "public" && (z.id === "zone-public" || z.accessType === "public")) ||
+        (groupName === "private" && (z.id === "zone-private" || z.accessType === "protected")),
+    );
+
+    // If zone explicitly has layout disabled, skip generating layout.tsx
+    if (matchedZone && matchedZone.hasLayout === false) {
+      return;
+    }
+
     files.push({
       filename: `app/(${groupName})/layout.tsx`,
       language: "typescript",
-      content: generateSectionLayout(groupName, isAuthConnected),
+      content: generateSectionLayout(
+        groupName,
+        isAuthConnected,
+        matchedZone?.layoutDescription,
+      ),
     });
   });
 

@@ -70,7 +70,7 @@ export function compileNextjsV16WebClient(
   );
 
   // 2. Generate Route Group Layouts
-  files.push(...generateRouteGroupLayouts(pagesInfo, Boolean(authNode)));
+  files.push(...generateRouteGroupLayouts(pagesInfo, Boolean(authNode), webAppNode));
 
   // 3. Project Configuration Files
   files.push(...generateProjectConfigFiles(effectiveAppSlug));

@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   Plus,
   Trash2,
+  LayoutTemplate,
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { WebAppZone } from "@workspace/canvas/types";
@@ -29,6 +30,8 @@ const DEFAULT_ZONES: WebAppZone[] = [
     name: "Public Section",
     handleId: "public-in",
     accessType: "public",
+    hasLayout: true,
+    layoutDescription: "Public layout with top navigation bar, logo, and auth links",
     rule: {
       id: "rule-public",
       scope: "zone",
@@ -41,6 +44,8 @@ const DEFAULT_ZONES: WebAppZone[] = [
     name: "Private Section",
     handleId: "private-in",
     accessType: "protected",
+    hasLayout: true,
+    layoutDescription: "Protected app layout with sidebar navigation, user profile, and session check",
     rule: {
       id: "rule-private",
       scope: "zone",
@@ -135,6 +140,8 @@ export const WebAppNode = ({
       name: `Custom Zone ${zones.length + 1}`,
       handleId: `${newZoneId}-in`,
       accessType: "protected",
+      hasLayout: true,
+      layoutDescription: "Custom route group layout",
       rule: {
         id: `rule-${newZoneId}`,
         scope: "zone",
@@ -143,6 +150,18 @@ export const WebAppNode = ({
       },
     };
     updateNode(id, { data: { ...data, zones: [...zones, newZone] } });
+  };
+
+  const handleToggleZoneLayout = (zoneId: string, enabled?: boolean) => {
+    const updatedZones = zones.map((z) => {
+      if (z.id !== zoneId) return z;
+      const nextVal = typeof enabled === "boolean" ? enabled : !(z.hasLayout ?? false);
+      return {
+        ...z,
+        hasLayout: nextVal,
+      };
+    });
+    updateNode(id, { data: { ...data, zones: updatedZones } });
   };
 
   // Helper to find connected WebClient page nodes for a given section handle
@@ -230,7 +249,7 @@ export const WebAppNode = ({
                 nodeId: id,
               })
             }
-            className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
             title="App Settings"
           >
             <Settings className="w-3.5 h-3.5" />
@@ -243,6 +262,7 @@ export const WebAppNode = ({
         {zones.map((zone) => {
           const connectedPages = getConnectedPages(zone.handleId);
           const isPublic = zone.accessType === "public";
+          const isLayoutEnabled = Boolean(zone.hasLayout);
 
           return (
             <div
@@ -262,20 +282,59 @@ export const WebAppNode = ({
                 title={`Connect WebClient pages to ${zone.name}`}
               />
 
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+              {/* Zone Top Row */}
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[11px] font-semibold text-foreground flex items-center gap-1.5 truncate min-w-0">
                   {isPublic ? (
-                    <Globe className="w-3.5 h-3.5 text-foreground" />
+                    <Globe className="w-3.5 h-3.5 text-foreground shrink-0" />
                   ) : (
-                    <Lock className="w-3.5 h-3.5 text-indigo-500" />
+                    <Lock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                   )}
-                  {zone.name}
+                  <span className="truncate">{zone.name}</span>
                 </span>
 
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-muted-foreground font-mono">
-                    {isPublic ? "Open Access" : "Protected"}
-                  </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Sleek Layout Toggle Switch */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleZoneLayout(zone.id);
+                    }}
+                    className={cn(
+                      "flex items-center gap-1.5 px-1 py-0.5 rounded text-[10px] font-medium transition-all duration-200 cursor-pointer select-none bg-transparent hover:bg-muted/40",
+                      isLayoutEnabled
+                        ? "text-indigo-400"
+                        : "text-muted-foreground/60 hover:text-muted-foreground",
+                    )}
+                    title={
+                      isLayoutEnabled
+                        ? "Layout enabled for this section. Click to disable"
+                        : "Layout disabled for this section. Click to enable"
+                    }
+                  >
+                    <LayoutTemplate
+                      className={cn(
+                        "w-3 h-3 transition-colors",
+                        isLayoutEnabled ? "text-indigo-400" : "text-muted-foreground/50",
+                      )}
+                    />
+                    <span className="text-[9px] font-mono leading-none">Layout</span>
+                    <span
+                      className={cn(
+                        "w-5 h-2.5 rounded-full transition-colors duration-200 relative flex items-center px-0.5",
+                        isLayoutEnabled ? "bg-indigo-500" : "bg-muted-foreground/30",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "w-1.5 h-1.5 rounded-full bg-white transition-transform duration-200 ease-in-out shadow-xs",
+                          isLayoutEnabled ? "translate-x-2.5" : "translate-x-0",
+                        )}
+                      />
+                    </span>
+                  </button>
+
                   <button
                     onClick={() =>
                       setActiveConfigItem({
@@ -285,7 +344,7 @@ export const WebAppNode = ({
                       })
                     }
                     className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                    title={`Configure rules for ${zone.name}`}
+                    title={`Configure rules & layout for ${zone.name}`}
                   >
                     <Settings className="w-3 h-3" />
                   </button>
