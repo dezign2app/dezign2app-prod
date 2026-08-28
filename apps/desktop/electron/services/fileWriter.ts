@@ -37,10 +37,85 @@ export async function pickDirectory(
  * Writes compiled project files to target directory with file diff checking
  * and optional stale folder cleanup.
  */
+export interface DeleteFilesResult {
+  success: boolean;
+  deletedCount: number;
+  errors: string[];
+}
+
+/**
+ * Safely deletes a list of relative or absolute files from outputDir,
+ * cleaning up empty parent directories within the workspace.
+ */
+export async function deleteProjectFiles(
+  outputDir: string,
+  relativePaths: string[]
+): Promise<DeleteFilesResult> {
+  if (!outputDir || !fs.existsSync(outputDir) || !relativePaths || relativePaths.length === 0) {
+    return { success: true, deletedCount: 0, errors: [] };
+  }
+
+  let deletedCount = 0;
+  const errors: string[] = [];
+  const normalizedOutputDir = path.resolve(outputDir);
+
+  for (const relPath of relativePaths) {
+    if (!relPath || typeof relPath !== "string") continue;
+    try {
+      const fullPath = path.isAbsolute(relPath) ? relPath : path.join(outputDir, relPath);
+      const normalizedFullPath = path.resolve(fullPath);
+
+      // Security check: ensure path stays within outputDir
+      if (!normalizedFullPath.startsWith(normalizedOutputDir)) {
+        continue;
+      }
+
+      if (fs.existsSync(normalizedFullPath)) {
+        const stat = fs.statSync(normalizedFullPath);
+        if (stat.isDirectory()) {
+          fs.rmSync(normalizedFullPath, { recursive: true, force: true });
+        } else {
+          fs.unlinkSync(normalizedFullPath);
+
+          // Clean up empty parent directories recursively up to outputDir
+          let parentDir = path.dirname(normalizedFullPath);
+          while (parentDir !== normalizedOutputDir && parentDir.startsWith(normalizedOutputDir)) {
+            try {
+              const filesInParent = fs.readdirSync(parentDir);
+              if (filesInParent.length === 0) {
+                fs.rmdirSync(parentDir);
+                parentDir = path.dirname(parentDir);
+              } else {
+                break;
+              }
+            } catch {
+              break;
+            }
+          }
+        }
+        deletedCount++;
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      errors.push(`Failed to delete ${relPath}: ${msg}`);
+    }
+  }
+
+  return {
+    success: errors.length === 0,
+    deletedCount,
+    errors,
+  };
+}
+
+/**
+ * Writes compiled project files to target directory with file diff checking
+ * and optional stale folder / deleted files cleanup.
+ */
 export async function writeProject(
   outputDir: string,
   files: CompiledFile[],
-  options?: { cleanStale?: boolean }
+  options?: { cleanStale?: boolean; deletedFiles?: string[] }
 ): Promise<WriteProjectResult> {
   if (!outputDir) {
     return { success: false, path: outputDir, writtenCount: 0, totalCount: 0 };
@@ -48,6 +123,11 @@ export async function writeProject(
 
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  // If explicit deletedFiles are passed, remove them from disk first
+  if (options?.deletedFiles && options.deletedFiles.length > 0) {
+    await deleteProjectFiles(outputDir, options.deletedFiles);
   }
 
   let writtenCount = 0;
@@ -101,6 +181,30 @@ export async function writeProject(
               // Stale app directory that is no longer in canvas project
               const staleFolderPath = path.join(appsDir, item.name);
               fs.rmSync(staleFolderPath, { recursive: true, force: true });
+            }
+          }
+        }
+      }
+
+      // Also clean up stale packages if packages were deleted
+      const packagesDir = path.join(outputDir, "packages");
+      if (fs.existsSync(packagesDir)) {
+        const existingPackageFolders = fs.readdirSync(packagesDir, {
+          withFileTypes: true,
+        });
+        for (const item of existingPackageFolders) {
+          if (
+            item.isDirectory() &&
+            !item.name.startsWith(".") &&
+            !["ui", "typescript-config", "logger", "types"].includes(item.name)
+          ) {
+            const pkgPrefix = `packages/${item.name}/`;
+            const hasMatchingFile = Array.from(currentFileSet).some((f) =>
+              f.startsWith(pkgPrefix)
+            );
+            if (!hasMatchingFile) {
+              const stalePkgPath = path.join(packagesDir, item.name);
+              fs.rmSync(stalePkgPath, { recursive: true, force: true });
             }
           }
         }

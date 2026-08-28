@@ -25,7 +25,7 @@ export const TransformerRefNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
-  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
+  const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const edges = useBackendCanvasStore((s) => s.edges);
   const addEdge = useBackendCanvasStore((s) => s.addEdge);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
@@ -141,10 +141,7 @@ export const TransformerRefNode = ({
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    edges
-      .filter((e) => e.source === id || e.target === id)
-      .forEach((e) => deleteEdge(e.id));
-    deleteNode(id);
+    requestDeleteNode(id);
   };
 
   return (

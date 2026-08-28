@@ -14,39 +14,13 @@ export function useCanvasHandlers(projectId: string, view: BackendCanvasView) {
 
       if (removals.length > 0) {
         const store = useBackendCanvasStore.getState();
-        const entitiesToConfirm: BackendNode[] = [];
-        const safeToRemove: NodeChange[] = [];
+        const removedIdsSet = new Set(removals.map((r) => r.id));
+        const nodesToConfirm = store.nodes.filter((n) => removedIdsSet.has(n.id));
 
-        removals.forEach((r) => {
-          const node = store.nodes.find((n) => n.id === r.id);
-          if (node && node.type === "entity") {
-            const cols = node.data.columns || [];
-            const idxs = node.data.indexes || [];
-            const isEmpty = cols.length === 0 && idxs.length === 0;
-            const isInitial =
-              cols.length === 1 && cols[0]?.name === "_id" && idxs.length === 0;
-
-            if (!isEmpty && !isInitial) {
-              entitiesToConfirm.push(node);
-            } else {
-              safeToRemove.push(r);
-            }
-          } else if (node && node.type === "group") {
-            const hasChildren = store.nodes.some((n) => n.parentId === node.id);
-            if (hasChildren || node.data.label) {
-              entitiesToConfirm.push(node);
-            } else {
-              safeToRemove.push(r);
-            }
-          } else if (node) {
-            safeToRemove.push(r);
-          }
-        });
-
-        if (entitiesToConfirm.length > 0) {
-          store.setNodesPendingDeletion(entitiesToConfirm);
-          if (otherChanges.length > 0 || safeToRemove.length > 0) {
-            onNodesChangeStore([...otherChanges, ...safeToRemove]);
+        if (nodesToConfirm.length > 0) {
+          store.setNodesPendingDeletion(nodesToConfirm);
+          if (otherChanges.length > 0) {
+            onNodesChangeStore(otherChanges);
           }
           return;
         }

@@ -24,7 +24,7 @@ export const VectorDBRefNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
-  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
+  const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
   const edges = useBackendCanvasStore((s) => s.edges);
   const setActiveConfigItem = useBackendCanvasStore(
@@ -58,10 +58,7 @@ export const VectorDBRefNode = ({
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    edges
-      .filter((e) => e.source === id || e.target === id)
-      .forEach((e) => deleteEdge(e.id));
-    deleteNode(id);
+    requestDeleteNode(id);
   };
 
   return (

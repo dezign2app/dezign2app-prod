@@ -18,7 +18,7 @@ export const HookNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
-  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
+  const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
   );
@@ -56,7 +56,7 @@ export const HookNode = ({
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    deleteNode(id);
+    requestDeleteNode(id);
   };
 
   const scope = data.scope || "global";

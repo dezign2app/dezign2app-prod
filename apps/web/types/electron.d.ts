@@ -18,12 +18,20 @@ export interface ElectronAPI {
     writeProject(
       outputDir: string,
       files: ElectronCompiledFile[],
-      options?: { cleanStale?: boolean }
+      options?: { cleanStale?: boolean; deletedFiles?: string[] }
     ): Promise<{
       success: boolean;
       path: string;
       writtenCount?: number;
       totalCount?: number;
+    }>;
+    deleteFiles?(
+      outputDir: string,
+      relativePaths: string[]
+    ): Promise<{
+      success: boolean;
+      deletedCount: number;
+      errors: string[];
     }>;
     readFile(
       outputDir: string,

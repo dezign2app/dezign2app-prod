@@ -11,6 +11,9 @@ import { generateKeyBetween } from "fractional-indexing";
 import { BackendCanvasState } from "../types";
 import { cleanupDeletedNodesState } from "../stateCleanup";
 import { getLastIndex } from "../utils";
+import { computeNodeDeletionDiff } from "@/lib/compiler/nodeDeletionDiff";
+import { handleNodeDeletionSync } from "@/lib/compiler/nodeDeletionSync";
+import { useSimulationStore } from "@/lib/stores/simulationStore";
 
 export interface NodeSlice {
   nodes: BackendNode[];
@@ -32,6 +35,9 @@ export interface NodeSlice {
   ) => void;
   updateNode: (id: string, changes: Partial<BackendNode>) => void;
   deleteNode: (id: string) => void;
+  deleteNodes: (ids: string[]) => void;
+  requestDeleteNode: (id: string) => void;
+  requestDeleteNodes: (ids: string[]) => void;
 }
 
 export const createNodeSlice = (
@@ -85,6 +91,23 @@ export const createNodeSlice = (
             n.type === "redis_schema"),
       );
       get().pushHistorySnapshot(isSchema ? "schema" : "graph");
+
+      // Compute affected file diff and trigger disk sync & notification banner
+      try {
+        const testCases = useSimulationStore.getState().testCases || [];
+        const diff = computeNodeDeletionDiff(
+          currentState.nodes,
+          currentState.endpoints,
+          currentState.events,
+          currentState.edges,
+          testCases,
+          "Blueprint Monorepo",
+          removedIds,
+        );
+        void handleNodeDeletionSync(currentState.projectId || "", diff);
+      } catch (e) {
+        console.error("[onNodesChange] Failed to compute deletion diff:", e);
+      }
     }
 
     if (removedIds.length > 0) {
@@ -598,15 +621,81 @@ export const createNodeSlice = (
   },
 
   deleteNode: (id) => {
-    const nodeToDelete = get().nodes.find((n) => n.id === id);
+    const currentState = get();
+    const nodeToDelete = currentState.nodes.find((n) => n.id === id);
     const isSchema =
       nodeToDelete?.type === "entity" ||
       nodeToDelete?.type === "database" ||
       nodeToDelete?.type === "group" ||
       nodeToDelete?.type === "redis_instance" ||
       nodeToDelete?.type === "redis_schema";
-    get().pushHistorySnapshot(isSchema ? "schema" : "graph");
-    const updates = cleanupDeletedNodesState(get(), [id]);
+    currentState.pushHistorySnapshot(isSchema ? "schema" : "graph");
+
+    try {
+      const testCases = useSimulationStore.getState().testCases || [];
+      const diff = computeNodeDeletionDiff(
+        currentState.nodes,
+        currentState.endpoints,
+        currentState.events,
+        currentState.edges,
+        testCases,
+        "Blueprint Monorepo",
+        [id],
+      );
+      void handleNodeDeletionSync(currentState.projectId || "", diff);
+    } catch (e) {
+      console.error("[deleteNode] Failed to compute deletion diff:", e);
+    }
+
+    const updates = cleanupDeletedNodesState(currentState, [id]);
     set(updates);
+  },
+
+  deleteNodes: (ids) => {
+    if (!ids || ids.length === 0) return;
+    const currentState = get();
+    const isSchema = currentState.nodes.some(
+      (n) =>
+        ids.includes(n.id) &&
+        (n.type === "entity" ||
+          n.type === "database" ||
+          n.type === "group" ||
+          n.type === "redis_instance" ||
+          n.type === "redis_schema"),
+    );
+    currentState.pushHistorySnapshot(isSchema ? "schema" : "graph");
+
+    try {
+      const testCases = useSimulationStore.getState().testCases || [];
+      const diff = computeNodeDeletionDiff(
+        currentState.nodes,
+        currentState.endpoints,
+        currentState.events,
+        currentState.edges,
+        testCases,
+        "Blueprint Monorepo",
+        ids,
+      );
+      void handleNodeDeletionSync(currentState.projectId || "", diff);
+    } catch (e) {
+      console.error("[deleteNodes] Failed to compute deletion diff:", e);
+    }
+
+    const updates = cleanupDeletedNodesState(currentState, ids);
+    set(updates);
+  },
+
+  requestDeleteNode: (id) => {
+    const node = get().nodes.find((n) => n.id === id);
+    if (node) {
+      set({ nodesPendingDeletion: [node] });
+    }
+  },
+
+  requestDeleteNodes: (ids) => {
+    const nodes = get().nodes.filter((n) => ids.includes(n.id));
+    if (nodes.length > 0) {
+      set({ nodesPendingDeletion: nodes });
+    }
   },
 });

@@ -1,16 +1,6 @@
 "use client";
 
 import React from "react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@workspace/ui/components/alert-dialog";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { BackendCanvasView } from "@/types/canvas";
 import { ChatContainer } from "@/app/(protected)/_components/chat/chat-container";
@@ -21,6 +11,7 @@ import { GraphView } from "./GraphView";
 import { SequenceView } from "./SequenceView";
 import { useChatStore } from "@/app/(protected)/_components/chat/chat-store";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
+import { NodeDeletionDialog } from "./NodeDeletionDialog";
 
 import { Loader2 } from "lucide-react";
 
@@ -99,46 +90,17 @@ export function BackendCanvas(props: BackendCanvasProps) {
   const setNodesPendingDeletion = useBackendCanvasStore(
     (s) => s.setNodesPendingDeletion,
   );
-  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
 
   return (
     <>
       <Flow {...props} />
-      <AlertDialog
+      <NodeDeletionDialog
         open={nodesPendingDeletion.length > 0}
         onOpenChange={(open) => !open && setNodesPendingDeletion([])}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will delete the{" "}
-              {nodesPendingDeletion.length > 1
-                ? "selected items"
-                : nodesPendingDeletion[0]?.type === "group"
-                  ? "group"
-                  : "table"}{" "}
-              "
-              {nodesPendingDeletion
-                .map((n) => n.data.label || "Untitled")
-                .join(", ")}
-              " and all of their contents. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                nodesPendingDeletion.forEach((n) => deleteNode(n.id));
-                setNodesPendingDeletion([]);
-              }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        nodesPendingDeletion={nodesPendingDeletion}
+        projectId={props.projectId}
+        projectName={props.projectName}
+      />
       <ConfigSidebar />
       <ChatContainer />
     </>

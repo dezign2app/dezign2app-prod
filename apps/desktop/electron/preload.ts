@@ -21,8 +21,12 @@ export interface ElectronAPI {
     writeProject(
       outputDir: string,
       files: CompiledFile[],
-      options?: { cleanStale?: boolean }
+      options?: { cleanStale?: boolean; deletedFiles?: string[] }
     ): Promise<{ success: boolean; path: string; writtenCount?: number; totalCount?: number }>;
+    deleteFiles(
+      outputDir: string,
+      relativePaths: string[]
+    ): Promise<{ success: boolean; deletedCount: number; errors: string[] }>;
     readFile(
       outputDir: string,
       relativePath: string
@@ -122,8 +126,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     writeProject: (
       outputDir: string,
       files: CompiledFile[],
-      options?: { cleanStale?: boolean }
+      options?: { cleanStale?: boolean; deletedFiles?: string[] }
     ) => ipcRenderer.invoke("fs:write-project", outputDir, files, options),
+    deleteFiles: (outputDir: string, relativePaths: string[]) =>
+      ipcRenderer.invoke("fs:delete-files", outputDir, relativePaths),
     readFile: (outputDir: string, relativePath: string) =>
       ipcRenderer.invoke("fs:read-file", outputDir, relativePath),
     listDirectory: (outputDir: string) =>
