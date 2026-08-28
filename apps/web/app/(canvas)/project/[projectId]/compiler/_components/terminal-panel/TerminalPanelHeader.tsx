@@ -9,37 +9,25 @@ import {
   Maximize2,
   Minimize2,
   X,
-  Plus,
   Radio,
-  ChevronDown,
-  Monitor,
-  Code2,
+  Folder,
+  Archive,
+  RefreshCw,
+  FolderSync,
+  AlertTriangle,
+  Zap,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-} from "@workspace/ui/components/dropdown-menu";
-import { TerminalPanelTab, ServicePortInfo } from "./types";
-import { TerminalSession, TerminalType } from "../../../_components/terminal/types";
+import { TerminalPanelTab } from "@workspace/canvas/types";
+import { TerminalSession } from "../../../_components/terminal/types";
+import { AutoSyncStatus } from "../../../_components/terminal/hooks/useAutoDiskSync";
+import { formatDistanceToNow } from "date-fns";
 
-interface TerminalPanelHeaderProps {
+export interface TerminalPanelHeaderProps {
   selectedTab: TerminalPanelTab;
   onTabChange: (tab: TerminalPanelTab) => void;
   portsCount: number;
   sessions: TerminalSession[];
-  activeSessionId: string | null;
-  activeSession: TerminalSession | null;
-  onSelectSession: (id: string) => void;
-  onCloseSession: (id: string) => void;
-  onCreateSession: (options?: {
-    type?: TerminalType;
-    shell?: string;
-    title?: string;
-  }) => void;
   isMaximized: boolean;
   onToggleMaximize: () => void;
   onToggleOpen: () => void;
@@ -47,6 +35,15 @@ interface TerminalPanelHeaderProps {
   copied: boolean;
   onClear: () => void;
   hasProjectId: boolean;
+  // Optional desktop / sync props
+  inElectron?: boolean;
+  outputDir?: string;
+  onPickDirectory?: () => void;
+  onDownloadZip?: () => void;
+  downloadingZip?: boolean;
+  syncStatus?: AutoSyncStatus;
+  lastSyncedAt?: Date | null;
+  onForceSync?: () => void;
 }
 
 export function TerminalPanelHeader({
@@ -54,11 +51,6 @@ export function TerminalPanelHeader({
   onTabChange,
   portsCount,
   sessions,
-  activeSessionId,
-  activeSession,
-  onSelectSession,
-  onCloseSession,
-  onCreateSession,
   isMaximized,
   onToggleMaximize,
   onToggleOpen,
@@ -66,14 +58,40 @@ export function TerminalPanelHeader({
   copied,
   onClear,
   hasProjectId,
+  inElectron = false,
+  outputDir = "",
+  onPickDirectory,
+  onDownloadZip,
+  downloadingZip = false,
+  syncStatus = "idle",
+  lastSyncedAt,
+  onForceSync,
 }: TerminalPanelHeaderProps) {
   const isWin =
     typeof navigator !== "undefined" &&
     (navigator.platform?.includes("Win") ||
       navigator.userAgent?.includes("Windows"));
 
+  const getRelativeSyncTime = (date: Date | null | undefined): string => {
+    if (!date) return "Synced";
+    const diffSeconds = Math.max(
+      0,
+      Math.floor((Date.now() - date.getTime()) / 1000),
+    );
+    if (diffSeconds < 15) return "just now";
+    return formatDistanceToNow(date, { addSuffix: true });
+  };
+
+  const formattedSyncTime = lastSyncedAt
+    ? lastSyncedAt.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : null;
+
   return (
-    <div className="h-8 bg-[#161b22] px-3 border-b border-border/40 flex items-center justify-between shrink-0 font-sans">
+    <div className="h-8 bg-[#161b22] px-3 border-b border-border/40 flex items-center justify-between shrink-0 font-sans select-none">
       {/* Left: VS Code Tabs */}
       <div className="flex items-center space-x-1 h-full">
         <button
@@ -130,11 +148,15 @@ export function TerminalPanelHeader({
               : "text-slate-400 hover:text-slate-200"
           }`}
         >
-          <Radio className="w-3 h-3 text-emerald-400" />
+          <Radio className={`w-3 h-3 ${portsCount > 0 ? "text-emerald-400" : "text-slate-400"}`} />
           <span>Ports</span>
-          {portsCount > 0 && (
+          {portsCount > 0 ? (
             <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-emerald-950/80 text-emerald-400 font-mono border border-emerald-800/40">
               {portsCount}
+            </span>
+          ) : (
+            <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-slate-800 text-slate-400 font-mono">
+              0
             </span>
           )}
         </button>
@@ -142,143 +164,86 @@ export function TerminalPanelHeader({
 
       {/* Right: VS Code Panel Actions */}
       <div className="flex items-center gap-1">
-        {selectedTab === "terminal" && hasProjectId && sessions.length > 0 && (
-          <div className="flex items-center gap-1 mr-1">
-            {/* Session Selector Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-[10px] font-mono text-slate-200 transition-colors"
-                  title="Switch active terminal session"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  <span className="max-w-[100px] truncate">
-                    {activeSession?.title || "1: bash"}
-                  </span>
-                  <ChevronDown className="w-3 h-3 text-slate-400" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="w-48 bg-[#161b22] border-slate-700 text-slate-200 text-xs shadow-xl p-1 z-50"
-              >
-                <DropdownMenuLabel className="px-2 py-1 text-[10px] text-slate-400 uppercase tracking-wider font-mono">
-                  Active Sessions
-                </DropdownMenuLabel>
-                {sessions.map((s, idx) => (
-                  <DropdownMenuItem
-                    key={s.id}
-                    onClick={() => onSelectSession(s.id)}
-                    className={`flex items-center justify-between px-2 py-1.5 rounded cursor-pointer text-xs ${
-                      s.id === activeSessionId
-                        ? "bg-primary/20 text-white font-medium"
-                        : "hover:bg-slate-800 text-slate-300"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <Terminal className="w-3 h-3 text-primary shrink-0" />
-                      <span className="truncate">{s.title || `Terminal ${idx + 1}`}</span>
-                    </div>
-                    {sessions.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onCloseSession(s.id);
-                        }}
-                        className="p-0.5 text-slate-400 hover:text-red-400 rounded transition-colors"
-                        title="Close terminal"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
 
-            {/* Add New Session Button */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  title="Create New Terminal Session"
-                  className="h-6 w-6 p-0 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="w-48 bg-[#161b22] border-slate-700 text-slate-200 text-xs shadow-xl p-1 z-50"
-              >
-                <DropdownMenuLabel className="px-2 py-1 text-[10px] text-slate-400 uppercase tracking-wider font-mono">
-                  New Terminal
-                </DropdownMenuLabel>
-                <DropdownMenuItem
-                  onClick={() =>
-                    onCreateSession({
-                      type: "shell",
-                      title: `Terminal ${sessions.length + 1}`,
-                    })
-                  }
-                  className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-800 rounded cursor-pointer"
-                >
-                  <Terminal className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Default Shell</span>
-                </DropdownMenuItem>
-
-                {isWin && (
-                  <>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        onCreateSession({
-                          type: "powershell",
-                          shell: "powershell.exe",
-                          title: `PowerShell ${sessions.length + 1}`,
-                        })
-                      }
-                      className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-800 rounded cursor-pointer"
-                    >
-                      <Terminal className="w-3.5 h-3.5 text-sky-400" />
-                      <span>PowerShell</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        onCreateSession({
-                          type: "cmd",
-                          shell: "cmd.exe",
-                          title: `CMD ${sessions.length + 1}`,
-                        })
-                      }
-                      className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-800 rounded cursor-pointer"
-                    >
-                      <Monitor className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Command Prompt</span>
-                    </DropdownMenuItem>
-                  </>
-                )}
-
-                <DropdownMenuItem
-                  onClick={() =>
-                    onCreateSession({
-                      type: "bash",
-                      shell: "bash",
-                      title: `Bash ${sessions.length + 1}`,
-                    })
-                  }
-                  className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-800 rounded cursor-pointer"
-                >
-                  <Code2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Bash</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+        {/* Real-time Auto-Sync Status Badge (Electron only) */}
+        {inElectron && outputDir && onForceSync && (
+          <button
+            type="button"
+            onClick={onForceSync}
+            className="flex items-center gap-1.5 h-6 px-2 text-[10px] rounded bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-300 transition-colors"
+            title={
+              syncStatus === "syncing"
+                ? "Syncing canvas changes to disk..."
+                : syncStatus === "synced"
+                  ? `Live synced to disk at ${formattedSyncTime || "just now"}. Click to force re-sync.`
+                  : syncStatus === "error"
+                    ? "Sync error occurred. Click to retry."
+                    : "Auto-sync active. Click to force sync."
+            }
+          >
+            {syncStatus === "syncing" ? (
+              <>
+                <RefreshCw className="w-3 h-3 text-sky-400 animate-spin" />
+                <span className="text-sky-300 font-mono hidden md:inline">
+                  Syncing...
+                </span>
+              </>
+            ) : syncStatus === "synced" ? (
+              <>
+                <FolderSync className="w-3 h-3 text-emerald-400" />
+                <span className="text-emerald-300 font-mono hidden md:inline">
+                  {lastSyncedAt ? `${getRelativeSyncTime(lastSyncedAt)}` : "Synced"}
+                </span>
+              </>
+            ) : syncStatus === "error" ? (
+              <>
+                <AlertTriangle className="w-3 h-3 text-amber-400" />
+                <span className="text-amber-300 font-mono hidden md:inline">
+                  Sync Error
+                </span>
+              </>
+            ) : (
+              <>
+                <Zap className="w-3 h-3 text-slate-400" />
+                <span className="text-slate-400 font-mono hidden md:inline">
+                  Auto-Sync
+                </span>
+              </>
+            )}
+          </button>
         )}
 
+        {/* Directory Selector in Desktop / ZIP Download in Browser */}
+        {inElectron && onPickDirectory ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onPickDirectory}
+            className="h-6 px-2 text-[10px] gap-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+            title={outputDir ? `Workspace: ${outputDir}` : "Choose workspace directory"}
+          >
+            <Folder className="w-3 h-3 text-slate-400" />
+            <span className="max-w-[100px] truncate hidden sm:inline font-mono">
+              {outputDir ? outputDir.split(/[\\/]/).pop() : "Folder..."}
+            </span>
+          </Button>
+        ) : onDownloadZip ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDownloadZip}
+            disabled={downloadingZip}
+            className="h-6 px-2 text-[10px] gap-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+            title="Download complete monorepo ZIP"
+          >
+            <Archive className="w-3 h-3 text-slate-400" />
+            <span className="hidden sm:inline">
+              {downloadingZip ? "Zipping..." : "ZIP"}
+            </span>
+          </Button>
+        ) : null}
+
+        {/* Copy Output Button */}
         <Button
           variant="ghost"
           size="sm"
@@ -293,6 +258,7 @@ export function TerminalPanelHeader({
           )}
         </Button>
 
+        {/* Clear Buffer Button */}
         <Button
           variant="ghost"
           size="sm"
@@ -303,6 +269,7 @@ export function TerminalPanelHeader({
           <Trash2 className="w-3.5 h-3.5" />
         </Button>
 
+        {/* Maximize / Minimize Button */}
         <Button
           variant="ghost"
           size="sm"
@@ -317,6 +284,7 @@ export function TerminalPanelHeader({
           )}
         </Button>
 
+        {/* Close Button */}
         <Button
           variant="ghost"
           size="sm"

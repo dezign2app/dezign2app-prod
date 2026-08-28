@@ -13,6 +13,8 @@ interface TerminalTabProps {
   onTerminalInput: (sessionId: string, data: string) => void;
   onTerminalResize: (sessionId: string, cols: number, rows: number) => void;
   onCreateSession: (type?: TerminalType, shell?: string, title?: string) => void;
+  onSelectSession?: (sessionId: string) => void;
+  onCloseSession?: (sessionId: string) => void;
   formattedLogs: string[];
 }
 
@@ -24,27 +26,31 @@ export function TerminalTab({
   onTerminalInput,
   onTerminalResize,
   onCreateSession,
+  onSelectSession,
+  onCloseSession,
   formattedLogs,
 }: TerminalTabProps) {
-  if (projectId) {
-    return (
-      <TerminalViewport
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        terminalRefs={terminalRefs}
-        onTerminalInput={onTerminalInput}
-        onTerminalResize={onTerminalResize}
-        onNewTab={onCreateSession}
-      />
-    );
-  }
-
   return (
-    <WTermTerminal
-      logs={formattedLogs}
-      interactive={true}
-      autoScroll={true}
-      placeholder="Terminal active. Type commands or view build logs."
-    />
+    <div className="w-full h-full flex flex-col flex-1 min-h-0 relative overflow-hidden bg-[#090d13]">
+      {projectId ? (
+        <TerminalViewport
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          terminalRefs={terminalRefs}
+          onTerminalInput={onTerminalInput}
+          onTerminalResize={onTerminalResize}
+          onNewTab={onCreateSession}
+          onSelectSession={onSelectSession}
+          onCloseSession={onCloseSession}
+        />
+      ) : (
+        <WTermTerminal
+          logs={formattedLogs}
+          interactive={true}
+          autoScroll={true}
+          placeholder="Terminal active. Type commands or view build logs."
+        />
+      )}
+    </div>
   );
 }

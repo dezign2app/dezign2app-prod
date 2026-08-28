@@ -43,10 +43,28 @@ function formatTerminalChunk(raw: string): string {
 }
 
 /**
- * Finds all scrollable elements within a root and its ancestors to preserve exact scroll positions.
+ * Finds all scrollable elements (window, document, root, ancestors, descendants) to preserve exact scroll positions.
  */
-function captureScrollableElements(root: HTMLElement | null): Map<HTMLElement, { top: number; left: number }> {
-  const map = new Map<HTMLElement, { top: number; left: number }>();
+function captureScrollableElements(root: HTMLElement | null): Map<HTMLElement | Window, { top: number; left: number }> {
+  const map = new Map<HTMLElement | Window, { top: number; left: number }>();
+  if (typeof window !== "undefined") {
+    map.set(window, {
+      top: window.scrollY || window.pageYOffset || 0,
+      left: window.scrollX || window.pageXOffset || 0,
+    });
+    if (document.documentElement) {
+      map.set(document.documentElement, {
+        top: document.documentElement.scrollTop,
+        left: document.documentElement.scrollLeft,
+      });
+    }
+    if (document.body) {
+      map.set(document.body, {
+        top: document.body.scrollTop,
+        left: document.body.scrollLeft,
+      });
+    }
+  }
   if (!root) return map;
 
   const elements = [root, ...Array.from(root.querySelectorAll("*"))] as HTMLElement[];
@@ -63,24 +81,28 @@ function captureScrollableElements(root: HTMLElement | null): Map<HTMLElement, {
 
   let parent = root.parentElement;
   while (parent) {
-    if (
-      parent.scrollHeight > parent.clientHeight ||
-      parent.scrollWidth > parent.clientWidth ||
-      parent.scrollTop > 0 ||
-      parent.scrollLeft > 0
-    ) {
-      map.set(parent, { top: parent.scrollTop, left: parent.scrollLeft });
-    }
+    map.set(parent, { top: parent.scrollTop, left: parent.scrollLeft });
     parent = parent.parentElement;
   }
 
   return map;
 }
 
-function restoreCapturedScrolls(map: Map<HTMLElement, { top: number; left: number }>) {
-  map.forEach(({ top, left }, el) => {
-    if (el.scrollTop !== top) el.scrollTop = top;
-    if (el.scrollLeft !== left) el.scrollLeft = left;
+function restoreCapturedScrolls(map: Map<HTMLElement | Window, { top: number; left: number }>) {
+  map.forEach(({ top, left }, target) => {
+    if (target === window) {
+      const currY = window.scrollY || window.pageYOffset || 0;
+      const currX = window.scrollX || window.pageXOffset || 0;
+      if (currY !== top || currX !== left) {
+        window.scrollTo({ top, left, behavior: "instant" as ScrollBehavior });
+      }
+    } else {
+      const el = target as HTMLElement;
+      if (el && typeof el.scrollTop === "number") {
+        if (el.scrollTop !== top) el.scrollTop = top;
+        if (el.scrollLeft !== left) el.scrollLeft = left;
+      }
+    }
   });
 }
 
@@ -108,7 +130,7 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
     const logsRef = useRef<string[]>(logs);
     logsRef.current = logs;
 
-    const mouseDownScrollMapRef = useRef<Map<HTMLElement, { top: number; left: number }> | null>(null);
+    const mouseDownScrollMapRef = useRef<Map<HTMLElement | Window, { top: number; left: number }> | null>(null);
 
     // Buffer for local shell echo when no external PTY is connected
     const inputBufferRef = useRef<string>("");
@@ -194,13 +216,7 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
         lastWrittenIndexRef.current = logsRef.current.length;
       }
       onReady?.();
-      // Auto-focus terminal on initial mount ONLY if interactive and autoScroll enabled
-      if (interactive && autoScroll) {
-        setTimeout(() => {
-          focusTerminal();
-        }, 50);
-      }
-    }, [write, onReady, focusTerminal, rawStream, interactive, autoScroll]);
+    }, [write, onReady, rawStream]);
 
     // Synchronize incremental log writes & tab switches
     useEffect(() => {
@@ -352,21 +368,73 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
       [interactive, onData, write],
     );
 
-    // Mouse handlers to prevent copy selection from scrolling to bottom
+    const userScrollTopRef = useRef<number>(0);
+    const isWheelScrollingRef = useRef<boolean>(false);
+    const isInteractingRef = useRef<boolean>(false);
+
+    // Track user's intentional wheel scrolling vs focus jumps
+    useEffect(() => {
+      const wrapper = wrapperRef.current;
+      if (!wrapper) return;
+
+      const handleWheel = () => {
+        isWheelScrollingRef.current = true;
+        setTimeout(() => {
+          isWheelScrollingRef.current = false;
+        }, 150);
+      };
+
+      const handleScroll = (e: Event) => {
+        const target = e.target as HTMLElement;
+        if (!target) return;
+
+        if (isWheelScrollingRef.current) {
+          userScrollTopRef.current = target.scrollTop;
+          return;
+        }
+
+        // If focus triggered an unwanted automatic jump to bottom
+        if (!autoScroll && isInteractingRef.current) {
+          if (target.scrollTop !== userScrollTopRef.current) {
+            target.scrollTop = userScrollTopRef.current;
+          }
+        } else {
+          userScrollTopRef.current = target.scrollTop;
+        }
+      };
+
+      const handleFocusIn = () => {
+        if (!autoScroll && wrapper) {
+          const scrollMap = captureScrollableElements(wrapper);
+          restoreCapturedScrolls(scrollMap);
+        }
+      };
+
+      wrapper.addEventListener("wheel", handleWheel, { passive: true });
+      wrapper.addEventListener("scroll", handleScroll, { capture: true, passive: false });
+      wrapper.addEventListener("focusin", handleFocusIn, { capture: true });
+
+      return () => {
+        wrapper.removeEventListener("wheel", handleWheel);
+        wrapper.removeEventListener("scroll", handleScroll, { capture: true });
+        wrapper.removeEventListener("focusin", handleFocusIn, { capture: true });
+      };
+    }, [autoScroll]);
+
+    // Mouse handlers to prevent copy selection or clicking from scrolling viewport
     const handleMouseDown = useCallback(() => {
+      isInteractingRef.current = true;
       mouseDownScrollMapRef.current = captureScrollableElements(wrapperRef.current);
     }, []);
 
     const handleMouseUp = useCallback(() => {
-      const selection =
-        typeof window !== "undefined" ? window.getSelection() : null;
-      if (selection && selection.toString().length > 0) {
-        // User selected text to copy: restore exact scroll position
-        if (mouseDownScrollMapRef.current) {
-          restoreCapturedScrolls(mouseDownScrollMapRef.current);
-        }
+      if (!autoScroll && mouseDownScrollMapRef.current) {
+        restoreCapturedScrolls(mouseDownScrollMapRef.current);
       }
-    }, []);
+      setTimeout(() => {
+        isInteractingRef.current = false;
+      }, 50);
+    }, [autoScroll]);
 
     const handleWrapperClick = useCallback(
       (e: React.MouseEvent) => {
@@ -378,9 +446,13 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
           e.stopPropagation();
           return;
         }
-        focusTerminal();
+
+        // Focus without jumping or scrolling
+        if (!autoScroll && mouseDownScrollMapRef.current) {
+          restoreCapturedScrolls(mouseDownScrollMapRef.current);
+        }
       },
-      [focusTerminal, interactive],
+      [autoScroll, interactive],
     );
 
     return (
@@ -389,9 +461,10 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
         onClick={handleWrapperClick}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
-        className={`relative w-full h-full bg-[#090d13] text-[#e6edf3] font-mono select-text overflow-hidden cursor-text ${className}`}
+        className={`relative w-full h-full bg-[#090d13] text-[#e6edf3] font-mono select-text overflow-hidden cursor-text overscroll-none ${className}`}
         style={
           {
+            overscrollBehavior: "contain",
             "--term-bg": "#090d13",
             "--term-fg": "#e6edf3",
             "--term-cursor": "#38bdf8",
@@ -410,7 +483,7 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
           onResize={onResize}
           autoResize={true}
           cursorBlink={true}
-          className="w-full h-full rounded-none!"
+          className="w-full h-full !rounded-none"
         />
 
         {logs.length === 0 && (

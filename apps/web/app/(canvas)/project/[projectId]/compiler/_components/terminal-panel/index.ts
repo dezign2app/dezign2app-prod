@@ -1,4 +1,4 @@
-export * from "./types";
+export * from "@workspace/canvas/types";
 export * from "./TerminalPanelHeader";
 export * from "./ProblemsTab";
 export * from "./OutputTab";

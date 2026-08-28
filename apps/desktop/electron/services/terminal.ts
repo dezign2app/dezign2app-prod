@@ -1,5 +1,6 @@
 import { app } from "electron";
 import fs from "fs";
+import path from "path";
 import type * as NodePty from "node-pty";
 
 // We lazy-import node-pty so the app still starts even if native build fails
@@ -38,11 +39,14 @@ export async function createTerminal(
     ptyMap.delete(id);
   }
 
-  let targetCwd = app.getPath("home");
+  let targetCwd = process.cwd() || app.getPath("home");
   if (cwd && typeof cwd === "string" && cwd.trim()) {
     try {
-      fs.mkdirSync(cwd.trim(), { recursive: true });
-      targetCwd = cwd.trim();
+      const resolved = path.isAbsolute(cwd.trim())
+        ? cwd.trim()
+        : path.resolve(process.cwd(), cwd.trim());
+      fs.mkdirSync(resolved, { recursive: true });
+      targetCwd = resolved;
     } catch (e) {
       console.warn("[main] Failed to prepare terminal cwd:", cwd, e);
     }
