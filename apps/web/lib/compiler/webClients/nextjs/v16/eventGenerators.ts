@@ -95,7 +95,6 @@ export function generateEventComponent(
   // 1. Navigation Event (e.g. navigateToPage)
   if (eventType === "navigateToPage") {
     const route = targetRoute || "/";
-    const label = targetPageLabel || route;
     return `"use client";
 
 import React from "react";
@@ -121,7 +120,6 @@ export function ${componentName}({ onTrigger }: ${componentName}Props) {
       className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2 cursor-pointer"
     >
       <span>${eventName}</span>
-      <span className="text-xs opacity-75 font-mono">(&rarr; ${label})</span>
     </Link>
   );
 }
@@ -151,7 +149,7 @@ export default ${componentName};
         name: ph,
         type: "string",
         required: true,
-        defaultValue: "1",
+        defaultValue: "",
       });
     }
   });
@@ -381,22 +379,70 @@ ${hasPathParams ? `  pathParams?: ${componentName}PathParams;\n` : ""}${hasQuery
     rawJsonTemplate || "{\n  \n}",
   );
 
-  // 4. Fully Interactive Component with Editable URL, Parameters, Headers, & Body
+  const hasFields =
+    hasPathParams ||
+    hasQueryParams ||
+    hasHeaders ||
+    hasBodyFields ||
+    hasRawJson;
+
+  // 4A. If no form inputs configured, render a clean, direct action Button
+  if (!hasFields) {
+    return `"use client";
+
+import React, { useState } from "react";
+import { Button } from "@workspace/ui/components/button";
+
+${typeDefs.join("\n\n")}
+
+export function ${componentName}({ onTrigger }: ${componentName}Props) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      await onTrigger?.(
+        "${eventName}",
+        "${eventType}",
+        "${url}",
+        "${upperMethod}",
+        ${Boolean(requireAuth)},
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Button
+      onClick={handleClick}
+      disabled={isSubmitting}
+      className="cursor-pointer font-medium shadow-sm"
+    >
+      {isSubmitting ? "Executing..." : "${eventName}"}
+    </Button>
+  );
+}
+
+export default ${componentName};
+`;
+  }
+
+  // 4B. Interactive Form Component with ONLY Configured Parameters & Body
   return `"use client";
 
 import React, { useState, useEffect } from "react";
 import { Button } from "@workspace/ui/components/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@workspace/ui/components/card";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@workspace/ui/components/card";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
-import { Badge } from "@workspace/ui/components/badge";
 import { Textarea } from "@workspace/ui/components/textarea";
 ${requireAuth ? `import { getAuthBearerToken } from "@/lib/auth-token";\n` : ""}
 ${typeDefs.join("\n\n")}
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [targetUrl, setTargetUrl] = useState<string>("${url}");
 ${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, any>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
 ${requireAuth && hasHeaders && mergedHeaders.some((h) => h.name.toLowerCase() === "authorization") ? `  useEffect(() => {
     async function autoFetchToken() {
@@ -416,7 +462,7 @@ ${requireAuth && hasHeaders && mergedHeaders.some((h) => h.name.toLowerCase() ==
   }, []);
 ` : ""}
   const computeFinalUrl = (): string => {
-    let currentUrl = targetUrl.trim() || "${url}";
+    let currentUrl = "${url}";
     let origin = "";
     let pathnameAndRest = currentUrl;
     const matchOrigin = currentUrl.match(/^([a-zA-Z]+:\\/\\/[^/]+)(.*)$/);
@@ -477,59 +523,17 @@ ${hasBodyFields ? `      // Form fields payload
     }
   };
 
-  const activeUrlPreview = computeFinalUrl();
-
   return (
     <Card className="w-full border-border shadow-sm">
       <CardHeader className="p-4 pb-3 border-b border-border/50">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <CardTitle className="text-sm font-bold text-card-foreground flex items-center gap-2">
-              <span>${eventName}</span>
-              <Badge variant="secondary" className="text-[10px] font-mono">
-                ${eventType}
-              </Badge>
-            </CardTitle>
-            <CardDescription className="text-xs font-mono text-muted-foreground mt-0.5 flex items-center gap-2">
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold border ${methodBadgeClass}">
-                ${upperMethod}
-              </span>
-              <span className="truncate font-mono">${url}</span>
-            </CardDescription>
-          </div>
-        </div>
+        <CardTitle className="text-sm font-bold text-card-foreground">
+          ${eventName}
+        </CardTitle>
       </CardHeader>
 
       <form onSubmit={handleFormSubmit}>
         <CardContent className="p-4 space-y-4 text-xs">
-          {/* 1. Endpoint URL Input */}
-          <div className="space-y-1.5 p-3 rounded-lg bg-background/60 border border-border/40">
-            <div className="flex items-center justify-between">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <span>Endpoint URL</span>
-              </Label>
-              <button
-                type="button"
-                onClick={() => setTargetUrl("${url}")}
-                className="text-[10px] text-muted-foreground hover:text-foreground underline cursor-pointer"
-              >
-                Reset to default
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-1 rounded text-[10px] font-mono font-bold border ${methodBadgeClass} shrink-0">
-                ${upperMethod}
-              </span>
-              <Input
-                className="h-8 text-xs font-mono bg-background flex-1"
-                placeholder="${url || "http://localhost:8000/api"}"
-                value={targetUrl}
-                onChange={(e) => setTargetUrl(e.target.value)}
-              />
-            </div>
-          </div>
-${hasPathParams ? `
-          {/* 2. Path Parameters */}
+${hasPathParams ? `          {/* Path Parameters */}
           <div className="space-y-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Path Parameters
@@ -551,8 +555,7 @@ ${mergedPathParams.map((p) => `              <div key="${p.name}" className="spa
               </div>`).join("\n")}
             </div>
           </div>
-` : ""}${hasQueryParams ? `
-          {/* 3. Query Parameters */}
+` : ""}${hasQueryParams ? `          {/* Query Parameters */}
           <div className="space-y-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Query Parameters
@@ -575,8 +578,7 @@ ${mergedQueryParams.map((q) => `              <div key="${q.name}" className="sp
               </div>`).join("\n")}
             </div>
           </div>
-` : ""}${hasHeaders ? `
-          {/* 4. Headers */}
+` : ""}${hasHeaders ? `          {/* Headers */}
           <div className="space-y-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Headers
@@ -607,15 +609,12 @@ ${mergedHeaders.map((h) => {
                 </div>
                 <Input
                   className="h-8 text-xs bg-background font-mono"
-                  placeholder="Bearer <auto-fetched from better-auth.session_token>"
+                  placeholder="Bearer token"
                   value={customHeaders["${h.name}"] ?? ""}
                   onChange={(e) =>
                     setCustomHeaders((prev) => ({ ...prev, "${h.name}": e.target.value }))
                   }
                 />
-                <span className="text-[10px] text-muted-foreground">
-                  Auto-fetched from active session token (<code className="text-primary font-semibold">better-auth.session_token</code>) or cookies.
-                </span>
               </div>`;
   }
   return `              <div key="${h.name}" className="space-y-1">
@@ -634,8 +633,7 @@ ${mergedHeaders.map((h) => {
 }).join("\n")}
             </div>
           </div>
-` : ""}${hasBodyFields ? `
-          {/* 5. Request Body Fields */}
+` : ""}${hasBodyFields ? `          {/* Request Body Fields */}
           <div className="space-y-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Request Body
@@ -701,8 +699,7 @@ ${bodyFields.map((f) => {
 }).join("\n")}
             </div>
           </div>
-` : ""}${hasRawJson ? `
-          {/* 6. Raw JSON Body */}
+` : ""}${hasRawJson ? `          {/* Raw JSON Body */}
           <div className="space-y-1.5">
             <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Request Body (JSON)
@@ -719,20 +716,16 @@ ${bodyFields.map((f) => {
               <span className="text-[10px] text-destructive font-mono">{jsonError}</span>
             )}
           </div>
-` : ""}
-        </CardContent>
+` : ""}        </CardContent>
 
-        <CardFooter className="p-4 pt-2 border-t border-border/50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-secondary/10">
-          <div className="text-[11px] font-mono text-muted-foreground truncate max-w-[320px]">
-            Target: <span className="text-foreground">{activeUrlPreview}</span>
-          </div>
+        <CardFooter className="p-4 pt-2 border-t border-border/50 flex justify-end">
           <Button
             type="submit"
             size="sm"
             disabled={isSubmitting}
             className="cursor-pointer font-semibold shadow"
           >
-            {isSubmitting ? "Executing..." : "Trigger ${eventName}"}
+            {isSubmitting ? "Executing..." : "${eventName}"}
           </Button>
         </CardFooter>
       </form>

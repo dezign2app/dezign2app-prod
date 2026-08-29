@@ -18,6 +18,18 @@ export function WebPageMembershipSection({
   onUpdateLabel,
   onUpdateAppSlug,
 }: WebPageMembershipSectionProps) {
+  const [currentLabel, setCurrentLabel] = React.useState(label || "");
+
+  React.useEffect(() => {
+    setCurrentLabel(label || "");
+  }, [label]);
+
+  const handleCommitLabel = () => {
+    if (currentLabel !== label) {
+      onUpdateLabel(currentLabel);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 p-4 rounded-xl bg-card border border-border/60 shadow-sm">
       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -29,8 +41,12 @@ export function WebPageMembershipSection({
         <div className="flex flex-col gap-2">
           <Label className="text-xs text-muted-foreground">Page Route Name</Label>
           <Input
-            value={label || ""}
-            onChange={(e) => onUpdateLabel(e.target.value)}
+            value={currentLabel}
+            onChange={(e) => setCurrentLabel(e.target.value)}
+            onBlur={handleCommitLabel}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleCommitLabel();
+            }}
             placeholder="e.g. /dashboard/settings"
             className="h-8 text-xs bg-background/50 font-mono"
           />

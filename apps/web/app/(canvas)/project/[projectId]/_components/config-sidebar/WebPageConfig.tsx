@@ -12,6 +12,7 @@ import { RequestBodyMode } from "./RequestBodyEditor";
 import { useTerminalWorkspace } from "../terminal/hooks/useTerminalWorkspace";
 import { useWebPageCodeMismatch } from "./useWebPageCodeMismatch";
 import { PageCodeMismatchDialog } from "./PageCodeMismatchDialog";
+import { NodeDeletionDialog } from "@/app/(canvas)/project/[projectId]/_components/NodeDeletionDialog";
 import { isElectron, getElectronAPI } from "@/lib/electron";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
@@ -212,6 +213,24 @@ export const WebPageConfig = ({
   });
 
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [pendingRename, setPendingRename] = useState<{ oldLabel: string; newLabel: string } | null>(null);
+
+  const handleRequestRename = (newLabel: string) => {
+    const oldLabel = data.label || "";
+    const cleanOld = parsePageRoute(oldLabel);
+    const cleanNew = parsePageRoute(newLabel);
+
+    if (cleanOld === cleanNew) return;
+
+    if (!cleanOld || cleanOld === "Untitled" || cleanOld === "Page") {
+      updateData({ label: cleanNew });
+      return;
+    }
+
+    setPendingRename({ oldLabel: cleanOld, newLabel: cleanNew });
+    setRenameDialogOpen(true);
+  };
 
   const handleGenerateAiCode = async () => {
     if (isGeneratingAi) return;
@@ -504,7 +523,7 @@ export const WebPageConfig = ({
             label={data.label}
             appSlug={appSlug}
             connectedZoneName={connectedZoneName}
-            onUpdateLabel={(label) => updateData({ label })}
+            onUpdateLabel={handleRequestRename}
             onUpdateAppSlug={(slug) => updateData({ appSlug: slug })}
           />
         </TabsContent>
@@ -604,6 +623,28 @@ export const WebPageConfig = ({
         onMergeSelected={mergeSelectedToServer}
         onOverwriteLocal={overwriteLocalWithServer}
       />
+
+      {/* Page Rename / File Deletion Confirmation Dialog */}
+      {pendingRename && (
+        <NodeDeletionDialog
+          open={renameDialogOpen}
+          onOpenChange={(open) => {
+            setRenameDialogOpen(open);
+            if (!open) setPendingRename(null);
+          }}
+          projectId={projectId}
+          deletionTarget={{
+            type: "pageRename",
+            nodeId,
+            oldLabel: pendingRename.oldLabel,
+            newLabel: pendingRename.newLabel,
+            onConfirm: () => {
+              updateData({ label: pendingRename.newLabel });
+              setPendingRename(null);
+            },
+          }}
+        />
+      )}
     </div>
   );
 };

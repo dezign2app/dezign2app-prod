@@ -41,8 +41,17 @@ export function computeSubItemDeletion(
 ): SubItemDeletionComputationResult {
   let filesBefore: CompiledFile[] = [];
   try {
+    const beforeNodes =
+      target.type === "pageRename"
+        ? nodes.map((n) =>
+            n.id === target.nodeId
+              ? { ...n, data: { ...n.data, label: target.oldLabel } }
+              : n,
+          )
+        : nodes;
+
     filesBefore = compileMonorepo(
-      nodes,
+      beforeNodes,
       endpoints,
       events,
       edges,
@@ -387,6 +396,68 @@ export function computeSubItemDeletion(
     });
 
     nextEndpoints = endpoints.filter((ep) => ep.id !== target.endpoint.id);
+  } else if (target.type === "pageRename") {
+    const parentNode = nodes.find((n) => n.id === target.nodeId);
+    const oldLabel = target.oldLabel || parentNode?.data?.label || "Page";
+    const newLabel = target.newLabel;
+
+    targetNodes.push({
+      id: target.nodeId,
+      label: `${oldLabel} → ${newLabel}`,
+      type: "webPage",
+      techStack: "Next.js Page",
+    });
+
+    // 1. Simulate canvas modification: update page label to newLabel
+    nextNodes = nodes.map((n) => {
+      if (n.id === target.nodeId) {
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            label: newLabel,
+          },
+        };
+      }
+      return n;
+    });
+
+    // 2. Cascade check: page references connected to this page
+    edges.forEach((e) => {
+      if (e.target === target.nodeId || e.source === target.nodeId) {
+        const otherId = e.source === target.nodeId ? e.target : e.source;
+        const otherNode = nodes.find((n) => n.id === otherId);
+        if (otherNode && otherNode.type === "page_ref") {
+          cascadeElements.push({
+            id: otherNode.id,
+            label: otherNode.data?.label || "Page Reference",
+            type: "page_ref",
+            category: "ref",
+            description: `Page reference pointing to "${oldLabel}" updated to "${newLabel}"`,
+          });
+        }
+      }
+    });
+
+    // 3. Check actions in other pages navigating to this page
+    nodes.forEach((n) => {
+      if (n.id !== target.nodeId && n.type === "webPage") {
+        const sections: PageSection[] = n.data?.sections || [];
+        sections.forEach((sec) => {
+          (sec.actions || []).forEach((act) => {
+            if (act.event === "navigateToPage" && act.targetPageId === target.nodeId) {
+              brokenReferences.push({
+                referencingNodeId: n.id,
+                referencingNodeLabel: `${n.data?.label || "Page"} → ${act.name || "Action"}`,
+                referencingNodeType: "webPage",
+                referenceType: "Navigation Target",
+                description: `Navigation action routing updated from "${oldLabel}" to "${newLabel}"`,
+              });
+            }
+          });
+        });
+      }
+    });
   } else if (target.type === "custom") {
     targetNodes.push({
       id: target.nodeId || "custom",

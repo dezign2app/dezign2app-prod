@@ -367,13 +367,10 @@ export default function ${pageMeta.componentName}() {
       <div className="w-full max-w-md space-y-6">
         
         {/* Top Brand / Nav Header */}
-        <div className="flex items-center justify-between">
-          <Link href="/" className="text-xs text-muted-foreground hover:text-foreground transition-colors font-medium flex items-center gap-1">
-            &larr; Back to Home
+        <div>
+          <Link href="/" className="text-xs text-muted-foreground hover:text-foreground transition-colors font-medium inline-flex items-center gap-1">
+            &larr; Back
           </Link>
-          <Badge variant="outline" className="text-[10px] font-mono uppercase tracking-wider">
-            Better Auth
-          </Badge>
         </div>
 
         <Suspense fallback={

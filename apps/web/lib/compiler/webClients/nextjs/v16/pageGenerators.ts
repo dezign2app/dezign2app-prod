@@ -22,18 +22,30 @@ export function generatePageCode(
     )
     .join("\n");
 
-  const sectionsJsx =
-    sectionsMeta.length === 0
-      ? `        <p className="text-muted-foreground text-sm italic">No sections configured for this page node.</p>`
-      : sectionsMeta
-          .map((s) => `        <${s.componentName} onTrigger={handleTriggerAction} />`)
-          .join("\n\n");
+  const allActions = sectionsMeta.flatMap((s) => s.actions || []);
+  const hasApiActions = allActions.some(
+    (a) => a.eventType !== "navigateToPage" && a.url && a.url !== "#",
+  );
+
+  const sectionsJsx = sectionsMeta
+    .map((s) => `        <${s.componentName}${hasApiActions ? " onTrigger={handleTriggerAction}" : ""} />`)
+    .join("\n\n");
 
   const hasAuth = Boolean(authNodeData);
   const hasPageLoad = Boolean(
-    pageLoadFetchStatements && pageLoadFetchStatements.trim().length > 0
+    pageLoadFetchStatements && pageLoadFetchStatements.trim().length > 0,
   );
-  const reactHooks = hasPageLoad ? "useState, useEffect" : "useState";
+
+  const hooksList: string[] = [];
+  if (hasPageLoad) {
+    hooksList.push("useState", "useEffect");
+  } else if (hasApiActions) {
+    hooksList.push("useState");
+  }
+
+  const reactImport = hooksList.length > 0
+    ? `import React, { ${hooksList.join(", ")} } from "react";`
+    : `import React from "react";`;
 
   const pageLoadStateJsx = hasPageLoad
     ? `  const [pageLoadData, setPageLoadData] = useState<Record<string, Record<string, string | number | boolean | null>> | null>(null);
@@ -60,12 +72,9 @@ export function generatePageCode(
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <div>
               <CardTitle className="text-lg font-bold text-card-foreground">Page Load Data</CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">
-                Stringified JSON data loaded automatically on page mount
-              </CardDescription>
             </div>
-            <Badge variant="secondary" className="font-mono">
-              {pageLoadLoading ? "Loading..." : pageLoadError ? "Error" : "pageLoad"}
+            <Badge variant="secondary" className="font-mono text-xs">
+              {pageLoadLoading ? "Loading..." : pageLoadError ? "Error" : "Loaded"}
             </Badge>
           </CardHeader>
           <CardContent>
@@ -86,14 +95,8 @@ export function generatePageCode(
 `
     : "";
 
-  return `"use client";
-
-import React, { ${reactHooks} } from "react";
-import Link from "next/link";
-import { Button } from "@workspace/ui/components/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@workspace/ui/components/card";
-${hasPageLoad ? `import { Badge } from "@workspace/ui/components/badge";\n` : ""}${hasAuth ? `import { getAuthBearerToken } from "@/lib/auth-token";\n` : ""}${allImports ? `${allImports}\n` : ""}export default function ${pageMeta.componentName}() {
-${pageLoadStateJsx}  const [triggerLogs, setTriggerLogs] = useState<Array<{
+  const triggerLogsStateJsx = hasApiActions
+    ? `  const [triggerLogs, setTriggerLogs] = useState<Array<{
     id: string;
     eventName: string;
     eventType: string;
@@ -106,7 +109,11 @@ ${pageLoadStateJsx}  const [triggerLogs, setTriggerLogs] = useState<Array<{
     error?: string;
   }>>([]);
 
-${pageLoadEffectJsx}  const handleTriggerAction = async (
+`
+    : "";
+
+  const triggerHandlerJsx = hasApiActions
+    ? `  const handleTriggerAction = async (
     eventName: string,
     eventType: string,
     url: string,
@@ -172,7 +179,7 @@ ${pageLoadEffectJsx}  const handleTriggerAction = async (
       } else {
         resData = {
           success: true,
-          message: "Action '" + eventName + "' (" + eventType + ") triggered successfully (Simulated - no endpoint connected)",
+          message: "Action '" + eventName + "' (" + eventType + ") triggered successfully",
           timestamp: new Date().toISOString(),
         };
       }
@@ -209,20 +216,15 @@ ${pageLoadEffectJsx}  const handleTriggerAction = async (
     }
   };
 
-  return (
-    <main className="min-h-screen bg-background text-foreground p-6 md:p-10 font-sans">
-      <div className="max-w-5xl mx-auto space-y-8">
-${pageLoadSectionJsx}        {/* Page Sections */}
-${sectionsJsx}
+`
+    : "";
 
-        {/* Section: Trigger Output Logs */}
+  const triggerLogsSectionJsx = hasApiActions
+    ? `        {/* Section: Trigger Output Logs */}
         <Card className="border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <div>
-              <CardTitle className="text-lg font-bold text-card-foreground">Trigger Results Log</CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">
-                Real-time output logs from user clicks and actions
-              </CardDescription>
+              <CardTitle className="text-lg font-bold text-card-foreground">Output Log</CardTitle>
             </div>
             {triggerLogs.length > 0 && (
               <Button
@@ -241,27 +243,16 @@ ${sectionsJsx}
           <CardContent>
             {triggerLogs.length === 0 ? (
               <div className="text-muted-foreground text-sm italic py-6 text-center border border-dashed border-border rounded-lg">
-                No actions triggered yet. Click a button above to execute trigger logic.
+                No activity logged yet.
               </div>
             ) : (
               <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
                 {triggerLogs.map((log) => (
                   <div key={log.id} className="bg-muted/40 border border-border rounded-lg p-4 font-mono text-xs space-y-2">
                     <div className="flex items-center justify-between text-muted-foreground border-b border-border pb-2">
-                      <span className="font-semibold text-foreground">{log.eventName} ({log.eventType})</span>
+                      <span className="font-semibold text-foreground">{log.eventName}</span>
                       <span>{log.timestamp}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px]">
-                      <span className="px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-bold">{log.method}</span>
-                      <span className="text-foreground/90 truncate">{log.url}</span>
-                      {log.status && <span className="ml-auto text-muted-foreground">HTTP {log.status}</span>}
-                    </div>
-                    {log.payload !== undefined && (
-                      <div className="text-[10px] text-muted-foreground bg-muted/60 p-2 rounded border border-border/40 space-y-1">
-                        <div className="font-semibold uppercase tracking-wider text-[9px] text-muted-foreground/80">Request Payload Sent</div>
-                        <pre className="overflow-x-auto whitespace-pre-wrap font-mono">{typeof log.payload === "string" ? log.payload : JSON.stringify(log.payload, null, 2)}</pre>
-                      </div>
-                    )}
                     {log.error ? (
                       <div className="text-destructive bg-destructive/10 p-2 rounded border border-destructive/20">
                         Error: {log.error}
@@ -277,31 +268,32 @@ ${sectionsJsx}
             )}
           </CardContent>
         </Card>
+`
+    : "";
 
-      </div>
-    </main>
-  );
-}
-`;
-}
+  const cardComponentsNeeded = hasPageLoad || hasApiActions;
+  const uiImports: string[] = [];
+  if (hasApiActions) {
+    uiImports.push(`import { Button } from "@workspace/ui/components/button";`);
+  }
+  if (cardComponentsNeeded) {
+    uiImports.push(`import { Card, CardHeader, CardTitle, CardContent } from "@workspace/ui/components/card";`);
+  }
+  if (hasPageLoad) {
+    uiImports.push(`import { Badge } from "@workspace/ui/components/badge";`);
+  }
+  if (hasAuth && (hasPageLoad || hasApiActions)) {
+    uiImports.push(`import { getAuthBearerToken } from "@/lib/auth-token";`);
+  }
 
-export function generateRootIndexPage(
-  projectName: string,
-  indexCards: string,
-): string {
-  return `import Link from "next/link";
-import { WebClientIndexHeader } from "./_components/WebClientIndexHeader";
+  return `"use client";
 
-export default function WebClientIndexPage() {
-  return (
+${reactImport}
+${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${allImports ? `${allImports}\n` : ""}export default function ${pageMeta.componentName}() {
+${pageLoadStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${triggerHandlerJsx}  return (
     <main className="min-h-screen bg-background text-foreground p-6 md:p-10 font-sans">
       <div className="max-w-5xl mx-auto space-y-8">
-        <WebClientIndexHeader />
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          ${indexCards}
-        </div>
-      </div>
+${pageLoadSectionJsx}${sectionsJsx ? `        {/* Page Sections */}\n${sectionsJsx}\n` : ""}${triggerLogsSectionJsx}      </div>
     </main>
   );
 }

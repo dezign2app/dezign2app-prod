@@ -8,7 +8,7 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { computeNodeDeletionDiff } from "@/lib/compiler/nodeDeletionDiff";
 import { computeNodeArchitectureImpact } from "@/lib/compiler/nodeArchitectureImpact";
-import { getSavedWorkspaceDir } from "@/lib/compiler/nodeDeletionSync";
+import { getSavedWorkspaceDir, handleNodeDeletionSync } from "@/lib/compiler/nodeDeletionSync";
 import { isElectron } from "@/lib/electron";
 import { toast } from "sonner";
 import { cn } from "@workspace/ui/lib/utils";
@@ -269,6 +269,9 @@ export function NodeDeletionDialog({
     setIsDeleting(true);
     try {
       if (effectiveTarget && "onConfirm" in effectiveTarget && typeof effectiveTarget.onConfirm === "function") {
+        if (computationResult.diff && (computationResult.diff.deletedFiles.length > 0 || computationResult.diff.totalAffectedCount > 0)) {
+          await handleNodeDeletionSync(projectId, computationResult.diff);
+        }
         effectiveTarget.onConfirm();
       } else if (effectiveTarget?.type === "nodes") {
         const nodeIdsToDelete = effectiveTarget.nodes.map((n) => n.id);
@@ -379,6 +382,15 @@ export function NodeDeletionDialog({
       };
     }
 
+    if (effectiveTarget.type === "pageRename") {
+      return {
+        label: `${effectiveTarget.oldLabel} → ${effectiveTarget.newLabel}`,
+        type: "webPage",
+        title: `Rename Page "${effectiveTarget.oldLabel}"?`,
+        count: 1,
+      };
+    }
+
     return {
       label: effectiveTarget.itemLabel || "Item",
       type: effectiveTarget.itemType || "item",
@@ -411,6 +423,11 @@ export function NodeDeletionDialog({
           primaryNodeType={headerMeta.type}
           isDeleting={isDeleting}
           titleOverride={headerMeta.title}
+          descriptionOverride={
+            effectiveTarget?.type === "pageRename"
+              ? "Renaming will delete the previous page files from local disk and generate the updated route structure."
+              : undefined
+          }
           onClose={() => onOpenChange(false)}
         />
 
@@ -515,13 +532,15 @@ export function NodeDeletionDialog({
             {isDeleting ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
-                <span>Deleting...</span>
+                <span>{effectiveTarget?.type === "pageRename" ? "Renaming & Deleting..." : "Deleting..."}</span>
               </>
             ) : (
               <>
                 <Trash className="w-3.5 h-3.5 mr-1.5" />
                 <span>
-                  Confirm & Delete ({architectureImpact.totalCanvasImpactCount > 0 ? `${architectureImpact.totalCanvasImpactCount} affected` : headerMeta.type})
+                  {effectiveTarget?.type === "pageRename"
+                    ? `Confirm & Rename (${diff.deletedFiles.length} files to delete)`
+                    : `Confirm & Delete (${architectureImpact.totalCanvasImpactCount > 0 ? `${architectureImpact.totalCanvasImpactCount} affected` : headerMeta.type})`}
                 </span>
               </>
             )}

@@ -20,7 +20,6 @@ import {
 } from "./authFileGenerator";
 import {
   generatePageAndComponentFiles,
-  generateFallbackRootIndex,
 } from "./pageFileGenerator";
 
 export type { LinkedEndpointInfo, LinkedPageRefInfo };
@@ -92,14 +91,18 @@ export function compileNextjsV16WebClient(
   ensureDatabaseDependencies(files, allNodes);
 
   // 6. Root Layout (app/layout.tsx) & Middleware Proxy (proxy.ts)
-  const navLinksHtml = pagesInfo
-    .map((p) => `<Link href="${p.routePath}" className="hover:underline">${p.label}</Link>`)
-    .join("\n              ");
+  const showNav = Boolean(webAppNode?.data?.showNav);
+
+  const navLinksHtml = showNav
+    ? pagesInfo
+        .map((p) => `<Link href="${p.routePath}" className="hover:underline">${p.label}</Link>`)
+        .join("\n              ")
+    : "";
 
   files.push({
     filename: "app/layout.tsx",
     language: "typescript",
-    content: generateRootLayout(projectName, navLinksHtml),
+    content: generateRootLayout(projectName, navLinksHtml, showNav),
   });
 
   files.push({
@@ -109,7 +112,7 @@ export function compileNextjsV16WebClient(
   });
 
   // 7. Pages, Action Event Components, Page Headers & Auth Components
-  const { pageFiles, hasExplicitRoot } = generatePageAndComponentFiles({
+  const { pageFiles } = generatePageAndComponentFiles({
     webClientNodes,
     pagesInfo,
     endpoints,
@@ -118,11 +121,6 @@ export function compileNextjsV16WebClient(
     authNode,
   });
   files.push(...pageFiles);
-
-  // 8. Fallback Root Index Page (if no explicit root page node exists)
-  if (!hasExplicitRoot) {
-    files.push(...generateFallbackRootIndex(projectName, pagesInfo));
-  }
 
   // 9. Web page E2E Tests
   files.push(

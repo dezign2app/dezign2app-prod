@@ -58,12 +58,14 @@ export interface CanvasWebAppNodeData {
   authNodeId?: string;
   defaultLoginRoute?: string;
   corsOrigins?: string;
+  showNav?: boolean;
 }
 
 /** Web Page node fields (canvas type). */
 export interface CanvasWebPageNodeData {
   appName?: string;
   appSlug?: string;
+  showNav?: boolean;
   accessType?: "public" | "private" | "role-gated" | "payment-gated" | "org-gated";
   allowedRoles?: string[];
   requiredPlans?: string[];
