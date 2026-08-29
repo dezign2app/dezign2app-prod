@@ -20,15 +20,19 @@ export function generateSectionComponent(
     .map((c) => `import { ${c.componentName} } from "./${c.componentName}";`)
     .join("\n");
 
-  const actionButtonsJsx =
-    eventComponents.length === 0
-      ? `<p className="text-muted-foreground text-sm italic">No actions configured in this section.</p>`
-      : `<div className="flex flex-wrap gap-3">\n${eventComponents
-          .map((c) => `          <${c.componentName} onTrigger={onTrigger} />`)
-          .join("\n")}\n        </div>`;
+  const hasActions = eventComponents.length > 0;
+  const descriptionJsx = section.description
+    ? `\n        <CardDescription className="text-xs text-muted-foreground">${section.description}</CardDescription>`
+    : "";
+
+  const contentJsx = hasActions
+    ? `\n      <CardContent>\n        <div className="flex flex-wrap gap-3">\n${eventComponents
+        .map((c) => `          <${c.componentName} onTrigger={onTrigger} />`)
+        .join("\n")}\n        </div>\n      </CardContent>`
+    : "";
 
   return `${isClient ? `"use client";\n\n` : ""}import React from "react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@workspace/ui/components/card";
+import { Card, CardHeader, CardTitle${section.description ? ", CardDescription" : ""}${hasActions ? ", CardContent" : ""} } from "@workspace/ui/components/card";
 ${actionImports ? `${actionImports}\n` : ""}export interface ${sectionCompName}Props {
   onTrigger?: (
     eventName: string,
@@ -46,16 +50,8 @@ export function ${sectionCompName}({ onTrigger }: ${sectionCompName}Props) {
   return (
     <Card className="border-border shadow-sm">
       <CardHeader>
-        <CardTitle className="text-lg font-bold text-card-foreground">${section.name || "Section"}</CardTitle>
-        ${
-          section.description
-            ? `<CardDescription className="text-xs text-muted-foreground">${section.description}</CardDescription>`
-            : `<CardDescription className="text-xs text-muted-foreground">Interactive section component</CardDescription>`
-        }
-      </CardHeader>
-      <CardContent>
-        ${actionButtonsJsx}
-      </CardContent>
+        <CardTitle className="text-lg font-bold text-card-foreground">${section.name || "Section"}</CardTitle>${descriptionJsx}
+      </CardHeader>${contentJsx}
     </Card>
   );
 }

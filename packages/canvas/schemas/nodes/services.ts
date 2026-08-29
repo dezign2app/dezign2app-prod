@@ -289,6 +289,7 @@ export const webAppDataSchema = baseNodeDataSchema
     authNodeId: z.string().optional(),
     defaultLoginRoute: z.string().optional(),
     corsOrigins: z.string().optional(),
+    showNav: z.boolean().optional(),
   })
   .passthrough();
 export type WebAppNodeData = z.infer<typeof webAppDataSchema>;

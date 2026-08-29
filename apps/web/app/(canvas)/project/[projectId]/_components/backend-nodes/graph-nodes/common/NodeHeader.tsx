@@ -27,6 +27,7 @@ export interface NodeHeaderProps {
   colorClass?: string;
   selected?: boolean;
   rightElement?: React.ReactNode;
+  onSave?: (newLabel: string) => void;
 }
 
 export const NodeHeader = ({
@@ -38,20 +39,29 @@ export const NodeHeader = ({
   colorClass,
   selected,
   rightElement,
+  onSave,
 }: NodeHeaderProps) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const [isEditing, setIsEditing] = useState(
     data.label === "" || data.label === "Untitled",
   );
-  const [name, setName] = useState(data.label);
+  const [name, setName] = useState(data.label || "");
+
+  React.useEffect(() => {
+    setName(data.label || "");
+  }, [data.label]);
 
   const handleSave = () => {
     let finalLabel = name || "Untitled";
     if (nodeType === "webPage") {
       finalLabel = parsePageRoute(finalLabel);
     }
-    updateNode(id, { data: { ...data, label: finalLabel } });
+    if (onSave) {
+      onSave(finalLabel);
+    } else {
+      updateNode(id, { data: { ...data, label: finalLabel } });
+    }
     setName(finalLabel);
     setIsEditing(false);
   };

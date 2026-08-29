@@ -57,7 +57,7 @@ export function useAutoDiskSync({
 
   // Core sync executor with atomic lock and clean stale support
   const executeSync = useCallback(
-    async (targetFiles: CompiledFile[], cleanStale: boolean = true) => {
+    async (targetFiles: CompiledFile[], cleanStale: boolean = true, isForce: boolean = false) => {
       if (!inElectron || !outputDir || targetFiles.length === 0) return;
       const api = getElectronAPI();
       if (!api?.fs?.writeProject) return;
@@ -73,15 +73,15 @@ export function useAutoDiskSync({
 
       try {
         // Protect frontend page files from being overwritten during automatic background compilation sync
-        // if they have been edited externally in another editor on disk.
+        // if they have been edited externally in another editor on disk (skipped when force re-syncing).
         const safeTargetFiles: CompiledFile[] = [];
         for (const file of targetFiles) {
           const isFrontendPageFile =
             file.filename.endsWith("/page.tsx") ||
             file.filename.endsWith("page.tsx") ||
-            file.filename.includes("/app/") && file.filename.endsWith(".tsx");
+            (file.filename.includes("/app/") && file.filename.endsWith(".tsx"));
 
-          if (isFrontendPageFile && api.fs.readFile) {
+          if (!isForce && isFrontendPageFile && api.fs.readFile) {
             try {
               const diskCheck = await api.fs.readFile(outputDir, file.filename);
               if (diskCheck?.success && typeof diskCheck.content === "string" && diskCheck.content.trim().length > 0) {
@@ -131,7 +131,7 @@ export function useAutoDiskSync({
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
     }
-    return executeSync(files, true);
+    return executeSync(files, true, true);
   }, [executeSync, files]);
 
   // Reactive debounced auto-sync whenever canvas files or outputDir change

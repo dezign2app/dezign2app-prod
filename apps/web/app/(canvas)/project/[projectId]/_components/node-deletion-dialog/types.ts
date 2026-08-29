@@ -73,6 +73,14 @@ export interface DeletionActionTarget {
   onConfirm: () => void;
 }
 
+export interface DeletionPageRenameTarget {
+  type: "pageRename";
+  nodeId: string;
+  oldLabel: string;
+  newLabel: string;
+  onConfirm: () => void;
+}
+
 export interface DeletionGenericTarget {
   type: "custom";
   title?: string;
@@ -94,6 +102,7 @@ export type DeletionTarget =
   | DeletionActionTarget
   | DeletionZoneTarget
   | DeletionEndpointTarget
+  | DeletionPageRenameTarget
   | DeletionGenericTarget;
 
 export interface NodeDeletionDialogProps {

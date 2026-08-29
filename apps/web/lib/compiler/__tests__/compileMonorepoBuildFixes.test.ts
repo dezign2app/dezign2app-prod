@@ -338,11 +338,23 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
       },
     };
 
-    const webClientNode: BackendNode = {
-      id: "node-web-1",
-      type: "webPage",
+    const webAppNode: BackendNode = {
+      id: "node-webapp-1",
+      type: "webApp",
       position: { x: 200, y: 0 },
       fractionalIndex: "a1",
+      data: {
+        label: "Super",
+        appSlug: "super",
+        authNodeId: "node-auth-1",
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-web-1",
+      type: "webPage",
+      position: { x: 200, y: 100 },
+      fractionalIndex: "a2",
       data: {
         label: "Super",
         appSlug: "super",
@@ -353,18 +365,28 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
       id: "node-db-1",
       type: "database",
       position: { x: 0, y: 200 },
-      fractionalIndex: "a2",
+      fractionalIndex: "a3",
       data: {
         label: "SQLite DB",
         dbEngine: "sqlite",
       },
     };
 
+    const edgeToApp: BackendEdge = {
+      id: "edge-web-app",
+      source: "node-web-1",
+      target: "node-webapp-1",
+      sourceHandle: "page-in",
+      targetHandle: "public-in",
+      type: "connection",
+      fractionalIndex: "a0",
+    };
+
     const result = compileMonorepo(
-      [authNode, webClientNode, dbNode],
+      [authNode, webAppNode, webPageNode, dbNode],
       [],
       [],
-      [],
+      [edgeToApp],
       [],
       "AuthTypeMonorepo",
     );

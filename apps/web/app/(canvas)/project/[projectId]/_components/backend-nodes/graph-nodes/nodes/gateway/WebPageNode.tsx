@@ -5,6 +5,8 @@ import {
   Lock,
   Pencil,
   Settings,
+  AlertCircle,
+  Unlink,
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -18,6 +20,7 @@ import {
 import { Textarea } from "@workspace/ui/components/textarea";
 import { parsePageRoute } from "@workspace/canvas";
 import { SectionList } from "./web-page";
+import { NodeDeletionDialog } from "@/app/(canvas)/project/[projectId]/_components/NodeDeletionDialog";
 
 export const WebPageNode = ({
   id,
@@ -38,6 +41,28 @@ export const WebPageNode = ({
     ? window.location.pathname.split("/project/")[1]?.split("/")[0] ?? ""
     : "";
 
+  const [renameDialogOpen, setRenameDialogOpen] = React.useState(false);
+  const [pendingRename, setPendingRename] = React.useState<{ oldLabel: string; newLabel: string } | null>(null);
+
+  const handleRequestRename = React.useCallback(
+    (newLabel: string) => {
+      const oldLabel = data.label || "";
+      const cleanOld = parsePageRoute(oldLabel);
+      const cleanNew = parsePageRoute(newLabel);
+
+      if (cleanOld === cleanNew) return;
+
+      if (!cleanOld || cleanOld === "Untitled" || cleanOld === "Page") {
+        updateNode(id, { data: { ...data, label: cleanNew } });
+        return;
+      }
+
+      setPendingRename({ oldLabel: cleanOld, newLabel: cleanNew });
+      setRenameDialogOpen(true);
+    },
+    [data, id, updateNode],
+  );
+
   // Find incoming WebApp edge connecting to this page
   const incomingEdge = edges.find((e) => {
     const isTarget = e.target === id;
@@ -55,6 +80,8 @@ export const WebPageNode = ({
           (n.id === incomingEdge.source || n.id === incomingEdge.target),
       )
     : null;
+
+  const isDisconnected = !connectedWebAppNode;
 
   // Find section name from handleId
   let connectedZoneName: string | null = null;
@@ -139,7 +166,12 @@ export const WebPageNode = ({
         "shadow-md rounded-xl bg-card border-2 min-w-[240px] max-w-[320px] flex flex-col transition-all duration-300 relative",
         isLocked
           ? "border-violet-500/80 ring-2 ring-violet-500/30"
-          : borderClass,
+          : isDisconnected
+            ? cn(
+                "border-destructive/80 ring-1 ring-destructive/30 shadow-destructive/5",
+                selected && "ring-2 ring-destructive/60 border-destructive",
+              )
+            : borderClass,
       )}
     >
       {/* Target handle from WebApp Section */}
@@ -147,9 +179,12 @@ export const WebPageNode = ({
         type="target"
         position={Position.Left}
         id="page-in"
-        className="w-2.5 h-2.5 !bg-indigo-500 rounded-full border-2 border-background -left-1.5"
+        className={cn(
+          "w-2.5 h-2.5 rounded-full border-2 border-background -left-1.5",
+          isDisconnected ? "!bg-destructive animate-pulse" : "!bg-indigo-500",
+        )}
         style={{ top: "18px" }}
-        title="Connect from WebApp section handle"
+        title={isDisconnected ? "Connect to a WebApp node section handle" : "Connected to WebApp"}
       />
 
       {/* Target handle for incoming Hooks / Data layer */}
@@ -179,8 +214,18 @@ export const WebPageNode = ({
         icon={Globe}
         title={isLandingPage ? "Landing Page" : "Web Page"}
         selected={selected}
+        onSave={handleRequestRename}
         rightElement={
           <div className="flex items-center gap-1 shrink-0 ml-2">
+            {isDisconnected && !isLocked && (
+              <div
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 text-[9px] font-semibold shrink-0"
+                title="Disconnected: Not attached to any WebApp. Connect to a WebApp node to compile this page."
+              >
+                <Unlink size={10} className="shrink-0" />
+                <span>Disconnected</span>
+              </div>
+            )}
             {data.pageSourceCode && !isLocked && (
               <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
                 AI-edited
@@ -210,6 +255,14 @@ export const WebPageNode = ({
           </div>
         }
       />
+
+      {/* Disconnected error banner */}
+      {isDisconnected && (
+        <div className="px-3 py-1.5 bg-destructive/10 border-b border-destructive/25 flex items-center gap-1.5 text-[10px] text-destructive font-medium leading-tight nodrag">
+          <AlertCircle size={12} className="shrink-0 text-destructive animate-pulse" />
+          <span>Connect to a WebApp node to build</span>
+        </div>
+      )}
 
       {/* Edit UI & Page settings button strip */}
       <div className="px-3 py-1.5 border-b bg-muted/30 flex items-center justify-between nodrag">
@@ -309,6 +362,28 @@ export const WebPageNode = ({
           })
         }
       />
+
+      {/* Page Rename / File Deletion Confirmation Dialog */}
+      {pendingRename && (
+        <NodeDeletionDialog
+          open={renameDialogOpen}
+          onOpenChange={(open) => {
+            setRenameDialogOpen(open);
+            if (!open) setPendingRename(null);
+          }}
+          projectId={projectId}
+          deletionTarget={{
+            type: "pageRename",
+            nodeId: id,
+            oldLabel: pendingRename.oldLabel,
+            newLabel: pendingRename.newLabel,
+            onConfirm: () => {
+              updateNode(id, { data: { ...data, label: pendingRename.newLabel } });
+              setPendingRename(null);
+            },
+          }}
+        />
+      )}
     </div>
   );
 };

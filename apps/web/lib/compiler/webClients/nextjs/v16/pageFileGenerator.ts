@@ -6,10 +6,8 @@ import { labelToSlug, slugToComponentName } from "./slugUtils";
 import {
   generateEventComponent,
   generateSectionComponent,
-  generateRootIndexHeaderComponent,
   generatePageCode,
   generateAuthFormComponent,
-  generateRootIndexPage,
   EventComponentMeta,
   SectionMeta,
 } from "./componentTemplates";
@@ -83,7 +81,7 @@ export function generatePageAndComponentFiles({
       node.data.requestBody.fields.forEach((f) => {
         const fKey = f.name || f.key;
         if (fKey) {
-          bodyObj[fKey] = f.value ?? f.defaultValue ?? (f.type === "number" ? 0 : f.type === "boolean" ? true : `sample_${fKey}`);
+          bodyObj[fKey] = f.value ?? f.defaultValue ?? (f.type === "number" ? 0 : f.type === "boolean" ? true : "");
         }
       });
       nodeRequestBody = bodyObj;
@@ -103,15 +101,7 @@ export function generatePageAndComponentFiles({
               actions: node.data.events,
             },
           ]
-        : [
-            {
-              id: "sec-default",
-              name: "Main Section",
-              renderMode: "server",
-              loadStrategy: "eager",
-              actions: [],
-            },
-          ];
+        : [];
 
     const allActions: UIEventItem[] = normalizedSections.flatMap((s) => s.actions || []);
     const pageLoadEvents = allActions.filter(
@@ -121,6 +111,8 @@ export function generatePageAndComponentFiles({
     let pageLoadFetchStatements = "";
     if (pageLoadEvents.length > 0) {
       const statements: string[] = [];
+      const usedSuffixes = new Set<string>();
+
       pageLoadEvents.forEach((evt) => {
         const link = resolveLinkedEndpoint(
           node.id,
@@ -130,29 +122,63 @@ export function generatePageAndComponentFiles({
           endpoints,
         );
         const evtKey = evt.name || "pageLoad";
+
+        // Derive meaningful variable suffix from TargetServiceName + EndpointName (e.g. UserServiceGetData)
+        let suffix = "";
+        if (pageLoadEvents.length > 1) {
+          const servicePart = link?.targetNodeName
+            ? link.targetNodeName
+                .replace(/[^a-zA-Z0-9]+/g, " ")
+                .trim()
+                .split(/\s+/)
+                .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                .join("")
+            : "";
+
+          const endpointPart = (link?.endpointName || (evt.name && evt.name !== "pageLoad" ? evt.name : "") || "Data")
+            .replace(/[^a-zA-Z0-9]+/g, " ")
+            .trim()
+            .split(/\s+/)
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join("");
+
+          let cleanName = `${servicePart}${endpointPart}` || "Data";
+          if (/^[0-9]/.test(cleanName)) {
+            cleanName = `data${cleanName}`;
+          }
+
+          suffix = `_${cleanName}`;
+          let collisionCount = 2;
+          while (usedSuffixes.has(suffix)) {
+            suffix = `_${cleanName}_${collisionCount}`;
+            collisionCount++;
+          }
+          usedSuffixes.add(suffix);
+        }
+
         if (link) {
           const requireAuth = Boolean(effectiveAuthNode) && link.requireAuth !== false;
           const headersEntries = Object.entries(nodeHeaders)
             .map(([k, v]) => `"${k}": "${v}",`)
             .join("\n          ");
 
-          statements.push(`const headers_${link.targetNodeId}: Record<string, string> = {
+          statements.push(`const headers${suffix}: Record<string, string> = {
           "Content-Type": "application/json",
           ${headersEntries}
         };
-        ${requireAuth ? `const token_${link.targetNodeId} = await getAuthBearerToken();
-        if (token_${link.targetNodeId}) {
-          headers_${link.targetNodeId}["Authorization"] = token_${link.targetNodeId};
+        ${requireAuth ? `const token${suffix} = await getAuthBearerToken();
+        if (token${suffix}) {
+          headers${suffix}["Authorization"] = token${suffix};
         }` : ""}
-        const res_${link.targetNodeId} = await fetch("${link.fullUrl}", {
+        const res${suffix} = await fetch("${link.fullUrl}", {
           method: "${link.method || "GET"}",
-          headers: headers_${link.targetNodeId},
+          headers: headers${suffix},
           ${link.method === "POST" || link.method === "PUT" || link.method === "PATCH" ? `body: JSON.stringify(${nodeRequestBody !== undefined ? JSON.stringify(nodeRequestBody) : `{ eventName: "${evt.name || "pageLoad"}", eventType: "pageLoad" }`}),` : ""}
         });
-        if (res_${link.targetNodeId}.ok) {
-          results["${evtKey}"] = await res_${link.targetNodeId}.json();
+        if (res${suffix}.ok) {
+          results["${evtKey}"] = await res${suffix}.json();
         } else {
-          results["${evtKey}"] = { error: "HTTP " + res_${link.targetNodeId}.status };
+          results["${evtKey}"] = { error: "HTTP " + res${suffix}.status };
         }`);
         } else {
           statements.push(`results["${evtKey}"] = {
@@ -337,41 +363,4 @@ export function generatePageAndComponentFiles({
   });
 
   return { pageFiles, hasExplicitRoot };
-}
-
-/**
- * Generates fallback root index components and page if canvas lacks an explicit root node
- */
-export function generateFallbackRootIndex(
-  projectName: string,
-  pagesInfo: PageInfo[],
-): CompiledFile[] {
-  const indexCards = pagesInfo
-    .map(
-      (p) => `
-          <Link href="${p.routePath}" className="block bg-card text-card-foreground border border-border hover:border-primary/50 rounded-xl p-6 transition-all hover:shadow-lg group">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xl font-bold text-card-foreground group-hover:text-primary transition-colors">${p.label}</h2>
-              <span className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground font-mono">${p.routePath}</span>
-            </div>
-            <p className="text-muted-foreground text-sm mb-4">${p.description || "Interactive Next.js page"}</p>
-            <div className="flex items-center text-xs text-primary font-semibold group-hover:translate-x-1 transition-transform">
-              Open Page &rarr;
-            </div>
-          </Link>`,
-    )
-    .join("\n");
-
-  return [
-    {
-      filename: "app/(public)/_components/WebClientIndexHeader.tsx",
-      language: "typescript",
-      content: generateRootIndexHeaderComponent(projectName),
-    },
-    {
-      filename: "app/(public)/page.tsx",
-      language: "typescript",
-      content: generateRootIndexPage(projectName, indexCards),
-    },
-  ];
 }

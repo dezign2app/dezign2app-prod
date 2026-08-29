@@ -181,6 +181,38 @@ export async function writeProject(
               // Stale app directory that is no longer in canvas project
               const staleFolderPath = path.join(appsDir, item.name);
               fs.rmSync(staleFolderPath, { recursive: true, force: true });
+            } else {
+              // Clean up orphaned route/component files inside the app's app/ directory
+              const appRoutesDir = path.join(appsDir, item.name, "app");
+              if (fs.existsSync(appRoutesDir)) {
+                const cleanStaleDir = (dir: string) => {
+                  try {
+                    const entries = fs.readdirSync(dir, { withFileTypes: true });
+                    for (const entry of entries) {
+                      const fullEntryPath = path.join(dir, entry.name);
+                      if (entry.isDirectory()) {
+                        if (["node_modules", ".next", ".git"].includes(entry.name)) continue;
+                        cleanStaleDir(fullEntryPath);
+                        try {
+                          if (fs.readdirSync(fullEntryPath).length === 0) {
+                            fs.rmdirSync(fullEntryPath);
+                          }
+                        } catch {}
+                      } else if (entry.isFile()) {
+                        const relPath = path.relative(outputDir, fullEntryPath).replace(/\\/g, "/");
+                        if (!currentFileSet.has(relPath)) {
+                          try {
+                            fs.unlinkSync(fullEntryPath);
+                          } catch (e) {
+                            console.warn(`[fileWriter] Failed to delete stale file ${relPath}:`, e);
+                          }
+                        }
+                      }
+                    }
+                  } catch {}
+                };
+                cleanStaleDir(appRoutesDir);
+              }
             }
           }
         }
