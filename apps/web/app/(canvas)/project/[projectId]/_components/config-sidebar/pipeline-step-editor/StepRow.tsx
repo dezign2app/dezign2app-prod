@@ -422,6 +422,7 @@ export const StepRow = ({
                       allNodes={allNodes}
                       allEdges={allEdges}
                       serviceNodeId={serviceNodeId}
+                      endpoint={endpoint}
                       consumedEvent={consumedEvent}
                       expectedArgs={expectedArgs}
                       onChange={onChange}

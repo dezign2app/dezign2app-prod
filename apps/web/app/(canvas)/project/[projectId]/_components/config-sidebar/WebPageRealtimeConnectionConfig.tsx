@@ -13,9 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Radio, ArrowLeft, ExternalLink, Globe, Sparkles } from "lucide-react";
+import { Radio, ArrowLeft, ExternalLink, Globe, Sparkles, AlertCircle } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { sanitizeEventName } from "./pipeline-step-editor/PushToClientStepSection";
+import { cn } from "@workspace/ui/lib/utils";
 
 export interface WebPageRealtimeConnectionConfigProps {
   id: string;
@@ -117,14 +118,20 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
     if (manualConn) return manualConn;
     if (derivedInfo?.step) {
       const s = derivedInfo.step as PipelineStep;
+      const ev = events.find((e) => e.id === derivedInfo.sourceEventId);
+      const ep = endpoints.find((e) => e.id === derivedInfo.sourceEndpointId);
+      const sourceItemName = ep ? (ep.name || "Endpoint") : ev ? ev.name : undefined;
       return {
         id,
         protocol: (s.clientDeliveryProtocol as ClientDeliveryProtocol) || "SSE",
         eventName: s.clientDeliveryEventName,
         room: s.clientDeliveryRoom,
-        description: s.name,
+        description: sourceItemName || s.name,
         sourceServiceNodeId: derivedInfo.sourceNode?.id,
         sourceServiceLabel: (derivedInfo.sourceNode?.data?.label as string) || derivedInfo.sourceNode?.type || "Service",
+        sourceEventId: derivedInfo.sourceEventId || derivedInfo.sourceEndpointId || undefined,
+        sourceItemName,
+        sourceItemType: ep ? "endpoint" : ev ? "event" : undefined,
       };
     }
     return {
@@ -132,9 +139,10 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
       protocol: "SSE",
       eventName: "message",
     };
-  }, [manualConn, derivedInfo, id]);
+  }, [manualConn, derivedInfo, id, events, endpoints]);
 
   const isDerived = Boolean(derivedInfo?.step);
+  const isConnected = Boolean(isDerived || (conn.sourceServiceNodeId && nodes.some((n) => n.id === conn.sourceServiceNodeId)));
 
   const handleUpdateManual = (changes: Partial<RealtimeConnection>) => {
     if (isDerived || !pageNode) return; // derived rows configured from source service pipeline
@@ -155,15 +163,38 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
       {/* Header */}
       <div className="flex items-start justify-between gap-3 pb-4 border-b border-border/50">
         <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-violet-500/10 text-violet-500 border border-violet-500/20">
-            <Radio size={18} />
+          <div
+            className={cn(
+              "p-2 rounded-xl border",
+              isConnected
+                ? "bg-violet-500/10 text-violet-500 border-violet-500/20"
+                : "bg-destructive/10 text-destructive border-destructive/25",
+            )}
+          >
+            {isConnected ? <Radio size={18} /> : <AlertCircle size={18} />}
           </div>
           <div>
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <span>{conn.eventName || "Real-Time Connection"}</span>
+              <span>{conn.sourceItemName || conn.eventName || "Real-Time Connection"}</span>
               <span className="text-[10px] font-mono font-normal px-1.5 py-0.5 rounded bg-secondary text-muted-foreground uppercase">
                 {conn.protocol}
               </span>
+              {conn.sourceItemType ? (
+                <span
+                  className={cn(
+                    "text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase",
+                    conn.sourceItemType === "endpoint"
+                      ? "bg-blue-500/15 text-blue-500 border border-blue-500/30"
+                      : "bg-amber-500/15 text-amber-500 border border-amber-500/30",
+                  )}
+                >
+                  {conn.sourceItemType === "endpoint" ? "API" : "EVENT"}
+                </span>
+              ) : (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-destructive/15 text-destructive border border-destructive/30">
+                  DISCONNECTED
+                </span>
+              )}
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
               Listening on WebPage:{" "}
@@ -174,6 +205,19 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
           </div>
         </div>
       </div>
+
+      {/* Disconnected / Unlinked Warning Banner */}
+      {!isConnected && (
+        <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 flex flex-col gap-1.5 text-destructive">
+          <div className="flex items-center gap-2 text-xs font-semibold">
+            <AlertCircle size={15} className="shrink-0" />
+            <span>Unlinked / Misconfigured Stream</span>
+          </div>
+          <p className="text-[11px] text-destructive/90 leading-relaxed">
+            No backend service endpoint or event listener is currently pushing to this stream. To deliver real-time data to this page, add a <strong className="text-foreground font-semibold">Push to Client</strong> step inside a Service pipeline targeting this WebPage.
+          </p>
+        </div>
+      )}
 
       {/* Derived Banner */}
       {isDerived && derivedInfo && (

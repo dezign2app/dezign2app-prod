@@ -405,6 +405,8 @@ export const realtimeConnectionConvexValidator = v.object({
   sourceServiceNodeId: v.optional(v.string()),
   sourceServiceLabel: v.optional(v.string()),
   sourceEventId: v.optional(v.string()),
+  sourceItemName: v.optional(v.string()),
+  sourceItemType: v.optional(v.union(v.literal("endpoint"), v.literal("event"))),
 });
 
 // Web Page Node Data Validator

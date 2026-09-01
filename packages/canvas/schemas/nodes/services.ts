@@ -171,7 +171,9 @@ export const realtimeConnectionSchema = z.object({
   description: z.string().optional().describe("Description of real-time listener"),
   sourceServiceNodeId: z.string().optional().describe("ID of service node pushing this stream"),
   sourceServiceLabel: z.string().optional().describe("Label of service node pushing this stream"),
-  sourceEventId: z.string().optional().describe("ID of source event"),
+  sourceEventId: z.string().optional().describe("ID of source event or endpoint"),
+  sourceItemName: z.string().optional().describe("Name of endpoint or event pushing this stream"),
+  sourceItemType: z.enum(["endpoint", "event"]).optional().describe("Type of pipeline owner"),
 });
 
 export const webPageDataSchema = simpleDataSchema.extend({

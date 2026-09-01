@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Plus, Settings, Trash, Radio } from "lucide-react";
+import { Plus, Settings, Trash, Radio, AlertCircle } from "lucide-react";
 import { BackendNode, RealtimeConnection, ClientDeliveryProtocol, PipelineStep } from "@workspace/canvas/types";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -32,7 +32,13 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
   const derivedConnections = useMemo(() => {
     const derived: MergedConnection[] = [];
 
-    const checkSteps = (steps: PipelineStep[] | undefined, sourceNodeId: string) => {
+    const checkSteps = (
+      steps: PipelineStep[] | undefined,
+      sourceNodeId: string,
+      sourceItemName: string,
+      sourceItemId: string,
+      sourceItemType: "endpoint" | "event",
+    ) => {
       if (!steps) return;
       for (const step of steps) {
         if (
@@ -45,23 +51,26 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
             protocol: (step.clientDeliveryProtocol as ClientDeliveryProtocol) || "SSE",
             eventName: step.clientDeliveryEventName,
             room: step.clientDeliveryRoom,
-            description: step.name,
+            description: sourceItemName || step.name,
             sourceServiceNodeId: sourceNodeId,
             sourceServiceLabel: (sourceNode?.data?.label as string) || sourceNode?.type || "Service",
+            sourceEventId: sourceItemId,
+            sourceItemName,
+            sourceItemType,
             isDerived: true,
           });
         }
-        if (step.thenSteps) checkSteps(step.thenSteps, sourceNodeId);
-        if (step.elseSteps) checkSteps(step.elseSteps, sourceNodeId);
-        if (step.trySteps) checkSteps(step.trySteps, sourceNodeId);
-        if (step.catchSteps) checkSteps(step.catchSteps, sourceNodeId);
-        if (step.loopBody) checkSteps(step.loopBody, sourceNodeId);
+        if (step.thenSteps) checkSteps(step.thenSteps, sourceNodeId, sourceItemName, sourceItemId, sourceItemType);
+        if (step.elseSteps) checkSteps(step.elseSteps, sourceNodeId, sourceItemName, sourceItemId, sourceItemType);
+        if (step.trySteps) checkSteps(step.trySteps, sourceNodeId, sourceItemName, sourceItemId, sourceItemType);
+        if (step.catchSteps) checkSteps(step.catchSteps, sourceNodeId, sourceItemName, sourceItemId, sourceItemType);
+        if (step.loopBody) checkSteps(step.loopBody, sourceNodeId, sourceItemName, sourceItemId, sourceItemType);
         if (step.switchCases) {
-          step.switchCases.forEach((c) => checkSteps(c.steps, sourceNodeId));
+          step.switchCases.forEach((c) => checkSteps(c.steps, sourceNodeId, sourceItemName, sourceItemId, sourceItemType));
         }
-        if (step.switchDefault) checkSteps(step.switchDefault, sourceNodeId);
+        if (step.switchDefault) checkSteps(step.switchDefault, sourceNodeId, sourceItemName, sourceItemId, sourceItemType);
         if (step.parallelBranches) {
-          step.parallelBranches.forEach((b) => checkSteps(b.steps, sourceNodeId));
+          step.parallelBranches.forEach((b) => checkSteps(b.steps, sourceNodeId, sourceItemName, sourceItemId, sourceItemType));
         }
       }
     };
@@ -69,14 +78,14 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
     // 1. Check all consumed / published events
     events.forEach((ev) => {
       if (ev.pipelineSteps && ev.nodeId) {
-        checkSteps(ev.pipelineSteps as PipelineStep[], ev.nodeId);
+        checkSteps(ev.pipelineSteps as PipelineStep[], ev.nodeId, ev.name || "Event", ev.id, "event");
       }
     });
 
     // 2. Check all endpoints
     endpoints.forEach((ep) => {
       if (ep.pipelineSteps && ep.nodeId) {
-        checkSteps(ep.pipelineSteps as PipelineStep[], ep.nodeId);
+        checkSteps(ep.pipelineSteps as PipelineStep[], ep.nodeId, ep.name || "Endpoint", ep.id, "endpoint");
       }
     });
 
@@ -88,7 +97,14 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
     const derivedIds = new Set(derivedConnections.map((d) => d.id));
     const manualOnly = connections
       .filter((c) => !derivedIds.has(c.id))
-      .map((c) => ({ ...c, isDerived: false }));
+      .map((c) => ({
+        ...c,
+        isDerived: false,
+        sourceServiceNodeId: undefined,
+        sourceServiceLabel: undefined,
+        sourceItemName: undefined,
+        sourceItemType: undefined,
+      }));
     return [...derivedConnections, ...manualOnly];
   }, [derivedConnections, connections]);
 
@@ -124,45 +140,52 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
     });
   };
 
-  const getProtocolBadge = (protocol: string) => {
+  const getProtocolBadge = (protocol: string, isConnected = true) => {
+    if (!isConnected) {
+      return (
+        <span className="text-[8px] font-bold px-1 py-0.2 rounded bg-destructive/15 text-destructive border border-destructive/30 shrink-0">
+          {protocol}
+        </span>
+      );
+    }
     switch (protocol) {
       case "SSE":
         return (
-          <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30">
+          <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30 shrink-0">
             SSE
           </span>
         );
       case "WEBSOCKET":
       case "WS":
         return (
-          <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
+          <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-cyan-500/15 text-cyan-500 border border-cyan-500/30 shrink-0">
             WS
           </span>
         );
       case "WEBRTC":
       case "RTC":
         return (
-          <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-purple-500/15 text-purple-500 border border-purple-500/30">
+          <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-purple-500/15 text-purple-500 border border-purple-500/30 shrink-0">
             RTC
           </span>
         );
       case "POLLING":
       case "POLL":
         return (
-          <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-blue-500/15 text-blue-500 border border-blue-500/30">
+          <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-blue-500/15 text-blue-500 border border-blue-500/30 shrink-0">
             POLL
           </span>
         );
       case "API_PUSH":
       case "PUSH":
         return (
-          <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
+          <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 shrink-0">
             PUSH
           </span>
         );
       default:
         return (
-          <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-muted text-muted-foreground border border-border">
+          <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-muted text-muted-foreground border border-border shrink-0">
             {protocol}
           </span>
         );
@@ -196,43 +219,82 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
             No real-time connections. Add listener or target from service pipeline.
           </div>
         ) : (
-          allConnections.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between px-3 py-1.5 border-b border-border/40 text-xs relative group/row hover:bg-secondary/20 nodrag"
-            >
-              {/* Target handle for visualizing real-time push incoming flow */}
-              <Handle
-                type="target"
-                position={Position.Left}
-                id={`rtc-in-${item.id}`}
-                className="w-2 h-2 -left-1 !bg-violet-500"
-                style={{ top: "50%" }}
-              />
+          allConnections.map((item) => {
+            const isConnected = Boolean(item.isDerived);
 
+            return (
               <div
-                className="flex items-center gap-1.5 overflow-hidden flex-1 cursor-pointer"
-                onClick={() =>
-                  setActiveConfigItem({
-                    type: "realtimeConnection",
-                    id: item.id,
-                    nodeId,
-                  })
-                }
-              >
-                {getProtocolBadge(item.protocol)}
-                <span className="font-medium text-xs truncate">
-                  {item.eventName || item.description || "message"}
-                </span>
-                {item.isDerived && item.sourceServiceLabel && (
-                  <span
-                    className="text-[9px] px-1 py-0.2 rounded bg-secondary/80 text-muted-foreground font-mono truncate max-w-[90px]"
-                    title={`Pushed by ${item.sourceServiceLabel} pipeline`}
-                  >
-                    ← {item.sourceServiceLabel}
-                  </span>
+                key={item.id}
+                className={cn(
+                  "flex items-center justify-between px-3 py-1.5 border-b text-xs relative group/row transition-colors nodrag",
+                  isConnected
+                    ? "border-border/40 hover:bg-secondary/20"
+                    : "border-destructive/30 bg-destructive/10 hover:bg-destructive/15",
                 )}
-              </div>
+              >
+                {/* Target handle for visualizing real-time push incoming flow */}
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id={`rtc-in-${item.id}`}
+                  className={cn(
+                    "w-2 h-2 -left-1 transition-colors",
+                    isConnected
+                      ? "!bg-violet-500"
+                      : "!bg-destructive ring-2 ring-destructive/50 shadow-xs",
+                  )}
+                  style={{ top: "50%" }}
+                />
+
+                <div
+                  className="flex items-center gap-1.5 overflow-hidden flex-1 cursor-pointer"
+                  onClick={() =>
+                    setActiveConfigItem({
+                      type: "realtimeConnection",
+                      id: item.id,
+                      nodeId,
+                    })
+                  }
+                >
+                  {getProtocolBadge(item.protocol, isConnected)}
+                  {isConnected && item.sourceItemType && (
+                    <span
+                      className={cn(
+                        "text-[8px] font-bold px-1 py-0.2 rounded font-mono uppercase shrink-0",
+                        item.sourceItemType === "endpoint"
+                          ? "bg-blue-500/15 text-blue-500 border border-blue-500/30"
+                          : "bg-amber-500/15 text-amber-500 border border-amber-500/30",
+                      )}
+                      title={item.sourceItemType === "endpoint" ? "HTTP Endpoint / API Route" : "Consumed Event Listener"}
+                    >
+                      {item.sourceItemType === "endpoint" ? "API" : "EVENT"}
+                    </span>
+                  )}
+                  <span
+                    className={cn(
+                      "text-xs truncate",
+                      isConnected ? "font-medium text-foreground" : "font-semibold text-destructive",
+                    )}
+                    title={item.sourceItemName || item.eventName || "message"}
+                  >
+                    {item.sourceItemName || (item.eventName && item.eventName !== "message" ? item.eventName : undefined) || item.eventName || "message"}
+                  </span>
+                  {isConnected && item.sourceServiceLabel ? (
+                    <span
+                      className="text-[9px] px-1 py-0.2 rounded bg-secondary/80 text-muted-foreground font-mono truncate max-w-[100px]"
+                      title={`Pushed by ${item.sourceItemType === "endpoint" ? "API" : "Event"} ${item.sourceItemName ? `"${item.sourceItemName}" on ` : ""}${item.sourceServiceLabel}`}
+                    >
+                      ← {item.sourceServiceLabel}
+                    </span>
+                  ) : (
+                    <span
+                      className="text-[8px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-destructive/20 text-destructive border border-destructive/40 flex items-center gap-0.5 shrink-0"
+                      title="Disconnected / Misconfigured: No backend service pipeline is currently pushing to this connection."
+                    >
+                      <AlertCircle size={8} /> DISCONNECTED
+                    </span>
+                  )}
+                </div>
 
               <div className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-all shrink-0">
                 <button
@@ -265,7 +327,8 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
                 )}
               </div>
             </div>
-          ))
+          );
+        })
         )}
       </div>
     </>
