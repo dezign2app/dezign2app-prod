@@ -160,6 +160,20 @@ export const pageSectionSchema = z.object({
   libraries: z.array(z.string()).optional().describe("Third-party libraries used in this section"),
 });
 
+export const realtimeConnectionSchema = z.object({
+  id: z.string().describe("Unique identifier for this real-time connection"),
+  protocol: z
+    .enum(["SSE", "WEBSOCKET", "WEBRTC", "POLLING", "API_PUSH"])
+    .describe("Delivery protocol for real-time messages"),
+  eventName: z.string().optional().describe("Event name or message type to listen for"),
+  room: z.string().optional().describe("Broadcast room or channel key for WebSockets"),
+  pollingIntervalMs: z.number().optional().describe("Polling interval in milliseconds"),
+  description: z.string().optional().describe("Description of real-time listener"),
+  sourceServiceNodeId: z.string().optional().describe("ID of service node pushing this stream"),
+  sourceServiceLabel: z.string().optional().describe("Label of service node pushing this stream"),
+  sourceEventId: z.string().optional().describe("ID of source event"),
+});
+
 export const webPageDataSchema = simpleDataSchema.extend({
   appName: z.string().optional().describe("Parent web application display name"),
   appSlug: z.string().optional().describe("Parent web application slug (e.g. customer-portal)"),
@@ -194,6 +208,7 @@ export const webPageDataSchema = simpleDataSchema.extend({
   aiEditing: z.boolean().optional().describe("Whether AI agent is actively streaming page edit"),
   events: z.array(clientEventInputSchema).optional(),
   sections: z.array(pageSectionSchema).optional().describe("Sections hierarchy containing actions"),
+  realtimeConnections: z.array(realtimeConnectionSchema).optional().describe("Real-time push streams"),
   uiPrompt: z.string().optional().describe("Page-level AI prompt"),
   renderMode: z.enum(["server", "client"]).optional().describe("Page-level render mode"),
 });
@@ -224,6 +239,7 @@ export const webPageDataInputSchema = baseNodeDataSchema.extend({
   aiEditing: z.boolean().optional(),
   events: z.array(clientEventInputSchema).optional(),
   sections: z.array(pageSectionSchema).optional(),
+  realtimeConnections: z.array(realtimeConnectionSchema).optional(),
   uiPrompt: z.string().optional(),
   renderMode: z.enum(["server", "client"]).optional(),
 });

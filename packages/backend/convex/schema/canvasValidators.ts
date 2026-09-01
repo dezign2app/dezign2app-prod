@@ -128,9 +128,26 @@ export const safePipelineStepSchema = z.object({
   switchDefault: z.array(z.any()).optional(),
   parallelBranches: z.array(safeParallelBranchSchema).optional(),
   failureMode: z.enum(["all", "any"]).optional(),
+  loopKind: z.enum(["for", "for_each", "while", "do_while"]).optional(),
   loopSource: pipelineStepInputSourceSchema.optional(),
   iteratorVariable: z.string().optional(),
+  loopForStart: z.number().optional(),
+  loopForEnd: z.number().optional(),
+  loopForStep: z.number().optional(),
+  loopConditionExpr: safeConditionExprSchema.optional(),
+  loopMaxIterations: z.number().optional(),
   loopBody: z.array(z.any()).optional(),
+
+  // push_to_client fields
+  clientDeliveryProtocol: z.enum(["SSE", "WEBSOCKET", "WEBRTC", "API_PUSH"]).optional(),
+  clientDeliveryTargetWebAppId: z.string().optional(),
+  clientDeliveryTargetPageId: z.string().optional(),
+  clientDeliveryEventName: z.string().optional(),
+  clientDeliveryRoom: z.string().optional(),
+  clientDeliveryWebhookUrl: z.string().optional(),
+  clientDeliveryWebhookMethod: z.enum(["POST", "PUT", "PATCH"]).optional(),
+  clientDeliveryFilterExpr: z.string().optional(),
+  clientDeliveryPayloadMapping: z.string().optional(),
 });
 
 /**
@@ -371,6 +388,25 @@ export const protectionRuleConvexValidator = v.object({
   ),
 });
 
+// Realtime Connection Validator
+export const realtimeConnectionConvexValidator = v.object({
+  id: v.string(),
+  protocol: v.union(
+    v.literal("SSE"),
+    v.literal("WEBSOCKET"),
+    v.literal("WEBRTC"),
+    v.literal("POLLING"),
+    v.literal("API_PUSH"),
+  ),
+  eventName: v.optional(v.string()),
+  room: v.optional(v.string()),
+  pollingIntervalMs: v.optional(v.number()),
+  description: v.optional(v.string()),
+  sourceServiceNodeId: v.optional(v.string()),
+  sourceServiceLabel: v.optional(v.string()),
+  sourceEventId: v.optional(v.string()),
+});
+
 // Web Page Node Data Validator
 export const webPageConvexDataValidator = v.object({
   label: v.optional(v.string()),
@@ -427,6 +463,7 @@ export const webPageConvexDataValidator = v.object({
   ),
   events: v.optional(v.array(webPageEventConvexValidator)),
   sections: v.optional(v.array(pageSectionConvexValidator)),
+  realtimeConnections: v.optional(v.array(realtimeConnectionConvexValidator)),
   uiPrompt: v.optional(v.string()),
   renderMode: v.optional(v.union(v.literal("server"), v.literal("client"))),
   protectionOverride: v.optional(protectionRuleConvexValidator),

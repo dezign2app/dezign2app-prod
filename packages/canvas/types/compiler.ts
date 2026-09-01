@@ -143,6 +143,17 @@ export interface LinkedPageRefInfo {
   targetRoute: string;
 }
 
+export interface LinkedRealtimeConnectionInfo {
+  connectionId: string;
+  protocol: "SSE" | "WEBSOCKET" | "WEBRTC" | "POLLING" | "API_PUSH";
+  eventName?: string;
+  room?: string;
+  sourceServiceNodeId?: string;
+  sourceServiceName?: string;
+  sourceEventId?: string;
+  description?: string;
+}
+
 export interface PageInfo {
   nodeId: string;
   label: string;
@@ -160,6 +171,7 @@ export interface PageInfo {
   isAuthPage?: boolean;
   appSlug?: string;
   appName?: string;
+  realtimeConnections?: LinkedRealtimeConnectionInfo[];
 }
 
 export interface NodeConnectionDetail {

@@ -32,6 +32,7 @@ import { ConditionExprEditor } from "./ConditionExprEditor";
 import { useStepRowState } from "./useStepRowState";
 import { StepType, PipelineStepDraft, AvailableSource } from "./types";
 import { STEP_TYPE_META, ADDABLE_STEP_TYPES } from "./utils";
+import { PushToClientStepSection } from "./PushToClientStepSection";
 
 function isStepType(val: string): val is StepType {
   return val in STEP_TYPE_META;
@@ -412,6 +413,23 @@ export const StepRow = ({
 
                 if (step.type === "custom_code") {
                   return <CustomCodeSection step={step} onChange={onChange} />;
+                }
+
+                if (step.type === "push_to_client") {
+                  return (
+                    <PushToClientStepSection
+                      step={step}
+                      allNodes={allNodes}
+                      allEdges={allEdges}
+                      serviceNodeId={serviceNodeId}
+                      consumedEvent={consumedEvent}
+                      expectedArgs={expectedArgs}
+                      onChange={onChange}
+                      onAutoMapArguments={handleAutoMapArguments}
+                    >
+                      {argumentBindingsSection}
+                    </PushToClientStepSection>
+                  );
                 }
 
                 return (

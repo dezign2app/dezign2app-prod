@@ -158,6 +158,9 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   "slot-out→slot-in": "connection",
 };
 
+// NOTE: "sse", "websocket", "webrtc", "polling" have been moved to the
+// dedicated "Real-Time Connections" section on WebPageNode and are no longer
+// valid section action event types.
 export const WEB_PAGE_EVENTS = [
   "pageLoad",
   "click",
@@ -172,10 +175,6 @@ export const WEB_PAGE_EVENTS = [
   "blur",
   "mouseenter",
   "mouseleave",
-  "sse",
-  "websocket",
-  "webrtc",
-  "polling",
   "navigateToPage",
   "other",
 ] as const;

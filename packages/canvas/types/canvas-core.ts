@@ -143,7 +143,8 @@ export type ConfigItemType =
   | "hook_ref"
   | "db_ref"
   | "redis_cache"
-  | "vector_db_ref";
+  | "vector_db_ref"
+  | "realtimeConnection";
 
 export interface ActiveConfigItem {
   type: ConfigItemType;

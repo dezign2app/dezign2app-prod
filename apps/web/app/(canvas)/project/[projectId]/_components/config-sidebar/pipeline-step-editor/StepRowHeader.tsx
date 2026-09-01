@@ -88,7 +88,15 @@ export const StepRowHeader = ({
           </span>
         ) : step.type === "loop" ? (
           <span className="text-teal-300 font-semibold truncate">
-            for ({step.iteratorVariable || "item"} of items)
+            {step.loopKind === "for"
+              ? `for (${step.iteratorVariable || "i"} = ${step.loopForStart ?? 0}; ${step.iteratorVariable || "i"} < ${step.loopForEnd ?? 10}; ${step.iteratorVariable || "i"} += ${step.loopForStep ?? 1})`
+              : step.loopKind === "while"
+              ? `while (condition) { ${step.loopBody?.length || 0} steps }`
+              : step.loopKind === "do_while"
+              ? `do { ${step.loopBody?.length || 0} steps } while (condition)`
+              : step.loopSource && "field" in step.loopSource && step.loopSource.field
+              ? `for (const ${step.iteratorVariable || "item"} of ${step.loopSource.field})`
+              : `for (const ${step.iteratorVariable || "item"} of items)`}
           </span>
         ) : step.type === "early_return" ? (
           <span className="text-orange-300 font-semibold truncate">

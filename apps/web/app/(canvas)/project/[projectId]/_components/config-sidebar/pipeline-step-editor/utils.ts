@@ -23,6 +23,7 @@ import {
   Layers,
   Repeat,
   LogOut,
+  MonitorSmartphone,
 } from "lucide-react";
 import {
   StepType,
@@ -49,67 +50,72 @@ export const STEP_TYPE_META: Record<StepType, StepTypeMeta> = {
   transform: {
     label: "Transform",
     icon: React.createElement(Shuffle, { size: 13 }),
-    color: "text-purple-400 bg-purple-500/10 border-purple-500/20",
+    color: "text-foreground/80 bg-secondary/40 border-border/60",
   },
   db_operation: {
     label: "DB Operation",
     icon: React.createElement(Database, { size: 13 }),
-    color: "text-blue-400 bg-blue-500/10 border-blue-500/20",
+    color: "text-foreground/80 bg-secondary/40 border-border/60",
   },
   redis_operation: {
     label: "Redis",
     icon: React.createElement(Zap, { size: 13 }),
-    color: "text-red-400 bg-red-500/10 border-red-500/20",
+    color: "text-foreground/80 bg-secondary/40 border-border/60",
   },
   kafka_publish: {
     label: "Kafka Publish",
     icon: React.createElement(Radio, { size: 13 }),
-    color: "text-orange-400 bg-orange-500/10 border-orange-500/20",
+    color: "text-foreground/80 bg-secondary/40 border-border/60",
   },
   service_call: {
     label: "Service Call",
     icon: React.createElement(Cloud, { size: 13 }),
-    color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
+    color: "text-foreground/80 bg-secondary/40 border-border/60",
   },
   custom_code: {
     label: "Custom Code",
     icon: React.createElement(Terminal, { size: 13 }),
-    color: "text-green-400 bg-green-500/10 border-green-500/20",
+    color: "text-foreground/80 bg-secondary/40 border-border/60",
   },
   return_response: {
     label: "Return Response",
     icon: React.createElement(Send, { size: 13 }),
-    color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+    color: "text-foreground/80 bg-secondary/40 border-border/60",
   },
   condition: {
     label: "If / Else",
     icon: React.createElement(GitBranch, { size: 13 }),
-    color: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+    color: "text-foreground/80 bg-secondary/40 border-border/60",
   },
   try_catch: {
     label: "Try / Catch",
     icon: React.createElement(ShieldAlert, { size: 13 }),
-    color: "text-rose-400 bg-rose-500/10 border-rose-500/20",
+    color: "text-foreground/80 bg-secondary/40 border-border/60",
   },
   switch: {
     label: "Switch",
     icon: React.createElement(GitFork, { size: 13 }),
-    color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
+    color: "text-foreground/80 bg-secondary/40 border-border/60",
   },
   parallel: {
     label: "Parallel",
     icon: React.createElement(Layers, { size: 13 }),
-    color: "text-sky-400 bg-sky-500/10 border-sky-500/20",
+    color: "text-foreground/80 bg-secondary/40 border-border/60",
   },
   loop: {
     label: "Loop",
     icon: React.createElement(Repeat, { size: 13 }),
-    color: "text-teal-400 bg-teal-500/10 border-teal-500/20",
+    color: "text-foreground/80 bg-secondary/40 border-border/60",
   },
   early_return: {
     label: "Early Return",
     icon: React.createElement(LogOut, { size: 13 }),
-    color: "text-orange-400 bg-orange-500/10 border-orange-500/20",
+    color: "text-foreground/80 bg-secondary/40 border-border/60",
+  },
+  push_to_client: {
+    label: "Push to Client",
+    icon: React.createElement(MonitorSmartphone, { size: 13 }),
+    color: "text-foreground/80 bg-secondary/40 border-border/60",
   },
 };
 
@@ -126,6 +132,7 @@ export const ADDABLE_STEP_TYPES: readonly StepType[] = [
   "parallel",
   "loop",
   "early_return",
+  "push_to_client",
 ];
 
 export const CONDITION_OPERATORS: readonly {

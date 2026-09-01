@@ -52,6 +52,7 @@ export * from "./GenericFunctionRefSection";
 export * from "./CustomCodeSection";
 export * from "./useStepRowState";
 export * from "./StepRow";
+export * from "./PushToClientStepSection";
 
 export interface PipelineStepEditorProps {
   steps: PipelineStepDraft[];
@@ -709,10 +710,10 @@ export const PipelineStepEditor = ({
               <button
                 key={type}
                 type="button"
-                className={`flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded border transition-all duration-150 hover:brightness-110 active:scale-95 ${meta.color}`}
+                className="flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md border border-border/60 bg-secondary/40 hover:bg-secondary text-foreground/80 hover:text-foreground transition-all duration-150 active:scale-95 shadow-xs"
                 onClick={() => addStep(type)}
               >
-                <Plus size={9} />
+                <Plus size={10} className="text-muted-foreground/80" />
                 {meta.label}
               </button>
             );
