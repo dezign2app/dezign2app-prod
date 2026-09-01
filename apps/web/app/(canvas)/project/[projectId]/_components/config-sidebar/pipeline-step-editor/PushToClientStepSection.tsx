@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { BackendNode, BackendEdge, AnyMessagingResource } from "@workspace/canvas/types";
+import { BackendNode, BackendEdge, AnyMessagingResource, Endpoint } from "@workspace/canvas/types";
 import { ClientDeliveryProtocol, RealtimeConnection } from "@workspace/canvas/types";
 import {
   Select,
@@ -48,6 +48,9 @@ export function upsertDerivedConnection(
   targetPageId: string,
   step: PipelineStepDraft,
   serviceNodeId?: string,
+  sourceItemName?: string,
+  sourceItemId?: string,
+  sourceItemType?: "endpoint" | "event",
 ) {
   const page = store.nodes.find((n) => n.id === targetPageId);
   if (!page) return;
@@ -58,12 +61,14 @@ export function upsertDerivedConnection(
   const derived: RealtimeConnection = {
     id: step.id,
     protocol: (step.clientDeliveryProtocol as ClientDeliveryProtocol) || "SSE",
-    eventName: step.clientDeliveryEventName || "message",
+    eventName: step.clientDeliveryEventName || sourceItemName || "message",
     room: step.clientDeliveryRoom,
-    description: step.name || undefined,
+    description: sourceItemName || step.name || undefined,
     sourceServiceNodeId: serviceNodeId,
     sourceServiceLabel: serviceNode?.data?.label as string | undefined,
-    sourceEventId: undefined,
+    sourceEventId: sourceItemId,
+    sourceItemName,
+    sourceItemType,
   };
 
   const without = existing.filter((c) => c.id !== step.id);
@@ -102,6 +107,7 @@ export interface PushToClientStepSectionProps {
   allNodes: BackendNode[];
   allEdges: BackendEdge[];
   serviceNodeId?: string;
+  endpoint?: Endpoint;
   consumedEvent?: AnyMessagingResource;
   expectedArgs?: ExpectedArg[];
   availableSources?: AvailableSource[];
@@ -119,6 +125,8 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
   allNodes,
   allEdges,
   serviceNodeId,
+  endpoint,
+  consumedEvent,
   onChange,
   children,
 }) => {
@@ -171,7 +179,22 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
       ) {
         removeDerivedConnection(store, step.clientDeliveryTargetPageId, step.id);
       }
-      upsertDerivedConnection(store, tgtId, updated, serviceNodeId);
+      const sourceItemName = endpoint
+        ? endpoint.name || "Endpoint"
+        : consumedEvent
+        ? consumedEvent.name
+        : undefined;
+      const sourceItemId = endpoint ? endpoint.id : consumedEvent ? consumedEvent.id : undefined;
+      const sourceItemType = endpoint ? "endpoint" : consumedEvent ? "event" : undefined;
+      upsertDerivedConnection(
+        store,
+        tgtId,
+        updated,
+        serviceNodeId,
+        sourceItemName,
+        sourceItemId,
+        sourceItemType,
+      );
     }
   };
 

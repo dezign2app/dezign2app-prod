@@ -59,6 +59,8 @@ export interface RealtimeConnection {
   sourceServiceNodeId?: string;
   sourceServiceLabel?: string;
   sourceEventId?: string;
+  sourceItemName?: string;
+  sourceItemType?: "endpoint" | "event";
 }
 
 /** WebApp node fields (canvas type). */
