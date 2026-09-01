@@ -72,7 +72,14 @@ export function compileNextjsV16WebClient(
   files.push(...generateRouteGroupLayouts(pagesInfo, Boolean(authNode), webAppNode));
 
   // 3. Project Configuration Files
-  files.push(...generateProjectConfigFiles(effectiveAppSlug));
+  const allWebCustomDeps = [
+    ...(webAppNode?.data?.customDependencies || []),
+    ...webClientNodes.flatMap((p) => p.data?.customDependencies || []),
+  ];
+  const deduplicatedCustomDeps = allWebCustomDeps.filter(
+    (dep, index, self) => index === self.findIndex((d) => d.name === dep.name)
+  );
+  files.push(...generateProjectConfigFiles(effectiveAppSlug, deduplicatedCustomDeps));
 
   // 4. Auth Server, Client SDK, Authorization Helpers & Dependencies (only if authNode connected)
   generateAuthFilesAndDependencies({

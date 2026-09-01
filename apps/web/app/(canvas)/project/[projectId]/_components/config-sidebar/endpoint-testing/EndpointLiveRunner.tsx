@@ -11,13 +11,9 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import {
-  Play,
   Send,
   Loader2,
   Globe,
-  Settings,
-  RefreshCw,
-  SlidersHorizontal,
   Users,
 } from "lucide-react";
 import { Endpoint, BackendNode } from "@/types/canvas";

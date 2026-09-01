@@ -71,7 +71,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
       <AuthAwarenessBanner
         zoneName={zoneName}
         isProtected={isProtected}
-        requireAuth={item.requireAuth !== false}
+        requireAuth={item.requireAuth !== undefined ? item.requireAuth : isProtected}
         onRequireAuthChange={(requireAuth) => {
           let updatedHeaders = [...(item.headers || [])];
           if (requireAuth) {

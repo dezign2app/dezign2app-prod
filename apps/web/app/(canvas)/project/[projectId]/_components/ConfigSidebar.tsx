@@ -17,6 +17,7 @@ import { SearchIndexConfig } from "./config-sidebar/SearchIndexConfig";
 import { AuthRuleConfig } from "./config-sidebar/AuthRuleConfig";
 import { IdentityProviderConfig } from "./config-sidebar/IdentityProviderConfig";
 import { AuthConfig } from "./config-sidebar/AuthConfig";
+import { ServiceConfig } from "./config-sidebar/ServiceConfig";
 import { WebAppConfig } from "./config-sidebar/WebAppConfig";
 import { WebPageConfig } from "./config-sidebar/WebPageConfig";
 import { WebPageSectionConfig } from "./config-sidebar/WebPageSectionConfig";
@@ -207,6 +208,8 @@ export const ConfigSidebar = () => {
             <IdentityProviderConfig id={id} nodeId={nodeId} />
           ) : type === "auth" ? (
             <AuthConfig id={id} nodeId={nodeId} />
+          ) : type === "service" ? (
+            <ServiceConfig id={id} nodeId={nodeId} />
           ) : type === "webApp" ? (
             <WebAppConfig id={id} nodeId={nodeId} />
           ) : type === "webPage" ? (

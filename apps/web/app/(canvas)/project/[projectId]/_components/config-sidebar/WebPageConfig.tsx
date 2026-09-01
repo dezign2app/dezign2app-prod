@@ -167,7 +167,7 @@ export const WebPageConfig = ({
         description={data.description}
         connectedZoneName={connectedZoneName}
         isProtected={isProtected}
-        requireAuth={data.requireAuth !== false}
+        requireAuth={data.requireAuth !== undefined ? data.requireAuth : isProtected}
         onUpdateSummary={(summary) => updateData({ summary, description: summary })}
         onUpdateRequireAuth={(requireAuth) => updateData({ requireAuth })}
       />

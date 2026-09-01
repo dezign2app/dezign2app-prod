@@ -213,6 +213,29 @@ export function generateConfigFiles(
     dependencies["@grpc/proto-loader"] = "^0.7.13";
   }
 
+  const devDependencies: Record<string, string> = {
+    "@workspace/typescript-config": "workspace:*",
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/node": "^20.11.0",
+    "ts-node-dev": "^2.0.0",
+    typescript: "^5.3.3",
+    vitest: "^1.6.0",
+  };
+
+  // Merge custom dependencies from node data
+  if (Array.isArray(node.data?.customDependencies)) {
+    node.data.customDependencies.forEach((dep) => {
+      if (!dep || !dep.name) return;
+      const ver = dep.version || "latest";
+      if (dep.isDev) {
+        devDependencies[dep.name] = ver;
+      } else {
+        dependencies[dep.name] = ver;
+      }
+    });
+  }
+
   const packageJson = JSON.stringify(
     {
       name: `@workspace/${sanitizedName}`,
@@ -228,15 +251,7 @@ export function generateConfigFiles(
         test: "vitest run",
       },
       dependencies,
-      devDependencies: {
-        "@workspace/typescript-config": "workspace:*",
-        "@types/express": "^4.17.21",
-        "@types/cors": "^2.8.17",
-        "@types/node": "^20.11.0",
-        "ts-node-dev": "^2.0.0",
-        typescript: "^5.3.3",
-        vitest: "^1.6.0",
-      },
+      devDependencies,
     },
     null,
     2,

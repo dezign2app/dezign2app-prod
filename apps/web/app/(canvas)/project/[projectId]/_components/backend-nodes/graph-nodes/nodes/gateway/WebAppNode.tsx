@@ -214,6 +214,24 @@ export const WebAppNode = ({
         icon={Globe}
         title="Web App"
         selected={selected}
+        rightElement={
+          <div className="flex items-center gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveConfigItem({
+                  type: "webApp",
+                  id,
+                  nodeId: id,
+                });
+              }}
+              className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all cursor-pointer flex items-center justify-center text-[10px]"
+              title="Configure Web App Settings & Packages"
+            >
+              <Settings size={13} />
+            </button>
+          </div>
+        }
       />
 
       {/* App Meta Info Bar */}

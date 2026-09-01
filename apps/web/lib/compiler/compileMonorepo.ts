@@ -271,7 +271,7 @@ export function compileMonorepo(
   // 6. Generate Web Apps: apps/<appSlug> for WebApp nodes & connected WebPage nodes
   const webAppNodes = nodes.filter((n) => n.type === "webApp");
 
-  if (webAppNodes.length > 0) {
+  if (webAppNodes.length > 0 || webPageNodes.length > 0) {
     const appMap = new Map<string, { appName: string; appSlug: string; webAppNode?: BackendNode; pageNodes: BackendNode[] }>();
 
     // Process explicit WebApp nodes
@@ -361,13 +361,21 @@ export function compileMonorepo(
             routeGroup = cleanHandle ? cleanHandle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") : "public";
           }
         }
-      } else if (pageNode.data?.appSlug) {
-        const candidateSlug = pageNode.data.appSlug.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-        if (appMap.has(candidateSlug)) {
+      } else if (webAppNodes.length === 0) {
+        const isConnected = edges.some((e) => e.source === pageNode.id || e.target === pageNode.id);
+        if (isConnected && pageNode.data?.appSlug) {
+          const candidateSlug = pageNode.data.appSlug.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+          if (!appMap.has(candidateSlug)) {
+            appMap.set(candidateSlug, {
+              appName: pageNode.data?.appName || candidateSlug,
+              appSlug: candidateSlug,
+              pageNodes: [],
+            });
+          }
           targetAppSlug = candidateSlug;
           routeGroup =
-            pageNode.data.routeGroup ||
-            (pageNode.data.accessType && pageNode.data.accessType !== "public" ? "private" : "public");
+            pageNode.data?.routeGroup ||
+            (pageNode.data?.accessType && pageNode.data?.accessType !== "public" ? "private" : "public");
         }
       }
 

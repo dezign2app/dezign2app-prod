@@ -27,12 +27,10 @@ import {
   Trash,
   Plus,
   Copy,
-  Sliders,
   CheckCircle2,
   Send,
-  Sparkles,
-  Layers,
   Users,
+  Settings,
 } from "lucide-react";
 import {
   Select,
@@ -297,7 +295,7 @@ export function EndpointTestCaseEditor({
             <Send className="w-3 h-3 text-primary" /> Live Test
           </TabsTrigger>
           <TabsTrigger value="request" className="text-xs gap-1 py-1">
-            <Sliders className="w-3 h-3 text-primary" /> Request
+            <Settings className="w-3 h-3 text-primary" /> Request
           </TabsTrigger>
           <TabsTrigger value="assertions" className="text-xs gap-1 py-1">
             <CheckCircle2 className="w-3 h-3 text-primary" /> Expectations

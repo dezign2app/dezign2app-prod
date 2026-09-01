@@ -43,7 +43,7 @@ import {
   FlaskConical,
   Plus,
   Zap,
-  SlidersHorizontal,
+  Settings,
 } from "lucide-react";
 import {
   generateDefaultTestCases,
@@ -426,7 +426,7 @@ export function EndpointTestCasesSection({
             value="manual"
             className="text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-semibold text-muted-foreground flex items-center gap-1.5 transition-all"
           >
-            <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground" />
+            <Settings className="w-3.5 h-3.5 text-muted-foreground" />
             <span>Manual Cases</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-secondary/80 text-muted-foreground border border-border/40">
               {manualCases.length}
@@ -567,7 +567,7 @@ export function EndpointTestCasesSection({
             </Accordion>
           ) : (
             <div className="flex flex-col items-center justify-center p-6 border border-border/50 rounded-xl bg-background/20 border-dashed text-center gap-2.5">
-              <SlidersHorizontal className="w-8 h-8 text-muted-foreground/30" />
+              <Settings className="w-8 h-8 text-muted-foreground/30" />
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-medium text-foreground">
                   No manual test cases defined yet

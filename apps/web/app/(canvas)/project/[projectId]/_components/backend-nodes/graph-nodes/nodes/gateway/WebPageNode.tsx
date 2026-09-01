@@ -127,8 +127,9 @@ export const WebPageNode = ({
   const isProtected = isCustomOverride
     ? (data.accessType && data.accessType !== "public") ||
       Boolean(data.protectionOverride)
-    : isZoneProtected ||
-      Boolean(
+    : connectedWebAppNode
+    ? isZoneProtected
+    : Boolean(
         connectedZoneName?.toLowerCase().includes("private") ||
           connectedZoneName?.toLowerCase().includes("protected") ||
           (data.accessType && data.accessType !== "public"),

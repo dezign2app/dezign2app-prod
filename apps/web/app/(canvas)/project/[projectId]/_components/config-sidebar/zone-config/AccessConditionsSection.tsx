@@ -1,5 +1,5 @@
 import React from "react";
-import { SlidersHorizontal, ChevronDown, ChevronRight } from "lucide-react";
+import { Settings, ChevronDown, ChevronRight } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import {
   Select,
@@ -223,7 +223,7 @@ export const AccessConditionsSection = ({
         className="flex items-center justify-between cursor-pointer nodrag"
       >
         <div className="flex items-center gap-2">
-          <SlidersHorizontal className="w-4 h-4 text-indigo-400" />
+          <Settings className="w-4 h-4 text-indigo-400" />
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Access Conditions
           </span>

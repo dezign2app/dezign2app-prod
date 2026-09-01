@@ -7,7 +7,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@workspace/ui/components/accordion";
-import { SlidersHorizontal } from "lucide-react";
+import { Settings } from "lucide-react";
 import { Endpoint } from "@workspace/canvas";
 
 interface RequestConfigSectionProps {
@@ -45,7 +45,7 @@ export const RequestConfigSection: React.FC<RequestConfigSectionProps> = ({
       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-secondary/20 transition-colors [&>svg]:shrink-0">
         <div className="flex items-center justify-between w-full pr-2">
           <div className="flex items-center gap-2">
-            <SlidersHorizontal size={14} className="text-primary" />
+            <Settings size={14} className="text-primary" />
             <span className="text-xs font-semibold">Request Configuration</span>
           </div>
         </div>

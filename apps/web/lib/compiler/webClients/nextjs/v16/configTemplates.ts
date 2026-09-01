@@ -1,6 +1,44 @@
-import { CompiledFile } from "@workspace/canvas/types";
+import { CompiledFile, NodeDependencyItem } from "@workspace/canvas/types";
 
-export function generateProjectConfigFiles(appSlug: string = "web-app"): CompiledFile[] {
+export function generateProjectConfigFiles(
+  appSlug: string = "web-app",
+  customDependencies?: NodeDependencyItem[],
+): CompiledFile[] {
+  const dependencies: Record<string, string> = {
+    "@workspace/db": "workspace:*",
+    "@workspace/logger": "workspace:*",
+    "@workspace/types": "workspace:*",
+    "@workspace/ui": "workspace:*",
+    "lucide-react": "^0.475.0",
+    next: "^16.0.0",
+    react: "^19.0.0",
+    "react-dom": "^19.0.0",
+    zod: "^3.24.2",
+  };
+
+  const devDependencies: Record<string, string> = {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^20.19.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@workspace/typescript-config": "workspace:*",
+    tailwindcss: "^4.0.0",
+    typescript: "^5.7.3",
+    vitest: "^1.6.0",
+  };
+
+  if (Array.isArray(customDependencies)) {
+    customDependencies.forEach((dep) => {
+      if (!dep || !dep.name) return;
+      const ver = dep.version || "latest";
+      if (dep.isDev) {
+        devDependencies[dep.name] = ver;
+      } else {
+        dependencies[dep.name] = ver;
+      }
+    });
+  }
+
   const packageJson = JSON.stringify(
     {
       name: `@workspace/${appSlug}`,
@@ -15,27 +53,8 @@ export function generateProjectConfigFiles(appSlug: string = "web-app"): Compile
         typecheck: "tsc --noEmit",
         test: "vitest run",
       },
-      dependencies: {
-        "@workspace/db": "workspace:*",
-        "@workspace/logger": "workspace:*",
-        "@workspace/types": "workspace:*",
-        "@workspace/ui": "workspace:*",
-        "lucide-react": "^0.475.0",
-        next: "^16.0.0",
-        react: "^19.0.0",
-        "react-dom": "^19.0.0",
-        zod: "^3.24.2",
-      },
-      devDependencies: {
-        "@tailwindcss/postcss": "^4.0.0",
-        "@types/node": "^20.19.0",
-        "@types/react": "^19.0.0",
-        "@types/react-dom": "^19.0.0",
-        "@workspace/typescript-config": "workspace:*",
-        tailwindcss: "^4.0.0",
-        typescript: "^5.7.3",
-        vitest: "^1.6.0",
-      },
+      dependencies,
+      devDependencies,
     },
     null,
     2,

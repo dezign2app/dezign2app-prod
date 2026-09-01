@@ -16,17 +16,13 @@ import {
   AccordionTrigger,
 } from "@workspace/ui/components/accordion";
 import {
-  SlidersHorizontal,
+  Settings,
   Plus,
   Trash,
   Clock,
-  RefreshCw,
-  ShieldCheck,
-  Zap,
   Info,
   ArrowRight,
-  Database,
-  Key,
+  Database
 } from "lucide-react";
 import { SessionClaimConfig, SessionConfig } from "@workspace/canvas";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
@@ -102,7 +98,7 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
     >
       <AccordionTrigger className="px-4 py-3.5 hover:no-underline hover:bg-muted/30 transition-colors">
         <div className="flex items-center gap-2 text-left flex-1">
-          <SlidersHorizontal className="w-4 h-4 text-primary shrink-0" />
+          <Settings className="w-4 h-4 text-primary shrink-0" />
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Session & Token Claims
           </span>

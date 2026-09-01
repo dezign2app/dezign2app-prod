@@ -18,10 +18,15 @@ export function useWebPageConnectedContext({
   allEndpoints,
 }: UseWebPageConnectedContextParams) {
   // Determine connected WebApp section name & zone
-  const { connectedWebApp, connectedZoneName, incomingEdge } = useMemo(() => {
-    const edge = allEdges.find(
-      (e) => e.target === nodeId || e.source === nodeId,
-    );
+  const { connectedWebApp, connectedZoneName, isZoneProtected, incomingEdge } = useMemo(() => {
+    const edge = allEdges.find((e) => {
+      const isTarget = e.target === nodeId;
+      const isSource = e.source === nodeId;
+      if (!isTarget && !isSource) return false;
+      const otherId = isSource ? e.target : e.source;
+      const otherNode = allNodes.find((n) => n.id === otherId);
+      return otherNode?.type === "webApp";
+    });
     const webApp = edge
       ? allNodes.find(
           (n) =>
@@ -31,37 +36,80 @@ export function useWebPageConnectedContext({
       : null;
 
     let zoneName: string | null = null;
+    let zoneProtected = false;
     if (webApp && edge) {
       const handleId =
         edge.source === webApp.id
           ? edge.sourceHandle
           : edge.targetHandle;
-      const zones: WebAppZone[] = webApp.data?.zones || [];
+      const defaultZones: WebAppZone[] = [
+        {
+          handleId: "public-in",
+          name: "Public Section",
+          accessType: "public",
+          id: "zone-public",
+          rule: {
+            id: "rule-public",
+            scope: "zone",
+            conditions: { kind: "leaf", condition: { type: "auth", op: "signedOut" } },
+            redirects: { default: "/login" },
+          },
+        },
+        {
+          handleId: "private-in",
+          name: "Private Section",
+          accessType: "protected",
+          id: "zone-private",
+          rule: {
+            id: "rule-private",
+            scope: "zone",
+            conditions: { kind: "leaf", condition: { type: "auth", op: "signedIn" } },
+            redirects: { default: "/login" },
+          },
+        },
+      ];
+      const zones: WebAppZone[] =
+        webApp.data?.zones && webApp.data.zones.length > 0
+          ? webApp.data.zones
+          : defaultZones;
       const matchedZone = zones.find((z: WebAppZone) => z.handleId === handleId);
       if (matchedZone) {
         zoneName = matchedZone.name;
+        zoneProtected =
+          matchedZone.accessType === "protected" ||
+          matchedZone.id === "zone-private" ||
+          matchedZone.handleId === "private-in" ||
+          (matchedZone.accessType !== "public" && matchedZone.id !== "zone-public");
+      } else if (handleId === "public-in" || handleId?.includes("public")) {
+        zoneName = "Public Section";
+        zoneProtected = false;
+      } else if (handleId === "private-in" || handleId?.includes("private")) {
+        zoneName = "Private Section";
+        zoneProtected = true;
       }
     }
 
     return {
       connectedWebApp: webApp,
       connectedZoneName: zoneName,
+      isZoneProtected: zoneProtected,
       incomingEdge: edge,
     };
   }, [allEdges, allNodes, nodeId]);
 
   const isProtected = useMemo(() => {
     if (data.useZoneDefault === false) {
-      return data.accessType !== "public";
+      return (data.accessType && data.accessType !== "public") || Boolean(data.protectionOverride);
+    }
+    if (connectedWebApp) {
+      return isZoneProtected;
     }
     return Boolean(
       connectedZoneName?.toLowerCase().includes("private") ||
         connectedZoneName?.toLowerCase().includes("protected") ||
-        incomingEdge?.sourceHandle === "private-in" ||
-        incomingEdge?.targetHandle === "private-in" ||
         (data.accessType && data.accessType !== "public"),
     );
-  }, [data.useZoneDefault, data.accessType, connectedZoneName, incomingEdge]);
+  }, [data.useZoneDefault, data.accessType, data.protectionOverride, connectedWebApp, isZoneProtected, connectedZoneName]);
 
   // Find connected service endpoint via any edge connected to this WebPage node
   const connectedEndpoint = useMemo<Endpoint | null>(() => {

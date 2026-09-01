@@ -13,12 +13,12 @@ import {
 import {
   Globe,
   Lock,
-  Key,
   Layers,
   ShieldCheck,
   Plus,
   Trash,
-  SlidersHorizontal,
+  Package,
+  Settings,
 } from "lucide-react";
 import {
   BackendNode,
@@ -38,6 +38,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog";
+
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@workspace/ui/components/tabs";
+import { NodePackageManager } from "./NodePackageManager";
+import { NodeDependencyItem } from "@workspace/canvas";
 
 function isWebClientTechStack(val: string): val is WebClientTechStack {
   return WEB_CLIENT_TECH_OPTIONS.some((t) => t.value === val);
@@ -63,6 +72,7 @@ export const WebAppConfig = ({
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
   );
+  const [activeTab, setActiveTab] = useState<string>("settings");
   const [zoneToDelete, setZoneToDelete] = useState<{ id: string; name: string } | null>(null);
 
   if (!node) return null;
@@ -78,9 +88,38 @@ export const WebAppConfig = ({
     (data.label || "web-app").toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const port = data.port || "3000";
   const defaultLoginRoute = data.defaultLoginRoute || "/login";
+  const customDependencies: NodeDependencyItem[] = data.customDependencies || [];
 
   const authNodes = allNodes.filter((n) => n.type === "auth");
   const paymentsNodes = allNodes.filter((n) => n.type === "payments");
+
+  // Determine auto-inferred web app dependencies
+  const inferredWebDeps: { name: string; version: string; reason: string }[] = [
+    { name: "next", version: "^16.0.0", reason: "Next.js App Router framework" },
+    { name: "react", version: "^19.0.0", reason: "React 19 runtime" },
+    { name: "react-dom", version: "^19.0.0", reason: "React DOM runtime" },
+    { name: "@workspace/ui", version: "workspace:*", reason: "Shared Shadcn component library" },
+    { name: "@workspace/types", version: "workspace:*", reason: "Shared API types & schemas" },
+    { name: "@workspace/logger", version: "workspace:*", reason: "Structured frontend logger" },
+    { name: "lucide-react", version: "^0.475.0", reason: "Standard UI icon set" },
+    { name: "zod", version: "^3.24.2", reason: "Client form & schema validation" },
+  ];
+
+  const hasDb = allNodes.some((n) => n.type === "entity" || n.type === "database" || n.type === "db_ref");
+  if (hasDb) {
+    inferredWebDeps.push({ name: "@workspace/db", version: "workspace:*", reason: "Database models & client" });
+  }
+
+  const inferredWebDevDeps: { name: string; version: string; reason: string }[] = [
+    { name: "@workspace/typescript-config", version: "workspace:*", reason: "Next.js TS configuration" },
+    { name: "tailwindcss", version: "^4.0.0", reason: "Tailwind CSS v4 engine" },
+    { name: "@tailwindcss/postcss", version: "^4.0.0", reason: "Tailwind PostCSS plugin" },
+    { name: "@types/react", version: "^19.0.0", reason: "React TypeScript types" },
+    { name: "@types/react-dom", version: "^19.0.0", reason: "React DOM TypeScript types" },
+    { name: "@types/node", version: "^20.19.0", reason: "Node.js types" },
+    { name: "typescript", version: "^5.7.3", reason: "TypeScript compiler" },
+    { name: "vitest", version: "^1.6.0", reason: "Unit testing runner" },
+  ];
 
   const zones: WebAppZone[] = data.zones || [
     {
@@ -179,6 +218,27 @@ export const WebAppConfig = ({
         </p>
       </div>
 
+      {/* Tabs: Settings vs Packages */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="w-full grid grid-cols-2 p-1 bg-muted/50 rounded-lg mb-4">
+          <TabsTrigger value="settings" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-background">
+            <Settings className="w-3.5 h-3.5" />
+            Overview & Sections
+          </TabsTrigger>
+          <TabsTrigger value="packages" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-background">
+            <Package className="w-3.5 h-3.5 text-primary" />
+            Packages & Libraries
+            {customDependencies.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-primary/20 text-primary font-mono font-bold">
+                {customDependencies.length}
+              </span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Tab 1: Settings */}
+        <TabsContent value="settings" className="space-y-6">
+
       {/* App Identity Section */}
       <div className="flex flex-col gap-4 p-4 rounded-xl bg-card border border-border/60 shadow-sm">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -255,7 +315,7 @@ export const WebAppConfig = ({
                 })
               }
             >
-              <SlidersHorizontal className="w-3.5 h-3.5 mr-1" /> Configure Auth
+              <Settings className="w-3.5 h-3.5 mr-1" /> Configure Auth
             </Button>
           )}
         </div>
@@ -404,7 +464,7 @@ export const WebAppConfig = ({
                     })
                   }
                 >
-                  <SlidersHorizontal className="w-3.5 h-3.5 mr-1" /> Config Rules
+                  <Settings className="w-3.5 h-3.5 mr-1" /> Config Rules
                 </Button>
                 {zone.id !== "zone-public" && (
                   <button
@@ -420,6 +480,20 @@ export const WebAppConfig = ({
           ))}
         </div>
       </div>
+    </TabsContent>
+
+    {/* Tab 2: Packages & Libraries */}
+    <TabsContent value="packages" className="pt-2">
+          <NodePackageManager
+            nodeId={nodeId}
+            nodeType="webApp"
+            customDependencies={customDependencies}
+            onUpdateDependencies={(deps) => updateData({ customDependencies: deps })}
+            inferredDependencies={inferredWebDeps}
+            inferredDevDependencies={inferredWebDevDeps}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Delete Section / Zone Dialog */}
       <AlertDialog open={!!zoneToDelete} onOpenChange={(open) => !open && setZoneToDelete(null)}>

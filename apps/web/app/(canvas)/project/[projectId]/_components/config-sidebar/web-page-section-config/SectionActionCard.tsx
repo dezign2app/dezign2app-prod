@@ -25,7 +25,6 @@ import {
   RefreshCw,
   MousePointerClick,
   Send,
-  Sliders,
   ChevronDown,
   ChevronRight,
   Info,
@@ -79,7 +78,7 @@ export const getEventBadge = (evtStr?: string) => {
     icon = <Send size={10} />;
     label = "Submit";
   } else if (evt === "change" || evt === "input") {
-    icon = <Sliders size={10} />;
+    icon = <Settings size={10} />;
     label = "Change";
   }
 
