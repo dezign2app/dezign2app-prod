@@ -11,8 +11,10 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { SmartPathInput } from "./SmartPathInput";
+import { ConditionExprEditor } from "./ConditionExprEditor";
 import { PipelineStepDraft, AvailableSource } from "./types";
 import { PipelineStepEditor } from "./index";
+import { ShieldAlert, Repeat } from "lucide-react";
 
 export interface LoopStepSectionProps {
   step: PipelineStepDraft;
@@ -37,8 +39,13 @@ export const LoopStepSection = ({
   depth = 0,
   onChange,
 }: LoopStepSectionProps) => {
+  const loopKind = step.loopKind || "for_each";
   const loopSource = step.loopSource || { kind: "req_body", field: "" };
-  const iterVar = step.iteratorVariable || "item";
+  const iterVar = step.iteratorVariable || (loopKind === "for" ? "i" : "item");
+  const maxIterations = step.loopMaxIterations ?? 100;
+  const forStart = step.loopForStart ?? 0;
+  const forEnd = step.loopForEnd ?? 10;
+  const forStep = step.loopForStep ?? 1;
 
   const currentSourceOptionId = useMemo(() => {
     if (loopSource.kind === "step_output") {
@@ -64,114 +71,308 @@ export const LoopStepSection = ({
       onChange({ ...step, loopSource: { kind: "req_query", field: "" } });
     } else if (selectedId === "req_headers") {
       onChange({ ...step, loopSource: { kind: "req_headers", field: "" } });
+    } else if (selectedId === "literal") {
+      onChange({ ...step, loopSource: { kind: "literal", value: "5" } });
     }
   };
 
-  const loopExtraSources: AvailableSource[] = useMemo(
-    () => [
+  const loopExtraSources: AvailableSource[] = useMemo(() => {
+    if (loopKind === "while" || loopKind === "do_while") return [];
+    return [
       {
         id: `iterator_${iterVar}`,
-        label: `Loop Item (${iterVar})`,
+        label: loopKind === "for" ? `Loop Index (${iterVar})` : `Loop Item (${iterVar})`,
         kind: "step_output",
         stepId: `__iterator__${iterVar}`,
         variableName: iterVar,
         rootVariableName: iterVar,
         paths: [],
       },
-    ],
-    [iterVar],
-  );
+    ];
+  }, [loopKind, iterVar]);
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Target Array & Iterator Variable Config */}
-      <div className="flex flex-col gap-2 p-2 rounded-lg bg-teal-500/10 border border-teal-500/20">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-teal-400">
-          Collection to Iterate (forEach / map)
-        </span>
-
-        <div className="grid grid-cols-2 gap-2">
-          {/* Target Array Source */}
-          <div className="flex flex-col gap-1">
-            <span className="text-[9px] font-semibold text-muted-foreground">
-              Array Source
+      {/* Loop Type Selection & Header Config */}
+      <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-secondary/30 border border-border/60">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Repeat size={13} className="text-primary/80" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/90">
+              Loop Type
             </span>
-            <div className="flex gap-1 items-center">
-              <Select value={currentSourceOptionId} onValueChange={handleSourceSelect}>
-                <SelectTrigger className="h-7 text-xs bg-background/60 border-border/60 w-[110px] shrink-0">
-                  <SelectValue placeholder="Source..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableSources
-                    .filter((s) => s.id !== "literal")
-                    .map((s) => (
+          </div>
+
+          {/* Loop Kind Selector */}
+          <Select
+            value={loopKind}
+            onValueChange={(val) => {
+              const kind = val as "for" | "for_each" | "while" | "do_while";
+              onChange({
+                ...step,
+                loopKind: kind,
+                iteratorVariable:
+                  step.iteratorVariable || (kind === "for" ? "i" : "item"),
+                ...(kind !== "for" && kind !== "for_each" && !step.loopConditionExpr && !step.conditionExpr
+                  ? {
+                      loopConditionExpr: {
+                        left: { kind: "req_body", field: "" },
+                        operator: "truthy",
+                      },
+                    }
+                  : {}),
+              });
+            }}
+          >
+            <SelectTrigger className="h-6 text-xs bg-background/80 border-border/60 w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="for_each" className="text-xs">
+                For Each (Collection / Array)
+              </SelectItem>
+              <SelectItem value="while" className="text-xs">
+                While Loop (Pre-Condition)
+              </SelectItem>
+              <SelectItem value="do_while" className="text-xs">
+                Do While Loop (Post-Condition)
+              </SelectItem>
+              <SelectItem value="for" className="text-xs">
+                For Loop (Index / Range)
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* 1. FOR LOOP: Index, Start, End, Step */}
+        {loopKind === "for" && (
+          <div className="flex flex-col gap-2 pt-1 border-t border-border/40">
+            <div className="grid grid-cols-4 gap-2">
+              {/* Index Variable Name */}
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-semibold text-muted-foreground">
+                  Index Var
+                </span>
+                <Input
+                  className="h-7 text-xs font-mono bg-background/60 border-border/60"
+                  value={iterVar}
+                  onChange={(e) =>
+                    onChange({
+                      ...step,
+                      iteratorVariable: e.target.value,
+                    })
+                  }
+                  placeholder="i"
+                />
+              </div>
+
+              {/* Start Value */}
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-semibold text-muted-foreground">
+                  Start (From)
+                </span>
+                <Input
+                  type="number"
+                  className="h-7 text-xs font-mono bg-background/60 border-border/60"
+                  value={forStart}
+                  onChange={(e) =>
+                    onChange({
+                      ...step,
+                      loopForStart: parseInt(e.target.value, 10) || 0,
+                    })
+                  }
+                  placeholder="0"
+                />
+              </div>
+
+              {/* End / Count Limit */}
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-semibold text-muted-foreground">
+                  End (Count &lt;)
+                </span>
+                <Input
+                  type="number"
+                  className="h-7 text-xs font-mono bg-background/60 border-border/60"
+                  value={forEnd}
+                  onChange={(e) =>
+                    onChange({
+                      ...step,
+                      loopForEnd: parseInt(e.target.value, 10) || 10,
+                    })
+                  }
+                  placeholder="10"
+                />
+              </div>
+
+              {/* Step / Increment */}
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] font-semibold text-muted-foreground">
+                  Step (+N)
+                </span>
+                <Input
+                  type="number"
+                  min={1}
+                  className="h-7 text-xs font-mono bg-background/60 border-border/60"
+                  value={forStep}
+                  onChange={(e) =>
+                    onChange({
+                      ...step,
+                      loopForStep: parseInt(e.target.value, 10) || 1,
+                    })
+                  }
+                  placeholder="1"
+                />
+              </div>
+            </div>
+
+            <span className="text-[9px] text-muted-foreground/70 font-mono">
+              Syntax: for (let {iterVar} = {forStart}; {iterVar} &lt; {forEnd}; {iterVar} += {forStep})
+            </span>
+          </div>
+        )}
+
+        {/* 2. FOR EACH: Array & Iterator Configuration */}
+        {loopKind === "for_each" && (
+          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/40">
+            {/* Target Source */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[9px] font-semibold text-muted-foreground">
+                Collection Source (Items to Iterate)
+              </span>
+              <div className="flex gap-1 items-center">
+                <Select value={currentSourceOptionId} onValueChange={handleSourceSelect}>
+                  <SelectTrigger className="h-7 text-xs bg-background/60 border-border/60 w-[120px] shrink-0">
+                    <SelectValue placeholder="Source..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableSources.map((s) => (
                       <SelectItem key={s.id} value={s.id} className="text-xs">
                         {s.label}
                       </SelectItem>
                     ))}
-                </SelectContent>
-              </Select>
+                    {!availableSources.some((s) => s.id === "literal") && (
+                      <SelectItem value="literal" className="text-xs">
+                        Literal / Fixed Array
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
 
-              {loopSource.kind !== "literal" ? (
-                <SmartPathInput
-                  value={loopSource.field ?? ""}
-                  onChange={(field) =>
-                    onChange({
-                      ...step,
-                      loopSource: { ...loopSource, field },
-                    })
-                  }
-                  suggestedPaths={
-                    activeSource?.paths.filter((p) => p.type === "array" || !p.type) || []
-                  }
-                  sourceKindLabel={activeSource?.label}
-                  rootVariableName={activeSource?.rootVariableName}
-                  placeholder="items"
-                />
-              ) : (
-                <Input
-                  className="h-7 text-xs font-mono bg-background/60 border-border/60 flex-1"
-                  value={String(loopSource.value ?? "")}
-                  onChange={(e) =>
-                    onChange({
-                      ...step,
-                      loopSource: { kind: "literal", value: e.target.value },
-                    })
-                  }
-                  placeholder="items"
-                />
-              )}
+                {loopSource.kind !== "literal" ? (
+                  <SmartPathInput
+                    value={loopSource.field ?? ""}
+                    onChange={(field) =>
+                      onChange({
+                        ...step,
+                        loopSource: { ...loopSource, field },
+                      })
+                    }
+                    suggestedPaths={activeSource?.paths || []}
+                    sourceKindLabel={activeSource?.label}
+                    rootVariableName={activeSource?.rootVariableName}
+                    placeholder="field or (entire output)"
+                  />
+                ) : (
+                  <Input
+                    className="h-7 text-xs font-mono bg-background/60 border-border/60 flex-1"
+                    value={String(loopSource.value ?? "")}
+                    onChange={(e) =>
+                      onChange({
+                        ...step,
+                        loopSource: { kind: "literal", value: e.target.value },
+                      })
+                    }
+                    placeholder="e.g. [1, 2, 3]"
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Iterator Variable Name */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[9px] font-semibold text-muted-foreground">
+                Item Variable Name
+              </span>
+              <Input
+                className="h-7 text-xs font-mono bg-background/60 border-border/60"
+                value={iterVar}
+                onChange={(e) =>
+                  onChange({
+                    ...step,
+                    iteratorVariable: e.target.value,
+                  })
+                }
+                placeholder="e.g. item"
+              />
             </div>
           </div>
+        )}
 
-          {/* Iterator Variable Name */}
-          <div className="flex flex-col gap-1">
-            <span className="text-[9px] font-semibold text-muted-foreground">
-              Item Variable Name
-            </span>
-            <Input
-              className="h-7 text-xs font-mono bg-background/60 border-border/60"
-              value={iterVar}
-              onChange={(e) =>
-                onChange({
-                  ...step,
-                  iteratorVariable: e.target.value,
-                })
-              }
-              placeholder="e.g. item"
-            />
+        {/* 3. WHILE / DO WHILE: Condition & Safety Limit Configuration */}
+        {(loopKind === "while" || loopKind === "do_while") && (
+          <div className="flex flex-col gap-2.5 pt-1 border-t border-border/40">
+            <div className="flex flex-col gap-1">
+              <span className="text-[9px] font-semibold text-muted-foreground">
+                {loopKind === "while"
+                  ? "Loop Condition (Runs while condition is true)"
+                  : "Post-Condition (Runs body once, then repeats while true)"}
+              </span>
+              <ConditionExprEditor
+                expr={
+                  step.loopConditionExpr ||
+                  step.conditionExpr || {
+                    left: { kind: "req_body", field: "" },
+                    operator: "truthy",
+                  }
+                }
+                availableSources={availableSources}
+                onChange={(loopConditionExpr) =>
+                  onChange({ ...step, loopConditionExpr, conditionExpr: loopConditionExpr })
+                }
+                compact={true}
+              />
+            </div>
+
+            {/* Max Iterations Safety Limit */}
+            <div className="flex items-center justify-between p-1.5 rounded bg-background/40 border border-border/40">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <ShieldAlert size={12} className="text-amber-400 shrink-0" />
+                <span className="text-[10px]">
+                  Max Iterations limit (prevents infinite loops):
+                </span>
+              </div>
+              <Input
+                type="number"
+                min={1}
+                max={10000}
+                className="h-6 w-20 text-xs font-mono bg-background border-border/60 text-right"
+                value={maxIterations}
+                onChange={(e) =>
+                  onChange({
+                    ...step,
+                    loopMaxIterations: parseInt(e.target.value, 10) || 100,
+                  })
+                }
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Loop Body Step Editor */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Loop Body Steps (Executed for each item):
+            Loop Body Steps:
           </span>
-          <span className="text-[9px] font-mono text-teal-300 bg-teal-500/20 px-1.5 py-0.5 rounded border border-teal-500/30">
-            const {iterVar} = items[i]
+          <span className="text-[9px] font-mono text-foreground/80 bg-secondary/50 px-1.5 py-0.5 rounded border border-border/60">
+            {loopKind === "for"
+              ? `for (${iterVar} = ${forStart}; ${iterVar} < ${forEnd}; ${iterVar} += ${forStep})`
+              : loopKind === "while"
+              ? "while (condition) { ... }"
+              : loopKind === "do_while"
+              ? "do { ... } while (condition)"
+              : `for (const ${iterVar} of items)`}
           </span>
         </div>
 

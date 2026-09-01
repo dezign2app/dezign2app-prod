@@ -165,6 +165,7 @@ export const pipelineStepTypeEnum = z.enum([
   "parallel",         // concurrent fan-out (Promise.all / allSettled)
   "loop",             // collection iteration (forEach / map)
   "early_return",     // mid-pipeline short circuit response
+  "push_to_client",   // deliver processed result to a web-page client via SSE / WS / WebRTC / Webhook
 ]);
 export type PipelineStepType = z.infer<typeof pipelineStepTypeEnum>;
 
@@ -274,9 +275,35 @@ export interface PipelineStep {
   failureMode?: "all" | "any";
 
   // ─── Control Flow: loop step ───
+  loopKind?: "for" | "for_each" | "while" | "do_while";
   loopSource?: PipelineStepInputSource;
   iteratorVariable?: string;
+  loopForStart?: number;
+  loopForEnd?: number;
+  loopForStep?: number;
+  loopConditionExpr?: ConditionExpr;
+  loopMaxIterations?: number;
   loopBody?: PipelineStep[];
+
+  // ─── push_to_client step ───
+  /** Delivery protocol used to push data to the connected web-page client */
+  clientDeliveryProtocol?: "SSE" | "WEBSOCKET" | "WEBRTC" | "API_PUSH";
+  /** Optional ID of the WebAppNode containing the target page */
+  clientDeliveryTargetWebAppId?: string;
+  /** ID of the WebPageNode this step targets (stored as a reference, no graph edge drawn) */
+  clientDeliveryTargetPageId?: string;
+  /** SSE event name or WebSocket message type (e.g. "order.updated") */
+  clientDeliveryEventName?: string;
+  /** WebSocket broadcast room / channel key */
+  clientDeliveryRoom?: string;
+  /** API_PUSH: target webhook URL */
+  clientDeliveryWebhookUrl?: string;
+  /** API_PUSH: HTTP method */
+  clientDeliveryWebhookMethod?: "POST" | "PUT" | "PATCH";
+  /** Optional filter expression — only push when this evaluates to truthy */
+  clientDeliveryFilterExpr?: string;
+  /** Optional payload mapping — reshape the data object before pushing */
+  clientDeliveryPayloadMapping?: string;
 }
 
 export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
@@ -323,9 +350,26 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     parallelBranches: z.array(parallelBranchSchema).optional(),
     failureMode: z.enum(["all", "any"]).optional(),
 
+    loopKind: z.enum(["for_each", "while", "do_while", "for"]).optional(),
     loopSource: pipelineStepInputSourceSchema.optional(),
     iteratorVariable: z.string().optional(),
+    loopForStart: z.number().optional(),
+    loopForEnd: z.number().optional(),
+    loopForStep: z.number().optional(),
+    loopConditionExpr: conditionExprSchema.optional(),
+    loopMaxIterations: z.number().optional(),
     loopBody: z.array(pipelineStepSchema).optional(),
+
+    // push_to_client fields
+    clientDeliveryProtocol: z.enum(["SSE", "WEBSOCKET", "WEBRTC", "API_PUSH"]).optional(),
+    clientDeliveryTargetWebAppId: z.string().optional(),
+    clientDeliveryTargetPageId: z.string().optional(),
+    clientDeliveryEventName: z.string().optional(),
+    clientDeliveryRoom: z.string().optional(),
+    clientDeliveryWebhookUrl: z.string().optional(),
+    clientDeliveryWebhookMethod: z.enum(["POST", "PUT", "PATCH"]).optional(),
+    clientDeliveryFilterExpr: z.string().optional(),
+    clientDeliveryPayloadMapping: z.string().optional(),
   })
 );
 

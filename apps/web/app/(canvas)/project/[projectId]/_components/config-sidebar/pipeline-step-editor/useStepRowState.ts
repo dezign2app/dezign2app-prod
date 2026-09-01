@@ -248,6 +248,16 @@ export function useStepRowState({
       ];
     }
 
+    if (step.type === "push_to_client") {
+      return [
+        {
+          name: "payload",
+          type: "any",
+          required: true,
+        },
+      ];
+    }
+
     return [];
   }, [
     step.type,
@@ -374,6 +384,29 @@ export function useStepRowState({
       if (existing) {
         newBindings.push(existing);
         continue;
+      }
+
+      // 7b. If payload argument and has prior step outputs, auto-bind to the immediate last prior step output
+      if (arg.name === "payload") {
+        const stepSources = availableSources.filter((s) => s.kind === "step_output");
+        const lastStep = stepSources.length > 0 ? stepSources[stepSources.length - 1] : undefined;
+        if (lastStep?.stepId) {
+          newBindings.push({
+            argName: arg.name,
+            source: {
+              kind: "step_output",
+              stepId: lastStep.stepId,
+              field: "",
+            },
+          });
+          continue;
+        } else if (reqBodySource) {
+          newBindings.push({
+            argName: arg.name,
+            source: { kind: "req_body", field: "" },
+          });
+          continue;
+        }
       }
 
       // 8. If no matching field exists in any available source, do NOT add non-existent field

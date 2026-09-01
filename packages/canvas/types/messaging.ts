@@ -71,6 +71,9 @@ export type EventCategory =
   | "NOTIFICATION";
 export type SchemaVersion = "v1" | "v2" | "v3";
 
+/** Protocol used to push server-side data to a web-page client. */
+export type ClientDeliveryProtocol = "SSE" | "WEBSOCKET" | "WEBRTC" | "API_PUSH";
+
 /** Messaging broker node fields — Kafka, SQS, Redis Streams, PubSub, etc. */
 export interface MessagingNodeData {
   // Common broker config

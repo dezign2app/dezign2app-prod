@@ -44,17 +44,7 @@ export const SectionActionRow = ({
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
   const evtStr = (action.event as string) || "";
-  const evtLower = evtStr.toLowerCase();
   const isPageLoad = evtStr === "pageLoad";
-  const isSse = evtStr === "sse" || evtStr === "sseMessage" || evtLower === "sse";
-  const isWebsocket =
-    evtStr === "websocket" ||
-    evtStr === "ws" ||
-    evtStr === "websocketMessage" ||
-    evtLower === "websocket" ||
-    evtLower === "ws";
-  const isWebrtc = evtStr === "webrtc" || evtLower === "webrtc";
-  const isPolling = evtStr === "polling" || evtLower === "polling";
 
   const link = getLinkedEndpoint(action.id);
 
@@ -159,34 +149,6 @@ export const SectionActionRow = ({
   };
 
   const getEventBadge = () => {
-    if (isSse) {
-      return (
-        <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30">
-          SSE
-        </span>
-      );
-    }
-    if (isWebsocket) {
-      return (
-        <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
-          WS
-        </span>
-      );
-    }
-    if (isWebrtc) {
-      return (
-        <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-purple-500/15 text-purple-500 border border-purple-500/30">
-          RTC
-        </span>
-      );
-    }
-    if (isPolling) {
-      return (
-        <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-blue-500/15 text-blue-500 border border-blue-500/30">
-          POLL
-        </span>
-      );
-    }
     return (
       <span className="text-[8px] text-muted-foreground font-mono truncate">
         {action.event || action.name || "click"}
@@ -205,40 +167,13 @@ export const SectionActionRow = ({
         style={{ top: "50%" }}
       />
 
-      {/* Protocol / Inbound Left handles */}
+      {/* Inbound PageLoad handle */}
       {isPageLoad && (
         <Handle
           type="target"
           position={Position.Left}
           id={`pageload-in-${action.id}`}
           className="w-2 h-2 -left-1 !bg-emerald-500"
-          style={{ top: "50%" }}
-        />
-      )}
-      {isSse && (
-        <Handle
-          type="target"
-          position={Position.Left}
-          id={`sse-in-${action.id}`}
-          className="w-2 h-2 -left-1 !bg-amber-500"
-          style={{ top: "50%" }}
-        />
-      )}
-      {isWebsocket && (
-        <Handle
-          type="target"
-          position={Position.Left}
-          id={`websocket-in-${action.id}`}
-          className="w-2 h-2 -left-1 !bg-cyan-500"
-          style={{ top: "50%" }}
-        />
-      )}
-      {isWebrtc && (
-        <Handle
-          type="target"
-          position={Position.Left}
-          id={`webrtc-in-${action.id}`}
-          className="w-2 h-2 -left-1 !bg-purple-500"
           style={{ top: "50%" }}
         />
       )}

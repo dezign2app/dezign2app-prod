@@ -19,7 +19,8 @@ import {
 } from "../../common";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { parsePageRoute } from "@workspace/canvas";
-import { SectionList } from "./web-page";
+import { RealtimeConnection, ClientDeliveryProtocol } from "@workspace/canvas/types";
+import { SectionList, RealtimeConnectionList } from "./web-page";
 import { NodeDeletionDialog } from "@/app/(canvas)/project/[projectId]/_components/NodeDeletionDialog";
 
 export const WebPageNode = ({
@@ -142,6 +143,49 @@ export const WebPageNode = ({
       }
     }
   }, [id, data.label, updateNode]);
+
+  // One-time migration: safely migrate any legacy SSE/WS/WebRTC/Polling actions from sections to realtimeConnections
+  React.useEffect(() => {
+    if (!data.sections || data.sections.length === 0) return;
+    const rtEventTypes = new Set(["sse", "websocket", "ws", "webrtc", "polling", "ssemessage", "websocketmessage"]);
+    let found = false;
+    const migrated: RealtimeConnection[] = [...(data.realtimeConnections || [])];
+
+    const nextSections = data.sections.map((sec) => {
+      const remainingActions = sec.actions.filter((act) => {
+        const evtLower = (act.event || "").toLowerCase();
+        if (rtEventTypes.has(evtLower)) {
+          found = true;
+          let proto: ClientDeliveryProtocol | "POLLING" = "SSE";
+          if (evtLower.includes("ws") || evtLower.includes("websocket")) proto = "WEBSOCKET";
+          else if (evtLower.includes("webrtc")) proto = "WEBRTC";
+          else if (evtLower.includes("polling")) proto = "POLLING";
+
+          if (!migrated.some((m) => m.id === act.id)) {
+            migrated.push({
+              id: act.id,
+              protocol: proto,
+              eventName: act.name || "message",
+              description: act.description,
+            });
+          }
+          return false;
+        }
+        return true;
+      });
+      return { ...sec, actions: remainingActions };
+    });
+
+    if (found) {
+      updateNode(id, {
+        data: {
+          ...data,
+          sections: nextSections,
+          realtimeConnections: migrated,
+        },
+      });
+    }
+  }, [id, data, updateNode]);
 
   const rawLabel = data.label || "";
   const normalizedLabel = parsePageRoute(rawLabel);
@@ -361,6 +405,14 @@ export const WebPageNode = ({
             initialTab: "trigger",
           })
         }
+      />
+
+      {/* Real-Time Connections (SSE, WebSocket, WebRTC, Polling) */}
+      <RealtimeConnectionList
+        nodeId={id}
+        connections={data.realtimeConnections}
+        updateNode={updateNode}
+        data={data}
       />
 
       {/* Page Rename / File Deletion Confirmation Dialog */}

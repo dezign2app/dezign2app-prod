@@ -1,5 +1,6 @@
 import type { UIEventItem, PageSection, Parameter, Schema } from "./simulation";
 import type { WebAppZone, ProtectionRule, PaymentsPlanConfig } from "./auth";
+import type { ClientDeliveryProtocol } from "./messaging";
 
 export type SectionIconName =
   | "layout-grid"
@@ -34,6 +35,30 @@ export interface PresetTriggerOption {
   value: string;
   label: string;
   defaultRoute: string;
+}
+
+/**
+ * A real-time connection that a WebPageNode listens on.
+ * Connections can be manually declared OR derived from a `push_to_client` pipeline step.
+ */
+export interface RealtimeConnection {
+  id: string;
+  protocol: ClientDeliveryProtocol | "POLLING";
+  /** SSE event name or WebSocket message type to listen for (e.g. "order.updated") */
+  eventName?: string;
+  /** WebSocket broadcast room / channel key */
+  room?: string;
+  /** Polling interval in ms (for POLLING protocol) */
+  pollingIntervalMs?: number;
+  /** Human-readable description */
+  description?: string;
+  /**
+   * Derived fields — set automatically by the `push_to_client` pipeline step.
+   * These are read-only in the UI; deleting the step clears them.
+   */
+  sourceServiceNodeId?: string;
+  sourceServiceLabel?: string;
+  sourceEventId?: string;
 }
 
 /** WebApp node fields (canvas type). */
@@ -87,6 +112,8 @@ export interface CanvasWebPageNodeData {
   requestBodyMode?: "field_builder" | "raw_json";
   summary?: string;
   requireAuth?: boolean;
+  /** Real-time push connections (SSE, WebSocket, WebRTC, Polling) for this page */
+  realtimeConnections?: RealtimeConnection[];
 }
 
 /** Payments node fields (canvas type). */

@@ -44,17 +44,8 @@ export const SectionList = ({
     const targetNode = nodes.find((n) => n.id === edge.target);
     if (!targetNode) return null;
 
-    if (
-      edge.targetHandle.startsWith("pageload-in-") ||
-      edge.targetHandle.startsWith("sse-in-") ||
-      edge.targetHandle.startsWith("websocket-in-") ||
-      edge.targetHandle.startsWith("webrtc-in-") ||
-      edge.targetHandle.startsWith("ws-in-")
-    ) {
-      const targetEventId = edge.targetHandle.replace(
-        /^(pageload|sse|websocket|webrtc|ws)-in-/,
-        "",
-      );
+    if (edge.targetHandle.startsWith("pageload-in-")) {
+      const targetEventId = edge.targetHandle.replace(/^pageload-in-/, "");
       return getLinkedEndpoint(targetEventId, edge.target, depth + 1);
     }
 
