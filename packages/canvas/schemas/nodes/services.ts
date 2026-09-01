@@ -25,6 +25,25 @@ import {
 } from "../../constants";
 
 
+export const nodeDependencyItemSchema = z.object({
+  name: z.string().min(1),
+  version: z.string().optional().default("latest"),
+  isDev: z.boolean().optional().default(false),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  source: z.enum(["manual", "ai_inferred", "canvas_inferred"]).optional().default("manual"),
+});
+export type NodeDependencyItem = z.input<typeof nodeDependencyItemSchema>;
+
+export const nodeDependencyItemInputSchema = z.object({
+  name: z.string(),
+  version: z.string().optional(),
+  isDev: z.boolean().optional(),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  source: z.enum(["manual", "ai_inferred", "canvas_inferred"]).optional(),
+}).passthrough();
+
 export const externalDataSchema = simpleDataSchema.extend({
   baseUrl: z.string().optional(),
   actions: z.array(resourceItemSchema).optional(),
@@ -213,6 +232,7 @@ export const webPageDataSchema = simpleDataSchema.extend({
   realtimeConnections: z.array(realtimeConnectionSchema).optional().describe("Real-time push streams"),
   uiPrompt: z.string().optional().describe("Page-level AI prompt"),
   renderMode: z.enum(["server", "client"]).optional().describe("Page-level render mode"),
+  customDependencies: z.array(nodeDependencyItemSchema).optional(),
 });
 
 export const webPageDataInputSchema = baseNodeDataSchema.extend({
@@ -244,6 +264,7 @@ export const webPageDataInputSchema = baseNodeDataSchema.extend({
   realtimeConnections: z.array(realtimeConnectionSchema).optional(),
   uiPrompt: z.string().optional(),
   renderMode: z.enum(["server", "client"]).optional(),
+  customDependencies: z.array(nodeDependencyItemInputSchema).optional(),
 });
 
 // --- WebApp Node ---
@@ -308,6 +329,7 @@ export const webAppDataSchema = baseNodeDataSchema
     defaultLoginRoute: z.string().optional(),
     corsOrigins: z.string().optional(),
     showNav: z.boolean().optional(),
+    customDependencies: z.array(nodeDependencyItemSchema).optional(),
   })
   .passthrough();
 export type WebAppNodeData = z.infer<typeof webAppDataSchema>;
@@ -344,6 +366,7 @@ export const serviceDataSchema = baseNodeDataSchema
       .optional(),
     /** Local data-transformation helper functions attached to this service */
     transformerHelpers: z.array(transformerHelperSchema).optional(),
+    customDependencies: z.array(nodeDependencyItemSchema).optional(),
   })
   .strict();
 export type ServiceNodeData = z.infer<typeof serviceDataSchema>;
@@ -395,6 +418,7 @@ export const serviceDataInputSchema = baseNodeDataSchema
       .optional(),
     /** Local data-transformation helper functions attached to this service */
     transformerHelpers: z.array(transformerHelperInputSchema).optional(),
+    customDependencies: z.array(nodeDependencyItemInputSchema).optional(),
   })
   .passthrough();
 

@@ -5,7 +5,7 @@ import {
   Sparkles,
   Shield,
   FileCode,
-  Sliders,
+  Settings,
 } from "lucide-react";
 
 interface WebPageTabsNavProps {
@@ -33,7 +33,7 @@ export function WebPageTabsNav({ sectionsCount }: WebPageTabsNavProps) {
           value="api"
           className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1"
         >
-          <Sliders size={12} className="shrink-0" />
+          <Settings size={12} className="shrink-0" />
           <span className="truncate">API</span>
         </TabsTrigger>
 

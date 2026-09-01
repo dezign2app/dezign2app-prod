@@ -13,7 +13,6 @@ import {
   Activity,
   MousePointerClick,
   Send,
-  Sliders,
   Radio,
   Wifi,
   Video,
@@ -163,7 +162,7 @@ export function WebPageSectionsOverviewSection({
     if (evt === "pageload") return <Zap size={10} className="text-muted-foreground" />;
     if (evt === "navigatetopage") return <Compass size={10} className="text-muted-foreground" />;
     if (evt === "submit") return <Send size={10} className="text-muted-foreground" />;
-    if (evt === "change" || evt === "input") return <Sliders size={10} className="text-muted-foreground" />;
+    if (evt === "change" || evt === "input") return <Settings size={10} className="text-muted-foreground" />;
     return <MousePointerClick size={10} className="text-muted-foreground" />;
   };
 

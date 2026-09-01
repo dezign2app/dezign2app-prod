@@ -1,6 +1,7 @@
 import type { UIEventItem, PageSection, Parameter, Schema } from "./simulation";
 import type { WebAppZone, ProtectionRule, PaymentsPlanConfig } from "./auth";
 import type { ClientDeliveryProtocol } from "./messaging";
+import type { NodeDependencyItem } from "./services";
 
 export type SectionIconName =
   | "layout-grid"
@@ -86,6 +87,7 @@ export interface CanvasWebAppNodeData {
   defaultLoginRoute?: string;
   corsOrigins?: string;
   showNav?: boolean;
+  customDependencies?: NodeDependencyItem[];
 }
 
 /** Web Page node fields (canvas type). */
@@ -116,6 +118,7 @@ export interface CanvasWebPageNodeData {
   requireAuth?: boolean;
   /** Real-time push connections (SSE, WebSocket, WebRTC, Polling) for this page */
   realtimeConnections?: RealtimeConnection[];
+  customDependencies?: NodeDependencyItem[];
 }
 
 /** Payments node fields (canvas type). */

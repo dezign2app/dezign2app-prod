@@ -7,7 +7,7 @@ import {
   Layers,
   Sparkles,
   MessageSquare,
-  Sliders,
+  Settings,
 } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import {
@@ -178,7 +178,7 @@ export function MemoryNodeInspector({
         {/* Thread Scope */}
         <div className="flex flex-col gap-2">
           <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-            <Sliders className="w-3.5 h-3.5 text-muted-foreground" />
+            <Settings className="w-3.5 h-3.5 text-muted-foreground" />
             Thread Persistence Scope
           </Label>
           <Select

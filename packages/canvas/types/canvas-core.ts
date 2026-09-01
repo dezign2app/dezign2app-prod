@@ -118,6 +118,7 @@ export interface JSONArray extends Array<JSONValue> {}
 // --- Canvas Configuration & Store State Types ---
 
 export type ConfigItemType =
+  | "service"
   | "endpoint"
   | "event"
   | "task"

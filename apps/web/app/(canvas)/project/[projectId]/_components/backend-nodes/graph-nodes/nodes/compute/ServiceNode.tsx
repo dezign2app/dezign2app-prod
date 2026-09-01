@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { NodeProps } from "@xyflow/react";
-import { Server, ChevronDown, ChevronUp } from "lucide-react";
+import { Server, ChevronDown, Settings } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
@@ -138,6 +138,24 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         title="Service / API"
         colorClass="bg-blue-500/10 text-blue-700 dark:text-blue-400"
         selected={selected}
+        rightElement={
+          <div className="flex items-center gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                useBackendCanvasStore.getState().setActiveConfigItem({
+                  type: "service",
+                  id,
+                  nodeId: id,
+                });
+              }}
+              className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all cursor-pointer flex items-center justify-center text-[10px]"
+              title="Configure Service Settings & Packages"
+            >
+              <Settings size={13} />
+            </button>
+          </div>
+        }
       />
 
       {/* Description */}

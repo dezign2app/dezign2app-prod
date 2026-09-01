@@ -1,7 +1,9 @@
-import type { Endpoint } from "../schemas";
+import type { Endpoint, NodeDependencyItem } from "../schemas";
 import type { InterServiceProtocol } from "../constants";
 import type { UIEventItem, Schema } from "./simulation";
 import type { PipelineStepDraft } from "./pipeline";
+
+export type { NodeDependencyItem };
 
 /**
  * A small, pure data-transformation helper function.
@@ -110,6 +112,7 @@ export interface CanvasServiceNodeData {
   consumedEvents?: ConsumedEventItem[];
   /** Local data-transformation helper functions attached to this service */
   transformerHelpers?: TransformerHelperNodeData[];
+  customDependencies?: NodeDependencyItem[];
 }
 
 /** Standalone transformer node fields for canvas graph view. */
