@@ -67,15 +67,23 @@ function stageWebResources() {
       copyDirPlain(standaloneDir, buildWebDir);
     }
 
-    // 2. Copy static files & public assets
+    // 2. Copy static files & public assets, and generate public-only safe .env
     const nextStaticSrc = path.join(webDir, ".next", "static");
     const publicSrc = path.join(webDir, "public");
-    const envSrc = path.join(webDir, ".env");
 
     const candidateTargets = [
       buildWebDir,
       path.join(buildWebDir, "apps", "web"),
     ].filter((dir) => fs.existsSync(dir));
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500";
+    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL || "https://neighborly-setter-541.convex.cloud";
+
+    const publicSafeEnv = [
+      `NEXT_PUBLIC_CONVEX_URL=${convexUrl}`,
+      `NEXT_PUBLIC_APP_URL=${appUrl}`,
+      "NODE_ENV=production",
+    ].join("\n") + "\n";
 
     for (const target of candidateTargets) {
       if (fs.existsSync(nextStaticSrc)) {
@@ -84,9 +92,7 @@ function stageWebResources() {
       if (fs.existsSync(publicSrc)) {
         copyDirPlain(publicSrc, path.join(target, "public"));
       }
-      if (fs.existsSync(envSrc)) {
-        fs.copyFileSync(envSrc, path.join(target, ".env"));
-      }
+      fs.writeFileSync(path.join(target, ".env"), publicSafeEnv, "utf8");
     }
 
     // 3. Copy clean flat packages from .pnpm virtual store
@@ -125,11 +131,9 @@ function stageWebResources() {
     const nextSrc = path.join(webDir, ".next");
     const publicSrc = path.join(webDir, "public");
     const envSrc = path.join(webDir, ".env");
-    const pkgSrc = path.join(webDir, "package.json");
-
     if (fs.existsSync(nextSrc)) copyDirPlain(nextSrc, path.join(buildWebDir, ".next"));
     if (fs.existsSync(publicSrc)) copyDirPlain(publicSrc, path.join(buildWebDir, "public"));
-    if (fs.existsSync(envSrc)) fs.copyFileSync(envSrc, path.join(buildWebDir, ".env"));
+    fs.writeFileSync(path.join(buildWebDir, ".env"), publicSafeEnv, "utf8");
     if (fs.existsSync(pkgSrc)) fs.copyFileSync(pkgSrc, path.join(buildWebDir, "package.json"));
   }
 

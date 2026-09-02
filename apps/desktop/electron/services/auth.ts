@@ -72,17 +72,19 @@ export function handleInitialDeepLink(): void {
   }
 }
 
-/**
- * Opens system browser to initiate OAuth login flow.
- */
 export async function openBrowserLogin(customUrl?: string): Promise<{ success: boolean }> {
-  const activeUrl = getCurrentAppUrl();
+  const authUrl =
+    process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "http://localhost:46500";
+
   const loginUrl =
     customUrl ||
-    (process.env.NEXT_PUBLIC_APP_URL
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/sign-in?desktop=true`
-      : `${activeUrl}/sign-in?desktop=true`);
+    `${authUrl}/sign-in?desktop=true&redirect_url=${encodeURIComponent(
+      `${authUrl}/auth/desktop`
+    )}`;
 
+  console.log("[main] Opening system browser for authentication:", loginUrl);
   shell.openExternal(loginUrl);
   return { success: true };
 }

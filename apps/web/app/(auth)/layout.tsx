@@ -1,6 +1,8 @@
 import { AuthLayout } from "@/app/(auth)/_components/ui/layouts/auth-layout";
 import React, { ReactNode } from "react";
 
+export const dynamic = "force-dynamic";
+
 const Layout = ({ children }: { children: ReactNode }) => {
   return <AuthLayout>{children}</AuthLayout>;
 };

@@ -30,6 +30,7 @@ import { Separator } from "@workspace/ui/components/separator";
 import { useTheme } from "next-themes";
 import { OrgSwitcher } from "@/components/auth/org-switcher";
 import { signOut } from "@/lib/auth-client";
+import { logoutUser } from "@/app/(auth)/_components/actions";
 import { KeyIcon } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@workspace/ui/lib/utils";
@@ -73,13 +74,56 @@ const ProtectedSidebar = () => {
   };
 
   const handleSignOut = async () => {
-    await signOut({
-      fetchOptions: {
-        onSuccess: () => {
-          router.push("/sign-in");
-        },
-      },
-    });
+    try {
+      // 1. Better Auth client sign out
+      await signOut().catch(() => {});
+
+      // 2. Clear all server-side session cookies via Server Action
+      await logoutUser().catch(() => {});
+
+      // 3. Clear via API route as extra safety
+      await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    } catch (err) {
+      console.error("[auth] Sign out error:", err);
+    } finally {
+      // 4. Clear all accessible document cookies across root path
+      if (typeof document !== "undefined") {
+        const cookiesToClear = [
+          "better-auth.session_token",
+          "__Secure-better-auth.session_token",
+          "better-auth.session_data",
+          "__Secure-better-auth.session_data",
+          "better-auth.dont_remember",
+          "better-auth.state",
+          "better-auth.pkce_code_verifier",
+          "convex_jwt",
+          "is_electron",
+        ];
+        cookiesToClear.forEach((name) => {
+          document.cookie = `${name}=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        });
+      }
+
+      // 5. Clear localStorage / sessionStorage auth items
+      if (typeof window !== "undefined") {
+        try {
+          const keys = Object.keys(localStorage);
+          keys.forEach((k) => {
+            if (
+              k.includes("better-auth") ||
+              k.includes("convex") ||
+              k.includes("auth")
+            ) {
+              localStorage.removeItem(k);
+            }
+          });
+          sessionStorage.clear();
+        } catch {}
+      }
+
+      // 6. Hard redirect to /sign-in?signed_out=true
+      window.location.href = "/sign-in?signed_out=true";
+    }
   };
 
   return (

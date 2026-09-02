@@ -60,3 +60,29 @@ export async function createDesktopSignInToken(): Promise<{ token: string }> {
 
   return { token: ticket };
 }
+
+export async function logoutUser(): Promise<{ success: boolean }> {
+  try {
+    const cookieStore = await cookies();
+    const allCookies = cookieStore.getAll();
+    for (const c of allCookies) {
+      if (
+        c.name.includes("better-auth") ||
+        c.name.includes("convex") ||
+        c.name === "is_electron" ||
+        c.name.toLowerCase().includes("session") ||
+        c.name.toLowerCase().includes("token")
+      ) {
+        cookieStore.delete(c.name);
+        cookieStore.set(c.name, "", {
+          maxAge: 0,
+          expires: new Date(0),
+          path: "/",
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[logoutUser] Error clearing server cookies:", e);
+  }
+  return { success: true };
+}

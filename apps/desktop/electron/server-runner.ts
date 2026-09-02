@@ -30,9 +30,8 @@ function loadEnvFile(envPath: string) {
         }
       }
     }
-    console.log("[server-runner] Loaded environment from:", envPath);
   } catch (e) {
-    console.warn("[server-runner] Warning: Failed to parse .env at", envPath, e);
+    // Silently ignore parse errors
   }
 }
 

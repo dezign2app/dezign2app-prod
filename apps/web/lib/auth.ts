@@ -13,12 +13,24 @@ const appUrl =
   process.env.BETTER_AUTH_URL ||
   "http://localhost:46500";
 
+const dynamicOrigins = [
+  process.env.NEXT_PUBLIC_APP_URL,
+  process.env.BETTER_AUTH_URL,
+  "https://dezign2app.com",
+  "https://www.dezign2app.com",
+  "http://localhost:46500",
+  "http://localhost:3000",
+  "http://127.0.0.1:46500",
+  "dezign2app://",
+].filter(Boolean) as string[];
+
 export const auth = betterAuth({
   appName: "Dezign2App",
   baseURL: appUrl,
   secret:
     process.env.BETTER_AUTH_SECRET ||
     "development-secret-key-at-least-32-chars-long-dezign2app-2026",
+  trustedOrigins: Array.from(new Set(dynamicOrigins)),
   emailAndPassword: {
     enabled: true,
     async sendResetPassword(data, _request) {

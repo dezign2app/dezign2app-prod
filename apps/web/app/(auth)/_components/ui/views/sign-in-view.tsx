@@ -31,6 +31,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 export const SignInView = () => {
+  const [mounted, setMounted] = useState(false);
   const [inDesktop, setInDesktop] = useState(false);
   const [waitingForAuth, setWaitingForAuth] = useState(false);
   const [manualTicket, setManualTicket] = useState("");
@@ -45,13 +46,20 @@ export const SignInView = () => {
 
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isSignedOut = searchParams.get("signed_out") === "true";
   const redirectUrl = searchParams.get("redirect_url") || "/projects";
 
   const { data: session, isPending: isSessionLoading } = useSession();
   const ensureUser = useMutation(api.users.ensureAuthUser);
 
-  // If already signed in, ensure user record exists and go directly to /projects or redirectUrl
+  // If already signed in (and not explicitly signed out), ensure user record exists and go directly to /projects or redirectUrl
   useEffect(() => {
+    if (isSignedOut) {
+      // Clear signed_out flag from URL without reloading
+      window.history.replaceState(null, "", "/sign-in");
+      return;
+    }
+
     if (session?.user) {
       if (session.user.email) {
         const userEmail = session.user.email;
@@ -64,7 +72,15 @@ export const SignInView = () => {
       }
       router.push(redirectUrl);
     }
-  }, [session, router, redirectUrl, ensureUser]);
+  }, [session, router, redirectUrl, ensureUser, isSignedOut]);
+
+  const getAuthBaseUrl = () => {
+    return (
+      process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      "http://localhost:46500"
+    );
+  };
 
   // Exchange ticket for Better Auth session inside Electron
   const exchangeTicket = async (ticket: string) => {
@@ -73,13 +89,35 @@ export const SignInView = () => {
       setIsExchanging(true);
       setError(null);
 
-      const res = await fetch("/api/auth/desktop/exchange", {
+      let res = await fetch("/api/auth/desktop/exchange", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ticket: ticket.trim() }),
       });
 
-      const data = await res.json();
+      let data = await res.json().catch(() => ({}));
+
+      // Fallback directly to authBaseUrl if local server does not have the ticket
+      if (!res.ok || !data.token) {
+        try {
+          const authBaseUrl = getAuthBaseUrl();
+          const remoteRes = await fetch(`${authBaseUrl}/api/auth/desktop/exchange`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ticket: ticket.trim() }),
+          });
+          if (remoteRes.ok) {
+            const remoteData = await remoteRes.json();
+            if (remoteData?.token) {
+              data = remoteData;
+              res = remoteRes;
+            }
+          }
+        } catch (remoteErr) {
+          console.warn("[desktop-auth] Direct remote exchange attempt failed:", remoteErr);
+        }
+      }
+
       if (res.ok && data.token) {
         // Set cookie / session
         document.cookie = `better-auth.session_token=${data.token}; path=/; max-age=2592000; SameSite=Lax`;
@@ -98,6 +136,7 @@ export const SignInView = () => {
   };
 
   useEffect(() => {
+    setMounted(true);
     setInDesktop(isElectron());
 
     const api = getElectronAPI();
@@ -119,16 +158,15 @@ export const SignInView = () => {
     setError(null);
     const api = getElectronAPI();
     if (api?.auth) {
-      const webBaseUrl =
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500";
-      const loginUrl = `${webBaseUrl}/sign-in?redirect_url=${encodeURIComponent(
-        `${webBaseUrl}/auth/desktop`,
+      const authBaseUrl = getAuthBaseUrl();
+      const loginUrl = `${authBaseUrl}/sign-in?redirect_url=${encodeURIComponent(
+        `${authBaseUrl}/auth/desktop`,
       )}`;
       await api.auth.openBrowserLogin(loginUrl);
     }
   };
 
-  const handleManualSubmit = (e: React.FormEvent) => {
+  const handleManualSubmit = (e: React.SubmitEvent) => {
     e.preventDefault();
     if (manualTicket.trim()) {
       exchangeTicket(manualTicket.trim());
@@ -177,8 +215,8 @@ export const SignInView = () => {
     }
   };
 
-  // If running inside Desktop app: Render clean shadcn authentication card with both browser login & direct login options
-  if (inDesktop) {
+  // If running inside Desktop app (client-side only after mount): Render clean shadcn authentication card with both browser login & direct login options
+  if (mounted && inDesktop) {
     return (
       <div className="flex w-full items-center justify-center p-4 min-h-[400px]">
         <Card className="w-full max-w-md border-border bg-card text-card-foreground shadow-2xl">
