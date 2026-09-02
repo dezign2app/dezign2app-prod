@@ -12,7 +12,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ticketData = consumeTicket(ticket.trim());
+    let ticketData = consumeTicket(ticket.trim());
+
+    if (!ticketData) {
+      try {
+        const authBaseUrl =
+          process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL ||
+          process.env.NEXT_PUBLIC_APP_URL ||
+          "http://localhost:46500";
+        const prodRes = await fetch(`${authBaseUrl}/api/auth/desktop/exchange`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticket: ticket.trim() }),
+        });
+        if (prodRes.ok) {
+          const prodData = await prodRes.json();
+          if (prodData?.token) {
+            ticketData = {
+              token: prodData.token,
+              userId: prodData.userId || "desktop_user",
+              expiresAt: Date.now() + 60000,
+            };
+          }
+        }
+      } catch (remoteErr) {
+        console.warn("[Desktop Auth Exchange] Remote exchange attempt failed:", remoteErr);
+      }
+    }
 
     if (!ticketData) {
       return NextResponse.json(

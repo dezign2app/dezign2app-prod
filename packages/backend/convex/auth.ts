@@ -15,15 +15,29 @@ export const betterAuthComponentClient = createClient(components.betterAuth);
 export const createAuth: CreateAuth<GenericDataModel> = (
   ctx: GenericCtx<GenericDataModel>,
 ) => {
+  const baseURL =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.BETTER_AUTH_URL ||
+    "http://localhost:46500";
+
+  const dynamicOrigins = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.BETTER_AUTH_URL,
+    "https://dezign2app.com",
+    "https://www.dezign2app.com",
+    "http://localhost:46500",
+    "http://localhost:3000",
+    "http://127.0.0.1:46500",
+    "dezign2app://",
+  ].filter(Boolean) as string[];
+
   return betterAuth({
     appName: "Dezign2App",
-    baseURL:
-      process.env.NEXT_PUBLIC_APP_URL ||
-      process.env.BETTER_AUTH_URL ||
-      "http://localhost:46500",
+    baseURL,
     secret:
       process.env.BETTER_AUTH_SECRET ||
       "development-secret-key-at-least-32-chars-long-dezign2app-2026",
+    trustedOrigins: Array.from(new Set(dynamicOrigins)),
     database: betterAuthComponentClient.adapter(ctx),
     databaseHooks: {
       user: {
@@ -66,11 +80,11 @@ export const createAuth: CreateAuth<GenericDataModel> = (
     },
     socialProviders: {
       github: {
-        clientId: process.env.GITHUB_CLIENT_ID || "Ov23limRnMyJ14xW58oP",
-        clientSecret:
-          process.env.GITHUB_CLIENT_SECRET ||
-          "45d8f1dca4a68a6ed4967f6068f4d3454d426f0c",
-        enabled: true,
+        clientId: process.env.GITHUB_CLIENT_ID || "",
+        clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
+        enabled: !!(
+          process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
+        ),
       },
       google: {
         clientId: process.env.GOOGLE_CLIENT_ID || "",

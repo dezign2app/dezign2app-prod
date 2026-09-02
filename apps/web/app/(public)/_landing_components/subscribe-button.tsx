@@ -38,7 +38,9 @@ export const SubscribeButton = ({ productId }: SubscribeButtonProps) => {
           toast.error("Please sign in to continue.");
           if (isElectron()) {
             const webBaseUrl =
-              process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500";
+              process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL ||
+              process.env.NEXT_PUBLIC_APP_URL ||
+              "http://localhost:46500";
             const pricingUrl = `${webBaseUrl}/pricing`;
             const api = getElectronAPI();
             if (api?.auth) {
@@ -97,7 +99,9 @@ export const SubscribeButton = ({ productId }: SubscribeButtonProps) => {
     const handleUnauthenticatedClick = () => {
       if (isElectron()) {
         const webBaseUrl =
-          process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500";
+          process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL ||
+          process.env.NEXT_PUBLIC_APP_URL ||
+          "http://localhost:46500";
         const pricingUrl = `${webBaseUrl}/pricing`;
         const api = getElectronAPI();
         if (api?.auth) {

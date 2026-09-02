@@ -59,10 +59,6 @@ export async function startNextServer(
       const onData = (data: Buffer) => {
         const msg = data.toString();
         console.log("[next-server]", msg);
-        const firstLine = msg.trim().split("\n")[0];
-        if (firstLine) {
-          onStatus?.(firstLine);
-        }
         if (
           !resolved &&
           (msg.includes("Ready") ||
@@ -73,6 +69,7 @@ export async function startNextServer(
             msg.includes("Local:") ||
             msg.includes("Network:"))
         ) {
+          onStatus?.("Connecting to workspace...");
           finishSuccess();
         }
       };

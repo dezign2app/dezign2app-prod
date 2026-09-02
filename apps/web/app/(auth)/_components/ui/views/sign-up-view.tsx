@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { SignInView } from "./sign-in-view";
 
 export const SignUpView = () => {
+  const [mounted, setMounted] = useState(false);
   const [inDesktop, setInDesktop] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -35,16 +36,23 @@ export const SignUpView = () => {
 
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isSignedOut = searchParams.get("signed_out") === "true";
   const redirectUrl = searchParams.get("redirect_url") || "/projects";
 
   const { data: session } = useSession();
   const ensureUser = useMutation(api.users.ensureAuthUser);
 
   useEffect(() => {
+    setMounted(true);
     setInDesktop(isElectron());
   }, []);
 
   useEffect(() => {
+    if (isSignedOut) {
+      window.history.replaceState(null, "", "/sign-up");
+      return;
+    }
+
     if (session?.user) {
       if (session.user.email) {
         const userEmail = session.user.email;
@@ -57,9 +65,9 @@ export const SignUpView = () => {
       }
       router.push(redirectUrl);
     }
-  }, [session, router, redirectUrl, ensureUser]);
+  }, [session, router, redirectUrl, ensureUser, isSignedOut]);
 
-  if (inDesktop) {
+  if (mounted && inDesktop) {
     return <SignInView />;
   }
 

@@ -53,7 +53,7 @@ export async function getServerSession(
           "x-forwarded-host":
             headersList.get("host") ||
             headersList.get("x-forwarded-host") ||
-            "localhost:46500",
+            "dezign2app.com",
         },
         cache: "no-store",
       });
