@@ -110,14 +110,13 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
   const handleAddTableToDb = () => {
     const tableId = crypto.randomUUID();
     const dbPos = dbNode.position || { x: 100, y: 100 };
-    const tableLabel = getUniqueNodeLabel(nodes, `Table_${attachedEntities.length + 1}`, "entity");
 
     addNode({
       id: tableId,
       type: "entity",
       position: { x: dbPos.x, y: dbPos.y + 220 },
       data: {
-        label: tableLabel,
+        label: "",
         columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
         indexes: [],
         databaseId: nodeId,
@@ -137,14 +136,13 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
   const handleAddRedisSchemaToDb = () => {
     const schemaId = crypto.randomUUID();
     const dbPos = dbNode.position || { x: 100, y: 100 };
-    const schemaLabel = getUniqueNodeLabel(nodes, `Cache_${attachedEntities.length + 1}`, "redis_schema");
 
     addNode({
       id: schemaId,
       type: "redis_schema",
       position: { x: dbPos.x, y: dbPos.y + 220 },
       data: {
-        label: schemaLabel,
+        label: "",
         dbType: "redis",
         redisDataStructure: "hash",
         keyTemplate: "",

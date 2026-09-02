@@ -48,12 +48,24 @@ export const WebPageNode = ({
   const handleRequestRename = React.useCallback(
     (newLabel: string) => {
       const oldLabel = data.label || "";
+      const cleanNew = parsePageRoute(newLabel) || newLabel.trim();
+
+      if (
+        !oldLabel ||
+        oldLabel.trim() === "" ||
+        oldLabel === "page-server" ||
+        oldLabel === "Untitled" ||
+        oldLabel === "Page"
+      ) {
+        updateNode(id, { data: { ...data, label: cleanNew } });
+        return;
+      }
+
       const cleanOld = parsePageRoute(oldLabel);
-      const cleanNew = parsePageRoute(newLabel);
 
       if (cleanOld === cleanNew) return;
 
-      if (!cleanOld || cleanOld === "Untitled" || cleanOld === "Page") {
+      if (!cleanOld || cleanOld === "page-server" || cleanOld === "Untitled" || cleanOld === "Page") {
         updateNode(id, { data: { ...data, label: cleanNew } });
         return;
       }
@@ -201,7 +213,7 @@ export const WebPageNode = ({
       ? data.label.startsWith("/")
         ? data.label
         : `/${data.label}`
-      : "/page-server";
+      : "/";
 
   const isLocked = Boolean(data.aiEditing);
 

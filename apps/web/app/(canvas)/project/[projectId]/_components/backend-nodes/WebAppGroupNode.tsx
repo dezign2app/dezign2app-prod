@@ -18,8 +18,8 @@ export const WebAppGroupNode = ({
   );
   const nodes = useBackendCanvasStore((s) => s.nodes);
 
-  const [isEditing, setIsEditing] = useState(data.label === "");
-  const [editValue, setEditValue] = useState(data.label || "Customer Portal");
+  const [isEditing, setIsEditing] = useState(!data.label);
+  const [editValue, setEditValue] = useState(data.label || "");
   const [editPort, setEditPort] = useState(data.port ? String(data.port) : "3000");
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,6 +54,13 @@ export const WebAppGroupNode = ({
     });
 
   useEffect(() => {
+    setEditValue(data.label || "");
+    if (!data.label) {
+      setIsEditing(true);
+    }
+  }, [data.label]);
+
+  useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
@@ -61,7 +68,16 @@ export const WebAppGroupNode = ({
   }, [isEditing]);
 
   const handleSave = () => {
-    const trimmed = editValue.trim() || "Web App";
+    const trimmed = editValue.trim();
+    if (!trimmed) {
+      if (!data.label || data.label.trim() === "") {
+        deleteNode(id);
+        return;
+      }
+      setEditValue(data.label);
+      setIsEditing(false);
+      return;
+    }
     updateNode(id, {
       data: {
         ...data,
@@ -70,6 +86,7 @@ export const WebAppGroupNode = ({
         port: String(editPort || "").trim() || "3000",
       },
     });
+    setEditValue(trimmed);
     setIsEditing(false);
   };
 
@@ -120,7 +137,7 @@ export const WebAppGroupNode = ({
           onDoubleClick={(e) => {
             e.stopPropagation();
             setIsEditing(true);
-            setEditValue(data.label || "Web App");
+            setEditValue(data.label || "");
           }}
         >
           <div className="flex items-center gap-2 min-w-0">
@@ -133,11 +150,19 @@ export const WebAppGroupNode = ({
                 <input
                   ref={inputRef}
                   value={editValue}
+                  placeholder="Enter web app name..."
                   onChange={(e) => setEditValue(e.target.value)}
                   onBlur={handleSave}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleSave();
-                    if (e.key === "Escape") setIsEditing(false);
+                    if (e.key === "Escape") {
+                      if (!data.label || data.label.trim() === "") {
+                        deleteNode(id);
+                        return;
+                      }
+                      setEditValue(data.label);
+                      setIsEditing(false);
+                    }
                   }}
                   className="bg-background/80 border border-indigo-500/40 rounded px-2 py-0.5 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />

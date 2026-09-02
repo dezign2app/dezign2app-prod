@@ -18,6 +18,7 @@ export const TransformerNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
@@ -29,19 +30,45 @@ export const TransformerNode = ({
     Boolean(selected),
   );
 
-  const [isEditing, setIsEditing] = useState(
-    data.label === "" || data.label === "Untitled",
-  );
-  const [name, setName] = useState(data.label || data.functionName || "Data Transformer");
+  const [isEditing, setIsEditing] = useState(!data.label && !data.functionName);
+  const [name, setName] = useState(data.label || data.functionName || "");
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    setName(data.label || data.functionName || "");
+    if (!data.label && !data.functionName) {
+      setIsEditing(true);
+    }
+  }, [data.label, data.functionName]);
+
+  React.useEffect(() => {
+    if (isEditing) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 10);
+    }
+  }, [isEditing]);
 
   const handleSave = () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      if (!data.label && !data.functionName) {
+        deleteNode(id);
+        return;
+      }
+      setName(data.label || data.functionName || "");
+      setIsEditing(false);
+      return;
+    }
     updateNode(id, {
       data: {
         ...data,
-        label: name || "Data Transformer",
-        functionName: name || "Data Transformer",
+        label: trimmed,
+        functionName: trimmed,
       },
     });
+    setName(trimmed);
     setIsEditing(false);
   };
 
@@ -97,13 +124,26 @@ export const TransformerNode = ({
 
           {isEditing ? (
             <LocalInput
+              ref={inputRef}
               value={name}
+              placeholder="Enter transformer name..."
               onChange={(e) => setName(e.target.value)}
               className="h-5 text-xs font-semibold px-1 py-0 bg-background/80 border-border/80"
               autoFocus
               onKeyDown={(e: React.KeyboardEvent) => {
-                if (e.key === "Enter") handleSave();
-                if (e.key === "Escape") setIsEditing(false);
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleSave();
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  if (!data.label && !data.functionName) {
+                    deleteNode(id);
+                    return;
+                  }
+                  setName(data.label || data.functionName || "");
+                  setIsEditing(false);
+                }
               }}
               onBlur={handleSave}
             />
@@ -114,9 +154,9 @@ export const TransformerNode = ({
                 e.stopPropagation();
                 setIsEditing(true);
               }}
-              title={data.label || data.functionName || "Data Transformer"}
+              title={data.label || data.functionName || "Transformer"}
             >
-              {data.label || data.functionName || "Data Transformer"}
+              {data.label || data.functionName || "Transformer"}
             </span>
           )}
         </div>

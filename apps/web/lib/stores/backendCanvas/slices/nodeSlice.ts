@@ -238,7 +238,7 @@ export const createNodeSlice = (
     const lastNodeIndex = getLastIndex(get().nodes);
     const fractionalIndex = generateKeyBetween(lastNodeIndex, null);
     const stepId = `step_${Date.now().toString(36).slice(-4)}`;
-    const stepName = name || `Step ${existingCount + 1}`;
+    const stepName = name || "";
     const node: BackendNode = {
       id: crypto.randomUUID(),
       type: "langgraph_step",

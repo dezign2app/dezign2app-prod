@@ -8,18 +8,24 @@ export function useRedisSchemaName(
   data: BackendNode["data"],
   updateNode: (id: string, changes: Partial<BackendNode>) => void,
 ) {
-  const [editingName, setEditingName] = useState(data.label || "User_Cache");
-  const [isEditingName, setIsEditingName] = useState(data.label === "");
+  const [editingName, setEditingName] = useState(data.label || "");
+  const [isEditingName, setIsEditingName] = useState(!data.label);
   const [nameError, setNameError] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setEditingName(data.label || "User_Cache");
+    setEditingName(data.label || "");
+    if (!data.label) {
+      setIsEditingName(true);
+    }
   }, [data.label]);
 
   useEffect(() => {
     if (isEditingName) {
-      setTimeout(() => inputRef.current?.focus(), 10);
+      setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 10);
     }
   }, [isEditingName]);
 
@@ -27,27 +33,13 @@ export function useRedisSchemaName(
     (e?: React.SyntheticEvent) => {
       const finalName = editingName.trim();
       if (!finalName) {
-        const latestNode = useBackendCanvasStore
-          .getState()
-          .nodes.find((n) => n.id === id);
-        if (!latestNode) return;
-
-        const latestCols = latestNode.data?.columns || [];
-        const isEmpty = latestCols.length === 0;
-        if (isEmpty) {
+        if (!data.label || data.label.trim() === "") {
           useBackendCanvasStore.getState().deleteNode(id);
-        } else {
-          const allNodes = useBackendCanvasStore.getState().nodes;
-          const defaultName = getUniqueNodeLabel(
-            allNodes,
-            "User_Cache",
-            "redis_schema",
-          );
-          updateNode(id, { data: { ...latestNode.data, label: defaultName } });
-          setEditingName(defaultName);
-          setNameError(false);
-          setIsEditingName(false);
+          return;
         }
+        setEditingName(data.label);
+        setNameError(false);
+        setIsEditingName(false);
         return;
       }
 
@@ -87,10 +79,14 @@ export function useRedisSchemaName(
   );
 
   const cancelEdit = useCallback(() => {
-    setEditingName(data.label || "User_Cache");
+    if (!data.label || data.label.trim() === "") {
+      useBackendCanvasStore.getState().deleteNode(id);
+      return;
+    }
+    setEditingName(data.label);
     setNameError(false);
     setIsEditingName(false);
-  }, [data.label]);
+  }, [data.label, id]);
 
   return {
     editingName,

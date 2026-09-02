@@ -45,54 +45,11 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const saveName = (e?: React.FocusEvent | React.KeyboardEvent) => {
     let finalName = editingName.trim();
     if (!finalName) {
-      if (!data.label) {
-        if (e && "relatedTarget" in e) {
-          const relatedTarget =
-            e.relatedTarget instanceof globalThis.Node ? e.relatedTarget : null;
-          if (relatedTarget && nodeRef.current?.contains(relatedTarget)) {
-            const allNodes = useBackendCanvasStore.getState().nodes;
-            const defaultName = getUniqueNodeLabel(allNodes, "Untitled_Table", "entity");
-            const latestNode = allNodes.find((n) => n.id === id);
-            if (latestNode) {
-              updateNode(id, {
-                data: { ...latestNode.data, label: defaultName },
-              });
-            }
-            setEditingName(defaultName);
-            setNameError(false);
-            setIsEditingName(false);
-            return;
-          }
-        }
-
-        const latestNode = useBackendCanvasStore
-          .getState()
-          .nodes.find((n) => n.id === id);
-        if (!latestNode) return;
-
-        const latestCols = latestNode.data.columns || [];
-        const latestIdxs = latestNode.data.indexes || [];
-
-        const isEmpty = latestCols.length === 0 && latestIdxs.length === 0;
-        const isInitial =
-          latestCols.length === 1 &&
-          latestCols[0]?.name === "_id" &&
-          latestIdxs.length === 0;
-
-        if (isEmpty || isInitial) {
-          useBackendCanvasStore.getState().deleteNode(id);
-        } else {
-          const allNodes = useBackendCanvasStore.getState().nodes;
-          const defaultName = getUniqueNodeLabel(allNodes, "Untitled_Table", "entity");
-          updateNode(id, { data: { ...latestNode.data, label: defaultName } });
-          setEditingName(defaultName);
-          setNameError(false);
-          setIsEditingName(false);
-        }
+      if (!data.label || data.label.trim() === "") {
+        useBackendCanvasStore.getState().deleteNode(id);
         return;
       }
-      finalName = data.label; // revert to original valid name
-      setEditingName(finalName);
+      setEditingName(data.label);
       setNameError(false);
       setIsEditingName(false);
       return;
@@ -199,6 +156,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                 <Input
                   ref={inputRef}
                   value={editingName}
+                  placeholder={isVector ? "Enter vector collection name..." : "Enter table name..."}
                   onChange={(e) => {
                     setEditingName(e.target.value);
                     if (nameError) setNameError(false);
@@ -212,6 +170,10 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") saveName(e);
                     if (e.key === "Escape") {
+                      if (!data.label || data.label.trim() === "") {
+                        useBackendCanvasStore.getState().deleteNode(id);
+                        return;
+                      }
                       setEditingName(data.label);
                       setNameError(false);
                       setIsEditingName(false);
@@ -232,7 +194,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                   style={dbThemeColor ? { color: dbThemeColor } : undefined}
                   onClick={() => setIsEditingName(true)}
                 >
-                  {data.label || "Untitled_Table"}
+                  {data.label || "Table"}
                 </span>
               </div>
             )}

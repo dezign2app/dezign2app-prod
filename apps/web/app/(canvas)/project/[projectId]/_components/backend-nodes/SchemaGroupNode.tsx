@@ -21,14 +21,21 @@ export const SchemaGroupNode = ({
   );
   const nodes = useBackendCanvasStore((s) => s.nodes);
 
-  const [isEditing, setIsEditing] = useState(data.label === "");
-  const [editValue, setEditValue] = useState(data.label);
+  const [isEditing, setIsEditing] = useState(!data.label);
+  const [editValue, setEditValue] = useState(data.label || "");
   const [editDescription, setEditDescription] = useState(
     data.description || "",
   );
   const [isError, setIsError] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setEditValue(data.label || "");
+    if (!data.label) {
+      setIsEditing(true);
+    }
+  }, [data.label]);
 
   useEffect(() => {
     if (isEditing) {
@@ -43,13 +50,13 @@ export const SchemaGroupNode = ({
   const handleRename = () => {
     const trimmedValue = editValue.trim();
     if (trimmedValue === "") {
-      const hasChildren = nodes.some((n) => n.parentId === id);
-      if (!hasChildren) {
+      if (!data.label || data.label.trim() === "") {
         deleteNode(id);
-      } else {
-        setIsError(true);
-        setTimeout(() => inputRef.current?.focus(), 0);
+        return;
       }
+      setEditValue(data.label);
+      setIsError(false);
+      setIsEditing(false);
       return;
     }
 
@@ -118,7 +125,7 @@ export const SchemaGroupNode = ({
           onDoubleClick={(e) => {
             e.stopPropagation();
             setIsEditing(true);
-            setEditValue(data.label);
+            setEditValue(data.label || "");
             setEditDescription(data.description || "");
           }}
         >
@@ -137,17 +144,14 @@ export const SchemaGroupNode = ({
                   if (e.key === "Enter") {
                     handleRename();
                   } else if (e.key === "Escape") {
-                    if (
-                      data.label === "" &&
-                      !nodes.some((n) => n.parentId === id)
-                    ) {
+                    if (!data.label || data.label.trim() === "") {
                       deleteNode(id);
-                    } else {
-                      setEditValue(data.label);
-                      setEditDescription(data.description || "");
-                      setIsError(false);
-                      setIsEditing(false);
+                      return;
                     }
+                    setEditValue(data.label);
+                    setEditDescription(data.description || "");
+                    setIsError(false);
+                    setIsEditing(false);
                   }
                 }}
                 className={cn(

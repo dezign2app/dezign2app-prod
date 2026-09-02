@@ -165,20 +165,29 @@ export const LangGraphNode = ({
   const params = useParams();
   const router = useRouter();
   const projectId = (params?.projectId as string) || storeProjectId;
-
-  const [isEditing, setIsEditing] = useState(
-    data.label === "" || data.label === "Untitled",
-  );
-  const [name, setName] = useState(data.label || "LangGraph Agent");
+  const [isEditing, setIsEditing] = useState(!data.label);
+  const [name, setName] = useState(data.label || "");
 
   const connectedRoutes = useConnectedRoutes(id);
 
   useEffect(() => {
-    setName(data.label || "LangGraph Agent");
+    setName(data.label || "");
+    if (!data.label) {
+      setIsEditing(true);
+    }
   }, [data.label]);
 
   const handleSaveName = () => {
-    const finalName = name.trim() || "LangGraph Agent";
+    const finalName = name.trim();
+    if (!finalName) {
+      if (!data.label || data.label.trim() === "") {
+        useBackendCanvasStore.getState().deleteNode(id);
+        return;
+      }
+      setName(data.label);
+      setIsEditing(false);
+      return;
+    }
     setName(finalName);
     updateNode(id, { data: { ...data, label: finalName } });
     setIsEditing(false);
@@ -228,6 +237,7 @@ export const LangGraphNode = ({
               >
                 <LocalInput
                   value={name}
+                  placeholder="Enter agent name..."
                   onChange={(e) => setName(e.target.value)}
                   className="h-6 text-xs px-1 bg-background/80 font-semibold flex-1 nodrag"
                   autoFocus
@@ -235,7 +245,11 @@ export const LangGraphNode = ({
                     e.stopPropagation();
                     if (e.key === "Enter") handleSaveName();
                     if (e.key === "Escape") {
-                      setName(data.label || "LangGraph Agent");
+                      if (!data.label || data.label.trim() === "") {
+                        useBackendCanvasStore.getState().deleteNode(id);
+                        return;
+                      }
+                      setName(data.label);
                       setIsEditing(false);
                     }
                   }}

@@ -60,6 +60,7 @@ export const RedisSchemaHeader = ({
               <Input
                 ref={inputRef}
                 value={editingName}
+                placeholder="Enter cache name..."
                 onChange={(e) => {
                   setEditingName(e.target.value);
                   if (nameError) setNameError(false);
@@ -84,7 +85,7 @@ export const RedisSchemaHeader = ({
                 style={{ color: dbThemeColor }}
                 onClick={() => setIsEditingName(true)}
               >
-                {label || "User_Cache"}
+                {label || "Cache"}
               </span>
               <Badge
                 variant="outline"

@@ -11,7 +11,7 @@ export function createGraphNodeData(
   existingNodes: BackendNode[],
 ): BackendNodeData {
   const baseData: BackendNodeData = {
-    label,
+    label: label || "",
   };
 
   if (type === "service") {
@@ -50,7 +50,7 @@ export function createGraphNodeData(
   if (type === "transformer") {
     return {
       ...baseData,
-      functionName: "transformData",
+      functionName: label || "",
       scope: "global",
       inputSchema: [
         { id: "in_name", name: "name", type: "string", required: true },
@@ -66,14 +66,14 @@ export function createGraphNodeData(
   if (type === "transformer_ref") {
     return {
       ...baseData,
-      label: "Transformer Ref",
+      label: label || "Transformer Ref",
     };
   }
 
   if (type === "hook") {
     return {
       ...baseData,
-      hookName: "useCustomHook",
+      hookName: label || "",
       scope: "global",
       hookType: "query",
       inputParams: [],
@@ -84,14 +84,14 @@ export function createGraphNodeData(
   if (type === "hook_ref") {
     return {
       ...baseData,
-      label: "Hook Ref",
+      label: label || "Hook Ref",
     };
   }
 
   if (type === "webPage") {
     return {
       ...baseData,
-      label: parsePageRoute(label || "page-server"),
+      label: label ? parsePageRoute(label) : "",
       sections: [
         {
           id: `sec-${Date.now()}`,

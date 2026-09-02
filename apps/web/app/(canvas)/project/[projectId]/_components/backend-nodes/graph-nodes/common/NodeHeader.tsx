@@ -42,20 +42,43 @@ export const NodeHeader = ({
   onSave,
 }: NodeHeaderProps) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
-  const [isEditing, setIsEditing] = useState(
-    data.label === "" || data.label === "Untitled",
-  );
+  const [isEditing, setIsEditing] = useState(!data.label);
   const [name, setName] = useState(data.label || "");
+  const inputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     setName(data.label || "");
+    if (!data.label) {
+      setIsEditing(true);
+    }
   }, [data.label]);
 
+  React.useEffect(() => {
+    if (isEditing) {
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isEditing]);
+
   const handleSave = () => {
-    let finalLabel = name || "Untitled";
+    const trimmed = name.trim();
+    if (!trimmed) {
+      if (!data.label || data.label.trim() === "") {
+        useBackendCanvasStore.getState().deleteNode(id);
+        return;
+      }
+      setName(data.label);
+      setIsEditing(false);
+      return;
+    }
+    let finalLabel = trimmed;
     if (nodeType === "webPage") {
-      finalLabel = parsePageRoute(finalLabel);
+      finalLabel = parsePageRoute(finalLabel) || finalLabel;
     }
     if (onSave) {
       onSave(finalLabel);
@@ -63,6 +86,15 @@ export const NodeHeader = ({
       updateNode(id, { data: { ...data, label: finalLabel } });
     }
     setName(finalLabel);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    if (!data.label || data.label.trim() === "") {
+      useBackendCanvasStore.getState().deleteNode(id);
+      return;
+    }
+    setName(data.label);
     setIsEditing(false);
   };
 
@@ -94,10 +126,12 @@ export const NodeHeader = ({
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center flex-1 min-w-0">
-          <Icon size={14} className="mr-2 shrink-0" />
+          {Icon ? <Icon size={14} className="mr-2 shrink-0" /> : null}
           {isEditing ? (
             <LocalInput
+              ref={inputRef}
               value={name}
+              placeholder={`Enter ${title ? title.toLowerCase() : "node"} name...`}
               onChange={(e) => {
                 let val = e.target.value;
                 if (nodeType === "webPage") {
@@ -109,8 +143,14 @@ export const NodeHeader = ({
               className="h-6 text-xs px-1 bg-background/50 font-mono"
               autoFocus
               onKeyDown={(e: React.KeyboardEvent) => {
-                if (e.key === "Enter") handleSave();
-                if (e.key === "Escape") setIsEditing(false);
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleSave();
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  handleCancel();
+                }
               }}
               onBlur={handleSave}
             />
