@@ -26,12 +26,16 @@ export const LangGraphStepNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [nameValue, setNameValue] = useState(data.label || DEFAULT_STEP_LABEL);
+  const [isEditingName, setIsEditingName] = useState(!data.label);
+  const [nameValue, setNameValue] = useState(data.label || "");
 
   useEffect(() => {
-    setNameValue(data.label || DEFAULT_STEP_LABEL);
+    setNameValue(data.label || "");
+    if (!data.label) {
+      setIsEditingName(true);
+    }
   }, [data.label]);
 
   const stepType = data.stepType || STEP_TYPE_LLM_CALL;
@@ -71,8 +75,17 @@ export const LangGraphStepNode = ({
   };
 
   const handleNameSave = () => {
+    const trimmed = nameValue.trim();
+    if (!trimmed) {
+      if (!data.label || data.label.trim() === "") {
+        deleteNode(id);
+        return;
+      }
+      setNameValue(data.label);
+      setIsEditingName(false);
+      return;
+    }
     setIsEditingName(false);
-    const trimmed = nameValue.trim() || DEFAULT_STEP_LABEL;
     setNameValue(trimmed);
     if (trimmed !== data.label) {
       updateNode(id, { data: { ...data, label: trimmed } });

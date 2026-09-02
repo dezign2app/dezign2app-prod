@@ -16,12 +16,24 @@ export function useWebPageRename({
 
   const handleRequestRename = (newLabel: string) => {
     const oldLabel = data.label || "";
+    const cleanNew = parsePageRoute(newLabel) || newLabel.trim();
+
+    if (
+      !oldLabel ||
+      oldLabel.trim() === "" ||
+      oldLabel === "page-server" ||
+      oldLabel === "Untitled" ||
+      oldLabel === "Page"
+    ) {
+      updateData({ label: cleanNew });
+      return;
+    }
+
     const cleanOld = parsePageRoute(oldLabel);
-    const cleanNew = parsePageRoute(newLabel);
 
     if (cleanOld === cleanNew) return;
 
-    if (!cleanOld || cleanOld === "Untitled" || cleanOld === "Page") {
+    if (!cleanOld || cleanOld === "page-server" || cleanOld === "Untitled" || cleanOld === "Page") {
       updateData({ label: cleanNew });
       return;
     }

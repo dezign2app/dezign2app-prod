@@ -160,7 +160,7 @@ export function NodePaletteSidebar({
                   variant="outline"
                   size="sm"
                   className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                  onClick={() => handleAddGraphNode("webApp", "Web App")}
+                  onClick={() => handleAddGraphNode("webApp", "")}
                 >
                   <Globe className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   Web App
@@ -169,7 +169,7 @@ export function NodePaletteSidebar({
                   variant="outline"
                   size="sm"
                   className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                  onClick={() => handleAddGraphNode("webPage", "page-server")}
+                  onClick={() => handleAddGraphNode("webPage", "")}
                 >
                   <Globe className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   Web Page
@@ -178,7 +178,7 @@ export function NodePaletteSidebar({
                   variant="outline"
                   size="sm"
                   className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                  onClick={() => handleAddGraphNode("page_ref", "Page Ref")}
+                  onClick={() => handleAddGraphNode("page_ref", "")}
                 >
                   <Compass className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   Page Ref
@@ -187,7 +187,7 @@ export function NodePaletteSidebar({
                   variant="outline"
                   size="sm"
                   className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                  onClick={() => handleAddGraphNode("auth", "Auth Node")}
+                  onClick={() => handleAddGraphNode("auth", "")}
                 >
                   <ShieldCheck className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   Auth Node
@@ -197,7 +197,7 @@ export function NodePaletteSidebar({
                   size="sm"
                   className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                   onClick={() =>
-                    handleAddGraphNode("hook", "useCustomHook")
+                    handleAddGraphNode("hook", "")
                   }
                 >
                   <Anchor className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
@@ -208,7 +208,7 @@ export function NodePaletteSidebar({
                   size="sm"
                   className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                   onClick={() =>
-                    handleAddGraphNode("hook_ref", "Hook Ref")
+                    handleAddGraphNode("hook_ref", "")
                   }
                 >
                   <Anchor className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
@@ -226,7 +226,7 @@ export function NodePaletteSidebar({
                   variant="outline"
                   size="sm"
                   className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                  onClick={() => handleAddGraphNode("service", "Service")}
+                  onClick={() => handleAddGraphNode("service", "")}
                 >
                   <Server className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   Service
@@ -236,7 +236,7 @@ export function NodePaletteSidebar({
                   size="sm"
                   className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                   onClick={() =>
-                    handleAddGraphNode("transformer", "Data Transformer")
+                    handleAddGraphNode("transformer", "")
                   }
                 >
                   <Shuffle className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
@@ -247,7 +247,7 @@ export function NodePaletteSidebar({
                   size="sm"
                   className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                   onClick={() =>
-                    handleAddGraphNode("transformer_ref", "Global Ref")
+                    handleAddGraphNode("transformer_ref", "")
                   }
                 >
                   <Shuffle className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
@@ -263,7 +263,7 @@ export function NodePaletteSidebar({
                 variant="outline"
                 size="sm"
                 className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                onClick={() => handleAddGraphNode("kafka", "Kafka")}
+                onClick={() => handleAddGraphNode("kafka", "")}
               >
                 <Waves className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Kafka
@@ -273,7 +273,7 @@ export function NodePaletteSidebar({
                 size="sm"
                 className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                 onClick={() =>
-                  handleAddGraphNode("redis-streams", "Redis Streams")
+                  handleAddGraphNode("redis-streams", "")
                 }
               >
                 <Waves className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
@@ -288,7 +288,7 @@ export function NodePaletteSidebar({
                 variant="outline"
                 size="sm"
                 className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                onClick={() => handleAddGraphNode("db_ref", "Database")}
+                onClick={() => handleAddGraphNode("db_ref", "")}
               >
                 <Database className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Database
@@ -297,7 +297,7 @@ export function NodePaletteSidebar({
                 variant="outline"
                 size="sm"
                 className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                onClick={() => handleAddGraphNode("redis-cache", "Redis Cache")}
+                onClick={() => handleAddGraphNode("redis-cache", "")}
               >
                 <Database className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Redis Cache
@@ -307,7 +307,7 @@ export function NodePaletteSidebar({
                 size="sm"
                 className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                 onClick={() =>
-                  handleAddGraphNode("storage", "Storage Bucket")
+                  handleAddGraphNode("storage", "")
                 }
               >
                 <HardDrive className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
@@ -318,7 +318,7 @@ export function NodePaletteSidebar({
                 size="sm"
                 className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                 onClick={() =>
-                  handleAddGraphNode("vector_db_ref", "Vector DB")
+                  handleAddGraphNode("vector_db_ref", "")
                 }
               >
                 <Database className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
@@ -333,7 +333,7 @@ export function NodePaletteSidebar({
                 variant="outline"
                 size="sm"
                 className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-                onClick={() => handleAddGraphNode("external", "External API")}
+                onClick={() => handleAddGraphNode("external", "")}
               >
                 <Globe className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 External API
@@ -348,7 +348,7 @@ export function NodePaletteSidebar({
                 size="sm"
                 className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
                 onClick={() =>
-                  handleAddGraphNode("langgraph", "LangGraph Agent")
+                  handleAddGraphNode("langgraph", "")
                 }
               >
                 <Network className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
@@ -395,13 +395,12 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
   const handleAddDatabase = () => {
     const center = getCenterPosition();
     const { x, y } = getOffsetPosition(center.x - 75, center.y - 30, nodes);
-    const dbLabel = getUniqueNodeLabel(nodes, DEFAULT_DATABASE_NODE_LABEL, "database");
     addNode({
       id: crypto.randomUUID(),
       type: "database",
       position: { x, y },
       data: {
-        label: dbLabel,
+        label: "",
         dbEngine: DEFAULT_DATABASE_ENGINE,
         dbType: "relational",
         dbCategory: "sql",
@@ -423,13 +422,12 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
 
     if (!dbId) {
       dbId = crypto.randomUUID();
-      const dbLabel = getUniqueNodeLabel(nodes, DEFAULT_DATABASE_NODE_LABEL, "database");
       addNode({
         id: dbId,
         type: "database",
         position: { x: x - 250, y: y - 100 },
         data: {
-          label: dbLabel,
+          label: "",
           dbEngine: DEFAULT_DATABASE_ENGINE,
           dbType: "relational",
           dbCategory: "sql",
@@ -443,13 +441,12 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
     }
 
     const tableId = crypto.randomUUID();
-    const tableLabel = getUniqueNodeLabel(nodes, "Untitled_Table", "entity");
     addNode({
       id: tableId,
       type: "entity",
       position: { x, y },
       data: {
-        label: tableLabel,
+        label: "",
         columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
         indexes: [],
         databaseId: dbId,
@@ -477,13 +474,12 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
 
     if (!dbId) {
       dbId = crypto.randomUUID();
-      const dbLabel = getUniqueNodeLabel(nodes, DEFAULT_DATABASE_NODE_LABEL, "database");
       addNode({
         id: dbId,
         type: "database",
         position: { x: x - 250, y: y - 100 },
         data: {
-          label: dbLabel,
+          label: "",
           dbEngine: DEFAULT_DATABASE_ENGINE,
           dbType: "relational",
           dbCategory: "sql",
@@ -497,13 +493,12 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
     }
 
     const tableId = crypto.randomUUID();
-    const vectorLabel = getUniqueNodeLabel(nodes, "Vector_Collection", "entity");
     addNode({
       id: tableId,
       type: "entity",
       position: { x, y },
       data: {
-        label: vectorLabel,
+        label: "",
         dbType: "vector",
         columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
         databaseId: dbId,
@@ -528,11 +523,6 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
     const redisInstances = nodes.filter(
       (n) => n.type === "redis_instance" || (n.type === "database" && n.data?.dbEngine === "redis"),
     );
-    const dbLabel = getUniqueNodeLabel(
-      nodes,
-      redisInstances.length > 0 ? `Redis_${redisInstances.length + 1}` : "Primary_Redis_Cache",
-      "redis_instance",
-    );
     const assignedPort = String(6379 + redisInstances.length);
     const connEnv = redisInstances.length === 0 ? "REDIS_URL" : `REDIS_${redisInstances.length + 1}_URL`;
 
@@ -541,7 +531,7 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
       type: "redis_instance",
       position: { x, y },
       data: {
-        label: dbLabel,
+        label: "",
         dbEngine: "redis",
         dbType: "key-value",
         dbCategory: "nosql",
@@ -569,20 +559,12 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
 
     if (!dbId) {
       dbId = crypto.randomUUID();
-      const redisInstances = nodes.filter(
-        (n) => n.type === "redis_instance" || (n.type === "database" && n.data?.dbEngine === "redis"),
-      );
-      const dbLabel = getUniqueNodeLabel(
-        nodes,
-        redisInstances.length > 0 ? `Redis_${redisInstances.length + 1}` : "Redis",
-        "redis_instance",
-      );
       addNode({
         id: dbId,
         type: "redis_instance",
         position: { x: x - 250, y: y - 100 },
         data: {
-          label: dbLabel,
+          label: "",
           dbEngine: "redis",
           dbType: "key-value",
           dbCategory: "nosql",
@@ -597,18 +579,12 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
     }
 
     const schemaId = crypto.randomUUID();
-    const redisSchemas = nodes.filter((n) => n.type === "redis_schema");
-    const redisLabel = getUniqueNodeLabel(
-      nodes,
-      redisSchemas.length > 0 ? `Cache_${redisSchemas.length + 1}` : "Cache",
-      "redis_schema",
-    );
     addNode({
       id: schemaId,
       type: "redis_schema",
       position: { x, y },
       data: {
-        label: redisLabel,
+        label: "",
         dbType: "redis",
         redisDataStructure: "hash",
         keyTemplate: "",

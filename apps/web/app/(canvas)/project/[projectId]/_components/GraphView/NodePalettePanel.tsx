@@ -44,7 +44,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           variant="outline"
           size="sm"
           className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-          onClick={() => onAddNode("webApp", "Web App")}
+          onClick={() => onAddNode("webApp", "")}
         >
           <Globe className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
           Web App
@@ -53,7 +53,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           variant="outline"
           size="sm"
           className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-          onClick={() => onAddNode("webPage", "Web Page")}
+          onClick={() => onAddNode("webPage", "")}
         >
           <Globe className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
           Web Page
@@ -62,7 +62,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           variant="outline"
           size="sm"
           className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-          onClick={() => onAddNode("page_ref", "Page Ref")}
+          onClick={() => onAddNode("page_ref", "")}
         >
           <Compass className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
           Page Ref
@@ -71,7 +71,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           variant="outline"
           size="sm"
           className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-          onClick={() => onAddNode("auth", "Auth Node")}
+          onClick={() => onAddNode("auth", "")}
         >
           <ShieldCheck className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
           Auth Node
@@ -80,7 +80,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           variant="outline"
           size="sm"
           className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-          onClick={() => onAddNode("hook", "useCustomHook")}
+          onClick={() => onAddNode("hook", "")}
         >
           <Anchor className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
           React Hook
@@ -89,7 +89,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           variant="outline"
           size="sm"
           className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-          onClick={() => onAddNode("hook_ref", "Hook Ref")}
+          onClick={() => onAddNode("hook_ref", "")}
         >
           <Anchor className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
           Hook Ref
@@ -106,7 +106,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           variant="outline"
           size="sm"
           className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-          onClick={() => onAddNode("service", "Service")}
+          onClick={() => onAddNode("service", "")}
         >
           <Server className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
           Service
@@ -115,7 +115,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           variant="outline"
           size="sm"
           className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-          onClick={() => onAddNode("transformer", "Data Transformer")}
+          onClick={() => onAddNode("transformer", "")}
         >
           <Shuffle className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
           Transformer
@@ -124,7 +124,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           variant="outline"
           size="sm"
           className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-          onClick={() => onAddNode("transformer_ref", "Global Ref")}
+          onClick={() => onAddNode("transformer_ref", "")}
         >
           <Shuffle className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
           Global Ref
@@ -139,7 +139,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
         variant="outline"
         size="sm"
         className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-        onClick={() => onAddNode("kafka", "Kafka")}
+        onClick={() => onAddNode("kafka", "")}
       >
         <Waves className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
         Kafka
@@ -148,7 +148,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
         variant="outline"
         size="sm"
         className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-        onClick={() => onAddNode("redis-streams", "Redis Streams")}
+        onClick={() => onAddNode("redis-streams", "")}
       >
         <Waves className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
         Redis Streams
@@ -162,7 +162,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
         variant="outline"
         size="sm"
         className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-        onClick={() => onAddNode("db_ref", "Database")}
+        onClick={() => onAddNode("db_ref", "")}
       >
         <Database className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
         Database
@@ -171,7 +171,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
         variant="outline"
         size="sm"
         className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-        onClick={() => onAddNode("redis-cache", "Redis Cache")}
+        onClick={() => onAddNode("redis-cache", "")}
       >
         <Database className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
         Redis Cache
@@ -180,7 +180,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
         variant="outline"
         size="sm"
         className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-        onClick={() => onAddNode("storage", "Storage Bucket")}
+        onClick={() => onAddNode("storage", "")}
       >
         <HardDrive className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
         Storage Bucket
@@ -189,7 +189,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
         variant="outline"
         size="sm"
         className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-        onClick={() => onAddNode("vector_db_ref", "Vector DB")}
+        onClick={() => onAddNode("vector_db_ref", "")}
       >
         <Database className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
         Vector DB
@@ -203,7 +203,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
         variant="outline"
         size="sm"
         className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-        onClick={() => onAddNode("external", "External API")}
+        onClick={() => onAddNode("external", "")}
       >
         <Globe className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
         External API
@@ -217,7 +217,7 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
         variant="outline"
         size="sm"
         className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-        onClick={() => onAddNode("langgraph", "LangGraph Agent")}
+        onClick={() => onAddNode("langgraph", "")}
       >
         <Network className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
         LangGraph Agent

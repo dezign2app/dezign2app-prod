@@ -12,6 +12,7 @@ import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Button } from "@workspace/ui/components/button";
 import { LocalInput } from "../../common";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   STEP_TYPE_LLM_CALL,
   STEP_TYPE_TOOL_NODE,
@@ -35,6 +36,7 @@ interface LangGraphStepHeaderProps {
 }
 
 export const LangGraphStepHeader: React.FC<LangGraphStepHeaderProps> = ({
+  id,
   data,
   stepType,
   isEditingName,
@@ -93,6 +95,7 @@ export const LangGraphStepHeader: React.FC<LangGraphStepHeaderProps> = ({
           >
             <LocalInput
               autoFocus
+              placeholder="Enter step name..."
               className="h-6 text-xs bg-background p-1 font-semibold flex-1 nodrag"
               value={nameValue}
               onChange={(e) => setNameValue(e.target.value)}
@@ -101,7 +104,11 @@ export const LangGraphStepHeader: React.FC<LangGraphStepHeaderProps> = ({
                 e.stopPropagation();
                 if (e.key === "Enter") onSaveName();
                 if (e.key === "Escape") {
-                  setNameValue(data.label || DEFAULT_STEP_LABEL);
+                  if (!data.label || data.label.trim() === "") {
+                    useBackendCanvasStore.getState().deleteNode(id);
+                    return;
+                  }
+                  setNameValue(data.label);
                   setIsEditingName(false);
                 }
               }}
@@ -120,7 +127,7 @@ export const LangGraphStepHeader: React.FC<LangGraphStepHeaderProps> = ({
             }}
             title="Click or double click to rename step"
           >
-            {data.label || DEFAULT_STEP_LABEL}
+            {data.label || "Step"}
           </span>
         )}
       </div>

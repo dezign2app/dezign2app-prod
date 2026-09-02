@@ -27,21 +27,40 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
   const allNodes = useBackendCanvasStore((s) => s.nodes);
 
   const color = data.color || "#ef4444";
-  const label = data.label || "Primary_Redis_Cache";
+  const label = data.label || "";
   const port = String(data.port || "6379");
   const host = data.host || "localhost";
   const [editingName, setEditingName] = useState(label);
-  const [isEditingName, setIsEditingName] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(!data.label);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    setEditingName(data.label || "");
+    if (!data.label) {
+      setIsEditingName(true);
+    }
+  }, [data.label]);
+
+  useEffect(() => {
     if (isEditingName) {
-      setTimeout(() => inputRef.current?.focus(), 10);
+      setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 10);
     }
   }, [isEditingName]);
 
   const saveName = () => {
-    const finalName = editingName.trim() || "Primary_Redis_Cache";
+    const finalName = editingName.trim();
+    if (!finalName) {
+      if (!data.label || data.label.trim() === "") {
+        useBackendCanvasStore.getState().deleteNode(id);
+        return;
+      }
+      setEditingName(data.label);
+      setIsEditingName(false);
+      return;
+    }
     updateNode(id, { data: { ...data, label: finalName } });
     setEditingName(finalName);
     setIsEditingName(false);
@@ -99,12 +118,17 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
               <Input
                 ref={inputRef}
                 value={editingName}
+                placeholder="Enter Redis instance name..."
                 onChange={(e) => setEditingName(e.target.value)}
                 className="h-6 text-xs px-1 font-semibold"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") saveName();
                   if (e.key === "Escape") {
-                    setEditingName(label);
+                    if (!data.label || data.label.trim() === "") {
+                      useBackendCanvasStore.getState().deleteNode(id);
+                      return;
+                    }
+                    setEditingName(data.label);
                     setIsEditingName(false);
                   }
                 }}
@@ -116,7 +140,7 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
                 style={{ color }}
                 onClick={() => setIsEditingName(true)}
               >
-                {label}
+                {label || "Redis Instance"}
               </span>
             )}
           </div>

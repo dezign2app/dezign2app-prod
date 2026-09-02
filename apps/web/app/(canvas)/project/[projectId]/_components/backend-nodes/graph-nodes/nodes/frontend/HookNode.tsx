@@ -18,6 +18,7 @@ export const HookNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
@@ -29,19 +30,45 @@ export const HookNode = ({
     Boolean(selected),
   );
 
-  const [isEditing, setIsEditing] = useState(
-    data.label === "" || data.label === "Untitled",
-  );
-  const [name, setName] = useState(data.label || data.hookName || "useCustomHook");
+  const [isEditing, setIsEditing] = useState(!data.label && !data.hookName);
+  const [name, setName] = useState(data.label || data.hookName || "");
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    setName(data.label || data.hookName || "");
+    if (!data.label && !data.hookName) {
+      setIsEditing(true);
+    }
+  }, [data.label, data.hookName]);
+
+  React.useEffect(() => {
+    if (isEditing) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 10);
+    }
+  }, [isEditing]);
 
   const handleSave = () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      if (!data.label && !data.hookName) {
+        deleteNode(id);
+        return;
+      }
+      setName(data.label || data.hookName || "");
+      setIsEditing(false);
+      return;
+    }
     updateNode(id, {
       data: {
         ...data,
-        label: name || "useCustomHook",
-        hookName: name || "useCustomHook",
+        label: trimmed,
+        hookName: trimmed,
       },
     });
+    setName(trimmed);
     setIsEditing(false);
   };
 
@@ -109,13 +136,26 @@ export const HookNode = ({
 
           {isEditing ? (
             <LocalInput
+              ref={inputRef}
               value={name}
+              placeholder="Enter hook name..."
               onChange={(e) => setName(e.target.value)}
               className="h-5 text-xs font-semibold px-1 py-0 bg-background/80 border-border/80"
               autoFocus
               onKeyDown={(e: React.KeyboardEvent) => {
-                if (e.key === "Enter") handleSave();
-                if (e.key === "Escape") setIsEditing(false);
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleSave();
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  if (!data.label && !data.hookName) {
+                    deleteNode(id);
+                    return;
+                  }
+                  setName(data.label || data.hookName || "");
+                  setIsEditing(false);
+                }
               }}
               onBlur={handleSave}
             />
@@ -126,9 +166,9 @@ export const HookNode = ({
                 e.stopPropagation();
                 setIsEditing(true);
               }}
-              title={data.label || data.hookName || "useCustomHook"}
+              title={data.label || data.hookName || "Hook"}
             >
-              {data.label || data.hookName || "useCustomHook"}
+              {data.label || data.hookName || "Hook"}
             </span>
           )}
         </div>

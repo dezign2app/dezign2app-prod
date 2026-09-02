@@ -304,9 +304,10 @@ export function getEdgeType(
  * - "users/[id]" -> "users/[id]"
  */
 export function parsePageRoute(raw: string): string {
-  if (!raw) return "page-server";
+  if (!raw) return "";
   const trimmed = raw.trim();
-  if (trimmed === "/" || trimmed === "") return "/";
+  if (trimmed === "") return "";
+  if (trimmed === "/") return "/";
 
   // Split into segments in case of nested paths (e.g. "dashboard/user profile")
   const segments = trimmed
