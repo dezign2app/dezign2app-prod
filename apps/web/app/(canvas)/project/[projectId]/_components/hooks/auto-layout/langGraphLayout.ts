@@ -8,7 +8,7 @@ export interface PerformLangGraphLayoutOptions {
   nodes: LayoutNode[];
   edges: LayoutEdge[];
   onNodesChange?: (changes: PositionNodeChange[]) => void;
-  fitView: (options?: { duration?: number; padding?: number }) => void;
+  fitView: (options?: { duration?: number; padding?: number; maxZoom?: number }) => void;
   direction?: string;
 }
 
@@ -142,6 +142,6 @@ export function performLangGraphLayout({
   }
 
   setTimeout(() => {
-    fitView({ duration: 300, padding: 0.2 });
+    fitView({ duration: 300, padding: 0.2, maxZoom: 0.85 });
   }, 50);
 }

@@ -189,9 +189,10 @@ export function GraphView({ projectId }: GraphViewProps) {
   useEffect(() => {
     if (graphNodes.length > 0 && !hasFitted.current) {
       hasFitted.current = true;
-      window.requestAnimationFrame(() => {
-        fitView({ duration: 600, padding: 0.15 });
-      });
+      const timer = setTimeout(() => {
+        fitView({ duration: 500, padding: 0.35, maxZoom: 0.65 });
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [graphNodes.length, fitView]);
 
@@ -326,6 +327,8 @@ export function GraphView({ projectId }: GraphViewProps) {
       <ReactFlow
         nodes={visualGraphNodes}
         edges={graphEdges}
+        fitView
+        fitViewOptions={{ padding: 0.35, maxZoom: 0.65 }}
         elevateEdgesOnSelect={true}
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
@@ -352,7 +355,7 @@ export function GraphView({ projectId }: GraphViewProps) {
         maxZoom={3}
       >
         <Background gap={12} size={1} />
-        <Controls />
+        <Controls fitViewOptions={{ padding: 0.35, maxZoom: 0.65 }} />
         <MiniMap />
         <TopToolbarPanel onLayout={handleLayout} />
       </ReactFlow>

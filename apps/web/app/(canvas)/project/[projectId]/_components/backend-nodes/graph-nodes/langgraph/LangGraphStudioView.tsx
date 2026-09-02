@@ -371,7 +371,7 @@ export function LangGraphStudioView({
               setEdges((eds) => eds.map((e) => ({ ...e, selected: false })));
             }}
             fitView
-            fitViewOptions={{ padding: 0.2 }}
+            fitViewOptions={{ padding: 0.2, maxZoom: 0.85 }}
             defaultEdgeOptions={{
               animated: true,
               style: { stroke: "#a1a1aa", strokeWidth: 2 },

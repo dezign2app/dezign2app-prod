@@ -78,11 +78,12 @@ export function SchemaView({ projectId }: SchemaViewProps) {
   useEffect(() => {
     if (schemaNodes.length > 0 && !hasFitted.current) {
       hasFitted.current = true;
-      window.requestAnimationFrame(() => {
-        fitView({ duration: 600, padding: 0.15 });
-      });
+      const timer = setTimeout(() => {
+        fitView({ duration: 500, padding: 0.35, maxZoom: 0.65 });
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [schemaNodes.length]);
+  }, [schemaNodes.length, fitView]);
 
 
   return (
@@ -90,6 +91,8 @@ export function SchemaView({ projectId }: SchemaViewProps) {
       <ReactFlow
         nodes={schemaNodes}
         edges={schemaEdges}
+        fitView
+        fitViewOptions={{ padding: 0.35, maxZoom: 0.65 }}
         elevateEdgesOnSelect={true}
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
@@ -127,7 +130,7 @@ export function SchemaView({ projectId }: SchemaViewProps) {
         maxZoom={3}
       >
         <Background gap={12} size={1} />
-        <Controls />
+        <Controls fitViewOptions={{ padding: 0.35, maxZoom: 0.65 }} />
         <MiniMap />
       </ReactFlow>
     </div>

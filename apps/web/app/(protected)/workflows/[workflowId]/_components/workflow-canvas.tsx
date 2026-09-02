@@ -84,7 +84,7 @@ export const WorkflowCanvas = () => {
     }
 
     const frame = window.requestAnimationFrame(() => {
-      fitView({ padding: 0.2, duration: 250 });
+      fitView({ padding: 0.2, duration: 250, maxZoom: 0.85 });
     });
 
     return () => window.cancelAnimationFrame(frame);
