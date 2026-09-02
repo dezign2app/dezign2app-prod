@@ -10,9 +10,49 @@ import {
 import { startNextServer } from "./services/nextServer";
 
 let mainWindow: BrowserWindow | null = null;
+let currentServerPort: number = DEFAULT_PORT;
+let currentAppUrl: string = `http://127.0.0.1:${DEFAULT_PORT}`;
 
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
+}
+
+export function getCurrentServerPort(): number {
+  return currentServerPort;
+}
+
+export function getCurrentAppUrl(): string {
+  return currentAppUrl;
+}
+
+/**
+ * Probes ports sequentially starting from startPort to find a responsive Next.js dev server.
+ */
+export async function detectDevServerUrl(
+  startPort: number = DEFAULT_PORT,
+  maxAttempts: number = 20
+): Promise<string | null> {
+  if (process.env.ELECTRON_DEV_URL) {
+    return process.env.ELECTRON_DEV_URL.replace("localhost", "127.0.0.1");
+  }
+
+  for (let port = startPort; port < startPort + maxAttempts; port++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 400);
+      const res = await fetch(`http://127.0.0.1:${port}/robots.txt`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (res.status >= 200 && res.status < 500) {
+        console.log(`[window] Detected active Next.js dev server on port ${port}`);
+        return `http://127.0.0.1:${port}`;
+      }
+    } catch {
+      // Port not active, check next port
+    }
+  }
+  return null;
 }
 
 export async function createMainWindow(): Promise<BrowserWindow> {
@@ -62,7 +102,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
       );
       if (IS_DEV && mainWindow && !mainWindow.isDestroyed()) {
         setTimeout(() => {
-          const devUrl = DEV_SERVER_URL.replace("localhost", "127.0.0.1");
+          const devUrl = currentAppUrl || DEV_SERVER_URL.replace("localhost", "127.0.0.1");
           mainWindow
             ?.loadURL(`${devUrl}/projects`)
             .catch(() => {});
@@ -251,27 +291,110 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     }
   };
 
+  const loadDevServerWithDiscovery = async (
+    maxRetries: number = 30,
+    delayMs: number = 1000
+  ): Promise<void> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+
+      if (attempt > 1) {
+        updateStatus(`Connecting to development server (attempt ${attempt}/${maxRetries})...`);
+      }
+
+      const discoveredUrl = await detectDevServerUrl(DEFAULT_PORT, 20);
+      if (discoveredUrl) {
+        currentAppUrl = discoveredUrl;
+        const portMatch = discoveredUrl.match(/:(\d+)/);
+        if (portMatch?.[1]) currentServerPort = parseInt(portMatch[1], 10);
+
+        try {
+          console.log(`[window] Connecting to dev server at ${discoveredUrl}/projects...`);
+          updateStatus(`Connecting to ${discoveredUrl}...`);
+          await mainWindow.loadURL(`${discoveredUrl}/projects`);
+          return;
+        } catch (err) {
+          console.warn(`[window] Failed loading ${discoveredUrl}/projects:`, err);
+        }
+      }
+
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+
+    // If max retries reached and no dev server found
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.loadURL(
+        `data:text/html;charset=utf-8,${encodeURIComponent(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8" />
+              <title>Dezign2App - Dev Server Not Found</title>
+              <style>
+                * { box-sizing: border-box; }
+                body {
+                  margin: 0;
+                  height: 100vh;
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  justify-content: center;
+                  background-color: #0d1117;
+                  color: #e6edf3;
+                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                  padding: 24px;
+                  text-align: center;
+                }
+                .icon { font-size: 40px; margin-bottom: 16px; }
+                h2 { font-size: 20px; font-weight: 600; margin: 0 0 10px 0; color: #f87171; }
+                p { color: #8b949e; margin: 0 0 24px 0; font-size: 13px; max-width: 480px; line-height: 1.5; }
+              </style>
+            </head>
+            <body>
+              <div class="icon">⚠️</div>
+              <h2>Development Server Not Running</h2>
+              <p>Could not detect Next.js dev server on ports ${DEFAULT_PORT}–${DEFAULT_PORT + 20}. Please ensure <code>pnpm dev</code> or <code>pnpm desktop:dev</code> is running.</p>
+            </body>
+          </html>
+        `)}`
+      );
+    }
+  };
+
   // Launch initial flow
   if (IS_DEV) {
     showSplashScreen("Connecting to development server...");
-    const devUrl = DEV_SERVER_URL.replace("localhost", "127.0.0.1");
-    loadWithRetry(`${devUrl}/projects`, 25, 1200);
+    loadDevServerWithDiscovery(30, 1000);
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     showSplashScreen("Initializing workspace...");
 
-    const targetPort = await getAvailablePort(DEFAULT_PORT);
+    let targetPort = await getAvailablePort(DEFAULT_PORT);
+    let started = false;
 
-    startNextServer(targetPort, updateStatus)
-      .then((port) => {
-        loadWithRetry(`http://127.0.0.1:${port}/projects`, 15, 1000);
-      })
-      .catch((err) => {
-        dialog.showErrorBox(
-          "Dezign2App Startup Error",
-          `Unable to start internal server:\n${err?.message || err}`
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const port = await startNextServer(targetPort, updateStatus);
+        currentServerPort = port;
+        currentAppUrl = `http://127.0.0.1:${port}`;
+        await loadWithRetry(`http://127.0.0.1:${port}/projects`, 20, 1000);
+        started = true;
+        break;
+      } catch (err: any) {
+        console.warn(
+          `[window] Failed to start server on port ${targetPort}:`,
+          err?.message || err
         );
-      });
+        targetPort = await getAvailablePort(targetPort + 1);
+      }
+    }
+
+    if (!started) {
+      dialog.showErrorBox(
+        "Dezign2App Startup Error",
+        "Unable to start internal server after multiple port attempts. Please check available system ports."
+      );
+    }
   }
 
   // Open external links in the system browser, not inside Electron

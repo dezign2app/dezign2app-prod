@@ -16,22 +16,45 @@ export const IS_DEV = !app.isPackaged;
 export const DEFAULT_PORT = 46500;
 
 /**
- * Finds an available open port dynamically (prevents EADDRINUSE).
+ * Checks if a specific port on 127.0.0.1 is available to be bound.
  */
-export function getAvailablePort(preferredPort: number = DEFAULT_PORT): Promise<number> {
+export function isPortFree(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer();
-    server.listen(preferredPort, "127.0.0.1", () => {
+    server.unref();
+    server.once("error", () => {
+      resolve(false);
+    });
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+/**
+ * Finds the next available open port starting from startPort (default: 46500).
+ * Sequentially tests startPort, startPort + 1, startPort + 2, up to maxAttempts.
+ */
+export async function getAvailablePort(
+  startPort: number = DEFAULT_PORT,
+  maxAttempts: number = 100
+): Promise<number> {
+  for (let port = startPort; port < startPort + maxAttempts; port++) {
+    const free = await isPortFree(port);
+    if (free) {
+      console.log(`[constants] Next available port determined: ${port}`);
+      return port;
+    }
+  }
+
+  // Fallback to random OS ephemeral port if entire range is occupied
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.listen(0, "127.0.0.1", () => {
       const { port } = server.address() as net.AddressInfo;
       server.close(() => resolve(port));
-    });
-    server.on("error", () => {
-      // Preferred port busy, ask OS for an available random port
-      const fallbackServer = net.createServer();
-      fallbackServer.listen(0, "127.0.0.1", () => {
-        const { port } = fallbackServer.address() as net.AddressInfo;
-        fallbackServer.close(() => resolve(port));
-      });
     });
   });
 }

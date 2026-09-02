@@ -2,7 +2,7 @@ import { app, shell } from "electron";
 import path from "path";
 import fs from "fs";
 import { PROTOCOL_SCHEME, IS_DEV } from "../constants";
-import { getMainWindow } from "../window";
+import { getMainWindow, getCurrentAppUrl } from "../window";
 
 /**
  * Registers custom protocol client (dezign2app://) for browser OAuth redirect.
@@ -76,11 +76,12 @@ export function handleInitialDeepLink(): void {
  * Opens system browser to initiate OAuth login flow.
  */
 export async function openBrowserLogin(customUrl?: string): Promise<{ success: boolean }> {
+  const activeUrl = getCurrentAppUrl();
   const loginUrl =
     customUrl ||
     (process.env.NEXT_PUBLIC_APP_URL
       ? `${process.env.NEXT_PUBLIC_APP_URL}/sign-in?desktop=true`
-      : "http://localhost:46500/sign-in?desktop=true");
+      : `${activeUrl}/sign-in?desktop=true`);
 
   shell.openExternal(loginUrl);
   return { success: true };
