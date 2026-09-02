@@ -9,7 +9,7 @@ export interface PerformSchemaLayoutOptions {
   nodes: LayoutNode[];
   edges: LayoutEdge[];
   onNodesChange?: (changes: PositionNodeChange[]) => void;
-  fitView: (options?: { duration?: number; padding?: number }) => void;
+  fitView: (options?: { duration?: number; padding?: number; maxZoom?: number }) => void;
   direction?: string;
 }
 
@@ -260,6 +260,6 @@ export function performSchemaLayout({
   }
 
   setTimeout(() => {
-    fitView({ duration: 300, padding: 0.15 });
+    fitView({ duration: 300, padding: 0.2, maxZoom: 0.85 });
   }, 50);
 }

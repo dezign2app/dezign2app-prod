@@ -24,10 +24,32 @@ import { NodeDeletionResizeHandle } from "./NodeDeletionResizeHandle";
 import { NodeDeletionCodePreview } from "./NodeDeletionCodePreview";
 import { computeSubItemDeletion } from "./computeSubItemDeletionDiff";
 
-export function NodeDeletionDialog({
+const EMPTY_ARRAY: any[] = [];
+const EMPTY_ARCHITECTURE_IMPACT = {
+  targetNodes: [],
+  severedConnections: [],
+  cascadeElements: [],
+  brokenReferences: [],
+  totalCanvasImpactCount: 0,
+};
+const EMPTY_DIFF = {
+  deletedNodes: [],
+  deletedFiles: [],
+  modifiedFiles: [],
+  addedFiles: [],
+  totalAffectedCount: 0,
+  filesBefore: [],
+  filesAfter: [],
+};
+const EMPTY_COMPUTATION_RESULT = {
+  architectureImpact: EMPTY_ARCHITECTURE_IMPACT,
+  diff: EMPTY_DIFF,
+};
+
+function NodeDeletionDialogInner({
   open,
   onOpenChange,
-  nodesPendingDeletion = [],
+  nodesPendingDeletion = EMPTY_ARRAY,
   deletionTarget,
   projectId = "",
   projectName = "Blueprint",
@@ -38,26 +60,11 @@ export function NodeDeletionDialog({
   const edges = useBackendCanvasStore((s) => s.edges);
   const deleteNodes = useBackendCanvasStore((s) => s.deleteNodes);
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
-  const testCases = useSimulationStore((s) => s.testCases) || [];
-
-  // Active view tab: defaults to "architecture"
-  const [activeTab, setActiveTab] = useState<"architecture" | "code">("architecture");
-
-  // Code Diff tab states
-  const [filterType, setFilterType] = useState<"all" | "deleted" | "modified">("all");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
-  const [previewVersion, setPreviewVersion] = useState<"before" | "after">("before");
-  const [sidebarWidth, setSidebarWidth] = useState<number>(310);
-  const [isDraggingSidebar, setIsDraggingSidebar] = useState<boolean>(false);
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
-  const [copiedCode, setCopiedCode] = useState<boolean>(false);
-  const [copiedPath, setCopiedPath] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const testCases = useSimulationStore((s) => s.testCases) ?? EMPTY_ARRAY;
 
   const effectiveTarget = useMemo(() => {
     if (deletionTarget) return deletionTarget;
-    if (nodesPendingDeletion.length > 0) {
+    if (nodesPendingDeletion && nodesPendingDeletion.length > 0) {
       return { type: "nodes" as const, nodes: nodesPendingDeletion };
     }
     return null;
@@ -69,25 +76,8 @@ export function NodeDeletionDialog({
 
   // Compute computation result (architecture impact and code diff)
   const computationResult = useMemo(() => {
-    if (!open || !effectiveTarget) {
-      return {
-        architectureImpact: {
-          targetNodes: [],
-          severedConnections: [],
-          cascadeElements: [],
-          brokenReferences: [],
-          totalCanvasImpactCount: 0,
-        },
-        diff: {
-          deletedNodes: [],
-          deletedFiles: [],
-          modifiedFiles: [],
-          addedFiles: [],
-          totalAffectedCount: 0,
-          filesBefore: [],
-          filesAfter: [],
-        },
-      };
+    if (!effectiveTarget) {
+      return EMPTY_COMPUTATION_RESULT;
     }
 
     if (effectiveTarget.type === "nodes") {
@@ -141,9 +131,25 @@ export function NodeDeletionDialog({
       projectName,
       effectiveTarget,
     );
-  }, [open, effectiveTarget, nodes, edges, endpoints, events, testCases, projectName]);
+  }, [effectiveTarget, nodes, edges, endpoints, events, testCases, projectName]);
 
   const { architectureImpact, diff } = computationResult;
+
+  // Active view tab: defaults to "architecture"
+  const [activeTab, setActiveTab] = useState<"architecture" | "code">("architecture");
+
+  // Code Diff tab states
+  const [filterType, setFilterType] = useState<"all" | "deleted" | "modified">("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(
+    () => diff.deletedFiles[0] || diff.modifiedFiles[0] || null,
+  );
+  const [previewVersion, setPreviewVersion] = useState<"before" | "after">("before");
+  const [sidebarWidth, setSidebarWidth] = useState<number>(310);
+  const [isDraggingSidebar, setIsDraggingSidebar] = useState<boolean>(false);
+  const [copiedCode, setCopiedCode] = useState<boolean>(false);
+  const [copiedPath, setCopiedPath] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   const filteredFiles: AffectedItem[] = useMemo(() => {
     const items: AffectedItem[] = [
@@ -166,27 +172,26 @@ export function NodeDeletionDialog({
     return buildAffectedFileTree(filteredFiles);
   }, [filteredFiles]);
 
-  // Reset tab to "architecture" whenever dialog opens
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
+    () => new Set(getAllFolderPaths(fileTree)),
+  );
+
+  // Expand folders on search query change if searching
   useEffect(() => {
-    if (open) {
-      setActiveTab("architecture");
+    if (searchQuery.trim()) {
+      const allPaths = getAllFolderPaths(fileTree);
+      setExpandedFolders(new Set(allPaths));
     }
-  }, [open]);
+  }, [searchQuery, fileTree]);
 
-  // Expand all folders by default when tree changes
+  // Keep selected file in sync if current selected file is no longer available
   useEffect(() => {
-    const allPaths = getAllFolderPaths(fileTree);
-    setExpandedFolders(new Set(allPaths));
-  }, [fileTree]);
-
-  // Automatically select first affected file when dialog opens
-  useEffect(() => {
-    if (open) {
+    if (!selectedFilePath && (diff.deletedFiles.length > 0 || diff.modifiedFiles.length > 0)) {
       const first = diff.deletedFiles[0] || diff.modifiedFiles[0] || null;
       setSelectedFilePath(first);
       setPreviewVersion("before");
     }
-  }, [open, diff.deletedFiles, diff.modifiedFiles]);
+  }, [selectedFilePath, diff.deletedFiles, diff.modifiedFiles]);
 
   const toggleFolder = (path: string) => {
     setExpandedFolders((prev) => {
@@ -404,7 +409,7 @@ export function NodeDeletionDialog({
 
   const targetNodeList = useMemo(() => {
     if (effectiveTarget?.type === "nodes") return effectiveTarget.nodes;
-    return [];
+    return EMPTY_ARRAY;
   }, [effectiveTarget]);
 
   return (
@@ -549,4 +554,11 @@ export function NodeDeletionDialog({
       </AlertDialogContent>
     </AlertDialog>
   );
+}
+
+export function NodeDeletionDialog(props: NodeDeletionDialogProps): React.JSX.Element | null {
+  if (!props.open) {
+    return null;
+  }
+  return <NodeDeletionDialogInner {...props} />;
 }

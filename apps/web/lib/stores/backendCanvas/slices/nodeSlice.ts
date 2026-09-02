@@ -69,13 +69,8 @@ export const createNodeSlice = (
     const persistentChangedNodeIds = new Set(
       nonRemoveChanges
         .filter((c) => {
-          if (
-            c.type === "add" ||
-            c.type === "replace" ||
-            c.type === "dimensions"
-          )
-            return true;
-          if (c.type === "position" && !c.dragging) return true;
+          if (c.type === "add" || c.type === "replace") return true;
+          if (c.type === "position" && !c.dragging && c.position) return true;
           return false;
         })
         .map((c) => c.id),

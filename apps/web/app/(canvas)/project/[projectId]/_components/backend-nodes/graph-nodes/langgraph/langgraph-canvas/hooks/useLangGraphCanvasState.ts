@@ -69,7 +69,7 @@ export function useLangGraphCanvasState({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      triggerFitView({ padding: 0.35, duration: 200 });
+      triggerFitView({ padding: 0.35, duration: 200, maxZoom: 0.85 });
     }, 50);
     return () => clearTimeout(timer);
   }, [triggerFitView]);
