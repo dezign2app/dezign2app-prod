@@ -200,9 +200,30 @@ export const createNodeSlice = (
     const fractionalIndex = generateKeyBetween(lastNodeIndex, null);
     const node = { ...finalNode, fractionalIndex, selected: true };
     const next = [...get().nodes.map((n) => ({ ...n, selected: false })), node];
+
+    let nextEndpoints = get().endpoints;
+    let pendingEndpoints = get().pendingEndpointUpserts;
+    if (node.type === "service") {
+      const existingEndpoints = nextEndpoints.filter((e) => e.nodeId === node.id);
+      if (existingEndpoints.length === 0) {
+        const defaultEp = {
+          id: crypto.randomUUID(),
+          nodeId: node.id,
+          name: "/",
+          type: "GET",
+          summary: "Health check",
+          businessLogic: "Test the health of the server",
+        };
+        nextEndpoints = [...nextEndpoints, defaultEp];
+        pendingEndpoints = [...pendingEndpoints, defaultEp];
+      }
+    }
+
     set({
       nodes: next,
+      endpoints: nextEndpoints,
       pendingNodeUpserts: [...get().pendingNodeUpserts, node],
+      pendingEndpointUpserts: pendingEndpoints,
     });
   },
 
