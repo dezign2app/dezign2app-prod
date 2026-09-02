@@ -418,6 +418,67 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     expect(libIndex?.content).not.toContain("@workspace/db/helpers");
   });
 
+  it("should NOT import or transpile @workspace/db in web apps when no database is configured", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-main",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Landing Page App",
+        appSlug: "web-app",
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-home",
+      type: "webPage",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "/home",
+        appSlug: "web-app",
+        appName: "Landing Page App",
+        routeGroup: "public",
+        accessType: "public",
+      },
+    };
+
+    const edges: BackendEdge[] = [
+      {
+        id: "edge-webapp-page",
+        source: "node-page-home",
+        target: "node-webapp-main",
+        targetHandle: "public-in",
+        type: "connection",
+        fractionalIndex: "a0",
+      },
+    ];
+
+    const result = compileMonorepo([webAppNode, webPageNode], [], [], edges, [], "NoDbMonorepo");
+
+    // 1. Verify NO packages/db files exist
+    const dbFiles = result.files.filter((f) => f.filename.startsWith("packages/db/"));
+    expect(dbFiles).toHaveLength(0);
+
+    // 2. Verify web app package.json does NOT depend on @workspace/db
+    const webPkg = result.files.find((f) => f.filename === "apps/web-app/package.json");
+    expect(webPkg).toBeDefined();
+    const parsedWebPkg = JSON.parse(webPkg!.content);
+    expect(parsedWebPkg.dependencies?.["@workspace/db"]).toBeUndefined();
+
+    // 3. Verify web app next.config.mjs does NOT transpile @workspace/db
+    const nextConfig = result.files.find((f) => f.filename === "apps/web-app/next.config.mjs");
+    expect(nextConfig).toBeDefined();
+    expect(nextConfig?.content).not.toContain('"@workspace/db"');
+
+    // 4. Verify web app .env does NOT contain DATABASE_PATH
+    const webEnv = result.files.find((f) => f.filename === "apps/web-app/.env");
+    expect(webEnv).toBeDefined();
+    expect(webEnv?.content).not.toContain("DATABASE_PATH");
+    expect(webEnv?.content).not.toContain("DATABASE_URL");
+  });
+
   it("should compile packages/db when a standalone SQLite database node is added", () => {
     const dbNode: BackendNode = {
       id: "node-db-primary",

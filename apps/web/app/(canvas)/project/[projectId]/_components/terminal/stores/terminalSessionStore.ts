@@ -65,7 +65,6 @@ interface TerminalStoreState {
   appendLog: (projectId: string, sessionId: string, logChunk: string) => void;
   removeSession: (projectId: string, sessionId: string) => void;
   renameSession: (projectId: string, sessionId: string, newTitle: string) => void;
-  clearSessionLogs: (projectId: string, sessionId: string) => void;
 }
 
 export const useTerminalSessionStore = create<TerminalStoreState>((set, get) => ({
@@ -156,7 +155,6 @@ export const useTerminalSessionStore = create<TerminalStoreState>((set, get) => 
 
             return {
               ...s,
-              logs: [...s.logs, logChunk],
               detectedPorts: mergedPorts,
               status: "running",
             };
@@ -199,20 +197,6 @@ export const useTerminalSessionStore = create<TerminalStoreState>((set, get) => 
           ...state.sessionsByProject,
           [projectId]: current.map((s) =>
             s.id === sessionId ? { ...s, title: newTitle.trim() || s.title } : s,
-          ),
-        },
-      };
-    });
-  },
-
-  clearSessionLogs: (projectId: string, sessionId: string) => {
-    set((state) => {
-      const current = state.sessionsByProject[projectId] || [];
-      return {
-        sessionsByProject: {
-          ...state.sessionsByProject,
-          [projectId]: current.map((s) =>
-            s.id === sessionId ? { ...s, logs: [] } : s,
           ),
         },
       };

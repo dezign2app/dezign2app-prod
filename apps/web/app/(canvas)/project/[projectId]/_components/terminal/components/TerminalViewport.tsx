@@ -19,9 +19,13 @@ import {
   DropdownMenuSeparator,
 } from "@workspace/ui/components/dropdown-menu";
 import { WTermTerminal, WTermTerminalHandle } from "@/components/terminal";
+import { isElectron } from "@/lib/electron";
 import { TerminalSession, TerminalType } from "../types";
+import { getShellPrompt } from "../hooks/useDynamicTerminalSessions";
 
 interface TerminalViewportProps {
+  projectId?: string;
+  outputDir?: string;
   sessions: TerminalSession[];
   activeSessionId: string | null;
   terminalRefs: React.MutableRefObject<Map<string, WTermTerminalHandle | null>>;
@@ -33,6 +37,8 @@ interface TerminalViewportProps {
 }
 
 export function TerminalViewport({
+  projectId,
+  outputDir = "",
   sessions,
   activeSessionId,
   terminalRefs,
@@ -42,6 +48,7 @@ export function TerminalViewport({
   onSelectSession,
   onCloseSession,
 }: TerminalViewportProps) {
+  const inElectron = isElectron();
   const isWin =
     typeof navigator !== "undefined" &&
     (navigator.platform?.includes("Win") ||
@@ -142,7 +149,16 @@ export function TerminalViewport({
                     terminalRefs.current.delete(session.id);
                   }
                 }}
-                logs={session.logs}
+                onReady={() => {
+                  if (!inElectron) {
+                    const handle = terminalRefs.current.get(session.id);
+                    const targetDir = outputDir || `/workspace/${projectId || "blueprint"}`;
+                    const prompt = getShellPrompt(session.shell, targetDir);
+                    handle?.write(
+                      `\x1b[36mBlueprint Monorepo Terminal: ${session.title || "Main Terminal"} [Web Preview]\x1b[0m\r\n\x1b[90mWorkspace: ${targetDir}\x1b[0m\r\n\x1b[90mType commands like "help", "pnpm dev", "pnpm build", "docker compose", "clear".\x1b[0m\r\n\r\n${prompt}`,
+                    );
+                  }
+                }}
                 rawStream={true}
                 interactive={true}
                 autoScroll={false}

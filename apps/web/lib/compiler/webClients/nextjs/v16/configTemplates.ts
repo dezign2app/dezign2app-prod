@@ -3,9 +3,11 @@ import { CompiledFile, NodeDependencyItem } from "@workspace/canvas/types";
 export function generateProjectConfigFiles(
   appSlug: string = "web-app",
   customDependencies?: NodeDependencyItem[],
+  hasDb: boolean = false,
+  dbPackageName: string = "@workspace/db",
 ): CompiledFile[] {
   const dependencies: Record<string, string> = {
-    "@workspace/db": "workspace:*",
+    ...(hasDb ? { [dbPackageName]: "workspace:*" } : {}),
     "@workspace/logger": "workspace:*",
     "@workspace/types": "workspace:*",
     "@workspace/ui": "workspace:*",
@@ -84,15 +86,35 @@ export function generateProjectConfigFiles(
     2,
   );
 
+  const transpilePackages = [
+    "@workspace/ui",
+    "@workspace/logger",
+    ...(hasDb ? [dbPackageName] : []),
+    "@workspace/types",
+  ];
+
+  const serverExternalPackages = [
+    ...(hasDb ? ["better-sqlite3"] : []),
+    "better-auth",
+  ];
+
   const nextConfig = `/** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@workspace/ui", "@workspace/logger", "@workspace/db", "@workspace/types"],
-  serverExternalPackages: ["better-sqlite3", "better-auth"],
+  transpilePackages: ${JSON.stringify(transpilePackages)},
+  serverExternalPackages: ${JSON.stringify(serverExternalPackages)},
 };
 
 export default nextConfig;
 `;
+
+  const envLines: string[] = [];
+  if (hasDb) {
+    envLines.push("DATABASE_PATH=../../packages/db/sqlite.db");
+    envLines.push("DATABASE_URL=../../packages/db/sqlite.db");
+  }
+  envLines.push("NEXT_PUBLIC_LOG_LEVEL=info\n");
+  const envContent = envLines.join("\n");
 
   return [
     {
@@ -103,18 +125,12 @@ export default nextConfig;
     {
       filename: ".env",
       language: "dotenv",
-      content: `DATABASE_PATH=../../packages/db/sqlite.db
-DATABASE_URL=../../packages/db/sqlite.db
-NEXT_PUBLIC_LOG_LEVEL=info
-`,
+      content: envContent,
     },
     {
       filename: ".env.example",
       language: "dotenv",
-      content: `DATABASE_PATH=../../packages/db/sqlite.db
-DATABASE_URL=../../packages/db/sqlite.db
-NEXT_PUBLIC_LOG_LEVEL=info
-`,
+      content: envContent,
     },
     {
       filename: "postcss.config.mjs",
