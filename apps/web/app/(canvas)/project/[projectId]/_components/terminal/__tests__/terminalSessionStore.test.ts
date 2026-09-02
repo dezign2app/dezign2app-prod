@@ -39,13 +39,12 @@ describe("terminalSessionStore", () => {
     expect(updated.getActiveSession(projectId)?.title).toBe("PowerShell 1");
   });
 
-  it("appends logs and detects runtime HTTP ports automatically", () => {
+  it("processes terminal output and detects runtime HTTP ports automatically", () => {
     const store = useTerminalSessionStore.getState();
     const session = {
       id: "term-1",
       title: "Server Terminal",
       type: "shell" as const,
-      logs: [],
       status: "running" as const,
       detectedPorts: [],
       createdAt: Date.now(),
@@ -60,7 +59,6 @@ describe("terminalSessionStore", () => {
 
     const updated = useTerminalSessionStore.getState();
     const active = updated.getActiveSession(projectId);
-    expect(active?.logs).toHaveLength(1);
     expect(active?.detectedPorts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ port: 3000, url: "http://localhost:3000" }),
@@ -75,7 +73,6 @@ describe("terminalSessionStore", () => {
       id: "term-1",
       title: "Terminal 1",
       type: "shell",
-      logs: [],
       status: "running",
       createdAt: Date.now(),
     });
@@ -92,7 +89,6 @@ describe("terminalSessionStore", () => {
       id: "term-1",
       title: "Terminal 1",
       type: "shell",
-      logs: [],
       status: "running",
       createdAt: Date.now(),
     });
@@ -101,7 +97,6 @@ describe("terminalSessionStore", () => {
       id: "term-2",
       title: "Terminal 2",
       type: "powershell",
-      logs: [],
       status: "running",
       createdAt: Date.now(),
     });
@@ -114,22 +109,5 @@ describe("terminalSessionStore", () => {
     const updated = useTerminalSessionStore.getState();
     expect(updated.getSessions(projectId)).toHaveLength(1);
     expect(updated.getActiveSessionId(projectId)).toBe("term-1");
-  });
-
-  it("clears logs for a session", () => {
-    const store = useTerminalSessionStore.getState();
-    store.addSession(projectId, {
-      id: "term-1",
-      title: "Terminal 1",
-      type: "shell",
-      logs: ["log line 1", "log line 2"],
-      status: "running",
-      createdAt: Date.now(),
-    });
-
-    store.clearSessionLogs(projectId, "term-1");
-
-    const updated = useTerminalSessionStore.getState();
-    expect(updated.getActiveSession(projectId)?.logs).toEqual([]);
   });
 });

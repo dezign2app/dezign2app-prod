@@ -369,19 +369,25 @@ export async function getAuthBearerToken(): Promise<string | null> {
 }
 
 /**
- * Ensures workspace DB dependencies are included if entity, database, or db_ref nodes exist
+ * Ensures workspace DB dependencies are included only if entity, database, or db_ref nodes exist
  */
 export function ensureDatabaseDependencies(
   files: CompiledFile[],
   allNodes: BackendNode[] = [],
 ): void {
-  const hasDatabaseNodes = allNodes.some(
-    (n) =>
-      n.type === "entity" ||
-      n.type === "db_ref" ||
-      n.type === "database" ||
-      n.type === "auth",
+  const dbNodes = allNodes.filter(
+    (n) => n.type === "database" && n.data?.dbEngine !== "redis",
   );
+  const entityNodes = allNodes.filter(
+    (n) =>
+      (n.type === "entity" || n.type === "db_ref") &&
+      n.data?.dbType !== "redis",
+  );
+  const authNodes = allNodes.filter((n) => n.type === "auth");
+
+  const hasDatabaseNodes =
+    dbNodes.length > 0 || entityNodes.length > 0 || authNodes.length > 0;
+
   if (hasDatabaseNodes) {
     const pkgFileIdx = files.findIndex((f) => f.filename === "package.json");
     if (pkgFileIdx !== -1) {
@@ -389,10 +395,23 @@ export function ensureDatabaseDependencies(
         const pkgObj = JSON.parse(files[pkgFileIdx]!.content);
         pkgObj.dependencies = pkgObj.dependencies || {};
         pkgObj.devDependencies = pkgObj.devDependencies || {};
-        pkgObj.dependencies["@workspace/db"] = "workspace:*";
+        const isSingleDb = dbNodes.length <= 1;
+        const dbPkgName = isSingleDb
+          ? "@workspace/db"
+          : `@workspace/db-${(dbNodes[0]?.data?.label || "db").toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+        pkgObj.dependencies[dbPkgName] = "workspace:*";
         pkgObj.dependencies["@workspace/types"] = "workspace:*";
-        pkgObj.dependencies["better-sqlite3"] = "^12.0.0";
-        pkgObj.devDependencies["@types/better-sqlite3"] = "^7.6.12";
+
+        const primaryEngine = (
+          dbNodes[0]?.data?.dbEngine ||
+          dbNodes[0]?.data?.provider ||
+          "sqlite"
+        ).toLowerCase();
+
+        if (primaryEngine.includes("sqlite") || dbNodes.length === 0) {
+          pkgObj.dependencies["better-sqlite3"] = "^12.0.0";
+          pkgObj.devDependencies["@types/better-sqlite3"] = "^7.6.12";
+        }
         files[pkgFileIdx]!.content = JSON.stringify(pkgObj, null, 2);
       } catch (err) {
         // preserve

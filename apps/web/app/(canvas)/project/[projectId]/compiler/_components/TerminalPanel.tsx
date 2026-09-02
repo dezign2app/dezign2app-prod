@@ -120,6 +120,7 @@ export function TerminalPanel({
   } = useDynamicTerminalSessions({
     projectId: projectId || "default",
     outputDir,
+    terminalRefs,
   });
 
   // Automatically ensure at least one session exists when projectId is provided
@@ -195,8 +196,11 @@ export function TerminalPanel({
     if (selectedTab === "output") {
       content = outputLogs.join("\n");
     } else if (selectedTab === "terminal") {
-      if (activeSession && activeSession.logs.length > 0) {
-        content = activeSession.logs.map(cleanTerminalText).join("\n");
+      const activeRef = activeSessionId
+        ? terminalRefs.current.get(activeSessionId)
+        : terminalRefs.current.values().next().value;
+      if (activeRef?.getText) {
+        content = activeRef.getText();
       } else if (logs.length > 0) {
         content = logs
           .map((l) => `[${l.timestamp}] [${l.type.toUpperCase()}] ${cleanTerminalText(l.text)}`)
@@ -269,6 +273,7 @@ export function TerminalPanel({
         {selectedTab === "terminal" && (
           <TerminalTab
             projectId={projectId}
+            outputDir={outputDir}
             sessions={sessions}
             activeSessionId={activeSessionId}
             terminalRefs={terminalRefs}

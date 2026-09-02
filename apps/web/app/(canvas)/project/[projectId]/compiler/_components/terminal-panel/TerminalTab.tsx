@@ -7,9 +7,10 @@ import { TerminalSession, TerminalType } from "../../../_components/terminal/typ
 
 interface TerminalTabProps {
   projectId?: string;
+  outputDir?: string;
   sessions: TerminalSession[];
   activeSessionId: string | null;
-  terminalRefs: React.MutableRefObject<Map<string, WTermTerminalHandle | null>>;
+  terminalRefs: React.RefObject<Map<string, WTermTerminalHandle | null>>;
   onTerminalInput: (sessionId: string, data: string) => void;
   onTerminalResize: (sessionId: string, cols: number, rows: number) => void;
   onCreateSession: (type?: TerminalType, shell?: string, title?: string) => void;
@@ -20,6 +21,7 @@ interface TerminalTabProps {
 
 export function TerminalTab({
   projectId,
+  outputDir = "",
   sessions,
   activeSessionId,
   terminalRefs,
@@ -34,6 +36,8 @@ export function TerminalTab({
     <div className="w-full h-full flex flex-col flex-1 min-h-0 relative overflow-hidden bg-[#090d13]">
       {projectId ? (
         <TerminalViewport
+          projectId={projectId}
+          outputDir={outputDir}
           sessions={sessions}
           activeSessionId={activeSessionId}
           terminalRefs={terminalRefs}
@@ -45,6 +49,13 @@ export function TerminalTab({
         />
       ) : (
         <WTermTerminal
+          ref={(el) => {
+            if (el) {
+              terminalRefs.current.set("standalone", el);
+            } else {
+              terminalRefs.current.delete("standalone");
+            }
+          }}
           logs={formattedLogs}
           interactive={true}
           autoScroll={true}

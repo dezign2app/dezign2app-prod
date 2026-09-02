@@ -79,7 +79,33 @@ export function compileNextjsV16WebClient(
   const deduplicatedCustomDeps = allWebCustomDeps.filter(
     (dep, index, self) => index === self.findIndex((d) => d.name === dep.name)
   );
-  files.push(...generateProjectConfigFiles(effectiveAppSlug, deduplicatedCustomDeps));
+
+  const dbNodes = allNodes.filter(
+    (n) => n.type === "database" && n.data?.dbEngine !== "redis",
+  );
+  const entityNodes = allNodes.filter(
+    (n) =>
+      (n.type === "entity" || n.type === "db_ref") &&
+      n.data?.dbType !== "redis",
+  );
+  const authNodes = allNodes.filter((n) => n.type === "auth");
+
+  const hasDb =
+    dbNodes.length > 0 || entityNodes.length > 0 || authNodes.length > 0;
+
+  const isSingleDb = dbNodes.length <= 1;
+  const dbPackageName = isSingleDb
+    ? "@workspace/db"
+    : `@workspace/db-${(dbNodes[0]?.data?.label || "db").toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+
+  files.push(
+    ...generateProjectConfigFiles(
+      effectiveAppSlug,
+      deduplicatedCustomDeps,
+      hasDb,
+      dbPackageName,
+    ),
+  );
 
   // 4. Auth Server, Client SDK, Authorization Helpers & Dependencies (only if authNode connected)
   generateAuthFilesAndDependencies({

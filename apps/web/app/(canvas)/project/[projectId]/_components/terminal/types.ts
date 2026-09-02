@@ -26,7 +26,7 @@ export interface TerminalSession {
   title: string;
   type: TerminalType;
   shell?: string;
-  logs: string[];
+  logs?: string[];
   status: ProcessStatus;
   detectedPorts?: DetectedPort[];
   createdAt: number;

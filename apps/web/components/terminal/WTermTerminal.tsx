@@ -18,6 +18,8 @@ export interface WTermTerminalHandle {
   clear: () => void;
   focus: () => void;
   resize: (cols: number, rows: number) => void;
+  getText?: () => string;
+  getSelection?: () => string;
 }
 
 export interface WTermTerminalProps {
@@ -181,6 +183,27 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
       }
     }, [focus, autoScroll, interactive]);
 
+    const getSelection = useCallback(() => {
+      if (typeof window === "undefined") return "";
+      const sel = window.getSelection()?.toString();
+      return sel ? sel.trim() : "";
+    }, []);
+
+    const getText = useCallback(() => {
+      // 1. If user highlighted text, copy the active selection
+      if (typeof window !== "undefined") {
+        const sel = window.getSelection()?.toString();
+        if (sel && sel.trim().length > 0) {
+          return sel.trim();
+        }
+      }
+      // 2. Otherwise get the currently rendered visible text from the terminal DOM element
+      if (wrapperRef.current) {
+        return (wrapperRef.current.innerText || "").trim();
+      }
+      return "";
+    }, []);
+
     // Expose handle methods to parent components
     useImperativeHandle(
       forwardedRef,
@@ -199,8 +222,10 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
             resize?.(cols, rows);
           } catch (e) {}
         },
+        getText,
+        getSelection,
       }),
-      [write, clearTerminal, focusTerminal, resize, rawStream],
+      [write, clearTerminal, focusTerminal, resize, rawStream, getText, getSelection],
     );
 
     const handleReady = useCallback(() => {

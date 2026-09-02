@@ -334,13 +334,17 @@ export function generateConfigFiles(
   }
 
   const grpcPort = node.data?.grpcPort || "50051";
+  const dbEnvLines: string[] = [];
+  if (hasDb) {
+    dbEnvLines.push("DATABASE_PATH=../../packages/db/sqlite.db");
+    dbEnvLines.push("DATABASE_URL=../../packages/db/sqlite.db");
+  }
+
   const envFile = `PORT=${port}
 GRPC_PORT=${grpcPort}
 NODE_ENV=development
 LOG_LEVEL=info
-DATABASE_PATH=../../packages/db/sqlite.db
-DATABASE_URL=../../packages/db/sqlite.db
-${redisEnvLines.length > 0 ? redisEnvLines.join("\n") + "\n" : ""}${connectedServiceEnvLines.length > 0 ? connectedServiceEnvLines.join("\n") + "\n" : ""}`;
+${dbEnvLines.length > 0 ? dbEnvLines.join("\n") + "\n" : ""}${redisEnvLines.length > 0 ? redisEnvLines.join("\n") + "\n" : ""}${connectedServiceEnvLines.length > 0 ? connectedServiceEnvLines.join("\n") + "\n" : ""}`;
 
 
 

@@ -12,7 +12,7 @@ const activeListeners = new Map<
   { dataCleanup: () => void; exitCleanup: () => void }
 >();
 
-function getShellPrompt(
+export function getShellPrompt(
   shell: string | undefined,
   dir: string = "",
   projectName: string = "blueprint",
@@ -170,14 +170,18 @@ function simulateCommand(rawCmd: string, targetDir: string): string {
   return `\x1b[90mExecuted: ${cmd}\x1b[0m\r\n\x1b[32m✔ Process finished with exit code 0\x1b[0m`;
 }
 
+import { WTermTerminalHandle } from "@/components/terminal";
+
 interface UseDynamicTerminalSessionsProps {
   projectId: string;
   outputDir: string;
+  terminalRefs?: React.RefObject<Map<string, WTermTerminalHandle | null>>;
 }
 
 export function useDynamicTerminalSessions({
   projectId,
   outputDir,
+  terminalRefs,
 }: UseDynamicTerminalSessionsProps) {
   const inElectron = isElectron();
   const store = useTerminalSessionStore();
@@ -209,21 +213,21 @@ export function useDynamicTerminalSessions({
       if (activeListeners.has(sessionId)) return;
 
       const dataCleanup = api.terminal.onData(sessionId, (data: string) => {
+        // Stream directly to the active terminal instance
+        terminalRefs?.current?.get(sessionId)?.write(data);
         store.appendLog(projectId, sessionId, data);
       });
 
       const exitCleanup = api.terminal.onExit(sessionId, (exitCode: number) => {
         store.updateSession(projectId, sessionId, { status: "stopped" });
-        store.appendLog(
-          projectId,
-          sessionId,
+        terminalRefs?.current?.get(sessionId)?.write(
           `\r\n\x1b[33m[Process exited with code ${exitCode}]\x1b[0m\r\n`,
         );
       });
 
       activeListeners.set(sessionId, { dataCleanup, exitCleanup });
     },
-    [inElectron, projectId, store],
+    [inElectron, projectId, store, terminalRefs],
   );
 
   // Re-attach IPC listeners on mount for any existing sessions in Electron (keyed on session IDs only)
@@ -234,6 +238,20 @@ export function useDynamicTerminalSessions({
       attachPtyListeners(s.id);
     });
   }, [inElectron, sessionIdsKey, attachPtyListeners]);
+
+  // Auto-navigate running sessions when output directory changes
+  const prevOutputDirRef = useRef<string>(outputDir);
+  useEffect(() => {
+    if (!inElectron || !outputDir || outputDir === prevOutputDirRef.current) return;
+    prevOutputDirRef.current = outputDir;
+
+    const api = getElectronAPI();
+    sessions.forEach((s) => {
+      if (s.status === "running") {
+        api?.terminal?.write?.(s.id, `cd "${outputDir}"\r`);
+      }
+    });
+  }, [inElectron, outputDir, sessions]);
 
   // Create a new dynamic terminal session of user's choice
   const createTerminal = useCallback(
@@ -290,11 +308,6 @@ export function useDynamicTerminalSessions({
         title: defaultTitle,
         type,
         shell: resolvedShell,
-        logs: !inElectron
-          ? [
-              `\x1b[36mBlueprint Monorepo Terminal: ${defaultTitle} [Web Preview]\x1b[0m\r\n\x1b[90mWorkspace: ${targetDir || `/workspace/${projectId}`}\x1b[0m\r\n\x1b[90mType commands like "help", "pnpm dev", "pnpm build", "docker compose", "clear".\x1b[0m\r\n\r\n${prompt}`,
-            ]
-          : [],
         status: "running",
         detectedPorts: [],
         createdAt: Date.now(),
@@ -319,13 +332,19 @@ export function useDynamicTerminalSessions({
               resolvedShell,
             );
 
+            if (targetDir) {
+              setTimeout(() => {
+                api?.terminal?.write?.(sessionId, `cd "${targetDir}"\r`);
+              }, 100);
+            }
+
             if (options?.initialCommand) {
               setTimeout(() => {
                 api?.terminal?.write?.(
                   sessionId,
                   `${options.initialCommand}\r`,
                 );
-              }, 150);
+              }, 250);
             }
           } catch (err) {
             console.error("Failed to spawn PTY:", err);
@@ -379,6 +398,7 @@ export function useDynamicTerminalSessions({
       }
 
       // Web Mode: Fully Interactive Simulated CLI Engine
+      const termHandle = terminalRefs?.current?.get(sessionId);
       const currentSessions = store.getSessions(projectId);
       const session = currentSessions.find((s) => s.id === sessionId);
       const targetDir = outputDir || `/workspace/${projectId}`;
@@ -402,19 +422,15 @@ export function useDynamicTerminalSessions({
 
           const lowerCmd = cmd.toLowerCase();
           if (lowerCmd === "clear" || lowerCmd === "cls") {
-            store.clearSessionLogs(projectId, sessionId);
-            store.appendLog(projectId, sessionId, prompt);
+            termHandle?.clear();
+            termHandle?.write(prompt);
             return;
           }
 
           const output = simulateCommand(cmd, targetDir);
-          store.appendLog(
-            projectId,
-            sessionId,
-            `\r\n${output}\r\n\r\n${prompt}`,
-          );
+          termHandle?.write(`\r\n${output}\r\n\r\n${prompt}`);
         } else {
-          store.appendLog(projectId, sessionId, `\r\n${prompt}`);
+          termHandle?.write(`\r\n${prompt}`);
         }
         return;
       }
@@ -424,7 +440,7 @@ export function useDynamicTerminalSessions({
         const curr = inputBuffersRef.current.get(sessionId) || "";
         if (curr.length > 0) {
           inputBuffersRef.current.set(sessionId, curr.slice(0, -1));
-          store.appendLog(projectId, sessionId, "\b \b");
+          termHandle?.write("\b \b");
         }
         return;
       }
@@ -432,15 +448,15 @@ export function useDynamicTerminalSessions({
       // 3. Ctrl+C (\x03)
       if (data === "\x03") {
         inputBuffersRef.current.set(sessionId, "");
-        store.appendLog(projectId, sessionId, `^C\r\n${prompt}`);
+        termHandle?.write(`^C\r\n${prompt}`);
         return;
       }
 
       // 4. Ctrl+L (\x0c)
       if (data === "\x0c") {
         inputBuffersRef.current.set(sessionId, "");
-        store.clearSessionLogs(projectId, sessionId);
-        store.appendLog(projectId, sessionId, prompt);
+        termHandle?.clear();
+        termHandle?.write(prompt);
         return;
       }
 
@@ -454,7 +470,7 @@ export function useDynamicTerminalSessions({
           const curr = inputBuffersRef.current.get(sessionId) || "";
           const eraseStr = "\b \b".repeat(curr.length);
           inputBuffersRef.current.set(sessionId, targetCmd);
-          store.appendLog(projectId, sessionId, eraseStr + targetCmd);
+          termHandle?.write(eraseStr + targetCmd);
         }
         return;
       }
@@ -470,7 +486,7 @@ export function useDynamicTerminalSessions({
           const curr = inputBuffersRef.current.get(sessionId) || "";
           const eraseStr = "\b \b".repeat(curr.length);
           inputBuffersRef.current.set(sessionId, targetCmd);
-          store.appendLog(projectId, sessionId, eraseStr + targetCmd);
+          termHandle?.write(eraseStr + targetCmd);
         }
         return;
       }
@@ -478,9 +494,9 @@ export function useDynamicTerminalSessions({
       // 7. Regular printable characters
       const prev = inputBuffersRef.current.get(sessionId) || "";
       inputBuffersRef.current.set(sessionId, prev + data);
-      store.appendLog(projectId, sessionId, data);
+      termHandle?.write(data);
     },
-    [inElectron, outputDir, projectId, store],
+    [inElectron, outputDir, projectId, store, terminalRefs],
   );
 
   // Resize PTY dimensions on window/viewport resize
@@ -499,7 +515,7 @@ export function useDynamicTerminalSessions({
   const clearTerminal = useCallback(
     (sessionId: string) => {
       inputBuffersRef.current.set(sessionId, "");
-      store.clearSessionLogs(projectId, sessionId);
+      const termHandle = terminalRefs?.current?.get(sessionId);
       if (inElectron) {
         const api = getElectronAPI();
         api?.terminal?.write?.(sessionId, "\x0c");
@@ -508,10 +524,11 @@ export function useDynamicTerminalSessions({
         const session = currentSessions.find((s) => s.id === sessionId);
         const targetDir = outputDir || `/workspace/${projectId}`;
         const prompt = getShellPrompt(session?.shell, targetDir);
-        store.appendLog(projectId, sessionId, prompt);
+        termHandle?.clear();
+        termHandle?.write(prompt);
       }
     },
-    [inElectron, outputDir, projectId, store],
+    [inElectron, outputDir, projectId, store, terminalRefs],
   );
 
   // Rename a terminal session

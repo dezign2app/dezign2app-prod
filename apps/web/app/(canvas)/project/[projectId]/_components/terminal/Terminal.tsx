@@ -99,6 +99,7 @@ export function Terminal({
   } = useDynamicTerminalSessions({
     projectId,
     outputDir,
+    terminalRefs,
   });
 
   // 4. Real-time automatic disk synchronization (Electron mode)
@@ -197,8 +198,11 @@ export function Terminal({
     if (selectedTab === "output") {
       content = outputLogs.join("\n");
     } else if (selectedTab === "terminal") {
-      if (activeSession && activeSession.logs.length > 0) {
-        content = activeSession.logs.map(cleanTerminalText).join("\n");
+      const activeRef = activeSessionId
+        ? terminalRefs.current.get(activeSessionId)
+        : terminalRefs.current.values().next().value;
+      if (activeRef?.getText) {
+        content = activeRef.getText();
       }
     } else if (selectedTab === "ports") {
       content = monitoredPorts
@@ -278,6 +282,7 @@ export function Terminal({
                 {selectedTab === "terminal" && (
                   <TerminalTab
                     projectId={projectId}
+                    outputDir={outputDir}
                     sessions={sessions}
                     activeSessionId={activeSessionId}
                     terminalRefs={terminalRefs}
