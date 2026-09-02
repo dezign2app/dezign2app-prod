@@ -7,7 +7,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "generate-icons": "node scripts/generate-icons.js",
-    "dev": "wait-on -i 1000 http://localhost:46500/robots.txt && tsc -p tsconfig.electron.json && electron .",
+    "dev": "tsc -p tsconfig.electron.json && electron .",
     "build:electron": "node scripts/build.js",
     "build:electron:win": "node scripts/build.js --win",
     "build:electron:win:x64": "node scripts/build.js --win --x64",

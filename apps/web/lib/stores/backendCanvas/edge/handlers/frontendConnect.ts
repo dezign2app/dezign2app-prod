@@ -104,7 +104,7 @@ export function handleFrontendConnect({
         source: refNodeId,
         target: pageId,
         sourceHandle: "hook-out",
-        targetHandle: "hooks-in",
+        targetHandle: "page-in",
         type: "connection",
       });
     }
