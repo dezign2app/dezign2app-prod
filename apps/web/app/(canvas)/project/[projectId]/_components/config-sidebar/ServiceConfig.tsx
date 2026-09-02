@@ -165,7 +165,22 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
             <Label className="text-xs">Service Name</Label>
             <Input
               value={data.label || ""}
-              onChange={(e) => updateData({ label: e.target.value })}
+              onChange={(e) => {
+                const val = e.target.value;
+                const trimmed = val.trim();
+                if (trimmed) {
+                  const conflict = allNodes.find(
+                    (n) =>
+                      n.id !== nodeId &&
+                      n.type === "service" &&
+                      (n.data?.label || "").trim().toLowerCase() === trimmed.toLowerCase(),
+                  );
+                  if (conflict) {
+                    toast.error(`Service name "${trimmed}" is already used!`);
+                  }
+                }
+                updateData({ label: val });
+              }}
               placeholder="e.g. OrdersService"
               className="text-xs font-mono"
             />

@@ -13,6 +13,7 @@ import {
   MessagingResourceList,
   useSimulationNodeState,
   getSimulationNodeBorderClass,
+  generateId,
 } from "../../common";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { toast } from "sonner";
@@ -27,6 +28,7 @@ import {
 
 export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const addEndpoint = useBackendCanvasStore((s) => s.addEndpoint);
   const addEvent = useBackendCanvasStore((s) => s.addEvent);
   const updateEvent = useBackendCanvasStore((s) => s.updateEvent);
   const deleteEvent = useBackendCanvasStore((s) => s.deleteEvent);
@@ -37,8 +39,6 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     simulation,
     Boolean(selected),
   );
-
-
 
   const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
   const endpointPubEventIds = new Set(
@@ -54,6 +54,25 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       e.variant === "publish" &&
       !endpointPubEventIds.has(e.id),
   );
+
+  const hasInitializedEndpointsRef = React.useRef(false);
+
+  useEffect(() => {
+    if (hasInitializedEndpointsRef.current) return;
+    hasInitializedEndpointsRef.current = true;
+    const existing = useBackendCanvasStore
+      .getState()
+      .endpoints.filter((e) => e.nodeId === id);
+    if (existing.length === 0) {
+      addEndpoint(id, {
+        id: generateId(),
+        name: "/",
+        type: "GET",
+        summary: "Health check",
+        businessLogic: "Test the health of the server",
+      });
+    }
+  }, [id, addEndpoint]);
 
   const [configOpen, setConfigOpen] = useState(false);
 

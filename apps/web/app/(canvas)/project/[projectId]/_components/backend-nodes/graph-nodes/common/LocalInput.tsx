@@ -2,17 +2,17 @@ import React, { useState } from "react";
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
 
-export const LocalInput = ({
-  value,
-  onChange,
-  ...props
-}: React.ComponentProps<typeof Input>) => {
+export const LocalInput = React.forwardRef<
+  HTMLInputElement,
+  React.ComponentProps<typeof Input>
+>(({ value, onChange, ...props }, ref) => {
   const [localValue, setLocalValue] = useState(value);
   React.useEffect(() => {
     if (value !== localValue) setLocalValue(value);
   }, [value]);
   return (
     <Input
+      ref={ref}
       {...props}
       value={localValue as string | undefined}
       onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -21,14 +21,13 @@ export const LocalInput = ({
       }}
     />
   );
-};
+});
+LocalInput.displayName = "LocalInput";
 
-export const LocalTextarea = ({
-  value,
-  onChange,
-  onKeyDown,
-  ...props
-}: React.ComponentProps<typeof Textarea>) => {
+export const LocalTextarea = React.forwardRef<
+  HTMLTextAreaElement,
+  React.ComponentProps<typeof Textarea>
+>(({ value, onChange, onKeyDown, ...props }, ref) => {
   const [localValue, setLocalValue] = useState(value);
   React.useEffect(() => {
     if (value !== localValue) setLocalValue(value);
@@ -62,6 +61,7 @@ export const LocalTextarea = ({
 
   return (
     <Textarea
+      ref={ref}
       {...props}
       value={localValue as string | undefined}
       onKeyDown={handleKeyDown}
@@ -71,4 +71,6 @@ export const LocalTextarea = ({
       }}
     />
   );
-};
+});
+LocalTextarea.displayName = "LocalTextarea";
+

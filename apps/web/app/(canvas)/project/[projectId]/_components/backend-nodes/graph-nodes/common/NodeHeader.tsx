@@ -17,6 +17,7 @@ import {
 } from "@/types/canvas";
 import { parsePageRoute } from "@workspace/canvas";
 import { LocalInput } from "./LocalInput";
+import { toast } from "sonner";
 
 export interface NodeHeaderProps {
   id: string;
@@ -80,6 +81,31 @@ export const NodeHeader = ({
     if (nodeType === "webPage") {
       finalLabel = parsePageRoute(finalLabel) || finalLabel;
     }
+
+    const allNodes = useBackendCanvasStore.getState().nodes;
+    const isDuplicate = allNodes.some(
+      (n) =>
+        n.id !== id &&
+        (n.type === nodeType || (nodeType === "service" && n.type === "service")) &&
+        (n.data?.label || "").trim().toLowerCase() === finalLabel.toLowerCase(),
+    );
+
+    if (isDuplicate) {
+      const typeLabel = nodeType === "service" ? "Service" : title || "Node";
+      toast.error(`${typeLabel} name "${finalLabel}" is already used!`);
+      if (data.label && data.label.trim()) {
+        setName(data.label);
+        setIsEditing(false);
+      } else {
+        setIsEditing(true);
+        setTimeout(() => {
+          inputRef.current?.focus();
+          inputRef.current?.select();
+        }, 50);
+      }
+      return;
+    }
+
     if (onSave) {
       onSave(finalLabel);
     } else {
