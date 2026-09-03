@@ -174,7 +174,8 @@ export function findEndpointDatabaseRefs(
         (edge.sourceHandle === `endpoint-out-${endpoint.id}` ||
           edge.sourceHandle === `endpoints-out-${endpoint.id}`) &&
         (edge.targetHandle === "database-target" ||
-          edge.targetHandle === "database-source"),
+          edge.targetHandle === "database-source" ||
+          edge.targetHandle?.startsWith("func-")),
     )
     .map((edge) => edge.target);
   const ids = declared.size > 0 ? [...declared] : connected;

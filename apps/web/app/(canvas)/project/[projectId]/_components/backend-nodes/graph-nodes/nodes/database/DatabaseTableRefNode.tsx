@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { Database, Server, Table2, Settings, Trash } from "lucide-react";
+import { Database, Server, Table2, Settings, Trash, Code2 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -17,6 +17,8 @@ import {
   useSimulationNodeState,
   getSimulationNodeBorderClass,
 } from "../../common";
+import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
+import { DbOperationFunction } from "@workspace/canvas/types";
 
 export const DatabaseTableRefNode = ({
   id,
@@ -84,6 +86,11 @@ export const DatabaseTableRefNode = ({
     );
     return directMatches.length > 0 ? directMatches : allEntities;
   }, [allEntities, selectedDatabaseId, edges]);
+
+  const operations: DbOperationFunction[] = useMemo(() => {
+    if (!selectedTable) return [];
+    return getEntityDbOperations(selectedTable, nodes);
+  }, [selectedTable, nodes]);
 
   const engineName =
     selectedDatabase?.data?.dbEngine ||
@@ -244,12 +251,112 @@ export const DatabaseTableRefNode = ({
         </Select>
       </div>
 
-      {/* Target Handle on Left */}
+      {/* Functions / Operations List */}
+      {selectedTable && operations.length > 0 && (
+        <div className="flex flex-col gap-1 pt-1.5 border-t border-border/50">
+          <div className="flex items-center justify-between px-0.5">
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-1">
+              <Code2 size={10} className="text-orange-500" />
+              Operations
+            </span>
+            <span className="text-[8px] font-mono text-muted-foreground/60">
+              {operations.length}
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {operations.map((op) => {
+              const isConnected = edges.some(
+                (e) =>
+                  e.target === id &&
+                  (e.targetHandle === `func-${op.name}` ||
+                    e.targetHandle === `func-${op.id}` ||
+                    (!e.targetHandle && op === operations[0])),
+              );
+
+              const badgeColor =
+                op.kind === "findAll" || op.kind === "findById"
+                  ? "bg-blue-500/15 text-blue-500 border-blue-500/25"
+                  : op.kind === "create"
+                  ? "bg-emerald-500/15 text-emerald-500 border-emerald-500/25"
+                  : op.kind === "update"
+                  ? "bg-amber-500/15 text-amber-500 border-amber-500/25"
+                  : op.kind === "delete"
+                  ? "bg-rose-500/15 text-rose-500 border-rose-500/25"
+                  : "bg-purple-500/15 text-purple-500 border-purple-500/25";
+
+              const badgeLabel =
+                op.kind === "findAll"
+                  ? "ALL"
+                  : op.kind === "findById"
+                  ? "BY ID"
+                  : op.kind === "create"
+                  ? "NEW"
+                  : op.kind === "update"
+                  ? "SET"
+                  : op.kind === "delete"
+                  ? "DEL"
+                  : "FN";
+
+              return (
+                <div
+                  key={op.id || op.name}
+                  className={cn(
+                    "relative flex items-center justify-between gap-1.5 px-2 py-1 rounded-md text-[10px] border transition-colors",
+                    isConnected
+                      ? "bg-orange-500/10 border-orange-500/40 text-foreground font-medium"
+                      : "bg-secondary/30 border-border/40 text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                  )}
+                >
+                  {/* Target Handle for this specific function */}
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={`func-${op.name}`}
+                    className={cn(
+                      "w-2 h-2 -left-1 border border-background transition-all",
+                      isConnected
+                        ? "!bg-orange-500 ring-2 ring-orange-500/30"
+                        : "!bg-muted-foreground/50 hover:!bg-orange-400",
+                    )}
+                    style={{ top: "50%", transform: "translateY(-50%)" }}
+                  />
+                  {op.id && op.id !== op.name && (
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={`func-${op.id}`}
+                      className="opacity-0 pointer-events-none -left-1"
+                      style={{ top: "50%", transform: "translateY(-50%)" }}
+                    />
+                  )}
+
+                  <span className="font-mono truncate" title={op.signature || op.name}>
+                    {op.name}
+                  </span>
+
+                  <span
+                    className={cn(
+                      "text-[8px] font-bold px-1 py-0.2 rounded border uppercase shrink-0 font-mono",
+                      badgeColor,
+                    )}
+                  >
+                    {badgeLabel}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Fallback Target Handle on Left for backward compatibility */}
       <Handle
         type="target"
         position={Position.Left}
         id="database-target"
         className="w-2.5 h-2.5 !bg-orange-500 border-2 border-background"
+        style={{ top: "20px" }}
       />
     </div>
   );
