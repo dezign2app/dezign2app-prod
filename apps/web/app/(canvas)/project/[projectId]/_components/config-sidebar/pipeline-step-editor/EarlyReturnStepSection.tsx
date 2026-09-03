@@ -37,7 +37,15 @@ export const EarlyReturnStepSection = ({
   };
 
   const addBinding = () => {
-    const newArgName = `arg${(step.inputBindings || []).length + 1}`;
+    const existingNames = new Set(
+      (step.inputBindings || []).map((b) => b.argName.trim().toLowerCase()),
+    );
+    const nextUnbound = expectedArgs.find(
+      (a) => !existingNames.has(a.name.trim().toLowerCase()),
+    );
+    const newArgName = nextUnbound
+      ? nextUnbound.name
+      : `arg${(step.inputBindings || []).length + 1}`;
     const newBinding: StepBinding = {
       argName: newArgName,
       source: { kind: "req_body", field: "" },

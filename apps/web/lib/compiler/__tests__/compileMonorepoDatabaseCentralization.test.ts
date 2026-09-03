@@ -508,7 +508,7 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     expect(rootTsconfig?.content).toContain('"path": "packages/db"');
   });
 
-  it("should generate singular/plural compatibility views and correctly resolve created_by FK joins with user", () => {
+  it("should generate singular/plural compatibility views and basic/multi CRUD helpers without auto-generated complex joins", () => {
     const productsEntityNode: BackendNode = {
       id: "node-entity-products",
       type: "entity",
@@ -573,11 +573,16 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     expect(dbConn?.content).toContain('CREATE TABLE IF NOT EXISTS \\"user\\"');
     expect(dbConn?.content).toContain('CREATE VIEW IF NOT EXISTS \\"users\\" AS SELECT * FROM \\"user\\"');
 
-    // 2. Verify packages/db/helpers/products.ts generated the join helper with user
+    // 2. Verify packages/db/helpers/products.ts does NOT generate the complex join helper with user, but contains basic & multi CRUD
     const productsHelper = result.files.find((f) => f.filename === "packages/db/helpers/products.ts");
     expect(productsHelper).toBeDefined();
-    expect(productsHelper?.content).toContain("findProductByIdWithUser");
-    expect(productsHelper?.content).toContain("LEFT JOIN user r ON t.created_by = r.id");
+    expect(productsHelper?.content).not.toContain("findProductByIdWithUser");
+    expect(productsHelper?.content).not.toContain("LEFT JOIN");
+    expect(productsHelper?.content).toContain("findAllProducts");
+    expect(productsHelper?.content).toContain("findProductById");
+    expect(productsHelper?.content).toContain("createProduct");
+    expect(productsHelper?.content).toContain("updateProduct");
+    expect(productsHelper?.content).toContain("deleteProductById");
 
     // 3. Verify lib/auth.ts imports db from @workspace/db/connection
     const authLib = result.files.find((f) => f.filename === "apps/storefront/lib/auth.ts");
