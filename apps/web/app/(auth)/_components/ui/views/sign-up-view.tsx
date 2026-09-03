@@ -67,6 +67,8 @@ export const SignUpView = () => {
     }
   }, [session, router, redirectUrl, ensureUser, isSignedOut]);
 
+  // In desktop app, authentication is strictly handled via external browser auth in SignInView.
+  // Direct in-app signup/login is disabled in desktop.
   if (mounted && inDesktop) {
     return <SignInView />;
   }

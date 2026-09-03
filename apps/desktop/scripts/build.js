@@ -6,6 +6,31 @@ const desktopDir = path.join(__dirname, "..");
 const args = process.argv.slice(2);
 const hostPlatform = process.platform; // 'win32', 'darwin', 'linux'
 
+function loadEnvFile(envPath) {
+  if (!fs.existsSync(envPath)) return;
+  try {
+    const content = fs.readFileSync(envPath, "utf8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIdx = trimmed.indexOf("=");
+      if (eqIdx !== -1) {
+        const key = trimmed.slice(0, eqIdx).trim();
+        let val = trimmed.slice(eqIdx + 1).trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (!process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    }
+  } catch (e) {}
+}
+
+loadEnvFile(path.join(desktopDir, "../web/.env.production"));
+loadEnvFile(path.join(desktopDir, "../web/.env"));
+
 function copyDirPlain(src, dest) {
   if (!fs.existsSync(src)) return;
   fs.mkdirSync(dest, { recursive: true });
@@ -76,14 +101,18 @@ function stageWebResources() {
       path.join(buildWebDir, "apps", "web"),
     ].filter((dir) => fs.existsSync(dir));
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500";
-    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL || "https://neighborly-setter-541.convex.cloud";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL || process.env.CONVEX_URL || "";
+    const desktopAuthUrl = process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL || "";
+    const betterAuthSecret = process.env.BETTER_AUTH_SECRET || "";
 
     const publicSafeEnv = [
-      `NEXT_PUBLIC_CONVEX_URL=${convexUrl}`,
-      `NEXT_PUBLIC_APP_URL=${appUrl}`,
+      convexUrl ? `NEXT_PUBLIC_CONVEX_URL=${convexUrl}` : null,
+      appUrl ? `NEXT_PUBLIC_APP_URL=${appUrl}` : null,
+      desktopAuthUrl ? `NEXT_PUBLIC_DESKTOP_AUTH_URL=${desktopAuthUrl}` : null,
+      betterAuthSecret ? `BETTER_AUTH_SECRET=${betterAuthSecret}` : null,
       "NODE_ENV=production",
-    ].join("\n") + "\n";
+    ].filter(Boolean).join("\n") + "\n";
 
     for (const target of candidateTargets) {
       if (fs.existsSync(nextStaticSrc)) {

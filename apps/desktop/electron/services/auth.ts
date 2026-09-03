@@ -76,7 +76,7 @@ export async function openBrowserLogin(customUrl?: string): Promise<{ success: b
   const authUrl =
     process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    "http://localhost:46500";
+    "";
 
   const loginUrl =
     customUrl ||

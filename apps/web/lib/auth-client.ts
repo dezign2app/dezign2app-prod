@@ -5,7 +5,7 @@ import { organizationClient } from "better-auth/client/plugins";
 const appUrl =
   typeof window !== "undefined"
     ? window.location.origin
-    : process.env.NEXT_PUBLIC_APP_URL || "https://dezign2app.com";
+    : process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BETTER_AUTH_URL;
 
 export const authClient = createAuthClient({
   baseURL: appUrl,
