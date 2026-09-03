@@ -320,6 +320,7 @@ export const webAppDataSchema = baseNodeDataSchema
     appSlug: z.string().optional(),
     framework: z.string().optional(),
     port: z.string().optional(),
+    skipDefaultPages: z.boolean().optional(),
     routes: z.array(webAppRouteSchema).optional(),
     zones: z.array(webAppZoneSchema).optional(),
     authMode: z

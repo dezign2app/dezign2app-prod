@@ -109,6 +109,12 @@ export function useWebPageCodeMismatch({
         ? `app/(${webAppSlug})/page.tsx`
         : `app/(${webAppSlug})/${pageFolderSlug}/page.tsx`,
       isRoot ? `app/page.tsx` : `app/${pageFolderSlug}/page.tsx`,
+      ...(pageFolderSlug === "not-found"
+        ? [
+            `apps/${webAppSlug}/app/not-found.tsx`,
+            `app/not-found.tsx`,
+          ]
+        : []),
     ];
   }, [webAppSlug, pageFolderSlug, isRoot]);
 

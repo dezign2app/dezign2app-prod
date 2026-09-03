@@ -3,7 +3,7 @@ import type {
   BackendNodeData,
   BackendNode,
 } from "@workspace/canvas/types";
-import { parsePageRoute } from "@workspace/canvas";
+import { parsePageRoute, DEFAULT_ZONES } from "@workspace/canvas";
 
 export function createGraphNodeData(
   type: BackendNodeType,
@@ -13,6 +13,32 @@ export function createGraphNodeData(
   const baseData: BackendNodeData = {
     label: label || "",
   };
+
+  if (type === "webApp") {
+    const existingWebApps = existingNodes.filter((n) => n.type === "webApp");
+    const count = existingWebApps.length;
+    const defaultLabel = count === 0 ? "Web App" : `Web App ${count + 1}`;
+    const effectiveLabel = label || defaultLabel;
+    const slug = effectiveLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const existingPorts = new Set(
+      existingNodes
+        .filter((n) => n.type === "webApp")
+        .map((n) => parseInt(String(n.data?.port || "3000"), 10))
+        .filter((p) => !isNaN(p)),
+    );
+    let nextPort = 3000;
+    while (existingPorts.has(nextPort)) {
+      nextPort++;
+    }
+
+    return {
+      ...baseData,
+      label: effectiveLabel,
+      appSlug: slug,
+      port: String(nextPort),
+      zones: DEFAULT_ZONES,
+    };
+  }
 
   if (type === "service") {
     const existingPorts = new Set(

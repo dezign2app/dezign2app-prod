@@ -69,6 +69,7 @@ export interface CanvasWebAppNodeData {
   appSlug?: string;
   framework?: string;
   port?: string | number;
+  skipDefaultPages?: boolean;
   routes?: Array<{
     id: string;
     name: string;
