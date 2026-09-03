@@ -204,15 +204,17 @@ export function useStepRowState({
       ];
     }
 
-    if (step.type === "service_call") {
-      const targetService = allNodes.find((n) => n.id === step.databaseId);
+    if (step.type === "external_call" || step.type === "service_call") {
+      const targetId = step.externalNodeId || step.databaseId;
+      const targetService = allNodes.find((n) => n.id === targetId);
       const allStoreEndpoints = useBackendCanvasStore.getState().endpoints;
       const endpoints: Endpoint[] =
-        allStoreEndpoints.filter((e) => e.nodeId === step.databaseId).length > 0
-          ? allStoreEndpoints.filter((e) => e.nodeId === step.databaseId)
+        allStoreEndpoints.filter((e) => e.nodeId === targetId).length > 0
+          ? allStoreEndpoints.filter((e) => e.nodeId === targetId)
           : targetService?.data?.endpoints || [];
+      const targetEpId = step.externalEndpointId || step.tableNodeId;
       const targetEp = endpoints.find(
-        (ep) => ep.id === step.tableNodeId || ep.name === step.tableNodeId,
+        (ep) => ep.id === targetEpId || ep.name === targetEpId,
       );
       if (targetEp) {
         const args: ExpectedArg[] = [];

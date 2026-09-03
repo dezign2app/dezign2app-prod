@@ -16,7 +16,7 @@ import { generateId, LocalInput, LocalTextarea } from "../backend-nodes/graph-no
 export type ResponseBodyMode = "field_builder" | "raw_json" | "custom_expression";
 
 interface ResponseBodyEditorProps {
-  mode: ResponseBodyMode;
+  mode?: ResponseBodyMode;
   onModeChange: (mode: ResponseBodyMode) => void;
   schema?: Schema;
   onSchemaChange: (schema: Schema) => void;
@@ -35,7 +35,7 @@ interface ResponseBodyEditorProps {
  * - custom_expression: custom variable or JS object expression (e.g. `dbResult`, `createdUser`).
  */
 export const ResponseBodyEditor: React.FC<ResponseBodyEditorProps> = ({
-  mode,
+  mode = "field_builder",
   onModeChange,
   schema,
   onSchemaChange,

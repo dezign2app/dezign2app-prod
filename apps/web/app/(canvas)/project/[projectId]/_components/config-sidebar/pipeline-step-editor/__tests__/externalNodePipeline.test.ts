@@ -89,7 +89,9 @@ describe("External Node Pipeline Integration", () => {
     const stepCallingExternal = {
       id: "step-1",
       name: "createCharge",
-      type: "service_call" as const,
+      type: "external_call" as const,
+      externalNodeId: externalNode.id,
+      externalEndpointId: externalEndpoint.id,
       databaseId: externalNode.id,
       tableNodeId: externalEndpoint.id,
       outputVariable: "chargeResult",
@@ -156,5 +158,81 @@ describe("External Node Pipeline Integration", () => {
         nodeWithBaseUrl,
       ]),
     ).toBe(false);
+  });
+
+  it("validates external_call step in pipeline validation", () => {
+    const validExternalNode: BackendNode = {
+      id: "ext-sendgrid",
+      type: "external",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "SendGrid",
+        baseUrl: "https://api.sendgrid.com/v3",
+      },
+    };
+
+    const validExternalEndpoint: Endpoint = {
+      id: "ep-mail-send",
+      name: "/mail/send",
+      type: "POST",
+      responseBody: {
+        id: "res-mail",
+        rawJson: JSON.stringify({ statusCode: 202 }),
+      },
+    };
+
+    const internalServiceNode: BackendNode = {
+      id: "svc-notifications",
+      type: "service",
+      position: { x: 100, y: 100 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Notifications",
+      },
+    };
+
+    const internalEndpoint: Endpoint = {
+      id: "ep-notify",
+      name: "/notify",
+      type: "POST",
+      pipelineSteps: [
+        {
+          id: "step-ext-call",
+          name: "sendEmail",
+          type: "external_call",
+          externalNodeId: validExternalNode.id,
+          externalEndpointId: validExternalEndpoint.id,
+          databaseId: validExternalNode.id,
+          tableNodeId: validExternalEndpoint.id,
+          outputVariable: "emailResponse",
+        },
+      ],
+    };
+
+    // Valid external_call with configured base URL & output schema -> not unconfigured
+    expect(
+      isEndpointPipelineUnconfigured(
+        internalEndpoint,
+        internalServiceNode.id,
+        [internalServiceNode, validExternalNode],
+        [],
+      ),
+    ).toBe(false);
+
+    // If external node lacks base URL -> pipeline becomes unconfigured (red)
+    const brokenExternalNode: BackendNode = {
+      ...validExternalNode,
+      data: { ...validExternalNode.data, baseUrl: "" },
+    };
+
+    expect(
+      isEndpointPipelineUnconfigured(
+        internalEndpoint,
+        internalServiceNode.id,
+        [internalServiceNode, brokenExternalNode],
+        [],
+      ),
+    ).toBe(true);
   });
 });

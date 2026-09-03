@@ -323,6 +323,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         title="Headers"
         parameters={(() => {
           let h = item.headers || [];
+          if (isExternal) return h;
           const isAuthEnabled = item.requireAuth !== false;
           if (isAuthEnabled) {
             if (!h.some((x) => x.name.toLowerCase() === "authorization")) {
@@ -388,7 +389,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         }
         isExternal={isExternal}
         mode={
-          item.responseMode === "field_builder" ? "field_builder" : "raw_json"
+          item.responseMode === "raw_json" ? "raw_json" : "field_builder"
         }
         onModeChange={(responseMode) =>
           updateEndpoint(item.id, { responseMode })
@@ -411,7 +412,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
             External Service Contract
           </span>
           <span className="text-[11px] leading-relaxed">
-            This endpoint is hosted externally by a third party. Microservices on your canvas can invoke this endpoint using a <strong>Service Call</strong> step, and subsequent pipeline steps will automatically have access to all nested output properties defined in the schema above.
+            This endpoint is hosted externally by a third party. Microservices on your canvas can invoke this endpoint using an <strong>External API Call</strong> step, and subsequent pipeline steps will automatically have access to all nested output properties defined in the schema above.
           </span>
         </div>
       ) : (

@@ -92,6 +92,7 @@ const safeParallelBranchSchema = z.object({
 export const safePipelineStepSchema = z.object({
   id: z.string(),
   name: z.string(),
+  description: z.string().optional(),
   type: pipelineStepTypeEnum,
   enabled: z.boolean().optional(),
   runIf: safeConditionExprSchema.optional(),
@@ -99,6 +100,8 @@ export const safePipelineStepSchema = z.object({
   responseMode: z.string().optional(),
   databaseId: z.string().optional(),
   tableNodeId: z.string().optional(),
+  externalNodeId: z.string().optional(),
+  externalEndpointId: z.string().optional(),
   operationId: z.string().optional(),
   brokerNodeId: z.string().optional(),
   messagingResourceId: z.string().optional(),

@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Endpoint, BackendNode } from "@workspace/canvas/types";
 
 import { Input } from "@workspace/ui/components/input";
+import { Textarea } from "@workspace/ui/components/textarea";
 import { Label } from "@workspace/ui/components/label";
 import {
   Select,
@@ -12,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { ChevronDown, ChevronRight, Plus, Trash, Send } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash, Send, Pencil, Check, X } from "lucide-react";
 import { BindingSourceEditor } from "./BindingSourceEditor";
 import { PipelineStepDraft, StepBinding } from "./types";
 import { getAvailableSources, HTTP_STATUS_OPTIONS } from "./utils";
@@ -33,6 +34,38 @@ export const ReturnResponseStepRow = ({
   onChange,
 }: ReturnResponseStepRowProps) => {
   const [expanded, setExpanded] = useState(true);
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [description, setDescription] = useState(
+    step.name && step.name !== "Return Response" ? step.name : (step.description ?? ""),
+  );
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    setDescription(
+      step.name && step.name !== "Return Response" ? step.name : (step.description ?? ""),
+    );
+  }, [step.name, step.description]);
+
+  useEffect(() => {
+    if (isEditingDescription && textareaRef.current) {
+      textareaRef.current.focus();
+      const len = textareaRef.current.value.length;
+      textareaRef.current.setSelectionRange(len, len);
+    }
+  }, [isEditingDescription]);
+
+  const handleBlur = () => {
+    const currentVal =
+      step.name && step.name !== "Return Response" ? step.name : (step.description ?? "");
+    if (description !== currentVal) {
+      onChange({
+        ...step,
+        name: description,
+        description,
+      });
+    }
+    setIsEditingDescription(false);
+  };
 
   // Available sources (request body, params, query, headers, prior steps)
   const availableSources = useMemo(
@@ -120,26 +153,81 @@ export const ReturnResponseStepRow = ({
     <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/10 shadow-sm transition-all duration-150">
       {/* Header */}
       <div
-        className="flex items-center gap-1.5 px-2.5 py-2 cursor-pointer select-none"
+        className="flex flex-col gap-0.5 px-2.5 py-1.5 cursor-pointer select-none"
         onClick={() => setExpanded((v) => !v)}
       >
-        <span className="text-[11px] text-emerald-400 font-mono w-3.5 shrink-0">
-          ↩
-        </span>
-        <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 text-emerald-400 bg-emerald-500/10 border-emerald-500/25">
-          <Send size={11} />
-          Return Response
-        </span>
-        <span className="text-xs font-medium text-foreground/90 flex-1 truncate">
-          HTTP {statusCode}
-        </span>
-        <span className="text-[10px] font-mono text-emerald-400/60 truncate max-w-[130px]">
-          {previewCode}
-        </span>
-        {expanded ? (
-          <ChevronDown size={12} className="text-muted-foreground/50 shrink-0 ml-1" />
+        {/* Top Line */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[11px] text-emerald-400 font-mono w-3.5 shrink-0">
+            ↩
+          </span>
+          <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 text-emerald-400 bg-emerald-500/10 border-emerald-500/25">
+            <Send size={11} />
+            Return Response
+          </span>
+          <span className="text-xs font-medium text-foreground/90 flex-1 truncate">
+            HTTP {statusCode}
+          </span>
+          <span className="text-[10px] font-mono text-emerald-400/60 truncate max-w-[130px]">
+            {previewCode}
+          </span>
+          {expanded ? (
+            <ChevronDown size={12} className="text-muted-foreground/50 shrink-0 ml-1" />
+          ) : (
+            <ChevronRight size={12} className="text-muted-foreground/50 shrink-0 ml-1" />
+          )}
+        </div>
+
+        {/* Second Line: Description (div/span on blur, Textarea on click) */}
+        {isEditingDescription ? (
+          <div
+            className="flex items-start ml-7 mr-6 -mt-0.5 mb-0.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Textarea
+              ref={textareaRef}
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              onBlur={handleBlur}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleBlur();
+                } else if (e.key === "Escape") {
+                  const currentVal =
+                    step.name && step.name !== "Return Response"
+                      ? step.name
+                      : (step.description ?? "");
+                  setDescription(currentVal);
+                  setIsEditingDescription(false);
+                }
+              }}
+              placeholder="Add response note (e.g. Return Created Product)..."
+              className="w-full bg-background/90 text-[11px] leading-relaxed text-foreground placeholder:text-muted-foreground/35 placeholder:italic px-2 py-1 rounded border border-emerald-500/50 focus:border-emerald-500 focus:outline-none transition-colors resize-none font-sans min-h-[44px]"
+              autoFocus
+            />
+          </div>
         ) : (
-          <ChevronRight size={12} className="text-muted-foreground/50 shrink-0 ml-1" />
+          <div
+            className="flex items-center ml-7 mr-6 -mt-0.5 mb-0.5 cursor-pointer group/desc min-h-[20px]"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsEditingDescription(true);
+            }}
+            title="Click to edit response note"
+          >
+            {description.trim() ? (
+              <span className="text-[11px] font-sans leading-relaxed text-emerald-300/80 group-hover/desc:text-emerald-200 line-clamp-2 transition-colors">
+                {description}
+              </span>
+            ) : (
+              <span className="text-[11px] font-sans italic text-muted-foreground/35 group-hover/desc:text-muted-foreground/60 transition-colors">
+                Add response note...
+              </span>
+            )}
+          </div>
         )}
       </div>
 

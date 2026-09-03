@@ -43,7 +43,7 @@ interface NestedResponseSchemaEditorProps {
   title?: string;
   subtitle?: string;
   isExternal?: boolean;
-  mode: OutputSchemaMode;
+  mode?: OutputSchemaMode;
   onModeChange: (mode: OutputSchemaMode) => void;
   schema?: Schema;
   onSchemaChange: (schema: Schema) => void;
@@ -142,7 +142,7 @@ export const NestedResponseSchemaEditor: React.FC<
   title = "Output / Response Schema",
   subtitle = "External APIs return complex data. Define the output structure so callers can bind to its properties.",
   isExternal = true,
-  mode,
+  mode = "field_builder",
   onModeChange,
   schema,
   onSchemaChange,
@@ -319,20 +319,6 @@ export const NestedResponseSchemaEditor: React.FC<
         <div className="flex items-center gap-0.5 bg-background/80 p-0.5 rounded-lg border border-border shrink-0">
           <button
             type="button"
-            onClick={() => onModeChange("raw_json")}
-            className={cn(
-              "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all",
-              mode === "raw_json"
-                ? "bg-primary text-primary-foreground shadow-sm font-semibold"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
-            )}
-            title="Paste example or arbitrary nested JSON payload"
-          >
-            <Braces size={12} />
-            <span>Example JSON</span>
-          </button>
-          <button
-            type="button"
             onClick={() => onModeChange("field_builder")}
             className={cn(
               "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all",
@@ -344,6 +330,20 @@ export const NestedResponseSchemaEditor: React.FC<
           >
             <ListPlus size={12} />
             <span>Field Builder</span>
+          </button>
+                    <button
+            type="button"
+            onClick={() => onModeChange("raw_json")}
+            className={cn(
+              "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all",
+              mode === "raw_json"
+                ? "bg-primary text-primary-foreground shadow-sm font-semibold"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
+            )}
+            title="Paste example or arbitrary nested JSON payload"
+          >
+            <Braces size={12} />
+            <span>JSON</span>
           </button>
         </div>
       </div>
