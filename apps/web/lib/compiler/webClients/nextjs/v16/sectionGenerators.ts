@@ -21,6 +21,38 @@ export function generateSectionComponent(
     .join("\n");
 
   const hasActions = eventComponents.length > 0;
+  const isNavOnly =
+    hasActions && eventComponents.every((c) => c.eventType === "navigateToPage");
+
+  if (isNavOnly) {
+    return `${isClient ? `"use client";\n\n` : ""}import React from "react";
+${actionImports ? `${actionImports}\n` : ""}export interface ${sectionCompName}Props {
+  onTrigger?: (
+    eventName: string,
+    eventType: string,
+    url: string,
+    method: string,
+    requireAuth?: boolean,
+    customHeaders?: Record<string, string>,
+    queryParams?: Record<string, string>,
+    requestBody?: unknown,
+  ) => void;
+}
+
+export function ${sectionCompName}({ onTrigger }: ${sectionCompName}Props) {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-3">
+${eventComponents
+  .map((c) => `      <${c.componentName} onTrigger={onTrigger} />`)
+  .join("\n")}
+    </div>
+  );
+}
+
+export default ${sectionCompName};
+`;
+  }
+
   const descriptionJsx = section.description
     ? `\n        <CardDescription className="text-xs text-muted-foreground">${section.description}</CardDescription>`
     : "";

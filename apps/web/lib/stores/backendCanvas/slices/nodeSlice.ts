@@ -4,6 +4,7 @@ import {
   DEFAULT_LLM_MODEL,
   DEFAULT_LLM_TEMPERATURE,
   BROKER_RESOURCE_KEYS,
+  DEFAULT_ZONES,
 } from "@workspace/canvas/constants";
 import { getUniqueNodeLabel } from "@workspace/canvas";
 import { applyNodeChanges, NodeChange } from "@xyflow/react";
@@ -196,10 +197,157 @@ export const createNodeSlice = (
         },
       };
     }
+    if (nodeWithoutIndex.type === "webApp") {
+      let nextPort = 3000;
+      if (!nodeWithoutIndex.data?.port) {
+        const existingPorts = new Set(
+          get()
+            .nodes.filter((n) => n.type === "webApp")
+            .map((n) => parseInt(String(n.data?.port || "3000"), 10))
+            .filter((p) => !isNaN(p)),
+        );
+        while (existingPorts.has(nextPort)) {
+          nextPort++;
+        }
+      }
+
+      const existingWebApps = get().nodes.filter((n) => n.type === "webApp");
+      const count = existingWebApps.length;
+      const defaultLabel = count === 0 ? "Web App" : `Web App ${count + 1}`;
+      const effectiveLabel = nodeWithoutIndex.data?.label || defaultLabel;
+      const effectiveSlug =
+        nodeWithoutIndex.data?.appSlug ||
+        effectiveLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+      finalNode = {
+        ...finalNode,
+        data: {
+          zones: DEFAULT_ZONES,
+          ...finalNode.data,
+          label: effectiveLabel,
+          appSlug: effectiveSlug,
+          port: nodeWithoutIndex.data?.port || String(nextPort),
+        },
+      };
+    }
     const lastNodeIndex = getLastIndex(get().nodes);
     const fractionalIndex = generateKeyBetween(lastNodeIndex, null);
-    const node = { ...finalNode, fractionalIndex, selected: true };
-    const next = [...get().nodes.map((n) => ({ ...n, selected: false })), node];
+    const node: BackendNode = { ...finalNode, fractionalIndex, selected: true };
+    let next: BackendNode[] = [
+      ...get().nodes.map((n) => ({ ...n, selected: false })),
+      node,
+    ];
+    let nextPendingNodes: BackendNode[] = [
+      ...get().pendingNodeUpserts,
+      node,
+    ];
+    let nextEdges: BackendEdge[] = get().edges;
+    let nextPendingEdges: BackendEdge[] = get().pendingEdgeUpserts;
+
+    if (node.type === "webApp" && !node.data?.skipDefaultPages) {
+      const baseX = node.position?.x ?? 300;
+      const baseY = node.position?.y ?? 200;
+      const appSlug = node.data?.appSlug || "web-app";
+
+      const rootPageId = crypto.randomUUID();
+      const notFoundPageId = crypto.randomUUID();
+
+      let lastIdx = fractionalIndex;
+      const rootIndex = generateKeyBetween(lastIdx, null);
+      lastIdx = rootIndex;
+      const notFoundIndex = generateKeyBetween(lastIdx, null);
+
+      const rootPageNode: BackendNode = {
+        id: rootPageId,
+        type: "webPage",
+        position: { x: baseX + 400, y: baseY },
+        fractionalIndex: rootIndex,
+        selected: false,
+        data: {
+          label: "/",
+          isRoot: true,
+          appSlug,
+          description: "Default landing page",
+          useZoneDefault: true,
+          sections: [
+            {
+              id: `sec-${Date.now()}-1`,
+              name: "Main Section",
+              renderMode: "server",
+              loadStrategy: "eager",
+              actions: [
+                {
+                  id: `evt-${Date.now()}-1`,
+                  name: "pageLoad",
+                  event: "pageLoad",
+                },
+              ],
+            },
+          ],
+        },
+      };
+
+      const notFoundPageNode: BackendNode = {
+        id: notFoundPageId,
+        type: "webPage",
+        position: { x: baseX + 400, y: baseY + 200 },
+        fractionalIndex: notFoundIndex,
+        selected: false,
+        data: {
+          label: "/not-found",
+          appSlug,
+          description: "Default 404 not found page",
+          useZoneDefault: true,
+          sections: [
+            {
+              id: `sec-${Date.now()}-2`,
+              name: "Navigation",
+              renderMode: "client",
+              loadStrategy: "eager",
+              actions: [
+                {
+                  id: `evt-${Date.now()}-2`,
+                  name: "Back to Home",
+                  event: "navigateToPage",
+                  targetRoute: "/",
+                  targetPageId: rootPageId,
+                },
+              ],
+            },
+          ],
+        },
+      };
+
+      let lastEdgeIdx = getLastIndex(nextEdges);
+      const edge1Idx = generateKeyBetween(lastEdgeIdx, null);
+      lastEdgeIdx = edge1Idx;
+      const edge2Idx = generateKeyBetween(lastEdgeIdx, null);
+
+      const edge1: BackendEdge = {
+        id: `edge-${node.id}-public-in-${rootPageId}-page-in`,
+        source: node.id,
+        sourceHandle: "public-in",
+        target: rootPageId,
+        targetHandle: "page-in",
+        type: "connection",
+        fractionalIndex: edge1Idx,
+      };
+
+      const edge2: BackendEdge = {
+        id: `edge-${node.id}-public-in-${notFoundPageId}-page-in`,
+        source: node.id,
+        sourceHandle: "public-in",
+        target: notFoundPageId,
+        targetHandle: "page-in",
+        type: "connection",
+        fractionalIndex: edge2Idx,
+      };
+
+      next = [...next, rootPageNode, notFoundPageNode];
+      nextPendingNodes = [...nextPendingNodes, rootPageNode, notFoundPageNode];
+      nextEdges = [...nextEdges, edge1, edge2];
+      nextPendingEdges = [...nextPendingEdges, edge1, edge2];
+    }
 
     let nextEndpoints = get().endpoints;
     let pendingEndpoints = get().pendingEndpointUpserts;
@@ -221,8 +369,10 @@ export const createNodeSlice = (
 
     set({
       nodes: next,
+      edges: nextEdges,
       endpoints: nextEndpoints,
-      pendingNodeUpserts: [...get().pendingNodeUpserts, node],
+      pendingNodeUpserts: nextPendingNodes,
+      pendingEdgeUpserts: nextPendingEdges,
       pendingEndpointUpserts: pendingEndpoints,
     });
   },

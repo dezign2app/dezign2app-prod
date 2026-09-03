@@ -340,8 +340,8 @@ export function parsePageRoute(raw: string): string {
 
   if (segments.length === 0) return "/";
 
-  // Return clean relative path without leading/trailing slashes (e.g. "page-client", "dashboard/user-settings")
-  return segments.join("/");
+  const cleanPath = segments.join("/");
+  return trimmed.startsWith("/") ? `/${cleanPath}` : cleanPath;
 }
 
 /**

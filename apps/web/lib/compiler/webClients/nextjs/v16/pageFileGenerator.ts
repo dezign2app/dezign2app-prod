@@ -360,6 +360,20 @@ export function generatePageAndComponentFiles({
       language: "typescript",
       content: finalPageContent,
     });
+
+    if (pageMeta.slug === "not-found") {
+      pageFiles.push({
+        filename: "app/not-found.tsx",
+        language: "typescript",
+        content: `export { default } from "./${groupFolder}/${pageMeta.slug}/page";\n`,
+      });
+
+      pageFiles.push({
+        filename: "app/[...not_found]/page.tsx",
+        language: "typescript",
+        content: `import { notFound } from "next/navigation";\n\nexport default function NotFoundCatchAll() {\n  notFound();\n}\n`,
+      });
+    }
   });
 
   return { pageFiles, hasExplicitRoot };
