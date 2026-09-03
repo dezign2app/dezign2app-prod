@@ -16,28 +16,22 @@ export const createAuth: CreateAuth<GenericDataModel> = (
   ctx: GenericCtx<GenericDataModel>,
 ) => {
   const baseURL =
-    process.env.NEXT_PUBLIC_APP_URL ||
     process.env.BETTER_AUTH_URL ||
-    "http://localhost:46500";
+    process.env.NEXT_PUBLIC_APP_URL;
 
-  const dynamicOrigins = [
+  const trustedOrigins = [
+    baseURL,
     process.env.NEXT_PUBLIC_APP_URL,
     process.env.BETTER_AUTH_URL,
-    "https://dezign2app.com",
-    "https://www.dezign2app.com",
-    "http://localhost:46500",
-    "http://localhost:3000",
-    "http://127.0.0.1:46500",
+    ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",").map((s) => s.trim()) || []),
     "dezign2app://",
   ].filter(Boolean) as string[];
 
   return betterAuth({
     appName: "Dezign2App",
     baseURL,
-    secret:
-      process.env.BETTER_AUTH_SECRET ||
-      "development-secret-key-at-least-32-chars-long-dezign2app-2026",
-    trustedOrigins: Array.from(new Set(dynamicOrigins)),
+    secret: process.env.BETTER_AUTH_SECRET,
+    trustedOrigins: Array.from(new Set(trustedOrigins)),
     database: betterAuthComponentClient.adapter(ctx),
     databaseHooks: {
       user: {

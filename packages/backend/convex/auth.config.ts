@@ -1,7 +1,9 @@
 import { AuthConfig } from "convex/server";
 
 const convexSiteUrl =
-  process.env.CONVEX_SITE_URL || "https://neighborly-setter-541.convex.site";
+  process.env.CONVEX_SITE_URL ||
+  process.env.NEXT_PUBLIC_CONVEX_SITE_URL ||
+  (process.env.CONVEX_URL ? process.env.CONVEX_URL.replace(".convex.cloud", ".convex.site") : "");
 
 export default {
   providers: [

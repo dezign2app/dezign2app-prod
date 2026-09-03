@@ -9,28 +9,24 @@ const resend = process.env.RESEND_API_KEY
   : null;
 
 const appUrl =
-  process.env.NEXT_PUBLIC_APP_URL ||
   process.env.BETTER_AUTH_URL ||
-  "http://localhost:46500";
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : undefined) ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
 
-const dynamicOrigins = [
+const trustedOrigins = [
+  appUrl,
   process.env.NEXT_PUBLIC_APP_URL,
   process.env.BETTER_AUTH_URL,
-  "https://dezign2app.com",
-  "https://www.dezign2app.com",
-  "http://localhost:46500",
-  "http://localhost:3000",
-  "http://127.0.0.1:46500",
+  ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",").map((s) => s.trim()) || []),
   "dezign2app://",
 ].filter(Boolean) as string[];
 
 export const auth = betterAuth({
   appName: "Dezign2App",
   baseURL: appUrl,
-  secret:
-    process.env.BETTER_AUTH_SECRET ||
-    "development-secret-key-at-least-32-chars-long-dezign2app-2026",
-  trustedOrigins: Array.from(new Set(dynamicOrigins)),
+  secret: process.env.BETTER_AUTH_SECRET,
+  trustedOrigins: Array.from(new Set(trustedOrigins)),
   emailAndPassword: {
     enabled: true,
     async sendResetPassword(data, _request) {

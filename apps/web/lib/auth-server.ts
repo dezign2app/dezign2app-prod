@@ -4,11 +4,13 @@ import { api } from "@workspace/backend/_generated/api";
 
 const convexUrl =
   process.env.NEXT_PUBLIC_CONVEX_URL ||
-  "https://neighborly-setter-541.convex.cloud";
+  process.env.CONVEX_URL ||
+  "";
 
 const convexSiteUrl =
   process.env.NEXT_PUBLIC_CONVEX_SITE_URL ||
-  convexUrl.replace(".convex.cloud", ".convex.site");
+  process.env.CONVEX_SITE_URL ||
+  (convexUrl ? convexUrl.replace(".convex.cloud", ".convex.site") : "");
 
 const convexAuthNextJs = convexBetterAuthNextJs({
   convexUrl,
@@ -53,7 +55,7 @@ export async function getServerSession(
           "x-forwarded-host":
             headersList.get("host") ||
             headersList.get("x-forwarded-host") ||
-            "dezign2app.com",
+            (process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).host : ""),
         },
         cache: "no-store",
       });
