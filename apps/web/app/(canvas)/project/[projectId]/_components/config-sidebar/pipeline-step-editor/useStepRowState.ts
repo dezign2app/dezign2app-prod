@@ -7,6 +7,7 @@ import {
   StepBinding,
   ExpectedArg,
 } from "./types";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   STEP_TYPE_META,
   getAvailableSources,
@@ -205,7 +206,11 @@ export function useStepRowState({
 
     if (step.type === "service_call") {
       const targetService = allNodes.find((n) => n.id === step.databaseId);
-      const endpoints: Endpoint[] = targetService?.data?.endpoints || [];
+      const allStoreEndpoints = useBackendCanvasStore.getState().endpoints;
+      const endpoints: Endpoint[] =
+        allStoreEndpoints.filter((e) => e.nodeId === step.databaseId).length > 0
+          ? allStoreEndpoints.filter((e) => e.nodeId === step.databaseId)
+          : targetService?.data?.endpoints || [];
       const targetEp = endpoints.find(
         (ep) => ep.id === step.tableNodeId || ep.name === step.tableNodeId,
       );
@@ -233,6 +238,27 @@ export function useStepRowState({
               required: f.required !== false,
             });
           });
+        } else if (targetEp.requestBody?.rawJson) {
+          try {
+            const parsed = JSON.parse(targetEp.requestBody.rawJson);
+            if (
+              typeof parsed === "object" &&
+              parsed !== null &&
+              !Array.isArray(parsed)
+            ) {
+              Object.entries(parsed).forEach(([key, val]) => {
+                args.push({
+                  name: key,
+                  type: Array.isArray(val) ? "array" : typeof val,
+                  required: true,
+                });
+              });
+            } else {
+              args.push({ name: "body", type: "object", required: true });
+            }
+          } catch {
+            args.push({ name: "body", type: "object", required: true });
+          }
         } else if (
           targetEp.type === "POST" ||
           targetEp.type === "PUT" ||

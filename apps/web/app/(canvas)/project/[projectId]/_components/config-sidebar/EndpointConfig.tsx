@@ -17,13 +17,16 @@ import { useParams } from "next/navigation";
 import { useCallerWebPageZone } from "./hooks/useCallerWebPageZone";
 import { AuthAwarenessBanner } from "./AuthAwarenessBanner";
 import { RequestBodyEditor } from "./RequestBodyEditor";
+import { NestedResponseSchemaEditor } from "./NestedResponseSchemaEditor";
+import { ExternalAuthSection } from "./ExternalAuthSection";
 import { EndpointTestCasesSection } from "./endpoint-testing/EndpointTestCasesSection";
 import {
   PipelineStepEditor,
   type PipelineStepDraft,
 } from "./PipelineStepEditor";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Globe, AlertCircle } from "lucide-react";
 import { isEndpointPipelineUnconfigured } from "@/lib/utils/pipelineValidation";
+import { useBufferedInput } from "@/lib/hooks/useBufferedInput";
 
 interface EndpointConfigProps {
   id: string;
@@ -40,6 +43,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
   const node = useBackendCanvasStore((s) =>
     s.nodes.find((n) => n.id === nodeId),
   );
+  const isExternal = node?.type === "external";
   const authRules = node?.data.authRules || [];
 
   const allNodes = useBackendCanvasStore((s) => s.nodes);
@@ -49,55 +53,178 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
   const { isProtected, zoneName } = useCallerWebPageZone(nodeId, id);
 
   const item = endpoints.find((e) => e.id === id);
+
+  const nameBuffer = useBufferedInput(
+    item?.name || "",
+    React.useCallback(
+      (name: string) => updateEndpoint(id, { name }),
+      [id, updateEndpoint],
+    ),
+    200,
+  );
+
+  const summaryBuffer = useBufferedInput(
+    item?.summary || "",
+    React.useCallback(
+      (summary: string) => updateEndpoint(id, { summary }),
+      [id, updateEndpoint],
+    ),
+    200,
+  );
+
+  const rolesBuffer = useBufferedInput(
+    item?.requiredRoles?.join(", ") || "",
+    React.useCallback(
+      (val: string) =>
+        updateEndpoint(id, {
+          requiredRoles: val
+            .split(",")
+            .map((r) => r.trim())
+            .filter(Boolean),
+        }),
+      [id, updateEndpoint],
+    ),
+    200,
+  );
+
+  const scopesBuffer = useBufferedInput(
+    item?.requiredScopes?.join(", ") || "",
+    React.useCallback(
+      (val: string) =>
+        updateEndpoint(id, {
+          requiredScopes: val
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        }),
+      [id, updateEndpoint],
+    ),
+    200,
+  );
+
+  const audienceBuffer = useBufferedInput(
+    item?.audience || "",
+    React.useCallback(
+      (audience: string) => updateEndpoint(id, { audience }),
+      [id, updateEndpoint],
+    ),
+    200,
+  );
+
   if (!item) return null;
 
   return (
     <div className="flex flex-col gap-6 mt-6 pb-12">
-      <div className="flex flex-col gap-2 border-b border-border/50 pb-6">
-        <div className="flex items-center gap-2.5">
-          <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-primary/15 text-primary rounded border border-primary/20 shadow-sm">
-            {item.type}
-          </span>
-          <span className="text-lg font-semibold tracking-tight text-foreground">
-            {item.name}
-          </span>
+      {/* Endpoint Header - Method and Path are editable */}
+      <div className="flex flex-col gap-2.5 border-b border-border/50 pb-6">
+        {isExternal && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+              External API Endpoint
+            </span>
+            {node?.data?.baseUrl?.trim() ? (
+              <span className="text-[11px] font-mono text-muted-foreground truncate">
+                Base: {node.data.baseUrl}
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold text-destructive bg-destructive/15 px-2 py-0.5 rounded border border-destructive/30 flex items-center gap-1">
+                <AlertCircle size={11} /> Base URL not configured
+              </span>
+            )}
+          </div>
+        )}
+
+        {isExternal && !node?.data?.baseUrl?.trim() && (
+          <div className="flex items-start gap-2.5 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-xs leading-relaxed">
+            <AlertCircle size={15} className="mt-0.5 shrink-0" />
+            <div className="flex flex-col gap-1">
+              <span className="font-semibold text-[11px]">
+                Base URL Not Configured
+              </span>
+              <span className="text-[10px] opacity-90">
+                The parent external service does not have a Base URL configured. Calling this endpoint from pipelines or code will fail without a target host URL.
+              </span>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <Select
+            value={item.type || (isExternal ? "POST" : "GET")}
+            onValueChange={(type) => updateEndpoint(item.id, { type })}
+          >
+            <SelectTrigger className="h-8 w-[95px] text-xs font-mono font-bold bg-primary/15 text-primary border-primary/30 shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].map((m) => (
+                <SelectItem key={m} value={m} className="text-xs font-mono">
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Input
+            className="h-8 text-sm font-semibold tracking-tight text-foreground bg-background font-mono flex-1"
+            placeholder="/v1/resource"
+            value={nameBuffer.value}
+            onChange={(e) => nameBuffer.onChange(e.target.value)}
+            onBlur={nameBuffer.flush}
+          />
         </div>
-        <span className="text-sm text-muted-foreground">
-          Configure endpoint details and behavior.
+
+        <span className="text-xs text-muted-foreground">
+          {isExternal
+            ? "Configure request parameters and declare the output structure callers bind to."
+            : "Configure endpoint details and behavior."}
         </span>
       </div>
 
-      {/* Auth awareness banner & Bearer token switch */}
-      <AuthAwarenessBanner
-        zoneName={zoneName}
-        isProtected={isProtected}
-        requireAuth={item.requireAuth !== undefined ? item.requireAuth : isProtected}
-        onRequireAuthChange={(requireAuth) => {
-          let updatedHeaders = [...(item.headers || [])];
-          if (requireAuth) {
-            if (!updatedHeaders.some((h) => h.name.toLowerCase() === "authorization")) {
-              updatedHeaders = [
-                {
-                  id: "auth-bearer-header",
-                  name: "Authorization",
-                  type: "string",
-                  required: true,
-                  description: "Bearer <token>",
-                  defaultValue: "Bearer <token>",
-                  key: "Authorization",
-                  value: "Bearer <token>",
-                },
-                ...updatedHeaders,
-              ];
+      {/* Authentication */}
+      {isExternal ? (
+        <ExternalAuthSection
+          endpoint={item}
+          projectId={projectId}
+          serviceNodeId={node?.id}
+          nodeEnvVars={node?.data?.envVars}
+          defaultAuthType={node?.data?.authType}
+          defaultAuthHeader={node?.data?.authHeader}
+          defaultApiKey={node?.data?.apiKey}
+          onUpdateEndpoint={(changes) => updateEndpoint(item.id, changes)}
+        />
+      ) : (
+        <AuthAwarenessBanner
+          zoneName={zoneName}
+          isProtected={isProtected}
+          requireAuth={item.requireAuth !== undefined ? item.requireAuth : isProtected}
+          onRequireAuthChange={(requireAuth) => {
+            let updatedHeaders = [...(item.headers || [])];
+            if (requireAuth) {
+              if (!updatedHeaders.some((h) => h.name.toLowerCase() === "authorization")) {
+                updatedHeaders = [
+                  {
+                    id: "auth-bearer-header",
+                    name: "Authorization",
+                    type: "string",
+                    required: true,
+                    description: "Bearer <token>",
+                    defaultValue: "Bearer <token>",
+                    key: "Authorization",
+                    value: "Bearer <token>",
+                  },
+                  ...updatedHeaders,
+                ];
+              }
+            } else {
+              updatedHeaders = updatedHeaders.filter(
+                (h) => h.name.toLowerCase() !== "authorization",
+              );
             }
-          } else {
-            updatedHeaders = updatedHeaders.filter(
-              (h) => h.name.toLowerCase() !== "authorization",
-            );
-          }
-          updateEndpoint(item.id, { requireAuth, headers: updatedHeaders });
-        }}
-      />
+            updateEndpoint(item.id, { requireAuth, headers: updatedHeaders });
+          }}
+        />
+      )}
 
       {node?.type === "api_gateway" && (
         <div className="flex flex-col gap-4 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
@@ -145,15 +272,9 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
                 <Input
                   className="h-7 text-xs bg-background"
                   placeholder="e.g. admin, user"
-                  value={item.requiredRoles?.join(", ") || ""}
-                  onChange={(e) =>
-                    updateEndpoint(item.id, {
-                      requiredRoles: e.target.value
-                        .split(",")
-                        .map((r) => r.trim())
-                        .filter(Boolean),
-                    })
-                  }
+                  value={rolesBuffer.value}
+                  onChange={(e) => rolesBuffer.onChange(e.target.value)}
+                  onBlur={rolesBuffer.flush}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -163,15 +284,9 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
                 <Input
                   className="h-7 text-xs bg-background"
                   placeholder="e.g. read:users, write:users"
-                  value={item.requiredScopes?.join(", ") || ""}
-                  onChange={(e) =>
-                    updateEndpoint(item.id, {
-                      requiredScopes: e.target.value
-                        .split(",")
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    })
-                  }
+                  value={scopesBuffer.value}
+                  onChange={(e) => scopesBuffer.onChange(e.target.value)}
+                  onBlur={scopesBuffer.flush}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -179,10 +294,9 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
                 <Input
                   className="h-7 text-xs bg-background"
                   placeholder="e.g. my-api"
-                  value={item.audience || ""}
-                  onChange={(e) =>
-                    updateEndpoint(item.id, { audience: e.target.value })
-                  }
+                  value={audienceBuffer.value}
+                  onChange={(e) => audienceBuffer.onChange(e.target.value)}
+                  onBlur={audienceBuffer.flush}
                 />
               </div>
             </div>
@@ -197,8 +311,9 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         <Input
           className="bg-background/50"
           placeholder="e.g. Returns all users."
-          value={item.summary || ""}
-          onChange={(e) => updateEndpoint(item.id, { summary: e.target.value })}
+          value={summaryBuffer.value}
+          onChange={(e) => summaryBuffer.onChange(e.target.value)}
+          onBlur={summaryBuffer.flush}
         />
       </div>
 
@@ -262,67 +377,102 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
           updateEndpoint(item.id, { requestBody })
         }
       />
-      {/* ---------------------------------------------------------------- */}
-      {/* PIPELINE STEPS SECTION                                            */}
-      {/* ---------------------------------------------------------------- */}
-      {(() => {
-        const isPipelineRed = isEndpointPipelineUnconfigured(
-          item,
-          nodeId,
-          allNodes,
-          allEdges,
-        );
 
-        return (
-          <div className="flex flex-col gap-2 border border-border/40 rounded-xl overflow-hidden transition-colors">
-            {/* Collapsible header */}
-            <button
-              className="flex items-center justify-between px-3 py-2.5 hover:bg-muted/20 transition-colors text-left"
-              onClick={() => setPipelineExpanded((v) => !v)}
-            >
-              <div>
-                <p className="text-[11px] font-semibold text-foreground/90 flex items-center gap-1.5 flex-wrap">
-                  <span>Pipeline Steps</span>
-                  {item.pipelineSteps && item.pipelineSteps.length > 0 && (
-                    <span className="text-[9px] text-primary/70 font-mono bg-primary/10 px-1.5 py-0.5 rounded-full">
-                      {item.pipelineSteps.length} step{item.pipelineSteps.length !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                  {isPipelineRed && (
-                    <span className="text-[9px] font-bold text-destructive font-mono bg-destructive/15 border border-destructive/30 px-1.5 py-0.5 rounded-full flex items-center gap-1">
-                      ⚠️ Unconfigured Inputs
-                    </span>
-                  )}
-                </p>
-                <p className="text-[9px] text-muted-foreground/60 mt-0.5">
-                  Explicit field-level bindings per step — compiler generates exactly what you configure.
-                </p>
-              </div>
-              {pipelineExpanded ? (
-                <ChevronDown size={13} className="text-muted-foreground/50 shrink-0" />
-              ) : (
-                <ChevronRight size={13} className="text-muted-foreground/50 shrink-0" />
+      {/* Output / Response Body Schema (Enforced for External APIs) */}
+      <NestedResponseSchemaEditor
+        title={isExternal ? "Output / Response Schema (Required)" : "Response Body Schema"}
+        subtitle={
+          isExternal
+            ? "External API return contract. Declare the nested JSON structure returned by this endpoint so callers can bind to its fields."
+            : "Expected response body payload returned by this endpoint."
+        }
+        isExternal={isExternal}
+        mode={
+          item.responseMode === "field_builder" ? "field_builder" : "raw_json"
+        }
+        onModeChange={(responseMode) =>
+          updateEndpoint(item.id, { responseMode })
+        }
+        schema={
+          item.responseBody || { id: `res_${item.id}`, fields: [] }
+        }
+        onSchemaChange={(responseBody) =>
+          updateEndpoint(item.id, { responseBody })
+        }
+      />
+
+      {/* ---------------------------------------------------------------- */}
+      {/* PIPELINE STEPS SECTION (Internal Microservices only)              */}
+      {/* ---------------------------------------------------------------- */}
+      {isExternal ? (
+        <div className="p-4 rounded-xl border border-dashed border-border/80 bg-muted/20 text-xs text-muted-foreground flex flex-col gap-1.5">
+          <span className="font-semibold text-foreground text-xs flex items-center gap-1.5">
+            <Globe size={14} className="text-emerald-500" />
+            External Service Contract
+          </span>
+          <span className="text-[11px] leading-relaxed">
+            This endpoint is hosted externally by a third party. Microservices on your canvas can invoke this endpoint using a <strong>Service Call</strong> step, and subsequent pipeline steps will automatically have access to all nested output properties defined in the schema above.
+          </span>
+        </div>
+      ) : (
+        (() => {
+          const isPipelineRed = isEndpointPipelineUnconfigured(
+            item,
+            nodeId,
+            allNodes,
+            allEdges,
+          );
+
+          return (
+            <div className="flex flex-col gap-2 border border-border/40 rounded-xl overflow-hidden transition-colors">
+              {/* Collapsible header */}
+              <button
+                className="flex items-center justify-between px-3 py-2.5 hover:bg-muted/20 transition-colors text-left"
+                onClick={() => setPipelineExpanded((v) => !v)}
+              >
+                <div>
+                  <p className="text-[11px] font-semibold text-foreground/90 flex items-center gap-1.5 flex-wrap">
+                    <span>Pipeline Steps</span>
+                    {item.pipelineSteps && item.pipelineSteps.length > 0 && (
+                      <span className="text-[9px] text-primary/70 font-mono bg-primary/10 px-1.5 py-0.5 rounded-full">
+                        {item.pipelineSteps.length} step{item.pipelineSteps.length !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                    {isPipelineRed && (
+                      <span className="text-[9px] font-bold text-destructive font-mono bg-destructive/15 border border-destructive/30 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                        ⚠️ Unconfigured Inputs
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[9px] text-muted-foreground/60 mt-0.5">
+                    Explicit field-level bindings per step — compiler generates exactly what you configure.
+                  </p>
+                </div>
+                {pipelineExpanded ? (
+                  <ChevronDown size={13} className="text-muted-foreground/50 shrink-0" />
+                ) : (
+                  <ChevronRight size={13} className="text-muted-foreground/50 shrink-0" />
+                )}
+              </button>
+
+              {pipelineExpanded && (
+                <div className="px-3 pb-3">
+                  <PipelineStepEditor
+                    steps={item.pipelineSteps || []}
+                    onChange={(steps) =>
+                      updateEndpoint(item.id, { pipelineSteps: steps })
+                    }
+                    endpoint={item}
+                    allNodes={allNodes}
+                    allEdges={allEdges}
+                    serviceNodeId={nodeId}
+                  />
+                </div>
               )}
-            </button>
-
-        {pipelineExpanded && (
-          <div className="px-3 pb-3">
-            <PipelineStepEditor
-              steps={item.pipelineSteps || []}
-              onChange={(steps) =>
-                updateEndpoint(item.id, { pipelineSteps: steps })
-              }
-              endpoint={item}
-              allNodes={allNodes}
-              allEdges={allEdges}
-              serviceNodeId={nodeId}
-            />
-
-          </div>
-        )}
-      </div>
-    );
-  })()}
+            </div>
+          );
+        })()
+      )}
 
       <EndpointTestCasesSection
         endpoint={item}

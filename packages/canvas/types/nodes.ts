@@ -145,6 +145,34 @@ export interface BaseNodeData {
   aiEditing?: boolean;
 }
 
+export interface CanvasExternalNodeData extends Partial<BaseNodeData> {
+  baseUrl?: string;
+  authType?: "none" | "bearer" | "apiKey" | "basic" | "custom";
+  authHeader?: string;
+  authQueryParam?: string;
+  apiKey?: string;
+  apiSecret?: string;
+  docsUrl?: string;
+  timeout?: string | number;
+  rateLimit?: string;
+  defaultHeaders?: Array<{
+    id?: string;
+    name: string;
+    type: string;
+    required?: boolean;
+    description?: string;
+    defaultValue?: string;
+    key?: string;
+    value?: string;
+  }>;
+  envVars?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+  }>;
+  actions?: { id: string; name: string }[];
+}
+
 /**
  * Composite data payload for every BackendNode.
  * All domain-specific fields are optional; only `BaseNodeData.label` is required.
@@ -156,6 +184,7 @@ export type BackendNodeData = BaseNodeData &
     CanvasDatabaseNodeData &
       CanvasEntityNodeData &
       CanvasServiceNodeData &
+      CanvasExternalNodeData &
       CanvasWebAppNodeData &
       CanvasWebPageNodeData &
       MessagingNodeData &

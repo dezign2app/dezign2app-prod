@@ -12,8 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Cloud, Globe, Code2, Settings, Sparkles, ExternalLink } from "lucide-react";
+import { Cloud, Globe, Code2, Settings, Sparkles, ExternalLink, AlertCircle } from "lucide-react";
 import { PipelineStepDraft, ExpectedArg, StepBinding } from "./types";
+
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
 export interface ServiceCallStepSectionProps {
   step: PipelineStepDraft;
@@ -40,14 +42,17 @@ export const ServiceCallStepSection = ({
   onAutoMapArguments,
   children,
 }: ServiceCallStepSectionProps) => {
-  // 1. Identify other target microservices / services on the canvas
+  const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
+
+  // 1. Identify other target microservices / external APIs on the canvas
   const availableServices = useMemo(
     () =>
       allNodes.filter(
         (n) =>
           (n.type === "service" ||
             n.type === "serverless" ||
-            n.type === "worker") &&
+            n.type === "worker" ||
+            n.type === "external") &&
           (!serviceNodeId || n.id !== serviceNodeId),
       ),
     [allNodes, serviceNodeId],
@@ -63,11 +68,16 @@ export const ServiceCallStepSection = ({
 
   // 2. Endpoints configured on the selected service
   const serviceEndpoints: Endpoint[] = useMemo(() => {
+    if (!selectedServiceNode) return [];
+    const fromStore = allEndpoints.filter(
+      (e) => e.nodeId === selectedServiceNode.id,
+    );
+    if (fromStore.length > 0) return fromStore;
     if (!selectedServiceNode?.data?.endpoints) return [];
     return Array.isArray(selectedServiceNode.data.endpoints)
       ? selectedServiceNode.data.endpoints
       : [];
-  }, [selectedServiceNode]);
+  }, [selectedServiceNode, allEndpoints]);
 
   // Selected endpoint
   const selectedEndpoint = useMemo(() => {
@@ -241,6 +251,15 @@ export const ServiceCallStepSection = ({
             </SelectContent>
           </Select>
         </div>
+
+        {selectedServiceNode?.type === "external" && !selectedServiceNode.data?.baseUrl?.trim() && (
+          <div className="flex items-center gap-2 p-2 rounded bg-destructive/10 border border-destructive/30 text-destructive text-[11px] font-medium">
+            <AlertCircle size={13} className="shrink-0 text-destructive" />
+            <span>
+              Target external service <strong>{selectedServiceNode.data?.label || "External API"}</strong> has no Base URL configured.
+            </span>
+          </div>
+        )}
 
         {/* 2. Target Endpoint selector */}
         <div className="flex flex-col gap-1">

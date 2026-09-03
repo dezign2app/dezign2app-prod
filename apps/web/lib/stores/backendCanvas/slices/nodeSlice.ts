@@ -351,16 +351,17 @@ export const createNodeSlice = (
 
     let nextEndpoints = get().endpoints;
     let pendingEndpoints = get().pendingEndpointUpserts;
-    if (node.type === "service") {
+    if (node.type === "service" || node.type === "external") {
       const existingEndpoints = nextEndpoints.filter((e) => e.nodeId === node.id);
       if (existingEndpoints.length === 0) {
+        const isExt = node.type === "external";
         const defaultEp = {
           id: crypto.randomUUID(),
           nodeId: node.id,
-          name: "/",
-          type: "GET",
-          summary: "Health check",
-          businessLogic: "Test the health of the server",
+          name: isExt ? "/v1/resource" : "/",
+          type: isExt ? "POST" : "GET",
+          summary: isExt ? "External API action" : "Health check",
+          businessLogic: isExt ? "External API call" : "Test the health of the server",
         };
         nextEndpoints = [...nextEndpoints, defaultEp];
         pendingEndpoints = [...pendingEndpoints, defaultEp];

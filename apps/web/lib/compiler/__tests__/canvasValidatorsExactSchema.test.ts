@@ -97,4 +97,21 @@ describe("Convex canvasValidators exact schema", () => {
     expect(backendEventDataValidator).toBeDefined();
     expect(backendNodeDataValidator).toBeDefined();
   });
+
+  it("validates external node data with envVars in externalDataSchema", async () => {
+    const { externalDataSchema } = await import("@workspace/canvas/schemas");
+    const externalNodeData = {
+      label: "Stripe API",
+      baseUrl: "https://api.stripe.com/v1",
+      authType: "bearer" as const,
+      apiKey: "process.env.STRIPE_SECRET_KEY",
+      envVars: [
+        { id: "env-1", name: "STRIPE_SECRET_KEY", description: "Secret API key" },
+        { id: "env-2", name: "STRIPE_WEBHOOK_SECRET" },
+      ],
+    };
+
+    const parsed = externalDataSchema.safeParse(externalNodeData);
+    expect(parsed.success).toBe(true);
+  });
 });
