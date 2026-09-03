@@ -86,7 +86,8 @@ export async function simulateEndpoint(args: {
         (candidate.sourceHandle === `endpoint-out-${endpoint.id}` ||
           candidate.sourceHandle === `endpoints-out-${endpoint.id}`) &&
         (candidate.targetHandle === "database-target" ||
-          candidate.targetHandle === "database-source"),
+          candidate.targetHandle === "database-source" ||
+          candidate.targetHandle?.startsWith("func-")),
     );
     return { ref, rows, tableId, edge };
   };
