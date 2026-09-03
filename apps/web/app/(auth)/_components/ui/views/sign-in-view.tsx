@@ -54,6 +54,18 @@ export const SignInView = () => {
 
   // If already signed in (and not explicitly signed out), ensure user record exists and go directly to /projects or redirectUrl
   useEffect(() => {
+    console.log("[desktop-auth:view] Session state:", {
+      isSessionLoading,
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      userId: session?.user?.id,
+      userEmail: session?.user?.email,
+      inDesktop,
+      isSignedOut,
+      redirectUrl,
+      currentCookies: typeof document !== "undefined" ? document.cookie : "",
+    });
+
     if (isSignedOut) {
       // Clear signed_out flag from URL without reloading
       window.history.replaceState(null, "", "/sign-in");
@@ -61,6 +73,7 @@ export const SignInView = () => {
     }
 
     if (session?.user) {
+      console.log("[desktop-auth:view] Valid session user detected! Redirecting to:", redirectUrl);
       if (session.user.email) {
         const userEmail = session.user.email;
         ensureUser({
@@ -68,11 +81,13 @@ export const SignInView = () => {
           name: session.user.name || userEmail.split("@")[0] || "User",
           authId: session.user.id,
           avatarUrl: session.user.image || undefined,
-        }).catch(() => {});
+        }).catch((err) => {
+          console.warn("[desktop-auth:view] ensureUser error:", err);
+        });
       }
       router.push(redirectUrl);
     }
-  }, [session, router, redirectUrl, ensureUser, isSignedOut]);
+  }, [session, router, redirectUrl, ensureUser, isSignedOut, inDesktop, isSessionLoading]);
 
   const getAuthBaseUrl = () => {
     return (
@@ -84,7 +99,15 @@ export const SignInView = () => {
 
   // Exchange ticket for Better Auth session inside Electron
   const exchangeTicket = async (ticket: string) => {
-    if (!ticket) return;
+    if (!ticket) {
+      console.warn("[desktop-auth:view] exchangeTicket called with empty ticket");
+      return;
+    }
+    const cleanTicket = ticket.trim();
+    console.log("[desktop-auth:view] exchangeTicket started with ticket:", {
+      preview: `${cleanTicket.substring(0, 15)}...`,
+      length: cleanTicket.length,
+    });
     try {
       setIsExchanging(true);
       setError(null);
@@ -95,19 +118,35 @@ export const SignInView = () => {
         !authBaseUrl.includes("localhost") &&
         !authBaseUrl.includes("127.0.0.1");
 
-      // In production, exchange directly with remote production auth server.
-      // In local development, exchange with the local server.
       const primaryUrl = isRemote
         ? `${authBaseUrl}/api/auth/desktop/exchange`
         : "/api/auth/desktop/exchange";
 
+      console.log("[desktop-auth:view] Calling primary exchange endpoint:", primaryUrl, {
+        isRemote,
+        authBaseUrl,
+      });
+
       let res = await fetch(primaryUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticket: ticket.trim() }),
+        body: JSON.stringify({ ticket: cleanTicket }),
       });
 
-      let data = await res.json().catch(() => ({}));
+      console.log("[desktop-auth:view] Primary exchange response status:", res.status, res.statusText);
+
+      let data = await res.json().catch((err) => {
+        console.error("[desktop-auth:view] Failed to parse primary exchange JSON:", err);
+        return {};
+      });
+
+      console.log("[desktop-auth:view] Primary exchange response body:", {
+        hasToken: !!data.token,
+        tokenPreview: data.token ? `${data.token.substring(0, 10)}...` : undefined,
+        userId: data.userId,
+        error: data.error,
+        success: data.success,
+      });
 
       // Fallback: if remote failed, try local endpoint; if local failed, try remote
       if (!res.ok || !data.token) {
@@ -118,37 +157,46 @@ export const SignInView = () => {
             : null;
 
         if (fallbackUrl) {
+          console.warn("[desktop-auth:view] Primary exchange failed, attempting fallbackUrl:", fallbackUrl);
           try {
             const fallbackRes = await fetch(fallbackUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ ticket: ticket.trim() }),
+              body: JSON.stringify({ ticket: cleanTicket }),
             });
+            console.log("[desktop-auth:view] Fallback response status:", fallbackRes.status);
             if (fallbackRes.ok) {
               const fallbackData = await fallbackRes.json();
+              console.log("[desktop-auth:view] Fallback response data:", {
+                hasToken: !!fallbackData?.token,
+                error: fallbackData?.error,
+              });
               if (fallbackData?.token) {
                 data = fallbackData;
                 res = fallbackRes;
               }
             }
           } catch (fallbackErr) {
-            console.warn("[desktop-auth] Fallback exchange attempt failed:", fallbackErr);
+            console.warn("[desktop-auth:view] Fallback exchange exception:", fallbackErr);
           }
         }
       }
 
       if (res.ok && data.token) {
-        // Set session cookies in the desktop window
+        console.log("[desktop-auth:view] Exchange succeeded! Setting session cookies in document.cookie...");
         document.cookie = `better-auth.session_token=${data.token}; path=/; max-age=2592000; SameSite=Lax`;
         document.cookie = `is_electron=1; path=/; max-age=2592000; SameSite=Lax`;
+        console.log("[desktop-auth:view] Cookies after setting:", document.cookie);
         setWaitingForAuth(false);
         toast.success("Desktop session connected!");
+        console.log("[desktop-auth:view] Calling window.location.href = '/projects'...");
         window.location.href = "/projects";
       } else {
+        console.error("[desktop-auth:view] Ticket exchange failed with error:", data.error);
         setError(data.error || "Failed to exchange ticket");
       }
     } catch (err) {
-      console.error("[desktop-auth] Ticket exchange error:", err);
+      console.error("[desktop-auth:view] Uncaught ticket exchange error:", err);
       setError("Invalid or expired sign-in ticket. Please try again.");
     } finally {
       setIsExchanging(false);
@@ -156,20 +204,35 @@ export const SignInView = () => {
   };
 
   useEffect(() => {
+    const inElectronMode = isElectron();
     setMounted(true);
-    setInDesktop(isElectron());
+    setInDesktop(inElectronMode);
+    console.log("[desktop-auth:view] Component mounted. inDesktop:", inElectronMode);
 
     const api = getElectronAPI();
     if (api?.auth) {
-      // Listen for incoming deep link callback from browser
+      console.log("[desktop-auth:view] Registering api.auth.onAuthCallback listener...");
       const cleanup = api.auth.onAuthCallback(async (data) => {
+        console.log("[desktop-auth:view] onAuthCallback received data:", {
+          hasToken: !!data.token,
+          hasTicket: !!data.ticket,
+          rawUrl: data.rawUrl,
+        });
         const ticketToUse = data.ticket || data.token;
         if (ticketToUse) {
+          console.log("[desktop-auth:view] Exchanging ticket from deep link callback...");
           await exchangeTicket(ticketToUse);
+        } else {
+          console.warn("[desktop-auth:view] onAuthCallback received event without ticket or token!");
         }
       });
 
-      return cleanup;
+      return () => {
+        console.log("[desktop-auth:view] Cleaning up onAuthCallback listener");
+        cleanup();
+      };
+    } else {
+      console.log("[desktop-auth:view] Electron API auth not available (running in normal browser mode)");
     }
   }, []);
 
@@ -177,17 +240,20 @@ export const SignInView = () => {
     setWaitingForAuth(true);
     setError(null);
     const api = getElectronAPI();
+    console.log("[desktop-auth:view] handleBrowserLogin clicked. Electron API available?", !!api?.auth);
     if (api?.auth) {
       const authBaseUrl = getAuthBaseUrl();
       const loginUrl = `${authBaseUrl}/sign-in?redirect_url=${encodeURIComponent(
         `${authBaseUrl}/auth/desktop`,
       )}`;
+      console.log("[desktop-auth:view] Requesting openBrowserLogin with:", loginUrl);
       await api.auth.openBrowserLogin(loginUrl);
     }
   };
 
   const handleManualSubmit = (e: React.SubmitEvent) => {
     e.preventDefault();
+    console.log("[desktop-auth:view] Manual ticket submitted:", manualTicket);
     if (manualTicket.trim()) {
       exchangeTicket(manualTicket.trim());
     }

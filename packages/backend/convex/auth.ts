@@ -10,7 +10,26 @@ import { convex } from "@convex-dev/better-auth/plugins";
 import { organization, bearer } from "better-auth/plugins";
 import type { GenericDataModel } from "convex/server";
 
+import { mutation } from "./_generated/server";
+
 export const betterAuthComponentClient = createClient(components.betterAuth);
+
+export const cleanStaleJwks = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+      input: {
+        model: "jwks",
+        where: [],
+      },
+      paginationOpts: {
+        numItems: 100,
+        cursor: null,
+      },
+    });
+    return { success: true, message: "Cleared stale JWKS" };
+  },
+});
 
 export const createAuth: CreateAuth<GenericDataModel> = (
   ctx: GenericCtx<GenericDataModel>,
@@ -25,13 +44,20 @@ export const createAuth: CreateAuth<GenericDataModel> = (
     process.env.BETTER_AUTH_URL,
     ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",").map((s) => s.trim()) || []),
     "dezign2app://",
+    "http://127.0.0.1:*",
+    "http://localhost:*",
+    "http://127.0.0.1",
+    "http://localhost",
   ].filter(Boolean) as string[];
+
+  const finalTrustedOrigins = Array.from(new Set(trustedOrigins));
+  console.log("[convex:auth] createAuth invoked. baseURL:", baseURL, "trustedOrigins:", finalTrustedOrigins);
 
   return betterAuth({
     appName: "Dezign2App",
     baseURL,
     secret: process.env.BETTER_AUTH_SECRET,
-    trustedOrigins: Array.from(new Set(trustedOrigins)),
+    trustedOrigins: finalTrustedOrigins,
     database: betterAuthComponentClient.adapter(ctx),
     databaseHooks: {
       user: {

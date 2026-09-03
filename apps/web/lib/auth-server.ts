@@ -47,16 +47,41 @@ export async function getServerSession(
 ): Promise<ServerSession | null> {
   try {
     const headersList = reqHeaders || (await headers());
-    const cookie = headersList.get("cookie") || "";
+    let cookie = headersList.get("cookie") || "";
     if (cookie) {
+      const tokenMatch = cookie.match(
+        /(?:^|;\s*)(?:__Secure-)?better-auth\.session_token=([^;]+)/,
+      );
+      const sessionToken = tokenMatch ? tokenMatch[1] : null;
+      let authHeader = headersList.get("authorization") || "";
+
+      if (sessionToken) {
+        if (!cookie.includes("__Secure-better-auth.session_token=")) {
+          cookie += `; __Secure-better-auth.session_token=${sessionToken}`;
+        }
+        if (!cookie.includes("better-auth.session_token=")) {
+          cookie += `; better-auth.session_token=${sessionToken}`;
+        }
+        if (!authHeader) {
+          authHeader = `Bearer ${sessionToken}`;
+        }
+      }
+
+      const publicHost = process.env.NEXT_PUBLIC_APP_URL
+        ? new URL(process.env.NEXT_PUBLIC_APP_URL).host
+        : "www.dezign2app.com";
+
+      const fetchHeaders: Record<string, string> = {
+        cookie,
+        "x-forwarded-host": publicHost,
+        "x-forwarded-proto": "https",
+      };
+      if (authHeader) {
+        fetchHeaders["authorization"] = authHeader;
+      }
+
       const res = await fetch(`${convexSiteUrl}/api/auth/get-session`, {
-        headers: {
-          cookie,
-          "x-forwarded-host":
-            headersList.get("host") ||
-            headersList.get("x-forwarded-host") ||
-            (process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).host : ""),
-        },
+        headers: fetchHeaders,
         cache: "no-store",
       });
 

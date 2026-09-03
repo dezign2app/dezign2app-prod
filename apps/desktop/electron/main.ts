@@ -47,6 +47,7 @@ process.on("unhandledRejection", (reason) => {
 registerProtocolClient();
 
 app.on("second-instance", (_event, commandLine) => {
+  console.log("[main] App received second-instance event with args:", commandLine);
   const mainWindow = getMainWindow();
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -56,12 +57,16 @@ app.on("second-instance", (_event, commandLine) => {
     arg.toLowerCase().includes("dezign2app://")
   );
   if (deepLink) {
+    console.log("[main] Found deepLink in second-instance args:", deepLink);
     handleAuthUrl(deepLink);
+  } else {
+    console.warn("[main] second-instance fired but no dezign2app:// URL found in args:", commandLine);
   }
 });
 
 app.on("open-url", (event, url) => {
   event.preventDefault();
+  console.log("[main] App received open-url event with URL:", url);
   handleAuthUrl(url);
 });
 

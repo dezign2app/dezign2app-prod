@@ -112,7 +112,15 @@ export const AuthenticatedProvider = ({
   const router = useRouter();
 
   React.useEffect(() => {
+    console.log("[AuthenticatedProvider] Auth guard evaluation:", {
+      isPending,
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      userId: session?.user?.id,
+      email: session?.user?.email,
+    });
     if (!isPending && !session?.user) {
+      console.warn("[AuthenticatedProvider] Unauthenticated access detected (no session user). Redirecting to /sign-in...");
       router.replace("/sign-in");
     }
   }, [session, isPending, router]);

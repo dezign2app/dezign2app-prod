@@ -37,19 +37,21 @@ export async function detectDevServerUrl(
   }
 
   for (let port = startPort; port < startPort + maxAttempts; port++) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 400);
-      const res = await fetch(`http://127.0.0.1:${port}/robots.txt`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      if (res.status >= 200 && res.status < 500) {
-        console.log(`[window] Detected active Next.js dev server on port ${port}`);
-        return `http://127.0.0.1:${port}`;
+    for (const host of ["127.0.0.1", "localhost"]) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 400);
+        const res = await fetch(`http://${host}:${port}/robots.txt`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (res.status >= 200 && res.status < 500) {
+          console.log(`[window] Detected active Next.js dev server on port ${port} (${host})`);
+          return `http://127.0.0.1:${port}`;
+        }
+      } catch {
+        // Port not active, check next host/port
       }
-    } catch {
-      // Port not active, check next port
     }
   }
   return null;
@@ -348,12 +350,39 @@ export async function createMainWindow(): Promise<BrowserWindow> {
                 .icon { font-size: 40px; margin-bottom: 16px; }
                 h2 { font-size: 20px; font-weight: 600; margin: 0 0 10px 0; color: #f87171; }
                 p { color: #8b949e; margin: 0 0 24px 0; font-size: 13px; max-width: 480px; line-height: 1.5; }
+                .retry-btn {
+                  background: #238636;
+                  color: #ffffff;
+                  border: none;
+                  padding: 10px 20px;
+                  border-radius: 6px;
+                  font-weight: 500;
+                  font-size: 14px;
+                  cursor: pointer;
+                  transition: background 0.2s;
+                }
+                .retry-btn:hover { background: #2ea043; }
+                .status-msg { color: #58a6ff; font-size: 12px; margin-top: 16px; }
               </style>
             </head>
             <body>
               <div class="icon">⚠️</div>
               <h2>Development Server Not Running</h2>
-              <p>Could not detect Next.js dev server on ports ${DEFAULT_PORT}–${DEFAULT_PORT + 20}. Please ensure <code>pnpm dev</code> or <code>pnpm desktop:dev</code> is running.</p>
+              <p>Waiting for Next.js dev server on port ${DEFAULT_PORT}... Please ensure <code>pnpm dev</code> or <code>pnpm desktop:dev</code> is running.</p>
+              <button class="retry-btn" onclick="window.location.reload()">Retry Connection</button>
+              <div class="status-msg">Auto-reconnecting every 2 seconds...</div>
+              <script>
+                async function pollServer() {
+                  try {
+                    const res = await fetch('http://127.0.0.1:${DEFAULT_PORT}/robots.txt');
+                    if (res.ok) {
+                      window.location.href = 'http://127.0.0.1:${DEFAULT_PORT}/projects';
+                    }
+                  } catch (e) {}
+                }
+                setInterval(pollServer, 2000);
+                pollServer();
+              </script>
             </body>
           </html>
         `)}`
@@ -364,7 +393,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
   // Launch initial flow
   if (IS_DEV) {
     showSplashScreen("Connecting to development server...");
-    loadDevServerWithDiscovery(30, 1000);
+    loadDevServerWithDiscovery(60, 1500);
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     showSplashScreen("Initializing workspace...");
