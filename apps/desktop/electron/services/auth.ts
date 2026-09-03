@@ -32,31 +32,47 @@ export function registerProtocolClient(): void {
  * Handles incoming auth deep links (dezign2app://...).
  */
 export function handleAuthUrl(urlStr: string): void {
-  if (!urlStr) return;
+  if (!urlStr) {
+    console.warn("[auth-service] handleAuthUrl called with empty urlStr");
+    return;
+  }
+  console.log("[auth-service] handleAuthUrl received input:", urlStr);
   const match = urlStr.match(/dezign2app:\/\/[^\s"']+/i);
-  if (!match) return;
+  if (!match) {
+    console.warn("[auth-service] URL did not match dezign2app:// pattern:", urlStr);
+    return;
+  }
   const cleanUrl = match[0].replace(/\/$/, "");
-  console.log("[main] Received auth deep link:", cleanUrl);
+  console.log("[auth-service] Clean auth deep link:", cleanUrl);
 
   try {
     const urlObj = new URL(cleanUrl);
     const token = urlObj.searchParams.get("token") || undefined;
     const ticket = urlObj.searchParams.get("ticket") || undefined;
+    console.log("[auth-service] Parsed deep link params:", {
+      hasToken: !!token,
+      hasTicket: !!ticket,
+      ticketPreview: ticket ? `${ticket.substring(0, 15)}...` : undefined,
+    });
 
     const mainWindow = getMainWindow();
-    mainWindow?.webContents.send("auth:callback", {
+    if (!mainWindow) {
+      console.error("[auth-service] getMainWindow() is null! Cannot deliver auth:callback.");
+      return;
+    }
+
+    console.log("[auth-service] Sending auth:callback event to renderer...");
+    mainWindow.webContents.send("auth:callback", {
       token,
       ticket,
       rawUrl: cleanUrl,
     });
 
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
   } catch (err) {
-    console.error("[main] Failed to parse auth deep link URL:", err);
+    console.error("[auth-service] Failed to parse auth deep link URL:", err);
   }
 }
 
@@ -84,7 +100,13 @@ export async function openBrowserLogin(customUrl?: string): Promise<{ success: b
       `${authUrl}/auth/desktop`
     )}`;
 
-  console.log("[main] Opening system browser for authentication:", loginUrl);
-  shell.openExternal(loginUrl);
-  return { success: true };
+  console.log("[auth-service] Opening external browser for authentication:", loginUrl);
+  try {
+    await shell.openExternal(loginUrl);
+    console.log("[auth-service] shell.openExternal succeeded");
+    return { success: true };
+  } catch (err) {
+    console.error("[auth-service] Failed to open external browser:", err);
+    return { success: false };
+  }
 }

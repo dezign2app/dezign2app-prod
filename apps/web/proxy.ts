@@ -93,11 +93,15 @@ export default async function proxy(req: NextRequest) {
 
   const isSignedIn = !!sessionToken;
 
+  console.log(`[proxy] ${req.method} ${req.nextUrl.pathname} | isElectron=${isElectron} | isSignedIn=${isSignedIn} | tokenPreview=${sessionToken ? `${sessionToken.substring(0, 10)}...` : "none"}`);
+
   // If in Electron and trying to access marketing/landing/public pages, redirect directly to /projects or /sign-in
   if (isElectron && isExcludedDesktopRoute(req)) {
     if (isSignedIn) {
+      console.log(`[proxy] In Electron accessing marketing route, redirecting to /projects`);
       return NextResponse.redirect(new URL("/projects", req.url));
     } else {
+      console.log(`[proxy] In Electron accessing marketing route, redirecting to /sign-in`);
       return NextResponse.redirect(new URL("/sign-in", req.url));
     }
   }
@@ -112,6 +116,7 @@ export default async function proxy(req: NextRequest) {
   if (!isPublicRoute(req) && !isSignedIn) {
     const signInUrl = new URL("/sign-in", req.url);
     signInUrl.searchParams.set("redirect_url", req.nextUrl.pathname + req.nextUrl.search);
+    console.log(`[proxy] Unauthenticated request to protected route ${req.nextUrl.pathname}, redirecting to /sign-in`);
     return NextResponse.redirect(signInUrl);
   }
 

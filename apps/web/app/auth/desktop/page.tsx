@@ -27,29 +27,48 @@ export default function DesktopAuthSuccessPage() {
   useEffect(() => {
     async function generateTicket() {
       try {
+        console.log("[DesktopAuthSuccessPage] Starting createDesktopSignInToken call... Session:", {
+          isSignedIn,
+          isLoaded,
+          userId: session?.user?.id,
+          email: session?.user?.email,
+        });
         setLoading(true);
         const res = await createDesktopSignInToken();
+        console.log("[DesktopAuthSuccessPage] createDesktopSignInToken response:", {
+          hasToken: !!res?.token,
+          tokenPreview: res?.token ? `${res.token.substring(0, 15)}...` : undefined,
+        });
         if (res?.token) {
           setTicket(res.token);
           const targetUrl = `dezign2app://auth?ticket=${encodeURIComponent(
             res.token
           )}`;
           setDeepLink(targetUrl);
+          console.log("[DesktopAuthSuccessPage] Deep link generated:", targetUrl);
 
           // Automatically open desktop app
           try {
+            console.log("[DesktopAuthSuccessPage] Attempting automatic redirect to deep link...");
             window.location.href = targetUrl;
-          } catch (e) {}
+          } catch (e) {
+            console.warn("[DesktopAuthSuccessPage] Automatic window.location.href redirect error:", e);
+          }
+        } else {
+          console.warn("[DesktopAuthSuccessPage] No token returned from createDesktopSignInToken");
         }
       } catch (err) {
-        console.error("Failed to create desktop sign in token:", err);
+        console.error("[DesktopAuthSuccessPage] Failed to create desktop sign in token:", err);
       } finally {
         setLoading(false);
       }
     }
 
     if (isLoaded) {
+      console.log("[DesktopAuthSuccessPage] Session loaded, calling generateTicket()");
       generateTicket();
+    } else {
+      console.log("[DesktopAuthSuccessPage] Waiting for session to finish loading...");
     }
   }, [isLoaded]);
 
