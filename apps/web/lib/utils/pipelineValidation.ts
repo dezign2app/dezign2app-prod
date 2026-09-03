@@ -313,13 +313,21 @@ export function isStepInputUnconfigured(
     return false;
   }
 
-  // 5. Service Call Step validation (including external services)
+  // 5. Service Call Step validation
   if (step.type === "service_call") {
     if (!step.databaseId) return true;
-    const targetNode = allNodes.find((n) => n.id === step.databaseId);
-    if (targetNode?.type === "external" && !targetNode.data?.baseUrl?.trim()) {
+    return false;
+  }
+
+  // 6. External API Call Step validation
+  if (step.type === "external_call") {
+    const targetNodeId = step.externalNodeId || step.databaseId;
+    if (!targetNodeId) return true;
+    const targetNode = allNodes.find((n) => n.id === targetNodeId);
+    if (!targetNode?.data?.baseUrl?.trim()) {
       return true;
     }
+    return false;
   }
 
   return false;
@@ -358,21 +366,21 @@ export function isEndpointPipelineUnconfigured(
 
   if (hasUnconfiguredStep) return true;
 
-  // Check 1b: Are there service_call steps calling external endpoints that lack an output schema or Base URL?
+  // Check 1b: Are there external_call steps calling external endpoints that lack an output schema or Base URL?
   const hasUnconfiguredExternalCall = steps
-    .filter((s) => s.type === "service_call")
+    .filter((s) => s.type === "external_call")
     .some((s) => {
-      const targetNode = allNodes.find((n) => n.id === s.databaseId);
-      if (targetNode?.type === "external") {
-        if (!targetNode.data?.baseUrl?.trim()) {
-          return true;
-        }
-        const targetEp = (targetNode.data?.endpoints as Endpoint[] | undefined)?.find(
-          (ep) => ep.id === s.tableNodeId || ep.id === s.operationId,
-        );
-        if (targetEp && isOutputSchemaMissing(targetEp)) {
-          return true;
-        }
+      const targetNodeId = s.externalNodeId || s.databaseId;
+      const targetNode = allNodes.find((n) => n.id === targetNodeId);
+      if (!targetNode?.data?.baseUrl?.trim()) {
+        return true;
+      }
+      const targetEpId = s.externalEndpointId || s.tableNodeId || s.operationId;
+      const targetEp = (targetNode.data?.endpoints as Endpoint[] | undefined)?.find(
+        (ep) => ep.id === targetEpId || ep.name === targetEpId,
+      );
+      if (targetEp && isOutputSchemaMissing(targetEp)) {
+        return true;
       }
       return false;
     });

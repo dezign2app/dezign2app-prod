@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, Trash, Text, Braces, ListPlus } from "lucide-react";
+import { Plus, Trash, Text, Braces, ListPlus, Lock } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -194,11 +194,35 @@ export const ParameterEditor = ({
       </div>
 
       <div className="flex flex-col gap-2.5 mt-1">
-        {parameters.map((p) => (
+        {parameters.map((p) => {
+          const isAuthManaged = Boolean(
+            p.id?.startsWith("auth-") ||
+            p.id === "auth-header-external" ||
+            p.id === "auth-query-external" ||
+            p.id === "auth-bearer-header"
+          );
+
+          return (
           <div
             key={p.id}
-            className="flex flex-col gap-2 rounded-lg border bg-background/50 p-2.5 relative group/param transition-all hover:border-primary/30 hover:shadow-sm"
+            className={cn(
+              "flex flex-col gap-2 rounded-lg border bg-background/50 p-2.5 relative group/param transition-all hover:border-primary/30 hover:shadow-sm",
+              isAuthManaged && "border-emerald-500/30 bg-emerald-500/[0.02]"
+            )}
           >
+            {isAuthManaged && (
+              <div className="flex items-center justify-between gap-2 pb-0.5">
+                <div className="flex items-center gap-1.5 text-[9px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                  <Lock size={10} />
+                  <span>Managed by API Authentication</span>
+                </div>
+                {p.defaultValue && (
+                  <span className="text-[9px] font-mono text-muted-foreground truncate" title={p.defaultValue}>
+                    {p.defaultValue}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-2">
               {fieldOptions ? (
                 <Combobox
@@ -226,7 +250,11 @@ export const ParameterEditor = ({
                 </Combobox>
               ) : (
                 <LocalInput
-                  className="h-7 text-xs flex-1 nodrag bg-background font-mono border-none shadow-none focus-visible:ring-1 placeholder:font-sans"
+                  disabled={isAuthManaged}
+                  className={cn(
+                    "h-7 text-xs flex-1 nodrag bg-background font-mono border-none shadow-none focus-visible:ring-1 placeholder:font-sans",
+                    isAuthManaged && "opacity-80 cursor-not-allowed bg-muted/30"
+                  )}
                   placeholder="Field name"
                   value={p.name || ""}
                   onBlur={(e) => updateParam(p.id, { name: e.target.value })}
@@ -235,8 +263,9 @@ export const ParameterEditor = ({
               <Select
                 value={p.type}
                 onValueChange={(v) => updateParam(p.id, { type: v })}
+                disabled={isAuthManaged}
               >
-                <SelectTrigger className="h-7 w-[95px] text-xs py-0 nodrag bg-secondary/50 border-none font-mono">
+                <SelectTrigger className={cn("h-7 w-[95px] text-xs py-0 nodrag bg-secondary/50 border-none font-mono", isAuthManaged && "opacity-80 cursor-not-allowed")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -250,12 +279,13 @@ export const ParameterEditor = ({
               <Button
                 variant="ghost"
                 size="sm"
-                className={`h-7 px-2.5 text-[10px] nodrag rounded-full transition-colors ${p.required ? "text-primary font-bold bg-primary/10 hover:bg-primary/20" : "text-muted-foreground bg-secondary/50 hover:bg-secondary"}`}
+                disabled={isAuthManaged}
+                className={`h-7 px-2.5 text-[10px] nodrag rounded-full transition-colors ${p.required ? "text-primary font-bold bg-primary/10 hover:bg-primary/20" : "text-muted-foreground bg-secondary/50 hover:bg-secondary"} ${isAuthManaged ? "opacity-80 cursor-not-allowed" : ""}`}
                 onClick={() => updateParam(p.id, { required: !p.required })}
               >
                 {p.required ? "REQUIRED" : "OPTIONAL"}
               </Button>
-              {p.description === undefined && (
+              {p.description === undefined && !isAuthManaged && (
                 <Button
                   size="icon"
                   variant="ghost"
@@ -266,14 +296,23 @@ export const ParameterEditor = ({
                   <Text size={14} />
                 </Button>
               )}
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 opacity-0 group-hover/param:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 transition-all rounded-full"
-                onClick={() => removeParam(p.id)}
-              >
-                <Trash size={14} />
-              </Button>
+              {isAuthManaged ? (
+                <div
+                  title="This field is managed by the API Authentication section above"
+                  className="h-7 w-7 flex items-center justify-center text-muted-foreground/40 cursor-not-allowed"
+                >
+                  <Lock size={12} />
+                </div>
+              ) : (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 opacity-0 group-hover/param:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 transition-all rounded-full"
+                  onClick={() => removeParam(p.id)}
+                >
+                  <Trash size={14} />
+                </Button>
+              )}
             </div>
             {p.description !== undefined && (
               <div className="relative w-full">
@@ -296,7 +335,8 @@ export const ParameterEditor = ({
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -44,15 +44,14 @@ export const ServiceCallStepSection = ({
 }: ServiceCallStepSectionProps) => {
   const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
 
-  // 1. Identify other target microservices / external APIs on the canvas
+  // 1. Identify other target microservices on the canvas
   const availableServices = useMemo(
     () =>
       allNodes.filter(
         (n) =>
           (n.type === "service" ||
             n.type === "serverless" ||
-            n.type === "worker" ||
-            n.type === "external") &&
+            n.type === "worker") &&
           (!serviceNodeId || n.id !== serviceNodeId),
       ),
     [allNodes, serviceNodeId],
@@ -251,15 +250,6 @@ export const ServiceCallStepSection = ({
             </SelectContent>
           </Select>
         </div>
-
-        {selectedServiceNode?.type === "external" && !selectedServiceNode.data?.baseUrl?.trim() && (
-          <div className="flex items-center gap-2 p-2 rounded bg-destructive/10 border border-destructive/30 text-destructive text-[11px] font-medium">
-            <AlertCircle size={13} className="shrink-0 text-destructive" />
-            <span>
-              Target external service <strong>{selectedServiceNode.data?.label || "External API"}</strong> has no Base URL configured.
-            </span>
-          </div>
-        )}
 
         {/* 2. Target Endpoint selector */}
         <div className="flex flex-col gap-1">

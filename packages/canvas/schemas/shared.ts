@@ -157,6 +157,7 @@ export const pipelineStepTypeEnum = z.enum([
   "redis_operation",  // call a Redis cache helper
   "kafka_publish",    // publishKafkaEvent
   "service_call",     // HTTP / gRPC call to another service
+  "external_call",    // HTTP call to an external 3rd-party API
   "custom_code",      // raw TypeScript block
   "return_response",  // explicit return response step
   "condition",        // if / else branching
@@ -218,6 +219,8 @@ export const parallelBranchSchema: z.ZodType<ParallelBranch> = z.lazy(() =>
 export interface PipelineStep {
   id: string;
   name: string;
+  /** Optional human-readable description or note for the step */
+  description?: string;
   type: PipelineStepType;
   enabled?: boolean;
   /** Optional single-step skip guard */
@@ -230,6 +233,10 @@ export interface PipelineStep {
   databaseId?: string;
   /** For DB/Redis operation steps: ID of the selected table/entity node */
   tableNodeId?: string;
+  /** For external_call steps: ID of the selected external node */
+  externalNodeId?: string;
+  /** For external_call steps: ID of the selected external endpoint */
+  externalEndpointId?: string;
   /** For DB/Redis operation steps: ID of the selected operation */
   operationId?: string;
   /** For Kafka/messaging publish steps: ID of the broker node */
@@ -310,6 +317,7 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
   z.object({
     id: z.string(),
     name: z.string(),
+    description: z.string().optional(),
     type: pipelineStepTypeEnum,
     enabled: z.boolean().optional().default(true),
     runIf: conditionExprSchema.optional(),
@@ -317,6 +325,8 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     responseMode: z.string().optional(),
     databaseId: z.string().optional(),
     tableNodeId: z.string().optional(),
+    externalNodeId: z.string().optional(),
+    externalEndpointId: z.string().optional(),
     operationId: z.string().optional(),
     brokerNodeId: z.string().optional(),
     messagingResourceId: z.string().optional(),

@@ -38,6 +38,7 @@ export * from "./DbOperationStepSection";
 export * from "./RedisOperationStepSection";
 export * from "./KafkaPublishStepSection";
 export * from "./ServiceCallStepSection";
+export * from "./ExternalCallStepSection";
 export * from "./ConditionStepSection";
 export * from "./TryCatchStepSection";
 export * from "./SwitchStepSection";
@@ -344,6 +345,8 @@ export const PipelineStepEditor = ({
         ? `publishResult${stepNum}`
         : type === "service_call"
         ? `serviceResponse${stepNum}`
+        : type === "external_call"
+        ? `externalResult${stepNum}`
         : type === "condition"
         ? `condition${stepNum}Result`
         : type === "try_catch"
@@ -359,7 +362,21 @@ export const PipelineStepEditor = ({
         : `step${stepNum}Result`;
 
     let initialFields: Partial<PipelineStepDraft> = {};
-    if (type === "condition") {
+    if (type === "external_call") {
+      const extNodes = allNodes.filter((n) => n.type === "external");
+      const firstExt = extNodes[0];
+      const allStoreEndpoints = useBackendCanvasStore.getState().endpoints;
+      const extEndpoints = firstExt ? allStoreEndpoints.filter((e) => e.nodeId === firstExt.id) : [];
+      const firstEp = extEndpoints[0] || firstExt?.data?.endpoints?.[0];
+      initialFields = {
+        databaseId: firstExt?.id,
+        externalNodeId: firstExt?.id,
+        tableNodeId: firstEp?.id,
+        externalEndpointId: firstEp?.id,
+        operationId: firstEp ? `${firstEp.type || "POST"}_${firstEp.name}` : undefined,
+        inputBindings: [],
+      };
+    } else if (type === "condition") {
       initialFields = {
         conditionExpr: {
           left: { kind: "req_body", field: "" },

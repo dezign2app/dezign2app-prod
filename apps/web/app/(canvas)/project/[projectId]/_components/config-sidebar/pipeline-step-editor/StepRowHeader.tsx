@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
 import { PipelineStepDraft } from "./types";
-import { StepTypeMeta } from "./utils";
+import { StepTypeMeta, formatConditionSummary } from "./utils";
+import { Textarea } from "@workspace/ui/components/textarea";
 
 export interface StepRowHeaderProps {
   step: PipelineStepDraft;
@@ -28,6 +29,7 @@ export interface StepRowHeaderProps {
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDelete: () => void;
+  onChange?: (updated: PipelineStepDraft) => void;
 }
 
 export const StepRowHeader = ({
@@ -44,135 +46,222 @@ export const StepRowHeader = ({
   onMoveUp,
   onMoveDown,
   onDelete,
+  onChange,
 }: StepRowHeaderProps) => {
+  const [description, setDescription] = useState(step.description ?? "");
+  const [isEditing, setIsEditing] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    setDescription(step.description ?? "");
+  }, [step.description]);
+
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+      textareaRef.current.focus();
+      const len = textareaRef.current.value.length;
+      textareaRef.current.setSelectionRange(len, len);
+    }
+  }, [isEditing]);
+
+  const handleBlur = () => {
+    if (description !== (step.description ?? "")) {
+      onChange?.({
+        ...step,
+        description,
+      });
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setDescription(e.target.value);
+  };
+
   return (
     <div
-      className="flex items-center gap-1.5 px-2.5 py-2 cursor-pointer select-none"
+      className="flex flex-col gap-0.5 px-2.5 py-1.5 cursor-pointer select-none"
       onClick={onToggleExpand}
     >
-      <div
-        {...dragHandleProps}
-        className="text-muted-foreground/40 hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing p-1 -ml-1 rounded hover:bg-muted/40"
-        title="Drag to reorder"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <GripVertical size={13} className="shrink-0" />
-      </div>
-      <span className="text-[11px] text-muted-foreground/60 w-3.5 shrink-0 font-mono">
-        {index + 1}
-      </span>
-      <span
-        className={`flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${meta.color}`}
-      >
-        {meta.icon}
-        {meta.label}
-      </span>
-
-      {/* Variable assignment / Control flow summary view */}
-      <span className="text-xs font-mono font-medium text-foreground/90 flex-1 truncate flex items-center gap-1.5">
-        {step.type === "condition" ? (
-          <span className="text-amber-300 font-semibold truncate">
-            if (condition) &#123; then: {step.thenSteps?.length || 0}, else: {step.elseSteps?.length || 0} &#125;
-          </span>
-        ) : step.type === "try_catch" ? (
-          <span className="text-rose-300 font-semibold truncate">
-            try &#123; {step.trySteps?.length || 0} &#125; catch &#123; {step.catchSteps?.length || 0} &#125;
-          </span>
-        ) : step.type === "switch" ? (
-          <span className="text-indigo-300 font-semibold truncate">
-            switch ({step.switchCases?.length || 0} cases)
-          </span>
-        ) : step.type === "parallel" ? (
-          <span className="text-sky-300 font-semibold truncate">
-            parallel ({step.parallelBranches?.length || 0} branches)
-          </span>
-        ) : step.type === "loop" ? (
-          <span className="text-teal-300 font-semibold truncate">
-            {step.loopKind === "for"
-              ? `for (${step.iteratorVariable || "i"} = ${step.loopForStart ?? 0}; ${step.iteratorVariable || "i"} < ${step.loopForEnd ?? 10}; ${step.iteratorVariable || "i"} += ${step.loopForStep ?? 1})`
-              : step.loopKind === "while"
-              ? `while (condition) { ${step.loopBody?.length || 0} steps }`
-              : step.loopKind === "do_while"
-              ? `do { ${step.loopBody?.length || 0} steps } while (condition)`
-              : step.loopSource && "field" in step.loopSource && step.loopSource.field
-              ? `for (const ${step.iteratorVariable || "item"} of ${step.loopSource.field})`
-              : `for (const ${step.iteratorVariable || "item"} of items)`}
-          </span>
-        ) : step.type === "early_return" ? (
-          <span className="text-orange-300 font-semibold truncate">
-            return res.status({step.statusCode || 200})
-          </span>
-        ) : (
-          <>
-            <span className="text-muted-foreground/45 font-normal select-none">const</span>
-            <span className="text-primary/95 font-semibold">{displayVarName}</span>
-            <span className="text-muted-foreground/35 font-normal select-none">=</span>
-            {step.functionRef?.name && (
-              <span className="text-[11px] text-muted-foreground/75 font-mono truncate max-w-[150px]">
-                {step.functionRef.name}(...)
-              </span>
-            )}
-            {step.type === "custom_code" && (
-              <span className="text-[11px] text-muted-foreground/50 font-mono italic truncate max-w-[120px]">
-                {`{ /* code */ }`}
-              </span>
-            )}
-          </>
-        )}
-
-        {/* runIf Guard Badge */}
-        {step.runIf && (
-          <span className="text-[9px] font-sans font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0 ml-1">
-            ⚡ if
-          </span>
-        )}
-      </span>
-
-      {/* Unconfigured Warning Badge */}
-      {isUnconfigured && (
-        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-1 shrink-0">
-          <AlertTriangle size={10} />
-          Unconfigured
-        </span>
-      )}
-
-      <div
-        className="flex items-center gap-0.5 ml-1"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {!isFirst && (
-          <button
-            type="button"
-            className="text-muted-foreground/40 hover:text-foreground transition-colors p-1 rounded hover:bg-muted/40"
-            onClick={onMoveUp}
-            title="Move step up"
-          >
-            <ArrowUp size={11} />
-          </button>
-        )}
-        {!isLast && (
-          <button
-            type="button"
-            className="text-muted-foreground/40 hover:text-foreground transition-colors p-1 rounded hover:bg-muted/40"
-            onClick={onMoveDown}
-            title="Move step down"
-          >
-            <ArrowDown size={11} />
-          </button>
-        )}
-        <button
-          type="button"
-          className="text-destructive/50 hover:text-destructive transition-colors p-1 rounded hover:bg-destructive/10"
-          onClick={onDelete}
-          title="Delete step"
+      {/* Top Line: Grip, Index, Type Badge, Summary/Code Preview, Actions, Chevron */}
+      <div className="flex items-center gap-1.5 min-w-0">
+        <div
+          {...dragHandleProps}
+          className="text-muted-foreground/40 hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing p-1 -ml-1 rounded hover:bg-muted/40"
+          title="Drag to reorder"
+          onClick={(e) => e.stopPropagation()}
         >
-          <Trash size={11} />
-        </button>
+          <GripVertical size={13} className="shrink-0" />
+        </div>
+        <span className="text-[11px] text-muted-foreground/60 w-3.5 shrink-0 font-mono">
+          {index + 1}
+        </span>
+        <span
+          className={`flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${meta.color}`}
+        >
+          {meta.icon}
+          {meta.label}
+        </span>
+
+        {/* Variable assignment / Control flow summary view */}
+        <span className="text-xs font-mono font-medium text-foreground/90 flex-1 truncate flex items-center gap-1.5 min-w-0">
+          {step.type === "condition" ? (
+            <span className="text-amber-300 font-semibold truncate">
+              if ({formatConditionSummary(step.conditionExpr)}) &#123; then:{" "}
+              {step.thenSteps?.length || 0}, else: {step.elseSteps?.length || 0} &#125;
+            </span>
+          ) : step.type === "try_catch" ? (
+            <span className="text-rose-300 font-semibold truncate">
+              try &#123; {step.trySteps?.length || 0} &#125; catch &#123;{" "}
+              {step.catchSteps?.length || 0} &#125;
+            </span>
+          ) : step.type === "switch" ? (
+            <span className="text-indigo-300 font-semibold truncate">
+              switch ({step.switchCases?.length || 0} cases)
+            </span>
+          ) : step.type === "parallel" ? (
+            <span className="text-sky-300 font-semibold truncate">
+              parallel ({step.parallelBranches?.length || 0} branches)
+            </span>
+          ) : step.type === "loop" ? (
+            <span className="text-teal-300 font-semibold truncate">
+              {step.loopKind === "for"
+                ? `for (${step.iteratorVariable || "i"} = ${step.loopForStart ?? 0}; ${step.iteratorVariable || "i"} < ${step.loopForEnd ?? 10}; ${step.iteratorVariable || "i"} += ${step.loopForStep ?? 1})`
+                : step.loopKind === "while"
+                ? `while (condition) { ${step.loopBody?.length || 0} steps }`
+                : step.loopKind === "do_while"
+                ? `do { ${step.loopBody?.length || 0} steps } while (condition)`
+                : step.loopSource && "field" in step.loopSource && step.loopSource.field
+                ? `for (const ${step.iteratorVariable || "item"} of ${step.loopSource.field})`
+                : `for (const ${step.iteratorVariable || "item"} of items)`}
+            </span>
+          ) : step.type === "early_return" ? (
+            <span className="text-orange-300 font-semibold truncate">
+              return res.status({step.statusCode || 200})
+            </span>
+          ) : (
+            <>
+              <span className="text-muted-foreground/45 font-normal select-none">const</span>
+              <span className="text-primary/95 font-semibold">{displayVarName}</span>
+              <span className="text-muted-foreground/35 font-normal select-none">=</span>
+              {step.functionRef?.name && (
+                <span className="text-[11px] text-muted-foreground/75 font-mono truncate max-w-[150px]">
+                  {step.functionRef.name}(...)
+                </span>
+              )}
+              {step.type === "custom_code" && (
+                <span className="text-[11px] text-muted-foreground/50 font-mono italic truncate max-w-[120px]">
+                  {`{ /* code */ }`}
+                </span>
+              )}
+            </>
+          )}
+
+          {/* runIf Guard Badge */}
+          {step.runIf && (
+            <span className="text-[9px] font-sans font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0 ml-1">
+              ⚡ if
+            </span>
+          )}
+        </span>
+
+        {/* Unconfigured Warning Badge */}
+        {isUnconfigured && (
+          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-1 shrink-0">
+            <AlertTriangle size={10} />
+            Unconfigured
+          </span>
+        )}
+
+        <div
+          className="flex items-center gap-0.5 ml-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {!isFirst && (
+            <button
+              type="button"
+              className="text-muted-foreground/40 hover:text-foreground transition-colors p-1 rounded hover:bg-muted/40"
+              onClick={onMoveUp}
+              title="Move step up"
+            >
+              <ArrowUp size={11} />
+            </button>
+          )}
+          {!isLast && (
+            <button
+              type="button"
+              className="text-muted-foreground/40 hover:text-foreground transition-colors p-1 rounded hover:bg-muted/40"
+              onClick={onMoveDown}
+              title="Move step down"
+            >
+              <ArrowDown size={11} />
+            </button>
+          )}
+          <button
+            type="button"
+            className="text-destructive/50 hover:text-destructive transition-colors p-1 rounded hover:bg-destructive/10"
+            onClick={onDelete}
+            title="Delete step"
+          >
+            <Trash size={11} />
+          </button>
+        </div>
+        {expanded ? (
+          <ChevronDown size={12} className="text-muted-foreground/50 shrink-0" />
+        ) : (
+          <ChevronRight size={12} className="text-muted-foreground/50 shrink-0" />
+        )}
       </div>
-      {expanded ? (
-        <ChevronDown size={12} className="text-muted-foreground/50 shrink-0" />
+
+      {/* Second Line: Description (div/span on blur, Textarea on click) */}
+      {isEditing ? (
+        <div
+          className="flex items-start ml-7 mr-6 -mt-0.5 mb-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Textarea
+            ref={textareaRef}
+            rows={2}
+            value={description}
+            onChange={handleChange}
+            onBlur={() => {
+              handleBlur();
+              setIsEditing(false);
+            }}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleBlur();
+                setIsEditing(false);
+              } else if (e.key === "Escape") {
+                setDescription(step.description ?? "");
+                setIsEditing(false);
+              }
+            }}
+            placeholder="Add description..."
+            className="w-full bg-background/90 text-[11px] leading-relaxed text-foreground placeholder:text-muted-foreground/35 placeholder:italic px-2 py-1 rounded border border-border/80 focus:border-primary/60 focus:outline-none transition-colors resize-none font-sans min-h-[44px]"
+            autoFocus
+          />
+        </div>
       ) : (
-        <ChevronRight size={12} className="text-muted-foreground/50 shrink-0" />
+        <div
+          className="flex items-center ml-7 mr-6 -mt-0.5 mb-0.5 cursor-pointer group/desc min-h-[20px]"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsEditing(true);
+          }}
+          title="Click to edit description"
+        >
+          {description.trim() ? (
+            <span className="text-[11px] font-sans leading-relaxed text-muted-foreground/80 group-hover/desc:text-foreground line-clamp-2 transition-colors">
+              {description}
+            </span>
+          ) : (
+            <span className="text-[11px] font-sans italic text-muted-foreground/35 group-hover/desc:text-muted-foreground/60 transition-colors">
+              Add description...
+            </span>
+          )}
+        </div>
       )}
     </div>
   );

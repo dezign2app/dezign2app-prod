@@ -276,6 +276,55 @@ export function renderPipelineStep(
     }
 
     // -------------------------------------------------------------------------
+    // External API Call: 3rd-party SaaS / REST endpoint
+    // -------------------------------------------------------------------------
+    case "external_call": {
+      if (functionRef) {
+        const args = buildArgList(inputBindings, ctx);
+        const isMultiLine = args.includes("\n");
+        if (isMultiLine) {
+          rawLines.push(`const ${outputVariable} = await ${functionRef.name}(`);
+          args.split("\n").forEach((l) => rawLines.push(`  ${l}`));
+          rawLines.push(`);`);
+        } else {
+          const callExpr = args
+            ? `await ${functionRef.name}(${args})`
+            : `await ${functionRef.name}()`;
+          rawLines.push(`const ${outputVariable} = ${callExpr};`);
+        }
+        break;
+      }
+
+      // Direct fetch call when no custom functionRef is configured
+      const endpointPath = step.operationId?.includes("_")
+        ? step.operationId.substring(step.operationId.indexOf("_") + 1)
+        : "/";
+      const method = step.operationId?.includes("_")
+        ? step.operationId.substring(0, step.operationId.indexOf("_"))
+        : "POST";
+      const bodyBinding = inputBindings.find(
+        (b) => b.argName === "body" || b.argName === "data" || b.argName === "payload",
+      );
+      const bodyExpr = bodyBinding ? resolveBinding(bodyBinding, ctx) : null;
+      const otherBindings = inputBindings.filter((b) => b !== bodyBinding);
+      const payloadExpr =
+        bodyExpr || (otherBindings.length > 0 ? buildArgList(otherBindings, ctx) : null);
+
+      rawLines.push(`// External API Call: ${step.name || "external_call"}`);
+      rawLines.push(
+        `const ${outputVariable}Response = await fetch(\`\${process.env.EXTERNAL_API_BASE_URL || ""}${endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`}\`, {`,
+      );
+      rawLines.push(`  method: "${method.toUpperCase()}",`);
+      rawLines.push(`  headers: { "Content-Type": "application/json" },`);
+      if (payloadExpr && ["POST", "PUT", "PATCH"].includes(method.toUpperCase())) {
+        rawLines.push(`  body: JSON.stringify(${payloadExpr}),`);
+      }
+      rawLines.push(`});`);
+      rawLines.push(`const ${outputVariable} = await ${outputVariable}Response.json();`);
+      break;
+    }
+
+    // -------------------------------------------------------------------------
     // Kafka publish: no meaningful return value, but we still track the var
     // -------------------------------------------------------------------------
     case "kafka_publish": {

@@ -127,7 +127,7 @@ export const ExternalAuthSection: React.FC<ExternalAuthSectionProps> = ({
           name: targetHeader,
           type: "string",
           required: true,
-          description: "API Key Header",
+          description: "",
           defaultValue: resolvedRef,
           key: targetHeader,
           value: resolvedRef,
@@ -200,9 +200,20 @@ export const ExternalAuthSection: React.FC<ExternalAuthSectionProps> = ({
           <Label className="text-xs">Scheme</Label>
           <Select
             value={authType}
-            onValueChange={(val: ExternalAuthType) =>
-              handleApplyAuth(val, headerBuffer.value, formatEnvVarRef(envVarName))
-            }
+            onValueChange={(val: ExternalAuthType) => {
+              let nextHName = headerBuffer.value;
+              if (val === "apiKeyHeader" && (!nextHName || nextHName.toLowerCase() === "authorization")) {
+                nextHName = defaultAuthHeader || "X-API-Key";
+                headerBuffer.onChange(nextHName);
+              } else if (val === "apiKeyQuery" && (!nextHName || nextHName.toLowerCase() === "authorization" || nextHName.toLowerCase() === "x-api-key")) {
+                nextHName = "api_key";
+                headerBuffer.onChange(nextHName);
+              } else if (val === "bearer" || val === "basic") {
+                nextHName = "Authorization";
+                headerBuffer.onChange(nextHName);
+              }
+              handleApplyAuth(val, nextHName, formatEnvVarRef(envVarName));
+            }}
           >
             <SelectTrigger className="h-8 text-xs bg-background">
               <SelectValue />
