@@ -225,11 +225,13 @@ export const StepRow = ({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {ADDABLE_STEP_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {STEP_TYPE_META[t].label}
-                        </SelectItem>
-                      ))}
+                      {ADDABLE_STEP_TYPES
+                        .filter((t) => Boolean(t && t.trim()))
+                        .map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {STEP_TYPE_META[t].label}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>

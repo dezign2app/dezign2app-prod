@@ -34,23 +34,24 @@ vi.mock("../BindingSourceEditor", () => ({
   BindingSourceEditor: () => <div data-testid="mock-binding-source-editor" />,
 }));
 
-describe("ArgumentBindingsSection", () => {
-  const mockExpectedArgs: ExpectedArg[] = [
-    { name: "conversationId", type: "TEXT", required: true },
-    { name: "text", type: "TEXT", required: true },
-  ];
+const mockExpectedArgs: ExpectedArg[] = [
+  { name: "conversationId", type: "TEXT", required: true },
+  { name: "text", type: "TEXT", required: true },
+];
 
-  const mockAvailableSources: AvailableSource[] = [
-    {
-      id: "req_body",
-      label: "Request Body (body)",
-      kind: "req_body",
-      paths: [
-        { path: "conversationId", type: "string" },
-        { path: "text", type: "string" },
-      ],
-    },
-  ];
+const mockAvailableSources: AvailableSource[] = [
+  {
+    id: "req_body",
+    label: "Request Body (body)",
+    kind: "req_body",
+    paths: [
+      { path: "conversationId", type: "string" },
+      { path: "text", type: "string" },
+    ],
+  },
+];
+
+describe("ArgumentBindingsSection", () => {
 
   it("renders a dropdown trigger containing the function input variable when expectedArgs are provided", () => {
     const bindings: StepBinding[] = [
@@ -204,5 +205,43 @@ describe("useStepRowState: addBinding with expectedArgs", () => {
     const secondBinding = updatedStep.inputBindings?.[1];
     expect(secondBinding?.argName).toBe("text");
     expect(secondBinding?.source).toEqual({ kind: "req_body", field: "text" });
+  });
+
+  it("filters out empty, null, or undefined expectedArg names without rendering invalid select items", () => {
+    const mixedExpectedArgs: ExpectedArg[] = [
+      { name: "validArg", type: "string", required: true },
+      { name: "", type: "string", required: false },
+      { name: "   ", type: "string", required: false },
+      { name: undefined as any, type: "string", required: false },
+      { name: null as any, type: "string", required: false },
+    ];
+
+    const bindings: StepBinding[] = [
+      {
+        argName: "validArg",
+        source: { kind: "req_body", field: "validArg" },
+      },
+    ];
+
+    render(
+      <ArgumentBindingsSection
+        bindings={bindings}
+        expectedArgs={mixedExpectedArgs}
+        availableSources={mockAvailableSources}
+        onAddBinding={vi.fn()}
+        onUpdateBinding={vi.fn()}
+        onRemoveBinding={vi.fn()}
+        onAutoMapArguments={vi.fn()}
+      />,
+    );
+
+    const selectItems = screen.getAllByTestId("mock-select-item");
+    const values = selectItems.map((item) => item.getAttribute("data-value"));
+    expect(values).toContain("validArg");
+    expect(values).toContain("__custom__");
+    expect(values).not.toContain("");
+    expect(values).not.toContain("   ");
+    expect(values).not.toContain("undefined");
+    expect(values).not.toContain("null");
   });
 });

@@ -87,206 +87,224 @@ export function useStepRowState({
 
   // Expected arguments (for DB Operation, Redis, Transform, Kafka, Service Call)
   const expectedArgs = useMemo((): ExpectedArg[] => {
-    if (step.type === "transform" && selectedTransformer) {
-      return selectedTransformer.inputSchema.map((f) => ({
-        name: f.name,
-        type: f.type || "string",
-        required: f.required !== false,
-      }));
-    }
-
-    if (step.type === "db_operation" && selectedTableNode) {
-      const columns = selectedTableNode.data?.columns || [];
-      const pkCol = columns.find((c) => c.isPrimaryKey) || columns[0];
-      const pkName = pkCol?.name || "id";
-      const pkType = pkCol?.type || "string";
-      const writableCols = columns.filter((c) => !c.isPrimaryKey);
-
-      const opName = (step.functionRef?.name || step.operationId || "").toLowerCase();
-      if (opName.includes("create") || opName.includes("insert")) {
-        return writableCols.map((c) => ({
-          name: toVarName(c.name),
-          type: c.type || "string",
-          required: c.isNotNull,
-        }));
+    const compute = (): ExpectedArg[] => {
+      if (step.type === "transform" && selectedTransformer) {
+        return (selectedTransformer.inputSchema || [])
+          .filter((f) => f && f.name && f.name.trim())
+          .map((f) => ({
+            name: f.name.trim(),
+            type: f.type || "string",
+            required: f.required !== false,
+          }));
       }
-      if (opName.includes("update")) {
-        return [
-          { name: toVarName(pkName), type: pkType, required: true },
-          ...writableCols.map((c) => ({
+
+      if (step.type === "db_operation" && selectedTableNode) {
+        const columns = selectedTableNode.data?.columns || [];
+        const pkCol = columns.find((c) => c.isPrimaryKey) || columns[0];
+        const pkName = pkCol?.name || "id";
+        const pkType = pkCol?.type || "string";
+        const writableCols = columns.filter((c) => !c.isPrimaryKey && c.name && c.name.trim());
+
+        const opName = (step.functionRef?.name || step.operationId || "").toLowerCase();
+        if (opName.includes("create") || opName.includes("insert")) {
+          return writableCols.map((c) => ({
             name: toVarName(c.name),
             type: c.type || "string",
-            required: false,
-          })),
-        ];
-      }
-      if (opName.includes("byid") || opName.includes("findone") || opName.includes("delete")) {
-        return [{ name: toVarName(pkName), type: pkType, required: true }];
-      }
-    }
-
-    if (step.type === "redis_operation") {
-      if (selectedTableNode && selectedTableNode.id !== "__direct__") {
-        const ops = getEntityDbOperations(selectedTableNode, allNodes);
-        const op = ops.find(
-          (o) => o.id === step.operationId || o.name === step.functionRef?.name,
-        );
-        if (op && op.params) {
-          return op.params.map((p) => ({
-            name: p.name,
-            type: p.type || "string",
-            required: p.required !== false,
+            required: c.isNotNull,
           }));
+        }
+        if (opName.includes("update")) {
+          return [
+            { name: toVarName(pkName), type: pkType, required: true },
+            ...writableCols.map((c) => ({
+              name: toVarName(c.name),
+              type: c.type || "string",
+              required: false,
+            })),
+          ];
+        }
+        if (opName.includes("byid") || opName.includes("findone") || opName.includes("delete")) {
+          return [{ name: toVarName(pkName), type: pkType, required: true }];
         }
       }
 
-      // Direct / Standard Redis Commands
-      const fn = (step.functionRef?.name || step.operationId || "").toLowerCase();
-      if (fn.includes("setex")) {
-        return [
-          { name: "key", type: "string", required: true },
-          { name: "seconds", type: "number", required: true },
-          { name: "value", type: "string", required: true },
-        ];
-      }
-      if (fn.includes("hset")) {
-        return [
-          { name: "key", type: "string", required: true },
-          { name: "field", type: "string", required: true },
-          { name: "value", type: "string", required: true },
-        ];
-      }
-      if (fn.includes("hget") || fn.includes("hdel")) {
-        return [
-          { name: "key", type: "string", required: true },
-          { name: "field", type: "string", required: true },
-        ];
-      }
-      if (fn.includes("set") || fn.includes("lpush") || fn.includes("rpush")) {
-        return [
-          { name: "key", type: "string", required: true },
-          { name: "value", type: "string", required: true },
-        ];
-      }
-      if (fn.includes("publish")) {
-        return [
-          { name: "channel", type: "string", required: true },
-          { name: "message", type: "string", required: true },
-        ];
-      }
-      if (fn.includes("xadd")) {
-        return [
-          { name: "stream", type: "string", required: true },
-          { name: "fields", type: "object", required: true },
-        ];
-      }
-      if (fn.includes("expire")) {
-        return [
-          { name: "key", type: "string", required: true },
-          { name: "seconds", type: "number", required: true },
-        ];
-      }
-      return [{ name: "key", type: "string", required: true }];
-    }
+      if (step.type === "redis_operation") {
+        if (selectedTableNode && selectedTableNode.id !== "__direct__") {
+          const ops = getEntityDbOperations(selectedTableNode, allNodes);
+          const op = ops.find(
+            (o) => o.id === step.operationId || o.name === step.functionRef?.name,
+          );
+          if (op && op.params) {
+            return op.params
+              .filter((p) => p && p.name && p.name.trim())
+              .map((p) => ({
+                name: p.name.trim(),
+                type: p.type || "string",
+                required: p.required !== false,
+              }));
+          }
+        }
 
-    if (step.type === "kafka_publish") {
-      const fnName = step.functionRef?.name || "";
-      if (fnName === "publishKafkaEvent") {
+        // Direct / Standard Redis Commands
+        const fn = (step.functionRef?.name || step.operationId || "").toLowerCase();
+        if (fn.includes("setex")) {
+          return [
+            { name: "key", type: "string", required: true },
+            { name: "seconds", type: "number", required: true },
+            { name: "value", type: "string", required: true },
+          ];
+        }
+        if (fn.includes("hset")) {
+          return [
+            { name: "key", type: "string", required: true },
+            { name: "field", type: "string", required: true },
+            { name: "value", type: "string", required: true },
+          ];
+        }
+        if (fn.includes("hget") || fn.includes("hdel")) {
+          return [
+            { name: "key", type: "string", required: true },
+            { name: "field", type: "string", required: true },
+          ];
+        }
+        if (fn.includes("set") || fn.includes("lpush") || fn.includes("rpush")) {
+          return [
+            { name: "key", type: "string", required: true },
+            { name: "value", type: "string", required: true },
+          ];
+        }
+        if (fn.includes("publish")) {
+          return [
+            { name: "channel", type: "string", required: true },
+            { name: "message", type: "string", required: true },
+          ];
+        }
+        if (fn.includes("xadd")) {
+          return [
+            { name: "stream", type: "string", required: true },
+            { name: "fields", type: "object", required: true },
+          ];
+        }
+        if (fn.includes("expire")) {
+          return [
+            { name: "key", type: "string", required: true },
+            { name: "seconds", type: "number", required: true },
+          ];
+        }
+        return [{ name: "key", type: "string", required: true }];
+      }
+
+      if (step.type === "kafka_publish") {
+        const fnName = step.functionRef?.name || "";
+        if (fnName === "publishKafkaEvent") {
+          return [
+            { name: "topic", type: "string", required: true },
+            { name: "payload", type: "object", required: true },
+            { name: "key", type: "string", required: false },
+          ];
+        }
         return [
-          { name: "topic", type: "string", required: true },
           { name: "payload", type: "object", required: true },
           { name: "key", type: "string", required: false },
         ];
       }
-      return [
-        { name: "payload", type: "object", required: true },
-        { name: "key", type: "string", required: false },
-      ];
-    }
 
-    if (step.type === "external_call" || step.type === "service_call") {
-      const targetId = step.externalNodeId || step.databaseId;
-      const targetService = allNodes.find((n) => n.id === targetId);
-      const allStoreEndpoints = useBackendCanvasStore.getState().endpoints;
-      const endpoints: Endpoint[] =
-        allStoreEndpoints.filter((e) => e.nodeId === targetId).length > 0
-          ? allStoreEndpoints.filter((e) => e.nodeId === targetId)
-          : targetService?.data?.endpoints || [];
-      const targetEpId = step.externalEndpointId || step.tableNodeId;
-      const targetEp = endpoints.find(
-        (ep) => ep.id === targetEpId || ep.name === targetEpId,
-      );
-      if (targetEp) {
-        const args: ExpectedArg[] = [];
-        if (targetEp.pathParams && targetEp.pathParams.length > 0) {
-          targetEp.pathParams.forEach((p) => {
-            args.push({ name: p.name, type: p.type || "string", required: true });
-          });
-        }
-        if (targetEp.queryParams && targetEp.queryParams.length > 0) {
-          targetEp.queryParams.forEach((q) => {
-            args.push({ name: q.name, type: q.type || "string", required: false });
-          });
-        }
-        if (
-          targetEp.requestBody &&
-          targetEp.requestBody.fields &&
-          targetEp.requestBody.fields.length > 0
-        ) {
-          targetEp.requestBody.fields.forEach((f) => {
-            args.push({
-              name: f.name,
-              type: f.type || "string",
-              required: f.required !== false,
-            });
-          });
-        } else if (targetEp.requestBody?.rawJson) {
-          try {
-            const parsed = JSON.parse(targetEp.requestBody.rawJson);
-            if (
-              typeof parsed === "object" &&
-              parsed !== null &&
-              !Array.isArray(parsed)
-            ) {
-              Object.entries(parsed).forEach(([key, val]) => {
+      if (step.type === "external_call" || step.type === "service_call") {
+        const targetId = step.externalNodeId || step.databaseId;
+        const targetService = allNodes.find((n) => n.id === targetId);
+        const allStoreEndpoints = useBackendCanvasStore.getState().endpoints;
+        const endpoints: Endpoint[] =
+          allStoreEndpoints.filter((e) => e.nodeId === targetId).length > 0
+            ? allStoreEndpoints.filter((e) => e.nodeId === targetId)
+            : targetService?.data?.endpoints || [];
+        const targetEpId = step.externalEndpointId || step.tableNodeId;
+        const targetEp = endpoints.find(
+          (ep) => ep.id === targetEpId || ep.name === targetEpId,
+        );
+        if (targetEp) {
+          const args: ExpectedArg[] = [];
+          if (targetEp.pathParams && targetEp.pathParams.length > 0) {
+            targetEp.pathParams
+              .filter((p) => p && p.name && p.name.trim())
+              .forEach((p) => {
+                args.push({ name: p.name.trim(), type: p.type || "string", required: true });
+              });
+          }
+          if (targetEp.queryParams && targetEp.queryParams.length > 0) {
+            targetEp.queryParams
+              .filter((q) => q && q.name && q.name.trim())
+              .forEach((q) => {
+                args.push({ name: q.name.trim(), type: q.type || "string", required: false });
+              });
+          }
+          if (
+            targetEp.requestBody &&
+            targetEp.requestBody.fields &&
+            targetEp.requestBody.fields.length > 0
+          ) {
+            targetEp.requestBody.fields
+              .filter((f) => f && f.name && f.name.trim())
+              .forEach((f) => {
                 args.push({
-                  name: key,
-                  type: Array.isArray(val) ? "array" : typeof val,
-                  required: true,
+                  name: f.name.trim(),
+                  type: f.type || "string",
+                  required: f.required !== false,
                 });
               });
-            } else {
+          } else if (targetEp.requestBody?.rawJson) {
+            try {
+              const parsed = JSON.parse(targetEp.requestBody.rawJson);
+              if (
+                typeof parsed === "object" &&
+                parsed !== null &&
+                !Array.isArray(parsed)
+              ) {
+                Object.entries(parsed)
+                  .filter(([key]) => key && key.trim())
+                  .forEach(([key, val]) => {
+                    args.push({
+                      name: key.trim(),
+                      type: Array.isArray(val) ? "array" : typeof val,
+                      required: true,
+                    });
+                  });
+              } else {
+                args.push({ name: "body", type: "object", required: true });
+              }
+            } catch {
               args.push({ name: "body", type: "object", required: true });
             }
-          } catch {
+          } else if (
+            targetEp.type === "POST" ||
+            targetEp.type === "PUT" ||
+            targetEp.type === "PATCH"
+          ) {
             args.push({ name: "body", type: "object", required: true });
           }
-        } else if (
-          targetEp.type === "POST" ||
-          targetEp.type === "PUT" ||
-          targetEp.type === "PATCH"
-        ) {
-          args.push({ name: "body", type: "object", required: true });
+          return args;
         }
-        return args;
+        return [
+          { name: "params", type: "object", required: false },
+          { name: "body", type: "object", required: false },
+        ];
       }
-      return [
-        { name: "params", type: "object", required: false },
-        { name: "body", type: "object", required: false },
-      ];
-    }
 
-    if (step.type === "push_to_client") {
-      return [
-        {
-          name: "payload",
-          type: "any",
-          required: true,
-        },
-      ];
-    }
+      if (step.type === "push_to_client") {
+        return [
+          {
+            name: "payload",
+            type: "any",
+            required: true,
+          },
+        ];
+      }
 
-    return [];
+      return [];
+    };
+
+    return compute().filter(
+      (a) => Boolean(a && a.name && typeof a.name === "string" && a.name.trim().length > 0),
+    );
   }, [
     step.type,
     selectedTransformer,
@@ -464,13 +482,20 @@ export function useStepRowState({
   );
 
   const addBinding = useCallback(() => {
-    const existingNames = new Set(
-      (step.inputBindings || []).map((b) => b.argName.trim().toLowerCase()),
+    const validArgs = expectedArgs.filter(
+      (a) => Boolean(a && a.name && typeof a.name === "string" && a.name.trim().length > 0),
     );
-    const nextUnbound = expectedArgs.find(
+    const existingNames = new Set(
+      (step.inputBindings || [])
+        .map((b) => (b.argName || "").trim().toLowerCase())
+        .filter(Boolean),
+    );
+    const nextUnbound = validArgs.find(
       (a) => !existingNames.has(a.name.trim().toLowerCase()),
     );
-    const argName = nextUnbound ? nextUnbound.name : (expectedArgs[0]?.name ?? "");
+    const argName = nextUnbound
+      ? nextUnbound.name.trim()
+      : (validArgs[0]?.name?.trim() ?? `arg_${(step.inputBindings || []).length + 1}`);
 
     let defaultSource: StepBinding["source"] = { kind: "req_body", field: "" };
     if (argName) {

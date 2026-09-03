@@ -201,15 +201,17 @@ export const DbOperationStepSection = ({
               <SelectItem value="all" className="text-xs">
                 All Databases
               </SelectItem>
-              {dbNodes.map((db) => {
-                const isRedisInstance = db.type === "redis_instance";
-                return (
-                  <SelectItem key={db.id} value={db.id} className="text-xs font-mono">
-                    {isRedisInstance ? "🔴" : "🛢"}{" "}
-                    {db.data?.label || (isRedisInstance ? "Redis Instance" : "Database")}
-                  </SelectItem>
-                );
-              })}
+              {dbNodes
+                .filter((db) => Boolean(db && db.id && db.id.trim()))
+                .map((db) => {
+                  const isRedisInstance = db.type === "redis_instance";
+                  return (
+                    <SelectItem key={db.id} value={db.id} className="text-xs font-mono">
+                      {isRedisInstance ? "🔴" : "🛢"}{" "}
+                      {db.data?.label || (isRedisInstance ? "Redis Instance" : "Database")}
+                    </SelectItem>
+                  );
+                })}
             </SelectContent>
           </Select>
         </div>
@@ -230,22 +232,24 @@ export const DbOperationStepSection = ({
               <SelectItem value="__none__" className="text-xs text-muted-foreground">
                 Select a table...
               </SelectItem>
-              {filteredEntityNodes.map((t) => {
-                const isRedis =
-                  t.type === "redis_schema" ||
-                  t.type === "redis-cache" ||
-                  t.data?.dbType === "redis";
-                const icon = isRedis ? "🔴" : "📄";
-                const label =
-                  t.data?.label ||
-                  t.data?.tableRef ||
-                  (isRedis ? "Redis Cache" : "Table");
-                return (
-                  <SelectItem key={t.id} value={t.id} className="text-xs font-mono">
-                    {icon} {label}
-                  </SelectItem>
-                );
-              })}
+              {filteredEntityNodes
+                .filter((t) => Boolean(t && t.id && t.id.trim()))
+                .map((t) => {
+                  const isRedis =
+                    t.type === "redis_schema" ||
+                    t.type === "redis-cache" ||
+                    t.data?.dbType === "redis";
+                  const icon = isRedis ? "🔴" : "📄";
+                  const label =
+                    t.data?.label ||
+                    t.data?.tableRef ||
+                    (isRedis ? "Redis Cache" : "Table");
+                  return (
+                    <SelectItem key={t.id} value={t.id} className="text-xs font-mono">
+                      {icon} {label}
+                    </SelectItem>
+                  );
+                })}
             </SelectContent>
           </Select>
         </div>
@@ -275,14 +279,16 @@ export const DbOperationStepSection = ({
               <SelectItem value="__none__" className="text-xs text-muted-foreground">
                 Select an operation...
               </SelectItem>
-              {availableDbOperations.map((op) => (
-                <SelectItem key={op.id} value={op.name} className="text-xs font-mono">
-                  <span className="font-semibold text-primary/90">{op.name}</span>
-                  <span className="text-[9px] text-muted-foreground ml-1.5 uppercase">
-                    ({op.kind})
-                  </span>
-                </SelectItem>
-              ))}
+              {availableDbOperations
+                .filter((op) => Boolean(op && op.name && op.name.trim()))
+                .map((op) => (
+                  <SelectItem key={op.id} value={op.name} className="text-xs font-mono">
+                    <span className="font-semibold text-primary/90">{op.name}</span>
+                    <span className="text-[9px] text-muted-foreground ml-1.5 uppercase">
+                      ({op.kind})
+                    </span>
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>

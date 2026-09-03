@@ -164,11 +164,13 @@ export const ConditionExprEditor = ({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {CONDITION_OPERATORS.map((op) => (
-                        <SelectItem key={op.value} value={op.value} className="text-xs">
-                          {op.label}
-                        </SelectItem>
-                      ))}
+                      {CONDITION_OPERATORS
+                        .filter((op) => Boolean(op && op.value && op.value.trim()))
+                        .map((op) => (
+                          <SelectItem key={op.value} value={op.value} className="text-xs">
+                            {op.label}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -270,11 +272,13 @@ const SourcePicker = ({
           <SelectValue placeholder="Source..." />
         </SelectTrigger>
         <SelectContent>
-          {availableSources.map((s) => (
-            <SelectItem key={s.id} value={s.id} className="text-xs">
-              {s.label}
-            </SelectItem>
-          ))}
+          {availableSources
+            .filter((s) => Boolean(s && s.id && s.id.trim()))
+            .map((s) => (
+              <SelectItem key={s.id} value={s.id} className="text-xs">
+                {s.label}
+              </SelectItem>
+            ))}
         </SelectContent>
       </Select>
 

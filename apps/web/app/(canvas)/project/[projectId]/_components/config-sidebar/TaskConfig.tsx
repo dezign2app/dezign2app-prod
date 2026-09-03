@@ -112,17 +112,19 @@ const TriggerItemConfig = ({
                   No services found
                 </SelectItem>
               )}
-              {triggerNodes.map((node) => (
-                <SelectItem key={node.id} value={node.id} className="text-xs">
-                  {node.data.label || node.type}
-                </SelectItem>
-              ))}
+              {triggerNodes
+                .filter((node) => Boolean(node && node.id && node.id.trim()))
+                .map((node) => (
+                  <SelectItem key={node.id} value={node.id} className="text-xs">
+                    {node.data.label || node.type}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
 
           {selectedServiceId ? (
             <Select
-              value={trigger.value || ""}
+              value={trigger.value || undefined}
               onValueChange={(v) => onUpdate({ value: v })}
             >
               <SelectTrigger className="h-8 text-xs">
@@ -141,11 +143,13 @@ const TriggerItemConfig = ({
                       </SelectItem>
                     );
 
-                  return nodeOptions.map((opt) => (
-                    <SelectItem key={opt.id} value={opt.id} className="text-xs">
-                      {opt.name || opt.id}
-                    </SelectItem>
-                  ));
+                  return nodeOptions
+                    .filter((opt) => Boolean(opt && opt.id && opt.id.trim()))
+                    .map((opt) => (
+                      <SelectItem key={opt.id} value={opt.id} className="text-xs">
+                        {opt.name || opt.id}
+                      </SelectItem>
+                    ));
                 })()}
               </SelectContent>
             </Select>

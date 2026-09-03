@@ -392,11 +392,13 @@ export const KafkaPublishStepSection = ({
                   No event brokers on canvas
                 </SelectItem>
               ) : (
-                brokerNodes.map((b) => (
-                  <SelectItem key={b.id} value={b.id} className="text-xs font-mono">
-                    📡 {b.data?.label || "Event Broker"} ({b.type})
-                  </SelectItem>
-                ))
+                brokerNodes
+                  .filter((b) => Boolean(b && b.id && b.id.trim()))
+                  .map((b) => (
+                    <SelectItem key={b.id} value={b.id} className="text-xs font-mono">
+                      📡 {b.data?.label || "Event Broker"} ({b.type})
+                    </SelectItem>
+                  ))
               )}
             </SelectContent>
           </Select>
@@ -418,14 +420,16 @@ export const KafkaPublishStepSection = ({
               <SelectItem value="__custom__" className="text-xs font-mono text-primary font-semibold">
                 ✨ Dynamic / Generic Topic (publishKafkaEvent)
               </SelectItem>
-              {availableResources.map((res) => (
-                <SelectItem key={res.id} value={res.id} className="text-xs font-mono">
-                  🏷️ {res.name}
-                  <span className="text-[9px] text-muted-foreground ml-1.5 uppercase">
-                    ({res.kind})
-                  </span>
-                </SelectItem>
-              ))}
+              {availableResources
+                .filter((res) => Boolean(res && res.id && res.id.trim()))
+                .map((res) => (
+                  <SelectItem key={res.id} value={res.id} className="text-xs font-mono">
+                    🏷️ {res.name}
+                    <span className="text-[9px] text-muted-foreground ml-1.5 uppercase">
+                      ({res.kind})
+                    </span>
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>
@@ -443,14 +447,16 @@ export const KafkaPublishStepSection = ({
               <SelectValue placeholder="Choose Publisher Function..." />
             </SelectTrigger>
             <SelectContent>
-              {publisherOptions.map((opt) => (
-                <SelectItem key={opt.id} value={opt.id} className="text-xs font-mono">
-                  <span className="font-semibold text-orange-300">{opt.name}</span>
-                  <span className="text-[9px] text-muted-foreground ml-1.5">
-                    — {opt.description}
-                  </span>
-                </SelectItem>
-              ))}
+              {publisherOptions
+                .filter((opt) => Boolean(opt && opt.id && opt.id.trim()))
+                .map((opt) => (
+                  <SelectItem key={opt.id} value={opt.id} className="text-xs font-mono">
+                    <span className="font-semibold text-orange-300">{opt.name}</span>
+                    <span className="text-[9px] text-muted-foreground ml-1.5">
+                      — {opt.description}
+                    </span>
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>

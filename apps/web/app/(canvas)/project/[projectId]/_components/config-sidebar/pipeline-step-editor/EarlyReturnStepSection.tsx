@@ -82,11 +82,13 @@ export const EarlyReturnStepSection = ({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {HTTP_STATUS_OPTIONS.map((opt) => (
-              <SelectItem key={opt.code} value={String(opt.code)} className="text-xs">
-                {opt.label}
-              </SelectItem>
-            ))}
+            {HTTP_STATUS_OPTIONS
+              .filter((opt) => opt && opt.code != null && String(opt.code).trim() !== "")
+              .map((opt) => (
+                <SelectItem key={opt.code} value={String(opt.code)} className="text-xs">
+                  {opt.label}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
       </div>

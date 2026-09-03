@@ -379,34 +379,38 @@ export const TransformerStepSection = ({
                 Service Helpers
               </div>
             )}
-            {serviceTransformers.map((t) => (
-              <SelectItem key={t.id} value={t.id} className="text-xs font-mono">
-                <span className="font-semibold text-purple-300">{t.name}</span>
-                <span className="text-[8px] ml-1.5 px-1 py-0.2 rounded font-sans uppercase text-muted-foreground/80 bg-muted/60">
-                  {t.scope}
-                </span>
-                <span className="text-[9px] text-muted-foreground/60 ml-1">
-                  ({t.inputSchema.length} in → {t.returnSchema.length} out)
-                </span>
-              </SelectItem>
-            ))}
+            {serviceTransformers
+              .filter((t) => Boolean(t && t.id && t.id.trim()))
+              .map((t) => (
+                <SelectItem key={t.id} value={t.id} className="text-xs font-mono">
+                  <span className="font-semibold text-purple-300">{t.name}</span>
+                  <span className="text-[8px] ml-1.5 px-1 py-0.2 rounded font-sans uppercase text-muted-foreground/80 bg-muted/60">
+                    {t.scope}
+                  </span>
+                  <span className="text-[9px] text-muted-foreground/60 ml-1">
+                    ({t.inputSchema.length} in → {t.returnSchema.length} out)
+                  </span>
+                </SelectItem>
+              ))}
 
             {canvasTransformers.length > 0 && (
               <div className="px-2 py-1 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30">
                 Canvas Transformer Nodes
               </div>
             )}
-            {canvasTransformers.map((t) => (
-              <SelectItem key={t.id} value={t.id} className="text-xs font-mono">
-                <span className="font-semibold text-purple-300">{t.name}</span>
-                <span className="text-[8px] ml-1.5 px-1 py-0.2 rounded font-sans uppercase text-muted-foreground/80 bg-muted/60">
-                  Node ({t.scope})
-                </span>
-                <span className="text-[9px] text-muted-foreground/60 ml-1">
-                  ({t.inputSchema.length} in → {t.returnSchema.length} out)
-                </span>
-              </SelectItem>
-            ))}
+            {canvasTransformers
+              .filter((t) => Boolean(t && t.id && t.id.trim()))
+              .map((t) => (
+                <SelectItem key={t.id} value={t.id} className="text-xs font-mono">
+                  <span className="font-semibold text-purple-300">{t.name}</span>
+                  <span className="text-[8px] ml-1.5 px-1 py-0.2 rounded font-sans uppercase text-muted-foreground/80 bg-muted/60">
+                    Node ({t.scope})
+                  </span>
+                  <span className="text-[9px] text-muted-foreground/60 ml-1">
+                    ({t.inputSchema.length} in → {t.returnSchema.length} out)
+                  </span>
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
       </div>

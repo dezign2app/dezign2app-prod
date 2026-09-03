@@ -245,11 +245,13 @@ export const LoopStepSection = ({
                     <SelectValue placeholder="Source..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableSources.map((s) => (
-                      <SelectItem key={s.id} value={s.id} className="text-xs">
-                        {s.label}
-                      </SelectItem>
-                    ))}
+                    {availableSources
+                      .filter((s) => Boolean(s && s.id && s.id.trim()))
+                      .map((s) => (
+                        <SelectItem key={s.id} value={s.id} className="text-xs">
+                          {s.label}
+                        </SelectItem>
+                      ))}
                     {!availableSources.some((s) => s.id === "literal") && (
                       <SelectItem value="literal" className="text-xs">
                         Literal / Fixed Array

@@ -335,11 +335,13 @@ export const WebAppConfig = ({
               <SelectItem value="none" className="text-xs text-muted-foreground">
                 None (No Auth Connected)
               </SelectItem>
-              {authNodes.map((a) => (
-                <SelectItem key={a.id} value={a.id} className="text-xs">
-                  🔒 {a.data?.label || "Auth Server"} ({a.data?.framework || "Better Auth"})
-                </SelectItem>
-              ))}
+              {authNodes
+                .filter((a) => Boolean(a && a.id && a.id.trim()))
+                .map((a) => (
+                  <SelectItem key={a.id} value={a.id} className="text-xs">
+                    🔒 {a.data?.label || "Auth Server"} ({a.data?.framework || "Better Auth"})
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
           <span className="text-[11px] text-muted-foreground">
@@ -379,11 +381,13 @@ export const WebAppConfig = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {WEB_CLIENT_TECH_OPTIONS.map((t) => (
-                  <SelectItem key={t.value} value={t.value} className="text-xs">
-                    {t.label}
-                  </SelectItem>
-                ))}
+                {WEB_CLIENT_TECH_OPTIONS
+                  .filter((t) => Boolean(t && t.value && t.value.trim()))
+                  .map((t) => (
+                    <SelectItem key={t.value} value={t.value} className="text-xs">
+                      {t.label}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
@@ -412,11 +416,13 @@ export const WebAppConfig = ({
                   WEB_CLIENT_TECH_OPTIONS.find(
                     (t) => t.value === (data.techStack || "nextjs"),
                   )?.versions || [{ value: "16.x", label: "16.x" }]
-                ).map((v) => (
-                  <SelectItem key={v.value} value={v.value} className="text-xs font-mono">
-                    {v.label}
-                  </SelectItem>
-                ))}
+                )
+                  .filter((v) => Boolean(v && v.value && v.value.trim()))
+                  .map((v) => (
+                    <SelectItem key={v.value} value={v.value} className="text-xs font-mono">
+                      {v.label}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
