@@ -191,17 +191,19 @@ export function DatabaseTableRefConfig({ id, nodeId }: DatabaseTableRefConfigPro
               <SelectItem value="__all__" className="text-xs">
                 All Databases
               </SelectItem>
-              {databaseInstances.map((inst) => (
-                <SelectItem key={inst.id} value={inst.id} className="text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-orange-500" />
-                    <span>{inst.data?.label || "Database"}</span>
-                    <span className="text-[10px] font-mono text-muted-foreground uppercase">
-                      ({inst.data?.dbEngine || "sql"})
-                    </span>
-                  </div>
-                </SelectItem>
-              ))}
+              {databaseInstances
+                .filter((inst) => Boolean(inst && inst.id && inst.id.trim()))
+                .map((inst) => (
+                  <SelectItem key={inst.id} value={inst.id} className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-orange-500" />
+                      <span>{inst.data?.label || "Database"}</span>
+                      <span className="text-[10px] font-mono text-muted-foreground uppercase">
+                        ({inst.data?.dbEngine || "sql"})
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>
@@ -213,7 +215,7 @@ export function DatabaseTableRefConfig({ id, nodeId }: DatabaseTableRefConfigPro
             Target Table
           </Label>
           <Select
-            value={data.tableRef || ""}
+            value={data.tableRef || undefined}
             onValueChange={(val) => {
               const entity = allEntities.find((e) => e.id === val);
               updateNode(nodeId, {
@@ -237,15 +239,17 @@ export function DatabaseTableRefConfig({ id, nodeId }: DatabaseTableRefConfigPro
                   No tables found for this database
                 </div>
               ) : (
-                filteredEntities.map((e) => (
-                  <SelectItem key={e.id} value={e.id} className="text-xs">
-                    <div className="flex items-center justify-between w-full gap-2">
-                      <span className="font-medium">{e.data?.label || "Untitled Table"}</span>
-                      {e.data?.columns && (
-                        <span className="text-[10px] text-muted-foreground font-mono">
-                          {e.data.columns.length} cols
-                        </span>
-                      )}
+                filteredEntities
+                  .filter((e) => Boolean(e && e.id && e.id.trim()))
+                  .map((e) => (
+                    <SelectItem key={e.id} value={e.id} className="text-xs">
+                      <div className="flex items-center justify-between w-full gap-2">
+                        <span className="font-medium">{e.data?.label || "Untitled Table"}</span>
+                        {e.data?.columns && (
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {e.data.columns.length} cols
+                          </span>
+                        )}
                     </div>
                   </SelectItem>
                 ))

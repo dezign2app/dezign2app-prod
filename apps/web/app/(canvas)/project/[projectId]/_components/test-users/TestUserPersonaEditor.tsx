@@ -439,11 +439,13 @@ export function TestUserPersonaEditor({
                             <SelectValue placeholder="Select Database" />
                           </SelectTrigger>
                           <SelectContent>
-                            {databaseNodes.map((db) => (
-                              <SelectItem key={db.id} value={db.name} className="text-xs">
-                                {db.name}
-                              </SelectItem>
-                            ))}
+                            {databaseNodes
+                              .filter((db) => Boolean(db && db.name && db.name.trim()))
+                              .map((db) => (
+                                <SelectItem key={db.id} value={db.name} className="text-xs">
+                                  {db.name}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -459,11 +461,13 @@ export function TestUserPersonaEditor({
                             <SelectValue placeholder="Select Table" />
                           </SelectTrigger>
                           <SelectContent>
-                            {fallbackTables.map((t) => (
-                              <SelectItem key={t.id} value={t.name} className="text-xs font-mono">
-                                {t.name}
-                              </SelectItem>
-                            ))}
+                            {fallbackTables
+                              .filter((t) => Boolean(t && t.name && t.name.trim()))
+                              .map((t) => (
+                                <SelectItem key={t.id} value={t.name} className="text-xs font-mono">
+                                  {t.name}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -547,7 +551,7 @@ export function TestUserPersonaEditor({
                                   </SelectTrigger>
                                   <SelectContent>
                                     {availableForeignKeys
-                                      .filter((k) => k.id !== rec.id)
+                                      .filter((k) => Boolean(k && k.id && k.id.trim() && k.id !== rec.id))
                                       .map((k) => (
                                         <SelectItem key={k.id} value={k.id} className="text-xs font-mono">
                                           {k.tableName}._id ({k.id})

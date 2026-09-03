@@ -227,11 +227,13 @@ export const HookConfig: React.FC<HookConfigProps> = ({ id, nodeId }) => {
                 <SelectValue placeholder="Select Web App..." />
               </SelectTrigger>
               <SelectContent>
-                {webAppNodes.map((app) => (
-                  <SelectItem key={app.id} value={app.id} className="text-xs">
-                    {app.data?.label || app.data?.appName || "Web App"}
-                  </SelectItem>
-                ))}
+                {webAppNodes
+                  .filter((app) => Boolean(app && app.id && app.id.trim()))
+                  .map((app) => (
+                    <SelectItem key={app.id} value={app.id} className="text-xs">
+                      {app.data?.label || app.data?.appName || "Web App"}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
             <p className="text-[10px] text-muted-foreground">
@@ -265,11 +267,13 @@ export const HookConfig: React.FC<HookConfigProps> = ({ id, nodeId }) => {
               <SelectItem value="none" className="text-xs">
                 None (Standalone Hook)
               </SelectItem>
-              {endpoints.map((ep) => (
-                <SelectItem key={ep.id} value={ep.id} className="text-xs font-mono">
-                  {(ep.type || "GET").toUpperCase()} {ep.name || "/"}
-                </SelectItem>
-              ))}
+              {endpoints
+                .filter((ep) => Boolean(ep && ep.id && ep.id.trim()))
+                .map((ep) => (
+                  <SelectItem key={ep.id} value={ep.id} className="text-xs font-mono">
+                    {(ep.type || "GET").toUpperCase()} {ep.name || "/"}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>

@@ -195,12 +195,14 @@ export const ExternalCallStepSection: React.FC<ExternalCallStepSectionProps> = (
                   No External API nodes placed on canvas
                 </SelectItem>
               ) : (
-                availableExternalNodes.map((ext) => (
-                  <SelectItem key={ext.id} value={ext.id} className="text-xs font-mono">
-                    🌐 {ext.data?.label || "External API"}{" "}
-                    {ext.data?.baseUrl ? `(${ext.data.baseUrl})` : "(No URL)"}
-                  </SelectItem>
-                ))
+                availableExternalNodes
+                  .filter((ext) => Boolean(ext && ext.id && ext.id.trim()))
+                  .map((ext) => (
+                    <SelectItem key={ext.id} value={ext.id} className="text-xs font-mono">
+                      🌐 {ext.data?.label || "External API"}{" "}
+                      {ext.data?.baseUrl ? `(${ext.data.baseUrl})` : "(No URL)"}
+                    </SelectItem>
+                  ))
               )}
             </SelectContent>
           </Select>
@@ -243,26 +245,28 @@ export const ExternalCallStepSection: React.FC<ExternalCallStepSectionProps> = (
                   No endpoints configured on this External API
                 </SelectItem>
               ) : (
-                externalEndpoints.map((ep) => {
-                  const methodColor =
-                    ep.type === "GET"
-                      ? "text-blue-400 bg-blue-500/10"
-                      : ep.type === "POST"
-                      ? "text-green-400 bg-green-500/10"
-                      : ep.type === "PUT"
-                      ? "text-amber-400 bg-amber-500/10"
-                      : ep.type === "DELETE"
-                      ? "text-red-400 bg-red-500/10"
-                      : "text-purple-400 bg-purple-500/10";
-                  return (
-                    <SelectItem key={ep.id} value={ep.id} className="text-xs font-mono">
-                      <span className={`px-1 py-0.2 rounded text-[9px] font-bold mr-1.5 ${methodColor}`}>
-                        {ep.type || "GET"}
-                      </span>
-                      <span>{ep.name || "/"}</span>
-                    </SelectItem>
-                  );
-                })
+                externalEndpoints
+                  .filter((ep) => Boolean(ep && ep.id && ep.id.trim()))
+                  .map((ep) => {
+                    const methodColor =
+                      ep.type === "GET"
+                        ? "text-blue-400 bg-blue-500/10"
+                        : ep.type === "POST"
+                        ? "text-green-400 bg-green-500/10"
+                        : ep.type === "PUT"
+                        ? "text-amber-400 bg-amber-500/10"
+                        : ep.type === "DELETE"
+                        ? "text-red-400 bg-red-500/10"
+                        : "text-purple-400 bg-purple-500/10";
+                    return (
+                      <SelectItem key={ep.id} value={ep.id} className="text-xs font-mono">
+                        <span className={`px-1 py-0.2 rounded text-[9px] font-bold mr-1.5 ${methodColor}`}>
+                          {ep.type || "GET"}
+                        </span>
+                        <span>{ep.name || "/"}</span>
+                      </SelectItem>
+                    );
+                  })
               )}
             </SelectContent>
           </Select>

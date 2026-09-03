@@ -528,11 +528,13 @@ export const RedisOperationStepSection = ({
               <SelectItem value="all" className="text-xs">
                 🔴 All Redis Instances (Default)
               </SelectItem>
-              {redisInstances.map((inst) => (
-                <SelectItem key={inst.id} value={inst.id} className="text-xs font-mono">
-                  🔴 {inst.data?.label || "Redis Instance"} ({inst.data?.host || "localhost"}:{inst.data?.port || 6379})
-                </SelectItem>
-              ))}
+              {redisInstances
+                .filter((inst) => Boolean(inst && inst.id && inst.id.trim()))
+                .map((inst) => (
+                  <SelectItem key={inst.id} value={inst.id} className="text-xs font-mono">
+                    🔴 {inst.data?.label || "Redis Instance"} ({inst.data?.host || "localhost"}:{inst.data?.port || 6379})
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>
@@ -553,15 +555,17 @@ export const RedisOperationStepSection = ({
               <SelectItem value="__direct__" className="text-xs font-mono text-primary font-semibold">
                 ⚡ Direct Redis Commands (get, set, hget, etc.)
               </SelectItem>
-              {filteredRedisSchemas.map((schema) => {
-                const label = schema.data?.label || schema.data?.tableRef || "Redis Cache";
-                const structure = schema.data?.redisDataStructure || "hash";
-                return (
-                  <SelectItem key={schema.id} value={schema.id} className="text-xs font-mono">
-                    📑 {label} ({structure})
-                  </SelectItem>
-                );
-              })}
+              {filteredRedisSchemas
+                .filter((schema) => Boolean(schema && schema.id && schema.id.trim()))
+                .map((schema) => {
+                  const label = schema.data?.label || schema.data?.tableRef || "Redis Cache";
+                  const structure = schema.data?.redisDataStructure || "hash";
+                  return (
+                    <SelectItem key={schema.id} value={schema.id} className="text-xs font-mono">
+                      📑 {label} ({structure})
+                    </SelectItem>
+                  );
+                })}
             </SelectContent>
           </Select>
         </div>
@@ -580,23 +584,27 @@ export const RedisOperationStepSection = ({
             </SelectTrigger>
             <SelectContent>
               {isDirectMode || !selectedSchemaNode ? (
-                DIRECT_REDIS_COMMANDS.map((cmd) => (
-                  <SelectItem key={cmd.id} value={cmd.id} className="text-xs font-mono">
-                    <span className="font-semibold text-red-300">{cmd.name}</span>
-                    <span className="text-[9px] text-muted-foreground ml-1.5">
-                      — {cmd.description}
-                    </span>
-                  </SelectItem>
-                ))
+                DIRECT_REDIS_COMMANDS
+                  .filter((cmd) => Boolean(cmd && cmd.id && cmd.id.trim()))
+                  .map((cmd) => (
+                    <SelectItem key={cmd.id} value={cmd.id} className="text-xs font-mono">
+                      <span className="font-semibold text-red-300">{cmd.name}</span>
+                      <span className="text-[9px] text-muted-foreground ml-1.5">
+                        — {cmd.description}
+                      </span>
+                    </SelectItem>
+                  ))
               ) : (
-                schemaOperations.map((op) => (
-                  <SelectItem key={op.id} value={op.name} className="text-xs font-mono">
-                    <span className="font-semibold text-red-300">{op.name}</span>
-                    <span className="text-[9px] text-muted-foreground ml-1.5 uppercase">
-                      ({op.kind})
-                    </span>
-                  </SelectItem>
-                ))
+                schemaOperations
+                  .filter((op) => Boolean(op && op.name && op.name.trim()))
+                  .map((op) => (
+                    <SelectItem key={op.id} value={op.name} className="text-xs font-mono">
+                      <span className="font-semibold text-red-300">{op.name}</span>
+                      <span className="text-[9px] text-muted-foreground ml-1.5 uppercase">
+                        ({op.kind})
+                      </span>
+                    </SelectItem>
+                  ))
               )}
             </SelectContent>
           </Select>

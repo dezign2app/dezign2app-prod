@@ -241,11 +241,13 @@ export const ServiceCallStepSection = ({
                   No other microservices available
                 </SelectItem>
               ) : (
-                availableServices.map((svc) => (
-                  <SelectItem key={svc.id} value={svc.id} className="text-xs font-mono">
-                    ☁️ {svc.data?.label || "Service"} ({svc.data?.techStack || "node"})
-                  </SelectItem>
-                ))
+                availableServices
+                  .filter((svc) => Boolean(svc && svc.id && svc.id.trim()))
+                  .map((svc) => (
+                    <SelectItem key={svc.id} value={svc.id} className="text-xs font-mono">
+                      ☁️ {svc.data?.label || "Service"} ({svc.data?.techStack || "node"})
+                    </SelectItem>
+                  ))
               )}
             </SelectContent>
           </Select>
@@ -278,26 +280,28 @@ export const ServiceCallStepSection = ({
                   No endpoints configured on this service
                 </SelectItem>
               ) : (
-                serviceEndpoints.map((ep) => {
-                  const methodColor =
-                    ep.type === "GET"
-                      ? "text-blue-400 bg-blue-500/10"
-                      : ep.type === "POST"
-                      ? "text-green-400 bg-green-500/10"
-                      : ep.type === "PUT"
-                      ? "text-amber-400 bg-amber-500/10"
-                      : ep.type === "DELETE"
-                      ? "text-red-400 bg-red-500/10"
-                      : "text-purple-400 bg-purple-500/10";
-                  return (
-                    <SelectItem key={ep.id} value={ep.id} className="text-xs font-mono">
-                      <span className={`px-1 py-0.2 rounded text-[9px] font-bold mr-1.5 ${methodColor}`}>
-                        {ep.type || "GET"}
-                      </span>
-                      <span>{ep.name || "/"}</span>
-                    </SelectItem>
-                  );
-                })
+                serviceEndpoints
+                  .filter((ep) => Boolean(ep && ep.id && ep.id.trim()))
+                  .map((ep) => {
+                    const methodColor =
+                      ep.type === "GET"
+                        ? "text-blue-400 bg-blue-500/10"
+                        : ep.type === "POST"
+                        ? "text-green-400 bg-green-500/10"
+                        : ep.type === "PUT"
+                        ? "text-amber-400 bg-amber-500/10"
+                        : ep.type === "DELETE"
+                        ? "text-red-400 bg-red-500/10"
+                        : "text-purple-400 bg-purple-500/10";
+                    return (
+                      <SelectItem key={ep.id} value={ep.id} className="text-xs font-mono">
+                        <span className={`px-1 py-0.2 rounded text-[9px] font-bold mr-1.5 ${methodColor}`}>
+                          {ep.type || "GET"}
+                        </span>
+                        <span>{ep.name || "/"}</span>
+                      </SelectItem>
+                    );
+                  })
               )}
             </SelectContent>
           </Select>
@@ -317,14 +321,16 @@ export const ServiceCallStepSection = ({
               <SelectValue placeholder="Choose Client Function..." />
             </SelectTrigger>
             <SelectContent>
-              {clientOptions.map((opt) => (
-                <SelectItem key={opt.id} value={opt.id} className="text-xs font-mono">
-                  <span className="font-semibold text-cyan-300">{opt.name}</span>
-                  <span className="text-[9px] text-muted-foreground ml-1.5">
-                    — {opt.description}
-                  </span>
-                </SelectItem>
-              ))}
+              {clientOptions
+                .filter((opt) => Boolean(opt && opt.id && opt.id.trim()))
+                .map((opt) => (
+                  <SelectItem key={opt.id} value={opt.id} className="text-xs font-mono">
+                    <span className="font-semibold text-cyan-300">{opt.name}</span>
+                    <span className="text-[9px] text-muted-foreground ml-1.5">
+                      — {opt.description}
+                    </span>
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>

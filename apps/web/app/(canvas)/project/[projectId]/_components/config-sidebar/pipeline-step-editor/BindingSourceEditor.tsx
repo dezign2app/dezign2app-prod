@@ -62,11 +62,13 @@ export const BindingSourceEditor = ({
           <SelectValue placeholder="Source..." />
         </SelectTrigger>
         <SelectContent>
-          {availableSources.map((s) => (
-            <SelectItem key={s.id} value={s.id} className="text-xs">
-              {s.label}
-            </SelectItem>
-          ))}
+          {availableSources
+            .filter((s) => Boolean(s && s.id && s.id.trim()))
+            .map((s) => (
+              <SelectItem key={s.id} value={s.id} className="text-xs">
+                {s.label}
+              </SelectItem>
+            ))}
         </SelectContent>
       </Select>
 

@@ -228,11 +228,13 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
               <SelectItem value="__all__" className="text-xs">
                 All Web Applications ({allWebPageNodes.length} pages)
               </SelectItem>
-              {webAppNodes.map((w) => (
-                <SelectItem key={w.id} value={w.id} className="text-xs">
-                  {w.data?.label || w.data?.appSlug || "WebApp"}
-                </SelectItem>
-              ))}
+              {webAppNodes
+                .filter((w) => Boolean(w && w.id && w.id.trim()))
+                .map((w) => (
+                  <SelectItem key={w.id} value={w.id} className="text-xs">
+                    {w.data?.label || w.data?.appSlug || "WebApp"}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>
@@ -261,18 +263,20 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
                   : "No WebPage nodes on canvas"}
               </SelectItem>
             ) : (
-              filteredWebPageNodes.map((n) => {
-                const route = n.data?.label
-                  ? n.data.label.startsWith("/")
-                    ? n.data.label
-                    : `/${n.data.label}`
-                  : n.id;
-                return (
-                  <SelectItem key={n.id} value={n.id} className="text-xs">
-                    {route} {n.data?.appName ? `(${n.data.appName})` : ""}
-                  </SelectItem>
-                );
-              })
+              filteredWebPageNodes
+                .filter((n) => Boolean(n && n.id && n.id.trim()))
+                .map((n) => {
+                  const route = n.data?.label
+                    ? n.data.label.startsWith("/")
+                      ? n.data.label
+                      : `/${n.data.label}`
+                    : n.id;
+                  return (
+                    <SelectItem key={n.id} value={n.id} className="text-xs">
+                      {route} {n.data?.appName ? `(${n.data.appName})` : ""}
+                    </SelectItem>
+                  );
+                })
             )}
           </SelectContent>
         </Select>
@@ -293,11 +297,13 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {PROTOCOL_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                {opt.label}
-              </SelectItem>
-            ))}
+            {PROTOCOL_OPTIONS
+              .filter((opt) => Boolean(opt && opt.value && opt.value.trim()))
+              .map((opt) => (
+                <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                  {opt.label}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
       </div>

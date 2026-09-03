@@ -109,7 +109,7 @@ export const SwitchStepSection = ({
             </SelectTrigger>
             <SelectContent>
               {availableSources
-                .filter((s) => s.id !== "literal")
+                .filter((s) => Boolean(s && s.id && s.id.trim() && s.id !== "literal"))
                 .map((s) => (
                   <SelectItem key={s.id} value={s.id} className="text-xs">
                     {s.label}

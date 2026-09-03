@@ -122,6 +122,13 @@ function SelectItem({
   children,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Item>) {
+  if (
+    props.value === undefined ||
+    props.value === null ||
+    String(props.value).trim() === ""
+  ) {
+    return null;
+  }
   return (
     <SelectPrimitive.Item
       data-slot="select-item"

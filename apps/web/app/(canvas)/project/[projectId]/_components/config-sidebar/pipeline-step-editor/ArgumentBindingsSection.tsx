@@ -136,12 +136,15 @@ export const ArgumentBindingsSection = ({
       )}
 
       {bindings.map((binding, bi) => {
-        const hasExpectedArgs = expectedArgs.length > 0;
+        const validExpectedArgs = expectedArgs.filter(
+          (a) => Boolean(a && a.name && a.name.trim().length > 0),
+        );
+        const hasExpectedArgs = validExpectedArgs.length > 0;
         const isCustomMode = Boolean(customModeRows[bi]);
-        const matchingExpectedArg = expectedArgs.find(
+        const matchingExpectedArg = validExpectedArgs.find(
           (a) => a.name.toLowerCase() === (binding.argName || "").trim().toLowerCase(),
         );
-        const isCustomValue = Boolean(binding.argName) && !matchingExpectedArg;
+        const isCustomValue = Boolean(binding.argName?.trim()) && !matchingExpectedArg;
 
         return (
           <div
@@ -152,7 +155,7 @@ export const ArgumentBindingsSection = ({
             <div className="min-w-0">
               {hasExpectedArgs && !isCustomMode ? (
                 <Select
-                  value={matchingExpectedArg ? matchingExpectedArg.name : (binding.argName || undefined)}
+                  value={matchingExpectedArg ? matchingExpectedArg.name : (binding.argName?.trim() || undefined)}
                   onValueChange={(val) => handleArgSelect(bi, binding, val)}
                 >
                   <SelectTrigger className="h-7 text-xs font-mono bg-background/70 border-border/60 w-full min-w-0">
@@ -164,7 +167,7 @@ export const ArgumentBindingsSection = ({
                     <div className="px-2 py-1 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
                       Function Input Variables
                     </div>
-                    {expectedArgs.map((arg) => {
+                    {validExpectedArgs.map((arg) => {
                       const isAlreadyBound = bindings.some(
                         (b, idx) =>
                           idx !== bi &&
@@ -194,8 +197,8 @@ export const ArgumentBindingsSection = ({
                       );
                     })}
 
-                    {isCustomValue && (
-                      <SelectItem value={binding.argName} className="text-xs font-mono">
+                    {isCustomValue && Boolean(binding.argName?.trim()) && (
+                      <SelectItem value={binding.argName.trim()} className="text-xs font-mono">
                         <div className="flex items-center justify-between w-full gap-2 pr-2">
                           <span>{binding.argName}</span>
                           <span className="text-[9px] text-muted-foreground font-sans italic shrink-0">

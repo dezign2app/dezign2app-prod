@@ -248,7 +248,9 @@ export const ReturnResponseStepRow = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {HTTP_STATUS_OPTIONS.map((opt) => (
+                  {HTTP_STATUS_OPTIONS.filter(
+                    (opt) => opt && opt.code != null && String(opt.code).trim() !== "",
+                  ).map((opt) => (
                     <SelectItem
                       key={opt.code}
                       value={String(opt.code)}
