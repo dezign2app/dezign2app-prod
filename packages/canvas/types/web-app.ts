@@ -89,6 +89,7 @@ export interface CanvasWebAppNodeData {
   corsOrigins?: string;
   showNav?: boolean;
   customDependencies?: NodeDependencyItem[];
+  envVars?: Array<{ id: string; name: string; description?: string }>;
 }
 
 /** Web Page node fields (canvas type). */

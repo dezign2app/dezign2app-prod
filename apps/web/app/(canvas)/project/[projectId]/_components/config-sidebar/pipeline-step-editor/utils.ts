@@ -34,6 +34,7 @@ import {
   ConditionOperator,
 } from "./types";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { extractNestedPaths, parseRawJsonSafe } from "@/lib/utils/nestedJsonSchema";
 import React from "react";
 
 // ---------------------------------------------------------------------------
@@ -515,6 +516,37 @@ export function getAvailableSources(
             stepPaths.push({ path: col.name, type: col.type });
           }
         });
+      }
+    }
+
+    // If step is a service_call (calling another service or external API), extract response fields & nested paths
+    if (s.type === "service_call") {
+      const allStoreEndpoints = useBackendCanvasStore.getState().endpoints;
+      const targetEp = allStoreEndpoints.find(
+        (ep) =>
+          ep.id === s.tableNodeId ||
+          ep.id === s.operationId ||
+          ep.name === s.tableNodeId,
+      );
+      if (targetEp?.responseBody) {
+        if (Array.isArray(targetEp.responseBody.fields)) {
+          targetEp.responseBody.fields.forEach((f) => {
+            if (f.name && !stepPaths.some((p) => p.path === f.name)) {
+              stepPaths.push({ path: f.name, type: f.type || "string" });
+            }
+          });
+        }
+        if (targetEp.responseBody.rawJson) {
+          const { parsed, error } = parseRawJsonSafe(targetEp.responseBody.rawJson);
+          if (!error && parsed !== null) {
+            const nested = extractNestedPaths(parsed);
+            nested.forEach((item) => {
+              if (item.path && !stepPaths.some((p) => p.path === item.path)) {
+                stepPaths.push({ path: item.path, type: item.type });
+              }
+            });
+          }
+        }
       }
     }
 

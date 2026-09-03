@@ -119,6 +119,7 @@ export interface JSONArray extends Array<JSONValue> {}
 
 export type ConfigItemType =
   | "service"
+  | "external"
   | "endpoint"
   | "event"
   | "task"

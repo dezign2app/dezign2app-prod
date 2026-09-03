@@ -46,7 +46,25 @@ export const nodeDependencyItemInputSchema = z.object({
 
 export const externalDataSchema = simpleDataSchema.extend({
   baseUrl: z.string().optional(),
+  authType: z.enum(["none", "bearer", "apiKey", "basic", "custom"]).optional(),
+  authHeader: z.string().optional(),
+  authQueryParam: z.string().optional(),
+  apiKey: z.string().optional(),
+  apiSecret: z.string().optional(),
+  docsUrl: z.string().optional(),
+  timeout: z.union([z.string(), z.number()]).optional(),
+  rateLimit: z.string().optional(),
+  defaultHeaders: z.array(parameterSchema).optional(),
   actions: z.array(resourceItemSchema).optional(),
+  envVars: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        description: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const pageRefDataSchema = simpleDataSchema.extend({
@@ -331,6 +349,15 @@ export const webAppDataSchema = baseNodeDataSchema
     corsOrigins: z.string().optional(),
     showNav: z.boolean().optional(),
     customDependencies: z.array(nodeDependencyItemSchema).optional(),
+    envVars: z
+      .array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          description: z.string().optional(),
+        }),
+      )
+      .optional(),
   })
   .passthrough();
 export type WebAppNodeData = z.infer<typeof webAppDataSchema>;
@@ -368,6 +395,15 @@ export const serviceDataSchema = baseNodeDataSchema
     /** Local data-transformation helper functions attached to this service */
     transformerHelpers: z.array(transformerHelperSchema).optional(),
     customDependencies: z.array(nodeDependencyItemSchema).optional(),
+    envVars: z
+      .array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          description: z.string().optional(),
+        }),
+      )
+      .optional(),
   })
   .strict();
 export type ServiceNodeData = z.infer<typeof serviceDataSchema>;

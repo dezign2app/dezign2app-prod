@@ -24,6 +24,7 @@ import {
 } from "@workspace/ui/components/alert-dialog";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader } from "../../common";
+import { NodeEnvVarsSection } from "../ai-security/ExternalEnvVarsDrawer";
 
 const DEFAULT_REDIRECTS = {
   "no-auth": "/login",
@@ -421,6 +422,9 @@ export const WebAppNode = ({
           <Plus className="w-3 h-3" /> Add Protected Section
         </button>
       </div>
+
+      {/* Environment Variables (.env) Section */}
+      <NodeEnvVarsSection nodeId={id} />
 
       {/* Delete Zone Confirmation Dialog */}
       <AlertDialog open={!!zoneToDelete} onOpenChange={(open) => !open && setZoneToDelete(null)}>

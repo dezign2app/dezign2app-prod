@@ -156,6 +156,7 @@ export function getNodeDimensions(node: LayoutNode): {
     case "port":
       return { width: 140, height: 50 };
     case "service":
+    case "external":
     case "api_gateway":
     case "express":
     case "fastapi":

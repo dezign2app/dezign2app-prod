@@ -1,6 +1,7 @@
 import { BackendNode, BackendEdge, Endpoint, AnyMessagingResource, KafkaTopic, PublishedEventItem, Parameter } from "@/types/canvas";
 import { PipelineStepDraft } from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/pipeline-step-editor/types";
 import { toFolderName, toPascalCase } from "@/lib/compiler/utils";
+import { isOutputSchemaMissing } from "./nestedJsonSchema";
 
 /**
  * Returns all transformers (or transformer refs) connected via canvas edges to an endpoint or consumer.
@@ -312,6 +313,15 @@ export function isStepInputUnconfigured(
     return false;
   }
 
+  // 5. Service Call Step validation (including external services)
+  if (step.type === "service_call") {
+    if (!step.databaseId) return true;
+    const targetNode = allNodes.find((n) => n.id === step.databaseId);
+    if (targetNode?.type === "external" && !targetNode.data?.baseUrl?.trim()) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -329,6 +339,16 @@ export function isEndpointPipelineUnconfigured(
   allNodes: BackendNode[] = [],
   allEdges: BackendEdge[] = [],
 ): boolean {
+  const currentNode = allNodes.find((n) => n.id === serviceNodeId);
+  if (currentNode?.type === "external") {
+    if (!currentNode.data?.baseUrl?.trim()) {
+      return true;
+    }
+    return isOutputSchemaMissing(
+      endpointOrConsumer as Parameters<typeof isOutputSchemaMissing>[0],
+    );
+  }
+
   const steps = endpointOrConsumer.pipelineSteps || [];
 
   // Check 1: Are there any existing steps in the pipeline with unconfigured inputs?
@@ -337,6 +357,27 @@ export function isEndpointPipelineUnconfigured(
     .some((s) => isStepInputUnconfigured(s, allNodes));
 
   if (hasUnconfiguredStep) return true;
+
+  // Check 1b: Are there service_call steps calling external endpoints that lack an output schema or Base URL?
+  const hasUnconfiguredExternalCall = steps
+    .filter((s) => s.type === "service_call")
+    .some((s) => {
+      const targetNode = allNodes.find((n) => n.id === s.databaseId);
+      if (targetNode?.type === "external") {
+        if (!targetNode.data?.baseUrl?.trim()) {
+          return true;
+        }
+        const targetEp = (targetNode.data?.endpoints as Endpoint[] | undefined)?.find(
+          (ep) => ep.id === s.tableNodeId || ep.id === s.operationId,
+        );
+        if (targetEp && isOutputSchemaMissing(targetEp)) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+  if (hasUnconfiguredExternalCall) return true;
 
   // Check 2: Are there transformers connected via canvas edges to this endpoint/consumer?
   const connectedTransformers = getConnectedTransformersForEndpoint(

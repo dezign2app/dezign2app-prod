@@ -23,6 +23,7 @@ import {
   INTER_SERVICE_PROTOCOL_GRPC,
   INTER_SERVICE_PROTOCOL_HTTP,
 } from "@workspace/canvas";
+import { NodeEnvVarsSection } from "../ai-security/ExternalEnvVarsDrawer";
 
 
 
@@ -213,6 +214,9 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         onDelete={(eventId) => deleteEvent(eventId)}
         onUpdateItem={(eventId, changes) => updateEvent(eventId, changes)}
       />
+
+      {/* Environment Variables (.env) Section */}
+      <NodeEnvVarsSection nodeId={id} />
 
       <div className="p-3 bg-secondary/10 flex flex-col gap-3 rounded-b-xl">
         <div

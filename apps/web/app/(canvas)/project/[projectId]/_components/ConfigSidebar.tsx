@@ -22,6 +22,7 @@ import { WebAppConfig } from "./config-sidebar/WebAppConfig";
 import { WebPageConfig } from "./config-sidebar/WebPageConfig";
 import { WebPageSectionConfig } from "./config-sidebar/WebPageSectionConfig";
 import { PaymentsConfig } from "./config-sidebar/PaymentsConfig";
+import { ExternalConfig } from "./config-sidebar/ExternalConfig";
 import { ZoneConfig } from "./config-sidebar/ZoneConfig";
 import { EventTestingConfig } from "./config-sidebar/EventTestingConfig";
 
@@ -210,6 +211,8 @@ export const ConfigSidebar = () => {
             <AuthConfig id={id} nodeId={nodeId} />
           ) : type === "service" ? (
             <ServiceConfig id={id} nodeId={nodeId} />
+          ) : type === "external" ? (
+            <ExternalConfig id={id} nodeId={nodeId} />
           ) : type === "webApp" ? (
             <WebAppConfig id={id} nodeId={nodeId} />
           ) : type === "webPage" ? (

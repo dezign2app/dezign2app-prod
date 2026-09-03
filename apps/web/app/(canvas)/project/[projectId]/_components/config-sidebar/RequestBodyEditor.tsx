@@ -10,6 +10,7 @@ import {
 } from "@workspace/ui/components/select";
 import { PARAMETER_TYPES, Schema, Parameter } from "@/types/canvas";
 import { generateId, LocalInput, LocalTextarea } from "../backend-nodes/graph-nodes/common";
+import { useBufferedInput } from "@/lib/hooks/useBufferedInput";
 
 export type RequestBodyMode = "field_builder" | "raw_json";
 
@@ -75,26 +76,30 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
   };
 
   // ---- raw-json helpers ------------------------------------------------------
-  const [rawInput, setRawInput] = React.useState<string | undefined>(undefined);
   const [jsonError, setJsonError] = React.useState<string | null>(null);
 
-  const handleRawChange = (val: string) => {
-    setRawInput(val);
-    onSchemaChange({ ...safeSchema, rawJson: val });
-    if (!val.trim()) { setJsonError(null); return; }
-    try { JSON.parse(val); setJsonError(null); }
-    catch (err) { setJsonError(err instanceof Error ? err.message : String(err)); }
-  };
+  const commitRawJson = React.useCallback(
+    (val: string) => {
+      onSchemaChange({ ...safeSchema, rawJson: val });
+      if (!val.trim()) {
+        setJsonError(null);
+        return;
+      }
+      try {
+        JSON.parse(val);
+        setJsonError(null);
+      } catch (err) {
+        setJsonError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [safeSchema, onSchemaChange],
+  );
 
-  // Reset local raw state when schema changes externally (e.g. mode switch or live sync)
-  const prevRawRef = React.useRef(schema?.rawJson);
-  const prevModeRef = React.useRef(mode);
-  if (prevModeRef.current !== mode || prevRawRef.current !== schema?.rawJson) {
-    prevModeRef.current = mode;
-    prevRawRef.current = schema?.rawJson;
-    setRawInput(undefined);
-    setJsonError(null);
-  }
+  const rawBuffer = useBufferedInput(
+    safeSchema.rawJson || "",
+    commitRawJson,
+    250,
+  );
 
   // ---------------------------------------------------------------------------
   return (
@@ -257,8 +262,9 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
               jsonError ? "border-destructive focus-visible:ring-destructive" : ""
             }`}
             placeholder={'{ "email": "string", "password": "string" }'}
-            value={rawInput !== undefined ? rawInput : safeSchema.rawJson || ""}
-            onChange={(e) => handleRawChange(e.target.value)}
+            value={rawBuffer.value}
+            onChange={(e) => rawBuffer.onChange(e.target.value)}
+            onBlur={rawBuffer.flush}
           />
           {jsonError && (
             <span className="text-[10px] text-destructive font-mono bg-destructive/10 px-2 py-1 rounded">
