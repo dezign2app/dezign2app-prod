@@ -269,4 +269,97 @@ describe("pipeline-step-editor: Database Ref Node and Function Edge Synchronizat
     );
     expect(remainingEdges.length).toBe(1);
   });
+
+  it("does not delete edges or endpoint databaseNodeIds connected to other db_ref nodes of the same database when 1 step is deleted", () => {
+    // Add second entity for orders in same database
+    const orderEntityId = "entity-orders";
+    useBackendCanvasStore.setState((s) => ({
+      nodes: [
+        ...s.nodes,
+        {
+          id: orderEntityId,
+          type: "entity",
+          position: { x: 500, y: 350 },
+          fractionalIndex: "a4",
+          data: {
+            label: "orders",
+            databaseId,
+            columns: [
+              { name: "id", type: "uuid", isPrimary: true },
+              { name: "total", type: "integer" },
+            ],
+          },
+        },
+      ],
+    }));
+
+    // Connect step 1: users (findAllUsers)
+    const userResult = ensureDatabaseRefConnection({
+      tableNodeId: entityId,
+      databaseId,
+      serviceNodeId,
+      endpointId,
+      functionName: "findAllUsers",
+    });
+
+    // Connect step 2: orders (findAllOrders)
+    const orderResult = ensureDatabaseRefConnection({
+      tableNodeId: orderEntityId,
+      databaseId,
+      serviceNodeId,
+      endpointId,
+      functionName: "findAllOrders",
+    });
+
+    let state = useBackendCanvasStore.getState();
+    expect(state.edges.length).toBe(2);
+
+    const ep = state.endpoints.find((e) => e.id === endpointId);
+    expect(ep?.databaseNodeIds).toContain(userResult?.dbRefNodeId);
+    expect(ep?.databaseNodeIds).toContain(orderResult?.dbRefNodeId);
+
+    // Now delete step 1 (users) while step 2 (orders) remains
+    const remainingOrderStep: PipelineStepDraft = {
+      id: "step-order",
+      name: "findAllOrdersResult",
+      type: "db_operation",
+      tableNodeId: orderEntityId,
+      databaseId,
+      functionRef: {
+        name: "findAllOrders",
+        importPath: "@/lib/db",
+      },
+    };
+
+    cleanupDatabaseRefConnection({
+      tableNodeId: entityId,
+      databaseId,
+      serviceNodeId,
+      endpointId,
+      functionName: "findAllUsers",
+      remainingSteps: [remainingOrderStep],
+    });
+
+    state = useBackendCanvasStore.getState();
+
+    // Edge to users db_ref was deleted
+    const userEdges = state.edges.filter(
+      (e) => e.target === userResult?.dbRefNodeId,
+    );
+    expect(userEdges.length).toBe(0);
+
+    // Edge to orders db_ref is STILL INTACT!
+    const orderEdges = state.edges.filter(
+      (e) =>
+        e.source === serviceNodeId &&
+        e.target === orderResult?.dbRefNodeId &&
+        e.targetHandle === "func-findAllOrders",
+    );
+    expect(orderEdges.length).toBe(1);
+
+    // Endpoint databaseNodeIds still contains orders db_ref node ID!
+    const updatedEp = state.endpoints.find((e) => e.id === endpointId);
+    expect(updatedEp?.databaseNodeIds).not.toContain(userResult?.dbRefNodeId);
+    expect(updatedEp?.databaseNodeIds).toContain(orderResult?.dbRefNodeId);
+  });
 });

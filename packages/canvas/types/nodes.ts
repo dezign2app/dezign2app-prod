@@ -105,6 +105,7 @@ export interface BaseNodeData {
   functionName?: string;
   scope?: "global" | "local";
   targetServiceId?: string;
+  serviceNodeId?: string;
   targetEndpointId?: string;
   targetEndpointIds?: string[];
   targetEventId?: string;

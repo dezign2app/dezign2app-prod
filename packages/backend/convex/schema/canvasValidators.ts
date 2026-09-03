@@ -552,6 +552,8 @@ export const backendNodeDataValidator = v.union(
     label: v.string(),
     color: v.optional(v.string()),
     parentId: v.optional(v.string()),
+    targetServiceId: v.optional(v.string()),
+    serviceNodeId: v.optional(v.string()),
     position: v.optional(v.object({ x: v.number(), y: v.number() })),
     style: v.optional(
       v.record(

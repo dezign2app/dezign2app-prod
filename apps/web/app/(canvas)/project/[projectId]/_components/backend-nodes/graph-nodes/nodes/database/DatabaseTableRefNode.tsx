@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useMemo } from "react";
-import { Handle, Position, NodeProps } from "@xyflow/react";
-import { Database, Server, Table2, Settings, Trash, Code2 } from "lucide-react";
+import React, { useMemo, useState, useEffect } from "react";
+import { Handle, Position, NodeProps, useUpdateNodeInternals } from "@xyflow/react";
+import { Database, Server, Table2, Settings, Trash, Code2, ChevronDown, ChevronRight } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -19,6 +19,7 @@ import {
 } from "../../common";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 import { DbOperationFunction } from "@workspace/canvas/types";
+import { useSectionCollapseStore } from "@/lib/stores/sectionCollapseStore";
 
 export const DatabaseTableRefNode = ({
   id,
@@ -92,6 +93,34 @@ export const DatabaseTableRefNode = ({
     return getEntityDbOperations(selectedTable, nodes);
   }, [selectedTable, nodes]);
 
+  const isOperationsCollapsed = useSectionCollapseStore((s) =>
+    s.isSectionCollapsed(id, "operations"),
+  );
+  const toggleSectionCollapsed = useSectionCollapseStore(
+    (s) => s.toggleSectionCollapsed,
+  );
+
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    if (typeof updateNodeInternals === "function") {
+      updateNodeInternals(id);
+    }
+  }, [isOperationsCollapsed, id, updateNodeInternals, operations.length]);
+
+  const hasAnyConnectedOperation = useMemo(() => {
+    return edges.some(
+      (e) =>
+        e.target === id &&
+        operations.some(
+          (op) =>
+            e.targetHandle === `func-${op.name}` ||
+            e.targetHandle === `func-${op.id}` ||
+            (!e.targetHandle && op === operations[0]),
+        ),
+    );
+  }, [edges, id, operations]);
+
   const engineName =
     selectedDatabase?.data?.dbEngine ||
     parentDatabase?.data?.dbEngine ||
@@ -115,7 +144,7 @@ export const DatabaseTableRefNode = ({
   return (
     <div
       className={cn(
-        "group relative flex flex-col gap-2 p-2.5 rounded-xl bg-card/95 backdrop-blur border-2 min-w-[210px] max-w-[260px] shadow-md transition-all duration-150 cursor-pointer select-none",
+        "shadow-md rounded-xl bg-card border-2 min-w-[280px] max-w-[340px] flex flex-col transition-all duration-300 select-none cursor-pointer",
         selected
           ? "border-orange-500 shadow-orange-500/15 ring-1 ring-orange-500/20"
           : "border-border/80 hover:border-orange-500/50 hover:shadow-lg",
@@ -123,42 +152,49 @@ export const DatabaseTableRefNode = ({
       )}
       onDoubleClick={handleOpenConfig}
     >
-      {/* Top row: Icon + Title + Engine Badge + Action Buttons */}
-      <div className="flex items-center justify-between gap-1.5">
-        <div className="flex items-center gap-1.5 min-w-0">
+      {/* Top Header: matches NodeHeader structure and padding with orange accents */}
+      <div className="px-3 py-2 border-b flex items-center justify-between gap-2 rounded-t-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20 group">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           <div className="p-1 rounded-md bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/25 shrink-0">
-            <Database size={12} />
+            <Database size={14} />
           </div>
-          <span className="text-[9px] uppercase font-bold tracking-wider text-orange-600 dark:text-orange-400 truncate">
-            Table Ref
-          </span>
-          {engineName && (
-            <span className="text-[7px] font-mono px-1 py-0.2 rounded font-medium bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 uppercase shrink-0">
-              {engineName}
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] uppercase font-bold tracking-wider text-orange-600 dark:text-orange-400">
+                Table Ref
+              </span>
+              {engineName && (
+                <span className="text-[8px] font-mono px-1 py-0.2 rounded font-semibold bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/20 uppercase shrink-0">
+                  {engineName}
+                </span>
+              )}
+            </div>
+            <span className="font-semibold text-xs text-foreground truncate">
+              {selectedTable?.data?.label || data.label || "Table Ref"}
             </span>
-          )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <button
-            className="p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 transition-colors"
+            className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all cursor-pointer"
             onClick={handleOpenConfig}
             title="Configure Database"
           >
-            <Settings size={12} />
+            <Settings size={13} />
           </button>
           <button
-            className="p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+            className="p-1 rounded hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-all cursor-pointer"
             onClick={handleDelete}
             title="Delete Node"
           >
-            <Trash size={12} />
+            <Trash size={13} />
           </button>
         </div>
       </div>
 
-      {/* Dropdowns in flex-col */}
-      <div className="flex flex-col gap-1.5 nodrag">
+      {/* Selectors section: matches ServiceNode body bg-secondary/5 and border-b */}
+      <div className="px-3 py-2.5 bg-secondary/5 border-b flex flex-col gap-2 nodrag">
         {/* 1. Database Selector */}
         <Select
           value={selectedDatabaseId || "__all__"}
@@ -185,9 +221,9 @@ export const DatabaseTableRefNode = ({
             });
           }}
         >
-          <SelectTrigger className="h-6 w-full text-[11px] font-medium bg-background/50 border-border/70 hover:border-orange-500/50 px-2 py-0 truncate overflow-hidden">
+          <SelectTrigger className="h-7 w-full text-xs font-medium bg-background/80 hover:bg-background border-border/70 hover:border-orange-500/50 px-2.5 py-0 truncate shadow-none">
             <div className="flex items-center gap-1.5 min-w-0 truncate">
-              <Server size={11} className="text-orange-500/80 shrink-0" />
+              <Server size={12} className="text-orange-500 shrink-0" />
               <span className="truncate">
                 {selectedDatabase?.data?.label || (selectedDatabaseId && selectedDatabaseId !== "__all__" ? "Database" : "All Databases")}
               </span>
@@ -225,9 +261,9 @@ export const DatabaseTableRefNode = ({
             });
           }}
         >
-          <SelectTrigger className="h-6 w-full text-[11px] font-semibold bg-background/50 border-border/70 hover:border-orange-500/50 px-2 py-0 truncate overflow-hidden">
+          <SelectTrigger className="h-7 w-full text-xs font-semibold bg-background/80 hover:bg-background border-border/70 hover:border-orange-500/50 px-2.5 py-0 truncate shadow-none">
             <div className="flex items-center gap-1.5 min-w-0 truncate">
-              <Table2 size={11} className="text-orange-500 shrink-0" />
+              <Table2 size={12} className="text-orange-500 shrink-0" />
               <span className="truncate">
                 {selectedTable?.data?.label || "Select Table..."}
               </span>
@@ -251,20 +287,78 @@ export const DatabaseTableRefNode = ({
         </Select>
       </div>
 
-      {/* Functions / Operations List */}
-      {selectedTable && operations.length > 0 && (
-        <div className="flex flex-col gap-1 pt-1.5 border-t border-border/50">
-          <div className="flex items-center justify-between px-0.5">
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-1">
-              <Code2 size={10} className="text-orange-500" />
-              Operations
-            </span>
-            <span className="text-[8px] font-mono text-muted-foreground/60">
-              {operations.length}
-            </span>
-          </div>
+      {/* Section Header: Collapsible Operations banner */}
+      <div
+        className={cn(
+          "px-3 py-1 bg-secondary/40 border-b text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex justify-between items-center cursor-pointer hover:bg-secondary/60 transition-colors nodrag select-none relative group/ops",
+          isOperationsCollapsed && "rounded-b-xl border-b-0",
+        )}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleSectionCollapsed(id, "operations");
+        }}
+        title={isOperationsCollapsed ? "Expand Operations" : "Collapse Operations"}
+      >
+        {/* Collapsed Handles: all function handles anchor directly to the Operations header row */}
+        {isOperationsCollapsed && (
+          <>
+            {operations.map((op) => (
+              <React.Fragment key={op.id || op.name}>
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id={`func-${op.name}`}
+                  className={cn(
+                    "w-2.5 h-2.5 border-2 transition-colors -left-[5px]",
+                    hasAnyConnectedOperation
+                      ? "!bg-orange-500 !border-orange-500 ring-2 ring-orange-500/30"
+                      : "!bg-background border-muted-foreground/60 hover:!bg-orange-400",
+                  )}
+                  style={{ top: "50%", transform: "translateY(-50%)" }}
+                />
+                {op.id && op.id !== op.name && (
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={`func-${op.id}`}
+                    className="opacity-0 pointer-events-none -left-[5px]"
+                    style={{ top: "50%", transform: "translateY(-50%)" }}
+                  />
+                )}
+              </React.Fragment>
+            ))}
+          </>
+        )}
 
-          <div className="flex flex-col gap-1">
+        <span className="flex items-center gap-1.5">
+          <div className="text-muted-foreground group-hover/ops:text-foreground transition-transform">
+            {isOperationsCollapsed ? (
+              <ChevronRight size={12} />
+            ) : (
+              <ChevronDown size={12} />
+            )}
+          </div>
+          <Code2 size={11} className="text-orange-500" />
+          Operations
+        </span>
+
+        <div className="flex items-center gap-1.5">
+          {hasAnyConnectedOperation && isOperationsCollapsed && (
+            <span
+              className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0 animate-pulse"
+              title="Connected Operations"
+            />
+          )}
+          <span className="text-[9px] font-mono text-muted-foreground/70">
+            {operations.length}
+          </span>
+        </div>
+      </div>
+
+      {/* Functions / Operations List: shown when expanded */}
+      {!isOperationsCollapsed && (
+        selectedTable && operations.length > 0 ? (
+          <div className="flex flex-col">
             {operations.map((op) => {
               const isConnected = edges.some(
                 (e) =>
@@ -276,14 +370,14 @@ export const DatabaseTableRefNode = ({
 
               const badgeColor =
                 op.kind === "findAll" || op.kind === "findById"
-                  ? "bg-blue-500/15 text-blue-500 border-blue-500/25"
+                  ? "bg-blue-500/15 text-blue-400 border-blue-500/30"
                   : op.kind === "create"
-                  ? "bg-emerald-500/15 text-emerald-500 border-emerald-500/25"
+                  ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
                   : op.kind === "update"
-                  ? "bg-amber-500/15 text-amber-500 border-amber-500/25"
+                  ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
                   : op.kind === "delete"
-                  ? "bg-rose-500/15 text-rose-500 border-rose-500/25"
-                  : "bg-purple-500/15 text-purple-500 border-purple-500/25";
+                  ? "bg-rose-500/15 text-rose-400 border-rose-500/30"
+                  : "bg-purple-500/15 text-purple-400 border-purple-500/30";
 
               const badgeLabel =
                 op.kind === "findAll"
@@ -302,22 +396,22 @@ export const DatabaseTableRefNode = ({
                 <div
                   key={op.id || op.name}
                   className={cn(
-                    "relative flex items-center justify-between gap-1.5 px-2 py-1 rounded-md text-[10px] border transition-colors",
+                    "flex items-center justify-between px-3 py-2 border-b last:border-b-0 text-xs relative group/row transition-colors nodrag",
                     isConnected
-                      ? "bg-orange-500/10 border-orange-500/40 text-foreground font-medium"
-                      : "bg-secondary/30 border-border/40 text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                      ? "text-foreground font-medium"
+                      : "hover:bg-secondary/20 text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  {/* Target Handle for this specific function */}
+                  {/* Target Handle sitting cleanly on the left card border */}
                   <Handle
                     type="target"
                     position={Position.Left}
                     id={`func-${op.name}`}
                     className={cn(
-                      "w-2 h-2 -left-1 border border-background transition-all",
+                      "w-2.5 h-2.5 border-2 transition-colors -left-[5px]",
                       isConnected
-                        ? "!bg-orange-500 ring-2 ring-orange-500/30"
-                        : "!bg-muted-foreground/50 hover:!bg-orange-400",
+                        ? "!bg-orange-500 !border-orange-500 ring-2 ring-orange-500/30"
+                        : "!bg-background border-muted-foreground/60 hover:!bg-orange-400",
                     )}
                     style={{ top: "50%", transform: "translateY(-50%)" }}
                   />
@@ -326,18 +420,21 @@ export const DatabaseTableRefNode = ({
                       type="target"
                       position={Position.Left}
                       id={`func-${op.id}`}
-                      className="opacity-0 pointer-events-none -left-1"
+                      className="opacity-0 pointer-events-none -left-[5px]"
                       style={{ top: "50%", transform: "translateY(-50%)" }}
                     />
                   )}
 
-                  <span className="font-mono truncate" title={op.signature || op.name}>
+                  <span
+                    className="font-mono text-xs truncate select-text"
+                    title={op.signature || op.name}
+                  >
                     {op.name}
                   </span>
 
                   <span
                     className={cn(
-                      "text-[8px] font-bold px-1 py-0.2 rounded border uppercase shrink-0 font-mono",
+                      "text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase shrink-0 font-mono tracking-wider",
                       badgeColor,
                     )}
                   >
@@ -347,17 +444,12 @@ export const DatabaseTableRefNode = ({
               );
             })}
           </div>
-        </div>
+        ) : (
+          <div className="px-3 py-4 text-center text-xs text-muted-foreground/60 italic">
+            {selectedTable ? "No operations available" : "Select a table to view operations"}
+          </div>
+        )
       )}
-
-      {/* Fallback Target Handle on Left for backward compatibility */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="database-target"
-        className="w-2.5 h-2.5 !bg-orange-500 border-2 border-background"
-        style={{ top: "20px" }}
-      />
     </div>
   );
 };
