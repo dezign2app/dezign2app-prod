@@ -7,6 +7,7 @@ import {
   History,
   Plus,
   ArrowLeft,
+  X,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
@@ -95,7 +96,7 @@ export function AiPanelHeader({
               onClick={onClose}
               title="Collapse AI Panel"
             >
-              <Trash className="w-3.5 h-3.5" />
+              <X className="w-3.5 h-3.5" />
             </Button>
           </div>
         </>
@@ -171,7 +172,7 @@ export function AiPanelHeader({
                   className="h-6 w-6 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent rounded"
                   onClick={onClose}
                 >
-                  <Trash className="w-3.5 h-3.5" />
+                  <X className="w-3.5 h-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Collapse AI Panel</TooltipContent>

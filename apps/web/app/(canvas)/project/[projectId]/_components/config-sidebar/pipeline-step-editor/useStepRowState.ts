@@ -436,15 +436,43 @@ export function useStepRowState({
   );
 
   const addBinding = useCallback(() => {
+    const existingNames = new Set(
+      (step.inputBindings || []).map((b) => b.argName.trim().toLowerCase()),
+    );
+    const nextUnbound = expectedArgs.find(
+      (a) => !existingNames.has(a.name.trim().toLowerCase()),
+    );
+    const argName = nextUnbound ? nextUnbound.name : (expectedArgs[0]?.name ?? "");
+
+    let defaultSource: StepBinding["source"] = { kind: "req_body", field: "" };
+    if (argName) {
+      for (const src of availableSources) {
+        const match = src.paths.find((p) => isPathMatch(p.path, argName));
+        if (match) {
+          if (src.kind === "step_output" && src.stepId) {
+            defaultSource = { kind: "step_output", stepId: src.stepId, field: match.path };
+          } else if (
+            src.kind === "req_body" ||
+            src.kind === "req_params" ||
+            src.kind === "req_query" ||
+            src.kind === "req_headers"
+          ) {
+            defaultSource = { kind: src.kind, field: match.path };
+          }
+          break;
+        }
+      }
+    }
+
     const newBinding: StepBinding = {
-      argName: "",
-      source: { kind: "req_body", field: "" },
+      argName,
+      source: defaultSource,
     };
     onChange({
       ...step,
       inputBindings: [...(step.inputBindings || []), newBinding],
     });
-  }, [step, onChange]);
+  }, [step, onChange, expectedArgs, availableSources]);
 
   const removeBinding = useCallback(
     (bi: number) => {
