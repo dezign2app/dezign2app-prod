@@ -12,6 +12,8 @@ export const baseNodeDataSchema = z.object({
   position: z.object({ x: z.number(), y: z.number() }).optional(),
   graphPosition: z.object({ x: z.number(), y: z.number() }).optional(),
   parentId: z.string().optional(),
+  targetServiceId: z.string().optional(),
+  serviceNodeId: z.string().optional(),
   style: z
     .record(z.union([z.string(), z.number(), z.boolean(), z.null()]))
     .optional(),
@@ -83,6 +85,8 @@ export const dbRefDataSchema = baseNodeDataSchema
     description: z.string().optional(),
     tableRef: z.string().optional(),
     databaseId: z.string().optional(),
+    targetServiceId: z.string().optional(),
+    serviceNodeId: z.string().optional(),
     graphPosition: z.object({ x: z.number(), y: z.number() }).optional(),
   })
   .strict();

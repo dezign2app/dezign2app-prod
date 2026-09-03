@@ -158,7 +158,7 @@ export function cleanupRedisCacheConnection({
     (n) =>
       n.type === "redis-cache" &&
       ((tableNodeId && (n.id === tableNodeId || n.data?.schemaRef === tableNodeId)) ||
-        (databaseId && n.data?.databaseId === databaseId)),
+        (!tableNodeId && databaseId && n.data?.databaseId === databaseId)),
   );
 
   const matchingCacheNodeIds = new Set(matchingCacheNodes.map((n) => n.id));
@@ -184,6 +184,12 @@ export function cleanupRedisCacheConnection({
 // Database Table Ref Node & Function Edge Synchronization Helpers
 // ---------------------------------------------------------------------------
 
+export interface DatabaseRefConnectionResult {
+  dbRefNodeId: string;
+  edgeId?: string;
+  functionName?: string;
+}
+
 export interface EnsureDatabaseRefConnectionParams {
   tableNodeId?: string;
   databaseId?: string;
@@ -193,9 +199,19 @@ export interface EnsureDatabaseRefConnectionParams {
   functionName?: string;
 }
 
+export interface CleanupDatabaseRefConnectionParams {
+  tableNodeId?: string;
+  databaseId?: string;
+  serviceNodeId?: string;
+  endpointId?: string;
+  consumedEventId?: string;
+  functionName?: string;
+  remainingSteps: PipelineStepDraft[];
+}
+
 /**
- * Ensures at most 1 db_ref node exists for the given entity on the given serviceNode/server,
- * and connects the ServiceNode endpoint/event to the specific function handle on the db_ref node.
+ * Ensures a single db_ref node exists for the target table/entity per service,
+ * and creates an edge targeting the specific entity function handle (`func-${functionName}`).
  */
 export function ensureDatabaseRefConnection({
   tableNodeId,
@@ -204,11 +220,12 @@ export function ensureDatabaseRefConnection({
   endpointId,
   consumedEventId,
   functionName,
-}: EnsureDatabaseRefConnectionParams): { dbRefNodeId: string; functionName?: string } | undefined {
+}: EnsureDatabaseRefConnectionParams): DatabaseRefConnectionResult | undefined {
   if (!serviceNodeId) return undefined;
+
   const store = useBackendCanvasStore.getState();
   const allNodes = store.nodes;
-  const allEdges = store.edges;
+  const edges = store.edges;
 
   // 1. Look for existing db_ref node for this entity/table associated with this server (serviceNodeId)
   // "1 db_ref for any entity per server"
@@ -220,7 +237,7 @@ export function ensureDatabaseRefConnection({
     if (!matchesTable) return false;
 
     // Check if this db_ref belongs to this server
-    const isConnectedToThisService = allEdges.some(
+    const isConnectedToThisService = edges.some(
       (e) => e.source === serviceNodeId && e.target === n.id,
     );
     const isTaggedForService = n.data?.targetServiceId === serviceNodeId;
@@ -235,7 +252,7 @@ export function ensureDatabaseRefConnection({
       if (!matchesTable) return false;
       const isClaimedByOther =
         Boolean(n.data?.targetServiceId && n.data?.targetServiceId !== serviceNodeId) ||
-        allEdges.some((e) => e.target === n.id && e.source !== serviceNodeId);
+        edges.some((e) => e.target === n.id && e.source !== serviceNodeId);
       return !isClaimedByOther;
     });
   }
@@ -338,32 +355,29 @@ export function ensureDatabaseRefConnection({
         (ep.databaseNodeId && ep.databaseNodeId !== "none"
           ? [ep.databaseNodeId]
           : []);
+
       if (!currentDbIds.includes(dbRefNode.id)) {
         const nextDbIds = [...currentDbIds, dbRefNode.id];
         store.updateEndpoint(endpointId, {
           databaseNodeIds: nextDbIds,
-          databaseNodeId: nextDbIds[0] || "none",
+          databaseNodeId: nextDbIds[0] || dbRefNode.id,
         });
       }
     }
   }
 
-  return { dbRefNodeId: dbRefNode.id, functionName: resolvedFnName };
-}
-
-export interface CleanupDatabaseRefConnectionParams {
-  tableNodeId?: string;
-  databaseId?: string;
-  serviceNodeId?: string;
-  endpointId?: string;
-  consumedEventId?: string;
-  functionName?: string;
-  remainingSteps: PipelineStepDraft[];
+  return {
+    dbRefNodeId: dbRefNode.id,
+    edgeId: existingEdge?.id,
+    functionName: resolvedFnName,
+  };
 }
 
 /**
  * Cleans up edge(s) connecting the service endpoint to a db_ref node / function when
  * the step is deleted or no longer references that function / table.
+ * Strictly isolates matching to THIS specific table and service to avoid touching
+ * other db_ref nodes and their edges.
  */
 export function cleanupDatabaseRefConnection({
   tableNodeId,
@@ -376,33 +390,54 @@ export function cleanupDatabaseRefConnection({
 }: CleanupDatabaseRefConnectionParams) {
   if (!serviceNodeId) return;
   const store = useBackendCanvasStore.getState();
+  const allNodes = store.nodes;
+
+  // Resolve entity ID if tableNodeId points to a db_ref or entity
+  const targetNode = allNodes.find((n) => n.id === tableNodeId);
+  const resolvedEntityId =
+    targetNode?.type === "entity"
+      ? targetNode.id
+      : targetNode?.data?.tableRef || tableNodeId;
+
+  const stepMatchesTable = (s: PipelineStepDraft) => {
+    if (s.type !== "db_operation" || !s.tableNodeId) return false;
+    if (s.tableNodeId === tableNodeId) return true;
+    if (resolvedEntityId && s.tableNodeId === resolvedEntityId) return true;
+    const sNode = allNodes.find((n) => n.id === s.tableNodeId);
+    const sEntityId =
+      sNode?.type === "entity" ? sNode.id : sNode?.data?.tableRef || s.tableNodeId;
+    return Boolean(resolvedEntityId && sEntityId === resolvedEntityId);
+  };
 
   // Check if any other db_operation in remainingSteps still uses this table & function
-  const isFunctionStillUsed = remainingSteps.some(
-    (s) =>
-      s.type === "db_operation" &&
-      ((tableNodeId && (s.tableNodeId === tableNodeId || s.databaseId === databaseId)) ||
-        (!tableNodeId && databaseId && s.databaseId === databaseId)) &&
-      (!functionName || s.functionRef?.name === functionName || s.operationId === functionName),
-  );
+  const isFunctionStillUsed = remainingSteps.some((s) => {
+    if (!stepMatchesTable(s)) return false;
+    if (!functionName) return true;
+    const sFnName = s.functionRef?.name || s.operationId;
+    return sFnName === functionName;
+  });
 
-  const isTableStillUsedAtAll = remainingSteps.some(
-    (s) =>
-      s.type === "db_operation" &&
-      ((tableNodeId && (s.tableNodeId === tableNodeId || s.databaseId === databaseId)) ||
-        (!tableNodeId && databaseId && s.databaseId === databaseId)),
-  );
+  const isTableStillUsedAtAll = remainingSteps.some((s) => stepMatchesTable(s));
 
-  // Find matching db_ref nodes
-  const matchingDbRefNodes = store.nodes.filter(
-    (n) =>
-      n.type === "db_ref" &&
-      ((tableNodeId && (n.id === tableNodeId || n.data?.tableRef === tableNodeId)) ||
-        (databaseId && n.data?.databaseId === databaseId)),
-  );
+  // Find matching db_ref node for THIS specific table on THIS service
+  const matchingDbRefNodes = allNodes.filter((n) => {
+    if (n.type !== "db_ref") return false;
+    const matchesTable =
+      (tableNodeId && (n.id === tableNodeId || n.data?.tableRef === tableNodeId)) ||
+      (resolvedEntityId && (n.id === resolvedEntityId || n.data?.tableRef === resolvedEntityId));
+    if (!matchesTable) return false;
 
-  const matchingDbRefNodeIds = new Set(matchingDbRefNodes.map((n) => n.id));
+    // Check if this db_ref belongs to this service
+    return (
+      n.data?.targetServiceId === serviceNodeId ||
+      store.edges.some((e) => e.source === serviceNodeId && e.target === n.id)
+    );
+  });
+
+  const matchingDbRefNodeIds = new Set<string>();
+  matchingDbRefNodes.forEach((n) => matchingDbRefNodeIds.add(n.id));
   if (tableNodeId) matchingDbRefNodeIds.add(tableNodeId);
+  if (resolvedEntityId) matchingDbRefNodeIds.add(resolvedEntityId);
 
   const sourceHandle = endpointId
     ? `endpoint-out-${endpointId}`
@@ -412,21 +447,32 @@ export function cleanupDatabaseRefConnection({
 
   const targetHandle = functionName ? `func-${functionName}` : undefined;
 
-  // If the specific function is not used anymore, delete the edge targeting that function handle
+  // 1. If the specific function is not used anymore, delete the edge targeting that function handle
   if (!isFunctionStillUsed) {
     const edgesToDelete = store.edges.filter((e) => {
       if (e.source !== serviceNodeId) return false;
       if (!matchingDbRefNodeIds.has(e.target)) return false;
       if (sourceHandle && e.sourceHandle && e.sourceHandle !== sourceHandle) return false;
-      if (targetHandle && e.targetHandle && e.targetHandle !== targetHandle) return false;
-      return true;
+      if (targetHandle) {
+        return e.targetHandle === targetHandle;
+      }
+      return !isTableStillUsedAtAll;
     });
 
     edgesToDelete.forEach((e) => store.deleteEdge(e.id));
   }
 
-  // If the table is not used at all anymore in this endpoint, update endpoint databaseNodeIds
+  // 2. If the table is not used at all anymore in this endpoint, update endpoint databaseNodeIds
+  // removing ONLY this specific table's db_ref node ID (other db_ref nodes remain untouched)
   if (!isTableStillUsedAtAll && endpointId) {
+    const remainingTableEdges = store.edges.filter((e) => {
+      if (e.source !== serviceNodeId) return false;
+      if (!matchingDbRefNodeIds.has(e.target)) return false;
+      if (sourceHandle && e.sourceHandle && e.sourceHandle !== sourceHandle) return false;
+      return true;
+    });
+    remainingTableEdges.forEach((e) => store.deleteEdge(e.id));
+
     const ep = store.endpoints.find((e) => e.id === endpointId);
     if (ep && ep.databaseNodeIds) {
       const nextDbIds = ep.databaseNodeIds.filter(
