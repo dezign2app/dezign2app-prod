@@ -132,6 +132,35 @@ const PRESET_EXAMPLES: Record<string, { label: string; json: string }> = {
       2,
     ),
   },
+  standardError: {
+    label: "Standard Error ({ error, message, statusCode })",
+    json: JSON.stringify(
+      {
+        error: "Bad Request",
+        message: "Invalid or missing parameters",
+        statusCode: 400,
+        timestamp: "2026-09-04T12:00:00Z",
+      },
+      null,
+      2,
+    ),
+  },
+  validationError: {
+    label: "Validation Error ({ message, errors[] })",
+    json: JSON.stringify(
+      {
+        error: "Validation Failed",
+        message: "Field validation errors occurred",
+        statusCode: 422,
+        errors: [
+          { field: "email", message: "Invalid email address" },
+          { field: "amount", message: "Must be greater than 0" },
+        ],
+      },
+      null,
+      2,
+    ),
+  },
 };
 
 import { useBufferedInput } from "@/lib/hooks/useBufferedInput";

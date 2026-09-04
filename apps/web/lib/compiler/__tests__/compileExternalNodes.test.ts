@@ -82,8 +82,13 @@ describe("compileExternalNodes", () => {
     expect(content).toContain("amount: number;");
     expect(content).toContain("currency?: string;");
 
-    // Verify Output interface
+    // Verify Dual Output interfaces (Success & Error)
+    expect(content).toContain("export interface CallStripeChargeSuccessOutput {");
+    expect(content).toContain("export interface CallStripeChargeErrorOutput {");
     expect(content).toContain("export interface CallStripeChargeOutput {");
+    expect(content).toContain("success: boolean;");
+    expect(content).toContain("data?: CallStripeChargeSuccessOutput;");
+    expect(content).toContain("error?: CallStripeChargeErrorOutput;");
 
     // Verify Function signature & implementation
     expect(content).toContain("export async function callStripeCharge(");
@@ -95,7 +100,8 @@ describe("compileExternalNodes", () => {
     expect(content).toContain('"Idempotency-Key": String(input["chargeId"] ?? ""),');
     expect(content).toContain("const response = await fetch(targetUrl");
     expect(content).toContain("if (!response.ok)");
-    expect(content).toContain("return (await response.json()) as CallStripeChargeOutput");
+    expect(content).toContain("data: dataPayload as CallStripeChargeSuccessOutput");
+    expect(content).toContain("error: (typeof errPayload === \"object\"");
   });
 
   it("handles GET request with query param authentication", () => {

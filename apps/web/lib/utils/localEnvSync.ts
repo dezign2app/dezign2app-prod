@@ -168,13 +168,9 @@ export async function fetchLocalEnvVariable(
   const cleanKey = cleanEnvVarName(key);
   if (!cleanKey) return "";
 
-  // Check memory/local storage cache first
-  const cached = getLocalEnvVariable(cleanKey);
-  if (cached) return cached;
-
   const outputDir = getActiveProjectOutputDir(projectId);
 
-  // Check via Electron FS
+  // 1. Prioritize reading live from local .env file on disk (Electron FS)
   const api = getElectronAPI();
   if (api?.fs?.readFile && outputDir) {
     try {
@@ -191,7 +187,7 @@ export async function fetchLocalEnvVariable(
     } catch {}
   }
 
-  // Check via Next.js /api/env
+  // 2. Prioritize reading live from local .env file on disk (Next.js /api/env)
   if (typeof window !== "undefined") {
     try {
       const params = new URLSearchParams({ key: cleanKey });
@@ -199,13 +195,17 @@ export async function fetchLocalEnvVariable(
       const res = await fetch(`/api/env?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.value) {
+        if (data.value !== undefined && data.value !== null && data.value !== "") {
           localStorage.setItem(`blueprint_env_${cleanKey}`, data.value);
           return data.value;
         }
       }
     } catch {}
   }
+
+  // 3. Fallback to localStorage cache only if live disk read could not find the key
+  const cached = getLocalEnvVariable(cleanKey);
+  if (cached) return cached;
 
   return "";
 }

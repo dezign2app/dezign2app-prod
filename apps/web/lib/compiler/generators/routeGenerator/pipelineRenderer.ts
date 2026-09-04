@@ -231,7 +231,7 @@ export function renderPipelineStep(
 ): string[] {
   if (step.enabled === false) return [];
 
-  const rawLines: string[] = [];
+  let rawLines: string[] = [];
   const { outputVariable, functionRef, inputBindings = [], type, customCode } = step;
 
   switch (type) {
@@ -334,25 +334,36 @@ export function renderPipelineStep(
         bodyExpr || (nonBodyNonHeaderBindings.length > 0 ? buildArgList(nonBodyNonHeaderBindings, ctx) : null);
 
       rawLines.push(`// External API Call: ${step.name || "external_call"}`);
+      rawLines.push(`let ${outputVariable}: any = null;`);
+      rawLines.push(`let ${outputVariable}Error: any = null;`);
+      rawLines.push(`try {`);
       rawLines.push(
-        `const ${outputVariable}Response = await fetch(\`\${process.env.EXTERNAL_API_BASE_URL || ""}${endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`}\`, {`,
+        `  const ${outputVariable}Response = await fetch(\`\${process.env.EXTERNAL_API_BASE_URL || ""}${endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`}\`, {`,
       );
-      rawLines.push(`  method: "${method.toUpperCase()}",`);
+      rawLines.push(`    method: "${method.toUpperCase()}",`);
       if (headerBindings.length > 0) {
-        rawLines.push(`  headers: {`);
-        rawLines.push(`    "Content-Type": "application/json",`);
+        rawLines.push(`    headers: {`);
+        rawLines.push(`      "Content-Type": "application/json",`);
         headerBindings.forEach((hb) => {
-          rawLines.push(`    "${hb.argName}": ${resolveBinding(hb, ctx)},`);
+          rawLines.push(`      "${hb.argName}": ${resolveBinding(hb, ctx)},`);
         });
-        rawLines.push(`  },`);
+        rawLines.push(`    },`);
       } else {
-        rawLines.push(`  headers: { "Content-Type": "application/json" },`);
+        rawLines.push(`    headers: { "Content-Type": "application/json" },`);
       }
       if (payloadExpr && ["POST", "PUT", "PATCH"].includes(method.toUpperCase())) {
-        rawLines.push(`  body: JSON.stringify(${payloadExpr}),`);
+        rawLines.push(`    body: JSON.stringify(${payloadExpr}),`);
       }
-      rawLines.push(`});`);
-      rawLines.push(`const ${outputVariable} = await ${outputVariable}Response.json();`);
+      rawLines.push(`  });`);
+      rawLines.push(`  if (!${outputVariable}Response.ok) {`);
+      rawLines.push(`    try { ${outputVariable}Error = await ${outputVariable}Response.json(); } catch { ${outputVariable}Error = { error: ${outputVariable}Response.statusText, statusCode: ${outputVariable}Response.status }; }`);
+      rawLines.push(`  } else {`);
+      rawLines.push(`    ${outputVariable} = await ${outputVariable}Response.json();`);
+      rawLines.push(`  }`);
+      rawLines.push(`} catch (fetchErr: any) {`);
+      rawLines.push(`  ${outputVariable}Error = { error: fetchErr?.message || String(fetchErr), statusCode: 500 };`);
+      rawLines.push(`  logger.error("External call ${step.name || "external_call"} failed:", fetchErr);`);
+      rawLines.push(`}`);
       break;
     }
 
@@ -575,6 +586,121 @@ export function renderPipelineStep(
 
     default:
       rawLines.push(`// [pipeline] unknown step type "${type}"`);
+  }
+
+  // Wrap lines in onError handler if specified
+  if (step.onError && rawLines.length > 0) {
+    const onError = step.onError;
+    const outVar = outputVariable;
+    const safeStepName = (step.name || "step").replace(/"/g, '\\"');
+
+    // 1. Handle retries if configured
+    if (onError.retries && onError.retries > 0) {
+      const stepKey = (step.id || "step").replace(/[^a-zA-Z0-9_]/g, "_");
+      let transformedLines = rawLines;
+      if (outVar) {
+        transformedLines = rawLines.map((line) =>
+          line.startsWith(`const ${outVar} =`)
+            ? line.replace(`const ${outVar} =`, `${outVar} =`)
+            : line,
+        );
+        rawLines = [
+          `let ${outVar}: any = null;`,
+          `let attempts_${stepKey} = 0;`,
+          `while (attempts_${stepKey} <= ${onError.retries}) {`,
+          `  try {`,
+          ...transformedLines.map((l) => `    ${l}`),
+          `    break;`,
+          `  } catch (retryErr) {`,
+          `    attempts_${stepKey}++;`,
+          `    if (attempts_${stepKey} > ${onError.retries}) throw retryErr;`,
+          `    await new Promise((r) => setTimeout(r, 300));`,
+          `  }`,
+          `}`,
+        ];
+      } else {
+        rawLines = [
+          `let attempts_${stepKey} = 0;`,
+          `while (attempts_${stepKey} <= ${onError.retries}) {`,
+          `  try {`,
+          ...rawLines.map((l) => `    ${l}`),
+          `    break;`,
+          `  } catch (retryErr) {`,
+          `    attempts_${stepKey}++;`,
+          `    if (attempts_${stepKey} > ${onError.retries}) throw retryErr;`,
+          `    await new Promise((r) => setTimeout(r, 300));`,
+          `  }`,
+          `}`,
+        ];
+      }
+    }
+
+    // 2. Handle failure actions: early_return, fallback, ignore
+    if (onError.action === "early_return") {
+      rawLines = [
+        `try {`,
+        ...rawLines.map((l) => `  ${l}`),
+        `} catch (stepErr: any) {`,
+        `  logger.error("Step ${safeStepName} failed (early return):", stepErr);`,
+        `  return res.status(${onError.statusCode || 502}).json({`,
+        `    error: "${onError.errorMessage || `${safeStepName} execution failed`}",`,
+        `    details: stepErr?.message || String(stepErr),`,
+        `    statusCode: ${onError.statusCode || 502},`,
+        `  });`,
+        `}`,
+      ];
+    } else if (onError.action === "fallback") {
+      let transformedLines = rawLines;
+      if (outVar) {
+        transformedLines = rawLines.map((line) =>
+          line.startsWith(`const ${outVar} =`)
+            ? line.replace(`const ${outVar} =`, `${outVar} =`)
+            : line,
+        );
+        rawLines = [
+          `let ${outVar}: any = null;`,
+          `try {`,
+          ...transformedLines.map((l) => `  ${l}`),
+          `} catch (stepErr) {`,
+          `  logger.warn("Step ${safeStepName} failed, using fallback value:", stepErr);`,
+          `  ${outVar} = ${onError.fallbackValue || "null"};`,
+          `}`,
+        ];
+      } else {
+        rawLines = [
+          `try {`,
+          ...rawLines.map((l) => `  ${l}`),
+          `} catch (stepErr) {`,
+          `  logger.warn("Step ${safeStepName} failed, fallback applied:", stepErr);`,
+          `}`,
+        ];
+      }
+    } else if (onError.action === "ignore") {
+      let transformedLines = rawLines;
+      if (outVar) {
+        transformedLines = rawLines.map((line) =>
+          line.startsWith(`const ${outVar} =`)
+            ? line.replace(`const ${outVar} =`, `${outVar} =`)
+            : line,
+        );
+        rawLines = [
+          `let ${outVar}: any = null;`,
+          `try {`,
+          ...transformedLines.map((l) => `  ${l}`),
+          `} catch (stepErr) {`,
+          `  logger.warn("Step ${safeStepName} failed (suppressed):", stepErr);`,
+          `}`,
+        ];
+      } else {
+        rawLines = [
+          `try {`,
+          ...rawLines.map((l) => `  ${l}`),
+          `} catch (stepErr) {`,
+          `  logger.warn("Step ${safeStepName} failed (suppressed):", stepErr);`,
+          `}`,
+        ];
+      }
+    }
   }
 
   // Wrap lines in runIf guard if specified

@@ -88,6 +88,7 @@ export const externalDataSchema = simpleDataSchema.extend({
   bodyType: z.enum(["json", "text", "raw", "none"]).optional(),
   bodyContent: z.string().optional(),
   responseSchema: z.any().optional(),
+  errorResponseSchema: z.any().optional(),
   lastTestResult: z.any().optional(),
   baseUrl: z.string().optional(),
   authType: z.enum(["none", "bearer", "apiKey", "basic", "custom"]).optional(),

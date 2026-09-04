@@ -216,6 +216,15 @@ export const parallelBranchSchema: z.ZodType<ParallelBranch> = z.lazy(() =>
   })
 );
 
+export const pipelineStepOnErrorSchema = z.object({
+  action: z.enum(["throw", "fallback", "early_return", "ignore"]),
+  statusCode: z.number().optional(),
+  errorMessage: z.string().optional(),
+  fallbackValue: z.string().optional(),
+  retries: z.number().optional(),
+});
+export type PipelineStepOnError = z.infer<typeof pipelineStepOnErrorSchema>;
+
 export interface PipelineStep {
   id: string;
   name: string;
@@ -225,6 +234,8 @@ export interface PipelineStep {
   enabled?: boolean;
   /** Optional single-step skip guard */
   runIf?: ConditionExpr;
+  /** Optional step-level error handling policy */
+  onError?: PipelineStepOnError;
   /** HTTP status code for return_response / early_return step (e.g. 200, 201, 204, 400, 404, 500) */
   statusCode?: number;
   /** Mode for return_response step */
@@ -321,6 +332,7 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     type: pipelineStepTypeEnum,
     enabled: z.boolean().optional().default(true),
     runIf: conditionExprSchema.optional(),
+    onError: pipelineStepOnErrorSchema.optional(),
     statusCode: z.number().optional(),
     responseMode: z.string().optional(),
     databaseId: z.string().optional(),
