@@ -20,7 +20,7 @@ describe("Control Flow Pipeline Steps Compilation", () => {
       const expr = {
         left: { kind: "req_body" as const, field: "role" },
         operator: "eq" as const,
-        right: { kind: "literal" as const, value: "admin" },
+        right: { kind: "inline" as const, value: "admin" },
       };
       const result = compileConditionExpr(expr, ctx);
       expect(result).toBe('(body.role === "admin")');
@@ -42,12 +42,12 @@ describe("Control Flow Pipeline Steps Compilation", () => {
           {
             left: { kind: "req_body" as const, field: "status" },
             operator: "eq" as const,
-            right: { kind: "literal" as const, value: "active" },
+            right: { kind: "inline" as const, value: "active" },
           },
           {
             left: { kind: "step_output" as const, stepId: "step-1", field: "count" },
             operator: "gte" as const,
-            right: { kind: "literal" as const, value: 5 },
+            right: { kind: "inline" as const, value: 5 },
           },
         ],
       };
@@ -87,7 +87,7 @@ describe("Control Flow Pipeline Steps Compilation", () => {
           conditionExpr: {
             left: { kind: "req_body", field: "isVip" },
             operator: "eq",
-            right: { kind: "literal", value: true },
+            right: { kind: "inline", value: true },
           },
           thenSteps: [
             {
@@ -170,7 +170,7 @@ describe("Control Flow Pipeline Steps Compilation", () => {
               inputBindings: [
                 {
                   argName: "topic",
-                  source: { kind: "literal", value: "order_failures" },
+                  source: { kind: "inline", value: "order_failures" },
                 },
                 {
                   argName: "payload",

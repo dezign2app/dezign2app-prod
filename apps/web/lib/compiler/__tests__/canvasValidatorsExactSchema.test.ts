@@ -42,7 +42,7 @@ describe("Convex canvasValidators exact schema", () => {
       conditionExpr: {
         left: { kind: "req_body" as const, field: "role" },
         operator: "eq" as const,
-        right: { kind: "literal" as const, value: "admin" },
+        right: { kind: "inline" as const, value: "admin" },
       },
       thenSteps: [
         {

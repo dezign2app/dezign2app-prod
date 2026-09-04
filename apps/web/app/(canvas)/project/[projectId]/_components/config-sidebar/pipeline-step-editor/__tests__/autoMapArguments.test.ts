@@ -142,11 +142,11 @@ describe("pipeline-step-editor: useStepRowState handleAutoMapArguments", () => {
       inputBindings: [
         {
           argName: "description",
-          source: { kind: "literal", value: "Default description" },
+          source: { kind: "inline", value: "Default description" },
         },
         {
           argName: "customExtraField",
-          source: { kind: "literal", value: "custom-val" },
+          source: { kind: "inline", value: "custom-val" },
         },
       ],
     };
@@ -178,12 +178,12 @@ describe("pipeline-step-editor: useStepRowState handleAutoMapArguments", () => {
     // Existing configured description should be preserved
     expect(mappedArgNames).toContain("description");
     const descBinding = (updatedStep.inputBindings || []).find((b) => b.argName === "description");
-    expect(descBinding?.source).toEqual({ kind: "literal", value: "Default description" });
+    expect(descBinding?.source).toEqual({ kind: "inline", value: "Default description" });
 
     // Custom extra field should be preserved
     expect(mappedArgNames).toContain("customExtraField");
     const extraBinding = (updatedStep.inputBindings || []).find((b) => b.argName === "customExtraField");
-    expect(extraBinding?.source).toEqual({ kind: "literal", value: "custom-val" });
+    expect(extraBinding?.source).toEqual({ kind: "inline", value: "custom-val" });
 
     // Matched fields should still be added
     expect(mappedArgNames).toContain("title");

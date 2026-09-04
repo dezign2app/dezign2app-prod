@@ -3,14 +3,13 @@
  */
 import { Endpoint, BackendNode } from "@/types/canvas";
 import { SimulationTestCase } from "@workspace/canvas";
-import { CanvasExternalNodeData } from "@workspace/canvas/types";
 import { generateId } from "./helpers";
 import { getInitialBody } from "./fakeData";
 import { sanitizeEndpointPath } from "./url";
 
 /**
  * Builds the default request headers for an endpoint, injecting
- * external node auth or internal JWT placeholder as appropriate.
+ * internal JWT placeholder for authenticated internal endpoints.
  */
 function buildDefaultHeaders(
   endpoint: Endpoint,
@@ -23,18 +22,7 @@ function buildDefaultHeaders(
   });
 
   const isExternal = serviceNode?.type === "external";
-  const extData = isExternal ? (serviceNode?.data as unknown as CanvasExternalNodeData) : null;
-
-  if (isExternal && extData) {
-    const { authType, apiKey = "", authHeader = "x-api-key" } = extData;
-    if (authType === "bearer" && apiKey) {
-      headers["authorization"] = `Bearer ${apiKey}`;
-    } else if (authType === "apiKey" && apiKey) {
-      headers[authHeader.toLowerCase()] = apiKey;
-    } else if (authType === "basic" && apiKey) {
-      headers["authorization"] = `Basic ${btoa(apiKey)}`;
-    }
-  } else if (endpoint.requireAuth !== false && !headers["authorization"]) {
+  if (!isExternal && endpoint.requireAuth !== false && !headers["authorization"]) {
     headers["authorization"] = "Bearer <test_jwt_token>";
   }
 

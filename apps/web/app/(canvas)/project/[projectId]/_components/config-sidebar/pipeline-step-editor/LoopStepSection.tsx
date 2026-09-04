@@ -71,8 +71,8 @@ export const LoopStepSection = ({
       onChange({ ...step, loopSource: { kind: "req_query", field: "" } });
     } else if (selectedId === "req_headers") {
       onChange({ ...step, loopSource: { kind: "req_headers", field: "" } });
-    } else if (selectedId === "literal") {
-      onChange({ ...step, loopSource: { kind: "literal", value: "5" } });
+    } else if (selectedId === "inline") {
+      onChange({ ...step, loopSource: { kind: "inline", value: "5" } });
     }
   };
 
@@ -252,15 +252,15 @@ export const LoopStepSection = ({
                           {s.label}
                         </SelectItem>
                       ))}
-                    {!availableSources.some((s) => s.id === "literal") && (
-                      <SelectItem value="literal" className="text-xs">
-                        Literal / Fixed Array
+                    {!availableSources.some((s) => s.id === "inline") && (
+                      <SelectItem value="inline" className="text-xs">
+                        Inline / Fixed Array
                       </SelectItem>
                     )}
                   </SelectContent>
                 </Select>
 
-                {loopSource.kind !== "literal" ? (
+                {loopSource.kind !== "inline" ? (
                   <SmartPathInput
                     value={loopSource.field ?? ""}
                     onChange={(field) =>
@@ -281,7 +281,7 @@ export const LoopStepSection = ({
                     onChange={(e) =>
                       onChange({
                         ...step,
-                        loopSource: { kind: "literal", value: e.target.value },
+                        loopSource: { kind: "inline", value: e.target.value },
                       })
                     }
                     placeholder="e.g. [1, 2, 3]"

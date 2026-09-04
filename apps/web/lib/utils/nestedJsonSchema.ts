@@ -3,6 +3,8 @@
  * dot-notation paths from complex/arbitrary JSON payloads and schemas.
  */
 
+import { parseRelaxedJson } from "../compiler/generators/routeGenerator/jsonInterpolation";
+
 export interface ExtractedPathItem {
   path: string;
   type: string;
@@ -124,24 +126,13 @@ export function extractNestedPaths(
 }
 
 /**
- * Safely parses raw JSON string.
+ * Safely parses raw JSON string (supporting standard and relaxed JSON syntax with backticks/variables).
  */
 export function parseRawJsonSafe(rawJson?: string): {
   parsed: unknown;
   error: string | null;
 } {
-  if (!rawJson || !rawJson.trim()) {
-    return { parsed: null, error: null };
-  }
-  try {
-    const parsed = JSON.parse(rawJson);
-    return { parsed, error: null };
-  } catch (err) {
-    return {
-      parsed: null,
-      error: err instanceof Error ? err.message : "Invalid JSON",
-    };
-  }
+  return parseRelaxedJson(rawJson || "");
 }
 
 /**
@@ -152,6 +143,10 @@ export function formatJsonPretty(rawJson: string): string {
     const parsed = JSON.parse(rawJson);
     return JSON.stringify(parsed, null, 2);
   } catch {
+    const { parsed, error } = parseRelaxedJson(rawJson);
+    if (!error && parsed !== null) {
+      return JSON.stringify(parsed, null, 2);
+    }
     return rawJson;
   }
 }

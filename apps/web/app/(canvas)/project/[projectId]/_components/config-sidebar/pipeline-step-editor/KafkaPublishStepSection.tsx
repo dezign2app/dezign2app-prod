@@ -238,7 +238,7 @@ export const KafkaPublishStepSection = ({
             {
               argName: "topic",
               source: {
-                kind: "literal",
+                kind: "inline",
                 value: firstTopic?.name || "events",
               },
             },
@@ -336,7 +336,7 @@ export const KafkaPublishStepSection = ({
         {
           argName: "topic",
           source: {
-            kind: "literal",
+            kind: "inline",
             value: selectedResource?.name || "events",
           },
         },

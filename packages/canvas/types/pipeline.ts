@@ -59,7 +59,7 @@ export interface AvailablePath {
 export interface AvailableSource {
   id: string;
   label: string;
-  kind: "req_body" | "req_params" | "req_query" | "req_headers" | "step_output" | "literal";
+  kind: "req_body" | "req_params" | "req_query" | "req_headers" | "step_output" | "inline";
   stepId?: string;
   variableName?: string;
   rootVariableName?: string;

@@ -67,6 +67,8 @@ export const SwitchStepSection = ({
       onChange({ ...step, switchSource: { kind: "req_query", field: "" } });
     } else if (selectedId === "req_headers") {
       onChange({ ...step, switchSource: { kind: "req_headers", field: "" } });
+    } else if (selectedId === "inline") {
+      onChange({ ...step, switchSource: { kind: "inline", value: "" } });
     }
   };
 
@@ -109,7 +111,7 @@ export const SwitchStepSection = ({
             </SelectTrigger>
             <SelectContent>
               {availableSources
-                .filter((s) => Boolean(s && s.id && s.id.trim() && s.id !== "literal"))
+                .filter((s) => Boolean(s && s.id && s.id.trim() && s.id !== "inline"))
                 .map((s) => (
                   <SelectItem key={s.id} value={s.id} className="text-xs">
                     {s.label}
@@ -118,7 +120,7 @@ export const SwitchStepSection = ({
             </SelectContent>
           </Select>
 
-          {switchSource.kind !== "literal" ? (
+          {switchSource.kind !== "inline" ? (
             <SmartPathInput
               value={switchSource.field ?? ""}
               onChange={(field) =>
@@ -138,10 +140,10 @@ export const SwitchStepSection = ({
               onChange={(e) =>
                 onChange({
                   ...step,
-                  switchSource: { kind: "literal", value: e.target.value },
+                  switchSource: { kind: "inline", value: e.target.value },
                 })
               }
-              placeholder="literal value"
+              placeholder="inline value"
             />
           )}
         </div>

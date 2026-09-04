@@ -142,7 +142,7 @@ export function handleColumnDeletion(
         const isBindingMatch = step.inputBindings?.some((b) => {
           const isArgMatch = b.argName.toLowerCase() === colLower;
           const isSourceFieldMatch =
-            b.source.kind !== "literal" &&
+            b.source.kind !== "inline" &&
             "field" in b.source &&
             typeof b.source.field === "string" &&
             b.source.field.toLowerCase() === colLower;

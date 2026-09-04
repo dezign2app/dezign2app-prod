@@ -128,7 +128,7 @@ export function handleEndpointConnect({
                 {
                   argName: "topic",
                   source: {
-                    kind: "literal" as const,
+                    kind: "inline" as const,
                     value: topicName || "default-topic",
                   },
                 },
