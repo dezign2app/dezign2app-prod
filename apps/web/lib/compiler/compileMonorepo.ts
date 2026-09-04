@@ -18,6 +18,7 @@ import { generateDockerFiles } from "./generators/dockerGenerator";
 import { compileGrpcPackages } from "./grpc";
 import { compileTransformerHelpers } from "./compileTransformerHelpers";
 import { compileFrontendNodes } from "./compileFrontendHelpers";
+import { compileExternalNodes } from "./compileExternalNodes";
 
 /**
  * Compiles the entire system architecture canvas into a production-ready
@@ -221,6 +222,13 @@ export function compileMonorepo(
     files.push(f);
   });
 
+  // 4.11 Generate Shared External API Calling Tools (@workspace/external-apis)
+  const compiledExternal = compileExternalNodes(nodes, edges);
+  compiledExternal.files.forEach((f) => {
+    files.push(f);
+  });
+  const externalFunctions: ReusableFunction[] = compiledExternal.reusableFunctions ?? [];
+
   // 5. Generate Apps: apps/<sanitizedName> for Service Nodes
   serviceNodes.forEach((srvNode) => {
     const srvInfo = servicesInfo.find((s) => s.id === srvNode.id);
@@ -233,7 +241,7 @@ export function compileMonorepo(
       nodes,
       edges,
       testCases,
-      dbFunctions,
+      [...dbFunctions, ...externalFunctions],
       kafkaFunctions,
       folderName,
       redisFunctions,

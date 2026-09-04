@@ -130,7 +130,7 @@ const EnvVarRow: React.FC<EnvVarRowProps> = ({
     >
       <div className="flex items-center justify-between w-full">
         <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
-          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-mono">
+          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 bg-secondary text-foreground border border-border font-mono">
             ENV
           </span>
 
@@ -175,7 +175,7 @@ const EnvVarRow: React.FC<EnvVarRowProps> = ({
             title={isRowEditing ? "Done editing" : "Configure secret value (.env)"}
           >
             {isRowEditing ? (
-              <Check size={13} className="text-emerald-500" />
+              <Check size={13} className="text-primary" />
             ) : (
               <Settings size={13} />
             )}
@@ -221,7 +221,7 @@ const EnvVarRow: React.FC<EnvVarRowProps> = ({
             </button>
           </div>
           {isSaved && (
-            <span className="text-[10px] text-emerald-500 font-medium px-1.5 py-0.5 rounded bg-emerald-500/10 shrink-0 flex items-center gap-0.5">
+            <span className="text-[10px] text-primary font-medium px-1.5 py-0.5 rounded bg-primary/10 shrink-0 flex items-center gap-0.5">
               <Check size={10} /> Saved
             </span>
           )}

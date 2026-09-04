@@ -12,6 +12,7 @@ export type Parameter = {
   defaultValue?: string;
   key?: string;
   value?: string;
+  enabled?: boolean;
 };
 
 export type Schema = {

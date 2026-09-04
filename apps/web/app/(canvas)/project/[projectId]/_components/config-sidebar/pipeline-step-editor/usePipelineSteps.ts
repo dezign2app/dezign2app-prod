@@ -383,16 +383,30 @@ export function usePipelineSteps({
     } else if (type === "external_call") {
       const extNodes = allNodes.filter((n) => n.type === "external");
       const firstExt = extNodes[0];
+      const fnName = toVarName(firstExt?.data?.functionName || firstExt?.data?.label || "callExternalApi");
+      const varName = `${fnName}Response`;
       const allStoreEndpoints = useBackendCanvasStore.getState().endpoints;
       const extEndpoints = firstExt ? allStoreEndpoints.filter((e) => e.nodeId === firstExt.id) : [];
       const firstEp = extEndpoints[0] || firstExt?.data?.endpoints?.[0];
+      const inputBindings = (firstExt?.data?.inputVariables || []).map((v) => ({
+        argName: v.name,
+        source: { kind: "req_body" as const, field: v.name },
+      }));
       initialFields = {
         databaseId: firstExt?.id,
         externalNodeId: firstExt?.id,
         tableNodeId: firstEp?.id,
         externalEndpointId: firstEp?.id,
         operationId: firstEp ? `${firstEp.type || "POST"}_${firstEp.name}` : undefined,
-        inputBindings: [],
+        name: varName,
+        outputVariable: varName,
+        functionRef: firstExt
+          ? {
+              name: fnName,
+              importPath: "@workspace/external-apis",
+            }
+          : undefined,
+        inputBindings,
       };
     } else if (type === "condition") {
       initialFields = {

@@ -196,6 +196,9 @@ export const EventTestingConfig: React.FC<EventTestingConfigProps> = ({
       if (chKey && !defaultHeaders.some((h) => (h.key ?? h.name) === chKey)) {
         defaultHeaders.push({
           ...ch,
+          name: ch.name ?? chKey,
+          type: ch.type ?? "string",
+          required: ch.required ?? false,
           key: chKey,
           value: ch.value ?? ch.defaultValue ?? "",
         });
