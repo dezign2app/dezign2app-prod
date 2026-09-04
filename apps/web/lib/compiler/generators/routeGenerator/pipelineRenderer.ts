@@ -687,19 +687,29 @@ export function renderPipelineStep(
           `let ${outVar}: any = null;`,
           `try {`,
           ...transformedLines.map((l) => `  ${l}`),
-          `} catch (stepErr) {`,
-          `  logger.warn("Step ${safeStepName} failed (suppressed):", stepErr);`,
+          `} catch (stepErr: any) {`,
+          `  logger.error("Step ${safeStepName} failed, proceeding to next step:", stepErr);`,
           `}`,
         ];
       } else {
         rawLines = [
           `try {`,
           ...rawLines.map((l) => `  ${l}`),
-          `} catch (stepErr) {`,
-          `  logger.warn("Step ${safeStepName} failed (suppressed):", stepErr);`,
+          `} catch (stepErr: any) {`,
+          `  logger.error("Step ${safeStepName} failed, proceeding to next step:", stepErr);`,
           `}`,
         ];
       }
+    } else if (onError.action === "throw") {
+      let transformedLines = rawLines;
+      rawLines = [
+        `try {`,
+        ...transformedLines.map((l) => `  ${l}`),
+        `} catch (stepErr: any) {`,
+        `  logger.error("Step ${safeStepName} failed:", stepErr);`,
+        `  throw stepErr;`,
+        `}`,
+      ];
     }
   }
 

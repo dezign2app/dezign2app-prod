@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
-import { ShieldAlert, ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
+import React from "react";
+import { ShieldAlert, RotateCcw } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
+import { Checkbox } from "@workspace/ui/components/checkbox";
 import {
   Select,
   SelectContent,
@@ -27,11 +28,10 @@ export const StepOnErrorSection: React.FC<StepOnErrorSectionProps> = ({
 }) => {
   const onError = step.onError;
   const isCustomConfigured = Boolean(
-    onError && (onError.action !== "throw" || (onError.retries && onError.retries > 0)),
+    onError && (onError.action !== "ignore" || (onError.retries && onError.retries > 0)),
   );
-  const [expanded, setExpanded] = useState(isCustomConfigured);
 
-  const action = onError?.action || "throw";
+  const action = onError?.action || "early_return";
   const statusCode = onError?.statusCode ?? 502;
   const errorMessage = onError?.errorMessage ?? "";
   const fallbackValue = onError?.fallbackValue ?? "";
@@ -57,78 +57,82 @@ export const StepOnErrorSection: React.FC<StepOnErrorSectionProps> = ({
       ...step,
       onError: undefined,
     });
-    setExpanded(false);
   };
 
   const getBadgeText = () => {
-    if (!isCustomConfigured) return "Default (Throw)";
-    if (action === "early_return") return `Early Return (${statusCode})`;
-    if (action === "fallback") return `Fallback: ${fallbackValue || "null"}`;
-    if (action === "ignore") return "Ignore & Continue";
-    if (retries > 0) return `Retry (${retries}x)`;
-    return "Custom";
+    if (!isCustomConfigured) return "Default (Log & Proceed)";
+    let text = "";
+    if (action === "early_return") text = `Return ${statusCode}`;
+    else if (action === "fallback") text = `Fallback: ${fallbackValue || "null"}`;
+    else if (action === "throw") text = "Fail & Stop (Throw)";
+    else text = "Custom";
+
+    if (retries > 0) {
+      text += ` (${retries}x retry)`;
+    }
+    return text;
   };
 
   return (
-    <div className="pt-2 border-t border-border/30 flex flex-col gap-2">
-      {/* Header / Summary row */}
+    <div className="pt-2 border-t border-border/30 flex flex-col gap-1.5">
+      {/* Header / Checkbox row */}
       <div className="flex items-center justify-between">
-        <div
-          className="flex items-center gap-1.5 cursor-pointer select-none group"
-          onClick={() => setExpanded((v) => !v)}
+        <label
+          htmlFor={`on-error-chk-${step.id}`}
+          className="flex items-center gap-2 cursor-pointer select-none group"
         >
-          <ShieldAlert
-            size={12}
-            className={cn(
-              "transition-colors",
-              isCustomConfigured ? "text-amber-500 dark:text-amber-400" : "text-muted-foreground/70",
-            )}
+          <Checkbox
+            id={`on-error-chk-${step.id}`}
+            checked={isCustomConfigured}
+            onCheckedChange={(checked) => {
+              if (checked) {
+                updateOnError({
+                  action: "early_return",
+                  statusCode: 502,
+                  errorMessage: `${step.name || "Step"} execution failed`,
+                });
+              } else {
+                handleResetToDefault();
+              }
+            }}
           />
-          <span className="text-[10px] font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
-            On Error Policy
-          </span>
-          <span
-            className={cn(
-              "px-1.5 py-0.5 rounded text-[9px] font-mono",
-              isCustomConfigured
-                ? "bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30"
-                : "bg-muted/40 text-muted-foreground/60 border border-border/40",
-            )}
-          >
-            {getBadgeText()}
-          </span>
-        </div>
+          <div className="flex items-center gap-1.5">
+            <ShieldAlert
+              size={12}
+              className={cn(
+                "transition-colors",
+                isCustomConfigured ? "text-amber-500 dark:text-amber-400" : "text-muted-foreground/70",
+              )}
+            />
+            <span className="text-[10px] font-semibold text-foreground/90 group-hover:text-foreground transition-colors">
+              Configure On Error Handling
+            </span>
+          </div>
+        </label>
 
-        <div className="flex items-center gap-2">
-          {isCustomConfigured && (
-            <button
-              type="button"
-              className="text-[9px] text-muted-foreground hover:text-destructive transition-colors"
-              onClick={handleResetToDefault}
-              title="Reset to default (Fail & Throw)"
-            >
-              Reset
-            </button>
+        <span
+          className={cn(
+            "px-1.5 py-0.5 rounded text-[9px] font-mono",
+            isCustomConfigured
+              ? "bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30"
+              : "bg-muted/40 text-muted-foreground/70 border border-border/40",
           )}
-          <button
-            type="button"
-            className="text-[10px] text-primary/80 hover:text-primary font-medium transition-colors flex items-center gap-0.5"
-            onClick={() => setExpanded((v) => !v)}
-          >
-            {expanded ? (
-              <ChevronDown size={12} />
-            ) : (
-              <ChevronRight size={12} />
-            )}
-            <span>{expanded ? "Collapse" : "Configure"}</span>
-          </button>
-        </div>
+        >
+          {getBadgeText()}
+        </span>
       </div>
 
-      {/* Expanded configuration card */}
-      {expanded && (
-        <div className="p-2.5 rounded-lg bg-secondary/15 border border-border/60 flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-2">
+      {/* Unchecked explanation note */}
+      {!isCustomConfigured && (
+        <p className="text-[10px] text-muted-foreground/60 pl-6 leading-normal">
+          By default, any errors thrown by this step will be logged and execution will proceed to the next step. Check the box above to configure custom error handling (e.g. return an error response, provide a fallback, or retry).
+        </p>
+      )}
+
+      {/* Expanded configuration card when checked */}
+      {isCustomConfigured && (
+        <div className="p-2.5 rounded-lg bg-secondary/15 border border-border/60 flex flex-col gap-3 mt-1">
+          <div className="flex items-start justify-between gap-2">
             <Label className="text-[10px] text-muted-foreground shrink-0">Failure Action</Label>
             <Select
               value={action}
@@ -136,21 +140,13 @@ export const StepOnErrorSection: React.FC<StepOnErrorSectionProps> = ({
                 updateOnError({ action: val as "throw" | "fallback" | "early_return" | "ignore" })
               }
             >
-              <SelectTrigger className="h-7 text-xs bg-background flex-1">
+              <SelectTrigger className="h-7 text-xs bg-background flex-1 text-start">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="throw" className="text-xs">
-                  <div className="flex flex-col">
-                    <span className="font-medium">Fail & Throw (Default)</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      Propagate exception to global catch block
-                    </span>
-                  </div>
-                </SelectItem>
                 <SelectItem value="early_return" className="text-xs">
                   <div className="flex flex-col">
-                    <span className="font-medium">Return Error Response</span>
+                    <span className="font-small">Return Error Response</span>
                     <span className="text-[10px] text-muted-foreground">
                       Short-circuit and return HTTP error payload
                     </span>
@@ -164,11 +160,11 @@ export const StepOnErrorSection: React.FC<StepOnErrorSectionProps> = ({
                     </span>
                   </div>
                 </SelectItem>
-                <SelectItem value="ignore" className="text-xs">
+                <SelectItem value="throw" className="text-xs">
                   <div className="flex flex-col">
-                    <span className="font-medium">Ignore & Continue</span>
+                    <span className="font-medium">Fail & Stop (Throw)</span>
                     <span className="text-[10px] text-muted-foreground">
-                      Log warning, set output to null and proceed
+                      Halt pipeline execution and propagate error (500)
                     </span>
                   </div>
                 </SelectItem>
