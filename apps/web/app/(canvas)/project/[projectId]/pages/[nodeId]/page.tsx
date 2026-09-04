@@ -7,7 +7,9 @@ import { Id } from "@workspace/backend/_generated/dataModel";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { useBackendSync } from "../../_components/hooks/useBackendSync";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@workspace/ui/components/button";
 import { toast } from "sonner";
 
 import { Terminal } from "../../_components/terminal";
@@ -396,8 +398,14 @@ export default function PageEditorPage({
 
   if (project === null) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background">
+      <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-background text-foreground">
         <p className="text-sm text-muted-foreground">Project not found.</p>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/projects" className="flex items-center gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Projects
+          </Link>
+        </Button>
       </div>
     );
   }

@@ -4,6 +4,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { ReactFlowProvider } from "@xyflow/react";
 import { Loader2, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@workspace/ui/components/button";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useBackendSync } from "../../_components/hooks/useBackendSync";
@@ -43,9 +44,16 @@ export default function LangGraphStudioPage({
         <p className="text-sm text-muted-foreground">
           The node "{nodeId}" could not be found in this project.
         </p>
-        <Button onClick={handleClose} variant="outline" className="gap-2">
-          <ArrowLeft className="w-4 h-4" /> Return to Architecture Canvas
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button onClick={handleClose} variant="outline" className="gap-2">
+            <ArrowLeft className="w-4 h-4" /> Return to Architecture Canvas
+          </Button>
+          <Button asChild variant="outline" className="gap-2">
+            <Link href="/projects">
+              Back to Projects
+            </Link>
+          </Button>
+        </div>
       </div>
     );
   }

@@ -47,6 +47,17 @@ export default function NotFound() {
             size="lg"
             className="bg-zinc-100 hover:bg-zinc-200 text-black border-none h-12 px-8"
           >
+            <Link href="/projects" className="flex items-center gap-2">
+              <ArrowLeft size={18} />
+              Back to Projects
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            size="lg"
+            className="border-white/10 hover:bg-white/5 h-12 px-8 text-white"
+          >
             <Link href="/" className="flex items-center gap-2">
               <Home size={18} />
               Home Page
@@ -58,7 +69,6 @@ export default function NotFound() {
             className="border-white/10 hover:bg-white/5 h-12 px-8 text-white"
             onClick={() => window.history.back()}
           >
-            <ArrowLeft size={18} />
             Go Back
           </Button>
         </div>
@@ -72,7 +82,7 @@ export default function NotFound() {
               href="/projects"
               className="block hover:text-white transition-colors"
             >
-              Documents
+              Projects
             </Link>
             <Link
               href="/dashboard"
