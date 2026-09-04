@@ -237,6 +237,17 @@ export function useStepRowState({
                 args.push({ name: q.name.trim(), type: q.type || "string", required: false });
               });
           }
+          if (targetEp.headers && targetEp.headers.length > 0) {
+            targetEp.headers
+              .filter((h) => h && h.name && h.name.trim())
+              .forEach((h) => {
+                args.push({
+                  name: h.name.trim(),
+                  type: h.type || "string",
+                  required: h.required !== false,
+                });
+              });
+          }
           if (
             targetEp.requestBody &&
             targetEp.requestBody.fields &&
@@ -346,7 +357,7 @@ export function useStepRowState({
       if (existing) {
         const src = existing.source;
         const isConfigured =
-          src.kind === "literal"
+          src.kind === "inline"
             ? src.value !== undefined && src.value !== ""
             : src.kind === "step_output"
             ? Boolean(src.stepId)

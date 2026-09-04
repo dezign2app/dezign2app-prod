@@ -172,7 +172,7 @@ describe("Step Pipeline & Transformer Helpers", () => {
             inputBindings: [
               {
                 argName: "topic",
-                source: { kind: "literal", value: "product-created" },
+                source: { kind: "inline", value: "product-created" },
               },
               {
                 argName: "payload",

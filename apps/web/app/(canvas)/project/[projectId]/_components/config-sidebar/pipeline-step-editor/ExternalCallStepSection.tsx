@@ -18,7 +18,6 @@ import {
   AlertTriangle,
   Sparkles,
   Settings,
-  ShieldCheck,
 } from "lucide-react";
 import { PipelineStepDraft, ExpectedArg } from "./types";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -144,22 +143,6 @@ export const ExternalCallStepSection: React.FC<ExternalCallStepSectionProps> = (
     return `${base}${normalizedPath}`;
   }, [selectedExternalNode, selectedEndpoint]);
 
-  const authDisplay = useMemo(() => {
-    if (!selectedExternalNode?.data?.authType || selectedExternalNode.data.authType === "none") {
-      return "No Auth";
-    }
-    const typeLabel =
-      selectedExternalNode.data.authType === "bearer"
-        ? "Bearer Token"
-        : selectedExternalNode.data.authType === "apiKey"
-        ? "API Key"
-        : selectedExternalNode.data.authType === "basic"
-        ? "Basic Auth"
-        : "Custom Auth";
-
-    const key = selectedExternalNode.data.apiKey?.trim();
-    return key ? `${typeLabel} (${key})` : typeLabel;
-  }, [selectedExternalNode]);
 
   return (
     <div className="flex flex-col gap-3 p-2.5 rounded-lg border border-emerald-500/25 bg-emerald-500/[0.04]">
@@ -286,28 +269,16 @@ export const ExternalCallStepSection: React.FC<ExternalCallStepSectionProps> = (
               </div>
             )}
 
-            <div className="flex items-center gap-2 flex-wrap text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <ShieldCheck size={11} className="text-emerald-500 shrink-0" />
+            {selectedExternalNode.data?.rateLimit && (
+              <div className="flex items-center gap-1 text-muted-foreground">
                 <span className="text-[10px] uppercase font-bold text-foreground/70">
-                  Auth:
+                  Rate Limit:
                 </span>
-                <span className="font-mono text-[10px] text-foreground/90">
-                  {authDisplay}
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  {selectedExternalNode.data.rateLimit}
                 </span>
               </div>
-
-              {selectedExternalNode.data?.rateLimit && (
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] uppercase font-bold text-foreground/70">
-                    Rate Limit:
-                  </span>
-                  <span className="font-mono text-[10px] text-muted-foreground">
-                    {selectedExternalNode.data.rateLimit}
-                  </span>
-                </div>
-              )}
-            </div>
+            )}
 
             {isSchemaMissing && (
               <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-amber-500/20 text-amber-500 text-[10px]">

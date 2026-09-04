@@ -12,6 +12,7 @@ import {
 } from "@workspace/ui/components/select";
 import { PARAMETER_TYPES, Schema, Parameter, BackendNode } from "@/types/canvas";
 import { generateId, LocalInput, LocalTextarea } from "../backend-nodes/graph-nodes/common";
+import { parseRelaxedJson } from "@/lib/compiler/generators/routeGenerator/jsonInterpolation";
 
 export type ResponseBodyMode = "field_builder" | "raw_json" | "custom_expression";
 
@@ -80,8 +81,8 @@ export const ResponseBodyEditor: React.FC<ResponseBodyEditorProps> = ({
     setRawInput(val);
     onSchemaChange({ ...safeSchema, rawJson: val });
     if (!val.trim()) { setJsonError(null); return; }
-    try { JSON.parse(val); setJsonError(null); }
-    catch (err) { setJsonError(err instanceof Error ? err.message : String(err)); }
+    const { error } = parseRelaxedJson(val);
+    setJsonError(error);
   };
 
   // Reset local raw state when mode changes

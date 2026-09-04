@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Plus, Trash, Edit2, List } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
+import { cn } from "@workspace/ui/lib/utils";
 import {
   Select,
   SelectContent,
@@ -46,7 +47,7 @@ export const ArgumentBindingsSection = ({
     let updated: StepBinding = { ...binding, argName: val };
 
     // Smart auto-fill: if source field is currently empty, try to find a matching path in available sources
-    if (binding.source.kind !== "literal" && !binding.source.field) {
+    if (binding.source.kind !== "inline" && !binding.source.field) {
       const activeSource = availableSources.find((s) => {
         if (binding.source.kind === "step_output") {
           return s.kind === "step_output" && s.stepId === binding.source.stepId;
@@ -146,10 +147,15 @@ export const ArgumentBindingsSection = ({
         );
         const isCustomValue = Boolean(binding.argName?.trim()) && !matchingExpectedArg;
 
+        const isInlineSource = binding.source.kind === "inline";
+
         return (
           <div
             key={bi}
-            className="grid grid-cols-[1.1fr_auto_2.2fr_auto] gap-1.5 items-center bg-background/60 p-1.5 rounded border border-border/40"
+            className={cn(
+              "grid grid-cols-[1.1fr_auto_2.2fr_auto] gap-1.5 bg-background/60 p-1.5 rounded border border-border/40",
+              isInlineSource ? "items-start pt-2" : "items-center",
+            )}
           >
             {/* Arg name (Dropdown of function input variables or custom text input) */}
             <div className="min-w-0">

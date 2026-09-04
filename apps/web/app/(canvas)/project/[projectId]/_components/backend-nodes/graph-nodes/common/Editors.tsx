@@ -27,6 +27,7 @@ import {
 } from "@/types/canvas";
 import { generateId } from "./utils";
 import { LocalInput, LocalTextarea } from "./LocalInput";
+import { parseRelaxedJson } from "@/lib/compiler/generators/routeGenerator/jsonInterpolation";
 
 // --- Processing Steps Editor ---
 
@@ -156,11 +157,13 @@ export const ParameterEditor = ({
   parameters,
   onChange,
   fieldOptions,
+  isExternal = false,
 }: {
   title: string;
   parameters: Parameter[];
   onChange: (params: Parameter[]) => void;
   fieldOptions?: string[];
+  isExternal?: boolean;
 }) => {
   const addParam = () => {
     onChange([
@@ -195,12 +198,12 @@ export const ParameterEditor = ({
 
       <div className="flex flex-col gap-2.5 mt-1">
         {parameters.map((p) => {
-          const isAuthManaged = Boolean(
-            p.id?.startsWith("auth-") ||
-            p.id === "auth-header-external" ||
-            p.id === "auth-query-external" ||
-            p.id === "auth-bearer-header"
-          );
+          const isAuthManaged =
+            !isExternal &&
+            Boolean(
+              p.id?.startsWith("auth-") ||
+                p.id === "auth-bearer-header"
+            );
 
           return (
           <div
@@ -440,12 +443,8 @@ export const SchemaEditor = ({
       setJsonError(null);
       return;
     }
-    try {
-      JSON.parse(val);
-      setJsonError(null);
-    } catch (err) {
-      setJsonError(err instanceof Error ? err.message : String(err));
-    }
+    const { error } = parseRelaxedJson(val);
+    setJsonError(error);
   };
 
   // Reset local raw state when schema changes externally (e.g. mode switch or live sync)
@@ -753,22 +752,22 @@ export const JsonPayloadEditor = ({
       onChange({});
       return;
     }
-    try {
-      const parsed = JSON.parse(val);
+    const { data, error } = parseRelaxedJson(val);
+    if (error) {
+      setJsonError(error);
+    } else {
       setJsonError(null);
-      onChange(parsed as JSONValue);
-    } catch (err) {
-      setJsonError(err instanceof Error ? err.message : String(err));
+      onChange(data as JSONValue);
     }
   };
 
   const generateMockFromSchema = () => {
     if (schema?.rawJson) {
-      try {
-        const parsed = JSON.parse(schema.rawJson);
-        onChange(parsed);
+      const { data, error } = parseRelaxedJson(schema.rawJson);
+      if (!error && data !== undefined) {
+        onChange(data as JSONValue);
         return;
-      } catch {}
+      }
     }
   };
 

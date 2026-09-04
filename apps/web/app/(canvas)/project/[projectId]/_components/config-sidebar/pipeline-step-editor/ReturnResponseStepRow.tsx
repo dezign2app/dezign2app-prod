@@ -110,9 +110,12 @@ export const ReturnResponseStepRow = ({
       const source = b.source;
 
       switch (source.kind) {
-        case "literal": {
+        case "inline": {
           const v = source.value;
-          return typeof v === "string" ? `"${v}"` : String(v);
+          if (typeof v === "number" || typeof v === "boolean") return String(v);
+          const str = String(v ?? "");
+          if (!/\$\{([^}]+)\}/.test(str)) return `"${str}"`;
+          return `\`${str.replace(/`/g, "\\`")}\``;
         }
         case "step_output": {
           const found = availableSources.find(

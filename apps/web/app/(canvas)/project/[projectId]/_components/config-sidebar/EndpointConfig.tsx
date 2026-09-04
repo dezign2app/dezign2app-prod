@@ -1,5 +1,6 @@
 import React from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { Parameter } from "@/types/canvas";
 import {
   ParameterEditor,
 } from "../backend-nodes/graph-nodes/Editors";
@@ -18,7 +19,6 @@ import { useCallerWebPageZone } from "./hooks/useCallerWebPageZone";
 import { AuthAwarenessBanner } from "./AuthAwarenessBanner";
 import { RequestBodyEditor } from "./RequestBodyEditor";
 import { NestedResponseSchemaEditor } from "./NestedResponseSchemaEditor";
-import { ExternalAuthSection } from "./ExternalAuthSection";
 import { EndpointTestCasesSection } from "./endpoint-testing/EndpointTestCasesSection";
 import {
   PipelineStepEditor,
@@ -37,11 +37,12 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
   const paramsHook = useParams();
   const projectId = paramsHook.projectId as Id<"projects">;
   const [pipelineExpanded, setPipelineExpanded] = React.useState(true);
-
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const updateEndpoint = useBackendCanvasStore((s) => s.updateEndpoint);
+  const item = endpoints.find((e) => e.id === id);
+  const targetNodeId = item?.nodeId || nodeId;
   const node = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === nodeId),
+    s.nodes.find((n) => n.id === targetNodeId),
   );
   const isExternal = node?.type === "external";
   const authRules = node?.data.authRules || [];
@@ -52,7 +53,41 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
   // Must be called before any early returns (rules of hooks)
   const { isProtected, zoneName } = useCallerWebPageZone(nodeId, id);
 
-  const item = endpoints.find((e) => e.id === id);
+  // Auto-clean any legacy or accidental auth headers/params on external endpoints
+  React.useEffect(() => {
+    if (isExternal && item) {
+      const hasStaleAuthHeaders = item.headers?.some(
+        (x: Parameter) =>
+          x.id === "auth-bearer-header" ||
+          x.id === "auth-header-external" ||
+          x.id === "auth-query-external",
+      );
+      const hasStaleAuthQueries = item.queryParams?.some(
+        (x: Parameter) => x.id === "auth-query-external",
+      );
+      if (hasStaleAuthHeaders || hasStaleAuthQueries) {
+        updateEndpoint(item.id, {
+          ...(hasStaleAuthHeaders
+            ? {
+                headers: (item.headers || []).filter(
+                  (x: Parameter) =>
+                    x.id !== "auth-bearer-header" &&
+                    x.id !== "auth-header-external" &&
+                    x.id !== "auth-query-external",
+                ),
+              }
+            : {}),
+          ...(hasStaleAuthQueries
+            ? {
+                queryParams: (item.queryParams || []).filter(
+                  (x: Parameter) => x.id !== "auth-query-external",
+                ),
+              }
+            : {}),
+        });
+      }
+    }
+  }, [isExternal, item?.id, item?.headers, item?.queryParams, updateEndpoint]);
 
   const nameBuffer = useBufferedInput(
     item?.name || "",
@@ -182,18 +217,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
       </div>
 
       {/* Authentication */}
-      {isExternal ? (
-        <ExternalAuthSection
-          endpoint={item}
-          projectId={projectId}
-          serviceNodeId={node?.id}
-          nodeEnvVars={node?.data?.envVars}
-          defaultAuthType={node?.data?.authType}
-          defaultAuthHeader={node?.data?.authHeader}
-          defaultApiKey={node?.data?.apiKey}
-          onUpdateEndpoint={(changes) => updateEndpoint(item.id, changes)}
-        />
-      ) : (
+      {!isExternal && (
         <AuthAwarenessBanner
           zoneName={zoneName}
           isProtected={isProtected}
@@ -321,12 +345,20 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
 
       <ParameterEditor
         title="Headers"
+        isExternal={isExternal}
         parameters={(() => {
           let h = item.headers || [];
-          if (isExternal) return h;
+          if (isExternal) {
+            return h.filter(
+              (x: Parameter) =>
+                x.id !== "auth-bearer-header" &&
+                x.id !== "auth-header-external" &&
+                x.id !== "auth-query-external",
+            );
+          }
           const isAuthEnabled = item.requireAuth !== false;
           if (isAuthEnabled) {
-            if (!h.some((x) => x.name.toLowerCase() === "authorization")) {
+            if (!h.some((x: Parameter) => x.name.toLowerCase() === "authorization")) {
               h = [
                 {
                   id: "auth-bearer-header",
@@ -342,7 +374,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
               ];
             }
           } else {
-            h = h.filter((x) => x.name.toLowerCase() !== "authorization");
+            h = h.filter((x: Parameter) => x.name.toLowerCase() !== "authorization");
           }
           return h;
         })()}
@@ -350,12 +382,20 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
       />
       <ParameterEditor
         title="Path Params"
+        isExternal={isExternal}
         parameters={item.pathParams || []}
         onChange={(pathParams) => updateEndpoint(item.id, { pathParams })}
       />
       <ParameterEditor
         title="Query Params"
-        parameters={item.queryParams || []}
+        isExternal={isExternal}
+        parameters={(() => {
+          let q = item.queryParams || [];
+          if (isExternal) {
+            return q.filter((x: Parameter) => x.id !== "auth-query-external");
+          }
+          return q;
+        })()}
         onChange={(queryParams) => updateEndpoint(item.id, { queryParams })}
       />
       <RequestBodyEditor

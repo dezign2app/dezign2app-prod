@@ -53,9 +53,6 @@ export function EndpointLiveRunner({
   const isExternal = serviceNode?.type === "external";
   const externalData = isExternal ? (serviceNode?.data as unknown as CanvasExternalNodeData) : null;
   const externalBaseUrl = externalData?.baseUrl || "";
-  const externalAuthType = externalData?.authType;
-  const externalApiKey = externalData?.apiKey || "";
-  const externalAuthHeader = externalData?.authHeader || "x-api-key";
 
   const fakeUsers = useActiveFakeUsers();
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>(() => {
@@ -131,16 +128,7 @@ export function EndpointLiveRunner({
     try {
       const headers = { ...(testCase.request?.headers || {}) };
 
-      if (isExternal) {
-        // Inject external node-level auth instead of fake user JWT
-        if (externalAuthType === "bearer" && externalApiKey) {
-          headers["authorization"] = `Bearer ${externalApiKey}`;
-        } else if (externalAuthType === "apiKey" && externalApiKey) {
-          headers[externalAuthHeader.toLowerCase()] = externalApiKey;
-        } else if (externalAuthType === "basic" && externalApiKey) {
-          headers["authorization"] = `Basic ${btoa(externalApiKey)}`;
-        }
-      } else if (endpoint.requireAuth !== false && selectedPersonaId) {
+      if (!isExternal && endpoint.requireAuth !== false && selectedPersonaId) {
         const selectedPersona = fakeUsers.find((u) => u.id === selectedPersonaId);
         if (selectedPersona) {
           if (selectedPersona.isAnonymous) {
@@ -252,20 +240,6 @@ export function EndpointLiveRunner({
           </div>
         )}
 
-        {/* External Auth Info Badge — shows which auth is being injected */}
-        {isExternal && externalAuthType && externalAuthType !== "none" && (
-          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-background/50 border border-border/40 text-xs">
-            <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-            <span className="text-[11px] text-muted-foreground">
-              Auth:{" "}
-              <span className="font-mono text-foreground font-semibold">
-                {externalAuthType === "bearer" && "Bearer token (from node config)"}
-                {externalAuthType === "apiKey" && `${externalAuthHeader}: ••••••• (from node config)`}
-                {externalAuthType === "basic" && "Basic auth (from node config)"}
-              </span>
-            </span>
-          </div>
-        )}
 
         {envMode === "custom" && (
           <div className="flex items-center gap-2">

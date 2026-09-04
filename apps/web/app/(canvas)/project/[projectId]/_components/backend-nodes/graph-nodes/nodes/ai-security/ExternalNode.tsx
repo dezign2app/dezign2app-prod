@@ -5,13 +5,7 @@ import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
+
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   NodeHeader,
@@ -23,9 +17,8 @@ import {
   LocalTextarea,
 } from "../../common";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { isOutputSchemaMissing } from "@/lib/utils/nestedJsonSchema";
-import { cleanEnvVarName } from "@/lib/utils/localEnvSync";
 import { ExternalEnvVarsDrawer } from "./ExternalEnvVarsDrawer";
+import { isOutputSchemaMissing } from "@/lib/utils/nestedJsonSchema";
 
 export const ExternalNode = ({
   id,
@@ -219,85 +212,7 @@ export const ExternalNode = ({
         >
           <div className="overflow-hidden">
             <div className="flex flex-col gap-2.5 pt-2 border-t border-border/50 nodrag">
-              <div className="flex flex-col gap-1">
-                <Label className="text-[11px] text-muted-foreground">
-                  Default Auth
-                </Label>
-                <Select
-                  value={data.authType || "none"}
-                  onValueChange={(val: "none" | "apiKey" | "basic" | "bearer" | "custom") =>
-                    updateNode(id, {
-                      data: {
-                        ...data,
-                        label: data.label || "External API",
-                        authType: val,
-                      },
-                    })
-                  }
-                >
-                  <SelectTrigger className="h-6 text-xs bg-background">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none" className="text-xs">
-                      No Auth
-                    </SelectItem>
-                    <SelectItem value="bearer" className="text-xs">
-                      Bearer Token
-                    </SelectItem>
-                    <SelectItem value="apiKey" className="text-xs">
-                      API Key
-                    </SelectItem>
-                    <SelectItem value="basic" className="text-xs">
-                      Basic Auth
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
 
-              {data.authType && data.authType !== "none" && (
-                <div className="flex flex-col gap-1">
-                  <Label className="text-[10px] text-muted-foreground">
-                    Environment Variable
-                  </Label>
-                  <Select
-                    value={
-                      cleanEnvVarName(data.apiKey || "") ||
-                      (data.envVars?.[0]?.name ?? "API_KEY")
-                    }
-                    onValueChange={(val) =>
-                      updateNode(id, {
-                        data: {
-                          ...data,
-                          label: data.label || "External API",
-                          apiKey: `process.env.${val}`,
-                        },
-                      })
-                    }
-                  >
-                    <SelectTrigger className="h-6 text-xs bg-background font-mono">
-                      <SelectValue placeholder="Select variable..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {data.envVars && data.envVars.length > 0 ? (
-                        data.envVars.map((v) => (
-                          <SelectItem
-                            key={v.id}
-                            value={v.name}
-                            className="text-xs font-mono"
-                          >
-                            {v.name}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="API_KEY" className="text-xs font-mono">
-                          process.env.API_KEY
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
 
               <div className="flex items-center justify-between gap-2">
                 <Label className="text-xs text-muted-foreground">

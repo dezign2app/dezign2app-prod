@@ -11,6 +11,7 @@ import {
 import { PARAMETER_TYPES, Schema, Parameter } from "@/types/canvas";
 import { generateId, LocalInput, LocalTextarea } from "../backend-nodes/graph-nodes/common";
 import { useBufferedInput } from "@/lib/hooks/useBufferedInput";
+import { parseRelaxedJson } from "@/lib/compiler/generators/routeGenerator/jsonInterpolation";
 
 export type RequestBodyMode = "field_builder" | "raw_json";
 
@@ -85,12 +86,8 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
         setJsonError(null);
         return;
       }
-      try {
-        JSON.parse(val);
-        setJsonError(null);
-      } catch (err) {
-        setJsonError(err instanceof Error ? err.message : String(err));
-      }
+      const { error } = parseRelaxedJson(val);
+      setJsonError(error);
     },
     [safeSchema, onSchemaChange],
   );

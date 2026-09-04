@@ -8,6 +8,7 @@ import { Textarea } from "@workspace/ui/components/textarea";
 import { Endpoint, Parameter, JSONValue, JSONObject } from "@/types/canvas";
 import { generateId } from "./utils";
 import { cn } from "@workspace/ui/lib/utils";
+import { parseRelaxedJson } from "@/lib/compiler/generators/routeGenerator/jsonInterpolation";
 
 interface FieldItem {
   id: string;
@@ -159,23 +160,23 @@ export const TestCaseRequestBodyEditor: React.FC<TestCaseRequestBodyEditorProps>
       return;
     }
 
-    try {
-      const parsed: JSONValue = JSON.parse(val);
-      setJsonError(null);
-      onChange(parsed);
+    const { parsed, error } = parseRelaxedJson(val);
+    if (error) {
+      setJsonError(error);
+      return;
+    }
+    setJsonError(null);
+    onChange(parsed as JSONValue);
 
-      // Also reconstruct fields array if parsed is object
-      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-        const newFields: FieldItem[] = Object.entries(parsed).map(([k, v]) => ({
-          id: `f-${k}`,
-          name: k,
-          type: typeof v,
-          value: typeof v === "object" ? JSON.stringify(v) : String(v ?? ""),
-        }));
-        setFields(newFields);
-      }
-    } catch (err: unknown) {
-      setJsonError(err instanceof Error ? err.message : String(err));
+    // Also reconstruct fields array if parsed is object
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      const newFields: FieldItem[] = Object.entries(parsed as Record<string, unknown>).map(([k, v]) => ({
+        id: `f-${k}`,
+        name: k,
+        type: typeof v,
+        value: typeof v === "object" ? JSON.stringify(v) : String(v ?? ""),
+      }));
+      setFields(newFields);
     }
   };
 

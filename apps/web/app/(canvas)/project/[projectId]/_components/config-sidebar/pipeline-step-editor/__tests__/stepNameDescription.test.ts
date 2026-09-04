@@ -57,7 +57,7 @@ describe("Step Name Identification & Formatting Helpers", () => {
         formatConditionSummary({
           left: { kind: "req_body", field: "role" },
           operator: "eq",
-          right: { kind: "literal", value: "admin" },
+          right: { kind: "inline", value: "admin" },
         }),
       ).toBe('body.role == "admin"');
 
@@ -65,7 +65,7 @@ describe("Step Name Identification & Formatting Helpers", () => {
         formatConditionSummary({
           left: { kind: "req_body", field: "age" },
           operator: "gte",
-          right: { kind: "literal", value: 18 },
+          right: { kind: "inline", value: 18 },
         }),
       ).toBe("body.age >= 18");
 
@@ -73,7 +73,7 @@ describe("Step Name Identification & Formatting Helpers", () => {
         formatConditionSummary({
           left: { kind: "req_params", field: "id" },
           operator: "neq",
-          right: { kind: "literal", value: "" },
+          right: { kind: "inline", value: "" },
         }),
       ).toBe('params.id != ""');
     });

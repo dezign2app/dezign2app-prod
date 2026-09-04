@@ -1,5 +1,6 @@
 import { Endpoint } from "@workspace/canvas/types";
 import { JSONValue } from "@workspace/canvas/types";
+import { parseRelaxedJson } from "./generators/routeGenerator/jsonInterpolation";
 
 /**
  * Derives a stable, human-readable camelCase file name for a route/type file.
@@ -152,11 +153,8 @@ export function deriveRouteFileName(
 
 export function parseSchemaJson(rawJson?: string): JSONValue {
   if (!rawJson || !rawJson.trim()) return null;
-  try {
-    return JSON.parse(rawJson);
-  } catch {
-    return null;
-  }
+  const { parsed } = parseRelaxedJson(rawJson);
+  return (parsed as JSONValue) ?? null;
 }
 
 export function toSqlIdentifier(str: string, fallback = "item"): string {

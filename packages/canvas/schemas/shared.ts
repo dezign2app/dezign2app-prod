@@ -83,9 +83,9 @@ export const pipelineStepInputSourceSchema = z.discriminatedUnion("kind", [
     /** If omitted, the entire step output object is passed */
     field: z.string().optional(),
   }),
-  /** A hardcoded literal value */
+  /** An inline value: plain literal (e.g. "gpt-4o", 100) or mixed text + ${...} tokens */
   z.object({
-    kind: z.literal("literal"),
+    kind: z.literal("inline"),
     value: z.union([z.string(), z.number(), z.boolean()]),
   }),
 ]);

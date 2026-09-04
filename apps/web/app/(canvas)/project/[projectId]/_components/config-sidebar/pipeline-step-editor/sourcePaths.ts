@@ -332,12 +332,12 @@ export function getAvailableSources(
     sources.push(...extraSources);
   }
 
-  // 7. Literal Value
+  // 7. Inline Value (Literal or Template ${...})
   sources.push({
-    id: "literal",
-    label: "Literal Value",
-    kind: "literal",
-    rootVariableName: "literal",
+    id: "inline",
+    label: "Inline Value (${...})",
+    kind: "inline",
+    rootVariableName: "inline",
     paths: [],
   });
 

@@ -30,7 +30,7 @@ export interface ConditionExprEditorProps {
 const DEFAULT_CLAUSE: ConditionClause = {
   left: { kind: "req_body", field: "" },
   operator: "eq",
-  right: { kind: "literal", value: "" },
+  right: { kind: "inline", value: "" },
 };
 
 function normalizeToClauseArray(
@@ -194,7 +194,7 @@ export const ConditionExprEditor = ({
                     Right Operand (RHS)
                   </span>
                   <SourcePicker
-                    source={clause.right || { kind: "literal", value: "" }}
+                    source={clause.right || { kind: "inline", value: "" }}
                     availableSources={availableSources}
                     onChange={(right) => updateClause(idx, { ...clause, right })}
                   />
@@ -260,8 +260,8 @@ const SourcePicker = ({
       onChange({ kind: "req_query", field: "" });
     } else if (selectedId === "req_headers") {
       onChange({ kind: "req_headers", field: "" });
-    } else if (selectedId === "literal") {
-      onChange({ kind: "literal", value: "" });
+    } else if (selectedId === "inline") {
+      onChange({ kind: "inline", value: "" });
     }
   };
 
@@ -282,7 +282,7 @@ const SourcePicker = ({
         </SelectContent>
       </Select>
 
-      {source.kind !== "literal" ? (
+      {source.kind !== "inline" ? (
         <SmartPathInput
           value={source.field ?? ""}
           onChange={(field) => onChange({ ...source, field })}
@@ -293,9 +293,9 @@ const SourcePicker = ({
       ) : (
         <Input
           className="h-7 text-xs font-mono bg-background/60 border-border/60 flex-1"
-          placeholder="literal value"
+          placeholder="inline value"
           value={String(source.value ?? "")}
-          onChange={(e) => onChange({ kind: "literal", value: e.target.value })}
+          onChange={(e) => onChange({ kind: "inline", value: e.target.value })}
         />
       )}
     </div>

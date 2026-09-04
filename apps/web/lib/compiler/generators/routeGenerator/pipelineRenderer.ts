@@ -5,6 +5,10 @@ import {
   ConditionClause,
   ConditionExpr,
 } from "@workspace/canvas/types";
+import {
+  compileTemplateString,
+  compileJsonExpression,
+} from "./jsonInterpolation";
 
 /**
  * Context available while rendering a pipeline step sequence.
@@ -62,9 +66,21 @@ export function resolveSource(
       }
       return field ? `${varName}.${field}` : varName;
     }
-    case "literal": {
+    case "inline": {
       const v = source.value;
-      return typeof v === "string" ? JSON.stringify(v) : String(v);
+      if (typeof v === "number" || typeof v === "boolean") return String(v);
+      const str = String(v ?? "");
+      if (!/\$\{([^}]+)\}/.test(str)) {
+        return JSON.stringify(str);
+      }
+      const trimmed = str.trim();
+      if (
+        (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+        (trimmed.startsWith("[") && trimmed.endsWith("]"))
+      ) {
+        return compileJsonExpression(str, ctx);
+      }
+      return compileTemplateString(str, ctx);
     }
     default:
       return "undefined";
@@ -306,16 +322,32 @@ export function renderPipelineStep(
         (b) => b.argName === "body" || b.argName === "data" || b.argName === "payload",
       );
       const bodyExpr = bodyBinding ? resolveBinding(bodyBinding, ctx) : null;
-      const otherBindings = inputBindings.filter((b) => b !== bodyBinding);
+      const headerBindings = inputBindings.filter((b) =>
+        ["authorization", "token", "apikey", "api-key", "x-api-key"].includes(
+          b.argName.toLowerCase(),
+        ) || b.argName.toLowerCase().startsWith("x-"),
+      );
+      const nonBodyNonHeaderBindings = inputBindings.filter(
+        (b) => b !== bodyBinding && !headerBindings.includes(b),
+      );
       const payloadExpr =
-        bodyExpr || (otherBindings.length > 0 ? buildArgList(otherBindings, ctx) : null);
+        bodyExpr || (nonBodyNonHeaderBindings.length > 0 ? buildArgList(nonBodyNonHeaderBindings, ctx) : null);
 
       rawLines.push(`// External API Call: ${step.name || "external_call"}`);
       rawLines.push(
         `const ${outputVariable}Response = await fetch(\`\${process.env.EXTERNAL_API_BASE_URL || ""}${endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`}\`, {`,
       );
       rawLines.push(`  method: "${method.toUpperCase()}",`);
-      rawLines.push(`  headers: { "Content-Type": "application/json" },`);
+      if (headerBindings.length > 0) {
+        rawLines.push(`  headers: {`);
+        rawLines.push(`    "Content-Type": "application/json",`);
+        headerBindings.forEach((hb) => {
+          rawLines.push(`    "${hb.argName}": ${resolveBinding(hb, ctx)},`);
+        });
+        rawLines.push(`  },`);
+      } else {
+        rawLines.push(`  headers: { "Content-Type": "application/json" },`);
+      }
       if (payloadExpr && ["POST", "PUT", "PATCH"].includes(method.toUpperCase())) {
         rawLines.push(`  body: JSON.stringify(${payloadExpr}),`);
       }

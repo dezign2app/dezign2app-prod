@@ -6,18 +6,10 @@ import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Textarea } from "@workspace/ui/components/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
-import {
   Globe,
   Plus,
   Settings,
   ExternalLink,
-  KeyRound,
   Trash,
   AlertTriangle,
   AlertCircle,
@@ -28,8 +20,6 @@ import { isOutputSchemaMissing } from "@/lib/utils/nestedJsonSchema";
 import { CanvasExternalNodeData } from "@workspace/canvas/types";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBufferedInput } from "@/lib/hooks/useBufferedInput";
-import { EnvSecretInput } from "./EnvSecretInput";
-import { EnvVarSelector } from "./EnvVarSelector";
 import { ExternalEnvVarsDrawer } from "../backend-nodes/graph-nodes/nodes/ai-security/ExternalEnvVarsDrawer";
 
 interface ExternalConfigProps {
@@ -105,14 +95,6 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({
     200,
   );
 
-  const authHeaderBuffer = useBufferedInput(
-    data.authHeader || "",
-    React.useCallback(
-      (authHeader: string) => updateData({ authHeader }),
-      [updateData],
-    ),
-    200,
-  );
 
   if (!node) return null;
 
@@ -288,68 +270,6 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({
             />
           </div>
         </div>
-      </div>
-
-      {/* Global Default Authentication */}
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <KeyRound size={15} className="text-primary" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Default Authentication
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Scheme</Label>
-          <Select
-            value={data.authType || "none"}
-            onValueChange={(val) => updateData({ authType: val })}
-          >
-            <SelectTrigger className="h-8 text-xs bg-background">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none" className="text-xs">
-                None (Public API)
-              </SelectItem>
-              <SelectItem value="bearer" className="text-xs">
-                Bearer Token (Authorization: Bearer &lt;token&gt;)
-              </SelectItem>
-              <SelectItem value="apiKey" className="text-xs">
-                API Key (Header)
-              </SelectItem>
-              <SelectItem value="basic" className="text-xs">
-                Basic Auth
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {data.authType === "apiKey" && (
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Header Name</Label>
-            <Input
-              className="h-8 text-xs bg-background font-mono"
-              placeholder="X-API-Key"
-              value={authHeaderBuffer.value}
-              onChange={(e) => authHeaderBuffer.onChange(e.target.value)}
-              onBlur={authHeaderBuffer.flush}
-            />
-          </div>
-        )}
-
-        {data.authType && data.authType !== "none" && (
-          <EnvVarSelector
-            serviceNodeId={nodeId}
-            nodeEnvVars={data.envVars}
-            currentEnvVar={data.apiKey || ""}
-            onChange={(cleanName, refString) => {
-              updateData({ apiKey: refString });
-            }}
-          />
-        )}
       </div>
 
       {/* Environment Variables (.env) Config */}

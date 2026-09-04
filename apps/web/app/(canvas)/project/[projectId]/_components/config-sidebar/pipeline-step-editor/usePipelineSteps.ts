@@ -173,7 +173,7 @@ export function usePipelineSteps({
             inputBindings.push({
               argName: "topic",
               source: {
-                kind: "literal",
+                kind: "inline",
                 value: ck.topicName || "events",
               },
             });
