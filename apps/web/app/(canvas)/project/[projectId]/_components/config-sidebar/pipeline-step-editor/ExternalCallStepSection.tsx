@@ -98,7 +98,8 @@ export const ExternalCallStepSection: React.FC<ExternalCallStepSectionProps> = (
     const endpoints = allEndpoints.filter((e) => e.nodeId === extNode.id);
     const firstEp = endpoints[0] || extNode.data?.endpoints?.[0];
     const nodeLabel = extNode.data?.label || "externalApi";
-    const varName = `${toVarName(nodeLabel)}Response`;
+    const fnName = toVarName(extNode.data?.functionName || extNode.data?.label || "callExternalApi");
+    const varName = `${fnName}Response`;
 
     onChange({
       ...step,
@@ -109,6 +110,10 @@ export const ExternalCallStepSection: React.FC<ExternalCallStepSectionProps> = (
       operationId: firstEp ? `${firstEp.type || "POST"}_${firstEp.name}` : undefined,
       name: step.outputVariable || varName,
       outputVariable: step.outputVariable || varName,
+      functionRef: {
+        name: fnName,
+        importPath: "@workspace/external-apis",
+      },
     });
   };
 

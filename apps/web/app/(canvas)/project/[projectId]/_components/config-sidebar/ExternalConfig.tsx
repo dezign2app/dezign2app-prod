@@ -1,369 +1,592 @@
 "use client";
 
-import React from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
+import { useParams } from "next/navigation";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { Input } from "@workspace/ui/components/input";
-import { Label } from "@workspace/ui/components/label";
-import { Textarea } from "@workspace/ui/components/textarea";
-import {
-  Globe,
-  Plus,
-  Settings,
-  ExternalLink,
-  Trash,
-  AlertTriangle,
-  AlertCircle,
-} from "lucide-react";
-import { Button } from "@workspace/ui/components/button";
+import { Globe } from "lucide-react";
 import { generateId } from "../backend-nodes/graph-nodes/common";
-import { isOutputSchemaMissing } from "@/lib/utils/nestedJsonSchema";
-import { CanvasExternalNodeData } from "@workspace/canvas/types";
-import { cn } from "@workspace/ui/lib/utils";
-import { useBufferedInput } from "@/lib/hooks/useBufferedInput";
+import {
+  BackendNodeData,
+  CanvasExternalNodeData,
+  ExternalInputVariable,
+  ExternalQueryParam,
+  ExternalHeader,
+  ExternalTestResult,
+} from "@workspace/canvas/types";
 import { ExternalEnvVarsDrawer } from "../backend-nodes/graph-nodes/nodes/ai-security/ExternalEnvVarsDrawer";
+import { toVarName } from "@/lib/compiler/utils";
+import { getLocalEnvVariable, fetchLocalEnvVariable } from "@/lib/utils/localEnvSync";
+
+import {
+  HttpMethod,
+  isHttpMethod,
+  resolveFullUrl,
+  interpolateString,
+  ExternalIdentitySection,
+  ExternalInputVariablesSection,
+  ExternalRequestConfigSection,
+  ExternalLiveTestSection,
+  ExternalAdvancedSettingsSection,
+} from "./external-config";
+
+/**
+ * Asynchronously resolves process.env.VAR references from localStorage or .env file on disk.
+ */
+async function resolveEnvTokens(
+  raw: string,
+  projectId?: string,
+  fallbackApiKey?: string,
+): Promise<string> {
+  if (!raw) return "";
+
+  const matches = Array.from(
+    raw.matchAll(/(?:\$\{)?process\.env\.([a-zA-Z0-9_]+)(?:\s*\|\|\s*["'].*?["'])?\}?/g),
+  );
+
+  let result = raw;
+  for (const m of matches) {
+    const fullMatch = m[0];
+    const envKey = m[1];
+    if (!envKey) continue;
+    let resolved = getLocalEnvVariable(envKey);
+    if (!resolved) {
+      try {
+        resolved = await fetchLocalEnvVariable(envKey, projectId);
+      } catch {}
+    }
+    if (!resolved && fallbackApiKey && !fallbackApiKey.includes("process.env.")) {
+      resolved = fallbackApiKey;
+    }
+    result = result.replace(fullMatch, resolved || "");
+  }
+
+  return result;
+}
 
 interface ExternalConfigProps {
   id: string;
   nodeId: string;
 }
 
-export const ExternalConfig: React.FC<ExternalConfigProps> = ({
-  id,
-  nodeId,
-}) => {
-  const node = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === nodeId),
-  );
+export const ExternalConfig: React.FC<ExternalConfigProps> = ({ id: _id, nodeId }) => {
+  const params = useParams();
+  const projectId = typeof params?.projectId === "string" ? params.projectId : undefined;
+
+  const node = useBackendCanvasStore((s) => s.nodes.find((n) => n.id === nodeId));
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
-  const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
-  const addEndpoint = useBackendCanvasStore((s) => s.addEndpoint);
-  const deleteEndpoint = useBackendCanvasStore((s) => s.deleteEndpoint);
-  const setActiveConfigItem = useBackendCanvasStore(
-    (s) => s.setActiveConfigItem,
-  );
 
-  const data = (node?.data || {}) as CanvasExternalNodeData;
-  const endpoints = allEndpoints.filter((e) => e.nodeId === nodeId);
+  const fallbackData: BackendNodeData = { label: "" };
+  const data = node?.data ?? fallbackData;
 
-  const updateData = React.useCallback(
-    (changes: Record<string, unknown>) => {
-      if (!node) return;
-      updateNode(nodeId, { data: { ...data, ...changes } as any });
+  // Use refs to provide stable access to latest node and data without triggering effect churn
+  const nodeRef = useRef(node);
+  nodeRef.current = node;
+  const dataRef = useRef<BackendNodeData>(data);
+  dataRef.current = data;
+
+  const updateData = useCallback(
+    (changes: Partial<CanvasExternalNodeData>) => {
+      if (!nodeRef.current) return;
+      updateNode(nodeId, {
+        data: {
+          ...dataRef.current,
+          ...changes,
+        },
+      });
     },
-    [node, nodeId, data, updateNode],
+    [nodeId, updateNode],
   );
 
-  const labelBuffer = useBufferedInput(
-    data.label || "",
-    React.useCallback((label: string) => updateData({ label }), [updateData]),
-    200,
+  // Commit callbacks for identity fields
+  const handleFunctionNameCommit = useCallback(
+    (val: string) => updateData({ functionName: toVarName(val) }),
+    [updateData],
+  );
+  const handleLabelCommit = useCallback(
+    (val: string) => updateData({ label: val }),
+    [updateData],
+  );
+  const handleDescriptionCommit = useCallback(
+    (val: string) => updateData({ description: val }),
+    [updateData],
+  );
+  const handleUrlCommit = useCallback(
+    (val: string) => updateData({ url: val, baseUrl: val }),
+    [updateData],
+  );
+  const handleDocsUrlCommit = useCallback(
+    (val: string) => updateData({ docsUrl: val }),
+    [updateData],
+  );
+  const handleTimeoutCommit = useCallback(
+    (val: string) => updateData({ timeout: val }),
+    [updateData],
+  );
+  const handleRateLimitCommit = useCallback(
+    (val: string) => updateData({ rateLimit: val }),
+    [updateData],
+  );
+  const handleBodyContentCommit = useCallback(
+    (val: string) => updateData({ bodyContent: val }),
+    [updateData],
   );
 
-  const descriptionBuffer = useBufferedInput(
-    data.description || "",
-    React.useCallback(
-      (description: string) => updateData({ description }),
-      [updateData],
-    ),
-    200,
+  // --- Dynamic Input Variables ---
+  const inputVariables: ExternalInputVariable[] = useMemo(
+    () => data.inputVariables || [],
+    [data.inputVariables],
   );
 
-  const docsUrlBuffer = useBufferedInput(
-    data.docsUrl || "",
-    React.useCallback((docsUrl: string) => updateData({ docsUrl }), [updateData]),
-    200,
+  const queryParams: ExternalQueryParam[] = useMemo(
+    () => data.queryParams || [],
+    [data.queryParams],
   );
 
-  const baseUrlBuffer = useBufferedInput(
-    data.baseUrl || "",
-    React.useCallback((baseUrl: string) => updateData({ baseUrl }), [updateData]),
-    200,
+  const headers: ExternalHeader[] = useMemo(
+    () => data.headers || [],
+    [data.headers],
   );
 
-  const timeoutBuffer = useBufferedInput(
-    data.timeout !== undefined && data.timeout !== null ? String(data.timeout) : "",
-    React.useCallback((timeout: string) => updateData({ timeout }), [updateData]),
-    200,
+  const rawMethod = (data.method || "POST").toUpperCase();
+  const method: HttpMethod = isHttpMethod(rawMethod) ? rawMethod : "POST";
+  const bodyType = data.bodyType || (method === "GET" ? "none" : "json");
+
+  // --- Live Testing State ---
+  const [testVariableValues, setTestVariableValues] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    (data.inputVariables || []).forEach((v) => {
+      initial[v.name] = v.defaultValue || "";
+    });
+    return initial;
+  });
+
+  const [isTesting, setIsTesting] = useState(false);
+  const [testError, setTestError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<ExternalTestResult | null>(
+    data.lastTestResult || null,
+  );
+  const [inferredSchemaSaved, setInferredSchemaSaved] = useState(false);
+
+  // --- Input Variables Handlers ---
+  const handleAddInputVariable = useCallback(
+    (presetName?: string, presetType: ExternalInputVariable["type"] = "string") => {
+      const curVars = dataRef.current.inputVariables || [];
+      const newVar: ExternalInputVariable = {
+        id: generateId(),
+        name: presetName || `param${curVars.length + 1}`,
+        type: presetType,
+        required: true,
+        defaultValue: "",
+        description: "",
+      };
+      const next = [...curVars, newVar];
+      updateData({ inputVariables: next });
+      setTestVariableValues((prev) => ({
+        ...prev,
+        [newVar.name]: prev[newVar.name] ?? "",
+      }));
+    },
+    [updateData],
   );
 
-  const rateLimitBuffer = useBufferedInput(
-    data.rateLimit || "",
-    React.useCallback(
-      (rateLimit: string) => updateData({ rateLimit }),
-      [updateData],
-    ),
-    200,
+  const handleUpdateInputVariable = useCallback(
+    (id: string, patch: Partial<ExternalInputVariable>) => {
+      const curVars = dataRef.current.inputVariables || [];
+      const next = curVars.map((v) => (v.id === id ? { ...v, ...patch } : v));
+      updateData({ inputVariables: next });
+    },
+    [updateData],
   );
 
+  const handleDeleteInputVariable = useCallback(
+    (id: string) => {
+      const curVars = dataRef.current.inputVariables || [];
+      const next = curVars.filter((v) => v.id !== id);
+      updateData({ inputVariables: next });
+    },
+    [updateData],
+  );
+
+  // --- Quick Insert Tokens ---
+  const handleInsertVariableIntoUrl = useCallback(
+    (varName: string) => {
+      const currentUrl = dataRef.current.url || dataRef.current.baseUrl || "";
+      const token = `{{${varName}}}`;
+      const nextUrl = currentUrl ? `${currentUrl}/${token}` : token;
+      updateData({ url: nextUrl, baseUrl: nextUrl });
+    },
+    [updateData],
+  );
+
+  const handleInsertVariableIntoBody = useCallback(
+    (varName: string) => {
+      const token = `{{${varName}}}`;
+      const current = dataRef.current.bodyContent || "{\n  \n}";
+      const insertion = current.includes("{\n")
+        ? current.replace("{\n", `{\n  "${varName}": "${token}",\n`)
+        : `${current} ${token}`;
+      updateData({ bodyContent: insertion });
+    },
+    [updateData],
+  );
+
+  // --- Query Params Handlers ---
+  const handleAddQueryParam = useCallback(() => {
+    const curParams = dataRef.current.queryParams || [];
+    const newParam: ExternalQueryParam = {
+      id: generateId(),
+      name: "",
+      type: "string",
+      required: false,
+      key: "",
+      value: "",
+      enabled: true,
+    };
+    updateData({ queryParams: [...curParams, newParam] });
+  }, [updateData]);
+
+  const handleUpdateQueryParam = useCallback(
+    (id: string, patch: Partial<ExternalQueryParam>) => {
+      const curParams = dataRef.current.queryParams || [];
+      const next = curParams.map((q) => (q.id === id ? { ...q, ...patch } : q));
+      updateData({ queryParams: next });
+    },
+    [updateData],
+  );
+
+  const handleDeleteQueryParam = useCallback(
+    (id: string) => {
+      const curParams = dataRef.current.queryParams || [];
+      updateData({ queryParams: curParams.filter((q) => q.id !== id) });
+    },
+    [updateData],
+  );
+
+  // --- Headers Handlers ---
+  const handleAddHeader = useCallback(
+    (key = "", value = "") => {
+      const curHeaders = dataRef.current.headers || [];
+      const newHeader: ExternalHeader = {
+        id: generateId(),
+        name: key || "Header",
+        type: "string",
+        required: false,
+        key,
+        value,
+        enabled: true,
+      };
+      updateData({ headers: [...curHeaders, newHeader] });
+    },
+    [updateData],
+  );
+
+  const handleUpdateHeader = useCallback(
+    (id: string, patch: Partial<ExternalHeader>) => {
+      const curHeaders = dataRef.current.headers || [];
+      const next = curHeaders.map((h) => (h.id === id ? { ...h, ...patch } : h));
+      updateData({ headers: next });
+    },
+    [updateData],
+  );
+
+  const handleDeleteHeader = useCallback(
+    (id: string) => {
+      const curHeaders = dataRef.current.headers || [];
+      updateData({ headers: curHeaders.filter((h) => h.id !== id) });
+    },
+    [updateData],
+  );
+
+  // Format JSON helper
+  const handleFormatJson = useCallback(() => {
+    try {
+      const parsed = JSON.parse(dataRef.current.bodyContent || "");
+      const formatted = JSON.stringify(parsed, null, 2);
+      updateData({ bodyContent: formatted });
+    } catch {
+      // ignore parse error
+    }
+  }, [updateData]);
+
+  // Compute resolved target URL for test execution and preview
+  const resolvedUrl = useMemo(
+    () => resolveFullUrl(data.url || data.baseUrl || "", queryParams, testVariableValues),
+    [data.url, data.baseUrl, queryParams, testVariableValues],
+  );
+
+  // --- Live API Call Execution ---
+  const handleRunLiveTest = async () => {
+    if (!resolvedUrl.trim()) {
+      setTestError("Target URL is required to test the API call.");
+      return;
+    }
+
+    setIsTesting(true);
+    setTestError(null);
+
+    let dispatchedHeaders: Record<string, string> = {};
+    let dispatchedBody: string | undefined = undefined;
+
+    try {
+      const requestHeaders: Record<string, string> = {};
+
+      // User headers
+      const configuredHeaders = (data.headers || []).filter(
+        (h) => h.enabled !== false && (h.key || h.name)?.trim(),
+      );
+
+      for (const h of configuredHeaders) {
+        const hKey = (h.key || h.name || "").trim();
+        let val = interpolateString(h.value || "", testVariableValues);
+        val = await resolveEnvTokens(val, projectId, data.apiKey);
+        requestHeaders[hKey] = val;
+      }
+
+      // Backward compatible Auth Header ONLY if not already provided in user headers
+      const hasAuthHeader = Object.keys(requestHeaders).some(
+        (k) => k.toLowerCase() === "authorization",
+      );
+
+      if (!hasAuthHeader) {
+        let authKeyValue = data.apiKey || "";
+        authKeyValue = await resolveEnvTokens(authKeyValue, projectId);
+
+        if (data.authType === "bearer" && authKeyValue) {
+          requestHeaders["Authorization"] = `Bearer ${authKeyValue}`;
+        } else if (data.authType === "apiKey" && data.authHeader && authKeyValue) {
+          requestHeaders[data.authHeader] = authKeyValue;
+        } else if (data.authType === "basic" && authKeyValue) {
+          requestHeaders["Authorization"] = `Basic ${btoa(authKeyValue + ":" + (data.apiSecret || ""))}`;
+        }
+      }
+
+      // Request Body
+      let requestBody: string | undefined = undefined;
+      if (["POST", "PUT", "PATCH"].includes(method) && bodyType !== "none") {
+        if (!requestHeaders["Content-Type"]) {
+          requestHeaders["Content-Type"] = "application/json";
+        }
+        if (data.bodyContent) {
+          requestBody = interpolateString(data.bodyContent, testVariableValues);
+        }
+      }
+
+      dispatchedHeaders = { ...requestHeaders };
+      dispatchedBody = requestBody;
+
+      // Prominently log the exact API parameters to browser console
+      console.group(`🚀 [EXTERNAL API TEST DISPATCH] ${method} ${resolvedUrl}`);
+      console.log("Target URL:", resolvedUrl);
+      console.log("HTTP Method:", method);
+      console.table(requestHeaders);
+      console.log("Dispatched Headers Object:", requestHeaders);
+      if (requestBody !== undefined) {
+        console.log("Dispatched Body:", requestBody);
+      }
+      console.groupEnd();
+
+      const startTime = performance.now();
+      const controller = new AbortController();
+      const timeoutSec = Number(data.timeout) || 30;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutSec * 1000);
+
+      const fetchOptions: RequestInit = {
+        method,
+        headers: requestHeaders,
+        signal: controller.signal,
+      };
+
+      if (["POST", "PUT", "PATCH", "DELETE"].includes(method) && requestBody !== undefined) {
+        fetchOptions.body = requestBody;
+      }
+
+      // Execute directly from current browser client
+      const response = await fetch(resolvedUrl, fetchOptions);
+      clearTimeout(timeoutId);
+      const endTime = performance.now();
+      const timeMs = Math.max(1, Math.round(endTime - startTime));
+
+      const responseHeaders: Record<string, string> = {};
+      response.headers.forEach((val, key) => {
+        responseHeaders[key] = val;
+      });
+
+      let responseData: unknown = null;
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        try {
+          responseData = await response.json();
+        } catch {
+          responseData = await response.text();
+        }
+      } else {
+        responseData = await response.text();
+      }
+
+      console.log("[External API Call Direct Response]", {
+        status: response.status,
+        statusText: response.statusText,
+        timeMs,
+        data: responseData,
+      });
+
+      const result: ExternalTestResult = {
+        status: response.status,
+        statusText: response.statusText,
+        timeMs,
+        headers: responseHeaders,
+        data: responseData,
+        testedAt: new Date().toLocaleTimeString(),
+        requestDetails: {
+          method,
+          url: resolvedUrl,
+          headers: dispatchedHeaders,
+          body: dispatchedBody,
+        },
+      };
+
+      setTestResult(result);
+      updateData({ lastTestResult: result });
+    } catch (err: unknown) {
+      let errorMsg =
+        err instanceof Error
+          ? err.message
+          : typeof err === "string"
+            ? err
+            : "Failed to execute external API call.";
+
+      if (errorMsg === "Failed to fetch") {
+        errorMsg =
+          "Failed to fetch: Browser blocked the request (CORS policy or network error). Check browser DevTools console.";
+      }
+
+      console.error("[External API Call Error]", errorMsg);
+      const failureResult: ExternalTestResult = {
+        error: errorMsg,
+        timeMs: 0,
+        testedAt: new Date().toLocaleTimeString(),
+        requestDetails: {
+          method,
+          url: resolvedUrl,
+          headers: dispatchedHeaders,
+          body: dispatchedBody,
+        },
+      };
+      setTestResult(failureResult);
+      setTestError(errorMsg);
+      updateData({ lastTestResult: failureResult });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  // Infer JSON schema from test response data
+  const handleInferOutputSchema = () => {
+    if (!testResult?.data) return;
+    try {
+      const sample = testResult.data;
+      updateData({ responseSchema: sample });
+      setInferredSchemaSaved(true);
+      setTimeout(() => setInferredSchemaSaved(false), 2000);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   if (!node) return null;
 
-  const handleAddEndpoint = () => {
-    const newEp = {
-      id: generateId(),
-      name: "/v1/action",
-      type: "POST",
-      summary: "External API action",
-    };
-    addEndpoint(nodeId, newEp);
-    setActiveConfigItem({
-      type: "endpoint",
-      id: newEp.id,
-      nodeId,
-    });
-  };
-
   return (
-    <div className="flex flex-col gap-6 mt-6 pb-12">
+    <div className="flex flex-col gap-6 mt-6 pb-16">
       {/* Header */}
-      <div className="flex flex-col gap-2 border-b border-border/50 pb-6">
+      <div className="flex flex-col gap-2 border-b border-border/50 pb-5">
         <div className="flex items-center gap-2.5">
-          <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-            <Globe size={18} />
+          <div className="p-2 rounded-xl bg-secondary text-foreground border border-border">
+            <Globe size={20} />
           </div>
           <div className="flex flex-col">
             <span className="text-lg font-semibold tracking-tight text-foreground">
-              {data.label || "External API"}
+              {data.label || "External API Calling Tool"}
             </span>
             <span className="text-xs text-muted-foreground">
-              Configure 3rd-party API connection, defaults & endpoints.
+              Configure external HTTP request, dynamic parameters & test live execution.
             </span>
           </div>
         </div>
       </div>
 
-      {/* Label & Description */}
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          General Info
-        </span>
+      {/* 1. Identity Section */}
+      <ExternalIdentitySection
+        functionName={data.functionName || toVarName(data.label || "callExternalApi")}
+        onFunctionNameCommit={handleFunctionNameCommit}
+        label={data.label || ""}
+        onLabelCommit={handleLabelCommit}
+        description={data.description || ""}
+        onDescriptionCommit={handleDescriptionCommit}
+        docsUrl={data.docsUrl || ""}
+        onDocsUrlCommit={handleDocsUrlCommit}
+      />
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">API Name</Label>
-          <Input
-            className="h-8 text-xs bg-background"
-            placeholder="e.g. Stripe, OpenAI, Twilio"
-            value={labelBuffer.value}
-            onChange={(e) => labelBuffer.onChange(e.target.value)}
-            onBlur={labelBuffer.flush}
-          />
-        </div>
+      {/* 2. Dynamic Input Variables */}
+      <ExternalInputVariablesSection
+        inputVariables={inputVariables}
+        onAddVariable={handleAddInputVariable}
+        onUpdateVariable={handleUpdateInputVariable}
+        onDeleteVariable={handleDeleteInputVariable}
+        onInsertInUrl={handleInsertVariableIntoUrl}
+        onInsertInBody={handleInsertVariableIntoBody}
+        onUpdateTestValue={(name, val) =>
+          setTestVariableValues((prev) => ({ ...prev, [name]: val }))
+        }
+      />
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Description</Label>
-          <Textarea
-            className="min-h-[60px] text-xs bg-background resize-none"
-            placeholder="Describe this external service and its role..."
-            value={descriptionBuffer.value}
-            onChange={(e) => descriptionBuffer.onChange(e.target.value)}
-            onBlur={descriptionBuffer.flush}
-          />
-        </div>
+      {/* 3. HTTP Request Configuration */}
+      <ExternalRequestConfigSection
+        method={method}
+        onMethodChange={(m) => updateData({ method: m })}
+        url={data.url || data.baseUrl || ""}
+        onUrlCommit={handleUrlCommit}
+        queryParams={queryParams}
+        onAddQueryParam={handleAddQueryParam}
+        onUpdateQueryParam={handleUpdateQueryParam}
+        onDeleteQueryParam={handleDeleteQueryParam}
+        headers={headers}
+        onAddHeader={handleAddHeader}
+        onUpdateHeader={handleUpdateHeader}
+        onDeleteHeader={handleDeleteHeader}
+        bodyType={bodyType}
+        onBodyTypeChange={(bt) => updateData({ bodyType: bt })}
+        bodyContent={data.bodyContent || ""}
+        onBodyContentCommit={handleBodyContentCommit}
+        onFormatJson={handleFormatJson}
+      />
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Documentation URL</Label>
-          <div className="flex items-center gap-2">
-            <Input
-              className="h-8 text-xs bg-background font-mono flex-1"
-              placeholder="https://docs.example.com/api"
-              value={docsUrlBuffer.value}
-              onChange={(e) => docsUrlBuffer.onChange(e.target.value)}
-              onBlur={docsUrlBuffer.flush}
-            />
-            {docsUrlBuffer.value && (
-              <a
-                href={docsUrlBuffer.value}
-                target="_blank"
-                rel="noreferrer"
-                className="p-2 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-                title="Open documentation"
-              >
-                <ExternalLink size={14} />
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* 4. Live Testing Studio */}
+      <ExternalLiveTestSection
+        method={method}
+        resolvedUrl={resolvedUrl}
+        inputVariables={inputVariables}
+        testVariableValues={testVariableValues}
+        onTestVariableValueChange={(varName, val) =>
+          setTestVariableValues((prev) => ({ ...prev, [varName]: val }))
+        }
+        onRunLiveTest={handleRunLiveTest}
+        isTesting={isTesting}
+        testError={testError}
+        testResult={testResult}
+        onInferOutputSchema={handleInferOutputSchema}
+        inferredSchemaSaved={inferredSchemaSaved}
+      />
 
-      {/* Base URL */}
-      <div
-        className={cn(
-          "flex flex-col gap-3 rounded-xl border p-4 shadow-sm backdrop-blur-sm transition-colors",
-          !baseUrlBuffer.value?.trim()
-            ? "border-destructive/40 bg-destructive/5"
-            : "border-border bg-card/50",
-        )}
-      >
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Network & Base URL
-          </span>
-          {!baseUrlBuffer.value?.trim() && (
-            <span className="text-[10px] font-bold uppercase tracking-wider text-destructive bg-destructive/15 px-1.5 py-0.5 rounded border border-destructive/30">
-              Error / Required
-            </span>
-          )}
-        </div>
+      {/* 5. Environment Variables Drawer */}
+      <ExternalEnvVarsDrawer nodeId={nodeId} defaultOpen={false} />
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs flex items-center justify-between">
-            <span>Base URL</span>
-            {!baseUrlBuffer.value?.trim() && (
-              <span className="text-[10px] text-destructive font-semibold">
-                Missing Base URL
-              </span>
-            )}
-          </Label>
-          <div className="flex items-center gap-2">
-            <Globe
-              size={14}
-              className={cn(
-                "shrink-0",
-                !baseUrlBuffer.value?.trim()
-                  ? "text-destructive"
-                  : "text-muted-foreground",
-              )}
-            />
-            <Input
-              className={cn(
-                "h-8 text-xs bg-background font-mono flex-1",
-                !baseUrlBuffer.value?.trim() &&
-                  "border-destructive focus-visible:ring-destructive text-destructive placeholder:text-destructive/50",
-              )}
-              placeholder="https://api.stripe.com/v1"
-              value={baseUrlBuffer.value}
-              onChange={(e) => baseUrlBuffer.onChange(e.target.value)}
-              onBlur={baseUrlBuffer.flush}
-            />
-          </div>
-          {!baseUrlBuffer.value?.trim() ? (
-            <span className="text-[10px] text-destructive font-medium flex items-center gap-1 mt-0.5">
-              <AlertCircle size={12} className="shrink-0 text-destructive" />
-              Base URL is not configured. Requests will fail without a target host URL.
-            </span>
-          ) : (
-            <span className="text-[10px] text-muted-foreground">
-              Prefix prepended to all endpoint paths when invoked.
-            </span>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 pt-2">
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Timeout (sec)</Label>
-            <Input
-              className="h-8 text-xs bg-background"
-              placeholder="30"
-              value={timeoutBuffer.value}
-              onChange={(e) => timeoutBuffer.onChange(e.target.value)}
-              onBlur={timeoutBuffer.flush}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Rate Limit</Label>
-            <Input
-              className="h-8 text-xs bg-background"
-              placeholder="100/m"
-              value={rateLimitBuffer.value}
-              onChange={(e) => rateLimitBuffer.onChange(e.target.value)}
-              onBlur={rateLimitBuffer.flush}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Environment Variables (.env) Config */}
-      <ExternalEnvVarsDrawer nodeId={nodeId} defaultOpen={true} />
-
-      {/* Endpoints List */}
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Configured Endpoints
-            </span>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-secondary text-foreground font-semibold">
-              {endpoints.length}
-            </span>
-          </div>
-
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-7 text-[10px] gap-1 rounded-full px-2.5"
-            onClick={handleAddEndpoint}
-          >
-            <Plus size={12} /> Add Endpoint
-          </Button>
-        </div>
-
-        {endpoints.length === 0 ? (
-          <span className="text-xs text-muted-foreground italic p-2">
-            No endpoints configured. Add an endpoint to start defining API actions.
-          </span>
-        ) : (
-          <div className="flex flex-col divide-y divide-border/50 border border-border/50 rounded-lg overflow-hidden">
-            {endpoints.map((ep) => {
-              const missingSchema = isOutputSchemaMissing({
-                responseBody: ep.responseBody,
-                responseMode: ep.responseMode,
-              });
-
-              return (
-                <div
-                  key={ep.id}
-                  className="flex items-center justify-between p-2.5 bg-background/50 hover:bg-muted/40 transition-colors group"
-                >
-                  <div className="flex items-center gap-2 overflow-hidden flex-1">
-                    <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary shrink-0">
-                      {ep.type || "POST"}
-                    </span>
-                    <span className="text-xs font-medium text-foreground truncate font-mono">
-                      {ep.name}
-                    </span>
-                    {missingSchema && (
-                      <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0">
-                        <AlertTriangle size={10} />
-                        Missing Schema
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                      onClick={() =>
-                        setActiveConfigItem({
-                          type: "endpoint",
-                          id: ep.id,
-                          nodeId,
-                        })
-                      }
-                      title="Configure endpoint parameters, request & response body"
-                    >
-                      <Settings size={13} />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => deleteEndpoint(ep.id)}
-                      title="Delete endpoint"
-                    >
-                      <Trash size={13} />
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/* 6. Advanced Call Settings */}
+      <ExternalAdvancedSettingsSection
+        timeout={data.timeout !== undefined && data.timeout !== null ? String(data.timeout) : "30"}
+        onTimeoutCommit={handleTimeoutCommit}
+        rateLimit={data.rateLimit || ""}
+        onRateLimitCommit={handleRateLimitCommit}
+      />
     </div>
   );
 };

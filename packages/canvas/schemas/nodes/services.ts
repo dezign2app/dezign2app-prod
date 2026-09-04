@@ -44,7 +44,51 @@ export const nodeDependencyItemInputSchema = z.object({
   source: z.enum(["manual", "ai_inferred", "canvas_inferred"]).optional(),
 }).passthrough();
 
+export const externalInputVariableSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.enum(["string", "number", "boolean", "object", "array"]).default("string"),
+  required: z.boolean().optional(),
+  defaultValue: z.string().optional(),
+  description: z.string().optional(),
+});
+
+export const externalQueryParamSchema = z.object({
+  id: z.string(),
+  key: z.string().optional(),
+  value: z.string().optional(),
+  name: z.string().optional(),
+  type: z.string().optional(),
+  required: z.boolean().optional(),
+  defaultValue: z.string().optional(),
+  description: z.string().optional(),
+  enabled: z.boolean().optional(),
+});
+
+export const externalHeaderSchema = z.object({
+  id: z.string(),
+  key: z.string().optional(),
+  value: z.string().optional(),
+  name: z.string().optional(),
+  type: z.string().optional(),
+  required: z.boolean().optional(),
+  defaultValue: z.string().optional(),
+  description: z.string().optional(),
+  enabled: z.boolean().optional(),
+});
+
 export const externalDataSchema = simpleDataSchema.extend({
+  functionName: z.string().optional(),
+  method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).optional(),
+  url: z.string().optional(),
+  endpointPath: z.string().optional(),
+  inputVariables: z.array(externalInputVariableSchema).optional(),
+  queryParams: z.array(externalQueryParamSchema).optional(),
+  headers: z.array(externalHeaderSchema).optional(),
+  bodyType: z.enum(["json", "text", "raw", "none"]).optional(),
+  bodyContent: z.string().optional(),
+  responseSchema: z.any().optional(),
+  lastTestResult: z.any().optional(),
   baseUrl: z.string().optional(),
   authType: z.enum(["none", "bearer", "apiKey", "basic", "custom"]).optional(),
   authHeader: z.string().optional(),

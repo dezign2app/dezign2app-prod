@@ -1,6 +1,6 @@
 import type { Endpoint, NodeDependencyItem } from "../schemas";
 import type { InterServiceProtocol } from "../constants";
-import type { UIEventItem, Schema } from "./simulation";
+import type { UIEventItem, Schema, Parameter } from "./simulation";
 import type { PipelineStepDraft } from "./pipeline";
 
 export type { NodeDependencyItem };
@@ -87,7 +87,7 @@ export interface CanvasServiceNodeData {
   cors?: boolean;
   corsOrigins?: string;
   rateLimit?: string;
-  timeout?: string;
+  timeout?: string | number;
   port?: string | number;
   grpcPort?: string;
   interServiceProtocol?: InterServiceProtocol;
@@ -136,12 +136,7 @@ export interface CanvasTransformerNodeData {
   logicMode?: "natural_language" | "code";
   prompt?: string;
   code?: string;
-  returnSchema?: {
-    name: string;
-    type: string;
-    required?: boolean;
-    description?: string;
-  }[];
+  returnSchema?: Parameter[];
   returnSchemaMode?: "field_builder" | "raw_json";
   returnSchemaRawJson?: string;
   isAsync?: boolean;

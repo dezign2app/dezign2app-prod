@@ -11,6 +11,7 @@ export * from "./compileAuth";
 export * from "./compileUiPackage";
 export * from "./compileTransformerHelpers";
 export * from "./compileFrontendHelpers";
+export * from "./compileExternalNodes";
 export * from "./compileMonorepo";
 
 // Tech & Version Specific Compilers

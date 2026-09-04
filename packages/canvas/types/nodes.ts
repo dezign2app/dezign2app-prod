@@ -33,6 +33,7 @@ import type {
   CanvasIdentityProviderNodeData,
   CanvasAuthNodeData,
 } from "./infrastructure";
+import type { Parameter } from "./simulation";
 export type BackendNodeType =
   | "service"
   | "database"
@@ -123,13 +124,7 @@ export interface BaseNodeData {
   logicMode?: "natural_language" | "code";
   prompt?: string;
   code?: string;
-  returnSchema?: {
-    id?: string;
-    name: string;
-    type: string;
-    required?: boolean;
-    description?: string;
-  }[];
+  returnSchema?: Parameter[];
   returnSchemaMode?: "field_builder" | "raw_json";
   returnSchemaRawJson?: string;
   isAsync?: boolean;
@@ -146,8 +141,52 @@ export interface BaseNodeData {
   aiEditing?: boolean;
 }
 
+export interface ExternalInputVariable {
+  id: string;
+  name: string;
+  type: "string" | "number" | "boolean" | "object" | "array";
+  required?: boolean;
+  defaultValue?: string;
+  description?: string;
+}
+
+export interface ExternalQueryParam extends Parameter {
+  enabled?: boolean;
+}
+
+export interface ExternalHeader extends Parameter {
+  enabled?: boolean;
+}
+
+export interface ExternalTestResult {
+  status?: number;
+  statusText?: string;
+  timeMs?: number;
+  headers?: Record<string, string>;
+  data?: any;
+  error?: string;
+  testedAt?: string;
+  requestDetails?: {
+    method?: string;
+    url?: string;
+    headers?: Record<string, string>;
+    body?: any;
+  };
+}
+
 export interface CanvasExternalNodeData extends Partial<BaseNodeData> {
+  functionName?: string;
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  url?: string;
   baseUrl?: string;
+  endpointPath?: string;
+  inputVariables?: ExternalInputVariable[];
+  queryParams?: ExternalQueryParam[];
+  headers?: ExternalHeader[];
+  bodyType?: "json" | "text" | "raw" | "none";
+  bodyContent?: string;
+  responseSchema?: any;
+  lastTestResult?: ExternalTestResult;
   authType?: "none" | "bearer" | "apiKey" | "basic" | "custom";
   authHeader?: string;
   authQueryParam?: string;

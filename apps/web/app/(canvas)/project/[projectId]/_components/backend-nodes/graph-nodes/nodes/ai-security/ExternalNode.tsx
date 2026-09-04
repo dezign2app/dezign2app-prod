@@ -1,24 +1,36 @@
-import React, { useState, useEffect } from "react";
-import { NodeProps } from "@xyflow/react";
-import { Globe, Settings, ChevronDown, AlertTriangle, AlertCircle } from "lucide-react";
+import React, { useState } from "react";
+import { NodeProps, Handle, Position } from "@xyflow/react";
+import {
+  Globe,
+  Settings,
+  AlertCircle,
+  Play,
+  Key,
+  Code2,
+  ChevronDown,
+  CheckCircle2,
+  XCircle,
+  Clock,
+} from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
-import { Input } from "@workspace/ui/components/input";
-import { Label } from "@workspace/ui/components/label";
-
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   NodeHeader,
-  EndpointList,
   useSimulationNodeState,
   getSimulationNodeBorderClass,
-  generateId,
   LocalInput,
   LocalTextarea,
 } from "../../common";
-import { Textarea } from "@workspace/ui/components/textarea";
 import { ExternalEnvVarsDrawer } from "./ExternalEnvVarsDrawer";
-import { isOutputSchemaMissing } from "@/lib/utils/nestedJsonSchema";
+
+const METHOD_COLORS: Record<string, string> = {
+  GET: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+  POST: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30",
+  PUT: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
+  PATCH: "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30",
+  DELETE: "bg-destructive/15 text-destructive border-destructive/30",
+};
 
 export const ExternalNode = ({
   id,
@@ -26,86 +38,103 @@ export const ExternalNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
-  const addEndpoint = useBackendCanvasStore((s) => s.addEndpoint);
-  const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
-  const endpoints = allEndpoints.filter((e) => e.nodeId === id);
+  const setActiveConfigItem = useBackendCanvasStore(
+    (s) => s.setActiveConfigItem,
+  );
 
   const simulation = useSimulationNodeState(id);
   const borderClass = getSimulationNodeBorderClass(
     simulation,
     Boolean(selected),
-    "border-border border-dashed",
+    "border-border",
   );
 
   const [configOpen, setConfigOpen] = useState(false);
-  const hasInitializedEndpointsRef = React.useRef(false);
 
-  // Initialize or migrate endpoints
-  useEffect(() => {
-    if (hasInitializedEndpointsRef.current) return;
-    hasInitializedEndpointsRef.current = true;
-    const existing = useBackendCanvasStore
-      .getState()
-      .endpoints.filter((e) => e.nodeId === id);
-    if (existing.length === 0) {
-      if (data.actions && data.actions.length > 0) {
-        data.actions.forEach((act) => {
-          addEndpoint(id, {
-            id: act.id || generateId(),
-            name: act.name.startsWith("/") ? act.name : `/${act.name}`,
-            type: "POST",
-            summary: act.name,
-          });
-        });
-      } else {
-        addEndpoint(id, {
-          id: generateId(),
-          name: "/v1/resource",
-          type: "POST",
-          summary: "External API action",
-        });
-      }
-    }
-  }, [id, addEndpoint, data.actions]);
+  const method = (data.method || "POST").toUpperCase();
+  const effectiveUrl = data.url || data.baseUrl || "";
+  const isUrlMissing = !effectiveUrl.trim();
 
-  const isBaseUrlMissing = !data.baseUrl?.trim();
+  const inputVariables = data.inputVariables || [];
+  const headerCount = (data.headers || []).filter((h) => h.enabled !== false).length;
+  const queryParamCount = (data.queryParams || []).filter((q) => q.enabled !== false).length;
+  const hasBody = ["POST", "PUT", "PATCH"].includes(method) && data.bodyType !== "none";
+  const authType = data.authType || "none";
+  const lastTest = data.lastTestResult;
 
-  const missingCount = endpoints.filter((ep) =>
-    isOutputSchemaMissing({
-      responseBody: ep.responseBody,
-      responseMode: ep.responseMode,
-    }),
-  ).length;
+  const handleOpenConfig = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setActiveConfigItem({
+      type: "external",
+      id,
+      nodeId: id,
+    });
+  };
 
   return (
     <div
       className={cn(
-        "shadow-md rounded-xl bg-card border-2 min-w-[300px] max-w-[400px] flex flex-col transition-all duration-300",
+        "shadow-md rounded-xl bg-card border-2 min-w-[320px] max-w-[420px] flex flex-col transition-all duration-300 relative",
         borderClass,
-        isBaseUrlMissing && !selected && "border-destructive/60",
+        isUrlMissing && !selected && "border-destructive/60",
       )}
+      onDoubleClick={handleOpenConfig}
     >
+      {/* Target input handle for dynamic calling */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="input-vars-in"
+        className="w-3 h-3 !bg-primary border-2 border-background -left-1.5"
+        style={{ top: "42px" }}
+        title="Input variables source -> Connect pipeline or service to invoke this tool"
+      />
+
+      {/* Target input handle (alias for backwards compatibility) */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="external-in"
+        className="w-2 h-2 !bg-primary/50 border-2 border-background -left-1 opacity-0 pointer-events-none"
+        style={{ top: "42px" }}
+      />
+
+      {/* Source output handle for response */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="external-out"
+        className="w-3 h-3 !bg-primary border-2 border-background -right-1.5"
+        style={{ top: "42px" }}
+        title="External API response output"
+      />
+
+      {/* Node Header */}
       <NodeHeader
         id={id}
-        data={data}
+        data={{
+          ...data,
+          label: data.label || data.functionName || "",
+        }}
         nodeType="external"
         icon={Globe}
         title="External API"
-        colorClass="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+        colorClass="bg-secondary/40 text-foreground"
         selected={selected}
         rightElement={
           <div className="flex items-center gap-1">
+            <span
+              className={cn(
+                "text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border uppercase",
+                METHOD_COLORS[method] || METHOD_COLORS.POST,
+              )}
+            >
+              {method}
+            </span>
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                useBackendCanvasStore.getState().setActiveConfigItem({
-                  type: "external",
-                  id,
-                  nodeId: id,
-                });
-              }}
+              onClick={handleOpenConfig}
               className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all cursor-pointer flex items-center justify-center text-[10px]"
-              title="Configure External API Settings"
+              title="Configure API Call & Test Runner"
             >
               <Settings size={13} />
             </button>
@@ -114,10 +143,10 @@ export const ExternalNode = ({
       />
 
       {/* Description */}
-      <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
+      <div className="px-3 py-1.5 bg-secondary/5 border-b nodrag">
         <LocalTextarea
-          className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
-          placeholder="description"
+          className="min-h-[18px] text-xs bg-transparent border-none shadow-none p-0.5 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
+          placeholder="Describe what this API tool does..."
           value={data.description || ""}
           onBlur={(e) =>
             updateNode(id, { data: { ...data, description: e.target.value } })
@@ -125,75 +154,161 @@ export const ExternalNode = ({
         />
       </div>
 
-      {/* Base URL */}
-      <div
-        className={cn(
-          "px-3 py-1.5 border-b nodrag flex items-center gap-2 transition-colors",
-          isBaseUrlMissing ? "bg-destructive/10 border-destructive/30" : "bg-secondary/5",
+      {/* Section 1: Dynamic Input Variables (at top) */}
+      <div className="px-3 py-2 border-b bg-muted/10">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+            <Code2 size={11} className="text-muted-foreground" />
+            Dynamic Inputs ({inputVariables.length})
+          </span>
+          <button
+            onClick={handleOpenConfig}
+            className="text-[9px] font-medium text-foreground hover:underline cursor-pointer"
+          >
+            + Edit Vars
+          </button>
+        </div>
+
+        {inputVariables.length === 0 ? (
+          <div
+            onClick={handleOpenConfig}
+            className="text-[11px] text-muted-foreground/70 italic bg-background/50 border border-dashed border-border/60 rounded px-2 py-1.5 cursor-pointer hover:border-foreground/30 transition-colors"
+          >
+            No dynamic variables defined (static call). Click to add inputs like <code className="font-mono text-[10px]">userId</code>, <code className="font-mono text-[10px]">amount</code>.
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-1 max-h-[80px] overflow-y-auto">
+            {inputVariables.map((v) => (
+              <span
+                key={v.id}
+                className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-background border border-border shadow-xs"
+                title={v.description || `${v.name}: ${v.type}${v.required ? " (required)" : ""}`}
+              >
+                <span className="font-semibold text-foreground">{v.name}</span>
+                <span className="text-muted-foreground text-[9px]">:{v.type}</span>
+              </span>
+            ))}
+          </div>
         )}
-      >
-        <Globe
-          size={13}
-          className={cn(
-            "shrink-0",
-            isBaseUrlMissing ? "text-destructive" : "text-muted-foreground",
-          )}
-        />
-        <LocalInput
-          placeholder="Base URL required (e.g. https://api.stripe.com/v1)"
-          className={cn(
-            "h-7 text-xs bg-transparent border-none shadow-none focus-visible:ring-0 font-mono",
-            isBaseUrlMissing && "placeholder:text-destructive/70 text-destructive",
-          )}
-          value={data.baseUrl || ""}
-          onBlur={(e) =>
-            updateNode(id, { data: { ...data, baseUrl: e.target.value } })
-          }
-        />
       </div>
 
-      {/* Base URL Missing Error Banner */}
-      {isBaseUrlMissing && (
-        <div className="px-3 py-1.5 bg-destructive/15 text-destructive text-[10px] font-medium flex items-center justify-between border-b border-destructive/30">
-          <span className="flex items-center gap-1.5">
-            <AlertCircle size={12} className="shrink-0 text-destructive" />
-            Base URL is not configured
-          </span>
-          <span className="text-[9px] font-bold uppercase tracking-wider bg-destructive/20 px-1 py-0.5 rounded">
-            Error
-          </span>
+      {/* Section 2: Request URL & Method preview */}
+      <div
+        className={cn(
+          "px-3 py-2 border-b nodrag flex flex-col gap-1 transition-colors",
+          isUrlMissing ? "bg-destructive/10 border-destructive/30" : "bg-card",
+        )}
+      >
+        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+          <span className="font-semibold uppercase tracking-wider">Target Endpoint</span>
+          {isUrlMissing && (
+            <span className="text-[9px] font-bold text-destructive flex items-center gap-1">
+              <AlertCircle size={10} /> URL Required
+            </span>
+          )}
         </div>
-      )}
 
-      {/* Schema Missing Warning Banner */}
-      {missingCount > 0 && (
-        <div className="px-3 py-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-medium flex items-center justify-between border-b border-amber-500/20">
-          <span className="flex items-center gap-1">
-            <AlertTriangle size={11} className="shrink-0" />
-            {missingCount} endpoint{missingCount !== 1 ? "s" : ""} missing output schema
-          </span>
-          <span className="text-[9px] opacity-75">Contract required</span>
+        <div className="flex items-center gap-2">
+          <LocalInput
+            placeholder="https://api.example.com/v1/resource/{{id}}"
+            className={cn(
+              "h-7 text-xs bg-muted/40 font-mono flex-1 border border-border/60",
+              isUrlMissing && "border-destructive text-destructive placeholder:text-destructive/60",
+            )}
+            value={effectiveUrl}
+            onBlur={(e) => {
+              const val = e.target.value;
+              updateNode(id, {
+                data: {
+                  ...data,
+                  url: val,
+                  baseUrl: val,
+                },
+              });
+            }}
+          />
         </div>
-      )}
+      </div>
 
-      {/* Endpoints List with GET/POST badges, handles & settings button */}
-      <EndpointList nodeId={id} title="Endpoints / Actions" />
+      {/* Badges / Tool Info Bar */}
+      <div className="px-3 py-1.5 bg-muted/30 border-b flex items-center justify-between gap-1 text-[10px] flex-wrap">
+        <div className="flex items-center gap-1.5">
+          {authType !== "none" ? (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-secondary text-foreground font-mono text-[9px] border border-border">
+              <Key size={9} /> {authType}
+            </span>
+          ) : (
+            <span className="text-muted-foreground text-[9px] font-mono">No auth</span>
+          )}
 
-      {/* Environment Variables Section on External Node (identical styling to Endpoints list) */}
+          {headerCount > 0 && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-secondary text-muted-foreground text-[9px]">
+              {headerCount} hdr{headerCount !== 1 ? "s" : ""}
+            </span>
+          )}
+
+          {queryParamCount > 0 && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-secondary text-muted-foreground text-[9px]">
+              {queryParamCount} param{queryParamCount !== 1 ? "s" : ""}
+            </span>
+          )}
+
+          {hasBody && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-secondary text-muted-foreground text-[9px]">
+              JSON Body
+            </span>
+          )}
+        </div>
+
+        {/* Test status indicator */}
+        {lastTest && (
+          <div className="flex items-center gap-1 text-[9px] font-mono">
+            {lastTest.status && lastTest.status >= 200 && lastTest.status < 300 ? (
+              <span className="text-foreground font-medium flex items-center gap-0.5">
+                <CheckCircle2 size={10} className="text-primary" /> {lastTest.status}
+              </span>
+            ) : lastTest.status ? (
+              <span className="text-destructive flex items-center gap-0.5">
+                <XCircle size={10} /> {lastTest.status}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Tested</span>
+            )}
+            {lastTest.timeMs !== undefined && (
+              <span className="text-muted-foreground flex items-center gap-0.5">
+                <Clock size={9} /> {lastTest.timeMs}ms
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Quick Test & Open Studio Button */}
+      <div className="px-3 py-2 bg-secondary/10 flex items-center justify-between border-b">
+        <button
+          onClick={handleOpenConfig}
+          className="flex-1 flex items-center justify-center gap-1.5 py-1 px-2.5 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground font-medium text-xs shadow-xs transition-colors cursor-pointer"
+        >
+          <Play size={11} className="fill-current" />
+          Test & Configure Call
+        </button>
+      </div>
+
+      {/* Environment Variables Section */}
       <ExternalEnvVarsDrawer nodeId={id} />
 
-      {/* Collapsible Connection & Auth Drawer */}
-      <div className="p-3 bg-secondary/10 flex flex-col gap-3 rounded-b-xl border-t border-border/50">
+      {/* Collapsible Connection Drawer (Rate limit, Timeout, Docs) */}
+      <div className="p-2.5 bg-secondary/10 flex flex-col gap-2 rounded-b-xl border-t border-border/50">
         <div
           className="flex items-center justify-between cursor-pointer group"
           onClick={() => setConfigOpen(!configOpen)}
         >
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">
-            Connection & Auth Config
+            Advanced Settings
           </span>
           <div className="p-0.5 rounded hover:bg-secondary text-muted-foreground group-hover:text-foreground transition-all">
             <ChevronDown
-              size={14}
+              size={13}
               className={cn(
                 "transition-transform duration-300 ease-in-out",
                 configOpen && "rotate-180",
@@ -211,13 +326,9 @@ export const ExternalNode = ({
           )}
         >
           <div className="overflow-hidden">
-            <div className="flex flex-col gap-2.5 pt-2 border-t border-border/50 nodrag">
-
-
+            <div className="flex flex-col gap-2 pt-1 border-t border-border/50 nodrag text-xs">
               <div className="flex items-center justify-between gap-2">
-                <Label className="text-xs text-muted-foreground">
-                  Rate Limit
-                </Label>
+                <span className="text-muted-foreground">Rate Limit:</span>
                 <LocalInput
                   className="h-6 text-xs w-24 text-right bg-background"
                   placeholder="100/m"
@@ -225,6 +336,19 @@ export const ExternalNode = ({
                   onBlur={(e) =>
                     updateNode(id, {
                       data: { ...data, rateLimit: e.target.value },
+                    })
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Timeout (s):</span>
+                <LocalInput
+                  className="h-6 text-xs w-24 text-right bg-background"
+                  placeholder="30"
+                  value={data.timeout !== undefined ? String(data.timeout) : ""}
+                  onBlur={(e) =>
+                    updateNode(id, {
+                      data: { ...data, timeout: e.target.value },
                     })
                   }
                 />
