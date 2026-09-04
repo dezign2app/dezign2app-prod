@@ -127,6 +127,7 @@ export const WebPageConfig = ({
   } = useWebPageApiParameters({
     data,
     connectedEndpoint,
+    isProtected,
   });
 
   // 4. AI Code Generation
