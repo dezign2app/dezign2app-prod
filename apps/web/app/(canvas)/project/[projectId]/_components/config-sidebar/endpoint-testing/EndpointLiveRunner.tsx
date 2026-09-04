@@ -17,6 +17,7 @@ import {
   Users,
 } from "lucide-react";
 import { Endpoint, BackendNode } from "@/types/canvas";
+import { CanvasExternalNodeData } from "@workspace/canvas/types";
 import { SimulationTestCase } from "@workspace/canvas";
 import {
   buildFullEndpointUrl,
@@ -48,8 +49,17 @@ export function EndpointLiveRunner({
   const defaultPort = useMemo(() => getServiceDefaultPort(serviceNode), [serviceNode]);
   const defaultLocalBaseUrl = `http://localhost:${defaultPort}`;
 
+  // External node detection
+  const isExternal = serviceNode?.type === "external";
+  const externalData = isExternal ? (serviceNode?.data as unknown as CanvasExternalNodeData) : null;
+  const externalBaseUrl = externalData?.baseUrl || "";
+  const externalAuthType = externalData?.authType;
+  const externalApiKey = externalData?.apiKey || "";
+  const externalAuthHeader = externalData?.authHeader || "x-api-key";
+
   const fakeUsers = useActiveFakeUsers();
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>(() => {
+    if (isExternal) return "anonymous";
     const existingAuth = (testCase.request?.headers?.authorization || "").replace(/^Bearer\s+/i, "").trim();
     if (!existingAuth) return "anonymous";
     const matched = fakeUsers.find((u) => u.token === existingAuth);
@@ -58,9 +68,13 @@ export function EndpointLiveRunner({
 
   const [customAuthTokenOverride, setCustomAuthTokenOverride] = useState<string | null>(null);
 
-  const [envMode, setEnvMode] = useState<"local" | "custom">("local");
+  const [envMode, setEnvMode] = useState<"external" | "local" | "custom">(
+    isExternal ? "external" : "local"
+  );
   const [customBaseUrl, setCustomBaseUrl] = useState<string>("");
-  const [activeBaseUrl, setActiveBaseUrl] = useState<string>(defaultLocalBaseUrl);
+  const [activeBaseUrl, setActiveBaseUrl] = useState<string>(
+    isExternal ? externalBaseUrl : defaultLocalBaseUrl
+  );
 
   const [isLoading, setIsLoading] = useState(false);
   const [lastResult, setLastResult] = useState<LiveApiCallResult | null>(null);
@@ -87,7 +101,11 @@ export function EndpointLiveRunner({
   }
 
   const effectiveBaseUrl =
-    envMode === "local" ? defaultLocalBaseUrl : customBaseUrl || defaultLocalBaseUrl;
+    envMode === "external"
+      ? externalBaseUrl || defaultLocalBaseUrl
+      : envMode === "local"
+        ? defaultLocalBaseUrl
+        : customBaseUrl || defaultLocalBaseUrl;
 
   const targetUrl = useMemo(() => {
     return buildFullEndpointUrl(
@@ -113,7 +131,16 @@ export function EndpointLiveRunner({
     try {
       const headers = { ...(testCase.request?.headers || {}) };
 
-      if (endpoint.requireAuth !== false && selectedPersonaId) {
+      if (isExternal) {
+        // Inject external node-level auth instead of fake user JWT
+        if (externalAuthType === "bearer" && externalApiKey) {
+          headers["authorization"] = `Bearer ${externalApiKey}`;
+        } else if (externalAuthType === "apiKey" && externalApiKey) {
+          headers[externalAuthHeader.toLowerCase()] = externalApiKey;
+        } else if (externalAuthType === "basic" && externalApiKey) {
+          headers["authorization"] = `Basic ${btoa(externalApiKey)}`;
+        }
+      } else if (endpoint.requireAuth !== false && selectedPersonaId) {
         const selectedPersona = fakeUsers.find((u) => u.id === selectedPersonaId);
         if (selectedPersona) {
           if (selectedPersona.isAnonymous) {
@@ -171,15 +198,21 @@ export function EndpointLiveRunner({
           <div className="flex items-center gap-1.5">
             <Select
               value={envMode}
-              onValueChange={(val: "local" | "custom") => setEnvMode(val)}
+              onValueChange={(val: "external" | "local" | "custom") => setEnvMode(val)}
             >
               <SelectTrigger className="h-6 text-[11px] px-2 bg-background border-border/60">
                 <SelectValue placeholder="Select Env" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="local" className="text-xs">
-                  Local Dev (:{defaultPort})
-                </SelectItem>
+                {isExternal ? (
+                  <SelectItem value="external" className="text-xs">
+                    External API ({externalBaseUrl || "no base URL"})
+                  </SelectItem>
+                ) : (
+                  <SelectItem value="local" className="text-xs">
+                    Local Dev (:{defaultPort})
+                  </SelectItem>
+                )}
                 <SelectItem value="custom" className="text-xs">
                   Custom URL / Tunnel
                 </SelectItem>
@@ -188,8 +221,8 @@ export function EndpointLiveRunner({
           </div>
         </div>
 
-        {/* Auth Persona Selector (when endpoint requires authentication) */}
-        {endpoint.requireAuth !== false && (
+        {/* Auth Persona Selector — only for internal service nodes */}
+        {!isExternal && endpoint.requireAuth !== false && (
           <div className="flex items-center justify-between p-2 rounded-lg bg-background/50 border border-border/40 text-xs gap-2">
             <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5 shrink-0">
               <Users className="w-3.5 h-3.5 text-muted-foreground" />
@@ -216,6 +249,21 @@ export function EndpointLiveRunner({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        )}
+
+        {/* External Auth Info Badge — shows which auth is being injected */}
+        {isExternal && externalAuthType && externalAuthType !== "none" && (
+          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-background/50 border border-border/40 text-xs">
+            <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <span className="text-[11px] text-muted-foreground">
+              Auth:{" "}
+              <span className="font-mono text-foreground font-semibold">
+                {externalAuthType === "bearer" && "Bearer token (from node config)"}
+                {externalAuthType === "apiKey" && `${externalAuthHeader}: ••••••• (from node config)`}
+                {externalAuthType === "basic" && "Basic auth (from node config)"}
+              </span>
+            </span>
           </div>
         )}
 
