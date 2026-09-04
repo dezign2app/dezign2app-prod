@@ -7,7 +7,9 @@ import { Id } from "@workspace/backend/_generated/dataModel";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { compileMonorepo, CompiledMonorepoResult } from "@/lib/compiler";
-import { Loader2, GitBranch, XCircle, AlertTriangle, Radio, CheckCircle2, Terminal } from "lucide-react";
+import { Loader2, GitBranch, XCircle, AlertTriangle, Radio, CheckCircle2, Terminal, ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@workspace/ui/components/button";
 import { toast } from "sonner";
 import sdk from "@stackblitz/sdk";
 import { IdeToolbar } from "./_components/IdeToolbar";
@@ -370,8 +372,19 @@ export default function CompilerPage({
 
   if (project === null) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#0d1117]">
+      <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-[#0d1117]">
         <p className="text-slate-300 font-mono text-sm">Project not found.</p>
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className="border-slate-700 bg-slate-800/60 text-slate-200 hover:bg-slate-700 hover:text-white"
+        >
+          <Link href="/projects" className="flex items-center gap-2 font-mono text-xs">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Projects
+          </Link>
+        </Button>
       </div>
     );
   }

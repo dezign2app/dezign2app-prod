@@ -24,7 +24,9 @@ import { CreateCommitDialog } from "../_components/history/CreateCommitDialog";
 import { VersionHistoryDrawer } from "../_components/history/VersionHistoryDrawer";
 import { VersionPreviewBanner } from "../_components/history/VersionPreviewBanner";
 import { useCanvasKeyboardShortcuts } from "../_components/hooks/useCanvasKeyboardShortcuts";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@workspace/ui/components/button";
 import { ReactFlowProvider } from "@xyflow/react";
 import { toast } from "sonner";
 
@@ -191,8 +193,14 @@ export default function SchemaCanvasPage({
 
   if (project === null) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center">
-        <p>Project not found.</p>
+      <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-background text-foreground">
+        <p className="text-muted-foreground text-sm">Project not found.</p>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/projects" className="flex items-center gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Projects
+          </Link>
+        </Button>
       </div>
     );
   }
