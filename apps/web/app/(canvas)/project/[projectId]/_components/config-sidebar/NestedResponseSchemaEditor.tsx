@@ -618,11 +618,17 @@ export const NestedResponseSchemaEditor: React.FC<
                 )}
               </div>
               <span className="text-[10px] text-muted-foreground/70">
-                Downstream pipeline steps can reference these exact paths via{" "}
-                <code className="bg-secondary px-1 py-0.5 rounded text-[9px] font-mono">
-                  step.result.&lt;path&gt;
-                </code>
-                .
+                {isExternal ? (
+                  <>
+                    Downstream pipeline steps can reference these exact paths via{" "}
+                    <code className="bg-secondary px-1 py-0.5 rounded text-[9px] font-mono">
+                      step.result.&lt;path&gt;
+                    </code>
+                    .
+                  </>
+                ) : (
+                  <>Callers and frontend components can reference these response fields during API invocation.</>
+                )}
               </span>
             </div>
           )}

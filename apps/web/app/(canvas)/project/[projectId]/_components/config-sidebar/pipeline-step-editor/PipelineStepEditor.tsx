@@ -20,6 +20,7 @@ export interface PipelineStepEditorProps {
   steps: PipelineStepDraft[];
   onChange: (steps: PipelineStepDraft[]) => void;
   endpoint?: Endpoint;
+  onEndpointChange?: (changes: Partial<Endpoint>) => void;
   consumedEvent?: AnyMessagingResource;
   allNodes?: BackendNode[];
   allEdges?: BackendEdge[];
@@ -34,6 +35,7 @@ export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
   steps,
   onChange,
   endpoint,
+  onEndpointChange,
   consumedEvent,
   allNodes = [],
   allEdges = [],
@@ -141,6 +143,7 @@ export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
             endpoint={endpoint}
             allNodes={allNodes}
             onChange={updateReturnStep}
+            onEndpointChange={onEndpointChange}
           />
         </div>
       )}

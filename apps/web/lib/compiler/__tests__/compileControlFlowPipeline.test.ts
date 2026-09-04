@@ -607,5 +607,59 @@ describe("Control Flow Pipeline Steps Compilation", () => {
       expect(code).toContain("break;");
       expect(code).toContain("if (attempts_step_flaky > 3) throw retryErr;");
     });
+
+    it("renders ignore policy to log error and proceed to next step", () => {
+      const step: PipelineStep = {
+        id: "step-safe",
+        name: "Optional Analytics",
+        type: "service_call",
+        enabled: true,
+        outputVariable: "analyticsRes",
+        functionRef: { name: "sendAnalytics", importPath: "@workspace/services" },
+        inputBindings: [],
+        onError: {
+          action: "ignore",
+        },
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "reqBody",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("let analyticsRes: any = null;");
+      expect(code).toContain("try {");
+      expect(code).toContain("analyticsRes = await sendAnalytics();");
+      expect(code).toContain("} catch (stepErr: any) {");
+      expect(code).toContain('logger.error("Step Optional Analytics failed, proceeding to next step:", stepErr);');
+    });
+
+    it("renders throw policy to log and re-throw error", () => {
+      const step: PipelineStep = {
+        id: "step-strict",
+        name: "Strict Validation",
+        type: "transform",
+        enabled: true,
+        outputVariable: "validRes",
+        functionRef: { name: "validateStrict", importPath: "@workspace/utils" },
+        inputBindings: [],
+        onError: {
+          action: "throw",
+        },
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "reqBody",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("try {");
+      expect(code).toContain("const validRes = validateStrict();");
+      expect(code).toContain("} catch (stepErr: any) {");
+      expect(code).toContain('logger.error("Step Strict Validation failed:", stepErr);');
+      expect(code).toContain("throw stepErr;");
+    });
   });
 });
