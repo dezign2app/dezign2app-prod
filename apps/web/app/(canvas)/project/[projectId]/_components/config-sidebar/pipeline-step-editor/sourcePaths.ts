@@ -314,6 +314,62 @@ export function getAvailableSources(
           }
         }
       }
+
+      // Check target external node error response schema
+      const targetExtNode = allNodes.find(
+        (n) => n.id === s.externalNodeId || n.id === s.databaseId,
+      );
+      if (targetExtNode?.data?.errorResponseSchema) {
+        const errSchema = targetExtNode.data.errorResponseSchema;
+        if (typeof errSchema === "object" && errSchema !== null) {
+          if (Array.isArray(errSchema.fields)) {
+            errSchema.fields.forEach((f: { name?: string; type?: string }) => {
+              if (f.name && !stepPaths.some((p) => p.path === `error.${f.name}`)) {
+                stepPaths.push({ path: `error.${f.name}`, type: f.type || "string" });
+              }
+            });
+          } else {
+            const nestedErr = extractNestedPaths(errSchema);
+            nestedErr.forEach((item) => {
+              if (item.path && !stepPaths.some((p) => p.path === `error.${item.path}`)) {
+                stepPaths.push({ path: `error.${item.path}`, type: item.type });
+              }
+            });
+          }
+        }
+      }
+      if (targetEp?.errorResponseBody) {
+        if (Array.isArray(targetEp.errorResponseBody.fields)) {
+          targetEp.errorResponseBody.fields.forEach((f) => {
+            if (f.name && !stepPaths.some((p) => p.path === `error.${f.name}`)) {
+              stepPaths.push({ path: `error.${f.name}`, type: f.type || "string" });
+            }
+          });
+        }
+        if (targetEp.errorResponseBody.rawJson) {
+          const { parsed, error } = parseRawJsonSafe(targetEp.errorResponseBody.rawJson);
+          if (!error && parsed !== null) {
+            const nested = extractNestedPaths(parsed);
+            nested.forEach((item) => {
+              if (item.path && !stepPaths.some((p) => p.path === `error.${item.path}`)) {
+                stepPaths.push({ path: `error.${item.path}`, type: item.type });
+              }
+            });
+          }
+        }
+      }
+      // Add standard error, success, and status paths
+      if (!stepPaths.some((p) => p.path.startsWith("error"))) {
+        stepPaths.push({ path: "error.message", type: "string" });
+        stepPaths.push({ path: "error.error", type: "string" });
+        stepPaths.push({ path: "error.statusCode", type: "number" });
+      }
+      if (!stepPaths.some((p) => p.path === "success")) {
+        stepPaths.push({ path: "success", type: "boolean" });
+      }
+      if (!stepPaths.some((p) => p.path === "status")) {
+        stepPaths.push({ path: "status", type: "number" });
+      }
     }
 
     sources.push({

@@ -32,6 +32,7 @@ export const endpointSchema = z.object({
   queryParams: z.array(parameterSchema).optional(),
   requestBody: schemaModelSchema.optional(),
   responseBody: schemaModelSchema.optional(),
+  errorResponseBody: schemaModelSchema.optional(),
   simulationOutput: z.unknown().optional(),
   testCases: z.array(simulationTestCaseSchema).optional(),
   processingSteps: z.array(processingStepSchema).optional(),
@@ -156,6 +157,25 @@ export const endpointInputSchema: z.ZodType<EndpointInputType> = z.object({
     })
     .passthrough()
     .describe("Response body schema; define the actual returned fields."),
+  errorResponseBody: z
+    .object({
+      id: z.string().optional(),
+      fields: z.array(
+        z
+          .object({
+            id: z.string().optional(),
+            name: z.string(),
+            type: z.string(),
+            required: z.boolean(),
+            description: z.string().optional(),
+          })
+          .passthrough(),
+      ),
+      rawJson: z.string().optional(),
+    })
+    .passthrough()
+    .optional()
+    .describe("Error response body schema for 4xx/5xx failures."),
   simulationOutput: z
     .unknown()
     .optional()

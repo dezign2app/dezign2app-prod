@@ -51,3 +51,27 @@ export function resolveFullUrl(
 
   return u;
 }
+
+/**
+ * Completely strips authorization headers, API keys, and secret tokens so they are NEVER stored in the database or node state.
+ */
+export function stripSecretsForPersistence(
+  headers: Record<string, string>,
+): Record<string, string> {
+  const safeHeaders: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    const lower = k.toLowerCase();
+    if (
+      lower === "authorization" ||
+      lower.includes("api-key") ||
+      lower.includes("apikey") ||
+      lower.includes("token") ||
+      lower.includes("secret")
+    ) {
+      // Do NOT store this header at all in the database/node!
+      continue;
+    }
+    safeHeaders[k] = v;
+  }
+  return safeHeaders;
+}

@@ -27,6 +27,7 @@ import {
 import { ChevronDown, ChevronRight, Globe, AlertCircle } from "lucide-react";
 import { isEndpointPipelineUnconfigured } from "@/lib/utils/pipelineValidation";
 import { useBufferedInput } from "@/lib/hooks/useBufferedInput";
+import { cn } from "@workspace/ui/lib/utils";
 
 interface EndpointConfigProps {
   id: string;
@@ -37,6 +38,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
   const paramsHook = useParams();
   const projectId = paramsHook.projectId as Id<"projects">;
   const [pipelineExpanded, setPipelineExpanded] = React.useState(true);
+  const [responseSchemaTab, setResponseSchemaTab] = React.useState<"success" | "error">("success");
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const updateEndpoint = useBackendCanvasStore((s) => s.updateEndpoint);
   const item = endpoints.find((e) => e.id === id);
@@ -419,28 +421,83 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         }
       />
 
-      {/* Output / Response Body Schema (Enforced for External APIs) */}
-      <NestedResponseSchemaEditor
-        title={isExternal ? "Output / Response Schema (Required)" : "Response Body Schema"}
-        subtitle={
-          isExternal
-            ? "External API return contract. Declare the nested JSON structure returned by this endpoint so callers can bind to its fields."
-            : "Expected response body payload returned by this endpoint."
-        }
-        isExternal={isExternal}
-        mode={
-          item.responseMode === "raw_json" ? "raw_json" : "field_builder"
-        }
-        onModeChange={(responseMode) =>
-          updateEndpoint(item.id, { responseMode })
-        }
-        schema={
-          item.responseBody || { id: `res_${item.id}`, fields: [] }
-        }
-        onSchemaChange={(responseBody) =>
-          updateEndpoint(item.id, { responseBody })
-        }
-      />
+      {/* Dual Return Schemas: 1 for Success (2xx) and 1 for Error (4xx/5xx) */}
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center gap-1.5 p-1 rounded-lg bg-secondary/30 border border-border/50">
+          <button
+            type="button"
+            onClick={() => setResponseSchemaTab("success")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-1 px-2.5 rounded-md text-xs font-medium transition-colors cursor-pointer",
+              responseSchemaTab === "success"
+                ? "bg-background text-foreground shadow-xs font-semibold border border-border/60"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+            <span>Success Response (2xx)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setResponseSchemaTab("error")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-1 px-2.5 rounded-md text-xs font-medium transition-colors cursor-pointer",
+              responseSchemaTab === "error"
+                ? "bg-background text-foreground shadow-xs font-semibold border border-border/60"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <span className="w-2 h-2 rounded-full bg-destructive inline-block" />
+            <span>Error Response (4xx/5xx)</span>
+            {item.errorResponseBody &&
+              item.errorResponseBody.fields &&
+              item.errorResponseBody.fields.length > 0 && (
+                <span className="text-[9px] px-1 py-0.2 rounded bg-destructive/15 text-destructive font-mono">
+                  {item.errorResponseBody.fields.length}
+                </span>
+              )}
+          </button>
+        </div>
+
+        {responseSchemaTab === "success" ? (
+          <NestedResponseSchemaEditor
+            title={isExternal ? "Success Output Schema (2xx)" : "Success Response Body (2xx)"}
+            subtitle={
+              isExternal
+                ? "External API return contract for 2xx responses. Declare the nested JSON structure returned by this endpoint so callers can bind to its fields."
+                : "Expected response body payload returned on successful execution (200 / 201)."
+            }
+            isExternal={isExternal}
+            mode={item.responseMode === "raw_json" ? "raw_json" : "field_builder"}
+            onModeChange={(responseMode) => updateEndpoint(item.id, { responseMode })}
+            schema={item.responseBody || { id: `res_${item.id}`, fields: [] }}
+            onSchemaChange={(responseBody) => updateEndpoint(item.id, { responseBody })}
+          />
+        ) : (
+          <NestedResponseSchemaEditor
+            title={isExternal ? "Error Output Schema (4xx/5xx)" : "Error Response Body (4xx/5xx)"}
+            subtitle={
+              isExternal
+                ? "External API error contract. Declare the error JSON payload returned on failure (e.g. 400, 404, 500) so callers can inspect error details."
+                : "Expected error body payload returned on failure (validation error, downstream failure, or server error)."
+            }
+            isExternal={isExternal}
+            mode={item.responseMode === "raw_json" ? "raw_json" : "field_builder"}
+            onModeChange={(responseMode) => updateEndpoint(item.id, { responseMode })}
+            schema={
+              item.errorResponseBody || {
+                id: `res_err_${item.id}`,
+                fields: [
+                  { id: "err_1", name: "error", type: "string", required: true, key: "error", value: "" },
+                  { id: "err_2", name: "message", type: "string", required: true, key: "message", value: "" },
+                  { id: "err_3", name: "statusCode", type: "number", required: false, key: "statusCode", value: "" },
+                ],
+              }
+            }
+            onSchemaChange={(errorResponseBody) => updateEndpoint(item.id, { errorResponseBody })}
+          />
+        )}
+      </div>
 
       {/* ---------------------------------------------------------------- */}
       {/* PIPELINE STEPS SECTION (Internal Microservices only)              */}

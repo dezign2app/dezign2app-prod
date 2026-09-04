@@ -186,6 +186,7 @@ export interface CanvasExternalNodeData extends Partial<BaseNodeData> {
   bodyType?: "json" | "text" | "raw" | "none";
   bodyContent?: string;
   responseSchema?: any;
+  errorResponseSchema?: any;
   lastTestResult?: ExternalTestResult;
   authType?: "none" | "bearer" | "apiKey" | "basic" | "custom";
   authHeader?: string;

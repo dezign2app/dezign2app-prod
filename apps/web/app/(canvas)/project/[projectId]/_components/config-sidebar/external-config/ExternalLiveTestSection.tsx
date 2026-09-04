@@ -18,7 +18,8 @@ import {
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
-import { ExternalInputVariable, ExternalTestResult } from "@workspace/canvas/types";
+import { ExternalInputVariable, ExternalTestResult, ExternalHeader } from "@workspace/canvas/types";
+import { fetchLocalEnvVariable } from "@/lib/utils/localEnvSync";
 import { cn } from "@workspace/ui/lib/utils";
 import { HttpMethod } from "./externalConfigUtils";
 import { BufferedInput } from "./BufferedInput";
@@ -35,6 +36,16 @@ interface ExternalLiveTestSectionProps {
   testResult: ExternalTestResult | null;
   onInferOutputSchema: () => void;
   inferredSchemaSaved: boolean;
+  onInferErrorSchema?: () => void;
+  inferredErrorSchemaSaved?: boolean;
+  projectId?: string;
+  configuredHeaders?: ExternalHeader[];
+  authConfig?: {
+    authType?: string;
+    apiKey?: string;
+    authHeader?: string;
+    apiSecret?: string;
+  };
 }
 
 export const ExternalLiveTestSection = React.memo<ExternalLiveTestSectionProps>(
@@ -50,11 +61,91 @@ export const ExternalLiveTestSection = React.memo<ExternalLiveTestSectionProps>(
     testResult,
     onInferOutputSchema,
     inferredSchemaSaved,
+    onInferErrorSchema,
+    inferredErrorSchemaSaved = false,
+    projectId,
+    configuredHeaders,
+    authConfig,
   }) => {
     const [activeTab, setActiveTab] = useState<"response" | "params">("response");
     const [copiedResponse, setCopiedResponse] = useState(false);
     const [copiedParams, setCopiedParams] = useState(false);
     const [revealSecrets, setRevealSecrets] = useState(false);
+
+    // Live auth header resolved directly from the developer's local .env file
+    const [liveAuthHeader, setLiveAuthHeader] = useState<{
+      key: string;
+      value: string;
+      isMissing: boolean;
+    } | null>(null);
+
+    React.useEffect(() => {
+      let isCancelled = false;
+
+      async function resolveLiveAuth() {
+        const authHeader = (configuredHeaders || []).find(
+          (h) =>
+            h.enabled !== false &&
+            (h.key?.toLowerCase() === "authorization" ||
+              h.name?.toLowerCase() === "authorization" ||
+              h.key?.toLowerCase().includes("api-key")),
+        );
+
+        let headerKey = authHeader?.key || authHeader?.name || "Authorization";
+        let rawVal = authHeader?.value || "";
+
+        if (!authHeader && authConfig) {
+          if (authConfig.authType === "bearer" && authConfig.apiKey) {
+            headerKey = "Authorization";
+            rawVal = authConfig.apiKey.startsWith("Bearer ")
+              ? authConfig.apiKey
+              : `Bearer ${authConfig.apiKey}`;
+          } else if (authConfig.authType === "apiKey" && authConfig.apiKey) {
+            headerKey = authConfig.authHeader || "x-api-key";
+            rawVal = authConfig.apiKey;
+          } else if (authConfig.authType === "basic" && authConfig.apiKey) {
+            headerKey = "Authorization";
+            rawVal = `Basic ${authConfig.apiKey}`;
+          }
+        }
+
+        if (!rawVal) {
+          if (!isCancelled) setLiveAuthHeader(null);
+          return;
+        }
+
+        const envMatches = Array.from(
+          rawVal.matchAll(/(?:\$\{)?process\.env\.([a-zA-Z0-9_]+)(?:\s*\|\|\s*["'].*?["'])?\}?/g),
+        );
+
+        let resolvedVal = rawVal;
+        let isMissing = false;
+
+        for (const m of envMatches) {
+          const varName = m[1];
+          if (!varName) continue;
+          const localVal = await fetchLocalEnvVariable(varName, projectId);
+          if (!localVal) {
+            isMissing = true;
+          }
+          resolvedVal = resolvedVal.replace(m[0], localVal || "");
+        }
+
+        if (!isCancelled) {
+          setLiveAuthHeader({
+            key: headerKey,
+            value: resolvedVal,
+            isMissing,
+          });
+        }
+      }
+
+      resolveLiveAuth();
+
+      return () => {
+        isCancelled = true;
+      };
+    }, [configuredHeaders, authConfig, projectId]);
 
     const handleCopyResponse = () => {
       if (!testResult?.data) return;
@@ -77,16 +168,13 @@ export const ExternalLiveTestSection = React.memo<ExternalLiveTestSectionProps>(
       setTimeout(() => setCopiedParams(false), 1500);
     };
 
-    // Extract authorization header from dispatched request
+    // Extract authorization header read live from local files
     const authHeaderEntry = useMemo(() => {
-      const headers = testResult?.requestDetails?.headers;
-      if (!headers) return null;
-      const entry = Object.entries(headers).find(
-        ([k]) => k.toLowerCase() === "authorization",
-      );
-      if (!entry) return null;
-      return { key: entry[0], value: entry[1] };
-    }, [testResult]);
+      if (liveAuthHeader) {
+        return { key: liveAuthHeader.key, value: liveAuthHeader.value };
+      }
+      return null;
+    }, [liveAuthHeader]);
 
     // Intelligent diagnosis of authentication issues
     const authDiagnostic = useMemo(() => {
@@ -328,24 +416,47 @@ export const ExternalLiveTestSection = React.memo<ExternalLiveTestSectionProps>(
                       Copy Body
                     </Button>
 
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="default"
-                      className="h-6 text-[10px] gap-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                      onClick={onInferOutputSchema}
-                      disabled={!testResult.data}
-                    >
-                      {inferredSchemaSaved ? (
-                        <>
-                          <Check size={11} /> Saved!
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles size={11} /> Infer Schema
-                        </>
-                      )}
-                    </Button>
+                    {testResult.status !== undefined && testResult.status >= 400 ? (
+                      onInferErrorSchema && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="default"
+                          className="h-6 text-[10px] gap-1 px-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                          onClick={onInferErrorSchema}
+                          disabled={!testResult.data && !testResult.error}
+                        >
+                          {inferredErrorSchemaSaved ? (
+                            <>
+                              <Check size={11} /> Saved Error Schema!
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={11} /> Infer Error Schema
+                            </>
+                          )}
+                        </Button>
+                      )
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="default"
+                        className="h-6 text-[10px] gap-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                        onClick={onInferOutputSchema}
+                        disabled={!testResult.data}
+                      >
+                        {inferredSchemaSaved ? (
+                          <>
+                            <Check size={11} /> Saved Success Schema!
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles size={11} /> Infer Success Schema
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </>
                 ) : (
                   <Button
@@ -405,7 +516,11 @@ export const ExternalLiveTestSection = React.memo<ExternalLiveTestSectionProps>(
                 <div className="flex flex-col gap-1 p-2 rounded bg-secondary/20 border border-border/60">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      Dispatched Request Headers ({Object.keys(testResult.requestDetails?.headers || {}).length})
+                      Dispatched Request Headers (
+                      {(testResult.requestDetails?.headers
+                        ? Object.keys(testResult.requestDetails.headers).length
+                        : 0) + (liveAuthHeader ? 1 : 0)}
+                      )
                     </span>
                     <button
                       type="button"
@@ -417,39 +532,50 @@ export const ExternalLiveTestSection = React.memo<ExternalLiveTestSectionProps>(
                     </button>
                   </div>
 
-                  {testResult.requestDetails?.headers &&
-                  Object.keys(testResult.requestDetails.headers).length > 0 ? (
+                  {liveAuthHeader ||
+                  (testResult.requestDetails?.headers &&
+                    Object.keys(testResult.requestDetails.headers).length > 0) ? (
                     <div className="flex flex-col divide-y divide-border/50 border border-border/60 rounded bg-background overflow-hidden">
-                      {Object.entries(testResult.requestDetails.headers).map(([key, val]) => {
-                        const isAuth = key.toLowerCase() === "authorization";
-                        const isKeyEmpty = isAuth && (!val || val.trim() === "Bearer" || val.trim() === "Bearer ");
-                        return (
-                          <div key={key} className="p-1.5 flex items-center justify-between gap-2">
-                            <span className="font-semibold text-foreground/80 shrink-0">{key}:</span>
-                            <div className="flex items-center gap-1.5 overflow-hidden">
-                              <span
-                                className={cn(
-                                  "truncate select-all",
-                                  isKeyEmpty
-                                    ? "text-destructive font-bold"
-                                    : "text-foreground/90",
-                                )}
-                              >
-                                {isAuth
-                                  ? revealSecrets
-                                    ? val
-                                    : maskValue(val)
-                                  : val}
-                              </span>
-                              {isKeyEmpty && (
-                                <span className="shrink-0 px-1 py-0.2 rounded bg-destructive/15 text-destructive border border-destructive/30 text-[9px] font-sans font-bold">
-                                  Empty Token!
-                                </span>
-                              )}
-                            </div>
+                      {/* 1. Live Auth Header read directly from local .env files (never stored in database) */}
+                      {liveAuthHeader && (
+                        <div className="p-1.5 flex items-center justify-between gap-2 bg-emerald-500/5 dark:bg-emerald-500/10">
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="font-semibold text-foreground/80">{liveAuthHeader.key}:</span>
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-sans font-medium border border-emerald-500/30">
+                              Live from local .env
+                            </span>
                           </div>
-                        );
-                      })}
+                          <div className="flex items-center gap-1.5 overflow-hidden">
+                            <span
+                              className={cn(
+                                "truncate select-all font-mono",
+                                liveAuthHeader.isMissing || !liveAuthHeader.value
+                                  ? "text-destructive font-bold"
+                                  : "text-foreground/90",
+                              )}
+                            >
+                              {liveAuthHeader.isMissing || !liveAuthHeader.value
+                                ? "(Missing in local .env)"
+                                : revealSecrets
+                                  ? liveAuthHeader.value
+                                  : maskValue(liveAuthHeader.value)}
+                            </span>
+                            {liveAuthHeader.isMissing && (
+                              <span className="shrink-0 px-1 py-0.2 rounded bg-destructive/15 text-destructive border border-destructive/30 text-[9px] font-sans font-bold">
+                                Not in .env
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 2. Non-secret request headers */}
+                      {Object.entries(testResult.requestDetails?.headers || {}).map(([key, val]) => (
+                        <div key={key} className="p-1.5 flex items-center justify-between gap-2">
+                          <span className="font-semibold text-foreground/80 shrink-0">{key}:</span>
+                          <span className="truncate select-all text-foreground/90 font-mono">{val}</span>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <span className="text-muted-foreground text-[10px] italic">No headers dispatched.</span>

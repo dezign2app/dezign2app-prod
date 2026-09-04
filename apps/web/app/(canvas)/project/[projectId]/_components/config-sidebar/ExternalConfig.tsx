@@ -22,6 +22,9 @@ import {
   isHttpMethod,
   resolveFullUrl,
   interpolateString,
+  stripSecretsForPersistence,
+} from "./external-config/externalConfigUtils";
+import {
   ExternalIdentitySection,
   ExternalInputVariablesSection,
   ExternalRequestConfigSection,
@@ -35,7 +38,6 @@ import {
 async function resolveEnvTokens(
   raw: string,
   projectId?: string,
-  fallbackApiKey?: string,
 ): Promise<string> {
   if (!raw) return "";
 
@@ -48,14 +50,12 @@ async function resolveEnvTokens(
     const fullMatch = m[0];
     const envKey = m[1];
     if (!envKey) continue;
-    let resolved = getLocalEnvVariable(envKey);
+    let resolved = "";
+    try {
+      resolved = await fetchLocalEnvVariable(envKey, projectId);
+    } catch {}
     if (!resolved) {
-      try {
-        resolved = await fetchLocalEnvVariable(envKey, projectId);
-      } catch {}
-    }
-    if (!resolved && fallbackApiKey && !fallbackApiKey.includes("process.env.")) {
-      resolved = fallbackApiKey;
+      resolved = getLocalEnvVariable(envKey);
     }
     result = result.replace(fullMatch, resolved || "");
   }
@@ -331,14 +331,15 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({ id: _id, nodeId 
       const requestHeaders: Record<string, string> = {};
 
       // User headers
-      const configuredHeaders = (data.headers || []).filter(
+      const currentData = dataRef.current;
+      const configuredHeaders = (currentData.headers || []).filter(
         (h) => h.enabled !== false && (h.key || h.name)?.trim(),
       );
 
       for (const h of configuredHeaders) {
         const hKey = (h.key || h.name || "").trim();
         let val = interpolateString(h.value || "", testVariableValues);
-        val = await resolveEnvTokens(val, projectId, data.apiKey);
+        val = await resolveEnvTokens(val, projectId);
         requestHeaders[hKey] = val;
       }
 
@@ -348,15 +349,15 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({ id: _id, nodeId 
       );
 
       if (!hasAuthHeader) {
-        let authKeyValue = data.apiKey || "";
+        let authKeyValue = currentData.apiKey || "";
         authKeyValue = await resolveEnvTokens(authKeyValue, projectId);
 
-        if (data.authType === "bearer" && authKeyValue) {
+        if (currentData.authType === "bearer" && authKeyValue) {
           requestHeaders["Authorization"] = `Bearer ${authKeyValue}`;
-        } else if (data.authType === "apiKey" && data.authHeader && authKeyValue) {
-          requestHeaders[data.authHeader] = authKeyValue;
-        } else if (data.authType === "basic" && authKeyValue) {
-          requestHeaders["Authorization"] = `Basic ${btoa(authKeyValue + ":" + (data.apiSecret || ""))}`;
+        } else if (currentData.authType === "apiKey" && currentData.authHeader && authKeyValue) {
+          requestHeaders[currentData.authHeader] = authKeyValue;
+        } else if (currentData.authType === "basic" && authKeyValue) {
+          requestHeaders["Authorization"] = `Basic ${btoa(authKeyValue + ":" + (currentData.apiSecret || ""))}`;
         }
       }
 
@@ -430,6 +431,29 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({ id: _id, nodeId 
         data: responseData,
       });
 
+      const safeStrip =
+        typeof stripSecretsForPersistence === "function"
+          ? stripSecretsForPersistence
+          : (headers: Record<string, string>) => {
+              const safe: Record<string, string> = {};
+              for (const [k, v] of Object.entries(headers)) {
+                const lower = k.toLowerCase();
+                if (
+                  lower === "authorization" ||
+                  lower.includes("api-key") ||
+                  lower.includes("apikey") ||
+                  lower.includes("token") ||
+                  lower.includes("secret")
+                ) {
+                  continue;
+                }
+                safe[k] = v;
+              }
+              return safe;
+            };
+
+      const persistedHeaders = safeStrip(dispatchedHeaders);
+
       const result: ExternalTestResult = {
         status: response.status,
         statusText: response.statusText,
@@ -440,7 +464,7 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({ id: _id, nodeId 
         requestDetails: {
           method,
           url: resolvedUrl,
-          headers: dispatchedHeaders,
+          headers: persistedHeaders,
           body: dispatchedBody,
         },
       };
@@ -461,6 +485,28 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({ id: _id, nodeId 
       }
 
       console.error("[External API Call Error]", errorMsg);
+
+      const safeStrip =
+        typeof stripSecretsForPersistence === "function"
+          ? stripSecretsForPersistence
+          : (headers: Record<string, string>) => {
+              const safe: Record<string, string> = {};
+              for (const [k, v] of Object.entries(headers)) {
+                const lower = k.toLowerCase();
+                if (
+                  lower === "authorization" ||
+                  lower.includes("api-key") ||
+                  lower.includes("apikey") ||
+                  lower.includes("token") ||
+                  lower.includes("secret")
+                ) {
+                  continue;
+                }
+                safe[k] = v;
+              }
+              return safe;
+            };
+
       const failureResult: ExternalTestResult = {
         error: errorMsg,
         timeMs: 0,
@@ -468,7 +514,7 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({ id: _id, nodeId 
         requestDetails: {
           method,
           url: resolvedUrl,
-          headers: dispatchedHeaders,
+          headers: safeStrip(dispatchedHeaders),
           body: dispatchedBody,
         },
       };
@@ -488,6 +534,23 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({ id: _id, nodeId 
       updateData({ responseSchema: sample });
       setInferredSchemaSaved(true);
       setTimeout(() => setInferredSchemaSaved(false), 2000);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const [inferredErrorSchemaSaved, setInferredErrorSchemaSaved] = useState(false);
+
+  // Infer Error JSON schema from test response data or error details
+  const handleInferErrorSchema = () => {
+    const errorSample =
+      testResult?.data ??
+      (testResult?.error ? { error: testResult.error, status: testResult.status || 500 } : null);
+    if (!errorSample) return;
+    try {
+      updateData({ errorResponseSchema: errorSample });
+      setInferredErrorSchemaSaved(true);
+      setTimeout(() => setInferredErrorSchemaSaved(false), 2000);
     } catch (e) {
       console.error(e);
     }
@@ -575,7 +638,98 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({ id: _id, nodeId 
         testResult={testResult}
         onInferOutputSchema={handleInferOutputSchema}
         inferredSchemaSaved={inferredSchemaSaved}
+        onInferErrorSchema={handleInferErrorSchema}
+        inferredErrorSchemaSaved={inferredErrorSchemaSaved}
+        projectId={projectId}
+        configuredHeaders={data.headers}
+        authConfig={{
+          authType: data.authType,
+          apiKey: data.apiKey,
+          authHeader: data.authHeader,
+          apiSecret: data.apiSecret,
+        }}
       />
+
+      {/* 4.5 Dual Output Schemas: Success & Error Contracts */}
+      <div className="flex flex-col gap-3 p-3 rounded-xl border border-border bg-card/40">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Return Schema Contracts
+          </span>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono">
+              {data.responseSchema ? "Success Defined" : "Success Empty"}
+            </span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive font-mono">
+              {data.errorResponseSchema ? "Error Defined" : "Default Error"}
+            </span>
+          </div>
+        </div>
+
+        {/* Success Schema Preview / Clear */}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-medium text-foreground flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              Success Schema (2xx)
+            </span>
+            {data.responseSchema && (
+              <button
+                type="button"
+                className="text-[10px] text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                onClick={() => updateData({ responseSchema: undefined })}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <pre className="p-2 rounded bg-background border border-border/50 text-[10px] font-mono max-h-[100px] overflow-y-auto text-muted-foreground select-all">
+            {data.responseSchema
+              ? JSON.stringify(data.responseSchema, null, 2)
+              : '// Run a successful live test and click "Infer Success Schema"'}
+          </pre>
+        </div>
+
+        {/* Error Schema Preview / Clear */}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-medium text-foreground flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
+              Error Schema (4xx/5xx)
+            </span>
+            {data.errorResponseSchema ? (
+              <button
+                type="button"
+                className="text-[10px] text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                onClick={() => updateData({ errorResponseSchema: undefined })}
+              >
+                Clear
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="text-[10px] text-primary hover:underline transition-colors cursor-pointer"
+                onClick={() =>
+                  updateData({
+                    errorResponseSchema: {
+                      error: "string",
+                      message: "string",
+                      statusCode: 500,
+                    },
+                  })
+                }
+              >
+                + Apply Standard Error
+              </button>
+            )}
+          </div>
+          <pre className="p-2 rounded bg-background border border-border/50 text-[10px] font-mono max-h-[100px] overflow-y-auto text-muted-foreground select-all">
+            {data.errorResponseSchema
+              ? JSON.stringify(data.errorResponseSchema, null, 2)
+              : '// Standard default: { error: string, message: string, statusCode?: number }'}
+          </pre>
+        </div>
+      </div>
 
       {/* 5. Environment Variables Drawer */}
       <ExternalEnvVarsDrawer nodeId={nodeId} defaultOpen={false} />

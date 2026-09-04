@@ -114,4 +114,41 @@ describe("Convex canvasValidators exact schema", () => {
     const parsed = externalDataSchema.safeParse(externalNodeData);
     expect(parsed.success).toBe(true);
   });
+
+  it("validates pipeline step with onError policy in safePipelineStepSchema", () => {
+    const stepWithOnError = {
+      id: "step-err-1",
+      name: "Fetch Weather",
+      type: "external_call",
+      enabled: true,
+      onError: {
+        action: "early_return" as const,
+        statusCode: 502,
+        errorMessage: "Weather API unavailable",
+        retries: 2,
+      },
+    };
+
+    const parsed = safePipelineStepSchema.safeParse(stepWithOnError);
+    expect(parsed.success).toBe(true);
+  });
+
+  it("validates external node data with responseSchema and errorResponseSchema", async () => {
+    const { externalDataSchema } = await import("@workspace/canvas/schemas");
+    const externalWithDualSchemas = {
+      label: "Payment Gateway",
+      baseUrl: "https://api.payment.com",
+      responseSchema: {
+        type: "object",
+        properties: { transactionId: { type: "string" } },
+      },
+      errorResponseSchema: {
+        type: "object",
+        properties: { errorCode: { type: "string" }, message: { type: "string" } },
+      },
+    };
+
+    const parsed = externalDataSchema.safeParse(externalWithDualSchemas);
+    expect(parsed.success).toBe(true);
+  });
 });

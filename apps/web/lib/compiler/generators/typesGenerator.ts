@@ -469,8 +469,18 @@ export function generateTypesPackage(
           singleRouteCode += `export type ${pascalName}Body = never;\n\n`;
         }
 
-        singleRouteCode += `// --- Output Schema ---\n`;
+        singleRouteCode += `// --- Output Schemas (Success & Error) ---\n`;
         singleRouteCode += responseResInfo.code + "\n";
+        if (ep.errorResponseBody) {
+          const errorRes = schemaToTsInterface(`${pascalName}ErrorResponse`, ep.errorResponseBody);
+          if (errorRes.hasContent) {
+            singleRouteCode += errorRes.code + "\n";
+          } else {
+            singleRouteCode += `export interface ${pascalName}ErrorResponse {\n  error: string;\n  message: string;\n  statusCode?: number;\n  details?: unknown;\n}\n\n`;
+          }
+        } else {
+          singleRouteCode += `export interface ${pascalName}ErrorResponse {\n  error: string;\n  message: string;\n  statusCode?: number;\n  details?: unknown;\n}\n\n`;
+        }
 
         singleRouteCode += `// --- Zod Validation Schemas ---\n`;
         if (queryTypeRes.hasContent) {

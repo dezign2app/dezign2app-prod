@@ -203,6 +203,11 @@ const EnvVarRow: React.FC<EnvVarRowProps> = ({
               placeholder="Secret value (.env)"
               value={secretVal}
               onChange={(e) => setSecretVal(e.target.value)}
+              onBlur={() => {
+                if (secretVal !== getLocalEnvVariable(name)) {
+                  handleSaveSecret(secretVal, name);
+                }
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleFinishEdit();
                 if (e.key === "Escape") {

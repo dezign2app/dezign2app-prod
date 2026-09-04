@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   renderPipeline,
+  renderPipelineStep,
   collectPipelineImports,
   compileConditionExpr,
 } from "../generators/routeGenerator/pipelineRenderer";
@@ -519,6 +520,92 @@ describe("Control Flow Pipeline Steps Compilation", () => {
 
       expect(imports.has("@workspace/pkg-c")).toBe(true);
       expect(imports.get("@workspace/pkg-c")?.has("fnC")).toBe(true);
+    });
+  });
+
+  describe("Step-level onError policies", () => {
+    it("renders fallback value policy wrapped in try-catch", () => {
+      const step: PipelineStep = {
+        id: "step-ext",
+        name: "Call Weather",
+        type: "external_call",
+        enabled: true,
+        outputVariable: "weatherData",
+        onError: {
+          action: "fallback",
+          fallbackValue: '{"temperature": 20, "condition": "sunny"}',
+        },
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "reqBody",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("let weatherData: any = null;");
+      expect(code).toContain("try {");
+      expect(code).toContain("} catch (stepErr) {");
+      expect(code).toContain('logger.warn("Step Call Weather failed, using fallback value:", stepErr);');
+      expect(code).toContain('weatherData = {"temperature": 20, "condition": "sunny"};');
+    });
+
+    it("renders early_return policy with custom statusCode and message", () => {
+      const step: PipelineStep = {
+        id: "step-db",
+        name: "Query User",
+        type: "db_operation",
+        enabled: true,
+        outputVariable: "userRow",
+        functionRef: { name: "findUserById", importPath: "@workspace/db" },
+        inputBindings: [],
+        onError: {
+          action: "early_return",
+          statusCode: 502,
+          errorMessage: "Failed to connect to user database",
+        },
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "reqBody",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("try {");
+      expect(code).toContain("const userRow = await findUserById();");
+      expect(code).toContain("} catch (stepErr: any) {");
+      expect(code).toContain("return res.status(502).json({");
+      expect(code).toContain('error: "Failed to connect to user database"');
+    });
+
+    it("renders automatic retries loop before failing", () => {
+      const step: PipelineStep = {
+        id: "step-flaky",
+        name: "Flaky Call",
+        type: "transform",
+        enabled: true,
+        outputVariable: "flakyRes",
+        functionRef: { name: "computeHash", importPath: "@workspace/utils" },
+        inputBindings: [],
+        onError: {
+          action: "throw",
+          retries: 3,
+        },
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "reqBody",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("let attempts_step_flaky = 0;");
+      expect(code).toContain("while (attempts_step_flaky <= 3) {");
+      expect(code).toContain("try {");
+      expect(code).toContain("flakyRes = computeHash();");
+      expect(code).toContain("break;");
+      expect(code).toContain("if (attempts_step_flaky > 3) throw retryErr;");
     });
   });
 });

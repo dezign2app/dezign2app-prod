@@ -258,11 +258,68 @@ export function generateExternalFunctionFile(node: BackendNode): CompiledFile {
     ? `/**\n * ${node.data.description}\n *\n * HTTP ${method} ${rawUrl}\n */\n`
     : `/**\n * External API Calling Tool: ${fnName}\n * HTTP ${method} ${rawUrl}\n */\n`;
 
+  const successTypeName = `${Pascal}SuccessOutput`;
+  const errorTypeName = `${Pascal}ErrorOutput`;
+
+  // Build Success interface fields if responseSchema is configured
+  let successFields = "  [key: string]: unknown;";
+  if (node.data?.responseSchema && typeof node.data.responseSchema === "object") {
+    const s = node.data.responseSchema;
+    if (s.fields && Array.isArray(s.fields) && s.fields.length > 0) {
+      successFields = s.fields
+        .map((f: { name?: string; type?: string; required?: boolean }) => {
+          const opt = f.required === false ? "?" : "";
+          return `  ${f.name || "field"}${opt}: ${mapTypeToTs(f.type || "string")};`;
+        })
+        .join("\n") + "\n  [key: string]: unknown;";
+    } else if (!Array.isArray(s)) {
+      const keys = Object.keys(s);
+      if (keys.length > 0) {
+        successFields = keys
+          .map((k) => `  ${k}?: ${typeof (s as Record<string, unknown>)[k] === "number" ? "number" : typeof (s as Record<string, unknown>)[k] === "boolean" ? "boolean" : typeof (s as Record<string, unknown>)[k] === "object" ? "Record<string, unknown>" : "string"};`)
+          .join("\n") + "\n  [key: string]: unknown;";
+      }
+    }
+  }
+
+  // Build Error interface fields
+  let errorFields = "  error: string;\n  message?: string;\n  statusCode?: number;\n  [key: string]: unknown;";
+  if (node.data?.errorResponseSchema && typeof node.data.errorResponseSchema === "object") {
+    const es = node.data.errorResponseSchema;
+    if (es.fields && Array.isArray(es.fields) && es.fields.length > 0) {
+      errorFields = es.fields
+        .map((f: { name?: string; type?: string; required?: boolean }) => {
+          const opt = f.required === false ? "?" : "";
+          return `  ${f.name || "field"}${opt}: ${mapTypeToTs(f.type || "string")};`;
+        })
+        .join("\n") + "\n  [key: string]: unknown;";
+    } else if (!Array.isArray(es)) {
+      const keys = Object.keys(es);
+      if (keys.length > 0) {
+        errorFields = keys
+          .map((k) => `  ${k}?: ${typeof (es as Record<string, unknown>)[k] === "number" ? "number" : typeof (es as Record<string, unknown>)[k] === "boolean" ? "boolean" : typeof (es as Record<string, unknown>)[k] === "object" ? "Record<string, unknown>" : "string"};`)
+          .join("\n") + "\n  [key: string]: unknown;";
+      }
+    }
+  }
+
   const content = `${descriptionDoc}export interface ${inputTypeName} {
 ${inputFields}
 }
 
+export interface ${successTypeName} {
+${successFields}
+}
+
+export interface ${errorTypeName} {
+${errorFields}
+}
+
 export interface ${outputTypeName} {
+  success: boolean;
+  status: number;
+  data?: ${successTypeName};
+  error?: ${errorTypeName};
   [key: string]: unknown;
 }
 
@@ -288,16 +345,46 @@ ${bodyLines.join("\n")}
     });
 
     if (!response.ok) {
-      const errText = await response.text().catch(() => "");
-      throw new Error(\`[${fnName}] Request failed with status \${response.status}: \${errText}\`);
+      let errPayload: unknown;
+      try {
+        errPayload = await response.json();
+      } catch {
+        const text = await response.text().catch(() => "");
+        errPayload = { error: response.statusText || "Request failed", message: text, statusCode: response.status };
+      }
+      return {
+        success: false,
+        status: response.status,
+        error: (typeof errPayload === "object" && errPayload !== null
+          ? errPayload
+          : { error: String(errPayload), statusCode: response.status }) as ${errorTypeName},
+      } as ${outputTypeName};
     }
 
     const contentType = response.headers.get("content-type") || "";
+    let dataPayload: unknown;
     if (contentType.includes("application/json")) {
-      return (await response.json()) as ${outputTypeName};
+      dataPayload = await response.json();
+    } else {
+      dataPayload = { data: await response.text() };
     }
-    const textData = await response.text();
-    return { data: textData } as ${outputTypeName};
+    return {
+      success: true,
+      status: response.status,
+      data: dataPayload as ${successTypeName},
+      ...(typeof dataPayload === "object" && dataPayload !== null ? dataPayload : {}),
+    } as ${outputTypeName};
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      success: false,
+      status: 500,
+      error: {
+        error: err instanceof Error ? err.name : "FetchError",
+        message,
+        statusCode: 500,
+      } as ${errorTypeName},
+    } as ${outputTypeName};
   } finally {
     clearTimeout(timer);
   }
