@@ -54,8 +54,11 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
 
   // Must be called before any early returns (rules of hooks)
   const { isProtected, zoneName } = useCallerWebPageZone(nodeId, id);
+  const isAuthEnabled =
+    !isExternal &&
+    (item?.requireAuth !== undefined ? item.requireAuth : isProtected);
 
-  // Auto-clean any legacy or accidental auth headers/params on external endpoints
+  // Auto-clean any legacy or accidental auth headers/params on external endpoints or when auth is disabled
   React.useEffect(() => {
     if (isExternal && item) {
       const hasStaleAuthHeaders = item.headers?.some(
@@ -88,8 +91,27 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
             : {}),
         });
       }
+    } else if (!isAuthEnabled && item) {
+      const hasStaleAuthHeaders = item.headers?.some(
+        (x: Parameter) =>
+          x.id === "auth-bearer-header" ||
+          x.id === "auth-header-external" ||
+          x.id?.startsWith("auth-") ||
+          x.name?.toLowerCase() === "authorization",
+      );
+      if (hasStaleAuthHeaders) {
+        updateEndpoint(item.id, {
+          headers: (item.headers || []).filter(
+            (x: Parameter) =>
+              x.id !== "auth-bearer-header" &&
+              x.id !== "auth-header-external" &&
+              !x.id?.startsWith("auth-") &&
+              x.name?.toLowerCase() !== "authorization",
+          ),
+        });
+      }
     }
-  }, [isExternal, item?.id, item?.headers, item?.queryParams, updateEndpoint]);
+  }, [isExternal, isAuthEnabled, item?.id, item?.headers, item?.queryParams, updateEndpoint]);
 
   const nameBuffer = useBufferedInput(
     item?.name || "",
@@ -223,11 +245,17 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         <AuthAwarenessBanner
           zoneName={zoneName}
           isProtected={isProtected}
-          requireAuth={item.requireAuth !== undefined ? item.requireAuth : isProtected}
+          requireAuth={isAuthEnabled}
           onRequireAuthChange={(requireAuth) => {
             let updatedHeaders = [...(item.headers || [])];
             if (requireAuth) {
-              if (!updatedHeaders.some((h) => h.name.toLowerCase() === "authorization")) {
+              if (
+                !updatedHeaders.some(
+                  (h) =>
+                    h.name?.toLowerCase() === "authorization" ||
+                    h.id === "auth-bearer-header",
+                )
+              ) {
                 updatedHeaders = [
                   {
                     id: "auth-bearer-header",
@@ -244,7 +272,10 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
               }
             } else {
               updatedHeaders = updatedHeaders.filter(
-                (h) => h.name.toLowerCase() !== "authorization",
+                (h) =>
+                  h.name?.toLowerCase() !== "authorization" &&
+                  h.id !== "auth-bearer-header" &&
+                  !h.id?.startsWith("auth-"),
               );
             }
             updateEndpoint(item.id, { requireAuth, headers: updatedHeaders });
@@ -358,9 +389,14 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
                 x.id !== "auth-query-external",
             );
           }
-          const isAuthEnabled = item.requireAuth !== false;
           if (isAuthEnabled) {
-            if (!h.some((x: Parameter) => x.name.toLowerCase() === "authorization")) {
+            if (
+              !h.some(
+                (x: Parameter) =>
+                  x.name?.toLowerCase() === "authorization" ||
+                  x.id === "auth-bearer-header",
+              )
+            ) {
               h = [
                 {
                   id: "auth-bearer-header",
@@ -376,11 +412,26 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
               ];
             }
           } else {
-            h = h.filter((x: Parameter) => x.name.toLowerCase() !== "authorization");
+            h = h.filter(
+              (x: Parameter) =>
+                x.name?.toLowerCase() !== "authorization" &&
+                x.id !== "auth-bearer-header" &&
+                !x.id?.startsWith("auth-"),
+            );
           }
           return h;
         })()}
-        onChange={(headers) => updateEndpoint(item.id, { headers })}
+        onChange={(headers) => {
+          const sanitized = isAuthEnabled
+            ? headers
+            : headers.filter(
+                (x: Parameter) =>
+                  x.name?.toLowerCase() !== "authorization" &&
+                  x.id !== "auth-bearer-header" &&
+                  !x.id?.startsWith("auth-"),
+              );
+          updateEndpoint(item.id, { headers: sanitized });
+        }}
       />
       <ParameterEditor
         title="Path Params"

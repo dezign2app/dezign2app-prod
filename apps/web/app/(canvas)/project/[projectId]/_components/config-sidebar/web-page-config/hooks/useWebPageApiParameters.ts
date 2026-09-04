@@ -6,11 +6,13 @@ import { RequestBodyMode } from "../../RequestBodyEditor";
 interface UseWebPageApiParametersParams {
   data: BackendNode["data"];
   connectedEndpoint: Endpoint | null;
+  isProtected?: boolean;
 }
 
 export function useWebPageApiParameters({
   data,
   connectedEndpoint,
+  isProtected = false,
 }: UseWebPageApiParametersParams) {
   // Resolve live page-level parameters and request body
   const resolvedPageEndpointRequestBody: Schema | undefined = useMemo(() => {
@@ -49,7 +51,8 @@ export function useWebPageApiParameters({
     return resolvedPageEndpointRequestBody || data.requestBody || { id: crypto.randomUUID(), fields: [] };
   }, [hasCustomPageRequestBody, data.requestBody, resolvedPageEndpointRequestBody]);
 
-  const isAuthEnabled = data.requireAuth !== false;
+  const isAuthEnabled =
+    data.requireAuth !== undefined ? data.requireAuth : isProtected;
 
   const effectiveHeaders: Parameter[] = useMemo(() => {
     let baseHeaders =
@@ -60,7 +63,13 @@ export function useWebPageApiParameters({
         : [];
 
     if (isAuthEnabled) {
-      if (!baseHeaders.some((h: Parameter) => h.name.toLowerCase() === "authorization")) {
+      if (
+        !baseHeaders.some(
+          (h: Parameter) =>
+            h.name?.toLowerCase() === "authorization" ||
+            h.id === "auth-bearer-header",
+        )
+      ) {
         baseHeaders = [
           {
             id: "auth-bearer-header",
@@ -77,7 +86,10 @@ export function useWebPageApiParameters({
       }
     } else {
       baseHeaders = baseHeaders.filter(
-        (h: Parameter) => h.name.toLowerCase() !== "authorization",
+        (h: Parameter) =>
+          h.name?.toLowerCase() !== "authorization" &&
+          h.id !== "auth-bearer-header" &&
+          !h.id?.startsWith("auth-"),
       );
     }
     return baseHeaders;
