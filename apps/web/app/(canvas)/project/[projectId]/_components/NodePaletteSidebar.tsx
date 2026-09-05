@@ -33,6 +33,7 @@ import {
 } from "@workspace/canvas";
 import { getOffsetPosition } from "./hooks/useCanvasHandlers";
 import { useSchemaAutoLayout } from "./hooks/useAutoLayout";
+import { useCanvasCenterPosition } from "./hooks/useCanvasCenterPosition";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { createGraphNodeData } from "./GraphView/utils";
@@ -61,11 +62,14 @@ export function NodePaletteSidebar({
   const isOpen = propIsOpen !== undefined ? propIsOpen : storePaletteOpen;
   const onToggle = propOnToggle || storeTogglePalette;
 
+  const { getCenterPosition } = useCanvasCenterPosition(isOpen);
+
   const handleAddGraphNode = (type: GraphNodeType, label: string) => {
-    const x = 300 + (nodes.length % 5) * 40;
-    const y = 200 + (nodes.length % 5) * 40;
-    const data = createGraphNodeData(type, label, nodes);
     const isContainer = type === "webAppGroup";
+    const width = isContainer ? 560 : 220;
+    const height = isContainer ? 380 : 100;
+    const { x, y } = getCenterPosition(width, height);
+    const data = createGraphNodeData(type, label, nodes);
 
     addNode({
       id: crypto.randomUUID(),
@@ -144,7 +148,11 @@ export function NodePaletteSidebar({
 
           {/* Body */}
           {view === "schema" ? (
-            <SchemaViewBody nodes={nodes} addNode={addNode} />
+            <SchemaViewBody
+              nodes={nodes}
+              addNode={addNode}
+              getCenterPosition={getCenterPosition}
+            />
           ) : (
             <div className="flex-1 p-2.5 space-y-1.5 overflow-y-auto hide-scrollbar">
               {/* COMPUTING */}
@@ -379,10 +387,10 @@ export function NodePaletteSidebar({
 interface SchemaViewBodyProps {
   nodes: ReturnType<typeof useBackendCanvasStore.getState>["nodes"];
   addNode: ReturnType<typeof useBackendCanvasStore.getState>["addNode"];
+  getCenterPosition: (width?: number, height?: number) => { x: number; y: number };
 }
 
-function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
-  const { screenToFlowPosition } = useReactFlow();
+function SchemaViewBody({ nodes, addNode, getCenterPosition }: SchemaViewBodyProps) {
   const schemaNodes = React.useMemo(
     () =>
       nodes.filter(
@@ -396,17 +404,8 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
   );
   const { handleLayout } = useSchemaAutoLayout({ nodes: schemaNodes, edges: [] });
 
-  const getCenterPosition = () => {
-    if (typeof window === "undefined") return { x: 100, y: 100 };
-    return screenToFlowPosition({
-      x: window.innerWidth / 2,
-      y: window.innerHeight / 2,
-    });
-  };
-
   const handleAddDatabase = () => {
-    const center = getCenterPosition();
-    const { x, y } = getOffsetPosition(center.x - 75, center.y - 30, nodes);
+    const { x, y } = getCenterPosition(200, 80);
     addNode({
       id: crypto.randomUUID(),
       type: "database",
@@ -426,8 +425,7 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
   };
 
   const handleAddTable = () => {
-    const center = getCenterPosition();
-    const { x, y } = getOffsetPosition(center.x - 75, center.y - 30, nodes);
+    const { x, y } = getCenterPosition(200, 80);
 
     let dbNode = nodes.find((n) => n.type === "database" && n.data?.dbEngine !== "redis");
     let dbId = dbNode?.id;
@@ -478,8 +476,7 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
   };
 
   const handleAddVectorDb = () => {
-    const center = getCenterPosition();
-    const { x, y } = getOffsetPosition(center.x - 75, center.y - 30, nodes);
+    const { x, y } = getCenterPosition(200, 80);
 
     let dbNode = nodes.find((n) => n.type === "database" && n.data?.dbEngine !== "redis");
     let dbId = dbNode?.id;
@@ -530,8 +527,7 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
   };
 
   const handleAddRedisInstance = () => {
-    const center = getCenterPosition();
-    const { x, y } = getOffsetPosition(center.x - 75, center.y - 30, nodes);
+    const { x, y } = getCenterPosition(200, 80);
     const redisInstances = nodes.filter(
       (n) => n.type === "redis_instance" || (n.type === "database" && n.data?.dbEngine === "redis"),
     );
@@ -561,8 +557,7 @@ function SchemaViewBody({ nodes, addNode }: SchemaViewBodyProps) {
   };
 
   const handleAddRedisSchema = () => {
-    const center = getCenterPosition();
-    const { x, y } = getOffsetPosition(center.x - 75, center.y - 30, nodes);
+    const { x, y } = getCenterPosition(200, 80);
 
     let redisDbNode = nodes.find(
       (n) => n.type === "redis_instance" || (n.type === "database" && n.data?.dbEngine === "redis"),
