@@ -21,3 +21,4 @@ export * from "./compiler";
 export * from "./versions";
 export * from "./pipeline";
 export * from "./terminal";
+export * from "./custom-types";

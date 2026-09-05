@@ -114,6 +114,29 @@ export function createGraphNodeData(
     };
   }
 
+  if (type === "types") {
+    return {
+      ...baseData,
+      label: label || "Custom Types",
+      scope: "global",
+      definitionMode: "visual",
+      types: [
+        {
+          id: `type-${Date.now()}-1`,
+          name: "CustomType",
+          kind: "interface",
+          description: "Reusable type definition",
+          fields: [
+            { id: "f-1", name: "id", type: "string", required: true, isArray: false },
+            { id: "f-2", name: "name", type: "string", required: true, isArray: false },
+            { id: "f-3", name: "createdAt", type: "string", required: true, isArray: false },
+          ],
+        },
+      ],
+      rawTypeScript: `export interface CustomType {\n  id: string;\n  name: string;\n  createdAt: string;\n}\n`,
+    };
+  }
+
   if (type === "webPage") {
     return {
       ...baseData,

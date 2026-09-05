@@ -34,6 +34,7 @@ import type {
   CanvasAuthNodeData,
 } from "./infrastructure";
 import type { Parameter } from "./simulation";
+import type { CustomTypeItem } from "./custom-types";
 export type BackendNodeType =
   | "service"
   | "database"
@@ -75,7 +76,8 @@ export type BackendNodeType =
   | "transformer"
   | "transformer_ref"
   | "hook"
-  | "hook_ref";
+  | "hook_ref"
+  | "types";
 
 /** Core fields present on every canvas node. */
 export interface BaseNodeData {
@@ -139,6 +141,10 @@ export interface BaseNodeData {
    * Blocks concurrent prompts. Cleared automatically when the AI finishes.
    */
   aiEditing?: boolean;
+  // Custom Types node properties
+  definitionMode?: "visual" | "raw";
+  rawTypeScript?: string;
+  types?: CustomTypeItem[];
 }
 
 export interface ExternalInputVariable {

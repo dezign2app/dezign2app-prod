@@ -14,6 +14,7 @@ import {
   Shuffle,
   Anchor,
   Layout,
+  Braces,
 } from "lucide-react";
 import type { GraphNodeType } from "@workspace/canvas";
 
@@ -128,6 +129,15 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
         >
           <Shuffle className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
           Global Ref
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
+          onClick={() => onAddNode("types", "")}
+        >
+          <Braces className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
+          Custom Types
         </Button>
       </div>
 

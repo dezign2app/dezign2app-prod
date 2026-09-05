@@ -7,9 +7,15 @@ export const LocalInput = React.forwardRef<
   React.ComponentProps<typeof Input>
 >(({ value, onChange, ...props }, ref) => {
   const [localValue, setLocalValue] = useState(value);
+  const prevValueRef = React.useRef(value);
+
   React.useEffect(() => {
-    if (value !== localValue) setLocalValue(value);
+    if (value !== prevValueRef.current) {
+      prevValueRef.current = value;
+      setLocalValue(value);
+    }
   }, [value]);
+
   return (
     <Input
       ref={ref}
@@ -29,8 +35,13 @@ export const LocalTextarea = React.forwardRef<
   React.ComponentProps<typeof Textarea>
 >(({ value, onChange, onKeyDown, ...props }, ref) => {
   const [localValue, setLocalValue] = useState(value);
+  const prevValueRef = React.useRef(value);
+
   React.useEffect(() => {
-    if (value !== localValue) setLocalValue(value);
+    if (value !== prevValueRef.current) {
+      prevValueRef.current = value;
+      setLocalValue(value);
+    }
   }, [value]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

@@ -32,6 +32,7 @@ import {
   TransformerRefNode,
   HookNode,
   HookRefNode,
+  TypesNode,
 } from "./graph-nodes";
 import { SchemaGroupNode } from "./SchemaGroupNode";
 import { WebAppGroupNode } from "./WebAppGroupNode";
@@ -80,4 +81,5 @@ export const nodeTypes = {
   transformer_ref: TransformerRefNode,
   hook: HookNode,
   hook_ref: HookRefNode,
+  types: TypesNode,
 };

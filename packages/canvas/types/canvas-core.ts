@@ -72,6 +72,8 @@ export type HandleKind =
   | "component-in"
   | "slot-in"
   | "slot-out"
+  | "type-out"
+  | "type-in"
 
   // --- Fallback ---
   | "unknown";
@@ -146,13 +148,15 @@ export type ConfigItemType =
   | "db_ref"
   | "redis_cache"
   | "vector_db_ref"
-  | "realtimeConnection";
+  | "realtimeConnection"
+  | "types";
 
 export interface ActiveConfigItem {
   type: ConfigItemType;
   id: string;
   nodeId: string;
   sectionId?: string;
+  selectedTypeId?: string;
   edgeId?: string;
   sourceId?: string;
   targetNodeId?: string;
