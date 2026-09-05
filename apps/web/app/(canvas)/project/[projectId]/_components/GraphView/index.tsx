@@ -17,14 +17,9 @@ import {
   IdentityConnectionEdge,
   TransformerReferenceEdge,
 } from "../backend-nodes/CustomEdges";
-import { isValidConnection, type GraphNodeType } from "@workspace/canvas";
-import {
-  getOffsetPosition,
-  useCanvasHandlers,
-} from "../hooks/useCanvasHandlers";
+import { isValidConnection } from "@workspace/canvas";
+import { useCanvasHandlers } from "../hooks/useCanvasHandlers";
 import { useGraphAutoLayout } from "../hooks/useAutoLayout";
-import { createGraphNodeData } from "./utils";
-import { NodePalettePanel } from "./NodePalettePanel";
 import { TopToolbarPanel } from "./TopToolbarPanel";
 import { TestCaseDialogs } from "./TestCaseDialogs";
 
@@ -65,7 +60,7 @@ export function GraphView({ projectId }: GraphViewProps) {
     handleSelectionDragStart,
     handleMoveEnd,
   } = useCanvasHandlers(projectId, "graph");
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { fitView } = useReactFlow();
 
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const events = useBackendCanvasStore((s) => s.events);
@@ -196,30 +191,7 @@ export function GraphView({ projectId }: GraphViewProps) {
     }
   }, [graphNodes.length, fitView]);
 
-  const getCenterPosition = () => {
-    if (typeof window === "undefined") return { x: 100, y: 100 };
-    return screenToFlowPosition({
-      x: window.innerWidth / 2,
-      y: window.innerHeight / 2,
-    });
-  };
 
-  const handleAddGraphNode = (type: GraphNodeType, label: string) => {
-    const center = getCenterPosition();
-    const { x, y } = getOffsetPosition(center.x - 100, center.y - 100, nodes);
-    const data = createGraphNodeData(type, label, nodes);
-    const isContainer = type === "webAppGroup";
-
-    addNode({
-      id: crypto.randomUUID(),
-      type,
-      position: { x, y },
-      style: isContainer ? { width: 560, height: 380 } : undefined,
-      width: isContainer ? 560 : undefined,
-      height: isContainer ? 380 : undefined,
-      data,
-    });
-  };
 
   const sortedGraphNodes = React.useMemo(() => {
     return [...graphNodes].sort((a, b) => {

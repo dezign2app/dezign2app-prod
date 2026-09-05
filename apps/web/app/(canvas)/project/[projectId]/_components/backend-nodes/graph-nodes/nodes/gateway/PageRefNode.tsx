@@ -1,6 +1,6 @@
 import React from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { ExternalLink, Compass, Globe, ArrowRight, CornerDownRight } from "lucide-react";
+import { Compass, Globe, Trash } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -12,10 +12,8 @@ import {
 } from "@workspace/ui/components/select";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useShallow } from "zustand/react/shallow";
-import { Textarea } from "@workspace/ui/components/textarea";
 
 import {
-  NodeHeader,
   useSimulationNodeState,
   getSimulationNodeBorderClass,
 } from "../../common";
@@ -26,6 +24,7 @@ export const PageRefNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const edges = useBackendCanvasStore((s) => s.edges);
   const nodes = useBackendCanvasStore((s) => s.nodes);
 
@@ -45,39 +44,10 @@ export const PageRefNode = ({
   // Selected target page node
   const selectedPage = pageNodes.find((p) => p.id === (data.targetPageId || data.pageRefId));
 
-  // Find incoming event connections that navigate to this page reference node
-  const incomingEdges = edges.filter((e) => e.target === id);
-  const callers = incomingEdges
-    .map((edge) => {
-      const srcNode = nodes.find((n) => n.id === edge.source);
-      if (!srcNode) return null;
-
-      const srcLabel = srcNode.data?.label || "Web Page";
-      const sourceHandle = edge.sourceHandle || "";
-      let eventName = "Navigation Event";
-
-      if (sourceHandle.startsWith("events-")) {
-        const eventId = sourceHandle.replace("events-", "");
-        const sections = srcNode.data?.sections || [];
-        const actions =
-          sections.length > 0
-            ? sections.flatMap((s) => s.actions)
-            : srcNode.data?.events || [];
-        const evtItem = actions.find((e) => e.id === eventId);
-        if (evtItem) {
-          eventName = evtItem.name || (evtItem.event as string) || "navigateToPage";
-        }
-      }
-
-      return {
-        id: edge.id,
-        srcLabel,
-        eventName,
-      };
-    })
-    .filter(
-      (x): x is { id: string; srcLabel: string; eventName: string } => x !== null,
-    );
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    requestDeleteNode(id);
+  };
 
   const handlePageSelect = (pageId: string) => {
     const page = pageNodes.find((p) => p.id === pageId);
@@ -108,6 +78,7 @@ export const PageRefNode = ({
       className={cn(
         "shadow-md rounded-xl bg-card border-2 min-w-[210px] max-w-[320px] flex flex-col transition-all duration-300 relative",
         selected ? "border-indigo-500" : "border-transparent",
+        borderClass,
       )}
     >
       <Handle
@@ -126,7 +97,7 @@ export const PageRefNode = ({
       />
 
       <div className="p-3 bg-indigo-500/10 border-b flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <div className="p-1 rounded bg-indigo-500/20 text-indigo-400 shrink-0">
             <Compass size={14} />
           </div>
@@ -139,11 +110,21 @@ export const PageRefNode = ({
             </span>
           </div>
         </div>
-        {isSelectedLanding && (
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono shrink-0">
-            / (Root)
-          </span>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {isSelectedLanding && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono shrink-0">
+              / (Root)
+            </span>
+          )}
+          <button
+            type="button"
+            className="p-1 rounded hover:bg-destructive/15 text-muted-foreground/60 hover:text-destructive transition-colors cursor-pointer"
+            onClick={handleDelete}
+            title="Delete Node"
+          >
+            <Trash size={13} />
+          </button>
+        </div>
       </div>
 
       <div className="p-3 bg-secondary/5 flex flex-col gap-2 nodrag rounded-b-[10px]">

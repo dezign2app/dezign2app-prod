@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { NodeProps, Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
+import React, { useState } from "react";
+import { NodeProps } from "@xyflow/react";
 import { Braces, Settings, Trash, Plus } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -24,7 +24,6 @@ export const TypesNode = ({
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
   );
-  const updateNodeInternals = useUpdateNodeInternals();
 
   const simulation = useSimulationNodeState(id);
   const borderClass = getSimulationNodeBorderClass(
@@ -38,10 +37,6 @@ export const TypesNode = ({
 
   const scope = data.scope || "global";
   const typesList: CustomTypeItem[] = data.types || [];
-
-  useEffect(() => {
-    updateNodeInternals(id);
-  }, [id, typesList.length, updateNodeInternals]);
 
   React.useEffect(() => {
     setName(data.label || "Custom Types");
@@ -276,7 +271,7 @@ export const TypesNode = ({
                   </span>
                 </div>
 
-                <div className="flex items-center gap-0.5 shrink-0 pr-1">
+                <div className="flex items-center gap-0.5 shrink-0">
                   {/* Per-type Gear configuration button */}
                   <button
                     className="p-1 rounded text-muted-foreground/60 hover:text-indigo-400 hover:bg-indigo-500/15 transition-colors"
@@ -294,15 +289,6 @@ export const TypesNode = ({
                     <Trash size={11} />
                   </button>
                 </div>
-
-                {/* Outgoing handle for THIS specific type */}
-                <Handle
-                  type="source"
-                  position={Position.Right}
-                  id={`type-out-${item.id}`}
-                  className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background"
-                  title={`Reference ${item.name}`}
-                />
               </div>
             ))}
 
