@@ -42,6 +42,7 @@ const ALL_BACKEND_NODE_TYPES = [
   "transformer_ref",
   "hook",
   "hook_ref",
+  "types",
 ] as const;
 
 export function isBackendNode(type: string): type is BackendNodeType {
@@ -219,6 +220,17 @@ export function classifyHandle(
   }
   if (nodeType === "hook" || nodeType === "hook_ref") {
     return handleDirection === "target" ? "hook-in" : "hook-out";
+  }
+
+  // --- Custom Types ---
+  if (id === "type-in" || id.startsWith("type-in") || id.startsWith("types-in")) {
+    return "type-in";
+  }
+  if (id === "type-out" || id.startsWith("type-out") || id.startsWith("types-out")) {
+    return "type-out";
+  }
+  if (nodeType === "types") {
+    return handleDirection === "target" ? "type-in" : "type-out";
   }
 
   // --- Components and Component Refs ---

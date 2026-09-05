@@ -38,6 +38,7 @@ import {
   transformerRefDataSchema,
   hookNodeDataSchema,
   hookRefDataSchema,
+  typesNodeDataSchema,
   identityProviderSchema,
   publishedEventSchema,
   consumedEventSchema,
@@ -549,6 +550,7 @@ export const backendNodeDataValidator = v.union(
   zodToConvex(transformerRefDataSchema),
   zodToConvex(hookNodeDataSchema),
   zodToConvex(hookRefDataSchema),
+  zodToConvex(typesNodeDataSchema),
   // Fallback for partial updates (label is always present on real nodes)
   v.object({
     label: v.string(),

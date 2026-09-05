@@ -35,6 +35,7 @@ import { TransformerConfig } from "./config-sidebar/TransformerConfig";
 import { DatabaseTableRefConfig } from "./config-sidebar/DatabaseTableRefConfig";
 import { RedisCacheRefConfig } from "./config-sidebar/RedisCacheRefConfig";
 import { HookConfig } from "./config-sidebar/HookConfig";
+import { TypesConfig } from "./config-sidebar/TypesConfig";
 import { WebPageRealtimeConnectionConfig } from "./config-sidebar/WebPageRealtimeConnectionConfig";
 
 export const ConfigSidebar = () => {
@@ -255,6 +256,14 @@ export const ConfigSidebar = () => {
             <TransformerConfig id={id} nodeId={nodeId} />
           ) : type === "hook" || type === "hook_ref" ? (
             <HookConfig id={id} nodeId={nodeId} />
+          ) : type === "types" ? (
+            <TypesConfig
+              id={id}
+              nodeId={nodeId}
+              selectedTypeId={
+                activeConfigItem.selectedTypeId || activeConfigItem.sectionId
+              }
+            />
           ) : type === "realtimeConnection" ? (
             <WebPageRealtimeConnectionConfig id={id} nodeId={nodeId} />
           ) : (

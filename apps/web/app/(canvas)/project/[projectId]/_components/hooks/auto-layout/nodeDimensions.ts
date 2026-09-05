@@ -249,6 +249,17 @@ export function getNodeDimensions(node: LayoutNode): {
     case "hook_ref": {
       return { width: 240, height: 50 };
     }
+    case "types": {
+      const typesCount =
+        node.data &&
+        typeof node.data === "object" &&
+        "types" in node.data &&
+        Array.isArray(node.data.types)
+          ? node.data.types.length
+          : 1;
+      const estHeight = Math.max(90, 60 + typesCount * 30 + 32);
+      return { width: 270, height: estHeight };
+    }
 
     case "group": {
       const data = getLayoutNodeData(node);

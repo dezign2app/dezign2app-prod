@@ -10,4 +10,5 @@ export * from "./ai";
 export * from "./langgraph";
 export * from "./transformer";
 export * from "./frontend";
+export * from "./typesNode";
 export * from "./registry";

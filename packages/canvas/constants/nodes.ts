@@ -36,6 +36,7 @@ export const BACKEND_NODE_TRANSFORMER = "transformer" as const;
 export const BACKEND_NODE_TRANSFORMER_REF = "transformer_ref" as const;
 export const BACKEND_NODE_HOOK = "hook" as const;
 export const BACKEND_NODE_HOOK_REF = "hook_ref" as const;
+export const BACKEND_NODE_CUSTOM_TYPES = "types" as const;
 
 export const NODE_TYPE_TO_RESOURCE_KIND: Record<string, string | undefined> = {
   kafka: "kafka",
@@ -98,6 +99,7 @@ export const BACKEND_NODE_TYPES = {
   TRANSFORMER_REF: BACKEND_NODE_TRANSFORMER_REF,
   HOOK: BACKEND_NODE_HOOK,
   HOOK_REF: BACKEND_NODE_HOOK_REF,
+  CUSTOM_TYPES: BACKEND_NODE_CUSTOM_TYPES,
 } as const;
 
 // ─── Backend Canvas Main Edge Types ───────────────────────────────────────────

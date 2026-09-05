@@ -108,6 +108,17 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
   "component-out": ["component-in", "page-in", "slot-in"],
   "slot-in": [],
   "slot-out": ["slot-in", "component-in", "page-in"],
+  "type-in": [],
+  "type-out": [
+    "endpoint-in",
+    "consumed-event-in",
+    "task-in",
+    "database-target",
+    "transformer-in",
+    "hook-in",
+    "page-in",
+    "type-in",
+  ],
   unknown: [],
 };
 
@@ -156,6 +167,15 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   "component-out→component-in": "reference",
   "component-out→page-in": "connection",
   "slot-out→slot-in": "connection",
+  // Custom Types wiring edges
+  "type-out→endpoint-in": "reference",
+  "type-out→consumed-event-in": "reference",
+  "type-out→task-in": "reference",
+  "type-out→database-target": "reference",
+  "type-out→transformer-in": "reference",
+  "type-out→hook-in": "reference",
+  "type-out→page-in": "reference",
+  "type-out→type-in": "reference",
 };
 
 // NOTE: "sse", "websocket", "webrtc", "polling" have been moved to the
