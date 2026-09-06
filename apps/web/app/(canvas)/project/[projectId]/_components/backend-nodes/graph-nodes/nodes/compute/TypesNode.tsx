@@ -505,7 +505,22 @@ export const TypesNode = ({
                     <span className="text-[9px] text-muted-foreground/50 font-mono shrink-0">
                       {item.kind === "enum"
                         ? `${item.enumValues?.length || 0} vals`
-                        : `${item.fields?.length || 0} props`}
+                        : (() => {
+                            if (item.fields && item.fields.length > 0) {
+                              return `${item.fields.length} props`;
+                            }
+                            // Count property declarations by semicolons inside the type body
+                            const src = item.rawCode || item.typeAliasValue || "";
+                            // Extract the body between first { and last }
+                            const bodyStart = src.indexOf("{");
+                            const bodyEnd = src.lastIndexOf("}");
+                            if (bodyStart !== -1 && bodyEnd > bodyStart) {
+                              const body = src.slice(bodyStart + 1, bodyEnd);
+                              const count = (body.match(/;/g) || []).length;
+                              return count > 0 ? `~${count} props` : "alias";
+                            }
+                            return "alias";
+                          })()}
                     </span>
                   </div>
 
