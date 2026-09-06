@@ -360,6 +360,7 @@ interface TypeEditorFormProps {
   nodeId: string;
   currentType: CustomTypeItem;
   otherCustomTypes: string[];
+  inheritedEnumValues?: string[];
   onUpdateCurrentType: (updates: Partial<CustomTypeItem>) => void;
   onDeleteCurrentType: () => void;
 }
@@ -368,6 +369,7 @@ const TypeEditorForm = ({
   nodeId,
   currentType,
   otherCustomTypes,
+  inheritedEnumValues = [],
   onUpdateCurrentType,
   onDeleteCurrentType,
 }: TypeEditorFormProps) => {
@@ -471,6 +473,20 @@ const TypeEditorForm = ({
       return `${desc}export enum ${currentType.name} {\n${lines}\n}\n`;
     }
 
+    // For read-only package types: rawCode is the source of truth — show it as-is
+    if (currentType.isReadOnly && currentType.rawCode) {
+      return currentType.rawCode.trim() + "\n";
+    }
+
+    // For alias types with no parsed fields but a typeAliasValue
+    if (
+      currentType.kind === "type" &&
+      (!currentType.fields || currentType.fields.length === 0) &&
+      currentType.typeAliasValue
+    ) {
+      return `${desc}export type ${currentType.name} = ${currentType.typeAliasValue};\n`;
+    }
+
     const fields = currentType.fields || [];
     const fieldLines = fields
       .map((f) => {
@@ -549,7 +565,7 @@ const TypeEditorForm = ({
         <div className="flex items-center gap-2">
           <Select
             value={currentType.kind}
-            disabled={Boolean(currentType.isReadOnly)}
+            disabled={Boolean(currentType.isReadOnly) || Boolean(currentType.extendedFrom)}
             onValueChange={(kind: CustomTypeKind) =>
               onUpdateCurrentType({ kind })
             }
@@ -574,7 +590,7 @@ const TypeEditorForm = ({
             className="h-8 text-sm font-semibold tracking-tight text-foreground bg-background font-mono flex-1 disabled:opacity-80"
             placeholder="TypeName (e.g. UserProfile)"
             value={nameBuffer.value}
-            disabled={Boolean(currentType.isReadOnly)}
+            disabled={Boolean(currentType.isReadOnly) || Boolean(currentType.extendedFrom)}
             onChange={(e) => nameBuffer.onChange(e.target.value)}
             onBlur={nameBuffer.flush}
           />
@@ -605,7 +621,7 @@ const TypeEditorForm = ({
         <Input
           className="bg-background/50 disabled:opacity-80"
           placeholder="e.g. Represents user profile and credentials."
-          disabled={Boolean(currentType.isReadOnly)}
+          disabled={Boolean(currentType.isReadOnly) || Boolean(currentType.extendedFrom)}
           value={descBuffer.value}
           onChange={(e) => descBuffer.onChange(e.target.value)}
           onBlur={descBuffer.flush}
@@ -624,8 +640,14 @@ const TypeEditorForm = ({
                 READ-ONLY PACKAGE ENUM
               </span>
             )}
+            {Boolean(currentType.extendedFrom) && (
+              <span className="text-[10px] font-mono font-medium text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                INHERITED · READ-ONLY
+              </span>
+            )}
           </div>
 
+          {/* Allow adding new constants when extended too — inherited ones just can't be deleted */}
           {!currentType.isReadOnly && (
             <div className="flex items-center gap-2">
               <Input
@@ -654,24 +676,34 @@ const TypeEditorForm = ({
 
           {/* Badges container below the input field */}
           <div className="flex flex-wrap items-center gap-1.5 pt-1 min-h-[36px]">
-            {(currentType.enumValues || []).map((val, idx) => (
-              <span
-                key={`${val}-${idx}`}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary/80 hover:bg-secondary border border-border/60 text-xs font-mono font-medium text-foreground transition-all shadow-2xs group/badge"
-              >
-                <span>{val}</span>
-                {!currentType.isReadOnly && (
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteEnumValue(idx)}
-                    className="text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 p-0.5 rounded transition-colors cursor-pointer"
-                    title={`Delete constant ${val}`}
-                  >
-                    <X size={12} />
-                  </button>
-                )}
-              </span>
-            ))}
+            {(currentType.enumValues || []).map((val, idx) => {
+              const isInherited = inheritedEnumValues.includes(val);
+              return (
+                <span
+                  key={`${val}-${idx}`}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-mono font-medium transition-all shadow-2xs",
+                    isInherited
+                      ? "bg-purple-500/10 border-purple-500/30 text-purple-300 cursor-default"
+                      : "bg-secondary/80 hover:bg-secondary border-border/60 text-foreground group/badge",
+                  )}
+                  title={isInherited ? `Inherited from ${currentType.extendedFrom}` : undefined}
+                >
+                  {isInherited && <Lock size={9} className="shrink-0 text-purple-400" />}
+                  <span>{val}</span>
+                  {!currentType.isReadOnly && !isInherited && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteEnumValue(idx)}
+                      className="text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 p-0.5 rounded transition-colors cursor-pointer"
+                      title={`Delete constant ${val}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </span>
+              );
+            })}
 
             {(currentType.enumValues || []).length === 0 && (
               <span className="text-xs text-muted-foreground/60 italic py-1">
@@ -755,7 +787,7 @@ const TypeEditorForm = ({
           </Button>
         </div>
 
-        <pre className="p-3 rounded-lg bg-background/80 border text-[11px] font-mono text-foreground/90 overflow-x-auto max-h-[220px] whitespace-pre">
+        <pre className="p-3 rounded-lg bg-background/80 border text-[11px] font-mono text-foreground/90 overflow-x-auto max-h-[220px] whitespace-pre hide-scrollbar">
           {previewCode}
         </pre>
       </div>
@@ -845,6 +877,20 @@ export const TypesConfig: React.FC<TypesConfigProps> = ({
     });
     return Array.from(new Set(list));
   }, [allNodes, currentType?.id, currentType?.name]);
+
+  // For extended types: find the base type's enum values so we can distinguish inherited vs user-added badges
+  const inheritedEnumValues = useMemo(() => {
+    if (!currentType?.extendedFromTypeId && !currentType?.extendedFrom) return [];
+    for (const n of allNodes) {
+      if (n.type !== "types") continue;
+      const baseType = (n.data?.types || []).find(
+        (t: CustomTypeItem) =>
+          t.id === currentType.extendedFromTypeId || t.name === currentType.extendedFrom,
+      );
+      if (baseType?.enumValues) return baseType.enumValues as string[];
+    }
+    return [];
+  }, [allNodes, currentType?.extendedFromTypeId, currentType?.extendedFrom]);
 
   const updateTypesList = useCallback(
     (updated: CustomTypeItem[]) => {
@@ -1027,6 +1073,7 @@ export const TypesConfig: React.FC<TypesConfigProps> = ({
           nodeId={nodeId || id}
           currentType={currentType}
           otherCustomTypes={otherCustomTypes}
+          inheritedEnumValues={inheritedEnumValues}
           onUpdateCurrentType={handleUpdateCurrentType}
           onDeleteCurrentType={handleDeleteCurrentType}
         />
