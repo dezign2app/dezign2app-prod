@@ -103,7 +103,7 @@ describe("useCanvasCenterPosition - calculateVisibleCenterScreenPoint", () => {
         type: "service",
         position: { x: 500, y: 300 },
         fractionalIndex: "a0",
-        data: {},
+        data: { label: "Node 1" },
       },
     ];
 
@@ -116,7 +116,7 @@ describe("useCanvasCenterPosition - calculateVisibleCenterScreenPoint", () => {
       type: "service",
       position: { x: 520, y: 320 },
       fractionalIndex: "a1",
-      data: {},
+      data: { label: "Node 2" },
     });
 
     const second = getOffsetPosition(500, 300, mockNodes);

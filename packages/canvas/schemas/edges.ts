@@ -6,6 +6,12 @@ export const edgeDataSchema = z.object({
   sourceCardinality: z.enum(["1", "N"]).optional(),
   targetCardinality: z.enum(["1", "N"]).optional(),
   resourceKind: z.string().optional(),
+  // --- Type Reference Fields ---
+  isTypeReference: z.boolean().optional(),
+  isExtensionEdge: z.boolean().optional(),
+  baseTypeName: z.string().optional(),
+  extendedTypeName: z.string().optional(),
+  packageName: z.string().optional(),
   // --- Identity Connection Fields ---
   protocol: z.string().optional(),
   grantType: z.string().optional(),

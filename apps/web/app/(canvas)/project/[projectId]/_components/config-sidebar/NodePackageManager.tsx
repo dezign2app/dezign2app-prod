@@ -31,7 +31,10 @@ import {
 import { cn } from "@workspace/ui/lib/utils";
 import { toast } from "sonner";
 import { NodeDependencyItem } from "@workspace/canvas";
-import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import {
+  syncPackageTypesToCanvas,
+  syncPackageToDiskPackageJson,
+} from "@/lib/stores/backendCanvas/packageTypesSync";
 
 interface NodePackageManagerProps {
   nodeId: string;
@@ -302,7 +305,19 @@ export const NodePackageManager: React.FC<NodePackageManagerProps> = ({
     onUpdateDependencies(updated);
     setStagedChangesCount((prev) => prev + 1);
 
-    toast.success(`Staged ${trimmedName}@${version} (${isDevDep ? "dev" : "prod"})`);
+    // Sync package to package.json on disk
+    syncPackageToDiskPackageJson({
+      action: "add",
+      name: trimmedName,
+      version,
+      isDev: isDevDep,
+      nodeType,
+    });
+
+    // Sync package types to canvas
+    syncPackageTypesToCanvas(nodeId, [trimmedName]);
+
+    toast.success(`Saved ${trimmedName}@${version} to package.json! Run 'pnpm i' to install.`);
 
     // Reset input form
     setSelectedPkgName("");
@@ -330,24 +345,56 @@ export const NodePackageManager: React.FC<NodePackageManagerProps> = ({
     const updated = [...customDependencies, newItem];
     onUpdateDependencies(updated);
     setStagedChangesCount((prev) => prev + 1);
-    toast.success(`Added ${presetItem.name}@${presetItem.version || "latest"}`);
+
+    // Sync package to package.json on disk
+    syncPackageToDiskPackageJson({
+      action: "add",
+      name: presetItem.name,
+      version: presetItem.version || "latest",
+      isDev: Boolean(presetItem.isDev),
+      nodeType,
+    });
+
+    // Sync package types to canvas
+    syncPackageTypesToCanvas(nodeId, [presetItem.name]);
+
+    toast.success(`Saved ${presetItem.name} to package.json! Run 'pnpm i' to install.`);
   };
 
   const handleRemovePackage = (name: string) => {
     const updated = customDependencies.filter((d) => d.name !== name);
     onUpdateDependencies(updated);
     setStagedChangesCount((prev) => prev + 1);
-    toast.info(`Removed package "${name}"`);
+
+    // Remove package from package.json on disk
+    syncPackageToDiskPackageJson({
+      action: "remove",
+      name,
+      nodeType,
+    });
+
+    toast.info(`Removed "${name}" from package.json.`);
   };
 
   const handleSaveVersionEdit = (index: number) => {
     if (!editingVersion.trim()) return;
     const updated = [...customDependencies];
     if (updated[index]) {
-      updated[index] = { ...updated[index], version: editingVersion.trim() };
+      const targetPkg = updated[index];
+      updated[index] = { ...targetPkg, version: editingVersion.trim() };
       onUpdateDependencies(updated);
       setStagedChangesCount((prev) => prev + 1);
-      toast.success(`Updated version to ${editingVersion.trim()}`);
+
+      // Update package version in package.json on disk
+      syncPackageToDiskPackageJson({
+        action: "update",
+        name: targetPkg.name,
+        version: editingVersion.trim(),
+        isDev: targetPkg.isDev,
+        nodeType,
+      });
+
+      toast.success(`Updated ${targetPkg.name} to ${editingVersion.trim()} in package.json!`);
     }
     setEditingIndex(null);
   };
@@ -380,38 +427,33 @@ export const NodePackageManager: React.FC<NodePackageManagerProps> = ({
     <div className="space-y-6 text-sm">
       {/* 1. Staged Changes Action Banner */}
       {stagedChangesCount > 0 && (
-        <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+        <div className="p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 dark:bg-emerald-950/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
             <div className="text-xs font-medium">
-              <span className="font-semibold">{stagedChangesCount} package modification(s) staged.</span>
-              <span className="text-muted-foreground ml-1">Run install & build to verify.</span>
+              <span className="font-semibold">{stagedChangesCount} package modification(s) saved to package.json.</span>
+              <span className="text-muted-foreground ml-1">Run <code className="text-foreground font-mono bg-black/20 px-1 py-0.5 rounded">pnpm i</code> in terminal to install.</span>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
             <Button
               size="sm"
-              onClick={handleRunInstallAndBuild}
-              disabled={isBuilding}
-              className="w-full sm:w-auto h-7 px-3 text-xs bg-amber-600 hover:bg-amber-700 text-white shadow-sm font-medium"
+              onClick={() => {
+                if (typeof navigator !== "undefined" && navigator.clipboard) {
+                  navigator.clipboard.writeText("pnpm i");
+                  toast.success("Copied 'pnpm i' to clipboard!");
+                }
+              }}
+              className="w-full sm:w-auto h-7 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-medium cursor-pointer"
             >
-              {isBuilding ? (
-                <>
-                  <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
-                  Installing & Building...
-                </>
-              ) : (
-                <>
-                  <Terminal className="w-3 h-3 mr-1.5" />
-                  Run Install & Build
-                </>
-              )}
+              <Terminal className="w-3 h-3 mr-1.5" />
+              Copy &apos;pnpm i&apos;
             </Button>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => setStagedChangesCount(0)}
-              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
             >
               Dismiss
             </Button>

@@ -264,6 +264,23 @@ export const backendParameterValidator = v.object({
   defaultValue: v.optional(v.string()),
   key: v.optional(v.string()),
   value: v.optional(v.string()),
+  isArray: v.optional(v.boolean()),
+});
+
+// Node Dependency Validator
+export const nodeDependencyItemConvexValidator = v.object({
+  name: v.string(),
+  version: v.optional(v.string()),
+  isDev: v.optional(v.boolean()),
+  description: v.optional(v.string()),
+  category: v.optional(v.string()),
+  source: v.optional(
+    v.union(
+      v.literal("manual"),
+      v.literal("ai_inferred"),
+      v.literal("canvas_inferred"),
+    ),
+  ),
 });
 
 // Request Body / Schema Model Validator
@@ -271,6 +288,12 @@ export const backendRequestBodyValidator = v.object({
   id: v.optional(v.string()),
   fields: v.optional(v.array(backendParameterValidator)),
   rawJson: v.optional(v.string()),
+  mode: v.optional(
+    v.union(v.literal("field_builder"), v.literal("raw_json")),
+  ),
+  requestBodyMode: v.optional(
+    v.union(v.literal("field_builder"), v.literal("raw_json")),
+  ),
 });
 
 // Simulation Case Validator
@@ -454,6 +477,7 @@ export const webPageConvexDataValidator = v.object({
   techStack: v.optional(v.string()),
   techVersion: v.optional(v.string()),
   isWebPage: v.optional(v.boolean()),
+  isWebClient: v.optional(v.boolean()),
   isRoot: v.optional(v.boolean()),
   pageSlug: v.optional(v.string()),
   path: v.optional(v.string()),
@@ -475,6 +499,7 @@ export const webPageConvexDataValidator = v.object({
   uiPrompt: v.optional(v.string()),
   renderMode: v.optional(v.union(v.literal("server"), v.literal("client"))),
   protectionOverride: v.optional(protectionRuleConvexValidator),
+  customDependencies: v.optional(v.array(nodeDependencyItemConvexValidator)),
 });
 
 export const backendWebPageDataValidator = webPageConvexDataValidator;
@@ -557,6 +582,7 @@ export const backendNodeDataValidator = v.union(
     color: v.optional(v.string()),
     parentId: v.optional(v.string()),
     targetServiceId: v.optional(v.string()),
+    targetWebAppId: v.optional(v.string()),
     serviceNodeId: v.optional(v.string()),
     position: v.optional(v.object({ x: v.number(), y: v.number() })),
     style: v.optional(
@@ -569,6 +595,12 @@ export const backendNodeDataValidator = v.union(
     height: v.optional(v.number()),
     pageSourceCode: v.optional(v.string()),
     aiEditing: v.optional(v.boolean()),
+    isPackageNode: v.optional(v.boolean()),
+    packageName: v.optional(v.string()),
+    packageVersion: v.optional(v.string()),
+    isInstalled: v.optional(v.boolean()),
+    installError: v.optional(v.string()),
+    isReadOnly: v.optional(v.boolean()),
   }),
 );
 

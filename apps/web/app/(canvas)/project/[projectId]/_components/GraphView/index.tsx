@@ -16,6 +16,7 @@ import {
   MessagingEdge,
   IdentityConnectionEdge,
   TransformerReferenceEdge,
+  TypeReferenceEdge,
 } from "../backend-nodes/CustomEdges";
 import { isValidConnection } from "@workspace/canvas";
 import { useCanvasHandlers } from "../hooks/useCanvasHandlers";
@@ -29,6 +30,7 @@ const edgeTypes = {
   message: MessagingEdge,
   "identity-connection": IdentityConnectionEdge,
   "transformer-reference": TransformerReferenceEdge,
+  "type-reference": TypeReferenceEdge,
   reference: TransformerReferenceEdge,
 };
 

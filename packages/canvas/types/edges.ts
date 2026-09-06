@@ -21,6 +21,12 @@ export type BackendEdge = {
     sequenceOrder?: number;
     sourceCardinality?: "1" | "N";
     targetCardinality?: "1" | "N";
+    // --- Type Reference Fields ---
+    isTypeReference?: boolean;
+    isExtensionEdge?: boolean;
+    baseTypeName?: string;
+    extendedTypeName?: string;
+    packageName?: string;
     // --- Identity Connection Fields ---
     protocol?: string;
     grantType?: string;

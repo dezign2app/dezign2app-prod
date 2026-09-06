@@ -44,9 +44,21 @@ export function useWebPageAiGeneration({
 
   const handleGenerateAiCode = async () => {
     if (isGeneratingAi) return;
+    const sectionLibs = (data.sections || []).flatMap((s) => s.libraries || []);
+    const actionLibs = (data.sections || []).flatMap((s) =>
+      (s.actions || []).flatMap((a) => a.libraries || [])
+    );
+    const allDeclaredLibs = Array.from(new Set([...sectionLibs, ...actionLibs]));
+
+    const libraryGuidance =
+      allDeclaredLibs.length > 0
+        ? `Declared Installed Libraries: ${allDeclaredLibs.join(", ")}. Please import and utilize their canonical functions, hooks, and types directly in the component implementation.`
+        : "";
+
     const promptText = [
       data.description ? `Page Purpose: ${data.description}` : "",
       data.uiPrompt ? `Visual & Theme Style: ${data.uiPrompt}` : "",
+      libraryGuidance,
     ]
       .filter(Boolean)
       .join("\n\n");

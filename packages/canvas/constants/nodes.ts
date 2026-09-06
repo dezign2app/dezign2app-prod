@@ -110,6 +110,7 @@ export const BACKEND_EDGE_MESSAGE = "message" as const;
 export const BACKEND_EDGE_CONNECTION = "connection" as const;
 export const BACKEND_EDGE_TRANSFORMER_REFERENCE = "transformer-reference" as const;
 export const BACKEND_EDGE_REFERENCE = "reference" as const;
+export const BACKEND_EDGE_TYPE_REFERENCE = "type-reference" as const;
 
 export const BACKEND_EDGE_TYPES = {
   FOREIGN_KEY: BACKEND_EDGE_FOREIGN_KEY,
@@ -119,4 +120,5 @@ export const BACKEND_EDGE_TYPES = {
   CONNECTION: BACKEND_EDGE_CONNECTION,
   TRANSFORMER_REFERENCE: BACKEND_EDGE_TRANSFORMER_REFERENCE,
   REFERENCE: BACKEND_EDGE_REFERENCE,
+  TYPE_REFERENCE: BACKEND_EDGE_TYPE_REFERENCE,
 } as const;

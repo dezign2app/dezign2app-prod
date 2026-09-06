@@ -118,6 +118,7 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
     "hook-in",
     "page-in",
     "type-in",
+    "page-section-in",
   ],
   unknown: [],
 };
@@ -175,7 +176,8 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   "type-out→transformer-in": "reference",
   "type-out→hook-in": "reference",
   "type-out→page-in": "reference",
-  "type-out→type-in": "reference",
+  "type-out→type-in": "type-reference",
+  "type-out→page-section-in": "type-reference",
 };
 
 // NOTE: "sse", "websocket", "webrtc", "polling" have been moved to the

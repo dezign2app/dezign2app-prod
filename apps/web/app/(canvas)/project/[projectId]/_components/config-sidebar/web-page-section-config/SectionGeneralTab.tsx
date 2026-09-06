@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Label } from "@workspace/ui/components/label";
 import { Input } from "@workspace/ui/components/input";
 import { Badge } from "@workspace/ui/components/badge";
@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { SECTION_PRESETS, SectionPreset, SectionIconName } from "@workspace/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import { SectionPresetConfirmDialog } from "./SectionPresetConfirmDialog";
 
 const PRESET_ICON_MAP: Record<SectionIconName, LucideIcon> = {
   "layout-grid": LayoutGrid,
@@ -38,10 +39,18 @@ export interface SectionGeneralTabProps {
   name: string;
   renderMode: "server" | "client";
   loadStrategy: "eager" | "dynamic" | "dynamic-no-ssr";
+  currentLibraries?: string[];
+  existingActionsCount?: number;
   onUpdateName: (name: string) => void;
   onUpdateRenderMode: (renderMode: "server" | "client") => void;
   onUpdateLoadStrategy: (strategy: "eager" | "dynamic" | "dynamic-no-ssr") => void;
-  onApplyPreset: (preset: SectionPreset) => void;
+  onApplyPreset: (
+    preset: SectionPreset,
+    options?: {
+      deletePreviousActions?: boolean;
+      updateName?: boolean;
+    }
+  ) => void;
   onDelete?: () => void;
 }
 
@@ -49,12 +58,16 @@ export const SectionGeneralTab: React.FC<SectionGeneralTabProps> = ({
   name,
   renderMode,
   loadStrategy,
+  currentLibraries = [],
+  existingActionsCount = 0,
   onUpdateName,
   onUpdateRenderMode,
   onUpdateLoadStrategy,
   onApplyPreset,
   onDelete,
 }) => {
+  const [confirmPreset, setConfirmPreset] = useState<SectionPreset | null>(null);
+
   return (
     <div className="flex-1 p-4 space-y-4 overflow-y-auto m-0 outline-none">
       {/* Section Name */}
@@ -77,7 +90,7 @@ export const SectionGeneralTab: React.FC<SectionGeneralTabProps> = ({
       <div className="space-y-2 p-3.5 rounded-xl bg-secondary/20 border border-border/50">
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-            <Sparkles size={13} className="text-muted-foreground" /> Blueprint Presets
+            <Sparkles size={13} className="text-muted-foreground" /> Presets
           </span>
           <span className="text-[10px] text-muted-foreground">1-click template</span>
         </div>
@@ -93,7 +106,7 @@ export const SectionGeneralTab: React.FC<SectionGeneralTabProps> = ({
               <button
                 key={preset.label}
                 type="button"
-                onClick={() => onApplyPreset(preset)}
+                onClick={() => setConfirmPreset(preset)}
                 className="p-2.5 rounded-lg border border-border/40 bg-secondary/30 hover:bg-secondary/70 hover:border-border text-left transition-all cursor-pointer flex flex-col gap-1 group"
               >
                 <div className="flex items-center gap-1.5 text-xs font-medium text-foreground group-hover:text-foreground transition-colors">
@@ -235,6 +248,22 @@ export const SectionGeneralTab: React.FC<SectionGeneralTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* Preset Confirmation Dialog */}
+      <SectionPresetConfirmDialog
+        open={confirmPreset !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmPreset(null);
+        }}
+        preset={confirmPreset}
+        currentSectionName={name}
+        currentLibraries={currentLibraries}
+        existingActionsCount={existingActionsCount}
+        onConfirm={(preset, options) => {
+          onApplyPreset(preset, options);
+          setConfirmPreset(null);
+        }}
+      />
     </div>
   );
 };

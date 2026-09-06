@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { NodeProps } from "@xyflow/react";
+import { NodeProps, Handle, Position } from "@xyflow/react";
 import { Server, ChevronDown, Settings } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -146,10 +146,19 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   return (
     <div
       className={cn(
-        "shadow-md rounded-xl bg-card border-2 min-w-[300px] max-w-[400px] flex flex-col transition-all duration-300",
+        "shadow-md rounded-xl bg-card border-2 min-w-[300px] max-w-[400px] flex flex-col transition-all duration-300 relative group",
         borderClass,
       )}
     >
+      {/* Types Reference Target Handle (Left) */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="types-in"
+        className="w-2.5 h-2.5 !bg-indigo-400 rounded-full border-2 border-background -left-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+        style={{ top: "24px" }}
+        title="Package Types / Custom Types Reference"
+      />
       <NodeHeader
         id={id}
         data={data}

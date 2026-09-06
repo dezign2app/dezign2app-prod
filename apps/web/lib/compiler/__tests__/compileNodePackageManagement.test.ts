@@ -101,4 +101,86 @@ describe("compileMonorepo Node Package Management", () => {
     expect(parsed.devDependencies["tailwindcss"]).toBeDefined();
     expect(parsed.devDependencies["@workspace/typescript-config"]).toBe("workspace:*");
   });
+
+  it("auto-collects section.libraries and action.libraries into package.json and generates code imports", () => {
+    const webAppNode: BackendNode = {
+      id: "node-app",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "AnalyticsApp",
+        appSlug: "analytics-app",
+        port: "3000",
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-metrics",
+      type: "webPage",
+      position: { x: 100, y: 100 },
+      fractionalIndex: "a1",
+      data: {
+        label: "/metrics",
+        appSlug: "analytics-app",
+        accessType: "public",
+        sections: [
+          {
+            id: "sec-charts",
+            name: "PerformanceCharts",
+            renderMode: "client",
+            libraries: ["framer-motion", "recharts"],
+            actions: [
+              {
+                id: "act-filter",
+                name: "ApplyDateFilter",
+                event: "click",
+                libraries: ["zod", "canvas-confetti"],
+                pathParams: [{ id: "p1", name: "rangeId", type: "string", required: true }],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-1",
+      source: "node-app",
+      target: "node-page-metrics",
+      type: "connection",
+      fractionalIndex: "a0",
+    };
+
+    const result = compileMonorepo([webAppNode, webPageNode], [], [], [edge], [], "AnalyticsApp");
+
+    // 1. Verify package.json automatically includes section & action libraries
+    const pkgFile = result.files.find((f) => f.filename === "apps/analytics-app/package.json");
+    expect(pkgFile).toBeDefined();
+    const pkg = JSON.parse(pkgFile!.content);
+    expect(pkg.dependencies["framer-motion"]).toBeDefined();
+    expect(pkg.dependencies["recharts"]).toBeDefined();
+    expect(pkg.dependencies["zod"]).toBeDefined();
+    expect(pkg.dependencies["canvas-confetti"]).toBeDefined();
+
+    // 2. Verify section component has framer-motion and recharts imports
+    const sectionFile = result.files.find(
+      (f) => f.filename.endsWith("PerformancechartsSection.tsx")
+    );
+    expect(sectionFile).toBeDefined();
+    expect(sectionFile!.content).toContain('"use client";');
+    expect(sectionFile!.content).toContain('import * as framer_motion from "framer-motion";');
+    expect(sectionFile!.content).toContain('import * as recharts from "recharts";');
+
+    // 3. Verify action component has clean library imports
+    const actionFile = result.files.find(
+      (f) => f.filename.endsWith("ApplydatefilterAction.tsx")
+    );
+    expect(actionFile).toBeDefined();
+    expect(actionFile!.content).toContain('import * as zod from "zod";');
+    expect(actionFile!.content).toContain('import * as canvas_confetti from "canvas-confetti";');
+    // Does not inject opinionated predefined templates
+    expect(actionFile!.content).not.toContain("ApplydatefilterActionSchema");
+    expect(actionFile!.content).not.toContain("particleCount");
+  });
 });

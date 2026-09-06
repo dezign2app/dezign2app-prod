@@ -1,5 +1,4 @@
-import React from "react";
-import { EdgeProps, getBezierPath, BaseEdge } from "@xyflow/react";
+import { EdgeProps, getBezierPath, BaseEdge, EdgeLabelRenderer } from "@xyflow/react";
 import { BackendEdge } from "@/types/canvas";
 
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -175,6 +174,18 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
 
   if (targetNode?.type === "database") {
     return <DatabaseRefEdge {...props} />;
+  }
+
+  const sourceNode = useBackendCanvasStore((s) =>
+    s.nodes.find((n) => n.id === props.source),
+  );
+  if (
+    sourceNode?.type === "types" ||
+    targetNode?.type === "types" ||
+    props.data?.isTypeReference ||
+    props.data?.isExtensionEdge
+  ) {
+    return <TypeReferenceEdge {...props} />;
   }
 
   const {
@@ -457,3 +468,117 @@ export const TransformerReferenceEdge = (props: EdgeProps<BackendEdge>) => {
     </>
   );
 };
+
+export type TypeReferenceEdgeProps = EdgeProps & {
+  data?: BackendEdge["data"];
+};
+
+// 5. Type Reference Edge (Indigo dashed, conditionally visible when either connected node is selected, or always visible if extending a type)
+export const TypeReferenceEdge = (props: TypeReferenceEdgeProps) => {
+  const {
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    style,
+    source,
+    target,
+    data,
+    selected,
+  } = props;
+
+  const sourceNode = useBackendCanvasStore((s) =>
+    s.nodes.find((n) => n.id === source),
+  );
+  const targetNode = useBackendCanvasStore((s) =>
+    s.nodes.find((n) => n.id === target),
+  );
+
+  const isExtensionEdge = Boolean(data?.isExtensionEdge);
+  const isNodeSelected = Boolean(sourceNode?.selected || targetNode?.selected || selected);
+
+  // Hidden when unselected, unless it is a visual extension edge
+  if (!isExtensionEdge && !isNodeSelected) {
+    return null;
+  }
+
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+
+  const edgeColor = isExtensionEdge ? "#8b5cf6" : "#6366f1"; // purple-500 for extends, indigo-500 for package types
+  const markerId = isExtensionEdge ? "arrow-purple" : "arrow-indigo";
+
+  return (
+    <>
+      <EdgeStyles />
+      <EdgeMarkers />
+      <svg style={{ position: "absolute", top: 0, left: 0, width: 0, height: 0 }}>
+        <defs>
+          <marker
+            id="arrow-indigo"
+            viewBox="0 0 10 10"
+            refX="6"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#6366f1" />
+          </marker>
+        </defs>
+      </svg>
+
+      {/* Glow path */}
+      <BaseEdge
+        path={edgePath}
+        style={{
+          ...style,
+          strokeWidth: 4,
+          stroke: `${edgeColor}25`,
+          filter: `drop-shadow(0 0 6px ${edgeColor}80)`,
+        }}
+      />
+
+      {/* Main dashed edge */}
+      <BaseEdge
+        path={edgePath}
+        markerEnd={`url(#${markerId})`}
+        style={{
+          ...style,
+          strokeWidth: 1.5,
+          stroke: edgeColor,
+          strokeDasharray: "4, 4",
+        }}
+      />
+
+      {/* Pill label if label is present (e.g. "extends") */}
+      {data?.label && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: "absolute",
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: "all",
+            }}
+            className={
+              isExtensionEdge
+                ? "px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold bg-background/95 border border-purple-500/50 text-purple-400 shadow-xs ring-1 ring-purple-500/20"
+                : "px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold bg-background/95 border border-indigo-500/40 text-indigo-400 shadow-xs"
+            }
+          >
+            {data.label}
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+};
+

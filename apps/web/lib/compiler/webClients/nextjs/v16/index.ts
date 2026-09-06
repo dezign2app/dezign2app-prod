@@ -72,9 +72,23 @@ export function compileNextjsV16WebClient(
   files.push(...generateRouteGroupLayouts(pagesInfo, Boolean(authNode), webAppNode));
 
   // 3. Project Configuration Files
+  const sectionAndActionLibs = webClientNodes.flatMap((p) =>
+    (p.data?.sections || []).flatMap((s: any) => [
+      ...(s.libraries || []),
+      ...(s.actions || []).flatMap((a: any) => a.libraries || []),
+    ])
+  );
+  const extraDepsFromSectionsAndActions = sectionAndActionLibs.map((libName: string) => ({
+    name: libName,
+    version: "latest",
+    isDev: false,
+    source: "manual" as const,
+  }));
+
   const allWebCustomDeps = [
     ...(webAppNode?.data?.customDependencies || []),
     ...webClientNodes.flatMap((p) => p.data?.customDependencies || []),
+    ...extraDepsFromSectionsAndActions,
   ];
   const deduplicatedCustomDeps = allWebCustomDeps.filter(
     (dep, index, self) => index === self.findIndex((d) => d.name === dep.name)

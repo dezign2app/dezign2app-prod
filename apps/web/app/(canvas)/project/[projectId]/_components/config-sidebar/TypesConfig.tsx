@@ -22,9 +22,19 @@ import {
   Check,
   Code2,
   Sparkles,
+  Lock,
+  ArrowUpRight,
+  Package,
+  AlertTriangle,
+  RefreshCw,
+  X,
 } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBufferedInput } from "@/lib/hooks/useBufferedInput";
+import {
+  createExtendedTypeNode,
+  refreshPackageTypesFromNodeModules,
+} from "@/lib/stores/backendCanvas/packageTypesSync";
 import type {
   CustomTypeItem,
   CustomTypeField,
@@ -42,20 +52,24 @@ const PRIMITIVE_TYPES = [
   "number",
   "boolean",
   "Date",
+  "object",
+  "Record<string, string>",
   "any",
-  "Record<string, unknown>",
+  "unknown",
+  "enum",
 ];
 
 // --- Memoized Property Row with Buffered Inputs for instant 0ms typing ---
 interface TypePropertyRowProps {
   field: CustomTypeField;
   otherCustomTypes: string[];
+  readOnly?: boolean;
   onUpdate: (updates: Partial<CustomTypeField>) => void;
   onDelete: () => void;
 }
 
 const TypePropertyRow = React.memo(
-  ({ field, otherCustomTypes, onUpdate, onDelete }: TypePropertyRowProps) => {
+  ({ field, otherCustomTypes, readOnly, onUpdate, onDelete }: TypePropertyRowProps) => {
     const nameBuffer = useBufferedInput(
       field.name || "",
       useCallback((name: string) => onUpdate({ name }), [onUpdate]),
@@ -71,12 +85,15 @@ const TypePropertyRow = React.memo(
       200,
     );
 
+    const [enumInput, setEnumInput] = useState("");
+
     const isFieldArray = Boolean(
       field.isArray || field.type?.endsWith("[]"),
     );
     const baseType = (field.type || "string").replace(/\[\]$/, "");
 
     const toggleArray = () => {
+      if (readOnly) return;
       if (isFieldArray) {
         onUpdate({ type: baseType, isArray: false });
       } else {
@@ -85,80 +102,128 @@ const TypePropertyRow = React.memo(
     };
 
     const handleTypeChange = (selectedBase: string) => {
+      if (readOnly) return;
       const cleanBase = selectedBase.replace(/\[\]$/, "");
       const newType = isFieldArray ? `${cleanBase}[]` : cleanBase;
-      onUpdate({ type: newType, isArray: isFieldArray });
+      onUpdate({
+        type: newType,
+        isArray: isFieldArray,
+        ...(cleanBase === "enum" && (!field.enumValues || field.enumValues.length === 0)
+          ? { enumValues: [] }
+          : {}),
+      });
     };
+
+    const handleAddEnumValue = useCallback(
+      (raw?: string) => {
+        const input = typeof raw === "string" ? raw : enumInput;
+        if (!input.trim()) return;
+        const parts = input
+          .split(",")
+          .map((p) => p.trim().replace(/^["']|["']$/g, ""))
+          .filter(Boolean);
+        if (parts.length === 0) return;
+        const currentValues = field.enumValues || [];
+        const uniqueNew = parts.filter((p) => !currentValues.includes(p));
+        if (uniqueNew.length > 0) {
+          onUpdate({ enumValues: [...currentValues, ...uniqueNew] });
+        }
+        setEnumInput("");
+      },
+      [enumInput, field.enumValues, onUpdate],
+    );
+
+    const handleDeleteEnumValue = useCallback(
+      (idx: number) => {
+        const updated = (field.enumValues || []).filter((_, i) => i !== idx);
+        onUpdate({ enumValues: updated });
+      },
+      [field.enumValues, onUpdate],
+    );
 
     return (
       <div className="flex flex-col gap-2 rounded-lg border bg-background/50 p-2.5 relative group/param transition-all hover:border-primary/30 hover:shadow-sm">
         <div className="flex items-center gap-2">
-          <Input
-            className="h-7 text-xs flex-1 nodrag bg-background font-mono border-none shadow-none focus-visible:ring-1 placeholder:font-sans"
-            placeholder="Property name"
-            value={nameBuffer.value}
-            onChange={(e) => nameBuffer.onChange(e.target.value)}
-            onBlur={nameBuffer.flush}
-          />
+          {readOnly ? (
+            <span className="h-7 text-xs flex-1 font-mono font-semibold flex items-center px-1 text-foreground">
+              {field.name}
+            </span>
+          ) : (
+            <Input
+              className="h-7 text-xs flex-1 nodrag bg-background font-mono border-none shadow-none focus-visible:ring-1 placeholder:font-sans"
+              placeholder="Property name"
+              value={nameBuffer.value}
+              onChange={(e) => nameBuffer.onChange(e.target.value)}
+              onBlur={nameBuffer.flush}
+            />
+          )}
 
-          {/* Type Select: Primitives + Available Custom Types */}
-          <Select
-            value={baseType}
-            onValueChange={handleTypeChange}
-          >
-            <SelectTrigger className="h-7 w-[140px] text-xs py-0 nodrag bg-secondary/50 border-none font-mono">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="max-h-[260px]">
-              <SelectGroup>
-                <SelectLabel className="text-[10px] font-bold uppercase text-muted-foreground">
-                  Primitives
-                </SelectLabel>
-                {PRIMITIVE_TYPES.map((pt) => (
-                  <SelectItem key={pt} value={pt} className="text-xs font-mono">
-                    {pt}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-
-              {otherCustomTypes.length > 0 && (
+          {/* Type Select or Read-only badge */}
+          {readOnly ? (
+            <span className="h-7 px-2.5 flex items-center text-xs font-mono bg-secondary/50 rounded text-foreground font-medium">
+              {field.type}
+            </span>
+          ) : (
+            <Select
+              value={baseType}
+              onValueChange={handleTypeChange}
+            >
+              <SelectTrigger className="h-7 w-[150px] text-xs py-0 nodrag bg-secondary/50 border-none font-mono">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="max-h-[260px]">
                 <SelectGroup>
-                  <SelectLabel className="text-[10px] font-bold uppercase text-indigo-500 dark:text-indigo-400">
-                    Custom Types
+                  <SelectLabel className="text-[10px] font-bold uppercase text-muted-foreground">
+                    Primitives & Types
                   </SelectLabel>
-                  {otherCustomTypes.map((ct) => (
-                    <SelectItem key={ct} value={ct} className="text-xs font-mono">
-                      {ct}
+                  {PRIMITIVE_TYPES.map((pt) => (
+                    <SelectItem key={pt} value={pt} className="text-xs font-mono">
+                      {pt === "enum" ? "enum (fixed values)" : pt}
                     </SelectItem>
                   ))}
                 </SelectGroup>
-              )}
-            </SelectContent>
-          </Select>
 
-          {/* Array [] toggle button (replaces REQUIRED button) */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            title={
-              isFieldArray
-                ? "Array type active (click to make single)"
-                : "Single type (click to make array [])"
-            }
-            className={cn(
-              "h-7 px-3 font-mono text-xs font-bold nodrag rounded-full transition-all cursor-pointer",
-              isFieldArray
-                ? "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 ring-1 ring-primary/30"
-                : "bg-secondary/60 text-muted-foreground/80 hover:bg-secondary hover:text-foreground border border-border/40",
-            )}
-            onClick={toggleArray}
-          >
-            []
-          </Button>
+                {otherCustomTypes.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel className="text-[10px] font-bold uppercase text-indigo-500 dark:text-indigo-400">
+                      Custom Types
+                    </SelectLabel>
+                    {otherCustomTypes.map((ct) => (
+                      <SelectItem key={ct} value={ct} className="text-xs font-mono">
+                        {ct}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+              </SelectContent>
+            </Select>
+          )}
+
+          {/* Array [] toggle button */}
+          {!readOnly && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              title={
+                isFieldArray
+                  ? "Array type active (click to make single)"
+                  : "Single type (click to make array [])"
+              }
+              className={cn(
+                "h-7 px-3 font-mono text-xs font-bold nodrag rounded-full transition-all cursor-pointer",
+                isFieldArray
+                  ? "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 ring-1 ring-primary/30"
+                  : "bg-secondary/60 text-muted-foreground/80 hover:bg-secondary hover:text-foreground border border-border/40",
+              )}
+              onClick={toggleArray}
+            >
+              []
+            </Button>
+          )}
 
           {/* Add Description toggle button */}
-          {field.description === undefined && (
+          {!readOnly && field.description === undefined && (
             <Button
               size="icon"
               variant="ghost"
@@ -171,34 +236,117 @@ const TypePropertyRow = React.memo(
           )}
 
           {/* Delete Field button */}
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7 opacity-0 group-hover/param:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 transition-all rounded-full"
-            onClick={onDelete}
-          >
-            <Trash size={14} />
-          </Button>
-        </div>
-
-        {/* Description row (matching ParameterEditor) */}
-        {field.description !== undefined && (
-          <div className="relative w-full">
-            <Input
-              className="h-6 text-[10px] pl-2.5 pr-6 w-full nodrag bg-transparent border-none shadow-none text-muted-foreground placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:bg-secondary/30 rounded"
-              placeholder="Add a description..."
-              value={descBuffer.value}
-              onChange={(e) => descBuffer.onChange(e.target.value)}
-              onBlur={descBuffer.flush}
-            />
+          {!readOnly && (
             <Button
               size="icon"
               variant="ghost"
-              className="h-5 w-5 absolute right-0.5 top-0.5 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0 transition-all rounded"
-              onClick={() => onUpdate({ description: undefined })}
+              className="h-7 w-7 opacity-0 group-hover/param:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 transition-all rounded-full"
+              onClick={onDelete}
             >
-              <Trash size={10} />
+              <Trash size={14} />
             </Button>
+          )}
+        </div>
+
+        {/* Inline enum values editor — badge style */}
+        {baseType === "enum" && (
+          <div className="flex flex-col gap-1.5 px-1 py-1.5 rounded-lg bg-purple-500/5 border border-purple-500/20">
+            <span className="text-[10px] font-mono font-bold text-purple-400 uppercase tracking-wider pl-1">
+              Values:
+            </span>
+            {readOnly ? (
+              <div className="flex flex-wrap gap-1 px-1">
+                {(field.enumValues || []).map((v, idx) => (
+                  <span
+                    key={`${v}-${idx}`}
+                    className="inline-flex items-center px-2 py-0.5 rounded bg-secondary/70 border border-border/50 text-[11px] font-mono text-foreground"
+                  >
+                    {v}
+                  </span>
+                ))}
+                {(field.enumValues || []).length === 0 && (
+                  <span className="text-xs text-muted-foreground/60 italic">empty</span>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    className="h-6 text-xs flex-1 nodrag bg-background/90 font-mono border-purple-500/30 text-foreground placeholder:text-muted-foreground/50 placeholder:font-sans focus-visible:ring-purple-500/30"
+                    placeholder="Add value, press Enter..."
+                    value={enumInput}
+                    onChange={(e) => setEnumInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddEnumValue();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="h-6 w-6 shrink-0 cursor-pointer"
+                    disabled={!enumInput.trim()}
+                    onClick={() => handleAddEnumValue()}
+                  >
+                    <Plus size={12} />
+                  </Button>
+                </div>
+                <div className="flex flex-wrap items-center gap-1 px-0.5 min-h-[24px]">
+                  {(field.enumValues || []).map((v, idx) => (
+                    <span
+                      key={`${v}-${idx}`}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-secondary/80 hover:bg-secondary border border-border/60 text-[11px] font-mono font-medium text-foreground transition-all"
+                    >
+                      <span>{v}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEnumValue(idx)}
+                        className="text-muted-foreground/60 hover:text-destructive p-0.5 rounded transition-colors cursor-pointer"
+                        title={`Remove "${v}"`}
+                      >
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+                  {(field.enumValues || []).length === 0 && (
+                    <span className="text-[10px] text-muted-foreground/50 italic">
+                      No values yet.
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Description row */}
+        {field.description !== undefined && (
+          <div className="relative w-full">
+            {readOnly ? (
+              <span className="text-[10px] pl-2 text-muted-foreground italic">
+                {field.description}
+              </span>
+            ) : (
+              <>
+                <Input
+                  className="h-6 text-[10px] pl-2.5 pr-6 w-full nodrag bg-transparent border-none shadow-none text-muted-foreground placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:bg-secondary/30 rounded"
+                  placeholder="Add a description..."
+                  value={descBuffer.value}
+                  onChange={(e) => descBuffer.onChange(e.target.value)}
+                  onBlur={descBuffer.flush}
+                />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-5 w-5 absolute right-0.5 top-0.5 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0 transition-all rounded"
+                  onClick={() => onUpdate({ description: undefined })}
+                >
+                  <Trash size={10} />
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -207,49 +355,9 @@ const TypePropertyRow = React.memo(
 );
 TypePropertyRow.displayName = "TypePropertyRow";
 
-// --- Memoized Enum Constant Row with Buffered Input ---
-interface TypeEnumConstantRowProps {
-  value: string;
-  onUpdate: (val: string) => void;
-  onDelete: () => void;
-}
-
-const TypeEnumConstantRow = React.memo(
-  ({ value, onUpdate, onDelete }: TypeEnumConstantRowProps) => {
-    const valBuffer = useBufferedInput(
-      value || "",
-      useCallback(
-        (v: string) => onUpdate(v.toUpperCase().replace(/\s+/g, "_")),
-        [onUpdate],
-      ),
-      200,
-    );
-
-    return (
-      <div className="flex items-center gap-2 rounded-lg border bg-background/50 p-2.5 group/param transition-all hover:border-primary/30 hover:shadow-sm">
-        <Input
-          className="h-7 text-xs flex-1 nodrag bg-background font-mono font-semibold border-none shadow-none focus-visible:ring-1"
-          placeholder="CONSTANT_NAME"
-          value={valBuffer.value}
-          onChange={(e) => valBuffer.onChange(e.target.value)}
-          onBlur={valBuffer.flush}
-        />
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7 opacity-0 group-hover/param:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 transition-all rounded-full"
-          onClick={onDelete}
-        >
-          <Trash size={14} />
-        </Button>
-      </div>
-    );
-  },
-);
-TypeEnumConstantRow.displayName = "TypeEnumConstantRow";
-
 // --- Dedicated Type Editor Form (keyed by currentType.id for instantaneous switches) ---
 interface TypeEditorFormProps {
+  nodeId: string;
   currentType: CustomTypeItem;
   otherCustomTypes: string[];
   onUpdateCurrentType: (updates: Partial<CustomTypeItem>) => void;
@@ -257,6 +365,7 @@ interface TypeEditorFormProps {
 }
 
 const TypeEditorForm = ({
+  nodeId,
   currentType,
   otherCustomTypes,
   onUpdateCurrentType,
@@ -315,19 +424,28 @@ const TypeEditorForm = ({
     [currentType.fields, onUpdateCurrentType],
   );
 
-  const handleAddEnumValue = useCallback(() => {
-    const currentValues = currentType.enumValues || [];
-    const newVal = `VALUE_${currentValues.length + 1}`;
-    onUpdateCurrentType({ enumValues: [...currentValues, newVal] });
-  }, [currentType.enumValues, onUpdateCurrentType]);
+  const [newConstantInput, setNewConstantInput] = useState("");
 
-  const handleUpdateEnumValue = useCallback(
-    (index: number, val: string) => {
-      const currentValues = [...(currentType.enumValues || [])];
-      currentValues[index] = val;
-      onUpdateCurrentType({ enumValues: currentValues });
+  const handleAddConstant = useCallback(
+    (valToAdd?: string) => {
+      const raw = typeof valToAdd === "string" ? valToAdd : newConstantInput;
+      if (!raw.trim()) return;
+
+      const parts = raw
+        .split(",")
+        .map((p) => p.trim().replace(/^["']|["']$/g, ""))
+        .filter(Boolean);
+
+      if (parts.length === 0) return;
+
+      const currentValues = currentType.enumValues || [];
+      const uniqueNew = parts.filter((p) => !currentValues.includes(p));
+      if (uniqueNew.length > 0) {
+        onUpdateCurrentType({ enumValues: [...currentValues, ...uniqueNew] });
+      }
+      setNewConstantInput("");
     },
-    [currentType.enumValues, onUpdateCurrentType],
+    [newConstantInput, currentType.enumValues, onUpdateCurrentType],
   );
 
   const handleDeleteEnumValue = useCallback(
@@ -358,7 +476,16 @@ const TypeEditorForm = ({
       .map((f) => {
         const isArr = Boolean(f.isArray || f.type?.endsWith("[]"));
         const base = (f.type || "string").replace(/\[\]$/, "");
-        const finalType = isArr ? `${base}[]` : base;
+        let finalType: string;
+        if (base === "enum") {
+          const vals =
+            f.enumValues && f.enumValues.length > 0
+              ? f.enumValues.map((v) => `"${v}"`).join(" | ")
+              : `"value1" | "value2"`;
+          finalType = isArr ? `(${vals})[]` : vals;
+        } else {
+          finalType = isArr ? `${base}[]` : base;
+        }
         const opt = f.required === false ? "?" : "";
         const comment = f.description ? ` // ${f.description}` : "";
         return `  ${f.name || "prop"}${opt}: ${finalType};${comment}`;
@@ -380,11 +507,49 @@ const TypeEditorForm = ({
 
   return (
     <>
+      {/* Read-Only Package Type Banner */}
+      {Boolean(currentType.isReadOnly) && (
+        <div className="flex flex-col gap-2.5 p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Lock size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="text-xs font-bold uppercase tracking-wide">
+                Package Contract: {currentType.packageSource || "external"}
+              </span>
+            </div>
+            {currentType.isExtendable !== false && (
+              <Button
+                size="sm"
+                className="h-7 text-xs gap-1.5 bg-purple-600 hover:bg-purple-700 text-white shadow-xs font-semibold cursor-pointer"
+                onClick={() => createExtendedTypeNode(nodeId, currentType.id)}
+              >
+                <ArrowUpRight size={13} />
+                Extend Type
+              </Button>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            This data contract is read-only because it represents an external package model. Click <strong>Extend Type</strong> to create an editable custom model with inheritance on your canvas.
+          </p>
+        </div>
+      )}
+
+      {/* Extended Type Banner */}
+      {Boolean(currentType.extendedFrom) && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-purple-500/30 bg-purple-500/10 text-xs text-purple-700 dark:text-purple-300">
+          <Sparkles size={14} className="shrink-0 text-purple-500" />
+          <span>
+            Extended from base model: <strong className="font-mono">{currentType.extendedFrom}</strong>
+          </span>
+        </div>
+      )}
+
       {/* Type Header - Kind and Name (buffered, matching EndpointConfig.tsx) */}
       <div className="flex flex-col gap-2.5 border-b border-border/50 pb-6">
         <div className="flex items-center gap-2">
           <Select
             value={currentType.kind}
+            disabled={Boolean(currentType.isReadOnly)}
             onValueChange={(kind: CustomTypeKind) =>
               onUpdateCurrentType({ kind })
             }
@@ -406,22 +571,25 @@ const TypeEditorForm = ({
           </Select>
 
           <Input
-            className="h-8 text-sm font-semibold tracking-tight text-foreground bg-background font-mono flex-1"
+            className="h-8 text-sm font-semibold tracking-tight text-foreground bg-background font-mono flex-1 disabled:opacity-80"
             placeholder="TypeName (e.g. UserProfile)"
             value={nameBuffer.value}
+            disabled={Boolean(currentType.isReadOnly)}
             onChange={(e) => nameBuffer.onChange(e.target.value)}
             onBlur={nameBuffer.flush}
           />
 
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 rounded-lg"
-            onClick={onDeleteCurrentType}
-            title="Delete this type"
-          >
-            <Trash size={14} />
-          </Button>
+          {!currentType.isReadOnly && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 rounded-lg"
+              onClick={onDeleteCurrentType}
+              title="Delete this type"
+            >
+              <Trash size={14} />
+            </Button>
+          )}
         </div>
 
         <span className="text-xs text-muted-foreground">
@@ -435,43 +603,79 @@ const TypeEditorForm = ({
           Description
         </Label>
         <Input
-          className="bg-background/50"
+          className="bg-background/50 disabled:opacity-80"
           placeholder="e.g. Represents user profile and credentials."
+          disabled={Boolean(currentType.isReadOnly)}
           value={descBuffer.value}
           onChange={(e) => descBuffer.onChange(e.target.value)}
           onBlur={descBuffer.flush}
         />
       </div>
 
-      {/* Properties Editor (Flat Object) - Reusing exact ParameterEditor style from EndpointConfig.tsx */}
+      {/* Enum Constants Editor: 1 input field with badges below */}
       {currentType.kind === "enum" ? (
         <div className="flex flex-col gap-3 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Enum Constants ({(currentType.enumValues || []).length})
             </span>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-7 text-[10px] gap-1 rounded-full px-3"
-              onClick={handleAddEnumValue}
-            >
-              <Plus size={12} /> Add Constant
-            </Button>
+            {currentType.isReadOnly && (
+              <span className="text-[10px] font-mono font-medium text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                READ-ONLY PACKAGE ENUM
+              </span>
+            )}
           </div>
 
-          <div className="flex flex-col gap-2.5 mt-1">
-            {(currentType.enumValues || []).map((val, idx) => (
-              <TypeEnumConstantRow
-                key={idx}
-                value={val}
-                onUpdate={(newVal) => handleUpdateEnumValue(idx, newVal)}
-                onDelete={() => handleDeleteEnumValue(idx)}
+          {!currentType.isReadOnly && (
+            <div className="flex items-center gap-2">
+              <Input
+                className="h-8 text-xs flex-1 nodrag bg-background font-mono border-border/70 focus-visible:ring-1 placeholder:font-sans placeholder:text-muted-foreground/60"
+                placeholder="Type constant and press Enter (or comma-separated)..."
+                value={newConstantInput}
+                onChange={(e) => setNewConstantInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddConstant();
+                  }
+                }}
               />
+              <Button
+                size="sm"
+                className="h-8 text-xs font-semibold gap-1 px-3 cursor-pointer shrink-0"
+                onClick={() => handleAddConstant()}
+                disabled={!newConstantInput.trim()}
+              >
+                <Plus size={13} />
+                <span>Add</span>
+              </Button>
+            </div>
+          )}
+
+          {/* Badges container below the input field */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1 min-h-[36px]">
+            {(currentType.enumValues || []).map((val, idx) => (
+              <span
+                key={`${val}-${idx}`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary/80 hover:bg-secondary border border-border/60 text-xs font-mono font-medium text-foreground transition-all shadow-2xs group/badge"
+              >
+                <span>{val}</span>
+                {!currentType.isReadOnly && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteEnumValue(idx)}
+                    className="text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 p-0.5 rounded transition-colors cursor-pointer"
+                    title={`Delete constant ${val}`}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </span>
             ))}
+
             {(currentType.enumValues || []).length === 0 && (
-              <span className="text-xs text-muted-foreground/60 italic py-2">
-                No constants added yet. Click &quot;Add Constant&quot; above.
+              <span className="text-xs text-muted-foreground/60 italic py-1">
+                No constants added yet. Type a constant name above and press Enter.
               </span>
             )}
           </div>
@@ -489,14 +693,16 @@ const TypeEditorForm = ({
                 </span>
               )}
             </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-7 text-[10px] gap-1 rounded-full px-3"
-              onClick={handleAddField}
-            >
-              <Plus size={12} /> Add Property
-            </Button>
+            {!currentType.isReadOnly && (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-7 text-[10px] gap-1 rounded-full px-3"
+                onClick={handleAddField}
+              >
+                <Plus size={12} /> Add Property
+              </Button>
+            )}
           </div>
 
           <div className="flex flex-col gap-2.5 mt-1">
@@ -505,6 +711,7 @@ const TypeEditorForm = ({
                 key={f.id}
                 field={f}
                 otherCustomTypes={otherCustomTypes}
+                readOnly={Boolean(currentType.isReadOnly)}
                 onUpdate={(updates) => handleUpdateField(f.id, updates)}
                 onDelete={() => handleDeleteField(f.id)}
               />
@@ -570,8 +777,34 @@ export const TypesConfig: React.FC<TypesConfigProps> = ({
   const [activeTypeId, setActiveTypeId] = useState<string | undefined>(
     selectedTypeId,
   );
+  const [copiedInstall, setCopiedInstall] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const data = node?.data;
+  const isPackageNode = Boolean(data?.isPackageNode);
+  const packageName = data?.packageName || "";
+  const packageVersion = data?.packageVersion;
+  const isInstalled = data?.isInstalled !== false;
+  const installError = data?.installError;
+  const installCmd = "pnpm i";
+
+  const handleCopyInstall = () => {
+    navigator.clipboard.writeText("pnpm i");
+    setCopiedInstall(true);
+    setTimeout(() => setCopiedInstall(false), 2000);
+  };
+
+  const handleRefresh = async () => {
+    const pkg = packageName || data?.label;
+    if (!pkg) return;
+    setIsRefreshing(true);
+    try {
+      await refreshPackageTypesFromNodeModules(nodeId || id, pkg);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const types: CustomTypeItem[] = useMemo(
     () => (data && Array.isArray(data.types) ? data.types : []),
     [data],
@@ -597,7 +830,7 @@ export const TypesConfig: React.FC<TypesConfigProps> = ({
     const list: string[] = [];
     allNodes.forEach((tn) => {
       if (tn.type === "types") {
-        const typeList = (tn.data?.types as CustomTypeItem[]) || [];
+        const typeList = tn.data?.types || [];
         typeList.forEach((item) => {
           if (
             item.name &&
@@ -664,6 +897,95 @@ export const TypesConfig: React.FC<TypesConfigProps> = ({
 
   return (
     <div className="flex flex-col gap-6 mt-6 pb-12">
+      {/* Package Header Banner if this is a Package Types Node */}
+      {isPackageNode && (
+        <div
+          className={cn(
+            "flex flex-col gap-2.5 p-3.5 rounded-xl border",
+            !isInstalled
+              ? "border-red-500/50 bg-red-500/10 text-red-900 dark:text-red-200"
+              : "border-border/60 bg-secondary/30 text-foreground",
+          )}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Package size={16} className={cn(!isInstalled ? "text-red-500" : "text-primary")} />
+              <div className="flex items-center gap-1.5 font-mono text-xs font-bold">
+                <span>{packageName || "Package Contract"}</span>
+                {packageVersion && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary font-normal text-muted-foreground">
+                    v{packageVersion}
+                  </span>
+                )}
+              </div>
+            </div>
+            <span
+              className={cn(
+                "text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider",
+                !isInstalled
+                  ? "bg-red-500 text-white"
+                  : "bg-primary/20 text-primary border border-primary/30",
+              )}
+            >
+              {!isInstalled ? "NOT INSTALLED" : "PACKAGE TYPES"}
+            </span>
+          </div>
+
+          {!isInstalled ? (
+            <div className="flex flex-col gap-2 pt-1">
+              <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 font-medium">
+                <AlertTriangle size={14} className="shrink-0" />
+                <span>
+                  {installError || "Saved to package.json. Run 'pnpm i' in your terminal to install:"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-black/60 dark:bg-black/90 font-mono text-[11px] text-emerald-400 border border-red-500/30">
+                <code className="select-all">{installCmd}</code>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 text-muted-foreground hover:text-white shrink-0 cursor-pointer"
+                  onClick={handleCopyInstall}
+                  title="Copy command"
+                >
+                  {copiedInstall ? (
+                    <Check size={13} className="text-emerald-400" />
+                  ) : (
+                    <Copy size={13} />
+                  )}
+                </Button>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1.5 border-red-500/30 text-red-700 dark:text-red-300 hover:bg-red-500/20 cursor-pointer mt-1"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+              >
+                <RefreshCw size={12} className={cn(isRefreshing && "animate-spin")} />
+                <span>{isRefreshing ? "Checking..." : "Check Again / Sync"}</span>
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40 mt-1">
+              <p className="text-[11px] text-muted-foreground leading-relaxed flex-1">
+                Inferred from <code>node_modules/{packageName}</code>. Use <strong>Extend Type</strong> to create an editable custom model.
+              </p>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 text-[10px] gap-1 shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+              >
+                <RefreshCw size={11} className={cn(isRefreshing && "animate-spin")} />
+                <span>{isRefreshing ? "Syncing..." : "Re-sync"}</span>
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Type Navigator Bar if multiple types exist */}
       <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl border bg-card/50 shadow-sm">
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -687,19 +1009,22 @@ export const TypesConfig: React.FC<TypesConfigProps> = ({
           </Select>
         </div>
 
-        <Button
-          size="sm"
-          variant="secondary"
-          className="h-7 text-[10px] gap-1 rounded-full px-3 shrink-0"
-          onClick={handleAddType}
-        >
-          <Plus size={12} /> Add Type
-        </Button>
+        {!isPackageNode && (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="h-7 text-[10px] gap-1 rounded-full px-3 shrink-0"
+            onClick={handleAddType}
+          >
+            <Plus size={12} /> Add Type
+          </Button>
+        )}
       </div>
 
       {currentType ? (
         <TypeEditorForm
           key={currentType.id}
+          nodeId={nodeId || id}
           currentType={currentType}
           otherCustomTypes={otherCustomTypes}
           onUpdateCurrentType={handleUpdateCurrentType}
@@ -708,11 +1033,15 @@ export const TypesConfig: React.FC<TypesConfigProps> = ({
       ) : (
         <div className="flex flex-col items-center justify-center p-12 rounded-xl border border-dashed text-center gap-3">
           <p className="text-sm text-muted-foreground">
-            No types defined on this node yet.
+            {isPackageNode
+              ? "No type definitions cataloged for this package yet."
+              : "No types defined on this node yet."}
           </p>
-          <Button size="sm" onClick={handleAddType} className="text-xs">
-            <Plus size={14} className="mr-1" /> Add Type
-          </Button>
+          {!isPackageNode && (
+            <Button size="sm" onClick={handleAddType} className="text-xs">
+              <Plus size={14} className="mr-1" /> Add Type
+            </Button>
+          )}
         </div>
       )}
     </div>

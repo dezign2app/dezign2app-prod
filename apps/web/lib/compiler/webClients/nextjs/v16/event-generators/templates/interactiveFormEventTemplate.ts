@@ -1,5 +1,17 @@
 import { ResolvedEventParameters } from "../types";
 
+function resolveActionLibImports(libraries?: string[]): string {
+  if (!libraries || libraries.length === 0) return "";
+  const lines: string[] = [];
+  for (const lib of libraries) {
+    const clean = lib.trim();
+    if (!clean) continue;
+    const safeId = clean.replace(/^@/, "").replace(/[^a-zA-Z0-9]/g, "_").replace(/^_+/, "");
+    lines.push(`import * as ${safeId} from "${clean}";`);
+  }
+  return lines.length > 0 ? `${lines.join("\n")}\n` : "";
+}
+
 export function generateInteractiveFormEventTemplate({
   componentName,
   eventName,
@@ -9,6 +21,7 @@ export function generateInteractiveFormEventTemplate({
   requireAuth = true,
   typeDefs,
   params,
+  libraries = [],
 }: {
   componentName: string;
   eventName: string;
@@ -18,6 +31,7 @@ export function generateInteractiveFormEventTemplate({
   requireAuth?: boolean;
   typeDefs: string[];
   params: ResolvedEventParameters;
+  libraries?: string[];
 }): string {
   const {
     mergedPathParams,
@@ -36,6 +50,8 @@ export function generateInteractiveFormEventTemplate({
     defaultRawJsonString,
   } = params;
 
+  const libImports = resolveActionLibImports(libraries);
+
   return `"use client";
 
 import React, { useState, useEffect } from "react";
@@ -44,7 +60,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@workspace
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Textarea } from "@workspace/ui/components/textarea";
-${requireAuth ? `import { getAuthBearerToken } from "@/lib/auth-token";\n` : ""}
+${libImports}${requireAuth ? `import { getAuthBearerToken } from "@/lib/auth-token";\n` : ""}
 ${typeDefs.join("\n\n")}
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
@@ -113,8 +129,7 @@ ${hasBodyFields ? `      // Form fields payload
           return;
         }
       }
-` : ""}
-      await onTrigger?.(
+` : ""}      await onTrigger?.(
         "${eventName}",
         "${eventType}",
         finalUrl,
