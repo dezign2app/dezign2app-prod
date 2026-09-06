@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { NodeProps, Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
-import { Braces, Settings, Trash, Plus, Copy, Lock, ArrowUpRight, AlertCircle, Package, RefreshCw } from "lucide-react";
+import { Braces, Settings, Trash, Plus, Copy, Lock, ArrowUpRight, AlertCircle, Package, RefreshCw, ChevronDown } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -14,6 +14,163 @@ import {
 import type { CustomTypeItem } from "@workspace/canvas/types";
 import { createExtendedTypeNode, refreshPackageTypesFromNodeModules } from "@/lib/stores/backendCanvas/packageTypesSync";
 import { toast } from "sonner";
+
+// ---------------------------------------------------------------------------
+// TypeRow – extracted so it can be rendered in both the pinned + scroll areas
+// ---------------------------------------------------------------------------
+interface TypeRowProps {
+  item: CustomTypeItem;
+  isConnected: boolean;  // has an active outgoing edge OR extendedFrom
+  incoming: boolean;
+  outgoing: boolean;
+  isPackageNode: boolean;
+  onOpenConfig: (e: React.MouseEvent) => void;
+  onExtend: (e: React.MouseEvent) => void;
+  onDelete?: (e: React.MouseEvent) => void;
+}
+
+const TypeRow = React.memo(function TypeRow({
+  item,
+  isConnected,
+  incoming,
+  outgoing,
+  isPackageNode,
+  onOpenConfig,
+  onExtend,
+  onDelete,
+}: TypeRowProps) {
+  const fieldCount = React.useMemo(() => {
+    if (item.kind === "enum") return `${item.enumValues?.length ?? 0} vals`;
+    if (item.fields && item.fields.length > 0) return `${item.fields.length} props`;
+    const src = item.rawCode || item.typeAliasValue || "";
+    const bodyStart = src.indexOf("{");
+    const bodyEnd = src.lastIndexOf("}");
+    if (bodyStart !== -1 && bodyEnd > bodyStart) {
+      const count = (src.slice(bodyStart + 1, bodyEnd).match(/;/g) || []).length;
+      return count > 0 ? `~${count} props` : "alias";
+    }
+    return "alias";
+  }, [item]);
+
+  return (
+    <div
+      className={cn(
+        "group/type relative flex items-center justify-between gap-1.5 px-2 py-1",
+        "bg-sidebar-accent/40 hover:bg-sidebar-accent/80 border border-sidebar-border/60",
+        "transition-colors text-xs",
+        isConnected && "border-l-2 border-l-purple-500/60",
+      )}
+      onClick={onOpenConfig}
+    >
+      {/* Target handle (left) */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id={`type-in-${item.id}`}
+        className={cn(
+          "!w-2 !h-2 !border !border-background -left-1 z-20 transition-all",
+          incoming || item.extendedFrom
+            ? "!bg-purple-400 !border-purple-200 !opacity-100 ring-2 ring-purple-500/30"
+            : "opacity-0 group-hover/type:opacity-100 hover:scale-125",
+          isPackageNode ? "!bg-emerald-400 hover:!bg-emerald-300" : "!bg-indigo-400 hover:!bg-indigo-300",
+        )}
+        style={{ top: "50%", transform: "translateY(-50%)" }}
+        title={`Input Handle: ${item.name}`}
+      />
+
+      {/* Source handle (right) */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id={`type-out-${item.id}`}
+        className={cn(
+          "!w-2 !h-2 !border !border-background -right-1 z-20 transition-all",
+          outgoing
+            ? "!bg-purple-400 !border-purple-200 !opacity-100 ring-2 ring-purple-500/30"
+            : "opacity-0 group-hover/type:opacity-100 hover:scale-125",
+          isPackageNode ? "!bg-emerald-400 hover:!bg-emerald-300" : "!bg-indigo-400 hover:!bg-indigo-300",
+        )}
+        style={{ top: "50%", transform: "translateY(-50%)" }}
+        title={`Output Handle: ${item.name}`}
+      />
+
+      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+        <span
+          className={cn(
+            "text-[8px] font-mono font-bold px-1.5 py-0.2 rounded uppercase shrink-0",
+            item.extendedFrom
+              ? "bg-purple-500/15 text-purple-400"
+              : isPackageNode
+                ? "bg-emerald-500/15 text-emerald-500 dark:text-emerald-400"
+                : "bg-indigo-500/15 text-indigo-500 dark:text-indigo-400",
+          )}
+        >
+          {item.kind === "interface" ? "intf" : item.kind === "enum" ? "enum" : "type"}
+        </span>
+        <span className="font-mono text-[11px] text-foreground font-semibold truncate">
+          {item.name}
+        </span>
+        {item.extendedFrom && (
+          <span
+            className="text-[7px] font-mono px-1 py-0.2 rounded bg-purple-500/15 text-purple-400 font-bold shrink-0 truncate max-w-[90px]"
+            title={`Extends ${item.extendedFrom}`}
+          >
+            EXTENDS
+          </span>
+        )}
+        {item.packageSource && !item.extendedFrom && (
+          <span
+            className="text-[7px] font-mono px-1 py-0.2 rounded bg-emerald-500/15 text-emerald-500 font-bold shrink-0"
+            title={`Imported from package: ${item.packageSource}`}
+          >
+            PKG
+          </span>
+        )}
+        {item.isReadOnly && (
+          <span title="Read-only package type" className="inline-flex items-center shrink-0">
+            <Lock size={10} className="text-muted-foreground/60" />
+          </span>
+        )}
+        <span className="text-[9px] text-muted-foreground/50 font-mono shrink-0">
+          {fieldCount}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-0.5 shrink-0">
+        {item.isExtendable !== false && (
+          <button
+            className={cn(
+              "p-1 rounded transition-colors cursor-pointer",
+              outgoing
+                ? "text-purple-400 bg-purple-500/15 hover:bg-purple-500/25"
+                : "text-muted-foreground/60 hover:text-purple-400 hover:bg-purple-500/15",
+            )}
+            onClick={onExtend}
+            title={outgoing ? `Type ${item.name} is extended` : `Extend ${item.name} into custom type`}
+          >
+            <ArrowUpRight size={12} />
+          </button>
+        )}
+        <button
+          className="p-1 rounded text-muted-foreground/60 hover:text-indigo-400 hover:bg-indigo-500/15 transition-colors cursor-pointer"
+          onClick={onOpenConfig}
+          title={`Configure ${item.name}`}
+        >
+          <Settings size={12} />
+        </button>
+        {onDelete && (
+          <button
+            className="p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover/type:opacity-100 cursor-pointer"
+            onClick={onDelete}
+            title={`Delete ${item.name}`}
+          >
+            <Trash size={11} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
 
 
 export const TypesNode = ({
@@ -42,8 +199,32 @@ export const TypesNode = ({
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const scope = data.scope || "global";
-  const typesList: CustomTypeItem[] = data.types || [];
+  const rawTypesList: CustomTypeItem[] = data.types || [];
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const COLLAPSED_THRESHOLD = 6;
+  const [isListCollapsed, setIsListCollapsed] = useState(true);
+
+  // Connected = has an active outgoing edge OR extends another type.
+  // These are pinned above the scroll area so their handles are never clipped.
+  const { connectedTypes, restTypes, totalCount } = React.useMemo(() => {
+    const connected: CustomTypeItem[] = [];
+    const rest: CustomTypeItem[] = [];
+    for (const t of rawTypesList) {
+      const hasOutgoing = edges.some(
+        (e) => e.source === id && e.sourceHandle === `type-out-${t.id}`,
+      );
+      if (t.extendedFrom || hasOutgoing) {
+        connected.push(t);
+      } else {
+        rest.push(t);
+      }
+    }
+    return { connectedTypes: connected, restTypes: rest, totalCount: rawTypesList.length };
+  }, [rawTypesList, edges, id]);
+
+  // Collapse only applies to the non-connected rest list
+  const shouldCollapse = restTypes.length > COLLAPSED_THRESHOLD;
 
   const handleRefresh = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -57,10 +238,10 @@ export const TypesNode = ({
     }
   };
 
-  // Re-calculate XYFlow handle bounds whenever typesList changes
+  // Re-calculate XYFlow handle bounds whenever the types list changes
   useEffect(() => {
     updateNodeInternals(id);
-  }, [id, typesList, updateNodeInternals]);
+  }, [id, rawTypesList, updateNodeInternals]);
 
   React.useEffect(() => {
     setName(data.label || "Custom Types");
@@ -105,7 +286,7 @@ export const TypesNode = ({
       id,
       nodeId: id,
       type: "types",
-      selectedTypeId: typesList[0]?.id,
+      selectedTypeId: (connectedTypes[0] ?? restTypes[0])?.id,
     });
   };
 
@@ -120,7 +301,7 @@ export const TypesNode = ({
     const newTypeId = `type-${Date.now()}`;
     const newType: CustomTypeItem = {
       id: newTypeId,
-      name: `Type${typesList.length + 1}`,
+      name: `Type${rawTypesList.length + 1}`,
       kind: "interface",
       description: "",
       fields: [
@@ -128,7 +309,7 @@ export const TypesNode = ({
         { id: `f-${Date.now()}-2`, name: "name", type: "string", required: true, isArray: false },
       ],
     };
-    const updated = [...typesList, newType];
+    const updated = [...rawTypesList, newType];
     updateNode(id, {
       data: {
         ...data,
@@ -157,7 +338,7 @@ export const TypesNode = ({
   // Delete a specific type and any edges attached to it
   const handleDeleteType = (typeId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updated = typesList.filter((t) => t.id !== typeId);
+    const updated = rawTypesList.filter((t) => t.id !== typeId);
     updateNode(id, {
       data: {
         ...data,
@@ -283,6 +464,20 @@ export const TypesNode = ({
               {hasInstallError && (
                 <span className="text-[7px] font-mono px-1 py-0.2 rounded font-bold bg-red-500/15 text-red-400 border border-red-500/30">
                   NOT INSTALLED
+                </span>
+              )}
+
+              {/* Type count badge */}
+              {totalCount > 0 && (
+                <span
+                  className={cn(
+                    "text-[7px] font-mono px-1.5 py-0.2 rounded-full font-bold tabular-nums",
+                    isPackageNode
+                      ? "bg-emerald-500/10 text-emerald-500/80"
+                      : "bg-indigo-500/10 text-indigo-500/80",
+                  )}
+                >
+                  {totalCount}
                 </span>
               )}
             </div>
@@ -411,169 +606,128 @@ export const TypesNode = ({
         </div>
       )}
 
-      {/* Body: List of defined types with individual outgoing and incoming handles to each type */}
+      {/* Body: types list split into pinned (connected) + collapsible (rest) */}
       <div className="flex flex-col border-t border-border/50">
-        {typesList.length > 0 ? (
+        {totalCount > 0 ? (
           <>
-            {typesList.map((item) => {
-              const incoming = hasIncomingEdge(item.id);
-              const outgoing = hasOutgoingEdge(item.id);
-
-              return (
-                <div
-                  key={item.id}
-                  className="group/type relative flex items-center justify-between gap-1.5 px-2 py-1 bg-sidebar-accent/40 hover:bg-sidebar-accent/80 border border-sidebar-border/60 transition-colors text-xs"
-                  onClick={(e) => handleOpenConfigForType(item.id, e)}
-                >
-                  {/* Row Target Handle (Left) - Connects inheritance from base type or external type */}
-                  <Handle
-                    type="target"
-                    position={Position.Left}
-                    id={`type-in-${item.id}`}
-                    className={cn(
-                      "!w-2 !h-2 !border !border-background -left-1 z-20 transition-all",
-                      incoming || item.extendedFrom
-                        ? "!bg-purple-400 !border-purple-200 !opacity-100 ring-2 ring-purple-500/30"
-                        : "opacity-0 group-hover/type:opacity-100 hover:scale-125",
-                      isPackageNode
-                        ? "!bg-emerald-400 hover:!bg-emerald-300"
-                        : "!bg-indigo-400 hover:!bg-indigo-300",
-                    )}
-                    style={{ top: "50%", transform: "translateY(-50%)" }}
-                    title={`Input Handle: ${item.name}`}
-                  />
-
-                  {/* Row Source Handle (Right) - Connects extension outwards or type reference */}
-                  <Handle
-                    type="source"
-                    position={Position.Right}
-                    id={`type-out-${item.id}`}
-                    className={cn(
-                      "!w-2 !h-2 !border !border-background -right-1 z-20 transition-all",
-                      outgoing
-                        ? "!bg-purple-400 !border-purple-200 !opacity-100 ring-2 ring-purple-500/30"
-                        : "opacity-0 group-hover/type:opacity-100 hover:scale-125",
-                      isPackageNode
-                        ? "!bg-emerald-400 hover:!bg-emerald-300"
-                        : "!bg-indigo-400 hover:!bg-indigo-300",
-                    )}
-                    style={{ top: "50%", transform: "translateY(-50%)" }}
-                    title={`Output Handle: ${item.name}`}
-                  />
-
-                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                    <span
-                      className={cn(
-                        "text-[8px] font-mono font-bold px-1.5 py-0.2 rounded uppercase shrink-0",
-                        item.extendedFrom
-                          ? "bg-purple-500/15 text-purple-400"
-                          : isPackageNode
-                            ? "bg-emerald-500/15 text-emerald-500 dark:text-emerald-400"
-                            : "bg-indigo-500/15 text-indigo-500 dark:text-indigo-400",
-                      )}
-                    >
-                      {item.kind === "interface"
-                        ? "intf"
-                        : item.kind === "enum"
-                          ? "enum"
-                          : "type"}
+            {/* ── PINNED SECTION: Connected / extended types ──────────────────
+                These are always rendered outside any overflow container so
+                xyflow can correctly position edge handles regardless of scroll. */}
+            {connectedTypes.length > 0 && (
+              <div className="flex flex-col">
+                {connectedTypes.length > 0 && restTypes.length > 0 && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 border-b border-border/30 bg-purple-500/5">
+                    <span className="text-[7px] uppercase font-bold tracking-wider text-purple-400/70">
+                      Connected
                     </span>
-                    <span className="font-mono text-[11px] text-foreground font-semibold truncate">
-                      {item.name}
-                    </span>
-                    {item.extendedFrom && (
-                      <span
-                        className="text-[7px] font-mono px-1 py-0.2 rounded bg-purple-500/15 text-purple-400 font-bold shrink-0 truncate max-w-[90px]"
-                        title={`Extends ${item.extendedFrom}`}
-                      >
-                        EXTENDS
-                      </span>
-                    )}
-                    {item.packageSource && !item.extendedFrom && (
-                      <span
-                        className="text-[7px] font-mono px-1 py-0.2 rounded bg-emerald-500/15 text-emerald-500 font-bold shrink-0"
-                        title={`Imported from package: ${item.packageSource}`}
-                      >
-                        PKG
-                      </span>
-                    )}
-                    {item.isReadOnly && (
-                      <span title="Read-only package type" className="inline-flex items-center shrink-0">
-                        <Lock size={10} className="text-muted-foreground/60" />
-                      </span>
-                    )}
-                    <span className="text-[9px] text-muted-foreground/50 font-mono shrink-0">
-                      {item.kind === "enum"
-                        ? `${item.enumValues?.length || 0} vals`
-                        : (() => {
-                            if (item.fields && item.fields.length > 0) {
-                              return `${item.fields.length} props`;
-                            }
-                            // Count property declarations by semicolons inside the type body
-                            const src = item.rawCode || item.typeAliasValue || "";
-                            // Extract the body between first { and last }
-                            const bodyStart = src.indexOf("{");
-                            const bodyEnd = src.lastIndexOf("}");
-                            if (bodyStart !== -1 && bodyEnd > bodyStart) {
-                              const body = src.slice(bodyStart + 1, bodyEnd);
-                              const count = (body.match(/;/g) || []).length;
-                              return count > 0 ? `~${count} props` : "alias";
-                            }
-                            return "alias";
-                          })()}
+                    <span className="text-[7px] font-mono text-purple-400/50">
+                      {connectedTypes.length}
                     </span>
                   </div>
+                )}
+                {connectedTypes.map((item) => (
+                  <TypeRow
+                    key={item.id}
+                    item={item}
+                    isConnected
+                    incoming={hasIncomingEdge(item.id)}
+                    outgoing={hasOutgoingEdge(item.id)}
+                    isPackageNode={isPackageNode}
+                    onOpenConfig={(e) => handleOpenConfigForType(item.id, e)}
+                    onExtend={(e) => { e.stopPropagation(); createExtendedTypeNode(id, item.id); }}
+                    onDelete={
+                      !item.isReadOnly && !isPackageNode
+                        ? (e) => handleDeleteType(item.id, e)
+                        : undefined
+                    }
+                  />
+                ))}
+              </div>
+            )}
 
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    {/* Extend Type button */}
-                    {item.isExtendable !== false && (
-                      <button
-                        className={cn(
-                          "p-1 rounded transition-colors cursor-pointer",
-                          outgoing
-                            ? "text-purple-400 bg-purple-500/15 hover:bg-purple-500/25"
-                            : "text-muted-foreground/60 hover:text-purple-400 hover:bg-purple-500/15",
-                        )}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          createExtendedTypeNode(id, item.id);
-                        }}
-                        title={
-                          outgoing
-                            ? `Type ${item.name} is extended`
-                            : `Extend ${item.name} into custom type`
+            {/* ── SCROLLABLE SECTION: Rest of types (no active connections) ── */}
+            {restTypes.length > 0 && (
+              <div className="flex flex-col">
+                {connectedTypes.length > 0 && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 border-t border-b border-border/30 bg-muted/20">
+                    <span className={cn(
+                      "text-[7px] uppercase font-bold tracking-wider",
+                      isPackageNode ? "text-emerald-500/60" : "text-indigo-400/60",
+                    )}>
+                      All types
+                    </span>
+                    <span className={cn(
+                      "text-[7px] font-mono",
+                      isPackageNode ? "text-emerald-500/40" : "text-indigo-400/40",
+                    )}>
+                      {restTypes.length}
+                    </span>
+                  </div>
+                )}
+
+                <div className="relative">
+                  <div
+                    className={cn(
+                      "flex flex-col overflow-y-auto transition-all duration-200",
+                      shouldCollapse && isListCollapsed ? "max-h-[180px]" : "max-h-none",
+                    )}
+                  >
+                    {restTypes.map((item) => (
+                      <TypeRow
+                        key={item.id}
+                        item={item}
+                        isConnected={false}
+                        incoming={hasIncomingEdge(item.id)}
+                        outgoing={hasOutgoingEdge(item.id)}
+                        isPackageNode={isPackageNode}
+                        onOpenConfig={(e) => handleOpenConfigForType(item.id, e)}
+                        onExtend={(e) => { e.stopPropagation(); createExtendedTypeNode(id, item.id); }}
+                        onDelete={
+                          !item.isReadOnly && !isPackageNode
+                            ? (e) => handleDeleteType(item.id, e)
+                            : undefined
                         }
-                      >
-                        <ArrowUpRight size={12} />
-                      </button>
-                    )}
-                    {/* Per-type Gear configuration button */}
-                    <button
-                      className="p-1 rounded text-muted-foreground/60 hover:text-indigo-400 hover:bg-indigo-500/15 transition-colors cursor-pointer"
-                      onClick={(e) => handleOpenConfigForType(item.id, e)}
-                      title={`Configure ${item.name}`}
-                    >
-                      <Settings size={12} />
-                    </button>
-                    {/* Delete type button (only for non-package types) */}
-                    {!item.isReadOnly && !isPackageNode && (
-                      <button
-                        className="p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover/type:opacity-100 cursor-pointer"
-                        onClick={(e) => handleDeleteType(item.id, e)}
-                        title={`Delete ${item.name}`}
-                      >
-                        <Trash size={11} />
-                      </button>
-                    )}
+                      />
+                    ))}
                   </div>
-                </div>
-              );
-            })}
 
-            {/* Quick add type button at bottom of list - ONLY for custom editable types */}
+                  {/* Fade overlay when collapsed */}
+                  {shouldCollapse && isListCollapsed && (
+                    <div className="absolute bottom-0 left-0 right-0 h-8 pointer-events-none bg-gradient-to-t from-card/95 via-card/60 to-transparent" />
+                  )}
+                </div>
+
+                {/* Show all / Collapse toggle */}
+                {shouldCollapse && (
+                  <button
+                    className={cn(
+                      "w-full flex items-center justify-center gap-1 py-1 text-[9px] font-semibold transition-colors border-t border-border/40",
+                      isPackageNode
+                        ? "text-emerald-500/70 hover:text-emerald-400 hover:bg-emerald-500/5"
+                        : "text-indigo-500/70 hover:text-indigo-400 hover:bg-indigo-500/5",
+                    )}
+                    onClick={(e) => { e.stopPropagation(); setIsListCollapsed((v) => !v); }}
+                  >
+                    {isListCollapsed ? (
+                      <>
+                        <span>Show all {restTypes.length} types</span>
+                        <ChevronDown size={10} />
+                      </>
+                    ) : (
+                      <>
+                        <span>Collapse</span>
+                        <ChevronDown size={10} className="rotate-180" />
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Add type button – custom types only */}
             {!isPackageNode && (
               <button
-                className="w-full flex items-center justify-center gap-1.5 py-1 text-[10px] font-medium text-muted-foreground/70 hover:text-indigo-400 hover:bg-indigo-500/5 transition-all mt-0.5"
+                className="w-full flex items-center justify-center gap-1.5 py-1 text-[10px] font-medium text-muted-foreground/70 hover:text-indigo-400 hover:bg-indigo-500/5 transition-all border-t border-border/30"
                 onClick={handleAddType}
               >
                 <Plus size={12} />
