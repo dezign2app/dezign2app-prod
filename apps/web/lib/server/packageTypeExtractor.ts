@@ -1,14 +1,11 @@
 import fs from "fs";
 import path from "path";
 import ts from "typescript";
-import { createRequire } from "module";
 import type {
   CustomTypeItem,
   CustomTypeField,
   CustomTypeKind,
 } from "@workspace/canvas/types";
-
-const nodeRequire = createRequire(import.meta.url);
 
 export interface PackageTypeExtractionResult {
   installed: boolean;
@@ -33,23 +30,25 @@ function resolvePackageDirectory(pkg: string): string | null {
   const cwd = process.cwd();
   const pkgParts = pkg.split("/");
 
-  // 1. Try Node's module resolution first with workspace roots
-  try {
-    const pkgJsonResolved = nodeRequire.resolve(`${pkg}/package.json`, {
-      paths: [
-        cwd,
-        path.join(cwd, "apps/web"),
-        path.join(cwd, "packages/backend"),
-        path.resolve(cwd, ".."),
-        path.resolve(cwd, "../.."),
-      ],
-    });
-    const dir = path.dirname(pkgJsonResolved);
-    if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
-      return dir;
+  // 1. Search upwards in node_modules from potential workspace roots (pure fs, no Turbopack bundler warnings)
+  const searchRoots = [
+    cwd,
+    path.join(cwd, "apps", "web"),
+    path.join(cwd, "packages", "backend"),
+  ];
+
+  for (const root of searchRoots) {
+    let currentDir = path.resolve(root);
+    while (true) {
+      const candidateDir = path.join(currentDir, "node_modules", ...pkgParts);
+      const pkgJsonPath = path.join(candidateDir, "package.json");
+      if (fs.existsSync(pkgJsonPath)) {
+        return candidateDir;
+      }
+      const parentDir = path.dirname(currentDir);
+      if (parentDir === currentDir) break;
+      currentDir = parentDir;
     }
-  } catch {
-    // Continue to manual candidate paths
   }
 
   // 2. Direct candidate directory checks
