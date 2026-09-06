@@ -41,6 +41,7 @@ const isPublicRoute = createRouteMatcher([
   "/favicon.ico",
   "/api/public(.*)",
   "/api/auth(.*)",
+  "/api/packages(.*)",
 ]);
 
 const isExcludedDesktopRoute = createRouteMatcher([

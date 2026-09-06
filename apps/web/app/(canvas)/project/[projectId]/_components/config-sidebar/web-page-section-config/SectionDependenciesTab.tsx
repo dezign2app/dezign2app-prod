@@ -5,106 +5,128 @@ import {
   Package,
   Plus,
   Trash,
-  Info,
   Check,
   Sparkles,
-  Table,
-  Box,
-  BarChart3,
-  LayoutGrid,
-  FormInput,
-  MessageSquare,
-  type LucideIcon,
 } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
-import { CATEGORIZED_LIBRARIES, SectionIconName } from "@workspace/canvas";
 import { cn } from "@workspace/ui/lib/utils";
-
-const CAT_ICON_MAP: Record<SectionIconName, LucideIcon> = {
-  "sparkles": Sparkles,
-  "table": Table,
-  "box": Box,
-  "bar-chart-3": BarChart3,
-  "package": Package,
-  "layout-grid": LayoutGrid,
-  "form-input": FormInput,
-  "message-square": MessageSquare,
-};
 
 export interface SectionDependenciesTabProps {
   libraries: string[];
+  availablePackages?: { name: string; version?: string; isDev?: boolean }[];
   onAddLibrary: (lib: string) => void;
   onRemoveLibrary: (lib: string) => void;
 }
 
 export const SectionDependenciesTab: React.FC<SectionDependenciesTabProps> = ({
   libraries,
+  availablePackages = [],
   onAddLibrary,
   onRemoveLibrary,
 }) => {
   const [newLibInput, setNewLibInput] = useState("");
 
   const handleAdd = () => {
-    onAddLibrary(newLibInput);
+    if (!newLibInput.trim()) return;
+    onAddLibrary(newLibInput.trim());
     setNewLibInput("");
   };
 
   return (
-    <div className="flex-1 p-4 space-y-4 overflow-y-auto m-0 outline-none">
+    <div className="flex-1 p-4 space-y-5 overflow-y-auto m-0 outline-none">
       <div className="space-y-1">
         <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-          <Package size={13} className="text-muted-foreground" /> Third-Party Dependencies
+          <Package size={13} className="text-muted-foreground" /> Section Dependencies
         </span>
         <p className="text-[11px] text-muted-foreground">
-          Declared packages are automatically compiled into <code className="font-mono text-foreground/80">package.json</code> and imported into this component.
+          Select packages for this section. They are automatically added to <code className="font-mono text-foreground/80">package.json</code> for the application.
         </p>
       </div>
 
-      {/* Current Added Libraries Box */}
-      <div className="space-y-2 p-3.5 rounded-xl bg-secondary/20 border border-border/50">
+      {/* 1. Available Packages from Parent Web App (NodePackageManager) */}
+      {availablePackages.length > 0 && (
+        <div className="space-y-2 p-3 rounded-xl bg-primary/5 border border-primary/20">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
+              <Sparkles size={12} /> Installed in Web App
+            </span>
+            <span className="text-[10px] text-muted-foreground font-mono">
+              {availablePackages.length} package(s)
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {availablePackages.map((pkg) => {
+              const isAttached = libraries.includes(pkg.name);
+              return (
+                <button
+                  key={pkg.name}
+                  type="button"
+                  onClick={() => (isAttached ? onRemoveLibrary(pkg.name) : onAddLibrary(pkg.name))}
+                  className={cn(
+                    "text-[10.5px] px-2.5 py-1 rounded-md font-mono border transition-all cursor-pointer flex items-center gap-1.5",
+                    isAttached
+                      ? "bg-primary text-primary-foreground border-primary font-medium shadow-xs"
+                      : "bg-background/80 hover:bg-primary/10 text-muted-foreground hover:text-foreground border-border/60"
+                  )}
+                  title={isAttached ? "Click to detach from section" : "Click to attach to section"}
+                >
+                  {isAttached ? <Check size={11} /> : <Plus size={11} className="opacity-60" />}
+                  <span>{pkg.name}</span>
+                  {pkg.version && (
+                    <span className={cn("text-[9px] opacity-70", isAttached ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                      {pkg.version}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 2. Configured Section Libraries */}
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-foreground">
-            Configured Section Packages
-          </span>
-          <span className="text-[10px] text-muted-foreground font-mono">
-            {libraries.length} added
+          <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+            <Package size={12} className="text-muted-foreground" /> Attached to Section ({libraries.length})
           </span>
         </div>
 
-        <div className="flex flex-wrap gap-1.5 min-h-[36px] p-2 rounded-lg bg-background/50 border border-border/40">
-          {libraries.length === 0 ? (
-            <span className="text-[10px] text-muted-foreground italic flex items-center gap-1">
-              <Info size={11} /> No custom packages declared. Add packages below.
-            </span>
-          ) : (
-            libraries.map((lib) => (
+        {libraries.length === 0 ? (
+          <div className="p-3 rounded-lg border border-dashed border-border/70 text-center text-xs text-muted-foreground italic bg-secondary/10">
+            No packages declared for this section yet. Select an installed package above or enter a package name below.
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {libraries.map((lib) => (
               <Badge
                 key={lib}
-                variant="outline"
-                className="text-[11px] py-0.5 px-2 gap-1.5 bg-secondary/70 text-foreground border-border/60 font-mono"
+                variant="secondary"
+                className="font-mono text-xs px-2.5 py-1 flex items-center gap-1.5 bg-secondary/70 border border-border/60"
               >
-                <Package size={10} className="text-muted-foreground" />
                 <span>{lib}</span>
                 <button
                   type="button"
                   onClick={() => onRemoveLibrary(lib)}
-                  className="hover:text-destructive cursor-pointer ml-0.5 text-muted-foreground"
+                  className="hover:text-destructive cursor-pointer text-muted-foreground hover:opacity-100"
+                  title={`Remove ${lib}`}
                 >
                   <Trash size={11} />
                 </button>
               </Badge>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Add Custom Package Input */}
         <div className="flex items-center gap-2 pt-1">
           <Input
             value={newLibInput}
             onChange={(e) => setNewLibInput(e.target.value)}
-            placeholder="Type package name (e.g. framer-motion, @xyflow/react)"
+            placeholder="Type package name..."
             className="h-8 text-xs font-mono bg-background/50 border-border/50"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -122,56 +144,6 @@ export const SectionDependenciesTab: React.FC<SectionDependenciesTabProps> = ({
             <Plus size={12} className="mr-1" /> Add
           </Button>
         </div>
-      </div>
-
-      {/* Categorized Package Suggestions */}
-      <div className="space-y-2.5">
-        <span className="text-xs font-semibold text-foreground">
-          Popular Curated Libraries
-        </span>
-
-        {CATEGORIZED_LIBRARIES.map((cat) => {
-          const CatIcon: LucideIcon =
-            (cat.iconName && CAT_ICON_MAP[cat.iconName]) || Package;
-          return (
-            <div
-              key={cat.category}
-              className="space-y-1.5 p-2.5 rounded-lg bg-secondary/15 border border-border/40"
-            >
-              <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                <CatIcon size={12} className="text-muted-foreground" />
-                <span>{cat.category}</span>
-              </div>
-
-              <div className="flex flex-wrap gap-1.5">
-                {cat.libs.map((lib) => {
-                  const isAdded = libraries.includes(lib);
-                  return (
-                    <button
-                      key={lib}
-                      type="button"
-                      onClick={() => (isAdded ? onRemoveLibrary(lib) : onAddLibrary(lib))}
-                      className={cn(
-                        "text-[10px] px-2 py-1 rounded-md font-mono border transition-all cursor-pointer flex items-center gap-1",
-                        isAdded
-                          ? "bg-secondary text-foreground border-border font-medium shadow-sm"
-                          : "bg-secondary/30 hover:bg-secondary/70 text-muted-foreground hover:text-foreground border-border/40",
-                      )}
-                    >
-                      {isAdded ? (
-                        <>
-                          <Check size={10} className="text-foreground" /> {lib}
-                        </>
-                      ) : (
-                        <>+ {lib}</>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
       </div>
     </div>
   );

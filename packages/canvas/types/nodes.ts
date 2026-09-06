@@ -34,7 +34,7 @@ import type {
   CanvasAuthNodeData,
 } from "./infrastructure";
 import type { Parameter } from "./simulation";
-import type { CustomTypeItem } from "./custom-types";
+import type { CustomTypeItem, CanvasTypesNodeData } from "./custom-types";
 export type BackendNodeType =
   | "service"
   | "database"
@@ -248,7 +248,8 @@ export type BackendNodeData = BaseNodeData &
       CanvasTransformerNodeData &
       CanvasTransformerRefNodeData &
       CanvasHookNodeData &
-      CanvasHookRefNodeData
+      CanvasHookRefNodeData &
+      CanvasTypesNodeData
   >;
 
 export type BackendNode = {

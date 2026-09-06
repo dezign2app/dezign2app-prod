@@ -197,6 +197,15 @@ export function classifyHandle(
     if (id === "auth-in" || id.startsWith("auth-in")) {
       return handleDirection === "source" ? "auth-out" : "auth-in";
     }
+    if (
+      id === "types-in" ||
+      id.startsWith("types-in") ||
+      id === "type-in" ||
+      id.startsWith("type-in") ||
+      id === "web-app-in"
+    ) {
+      return "type-in";
+    }
     return handleDirection === "source" ? "page-out" : "page-section-in";
   }
 
@@ -223,7 +232,13 @@ export function classifyHandle(
   }
 
   // --- Custom Types ---
-  if (id === "type-in" || id.startsWith("type-in") || id.startsWith("types-in")) {
+  if (
+    id === "type-in" ||
+    id.startsWith("type-in") ||
+    id.startsWith("types-in") ||
+    id === "service-in" ||
+    id === "web-app-in"
+  ) {
     return "type-in";
   }
   if (id === "type-out" || id.startsWith("type-out") || id.startsWith("types-out")) {

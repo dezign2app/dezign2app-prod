@@ -63,6 +63,7 @@ export function generateEventComponent(
       upperMethod: params.upperMethod,
       requireAuth,
       typeDefs,
+      libraries: eventItem?.libraries || [],
     });
   }
 
@@ -76,5 +77,6 @@ export function generateEventComponent(
     requireAuth,
     typeDefs,
     params,
+    libraries: eventItem?.libraries || [],
   });
 }

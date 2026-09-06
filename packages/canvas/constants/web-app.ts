@@ -104,8 +104,30 @@ export const SECTION_PRESETS: SectionPreset[] = [
     loadStrategy: "eager",
     libraries: ["lucide-react", "framer-motion"],
     defaultActions: [
-      { name: "onGetStarted", event: "click" },
-      { name: "onExploreDocs", event: "click" },
+      {
+        name: "onGetStarted",
+        event: "click",
+        description: "Primary CTA click handler triggering onboarding or sign-up",
+        requestBody: {
+          id: "rb-hero-get-started",
+          mode: "field_builder",
+          fields: [
+            { id: "f-hero-ref", name: "referralSource", type: "string", required: false, description: "Optional marketing campaign referral tag" },
+          ],
+        },
+      },
+      {
+        name: "onExploreDocs",
+        event: "click",
+        description: "Secondary CTA navigating to documentation or product tour",
+        requestBody: {
+          id: "rb-hero-docs",
+          mode: "field_builder",
+          fields: [
+            { id: "f-hero-section", name: "targetSection", type: "string", required: false, description: "Specific docs anchor section" },
+          ],
+        },
+      },
     ],
     defaultDesc: "Main landing hero section with headline, sub-headline, and primary action buttons.",
     defaultUiPrompt: "Sleek hero section with gradient typography, frosted glass background card, and glowing CTA buttons.",
@@ -119,9 +141,48 @@ export const SECTION_PRESETS: SectionPreset[] = [
     loadStrategy: "dynamic",
     libraries: ["@tanstack/react-table", "lucide-react", "zod"],
     defaultActions: [
-      { name: "onRowSelect", event: "click" },
-      { name: "onFilterChange", event: "change" },
-      { name: "onExportData", event: "click" },
+      {
+        name: "onRowSelect",
+        event: "click",
+        description: "Fires when user clicks or selects a row in the data grid",
+        requestBody: {
+          id: "rb-dt-row-select",
+          mode: "field_builder",
+          fields: [
+            { id: "f-dt-row-id", name: "rowId", type: "string", required: true, description: "Selected row unique identifier" },
+            { id: "f-dt-row-data", name: "rowData", type: "object", required: true, description: "Full table row record model" },
+          ],
+        },
+      },
+      {
+        name: "onFilterChange",
+        event: "change",
+        description: "Fires on table search filtering, column sort, or pagination change",
+        requestBody: {
+          id: "rb-dt-filter-change",
+          mode: "field_builder",
+          fields: [
+            { id: "f-dt-query", name: "searchQuery", type: "string", required: false, description: "Search query text filter" },
+            { id: "f-dt-sort-by", name: "sortBy", type: "string", required: false, description: "Column field to sort" },
+            { id: "f-dt-sort-order", name: "sortOrder", type: "string", required: false, description: "asc or desc" },
+            { id: "f-dt-page", name: "page", type: "number", required: true, description: "Current page index" },
+            { id: "f-dt-page-size", name: "pageSize", type: "number", required: true, description: "Page items size limit" },
+          ],
+        },
+      },
+      {
+        name: "onExportData",
+        event: "click",
+        description: "Exports filtered table dataset to CSV or JSON",
+        requestBody: {
+          id: "rb-dt-export",
+          mode: "field_builder",
+          fields: [
+            { id: "f-dt-format", name: "format", type: "string", required: true, description: "Export format (csv, json)" },
+            { id: "f-dt-filtered", name: "filteredOnly", type: "boolean", required: false, description: "Only export active filtered rows" },
+          ],
+        },
+      },
     ],
     defaultDesc: "High-performance tabular data viewer with search filtering and paginated query results.",
     defaultUiPrompt: "Modern dark themed data table with sticky headers, zebra rows, search bar, and badge status columns.",
@@ -135,8 +196,32 @@ export const SECTION_PRESETS: SectionPreset[] = [
     loadStrategy: "eager",
     libraries: ["zod", "lucide-react"],
     defaultActions: [
-      { name: "onSubmitForm", event: "submit" },
-      { name: "onResetForm", event: "click" },
+      {
+        name: "onSubmitForm",
+        event: "submit",
+        description: "Submits validated client-side form fields to API endpoint",
+        requestBody: {
+          id: "rb-form-submit",
+          mode: "field_builder",
+          fields: [
+            { id: "f-form-name", name: "name", type: "string", required: true, description: "User full name" },
+            { id: "f-form-email", name: "email", type: "string", required: true, description: "User email address" },
+            { id: "f-form-msg", name: "message", type: "string", required: true, description: "Form message or feedback" },
+          ],
+        },
+      },
+      {
+        name: "onResetForm",
+        event: "click",
+        description: "Clears input fields and resets validation error messages",
+        requestBody: {
+          id: "rb-form-reset",
+          mode: "field_builder",
+          fields: [
+            { id: "f-form-preserve-id", name: "preserveUserId", type: "boolean", required: false, description: "Keep user ID populated on reset" },
+          ],
+        },
+      },
     ],
     defaultDesc: "Structured input form handling user submissions with client-side Zod validation.",
     defaultUiPrompt: "Clean card with floating labels, responsive multi-column layout, and loading spinner on submit button.",
@@ -150,8 +235,25 @@ export const SECTION_PRESETS: SectionPreset[] = [
     loadStrategy: "dynamic",
     libraries: ["lucide-react", "date-fns"],
     defaultActions: [
-      { name: "onReceiveUpdate", event: "sse" },
-      { name: "onSendMessage", event: "submit" },
+      {
+        name: "onReceiveUpdate",
+        event: "sse",
+        description: "Subscribes to live server-sent events for incoming feed items",
+      },
+      {
+        name: "onSendMessage",
+        event: "submit",
+        description: "Sends real-time chat or activity post into live room stream",
+        requestBody: {
+          id: "rb-rt-send",
+          mode: "field_builder",
+          fields: [
+            { id: "f-rt-content", name: "content", type: "string", required: true, description: "Message body text" },
+            { id: "f-rt-channel", name: "channelId", type: "string", required: true, description: "Target channel or feed room key" },
+            { id: "f-rt-sender", name: "senderId", type: "string", required: false, description: "Sender user identifier" },
+          ],
+        },
+      },
     ],
     defaultDesc: "Live streaming event feed displaying real-time updates and notifications.",
     defaultUiPrompt: "Dark chat message stream with auto-scrolling container, message bubbles, and bottom action bar.",
@@ -165,8 +267,31 @@ export const SECTION_PRESETS: SectionPreset[] = [
     loadStrategy: "dynamic",
     libraries: ["recharts", "lucide-react"],
     defaultActions: [
-      { name: "onTimeframeChange", event: "change" },
-      { name: "onRefreshMetrics", event: "click" },
+      {
+        name: "onTimeframeChange",
+        event: "change",
+        description: "Updates metric aggregation window (7d, 30d, 90d, 1y)",
+        requestBody: {
+          id: "rb-kpi-timeframe",
+          mode: "field_builder",
+          fields: [
+            { id: "f-kpi-range", name: "timeframe", type: "string", required: true, description: "Selected timeframe (7d, 30d, 90d, 1y)" },
+            { id: "f-kpi-metric", name: "metricId", type: "string", required: false, description: "Optional specific metric card ID" },
+          ],
+        },
+      },
+      {
+        name: "onRefreshMetrics",
+        event: "click",
+        description: "Re-fetches latest KPI calculations bypassing cache",
+        requestBody: {
+          id: "rb-kpi-refresh",
+          mode: "field_builder",
+          fields: [
+            { id: "f-kpi-force", name: "forceFresh", type: "boolean", required: false, description: "Bypass cached metric summaries" },
+          ],
+        },
+      },
     ],
     defaultDesc: "Summary dashboard metrics showing KPI stat cards and visual trend charts.",
     defaultUiPrompt: "Responsive 4-column metric cards with sparklines, percentage change indicators, and interactive area chart.",
@@ -180,8 +305,31 @@ export const SECTION_PRESETS: SectionPreset[] = [
     loadStrategy: "dynamic-no-ssr",
     libraries: ["@xyflow/react", "lucide-react"],
     defaultActions: [
-      { name: "onSelectElement", event: "click" },
-      { name: "onSaveCanvas", event: "click" },
+      {
+        name: "onSelectElement",
+        event: "click",
+        description: "Selects a node or edge element on the visual canvas graph",
+        requestBody: {
+          id: "rb-canvas-select",
+          mode: "field_builder",
+          fields: [
+            { id: "f-cv-elem-id", name: "elementId", type: "string", required: true, description: "Selected canvas item ID" },
+            { id: "f-cv-elem-type", name: "elementType", type: "string", required: true, description: "Node or edge type" },
+          ],
+        },
+      },
+      {
+        name: "onSaveCanvas",
+        event: "click",
+        description: "Serializes canvas node graph snapshot and coordinates",
+        requestBody: {
+          id: "rb-canvas-save",
+          mode: "field_builder",
+          fields: [
+            { id: "f-cv-snapshot", name: "canvasData", type: "object", required: true, description: "Graph node & edge snapshot payload" },
+          ],
+        },
+      },
     ],
     defaultDesc: "Full-screen interactive visual canvas workspace for node graph manipulation.",
     defaultUiPrompt: "Infinite grid canvas with custom node templates, floating toolbar, and mini-map overlay.",

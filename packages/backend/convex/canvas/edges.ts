@@ -5,6 +5,8 @@ import { isBackendNode } from "@workspace/canvas/utils";
 import { RULES_VERSION } from "@workspace/canvas/constants";
 import { backendEdgeDataValidator } from "../schema/canvasValidators";
 
+// Validates and upserts canvas backend edges with strict connection taxonomy
+
 export const upsertBackendEdge = mutation({
   args: {
     projectId: v.id("projects"),

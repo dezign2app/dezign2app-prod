@@ -4,3 +4,7 @@ export * from "./SectionActionsTab";
 export * from "./SectionGeneralTab";
 export * from "./SectionDependenciesTab";
 export * from "./SectionUiDesignTab";
+export * from "./SectionPresetConfirmDialog";
+export * from "./SectionTabsNav";
+export * from "./SectionNotFoundState";
+export * from "./hooks";

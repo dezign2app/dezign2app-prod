@@ -21,7 +21,14 @@ export interface SectionPreset {
   renderMode: "server" | "client";
   loadStrategy: "eager" | "dynamic" | "dynamic-no-ssr";
   libraries: string[];
-  defaultActions: { name: string; event: string }[];
+  defaultActions: {
+    name: string;
+    event: string;
+    description?: string;
+    requestBody?: Schema;
+    requestBodyMode?: "field_builder" | "raw_json";
+    queryParams?: Parameter[];
+  }[];
   defaultDesc: string;
   defaultUiPrompt: string;
 }
