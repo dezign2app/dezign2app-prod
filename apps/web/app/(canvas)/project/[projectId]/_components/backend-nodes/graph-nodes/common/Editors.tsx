@@ -23,8 +23,8 @@ import {
   ProcessingStep,
   JSONValue,
   PROCESSING_STEP_OPERATIONS,
-  PARAMETER_TYPES,
 } from "@/types/canvas";
+import { TypeCombobox } from "../../../config-sidebar/TypeCombobox";
 import { generateId } from "./utils";
 import { LocalInput, LocalTextarea } from "./LocalInput";
 import { parseRelaxedJson } from "@/lib/compiler/generators/routeGenerator/jsonInterpolation";
@@ -263,22 +263,12 @@ export const ParameterEditor = ({
                   onBlur={(e) => updateParam(p.id, { name: e.target.value })}
                 />
               )}
-              <Select
-                value={p.type}
+              <TypeCombobox
+                value={p.type || "string"}
                 onValueChange={(v) => updateParam(p.id, { type: v })}
                 disabled={isAuthManaged}
-              >
-                <SelectTrigger className={cn("h-7 w-[95px] text-xs py-0 nodrag bg-secondary/50 border-none font-mono", isAuthManaged && "opacity-80 cursor-not-allowed")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PARAMETER_TYPES.map((type) => (
-                    <SelectItem key={type} value={type} className="text-xs">
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                className={cn("w-[110px]", isAuthManaged && "opacity-80 cursor-not-allowed")}
+              />
               <Button
                 variant="ghost"
                 size="sm"
@@ -611,21 +601,11 @@ export const SchemaEditor = ({
                         onBlur={(e) => updateField(f.id, { name: e.target.value })}
                       />
                     )}
-                    <Select
-                      value={f.type}
+                    <TypeCombobox
+                      value={f.type || "string"}
                       onValueChange={(v) => updateField(f.id, { type: v })}
-                    >
-                      <SelectTrigger className="h-7 w-[95px] text-xs py-0 nodrag bg-secondary/50 border-none font-mono">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PARAMETER_TYPES.map((t) => (
-                          <SelectItem key={t} value={t} className="text-xs">
-                            {t}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      className="w-[110px]"
+                    />
                     <Button
                       type="button"
                       variant="ghost"

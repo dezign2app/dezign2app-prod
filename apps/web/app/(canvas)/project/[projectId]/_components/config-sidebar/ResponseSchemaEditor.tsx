@@ -1,17 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Plus, Trash, Sparkles, Check, Database } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
 import { Input } from "@workspace/ui/components/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
 import { LocalInput } from "../backend-nodes/graph-nodes/common";
-import { BackendNode, PARAMETER_TYPES } from "@/types/canvas";
+import { BackendNode } from "@/types/canvas";
+import { TypeCombobox } from "./TypeCombobox";
 
 export interface ResponseField {
   id: string;
@@ -132,6 +126,36 @@ export const ResponseSchemaEditor: React.FC<ResponseSchemaEditorProps> = ({
     updateField(fieldId, { selectedColumns: newCols });
   };
 
+  const extraDbTypes = useMemo(() => {
+    if (!availableTableNodes || availableTableNodes.length === 0) return [];
+    return availableTableNodes.flatMap((tbl) => [
+      {
+        name: `db:${tbl.id}:single`,
+        kind: "database" as const,
+        category: "database" as const,
+        sourceLabel: `DB: ${tbl.label} (Full)`,
+      },
+      {
+        name: `db:${tbl.id}:array`,
+        kind: "database" as const,
+        category: "database" as const,
+        sourceLabel: `DB: ${tbl.label}[] (Full)`,
+      },
+      {
+        name: `db:${tbl.id}:partial_single`,
+        kind: "database" as const,
+        category: "database" as const,
+        sourceLabel: `DB: ${tbl.label} (Partial Pick)`,
+      },
+      {
+        name: `db:${tbl.id}:partial_array`,
+        kind: "database" as const,
+        category: "database" as const,
+        sourceLabel: `DB: ${tbl.label}[] (Partial Pick)`,
+      },
+    ]);
+  }, [availableTableNodes]);
+
   return (
     <div className="flex flex-col gap-3 p-3.5 bg-secondary/10 rounded-xl border border-border/60 shadow-sm">
       {/* Top Header */}
@@ -226,9 +250,9 @@ export const ResponseSchemaEditor: React.FC<ResponseSchemaEditorProps> = ({
                       onBlur={(e) => updateField(f.id, { name: e.target.value })}
                     />
 
-                    {/* Type Selector Dropdown */}
-                    <Select
-                      value={f.type}
+                    {/* Type Selector Combobox */}
+                    <TypeCombobox
+                      value={f.type || "string"}
                       onValueChange={(v) =>
                         updateField(f.id, {
                           type: v,
@@ -237,61 +261,10 @@ export const ResponseSchemaEditor: React.FC<ResponseSchemaEditorProps> = ({
                             : undefined,
                         })
                       }
-                    >
-                      <SelectTrigger className="h-7 w-[165px] text-xs py-0 nodrag bg-secondary/50 border-none font-mono">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-[300px]">
-                        <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                          Primitives
-                        </div>
-                        {PARAMETER_TYPES.map((pt) => (
-                          <SelectItem
-                            key={pt}
-                            value={pt}
-                            className="text-xs font-mono"
-                          >
-                            {pt}
-                          </SelectItem>
-                        ))}
-
-                        {availableTableNodes.length > 0 && (
-                          <>
-                            <div className="px-2 py-1 text-[10px] font-bold text-primary uppercase tracking-wider border-t border-border/40 mt-1">
-                              Connected Database Entities
-                            </div>
-                            {availableTableNodes.map((tbl) => (
-                              <React.Fragment key={tbl.id}>
-                                <SelectItem
-                                  value={`db:${tbl.id}:single`}
-                                  className="text-xs font-mono"
-                                >
-                                  DB: {tbl.label} (Full)
-                                </SelectItem>
-                                <SelectItem
-                                  value={`db:${tbl.id}:array`}
-                                  className="text-xs font-mono"
-                                >
-                                  DB: {tbl.label}[] (Full)
-                                </SelectItem>
-                                <SelectItem
-                                  value={`db:${tbl.id}:partial_single`}
-                                  className="text-xs font-mono"
-                                >
-                                  DB: {tbl.label} (Partial Pick)
-                                </SelectItem>
-                                <SelectItem
-                                  value={`db:${tbl.id}:partial_array`}
-                                  className="text-xs font-mono"
-                                >
-                                  DB: {tbl.label}[] (Partial Pick)
-                                </SelectItem>
-                              </React.Fragment>
-                            ))}
-                          </>
-                        )}
-                      </SelectContent>
-                    </Select>
+                      allNodes={allNodes}
+                      extraTypes={extraDbTypes}
+                      className="w-[165px]"
+                    />
 
                     <Button
                       type="button"
