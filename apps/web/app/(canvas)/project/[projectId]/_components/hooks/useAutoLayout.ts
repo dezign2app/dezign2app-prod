@@ -175,7 +175,10 @@ export function useAutoLayout(options?: UseAutoLayoutOptions) {
   const handleLayout = useCallback(
     (direction: string = "LR") => {
       const nonHeadNodes = nodes.filter(
-        (n) => n.type !== "api_endpoint" && n.type !== "event_item",
+        (n) =>
+          n.type !== "api_endpoint" &&
+          n.type !== "event_item" &&
+          n.type !== "types",
       );
 
       const isSchemaView =
