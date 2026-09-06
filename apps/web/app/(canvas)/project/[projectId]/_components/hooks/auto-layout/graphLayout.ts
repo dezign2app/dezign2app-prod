@@ -17,6 +17,7 @@ import {
   layoutHangingReferenceNodes,
   REFERENCE_NODE_TYPES,
 } from "./hangingReferenceLayout";
+import { layoutTypesNodes } from "./typesNodeLayout";
 import type { EndpointWithNode, EventWithNode } from "@workspace/canvas";
 
 export interface PerformGraphLayoutOptions {
@@ -40,24 +41,31 @@ export function performGraphLayout({
 }: PerformGraphLayoutOptions) {
   const isHorizontal = direction === "LR";
 
-  // Filter for graph nodes and graph edges only
+  // Partition types nodes away from the main architecture DAG flow
+  const typesNodes = nodes.filter((n: LayoutNode) => n.type === "types");
   const graphNodes = nodes.filter(
     (n: LayoutNode) =>
       n.type !== "group" &&
       n.type !== "entity" &&
       n.type !== "database" &&
       n.type !== "redis_instance" &&
-      n.type !== "redis_schema",
+      n.type !== "redis_schema" &&
+      n.type !== "types",
   );
-  if (graphNodes.length === 0) return;
+  if (graphNodes.length === 0 && typesNodes.length === 0) return;
 
+  const typesNodeIdSet = new Set(typesNodes.map((n) => n.id));
   const graphEdges = edges.filter((e: LayoutEdge) => {
     if (
       e.type === "database-connection" ||
       e.type === "foreign-key" ||
       e.type === "transformer-reference" ||
-      e.type === "reference"
+      e.type === "reference" ||
+      e.type === "type-reference"
     ) {
+      return false;
+    }
+    if (typesNodeIdSet.has(e.source) || typesNodeIdSet.has(e.target)) {
       return false;
     }
     const sourceNode = graphNodes.find((n) => n.id === e.source);
@@ -262,28 +270,45 @@ export function performGraphLayout({
     });
   }
 
+  // 6.7. Layout TypesNodes in dedicated away column(s) on the left margin
+  if (typesNodes.length > 0) {
+    layoutTypesNodes({
+      typesNodes,
+      positionsMap,
+      edges,
+      startMarginX: 60,
+      startMarginY: 60,
+    });
+  }
+
   // 7. Update node positions atomically
+  const allLayoutNodes = [...graphNodes, ...typesNodes];
   if (onNodesChange) {
-    const nodeChanges: PositionNodeChange[] = graphNodes.map((node: LayoutNode) => {
+    const nodeChanges: PositionNodeChange[] = allLayoutNodes.map((node: LayoutNode) => {
       const pos = positionsMap.get(node.id) ?? {
         x: node.position.x,
         y: node.position.y,
       };
       const isAttachedHead = attachedHeadNodeIdSet.has(node.id);
+      const isTypesNode = node.type === "types";
       return {
         id: node.id,
         type: "position",
         position: pos,
         sourcePosition: isAttachedHead
           ? Position.Bottom
-          : isHorizontal
+          : isTypesNode
             ? Position.Right
-            : Position.Bottom,
+            : isHorizontal
+              ? Position.Right
+              : Position.Bottom,
         targetPosition: isAttachedHead
           ? Position.Top
-          : isHorizontal
+          : isTypesNode
             ? Position.Left
-            : Position.Top,
+            : isHorizontal
+              ? Position.Left
+              : Position.Top,
       };
     });
     onNodesChange(nodeChanges);
@@ -293,19 +318,24 @@ export function performGraphLayout({
         const pos = positionsMap.get(node.id);
         if (!pos) return node;
         const isAttachedHead = attachedHeadNodeIdSet.has(node.id);
+        const isTypesNode = node.type === "types";
         return {
           ...node,
           position: pos,
           sourcePosition: isAttachedHead
             ? Position.Bottom
-            : isHorizontal
+            : isTypesNode
               ? Position.Right
-              : Position.Bottom,
+              : isHorizontal
+                ? Position.Right
+                : Position.Bottom,
           targetPosition: isAttachedHead
             ? Position.Top
-            : isHorizontal
+            : isTypesNode
               ? Position.Left
-              : Position.Top,
+              : isHorizontal
+                ? Position.Left
+                : Position.Top,
         };
       });
 
