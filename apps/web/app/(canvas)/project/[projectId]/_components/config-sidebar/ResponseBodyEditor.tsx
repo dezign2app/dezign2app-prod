@@ -1,16 +1,11 @@
 import React from "react";
-import { Plus, Trash, Braces, ListPlus, Text, Code } from "lucide-react";
+import { Plus, Trash, Braces, ListPlus, Text, Code, X } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
-import { PARAMETER_TYPES, Schema, Parameter, BackendNode } from "@/types/canvas";
+import { Schema, Parameter, BackendNode } from "@/types/canvas";
+import { TypeCombobox } from "./TypeCombobox";
+import { cn } from "@workspace/ui/lib/utils";
 import { generateId, LocalInput, LocalTextarea } from "../backend-nodes/graph-nodes/common";
 import { parseRelaxedJson } from "@/lib/compiler/generators/routeGenerator/jsonInterpolation";
 
@@ -43,6 +38,7 @@ export const ResponseBodyEditor: React.FC<ResponseBodyEditorProps> = ({
   expression = "",
   onExpressionChange,
   availableTableNodes = [],
+  allNodes,
 }) => {
   // ---- shared helpers --------------------------------------------------------
   const safeSchema: Schema = schema || { id: generateId() };
@@ -168,41 +164,38 @@ export const ResponseBodyEditor: React.FC<ResponseBodyEditorProps> = ({
                   value={f.name || ""}
                   onBlur={(e) => updateField(f.id, { name: e.target.value })}
                 />
-                <Select
-                  value={f.type}
-                  onValueChange={(v) => updateField(f.id, { type: v })}
+                <TypeCombobox
+                  value={f.type || "string"}
+                  onValueChange={(v) => {
+                    const updates: Partial<Parameter> = { type: v };
+                    if (v === "enum" && (!f.enumValues || f.enumValues.length === 0)) {
+                      updates.enumValues = [];
+                    }
+                    updateField(f.id, updates);
+                  }}
+                  allNodes={allNodes}
+                  includeDatabaseTables={true}
+                  className="w-[140px]"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  title={
+                    f.isArray
+                      ? "Array type active (click to make single)"
+                      : "Single type (click to make array [])"
+                  }
+                  className={cn(
+                    "h-7 px-2 font-mono text-xs font-bold nodrag rounded transition-all cursor-pointer",
+                    f.isArray
+                      ? "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 ring-1 ring-primary/30"
+                      : "bg-secondary/60 text-muted-foreground/80 hover:bg-secondary hover:text-foreground border border-border/40",
+                  )}
+                  onClick={() => updateField(f.id, { isArray: !f.isArray })}
                 >
-                  <SelectTrigger className="h-7 w-[140px] text-xs py-0 nodrag bg-secondary/50 border-none font-mono">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[260px]">
-                    <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                      Primitives
-                    </div>
-                    {PARAMETER_TYPES.map((t) => (
-                      <SelectItem key={t} value={t} className="text-xs font-mono">
-                        {t}
-                      </SelectItem>
-                    ))}
-                    {availableTableNodes.length > 0 && (
-                      <>
-                        <div className="px-2 py-1 text-[10px] font-bold text-primary uppercase tracking-wider border-t border-border/40 mt-1">
-                          Database Entities
-                        </div>
-                        {availableTableNodes.map((tbl) => (
-                          <React.Fragment key={tbl.id}>
-                            <SelectItem value={`db:${tbl.id}:single`} className="text-xs font-mono">
-                              DB: {tbl.label}
-                            </SelectItem>
-                            <SelectItem value={`db:${tbl.id}:array`} className="text-xs font-mono">
-                              DB: {tbl.label}[]
-                            </SelectItem>
-                          </React.Fragment>
-                        ))}
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
+                  []
+                </Button>
                 <Button
                   type="button"
                   variant="ghost"
@@ -238,6 +231,47 @@ export const ResponseBodyEditor: React.FC<ResponseBodyEditorProps> = ({
                   <Trash size={14} />
                 </Button>
               </div>
+
+              {/* Inline enum values manager if type === 'enum' */}
+              {f.type === "enum" && (
+                <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-md bg-secondary/30 border border-border/40 text-xs">
+                  <span className="text-[10px] uppercase font-semibold text-muted-foreground">Values:</span>
+                  {(f.enumValues || []).map((val, valIdx) => (
+                    <span
+                      key={valIdx}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-secondary font-mono text-[11px] border border-border/50"
+                    >
+                      {val}
+                      <button
+                        type="button"
+                        className="hover:text-destructive text-muted-foreground transition-colors"
+                        onClick={() => {
+                          const next = (f.enumValues || []).filter((_, i) => i !== valIdx);
+                          updateField(f.id, { enumValues: next });
+                        }}
+                      >
+                        <X size={11} />
+                      </button>
+                    </span>
+                  ))}
+                  <Input
+                    placeholder="Add value (press Enter)..."
+                    className="h-6 w-36 text-xs bg-background/80"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const val = e.currentTarget.value.trim().replace(/^["']|["']$/g, "");
+                        if (val && !(f.enumValues || []).includes(val)) {
+                          updateField(f.id, {
+                            enumValues: [...(f.enumValues || []), val],
+                          });
+                          e.currentTarget.value = "";
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              )}
               {f.description !== undefined && (
                 <div className="relative w-full">
                   <LocalInput

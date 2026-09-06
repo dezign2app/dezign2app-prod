@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { Button } from "@workspace/ui/components/button";
+import { TypeCombobox } from "./TypeCombobox";
 import {
   Plus,
   Trash,
@@ -164,39 +165,11 @@ const TypePropertyRow = React.memo(
               {field.type}
             </span>
           ) : (
-            <Select
+            <TypeCombobox
               value={baseType}
               onValueChange={handleTypeChange}
-            >
-              <SelectTrigger className="h-7 w-[150px] text-xs py-0 nodrag bg-secondary/50 border-none font-mono">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="max-h-[260px]">
-                <SelectGroup>
-                  <SelectLabel className="text-[10px] font-bold uppercase text-muted-foreground">
-                    Primitives & Types
-                  </SelectLabel>
-                  {PRIMITIVE_TYPES.map((pt) => (
-                    <SelectItem key={pt} value={pt} className="text-xs font-mono">
-                      {pt === "enum" ? "enum (fixed values)" : pt}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-
-                {otherCustomTypes.length > 0 && (
-                  <SelectGroup>
-                    <SelectLabel className="text-[10px] font-bold uppercase text-indigo-500 dark:text-indigo-400">
-                      Custom Types
-                    </SelectLabel>
-                    {otherCustomTypes.map((ct) => (
-                      <SelectItem key={ct} value={ct} className="text-xs font-mono">
-                        {ct}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                )}
-              </SelectContent>
-            </Select>
+              className="w-[150px]"
+            />
           )}
 
           {/* Array [] toggle button */}

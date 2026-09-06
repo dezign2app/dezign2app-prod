@@ -13,6 +13,8 @@ export type Parameter = {
   key?: string;
   value?: string;
   enabled?: boolean;
+  enumValues?: string[];
+  isArray?: boolean;
 };
 
 export type Schema = {

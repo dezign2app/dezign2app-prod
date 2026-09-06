@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
+import { TypeCombobox } from "./TypeCombobox";
 import {
   ChevronDown,
   ChevronRight,
@@ -81,21 +82,11 @@ const FieldListEditor = ({ fields, onChange, placeholder }: FieldListEditorProps
             onChange={(e) => update(i, { name: e.target.value })}
             placeholder={placeholder ?? "fieldName"}
           />
-          <Select
-            value={f.type}
+          <TypeCombobox
+            value={f.type || "string"}
             onValueChange={(v) => update(i, { type: v })}
-          >
-            <SelectTrigger className="h-7 text-xs bg-background/60 border-border/60">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TS_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {t}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            className="w-full"
+          />
           <button
             className={`text-[10px] rounded px-1.5 py-0.5 border transition-colors ${
               f.required === false

@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
+import { TypeCombobox } from "../TypeCombobox";
 
 interface FunctionParamsSectionProps {
   selectedOp: DbOperationFunction;
@@ -157,25 +158,15 @@ export const FunctionParamsSection: React.FC<FunctionParamsSectionProps> = ({
                   }}
                   className="h-7 text-xs font-mono flex-1"
                 />
-                <Select
-                  value={p.type}
+                <TypeCombobox
+                  value={p.type || "string"}
                   onValueChange={(val) => {
                     const updated = [...(selectedOp.params || [])];
                     updated[idx] = { ...updated[idx]!, type: val };
                     updateSelectedOp({ params: updated });
                   }}
-                >
-                  <SelectTrigger className="h-7 w-28 text-xs font-mono">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="string">string</SelectItem>
-                    <SelectItem value="number">number</SelectItem>
-                    <SelectItem value="boolean">boolean</SelectItem>
-                    <SelectItem value="any">any</SelectItem>
-                    <SelectItem value="object">object</SelectItem>
-                  </SelectContent>
-                </Select>
+                  className="w-28"
+                />
 
                 {isPaginationParam ? (
                   <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border/30 shrink-0">
