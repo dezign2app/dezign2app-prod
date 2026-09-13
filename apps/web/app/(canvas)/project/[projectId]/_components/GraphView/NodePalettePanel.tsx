@@ -112,34 +112,47 @@ export const NodePalettePanel: React.FC<NodePalettePanelProps> = ({
           <Server className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
           Service
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-          onClick={() => onAddNode("transformer", "")}
-        >
-          <Shuffle className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
-          Transformer
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-          onClick={() => onAddNode("transformer_ref", "")}
-        >
-          <Shuffle className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
-          Global Ref
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-          onClick={() => onAddNode("types", "")}
-        >
-          <Braces className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
-          Custom Types
-        </Button>
+
+        {/* Clubbed Transformers */}
+        <div className="flex flex-col gap-1 p-1 rounded-md bg-sidebar-accent/30 border border-sidebar-border/40">
+          <div className="px-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-1.5">
+            <Shuffle className="w-2.5 h-2.5 text-muted-foreground/80" />
+            Transformers
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-7 shrink-0 w-full"
+            onClick={() => onAddNode("transformer", "")}
+          >
+            <Shuffle className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
+            Transformer
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-7 shrink-0 w-full"
+            onClick={() => onAddNode("transformer_ref", "")}
+          >
+            <Shuffle className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
+            Global Ref
+          </Button>
+        </div>
       </div>
+
+      {/* TYPES */}
+      <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">
+        Types
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
+        onClick={() => onAddNode("types", "")}
+      >
+        <Braces className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
+        Custom Types
+      </Button>
 
       {/* MESSAGING */}
       <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">
