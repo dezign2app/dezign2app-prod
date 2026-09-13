@@ -21,6 +21,7 @@ export * from "./services/fastapi/v0";
 export * from "./webClients/nextjs/v16";
 export * from "./databases/sqlite/raw";
 export * from "./langgraph/typescript/v1";
+export * from "./schemas";
 
 // Legacy / Utility Generators
 export * from "./generators/rootFilesGenerator";

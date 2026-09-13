@@ -1,8 +1,9 @@
 import { CompiledFile } from "@workspace/canvas/types";
 import { BackendNode } from "@/types/canvas";
-import { toVarName, toPascalCase } from "../../utils";
-import { extractTemplateParams, mapColumnTypeToTs, jsonToTypeScriptInterfaces } from "../utils";
-import { parseRawJsonSafe } from "@/lib/utils/nestedJsonSchema";
+import {
+  compileRedisSchema,
+  generateRedisSchemasIndex,
+} from "../../schemas/redis";
 
 export interface GeneratedSchemaResult {
   file: CompiledFile;
@@ -17,137 +18,34 @@ export interface GeneratedSchemaResult {
   ttlSeconds: number;
 }
 
+/**
+ * Generates the TypeScript schema module for a Redis schema node.
+ * Delegates to modular schema compiler under `apps/web/lib/compiler/schemas/redis/`.
+ */
 export function generateSchemaModule(
   schemaNode: BackendNode,
 ): GeneratedSchemaResult {
-  const rawSchemaLabel = schemaNode.data?.label || schemaNode.id || "Cache";
-  const varName = toVarName(rawSchemaLabel) || "cache";
-  const typeName = toPascalCase(rawSchemaLabel) || "Cache";
-
-  const dataStructure = (
-    schemaNode.data?.redisDataStructure || "hash"
-  ).toLowerCase();
-  const keyTemplate =
-    schemaNode.data?.keyTemplate || `${varName.toLowerCase()}:{id}`;
-  const pattern = keyTemplate.replace(/\{[a-zA-Z0-9_]+\}/g, "*");
-  const templateParams = extractTemplateParams(keyTemplate);
-  const keyArgsSig =
-    templateParams.length > 0
-      ? templateParams.map((p) => `${p}: string | number`).join(", ")
-      : "id: string | number";
-
-  let keyTemplateLiteral = keyTemplate;
-  if (templateParams.length > 0) {
-    templateParams.forEach((p) => {
-      keyTemplateLiteral = keyTemplateLiteral.replace(`{${p}}`, `\${${p}}`);
-    });
-  } else {
-    keyTemplateLiteral = `${keyTemplate}:\${id}`;
-  }
-
-  const ttlSeconds =
-    typeof schemaNode.data?.ttl === "object"
-      ? schemaNode.data?.ttl?.value || 3600
-      : 3600;
-
-  // Build TypeScript Interface
-  let interfacesBlock = "";
-  let isJsonArray = false;
-  let itemTypeName: string | undefined = undefined;
-
-  if (
-    dataStructure === "json" &&
-    schemaNode.data?.isNestedJsonSchema &&
-    schemaNode.data?.rawJsonSchema
-  ) {
-    const { parsed, error } = parseRawJsonSafe(schemaNode.data.rawJsonSchema);
-    if (!error && parsed !== null && typeof parsed === "object") {
-      const typeInfo = jsonToTypeScriptInterfaces(typeName, parsed);
-      interfacesBlock = typeInfo.interfacesCode;
-      isJsonArray = typeInfo.isArray;
-      itemTypeName = typeInfo.itemTypeName;
-    }
-  }
-
-  if (!interfacesBlock) {
-    const columns = schemaNode.data?.columns || [];
-    const fields =
-      schemaNode.data?.hashConfig?.fields ||
-      columns.map((c) => ({
-        name: c.name,
-        type: mapColumnTypeToTs(c.type),
-        required: Boolean(c.isPrimaryKey || c.isNotNull),
-      }));
-
-    const interfaceFields =
-      fields.length > 0
-        ? fields
-            .map(
-              (f) =>
-                `  ${f.name}${f.required ? "" : "?"}: ${f.type || "string"};`,
-            )
-            .join("\n")
-        : "  id: string;\n  [key: string]: string | number | boolean | null | undefined;";
-
-    if (dataStructure === "json" && schemaNode.data?.jsonRootType === "array") {
-      isJsonArray = true;
-      itemTypeName = `${typeName}Item`;
-      interfacesBlock = `export interface ${itemTypeName} {\n${interfaceFields}\n}\n\nexport type ${typeName} = ${itemTypeName}[];`;
-    } else {
-      interfacesBlock = `export interface ${typeName} {\n${interfaceFields}\n}`;
-    }
-  }
-
-  const schemaModuleContent = `/**
- * TypeScript Data Structure Interface & Key Patterns for ${typeName}
- */
-${interfacesBlock}
-
-/**
- * Canonical Key Pattern and TTL for ${typeName}
- */
-export const ${typeName.toUpperCase()}_KEY_PATTERN = "${pattern}";
-export const ${typeName.toUpperCase()}_TTL_SECONDS = ${ttlSeconds};
-
-/**
- * Generate Redis Key for ${typeName}
- */
-export function get${typeName}Key(${keyArgsSig}): string {
-  return \`${keyTemplateLiteral}\`;
-}
-`;
-
+  const result = compileRedisSchema(schemaNode);
   return {
-    file: {
-      filename: `src/schemas/${varName}.ts`,
-      language: "typescript",
-      content: schemaModuleContent,
-    },
-    varName,
-    typeName,
-    itemTypeName,
-    isJsonArray,
-    dataStructure,
-    keyTemplate,
-    templateParams,
-    keyArgsSig,
-    ttlSeconds,
+    file: result.file,
+    varName: result.varName,
+    typeName: result.typeName,
+    itemTypeName: result.itemTypeName,
+    isJsonArray: result.isJsonArray,
+    dataStructure: result.dataStructure || "hash",
+    keyTemplate: result.keyTemplate || "",
+    templateParams: result.templateParams || [],
+    keyArgsSig: result.keyArgsSig || "id: string | number",
+    ttlSeconds: result.ttlSeconds || 3600,
   };
 }
 
+/**
+ * Generates the schemas barrel file (`src/schemas/index.ts`) for a Redis package.
+ */
 export function generateSchemasIndex(
   schemaBarrelExports: string[],
   instLabel: string,
 ): CompiledFile {
-  const schemasIndexContent = `/**
- * Generated Typed Redis Schemas for ${instLabel}
- */
-${schemaBarrelExports.join("\n")}
-`;
-
-  return {
-    filename: "src/schemas/index.ts",
-    language: "typescript",
-    content: schemasIndexContent,
-  };
+  return generateRedisSchemasIndex(schemaBarrelExports, instLabel);
 }

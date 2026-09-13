@@ -82,6 +82,7 @@ export interface CanvasEntityNodeData {
   metric?: "Cosine" | "Dot Product" | "Euclidean";
   /** For Redis schema entities. */
   redisDataStructure?: RedisDataStructure;
+  redisVersion?: string;
   keyTemplate?: string;
   clusterHashTagParam?: string;
   ttl?: RedisDuration;
@@ -161,4 +162,5 @@ export interface CanvasDatabaseNodeData {
   maxmemory?: string;
   persistenceMode?: "RDB" | "AOF" | "RDB+AOF" | "None";
   clustering?: boolean;
+  redisVersion?: string;
 }
