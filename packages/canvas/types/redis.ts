@@ -88,6 +88,14 @@ export interface RedisHyperLogLogConfig {
   precision?: string;
 }
 
+export type RedisJsonRootType = "object" | "array";
+
+export interface RedisJsonConfig {
+  rootType?: RedisJsonRootType;
+  isNested?: boolean;
+  rawSchema?: string;
+}
+
 export type CacheStrategy =
   | "Cache Aside"
   | "Read Through"

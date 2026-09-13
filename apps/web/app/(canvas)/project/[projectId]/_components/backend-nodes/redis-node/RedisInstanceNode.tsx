@@ -24,7 +24,7 @@ export const REDIS_COLOR_PRESETS = [
   { name: "Cyan", hex: "#06b6d4" },
 ];
 
-export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+export const RedisInstanceNode = React.memo(({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
@@ -32,19 +32,26 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
   const requestDeleteNode = useBackendCanvasStore(
     (s) => s.requestDeleteNode,
   );
-  const allNodes = useBackendCanvasStore((s) => s.nodes);
 
   const color = data.color || "#ef4444";
   const label = data.label || "";
   const port = String(data.port || "6379");
   const host = data.host || "localhost";
 
-  // Find all Redis schema entities hanging off this instance
-  const attachedSchemas = allNodes.filter(
-    (n) =>
-      (n.type === "redis_schema" || (n.type === "entity" && n.data?.dbType === "redis")) &&
-      n.data?.databaseId === id,
-  );
+  // Select only the count of attached schemas with a primitive return value to avoid re-renders
+  const attachedSchemasCount = useBackendCanvasStore((s) => {
+    let count = 0;
+    for (let i = 0; i < s.nodes.length; i++) {
+      const n = s.nodes[i]!;
+      if (
+        (n.type === "redis_schema" || (n.type === "entity" && n.data?.dbType === "redis")) &&
+        n.data?.databaseId === id
+      ) {
+        count++;
+      }
+    }
+    return count;
+  });
 
   const connStringEnv = data.connectionStringEnv || "REDIS_URL";
   const maxmemoryPolicy = data.maxmemoryPolicy || "volatile-lru";
@@ -228,7 +235,7 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
             <span>Hanging Schemas</span>
           </div>
           <span className="font-semibold text-foreground bg-secondary px-1.5 rounded-full">
-            {attachedSchemas.length}
+            {attachedSchemasCount}
           </span>
         </div>
       </div>
@@ -243,4 +250,6 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
       />
     </div>
   );
-};
+});
+
+RedisInstanceNode.displayName = "RedisInstanceNode";

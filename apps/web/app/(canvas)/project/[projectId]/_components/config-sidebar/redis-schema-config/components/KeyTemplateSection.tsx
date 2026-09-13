@@ -24,20 +24,38 @@ interface KeyTemplateSectionProps {
   updateData: (changes: Partial<BackendNode["data"]>) => void;
 }
 
-export const KeyTemplateSection: React.FC<KeyTemplateSectionProps> = ({
+export const KeyTemplateSection: React.FC<KeyTemplateSectionProps> = React.memo(({
   keyTemplate,
   clusterTagParam,
   updateData,
 }) => {
   const [copiedKey, setCopiedKey] = useState(false);
+  const [localTemplate, setLocalTemplate] = useState(keyTemplate);
 
-  const keyPattern = deriveKeyPattern(keyTemplate);
-  const namespace = deriveNamespace(keyTemplate);
-  const params = extractKeyTemplateParams(keyTemplate);
+  React.useEffect(() => {
+    setLocalTemplate(keyTemplate);
+  }, [keyTemplate]);
+
+  const commitTemplate = (val: string) => {
+    if (val === keyTemplate) return;
+    const extracted = extractKeyTemplateParams(val);
+    const newClusterTag =
+      clusterTagParam && extracted.includes(clusterTagParam)
+        ? clusterTagParam
+        : extracted[0] || undefined;
+    updateData({
+      keyTemplate: val,
+      clusterHashTagParam: newClusterTag,
+    });
+  };
+
+  const keyPattern = deriveKeyPattern(localTemplate);
+  const namespace = deriveNamespace(localTemplate);
+  const params = extractKeyTemplateParams(localTemplate);
 
   // Sample Key preview resolution (e.g. user:{id}:profile -> user:1001:profile)
-  const sampleKey = keyTemplate
-    ? keyTemplate.replace(/\{([^}]+)\}/g, (_, p) => {
+  const sampleKey = localTemplate
+    ? localTemplate.replace(/\{([^}]+)\}/g, (_, p) => {
         if (p.toLowerCase().includes("id")) return "1001";
         if (p.toLowerCase().includes("token") || p.toLowerCase().includes("session"))
           return "sess_99a8x";
@@ -72,18 +90,13 @@ export const KeyTemplateSection: React.FC<KeyTemplateSectionProps> = ({
           </span>
         </div>
         <Input
-          value={keyTemplate}
-          onChange={(e) => {
-            const val = e.target.value;
-            const extracted = extractKeyTemplateParams(val);
-            const newClusterTag =
-              clusterTagParam && extracted.includes(clusterTagParam)
-                ? clusterTagParam
-                : extracted[0] || undefined;
-            updateData({
-              keyTemplate: val,
-              clusterHashTagParam: newClusterTag,
-            });
+          value={localTemplate}
+          onChange={(e) => setLocalTemplate(e.target.value)}
+          onBlur={() => commitTemplate(localTemplate)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              commitTemplate(localTemplate);
+            }
           }}
           placeholder="e.g. user:{id}:profile or session:{token}"
           className="h-8 text-xs font-mono bg-background"
@@ -164,4 +177,6 @@ export const KeyTemplateSection: React.FC<KeyTemplateSectionProps> = ({
       </div>
     </div>
   );
-};
+});
+
+KeyTemplateSection.displayName = "KeyTemplateSection";

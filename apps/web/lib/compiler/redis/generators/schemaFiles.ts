@@ -1,12 +1,15 @@
 import { CompiledFile } from "@workspace/canvas/types";
 import { BackendNode } from "@/types/canvas";
 import { toVarName, toPascalCase } from "../../utils";
-import { extractTemplateParams, mapColumnTypeToTs } from "../utils";
+import { extractTemplateParams, mapColumnTypeToTs, jsonToTypeScriptInterfaces } from "../utils";
+import { parseRawJsonSafe } from "@/lib/utils/nestedJsonSchema";
 
 export interface GeneratedSchemaResult {
   file: CompiledFile;
   varName: string;
   typeName: string;
+  itemTypeName?: string;
+  isJsonArray?: boolean;
   dataStructure: string;
   keyTemplate: string;
   templateParams: string[];
@@ -48,31 +51,57 @@ export function generateSchemaModule(
       : 3600;
 
   // Build TypeScript Interface
-  const columns = schemaNode.data?.columns || [];
-  const fields =
-    schemaNode.data?.hashConfig?.fields ||
-    columns.map((c) => ({
-      name: c.name,
-      type: mapColumnTypeToTs(c.type),
-      required: Boolean(c.isPrimaryKey || c.isNotNull),
-    }));
+  let interfacesBlock = "";
+  let isJsonArray = false;
+  let itemTypeName: string | undefined = undefined;
 
-  const interfaceFields =
-    fields.length > 0
-      ? fields
-          .map(
-            (f) =>
-              `  ${f.name}${f.required ? "" : "?"}: ${f.type || "string"};`,
-          )
-          .join("\n")
-      : "  id: string;\n  [key: string]: string | number | boolean | null | undefined;";
+  if (
+    dataStructure === "json" &&
+    schemaNode.data?.isNestedJsonSchema &&
+    schemaNode.data?.rawJsonSchema
+  ) {
+    const { parsed, error } = parseRawJsonSafe(schemaNode.data.rawJsonSchema);
+    if (!error && parsed !== null && typeof parsed === "object") {
+      const typeInfo = jsonToTypeScriptInterfaces(typeName, parsed);
+      interfacesBlock = typeInfo.interfacesCode;
+      isJsonArray = typeInfo.isArray;
+      itemTypeName = typeInfo.itemTypeName;
+    }
+  }
+
+  if (!interfacesBlock) {
+    const columns = schemaNode.data?.columns || [];
+    const fields =
+      schemaNode.data?.hashConfig?.fields ||
+      columns.map((c) => ({
+        name: c.name,
+        type: mapColumnTypeToTs(c.type),
+        required: Boolean(c.isPrimaryKey || c.isNotNull),
+      }));
+
+    const interfaceFields =
+      fields.length > 0
+        ? fields
+            .map(
+              (f) =>
+                `  ${f.name}${f.required ? "" : "?"}: ${f.type || "string"};`,
+            )
+            .join("\n")
+        : "  id: string;\n  [key: string]: string | number | boolean | null | undefined;";
+
+    if (dataStructure === "json" && schemaNode.data?.jsonRootType === "array") {
+      isJsonArray = true;
+      itemTypeName = `${typeName}Item`;
+      interfacesBlock = `export interface ${itemTypeName} {\n${interfaceFields}\n}\n\nexport type ${typeName} = ${itemTypeName}[];`;
+    } else {
+      interfacesBlock = `export interface ${typeName} {\n${interfaceFields}\n}`;
+    }
+  }
 
   const schemaModuleContent = `/**
  * TypeScript Data Structure Interface & Key Patterns for ${typeName}
  */
-export interface ${typeName} {
-${interfaceFields}
-}
+${interfacesBlock}
 
 /**
  * Canonical Key Pattern and TTL for ${typeName}
@@ -96,6 +125,8 @@ export function get${typeName}Key(${keyArgsSig}): string {
     },
     varName,
     typeName,
+    itemTypeName,
+    isJsonArray,
     dataStructure,
     keyTemplate,
     templateParams,

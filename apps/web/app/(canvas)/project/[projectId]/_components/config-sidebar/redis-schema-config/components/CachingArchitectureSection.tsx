@@ -37,7 +37,6 @@ interface CachingArchitectureSectionProps {
   negativeCaching: NonNullable<BackendNode["data"]["negativeCaching"]>;
   staleWhileRevalidate: NonNullable<BackendNode["data"]["staleWhileRevalidate"]>;
   sourceOfTruth?: BackendNode["data"]["sourceOfTruth"];
-  invalidationRules?: string;
   serialization?: string;
   compression?: string;
   tableNodes: BackendNode[];
@@ -51,7 +50,6 @@ export const CachingArchitectureSection: React.FC<CachingArchitectureSectionProp
   negativeCaching,
   staleWhileRevalidate,
   sourceOfTruth,
-  invalidationRules,
   serialization,
   compression,
   tableNodes,
@@ -282,17 +280,6 @@ export const CachingArchitectureSection: React.FC<CachingArchitectureSectionProp
             </ComboboxList>
           </ComboboxContent>
         </Combobox>
-      </div>
-
-      {/* Invalidation Rules */}
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-xs font-semibold">Invalidation Trigger Rules</Label>
-        <Input
-          value={invalidationRules || ""}
-          onChange={(e) => updateData({ invalidationRules: e.target.value })}
-          placeholder="e.g. On User.update or Session.logout"
-          className="h-8 text-xs bg-background"
-        />
       </div>
 
       {/* Conditional Serialization & Compression (only for string, hash, list, set, zset) */}

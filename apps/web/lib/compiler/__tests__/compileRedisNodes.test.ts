@@ -244,4 +244,79 @@ describe("compileRedisNodes", () => {
     const rootTsConfig = JSON.parse(rootTsConfigFile!.content);
     expect(rootTsConfig.references).toContainEqual({ path: "packages/primary-redis-cache" });
   });
+
+  it("compiles RedisJSON with nested schema array into recursive TypeScript types and array helpers", () => {
+    const rawSchema = JSON.stringify([
+      {
+        id: "msg_1",
+        role: "user",
+        message: "Hello AI!",
+        sender: {
+          userId: "u_99",
+          name: "Alice",
+        },
+      },
+    ]);
+
+    const nodes: BackendNode[] = [
+      {
+        id: "redis-1",
+        type: "redis_instance",
+        data: {
+          label: "Primary_Cache",
+          host: "localhost",
+          port: 6379,
+        },
+        position: { x: 0, y: 0 },
+        fractionalIndex: "a0",
+      },
+      {
+        id: "schema-conv",
+        type: "redis_schema",
+        data: {
+          label: "Conversation",
+          redisDataStructure: "json",
+          keyTemplate: "conv:{id}",
+          databaseId: "redis-1",
+          isNestedJsonSchema: true,
+          rawJsonSchema: rawSchema,
+          jsonRootType: "array",
+        },
+        position: { x: 100, y: 100 },
+        fractionalIndex: "a1",
+      },
+    ];
+
+    const result = compileRedisNodes(nodes);
+    expect(result.packages).toHaveLength(1);
+    const pkg = result.packages![0]!;
+
+    // 1. Schema file should contain Sender, ConversationItem, and Conversation = ConversationItem[]
+    const schemaFile = pkg.files.find((f) => f.filename === "src/schemas/conversation.ts");
+    expect(schemaFile).toBeDefined();
+    expect(schemaFile!.content).toContain("export interface Sender");
+    expect(schemaFile!.content).toContain("userId: string;");
+    expect(schemaFile!.content).toContain("name: string;");
+    expect(schemaFile!.content).toContain("export interface ConversationItem");
+    expect(schemaFile!.content).toContain("sender: Sender;");
+    expect(schemaFile!.content).toContain("export type Conversation = ConversationItem[];");
+    expect(schemaFile!.content).toContain("export function getConversationKey");
+
+    // 2. Helper functions should include appendConversationItem and getRecentConversationItems
+    const appendHelper = pkg.files.find((f) => f.filename === "src/helpers/conversation/appendConversationItem.ts");
+    expect(appendHelper).toBeDefined();
+    expect(appendHelper!.content).toContain("redis.json.arrappend");
+    expect(appendHelper!.content).toContain("item: ConversationItem");
+
+    const recentHelper = pkg.files.find((f) => f.filename === "src/helpers/conversation/getRecentConversationItems.ts");
+    expect(recentHelper).toBeDefined();
+    expect(recentHelper!.content).toContain("redis.json.get");
+    expect(recentHelper!.content).toContain("path: `$[");
+
+    // 3. Helper barrel should export the array helpers
+    const barrel = pkg.files.find((f) => f.filename === "src/helpers/conversation/index.ts");
+    expect(barrel).toBeDefined();
+    expect(barrel!.content).toContain('export * from "./appendConversationItem"');
+    expect(barrel!.content).toContain('export * from "./getRecentConversationItems"');
+  });
 });
