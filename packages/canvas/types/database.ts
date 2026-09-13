@@ -14,6 +14,7 @@ import type {
   RedisZSetConfig,
   RedisBitmapConfig,
   RedisHyperLogLogConfig,
+  RedisJsonConfig,
 } from "./redis";
 
 /** Database operation function (CRUD, index fetch, or custom query) */
@@ -111,6 +112,10 @@ export interface CanvasEntityNodeData {
   zsetConfig?: RedisZSetConfig;
   bitmapConfig?: RedisBitmapConfig;
   hyperloglogConfig?: RedisHyperLogLogConfig;
+  jsonConfig?: RedisJsonConfig;
+  isNestedJsonSchema?: boolean;
+  rawJsonSchema?: string;
+  jsonRootType?: "object" | "array";
   /** Reference to entity node ID (used by DB Ref nodes). */
   tableRef?: string;
   /** Reference to vector collection (used by Vector DB Ref nodes). */

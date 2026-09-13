@@ -81,7 +81,7 @@ export function deriveNamespace(template: string): string {
   return template;
 }
 
-export const RedisConfig: React.FC<RedisConfigProps> = ({
+export const RedisConfig: React.FC<RedisConfigProps> = React.memo(({
   id,
   data,
   updateNode,
@@ -90,61 +90,79 @@ export const RedisConfig: React.FC<RedisConfigProps> = ({
   const template = data.keyTemplate ?? "";
   const clusterTagParam = data.clusterHashTagParam;
 
-  const keyPattern = deriveKeyPattern(template);
-  const params = extractKeyTemplateParams(template);
+  const [localTemplate, setLocalTemplate] = React.useState(template);
+
+  React.useEffect(() => {
+    setLocalTemplate(template);
+  }, [template]);
+
+  const commitTemplate = React.useCallback(
+    (val: string) => {
+      if (val === (data.keyTemplate ?? "")) return;
+      const newParams = extractKeyTemplateParams(val);
+      const newClusterTag =
+        clusterTagParam && newParams.includes(clusterTagParam)
+          ? clusterTagParam
+          : newParams[0] || undefined;
+
+      updateNode(id, {
+        data: {
+          ...data,
+          keyTemplate: val,
+          clusterHashTagParam: newClusterTag,
+        },
+      });
+    },
+    [id, data, clusterTagParam, updateNode],
+  );
+
+  const keyPattern = deriveKeyPattern(localTemplate);
+  const params = extractKeyTemplateParams(localTemplate);
   const ttl = data.ttl || { value: 3600, unit: "s" };
   const strategy = data.cacheStrategy || "Cache Aside";
 
-  const handleTemplateChange = (val: string) => {
-    const newParams = extractKeyTemplateParams(val);
-    const newClusterTag =
-      clusterTagParam && newParams.includes(clusterTagParam)
-        ? clusterTagParam
-        : newParams[0] || undefined;
-
-    updateNode(id, {
-      data: {
-        ...data,
-        keyTemplate: val,
-        clusterHashTagParam: newClusterTag,
-      },
-    });
-  };
-
-  const handleStructureChange = (val: RedisDataStructure) => {
-    updateNode(id, {
-      data: {
-        ...data,
-        redisDataStructure: val,
-      },
-    });
-  };
+  const handleStructureChange = React.useCallback(
+    (val: RedisDataStructure) => {
+      updateNode(id, {
+        data: {
+          ...data,
+          redisDataStructure: val,
+        },
+      });
+    },
+    [id, data, updateNode],
+  );
 
   return (
-    <div className="flex flex-col gap-2 p-2.5 bg-red-500/5 dark:bg-red-950/20 border-b border-red-500/20 nodrag">
+    <div className="flex flex-col gap-1.5 p-2 bg-red-500/5 dark:bg-red-950/20 border-b border-red-500/20 nodrag">
       {/* Key Template Input & Auto-Pattern Display */}
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between text-[10px]">
-          <span className="font-bold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-1">
+          <span className="font-semibold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-1">
             <Key size={10} /> Key Template
           </span>
           <code
-            className="text-[9px] font-mono px-1 py-0.5 rounded bg-background/80 text-muted-foreground border border-border/40"
-            title="Auto-derived wildcard pattern for SCAN / keyspace inspection"
+            className="text-[9px] font-mono px-1 py-0.2 rounded bg-background/80 text-muted-foreground border border-border/40 max-w-[170px] truncate"
+            title={`Scan Pattern: ${keyPattern}`}
           >
-            Pattern: {keyPattern}
+            {keyPattern}
           </code>
         </div>
         <Input
           className="h-6 text-xs font-mono bg-background border-red-500/30 focus-visible:ring-red-500/40"
           placeholder="e.g. user:{id}:profile"
-          value={template}
-          onChange={(e) => handleTemplateChange(e.target.value)}
+          value={localTemplate}
+          onChange={(e) => setLocalTemplate(e.target.value)}
+          onBlur={() => commitTemplate(localTemplate)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              commitTemplate(localTemplate);
+            }
+          }}
         />
         {/* Cluster Hash Tag Badge & Variable Chips */}
         {params.length > 0 && (
           <div className="flex items-center gap-1 flex-wrap pt-0.5">
-            <span className="text-[9px] text-muted-foreground">Variables:</span>
             {params.map((param) => {
               const isClusterTag = clusterTagParam === param;
               return (
@@ -161,14 +179,16 @@ export const RedisConfig: React.FC<RedisConfigProps> = ({
                       ? "Redis Cluster Hash Tag (forces shard co-location)"
                       : "Click to set as Cluster Hash Tag"
                   }
-                  onClick={() =>
+                  onClick={() => {
+                    commitTemplate(localTemplate);
                     updateNode(id, {
                       data: {
                         ...data,
+                        keyTemplate: localTemplate,
                         clusterHashTagParam: isClusterTag ? undefined : param,
                       },
-                    })
-                  }
+                    });
+                  }}
                 >
                   {isClusterTag ? `{${param}} ⚡` : param}
                 </Badge>
@@ -178,117 +198,87 @@ export const RedisConfig: React.FC<RedisConfigProps> = ({
         )}
       </div>
 
-      {/* Redis Data Structure Selector */}
-      <div className="flex items-center justify-between gap-2 pt-1 border-t border-red-500/15">
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-          <Layers size={10} className="text-red-500" /> Structure
-        </span>
-        <Select
-          value={structure}
-          onValueChange={(val: RedisDataStructure) => handleStructureChange(val)}
-        >
-          <SelectTrigger className="h-6 text-xs w-[140px] font-semibold bg-background border-red-500/30">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {REDIS_DATA_STRUCTURE_OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              return (
+      {/* Badges Strip (Structure, TTL, Strategy) */}
+      <div className="flex items-center justify-between gap-1 pt-1 border-t border-red-500/15 text-[9px] text-muted-foreground">
+        <div className="flex items-center gap-1">
+          <Select
+            value={structure}
+            onValueChange={(val: RedisDataStructure) => handleStructureChange(val)}
+          >
+            <SelectTrigger className="nodrag h-5 text-[10px] w-auto gap-1 px-1.5 font-semibold bg-background border-red-500/30">
+              <SelectValue>
+                {structure === "json" && data.jsonRootType === "array"
+                  ? "RedisJSON[]"
+                  : REDIS_DATA_STRUCTURE_OPTIONS.find((o) => o.value === structure)?.label || structure}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent position="popper" className="nodrag z-50">
+              {REDIS_DATA_STRUCTURE_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <Icon size={12} className="text-red-500 shrink-0" />
-                    <span>{opt.label}</span>
-                  </div>
+                  {opt.value === "json" && data.jsonRootType === "array"
+                    ? "RedisJSON[]"
+                    : opt.label}
                 </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
-      </div>
+              ))}
+            </SelectContent>
+          </Select>
 
-      {/* Structure-Specific Inline Info Summaries */}
-      {structure === "geo" && (
-        <div className="p-1.5 rounded bg-background/60 border border-border/40 text-[10px] flex items-center justify-between text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <MapPin size={10} className="text-red-500" />
-            Coordinates:
-          </span>
-          <span className="font-mono text-foreground font-semibold">
-            {data.geoConfig?.longitudeField || "lon"}, {data.geoConfig?.latitudeField || "lat"} (
-            {data.geoConfig?.distanceUnit || "km"})
-          </span>
-        </div>
-      )}
-
-      {structure === "stream" && (
-        <div className="p-1.5 rounded bg-background/60 border border-border/40 text-[10px] flex items-center justify-between text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Radio size={10} className="text-red-500" />
-            Consumer Groups:
-          </span>
-          <span className="font-mono text-foreground font-semibold">
-            {(data.streamConfig?.consumerGroups || []).length} groups
-          </span>
-        </div>
-      )}
-
-      {structure === "bitfield" && (
-        <div className="p-1.5 rounded bg-background/60 border border-border/40 text-[10px] flex items-center justify-between text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Binary size={10} className="text-red-500" />
-            Subfields:
-          </span>
-          <span className="font-mono text-foreground font-semibold">
-            {(data.bitfieldConfig?.fields || []).length} packed
-          </span>
-        </div>
-      )}
-
-      {structure === "zset" && (
-        <div className="p-1.5 rounded bg-background/60 border border-border/40 text-[10px] flex items-center justify-between text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <ListOrdered size={10} className="text-red-500" />
-            Score Type:
-          </span>
-          <span className="font-mono text-foreground font-semibold">
-            {data.zsetConfig?.scoreType || "timestamp"} ({data.zsetConfig?.sortOrder || "asc"})
-          </span>
-        </div>
-      )}
-
-      {/* Caching Badges Strip (TTL, Strategy, Negative Caching, SWR) */}
-      <div className="flex items-center gap-1 flex-wrap pt-1 text-[9px] text-muted-foreground">
-        <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-background/80 border border-border/40 font-mono">
-          <Clock size={9} className="text-red-500" />
-          <span>
-            {ttl.unit === "never" ? "No TTL" : `${ttl.value}${ttl.unit}`}
-          </span>
-        </div>
-
-        <div className="px-1.5 py-0.5 rounded bg-background/80 border border-border/40 font-mono">
-          {strategy}
-        </div>
-
-        {data.negativeCaching?.enabled && (
-          <div
-            className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-mono font-semibold"
-            title="Negative Caching: caches not-found results"
+          {/* [ ] Array of Objects Toggle Button */}
+          <button
+            type="button"
+            className={`nodrag h-5 px-1.5 rounded border text-[10px] font-mono font-bold transition-all cursor-pointer flex items-center justify-center ${
+              structure === "json" && data.jsonRootType === "array"
+                ? "bg-red-500/20 border-red-500/50 text-red-600 dark:text-red-400 shadow-xs"
+                : "bg-background/80 border-border/40 text-muted-foreground hover:text-foreground hover:border-red-500/30"
+            }`}
+            title={
+              structure === "json" && data.jsonRootType === "array"
+                ? "Array of Objects []. Click to switch to Object {}"
+                : "Click to toggle Array of Objects [] mode"
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              const isCurrentlyArray = structure === "json" && data.jsonRootType === "array";
+              updateNode(id, {
+                data: {
+                  ...data,
+                  redisDataStructure: "json",
+                  jsonRootType: isCurrentlyArray ? "object" : "array",
+                },
+              });
+            }}
           >
-            404: {data.negativeCaching.ttl?.value || 60}
-            {data.negativeCaching.ttl?.unit || "s"}
-          </div>
-        )}
+            [ ]
+          </button>
 
-        {data.staleWhileRevalidate?.enabled && (
-          <div
-            className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-mono font-semibold"
-            title="Stale-While-Revalidate background refresh enabled"
-          >
-            SWR: {data.staleWhileRevalidate.refreshInterval?.value || 300}
-            {data.staleWhileRevalidate.refreshInterval?.unit || "s"}
+          <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-background/80 border border-border/40 font-mono">
+            <Clock size={9} className="text-red-500" />
+            <span>{ttl.unit === "never" ? "No TTL" : `${ttl.value}${ttl.unit}`}</span>
           </div>
-        )}
+        </div>
+
+        <div className="flex items-center gap-1 font-mono">
+          <span className="px-1.5 py-0.5 rounded bg-background/80 border border-border/40">
+            {strategy}
+          </span>
+          {data.negativeCaching?.enabled && (
+            <span
+              className="px-1 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[8px] font-bold"
+              title="Negative caching enabled"
+            >
+              404
+            </span>
+          )}
+          {data.staleWhileRevalidate?.enabled && (
+            <span
+              className="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[8px] font-bold"
+              title="SWR enabled"
+            >
+              SWR
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
-};
+});

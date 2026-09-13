@@ -482,6 +482,74 @@ export async function set${typeName}(
       content: setFnContent,
     });
     cacheHelperBarrelExports.push(`export * from "./set${typeName}";`);
+
+    if (dataStructure === "json" && schema.isJsonArray && schema.itemTypeName) {
+      const itemType = schema.itemTypeName;
+
+      // append<Name>Item.ts
+      const appendFnContent = `import { getRedisClient } from "../../client";
+import { ${itemType}, get${typeName}Key } from "../../schemas/${varName}";
+import { createLogger } from "@workspace/logger";
+
+const logger = createLogger("append${typeName}Item");
+
+/**
+ * Append an item to ${typeName} JSON Array
+ */
+export async function append${typeName}Item(
+  ${keyArgsSig ? `${keyArgsSig}, ` : ""}
+  item: ${itemType},
+): Promise<number> {
+  const key = get${typeName}Key(${templateParams.join(", ") || "id"});
+  try {
+    const redis = await getRedisClient();
+    return await redis.json.arrappend(key, "$", item);
+  } catch (error) {
+    logger.error(\`Failed to append item to JSON array \${key}\`, error);
+    throw error;
+  }
+}
+`;
+      files.push({
+        filename: `src/helpers/${varName}/append${typeName}Item.ts`,
+        language: "typescript",
+        content: appendFnContent,
+      });
+      cacheHelperBarrelExports.push(`export * from "./append${typeName}Item";`);
+
+      // getRecent<Name>Items.ts
+      const getRecentFnContent = `import { getRedisClient } from "../../client";
+import { ${itemType}, get${typeName}Key } from "../../schemas/${varName}";
+import { createLogger } from "@workspace/logger";
+
+const logger = createLogger("getRecent${typeName}Items");
+
+/**
+ * Retrieve the most recent N items from ${typeName} JSON Array
+ */
+export async function getRecent${typeName}Items(
+  ${keyArgsSig ? `${keyArgsSig}, ` : ""}
+  count: number = 20,
+): Promise<${itemType}[]> {
+  const key = get${typeName}Key(${templateParams.join(", ") || "id"});
+  try {
+    const redis = await getRedisClient();
+    const result = await redis.json.get(key, { path: \`$[-\${count}:]\` });
+    if (!result || !Array.isArray(result) || result.length === 0) return [];
+    return (Array.isArray(result[0]) ? result[0] : result) as ${itemType}[];
+  } catch (error) {
+    logger.error(\`Failed to get recent items from JSON array \${key}\`, error);
+    return [];
+  }
+}
+`;
+      files.push({
+        filename: `src/helpers/${varName}/getRecent${typeName}Items.ts`,
+        language: "typescript",
+        content: getRecentFnContent,
+      });
+      cacheHelperBarrelExports.push(`export * from "./getRecent${typeName}Items";`);
+    }
   }
 
   // Universal Invalidation File: invalidate<Name>.ts

@@ -206,6 +206,16 @@ export const entityDataSchema = baseNodeDataSchema
         precision: z.string().optional(),
       })
       .optional(),
+    jsonConfig: z
+      .object({
+        rootType: z.enum(["object", "array"]).optional(),
+        isNested: z.boolean().optional(),
+        rawSchema: z.string().optional(),
+      })
+      .optional(),
+    isNestedJsonSchema: z.boolean().optional(),
+    rawJsonSchema: z.string().optional(),
+    jsonRootType: z.enum(["object", "array"]).optional(),
     columns: z.array(
       z.object({
         name: z.string(),

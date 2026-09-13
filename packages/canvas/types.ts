@@ -24,4 +24,8 @@ export type {
   JsonArray,
   JsonValue,
 } from "./types/realtime";
+export type {
+  RedisJsonConfig,
+  RedisJsonRootType,
+} from "./types/redis";
 

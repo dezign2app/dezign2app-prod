@@ -8,11 +8,10 @@ import {
   RedisHashField,
 } from "@/types/canvas";
 import { Input } from "@workspace/ui/components/input";
+import { Textarea } from "@workspace/ui/components/textarea";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
-import { SCHEMA_PRESET_MAP } from "./constants";
 import {
-  QuickPresetsSection,
   KeyTemplateSection,
   DataStructureSelector,
   CachingArchitectureSection,
@@ -87,13 +86,16 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
     });
   };
 
-  // Preset AI Templates
-  const handleApplyPreset = (presetName: string) => {
-    const preset = SCHEMA_PRESET_MAP[presetName];
-    if (preset) {
-      updateData(preset);
-    }
-  };
+
+  const [localLabel, setLocalLabel] = React.useState(label);
+  React.useEffect(() => {
+    setLocalLabel(label);
+  }, [label]);
+
+  const [localDescription, setLocalDescription] = React.useState(data.description || "");
+  React.useEffect(() => {
+    setLocalDescription(data.description || "");
+  }, [data.description]);
 
   const hashFields: RedisHashField[] =
     data.hashConfig?.fields ||
@@ -125,7 +127,7 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
           </div>
           <div className="flex flex-col min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold tracking-tight truncate">{label}</h2>
+              <h2 className="text-lg font-bold tracking-tight truncate">{localLabel}</h2>
               <Badge
                 variant="outline"
                 className="text-[10px] uppercase font-mono bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400 font-semibold"
@@ -143,16 +145,40 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
         <div className="flex flex-col gap-1 pt-1">
           <Label className="text-xs font-semibold">Schema Identifier / Label</Label>
           <Input
-            value={label}
-            onChange={(e) => updateData({ label: e.target.value })}
+            value={localLabel}
+            onChange={(e) => setLocalLabel(e.target.value)}
+            onBlur={() => {
+              if (localLabel !== label) {
+                updateData({ label: localLabel });
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && localLabel !== label) {
+                updateData({ label: localLabel });
+              }
+            }}
             placeholder="e.g. User_Profile_Cache"
             className="h-8 text-xs font-semibold"
           />
         </div>
+
+        {/* Schema Description & Invalidation Rules */}
+        <div className="flex flex-col gap-1 pt-1">
+          <Label className="text-xs font-semibold">Description & Invalidation Notes</Label>
+          <Textarea
+            value={localDescription}
+            onChange={(e) => setLocalDescription(e.target.value)}
+            onBlur={() => {
+              if (localDescription !== (data.description || "")) {
+                updateData({ description: localDescription });
+              }
+            }}
+            placeholder="Describe cache purpose, invalidation triggers, or operational rules..."
+            className="text-xs min-h-[56px] bg-background resize-y"
+          />
+        </div>
       </div>
 
-      {/* 1. AI Fill & Quick Schema Presets */}
-      <QuickPresetsSection onApplyPreset={handleApplyPreset} />
 
       {/* 2. Keyspace & Key Template Architecture */}
       <KeyTemplateSection
@@ -234,6 +260,7 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
 
         {structure === "json" && (
           <JsonStructureConfig
+            data={data}
             hashFields={hashFields}
             updateData={updateData}
           />
@@ -248,7 +275,6 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
         negativeCaching={negativeCaching}
         staleWhileRevalidate={staleWhileRevalidate}
         sourceOfTruth={data.sourceOfTruth}
-        invalidationRules={data.invalidationRules}
         serialization={data.serialization}
         compression={data.compression}
         tableNodes={tableNodes}

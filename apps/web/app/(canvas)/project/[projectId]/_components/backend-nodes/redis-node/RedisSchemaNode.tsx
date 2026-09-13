@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useCallback, useRef } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -6,45 +6,52 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { ColumnList } from "../entity-node/ColumnList";
 import { RedisConfig } from "../entity-node/RedisConfig";
 import { DbOperationsList } from "../entity-node/DbOperationsList";
-import { RedisSchemaDescription } from "./components/RedisSchemaDescription";
-import { RedisSchemaInstanceSelect } from "./components/RedisSchemaInstanceSelect";
 import { useRedisInstanceConnection } from "./hooks/useRedisInstanceConnection";
 import { syncHashColumns } from "./utils";
 import { NodeHeader } from "../graph-nodes/common";
 import { DatabaseZap, Settings } from "lucide-react";
 import { Badge } from "@workspace/ui/components/badge";
 
-export const RedisSchemaNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+export const RedisSchemaNode = React.memo(({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
   );
-  const setNodesPendingDeletion = useBackendCanvasStore(
-    (s) => s.setNodesPendingDeletion,
-  );
   const nodeRef = useRef<HTMLDivElement>(null);
 
-  const { redisInstanceNodes, dbThemeColor, handleInstanceChange } =
-    useRedisInstanceConnection(id, data, updateNode);
+  const { dbThemeColor } = useRedisInstanceConnection(id, data, updateNode);
 
   const redisStructure = data.redisDataStructure || "hash";
 
-  const openSettings = (e: React.MouseEvent) => {
+  const openSettings = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setActiveConfigItem({
       type: "redisSchema",
       id: id,
       nodeId: id,
     });
-  };
+  }, [id, setActiveConfigItem]);
 
-  const handleUpdateNodeWithSync = (
-    targetNodeId: string,
-    changes: Partial<BackendNode>,
-  ) => {
-    const syncedChanges = syncHashColumns(changes, redisStructure);
-    updateNode(targetNodeId, syncedChanges);
-  };
+  const handleUpdateNodeWithSync = useCallback(
+    (targetNodeId: string, changes: Partial<BackendNode>) => {
+      const syncedChanges = syncHashColumns(changes, redisStructure);
+      updateNode(targetNodeId, syncedChanges);
+    },
+    [redisStructure, updateNode],
+  );
+
+  const isJson = redisStructure === "json";
+  const isJsonArray = isJson && data.jsonRootType === "array";
+  const badgeText = isJsonArray ? "JSON[]" : redisStructure;
+  const listTitle = data.isNestedJsonSchema
+    ? isJsonArray
+      ? "JSON Schema"
+      : "JSON Schema"
+    : isJsonArray
+      ? "Array Items"
+      : isJson
+        ? "JSON Fields"
+        : "Hash Fields";
 
   return (
     <div
@@ -87,7 +94,7 @@ export const RedisSchemaNode = ({ id, data, selected }: NodeProps<BackendNode>) 
             variant="outline"
             className="text-[9px] px-1 py-0 uppercase font-mono bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 shrink-0"
           >
-            {redisStructure}
+            {badgeText}
           </Badge>
         }
         rightElement={
@@ -98,24 +105,6 @@ export const RedisSchemaNode = ({ id, data, selected }: NodeProps<BackendNode>) 
           >
             <Settings size={14} />
           </div>
-        }
-      />
-
-      {/* Redis Instance Selector Dropdown */}
-      <div className="px-3 py-1.5 border-b bg-muted/20">
-        <RedisSchemaInstanceSelect
-          currentDatabaseId={data.databaseId}
-          dbThemeColor={dbThemeColor}
-          redisInstanceNodes={redisInstanceNodes}
-          onInstanceChange={handleInstanceChange}
-        />
-      </div>
-
-      {/* Description */}
-      <RedisSchemaDescription
-        value={data.description}
-        onChange={(val) =>
-          updateNode(id, { data: { ...data, description: val } })
         }
       />
 
@@ -130,6 +119,9 @@ export const RedisSchemaNode = ({ id, data, selected }: NodeProps<BackendNode>) 
           updateNode={handleUpdateNodeWithSync}
           data={data}
           isVector={false}
+          defaultCollapsed={true}
+          title={listTitle}
+          badge={isJsonArray ? "[]" : undefined}
         />
       )}
 
@@ -137,4 +129,6 @@ export const RedisSchemaNode = ({ id, data, selected }: NodeProps<BackendNode>) 
       <DbOperationsList nodeId={id} data={data} updateNode={updateNode} />
     </div>
   );
-};
+});
+
+RedisSchemaNode.displayName = "RedisSchemaNode";
