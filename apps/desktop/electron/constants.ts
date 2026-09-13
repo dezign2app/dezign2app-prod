@@ -4,25 +4,42 @@ import fs from "fs";
 import net from "net";
 
 // ─────────────────────────────────────────────
-//  App Identity & Constants
+//  App Identity & Constants (3 Environments: local, dev, prod)
 // ─────────────────────────────────────────────
-function getIsDevBuild(): boolean {
-  if (!app.isPackaged) return true;
+export type AppEnvironment = "local" | "dev" | "prod";
+
+export function getAppEnvironment(): AppEnvironment {
+  if (!app.isPackaged) return "local";
   const name = app.getName() || "";
-  return name.toLowerCase().includes("dev") || process.env.APP_ENV === "development";
+  if (name.toLowerCase().includes("dev") || process.env.APP_ENV === "development") {
+    return "dev";
+  }
+  return "prod";
 }
 
-const isDevEnv = getIsDevBuild();
+export const APP_ENV = getAppEnvironment();
 
-export const APP_NAME = isDevEnv ? "D2A Dev" : "D2A";
-export const APP_USER_MODEL_ID = isDevEnv
-  ? "com.dezign2app.desktop.dev"
-  : "com.dezign2app.desktop";
+export const APP_NAME =
+  APP_ENV === "local"
+    ? "D2A Local"
+    : APP_ENV === "dev"
+      ? "D2A Dev"
+      : "D2A";
+
+export const APP_USER_MODEL_ID =
+  APP_ENV === "local"
+    ? "com.dezign2app.desktop.local"
+    : APP_ENV === "dev"
+      ? "com.dezign2app.desktop.dev"
+      : "com.dezign2app.desktop";
+
 export const PROTOCOL_SCHEME = "dezign2app";
 
 export const DEV_SERVER_URL =
   process.env.ELECTRON_DEV_URL || "http://127.0.0.1:46500";
-export const IS_DEV = !app.isPackaged;
+export const IS_LOCAL = APP_ENV === "local";
+export const IS_DEV = APP_ENV === "dev" || IS_LOCAL;
+export const IS_PROD = APP_ENV === "prod";
 export const DEFAULT_PORT = 46500;
 
 /**

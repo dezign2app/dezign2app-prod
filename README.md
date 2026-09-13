@@ -98,9 +98,10 @@ dezign2app/
 - **Integrated PTY Terminal**: Real native pseudo-terminal emulation powered by `node-pty` (PowerShell on Windows; bash/zsh on macOS and Linux) with multi-session terminal tabs.
 - **1-Click Local Docker Runner**: Writes the generated monorepo to your chosen folder and triggers `docker compose up` to run the entire distributed architecture locally.
 - **Seamless Deep-Link Authentication**: Native `dezign2app://` protocol handling for secure OAuth handoffs via Better Auth.
-- **Side-by-Side Dev & Prod Environments**:
-  - **`D2A Dev`**: Runs on development configurations and connects to the development Convex/Auth environment.
-  - **`D2A`**: Production build connecting to production cloud deployments. Both can be installed and run concurrently without conflicts.
+- **3-Tier Isolated Environments**:
+  - **`D2A Local`**: Live local development (`pnpm dev`) with hot reloading and dedicated `%APPDATA%\D2A Local` cache.
+  - **`D2A Dev`**: Packaged development build connecting to the development Convex/Auth environment (`%APPDATA%\D2A Dev`).
+  - **`D2A`**: Production build connecting to production cloud deployments (`%APPDATA%\D2A`). All three can run concurrently without conflicts.
 
 ### 4. In-Memory Architecture Simulation Engine (`lib/simulation`)
 
@@ -268,16 +269,17 @@ pnpm --filter web dev          # Terminal 1 (Next.js on 46500)
 pnpm --filter desktop dev      # Terminal 2 (Electron window)
 ```
 
-### Side-by-Side Dev & Prod Desktop Builds
+### Side-by-Side 3-Tier Desktop Environments
 
-Dezign2App supports dual-target desktop builds so developers can test bleeding-edge local features alongside stable production builds:
+Dezign2App supports three isolated desktop execution tiers so developers can test bleeding-edge local features, packaged dev builds, and stable production releases without conflict:
 
-| Build Type      | Command                   | Product Name | Application ID               | Target Environment                                          |
-| :-------------- | :------------------------ | :----------- | :--------------------------- | :---------------------------------------------------------- |
-| **Development** | `pnpm build:desktop:dev`  | **D2A Dev**  | `com.dezign2app.desktop.dev` | Development Convex (`neighborly-setter-541`) & local auth   |
-| **Production**  | `pnpm build:desktop:prod` | **D2A**      | `com.dezign2app.desktop`     | Production Convex (`gregarious-quail-82`) & production auth |
+| Tier / Build Type | Command                   | Product Name  | Application ID                 | Target Environment / Storage                                |
+| :---------------- | :------------------------ | :------------ | :----------------------------- | :---------------------------------------------------------- |
+| **Local Run**     | `pnpm dev`                | **D2A Local** | `com.dezign2app.desktop.local` | Live Next/Turbopack dev server (`%APPDATA%\D2A Local`)      |
+| **Development**   | `pnpm build:desktop:dev`  | **D2A Dev**   | `com.dezign2app.desktop.dev`   | Development Convex & local auth (`%APPDATA%\D2A Dev`)       |
+| **Production**    | `pnpm build:desktop:prod` | **D2A**       | `com.dezign2app.desktop`       | Production Convex & auth (`%APPDATA%\D2A`)                  |
 
-Both builds can be installed on the same machine simultaneously with independent shortcuts, user data folders, and identity profiles.
+All three tiers can run side-by-side on the same machine with completely independent shortcuts, user data folders, cache paths, and single-instance process locks.
 
 ### Packaging Desktop Executables
 

@@ -65,7 +65,10 @@ export async function createTerminal(
     cols: cols || 80,
     rows: rows || 24,
     cwd: targetCwd,
-    env: process.env as { [key: string]: string },
+    env: {
+      ...(process.env as { [key: string]: string }),
+      D2A_PARENT_PID: String(process.pid),
+    },
   });
 
   ptyProcess.onData((data: string) => {

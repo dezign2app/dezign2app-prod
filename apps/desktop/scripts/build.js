@@ -422,10 +422,10 @@ async function run() {
     }
   }
 
-  // 4. On Windows, ensure any previous running instance of D2A or D2A Dev is terminated
+  // 4. On Windows, ensure any previous running instance of D2A, D2A Dev, or D2A Local is terminated
   if (hostPlatform === "win32") {
     try {
-      execSync('powershell -Command "Stop-Process -Name D2A, \'D2A Dev\' -Force -ErrorAction SilentlyContinue"', {
+      execSync('powershell -Command "Stop-Process -Name D2A, \'D2A Dev\', \'D2A Local\' -Force -ErrorAction SilentlyContinue"', {
         stdio: "ignore",
       });
     } catch (e) {}

@@ -50,7 +50,14 @@ export async function startDev(
   onLog("🔥 [2/2] Launching all apps with hot reload (pnpm dev)...\n");
   onLog("─".repeat(60) + "\n\n");
 
-  devProcess = spawn("pnpm", ["dev"], { cwd: projectDir, shell: true });
+  devProcess = spawn("pnpm", ["dev"], {
+    cwd: projectDir,
+    shell: true,
+    env: {
+      ...process.env,
+      D2A_PARENT_PID: String(process.pid),
+    },
+  });
 
   devProcess.stdout?.on("data", (data: Buffer) => {
     onLog(data.toString());
