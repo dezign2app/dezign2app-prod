@@ -185,17 +185,27 @@ export const DatabaseTableRefNode = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div
+          className="flex items-center gap-1 shrink-0 nodrag"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <button
-            className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+            type="button"
+            className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all cursor-pointer nodrag"
             onClick={handleOpenConfig}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
             title="Configure Database"
           >
             <Settings size={13} />
           </button>
           <button
-            className="p-1 rounded hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-all cursor-pointer"
+            type="button"
+            className="p-1 rounded hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-all cursor-pointer nodrag"
             onClick={handleDelete}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
             title="Delete Node"
           >
             <Trash size={13} />
@@ -211,7 +221,11 @@ export const DatabaseTableRefNode = ({
       )}
 
       {/* Selectors section: matches ServiceNode body bg-secondary/5 and border-b */}
-      <div className="px-3 py-2.5 bg-secondary/5 border-b flex flex-col gap-2 nodrag">
+      <div
+        className="px-3 py-2.5 bg-secondary/5 border-b flex flex-col gap-2 nodrag"
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         {/* 1. Database Selector */}
         <Select
           value={selectedDatabaseId || "__all__"}
@@ -238,15 +252,18 @@ export const DatabaseTableRefNode = ({
             });
           }}
         >
-          <SelectTrigger className="h-7 w-full text-xs font-medium bg-background/80 hover:bg-background border-border/70 hover:border-orange-500/50 px-2.5 py-0 truncate shadow-none">
-            <div className="flex items-center gap-1.5 min-w-0 truncate">
+          <SelectTrigger
+            className="h-7 w-full text-xs font-medium bg-background/80 hover:bg-background border-border/70 hover:border-orange-500/50 px-2.5 py-0 truncate shadow-none nodrag cursor-pointer"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-1.5 min-w-0 truncate pointer-events-none">
               <Server size={12} className="text-orange-500 shrink-0" />
               <span className="truncate">
                 {selectedDatabase?.data?.label || (selectedDatabaseId && selectedDatabaseId !== "__all__" ? "Database" : "All Databases")}
               </span>
             </div>
           </SelectTrigger>
-          <SelectContent className="nodrag z-[100]">
+          <SelectContent position="popper" className="nodrag z-[100]">
             <SelectItem value="__all__" className="text-xs">
               All Databases
             </SelectItem>
@@ -263,8 +280,9 @@ export const DatabaseTableRefNode = ({
 
         {/* 2. Table Selector */}
         <Select
-          value={data.tableRef || ""}
+          value={data.tableRef || "__none__"}
           onValueChange={(val) => {
+            if (val === "__none__") return;
             const entity = allEntities.find((e) => e.id === val);
             updateNode(id, {
               data: {
@@ -278,21 +296,24 @@ export const DatabaseTableRefNode = ({
             });
           }}
         >
-          <SelectTrigger className="h-7 w-full text-xs font-semibold bg-background/80 hover:bg-background border-border/70 hover:border-orange-500/50 px-2.5 py-0 truncate shadow-none">
-            <div className="flex items-center gap-1.5 min-w-0 truncate">
+          <SelectTrigger
+            className="h-7 w-full text-xs font-semibold bg-background/80 hover:bg-background border-border/70 hover:border-orange-500/50 px-2.5 py-0 truncate shadow-none nodrag cursor-pointer"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-1.5 min-w-0 truncate pointer-events-none">
               <Table2 size={12} className="text-orange-500 shrink-0" />
               <span className="truncate">
                 {selectedTable?.data?.label || "Select Table..."}
               </span>
             </div>
           </SelectTrigger>
-          <SelectContent className="nodrag z-[100]">
+          <SelectContent position="popper" className="nodrag z-[100]">
             {filteredEntities.length === 0 ? (
-              <div className="p-2 text-xs text-muted-foreground italic">
+              <SelectItem value="__none__" disabled className="text-xs text-muted-foreground italic">
                 {selectedDatabaseId && selectedDatabaseId !== "__all__"
                   ? "No tables for this database"
                   : "No tables defined"}
-              </div>
+              </SelectItem>
             ) : (
               filteredEntities.map((e) => (
                 <SelectItem key={e.id} value={e.id} className="text-xs">

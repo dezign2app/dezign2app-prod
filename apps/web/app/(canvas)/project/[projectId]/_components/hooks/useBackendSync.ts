@@ -477,7 +477,7 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
             .map((n) => [n.id, n]),
         ).values(),
       );
-      const uniqueEdgesToSync = Array.from(
+      const edgesById = Array.from(
         new Map(
           syncingEdges
             .filter(
@@ -487,6 +487,18 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
             .map((e) => [e.id, e]),
         ).values(),
       );
+
+      const seenEdgeHandleKeys = new Set<string>();
+      const uniqueEdgesToSync: typeof syncingEdges = [];
+      for (const edge of edgesById) {
+        const key = `${edge.source}:${edge.sourceHandle ?? ""}->${edge.target}:${edge.targetHandle ?? ""}`;
+        const revKey = `${edge.target}:${edge.targetHandle ?? ""}->${edge.source}:${edge.sourceHandle ?? ""}`;
+        if (!seenEdgeHandleKeys.has(key) && !seenEdgeHandleKeys.has(revKey)) {
+          seenEdgeHandleKeys.add(key);
+          uniqueEdgesToSync.push(edge);
+        }
+      }
+
       const uniqueEndpointsToSync = Array.from(
         new Map(
           syncingEndpoints
@@ -572,6 +584,34 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
             targetHandle: e.targetHandle ?? undefined,
             data: e.data,
             fractionalIndex: e.fractionalIndex,
+          }).catch((err) => {
+            const errMsg = err?.message || String(err);
+            const errCode = err?.data?.code;
+            if (
+              errCode === "DUPLICATE_EDGE" ||
+              errMsg.includes("DUPLICATE_EDGE") ||
+              errMsg.includes("An edge already exists between these exact handles")
+            ) {
+              console.warn(
+                `[useBackendSync] Edge ${e.id} already exists in database; dropping duplicate.`,
+              );
+              const currentEdges = useBackendCanvasStore.getState().edges;
+              const hasOriginal = currentEdges.some(
+                (other) =>
+                  other.id !== e.id &&
+                  other.source === e.source &&
+                  other.target === e.target &&
+                  (other.sourceHandle ?? null) === (e.sourceHandle ?? null) &&
+                  (other.targetHandle ?? null) === (e.targetHandle ?? null),
+              );
+              if (hasOriginal) {
+                useBackendCanvasStore.setState({
+                  edges: currentEdges.filter((item) => item.id !== e.id),
+                });
+              }
+              return;
+            }
+            throw err;
           }),
         ),
         ...uniqueEdgeRemovals.map((id) =>

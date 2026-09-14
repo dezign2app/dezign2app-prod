@@ -136,17 +136,27 @@ export const RedisCacheNode = ({
           )}
         </div>
 
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div
+          className="flex items-center gap-0.5 shrink-0 nodrag"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <button
-            className="p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 transition-colors"
+            type="button"
+            className="p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 transition-colors nodrag cursor-pointer"
             onClick={handleOpenConfig}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
             title="Configure Redis Cache"
           >
             <Settings size={12} />
           </button>
           <button
-            className="p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+            type="button"
+            className="p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors nodrag cursor-pointer"
             onClick={handleDelete}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
             title="Delete Node"
           >
             <Trash size={12} />
@@ -162,7 +172,11 @@ export const RedisCacheNode = ({
       )}
 
       {/* Dropdowns in flex-col */}
-      <div className="flex flex-col gap-1.5 nodrag">
+      <div
+        className="flex flex-col gap-1.5 nodrag"
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         {/* 1. Redis Instance Selector */}
         <Select
           value={selectedInstanceId || "__all__"}
@@ -189,15 +203,18 @@ export const RedisCacheNode = ({
             });
           }}
         >
-          <SelectTrigger className="h-6 w-full text-[11px] font-medium bg-background/50 border-border/70 hover:border-red-500/50 px-2 py-0 truncate overflow-hidden">
-            <div className="flex items-center gap-1.5 min-w-0 truncate">
+          <SelectTrigger
+            className="h-6 w-full text-[11px] font-medium bg-background/50 border-border/70 hover:border-red-500/50 px-2 py-0 truncate overflow-hidden nodrag cursor-pointer"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-1.5 min-w-0 truncate pointer-events-none">
               <Server size={11} className="text-red-500/80 shrink-0" />
               <span className="truncate">
                 {selectedInstance?.data?.label || (selectedInstanceId && selectedInstanceId !== "__all__" ? "Instance" : "All Instances")}
               </span>
             </div>
           </SelectTrigger>
-          <SelectContent className="nodrag z-[100]">
+          <SelectContent position="popper" className="nodrag z-[100]">
             <SelectItem value="__all__" className="text-xs">
               All Instances
             </SelectItem>
@@ -214,8 +231,9 @@ export const RedisCacheNode = ({
 
         {/* 2. Redis Schema Selector */}
         <Select
-          value={data.schemaRef || ""}
+          value={data.schemaRef || "__none__"}
           onValueChange={(val) => {
+            if (val === "__none__") return;
             const schema = allRedisSchemas.find((s) => s.id === val);
             updateNode(id, {
               data: {
@@ -229,21 +247,24 @@ export const RedisCacheNode = ({
             });
           }}
         >
-          <SelectTrigger className="h-6 w-full text-[11px] font-semibold bg-background/50 border-border/70 hover:border-red-500/50 px-2 py-0 truncate overflow-hidden">
-            <div className="flex items-center gap-1.5 min-w-0 truncate">
+          <SelectTrigger
+            className="h-6 w-full text-[11px] font-semibold bg-background/50 border-border/70 hover:border-red-500/50 px-2 py-0 truncate overflow-hidden nodrag cursor-pointer"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-1.5 min-w-0 truncate pointer-events-none">
               <Layers size={11} className="text-red-500 shrink-0" />
               <span className="truncate">
                 {selectedSchema?.data?.label || "Select Schema..."}
               </span>
             </div>
           </SelectTrigger>
-          <SelectContent className="nodrag z-[100]">
+          <SelectContent position="popper" className="nodrag z-[100]">
             {filteredSchemas.length === 0 ? (
-              <div className="p-2 text-xs text-muted-foreground italic">
+              <SelectItem value="__none__" disabled className="text-xs text-muted-foreground italic">
                 {selectedInstanceId && selectedInstanceId !== "__all__"
                   ? "No schemas for instance"
                   : "No schemas defined"}
-              </div>
+              </SelectItem>
             ) : (
               filteredSchemas.map((s) => (
                 <SelectItem key={s.id} value={s.id} className="text-xs">

@@ -29,11 +29,12 @@ import {
   getConnectedTransformersForEndpoint,
   getConnectedKafkaForEndpoint,
   getConnectedLangGraphForEndpoint,
+  getConnectedRedisForEndpoint,
   isStepInputUnconfigured,
 } from "@/lib/utils/pipelineValidation";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
-import { toTableName, toVarName } from "@/lib/compiler/utils";
+import { toFolderName, toTableName, toVarName } from "@/lib/compiler/utils";
 
 export interface UsePipelineStepsProps {
   steps: PipelineStepDraft[];
@@ -323,6 +324,95 @@ export function usePipelineSteps({
     steps,
   ]);
 
+  const connectedRedis = useMemo(() => {
+    if (!targetId || !serviceNodeId) return [];
+    return getConnectedRedisForEndpoint(
+      targetId,
+      serviceNodeId,
+      allNodes,
+      allEdges,
+    );
+  }, [targetId, serviceNodeId, allNodes, allEdges]);
+
+  // Auto-synchronize connected Redis cache into the pipeline steps
+  useEffect(() => {
+    if (connectedRedis.length === 0) return;
+
+    const missingRedis = connectedRedis.filter(
+      (cr) =>
+        !executableSteps.some(
+          (s) =>
+            s.type === "redis_operation" &&
+            (s.tableNodeId === cr.schemaId ||
+              s.tableNodeId === cr.cacheNodeId ||
+              (cr.instanceId && s.databaseId === cr.instanceId)),
+        ),
+    );
+
+    if (missingRedis.length > 0) {
+      const newRedisSteps: PipelineStepDraft[] = missingRedis.map(
+        (cr, idx) => {
+          const stepNum = executableSteps.length + idx + 1;
+          const targetSchemaNode = cr.schemaNode || cr.cacheNode;
+          const ops = targetSchemaNode ? getEntityDbOperations(targetSchemaNode, allNodes) : [];
+          const defaultOp = ops[0];
+          const varName = defaultOp
+            ? `${toVarName(defaultOp.name)}Result`
+            : `cachedResult${stepNum > 1 ? stepNum : ""}`;
+          const instanceLabel = cr.instanceNode?.data?.label || "primary-redis-cache";
+          const importPath = `@workspace/${toFolderName(instanceLabel)}`;
+
+          return {
+            id: generateId(),
+            name: varName,
+            type: "redis_operation",
+            enabled: true,
+            outputVariable: varName,
+            tableNodeId: cr.schemaId || cr.cacheNodeId,
+            databaseId: cr.instanceId,
+            operationId: defaultOp?.id,
+            functionRef: defaultOp
+              ? {
+                  name: defaultOp.name,
+                  importPath,
+                  signature: defaultOp.signature,
+                }
+              : undefined,
+            inputBindings: [],
+          };
+        },
+      );
+
+      if (isConsumer) {
+        onChange([...executableSteps, ...newRedisSteps]);
+      } else {
+        const foundReturn = steps.find((s) => s.type === "return_response");
+        onChange([
+          ...executableSteps,
+          ...newRedisSteps,
+          foundReturn || {
+            id: "return-response-step",
+            name: "Return Response",
+            type: "return_response",
+            enabled: true,
+            statusCode: endpoint?.type === "POST" ? 201 : 200,
+            inputBindings: [],
+            outputVariable: "",
+          },
+        ]);
+      }
+    }
+  }, [
+    connectedRedis,
+    executableSteps,
+    isConsumer,
+    onChange,
+    serviceNodeId,
+    endpoint?.type,
+    steps,
+    allNodes,
+  ]);
+
   // Stable synchronization keys to prevent re-running connection effects on internal step property changes (e.g. checkbox toggles)
   const redisStepsKey = useMemo(
     () =>
@@ -515,6 +605,38 @@ export function usePipelineSteps({
         tableNodeId: firstEntity?.id || connectionResult?.dbRefNodeId,
         operationId: defaultOp?.id,
         functionRef: defaultOp && importPath
+          ? {
+              name: defaultOp.name,
+              importPath,
+              signature: defaultOp.signature,
+            }
+          : undefined,
+        name: varName,
+        outputVariable: varName,
+        inputBindings: [],
+      };
+    } else if (type === "redis_operation") {
+      const redisCacheNodes = allNodes.filter((n) => n.type === "redis-cache");
+      const firstCache = redisCacheNodes[0];
+      const schemaRef = firstCache?.data?.schemaRef;
+      const targetSchemaNode = allNodes.find((n) => n.id === schemaRef) || firstCache;
+      const instanceId = firstCache?.data?.databaseId || targetSchemaNode?.data?.databaseId;
+      const targetInstanceNode = allNodes.find((n) => n.id === instanceId);
+      const instanceLabel = targetInstanceNode?.data?.label || "primary-redis-cache";
+      const importPath = `@workspace/${toFolderName(instanceLabel)}`;
+
+      const ops = targetSchemaNode ? getEntityDbOperations(targetSchemaNode, allNodes) : [];
+      const defaultOp = ops[0];
+      const tableNodeId = schemaRef || firstCache?.id;
+      const varName = defaultOp
+        ? `${toVarName(defaultOp.name)}Result`
+        : defaultVar;
+
+      initialFields = {
+        databaseId: instanceId,
+        tableNodeId: tableNodeId,
+        operationId: defaultOp?.id,
+        functionRef: defaultOp
           ? {
               name: defaultOp.name,
               importPath,

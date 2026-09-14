@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { ensureRedisCacheConnection, cleanupRedisCacheConnection } from "../utils";
+import { getConnectedRedisForEndpoint } from "@/lib/utils/pipelineValidation";
 import { PipelineStepDraft } from "../types";
 
 describe("pipeline-step-editor: Redis Cache Node and Edge Synchronization", () => {
@@ -166,5 +167,215 @@ describe("pipeline-step-editor: Redis Cache Node and Edge Synchronization", () =
       (e) => e.source === serviceNodeId && e.target === cacheNodeId,
     );
     expect(remainingEdges.length).toBe(1);
+  });
+
+  describe("Canvas Edge connection from RedisCacheNode to ServiceNode", () => {
+    const cacheNodeId = "redis-cache-user";
+    const eventId = "event-user-cache";
+
+    beforeEach(() => {
+      useBackendCanvasStore.setState({
+        nodes: [
+          {
+            id: serviceNodeId,
+            type: "service",
+            position: { x: 100, y: 100 },
+            fractionalIndex: "a0",
+            data: { label: "User Service" },
+          },
+          {
+            id: redisInstanceId,
+            type: "redis_instance",
+            position: { x: 500, y: 100 },
+            fractionalIndex: "a1",
+            data: { label: "Redis Main", dbEngine: "redis" },
+          },
+          {
+            id: redisSchemaId,
+            type: "redis_schema",
+            position: { x: 500, y: 250 },
+            fractionalIndex: "a2",
+            data: { label: "User Cache Schema", databaseId: redisInstanceId },
+          },
+          {
+            id: cacheNodeId,
+            type: "redis-cache",
+            position: { x: 500, y: 400 },
+            fractionalIndex: "a3",
+            data: {
+              label: "User Cache Ref",
+              schemaRef: redisSchemaId,
+              databaseId: redisInstanceId,
+            },
+          },
+        ],
+        edges: [],
+        endpoints: [
+          {
+            id: endpointId,
+            nodeId: serviceNodeId,
+            name: "Get User",
+            type: "GET",
+            pipelineSteps: [
+              {
+                id: "return-response-step",
+                name: "Return Response",
+                type: "return_response",
+                enabled: true,
+                outputVariable: "",
+                inputBindings: [],
+              },
+            ],
+          },
+        ],
+        events: [
+          {
+            id: eventId,
+            nodeId: serviceNodeId,
+            name: "user-created-event",
+            variant: "consume",
+            pipelineSteps: [],
+          },
+        ],
+      });
+    });
+
+    it("auto-adds redis_operation step before return_response when edge is connected from endpoint to redis-cache node", () => {
+      useBackendCanvasStore.getState().onConnect({
+        source: serviceNodeId,
+        target: cacheNodeId,
+        sourceHandle: `endpoint-out-${endpointId}`,
+        targetHandle: "database-target",
+      });
+
+      const state = useBackendCanvasStore.getState();
+      const updatedEp = state.endpoints.find((e) => e.id === endpointId);
+
+      expect(updatedEp?.pipelineSteps).toHaveLength(2);
+      const redisStep = updatedEp?.pipelineSteps?.[0];
+      expect(redisStep?.type).toBe("redis_operation");
+      expect(redisStep?.tableNodeId).toBe(redisSchemaId);
+      expect(redisStep?.databaseId).toBe(redisInstanceId);
+      expect(redisStep?.outputVariable).toBeDefined();
+
+      // Pinned return_response step should remain at the end
+      expect(updatedEp?.pipelineSteps?.[1]?.type).toBe("return_response");
+
+      // Canvas edge should remain intact
+      const edge = state.edges.find(
+        (e) => e.source === serviceNodeId && e.target === cacheNodeId,
+      );
+      expect(edge).toBeDefined();
+    });
+
+    it("auto-adds redis_operation step when edge is connected from redis-cache node to service endpoint", () => {
+      useBackendCanvasStore.getState().onConnect({
+        source: cacheNodeId,
+        target: serviceNodeId,
+        sourceHandle: "database-source",
+        targetHandle: `endpoint-in-${endpointId}`,
+      });
+
+      const state = useBackendCanvasStore.getState();
+      const updatedEp = state.endpoints.find((e) => e.id === endpointId);
+
+      expect(updatedEp?.pipelineSteps).toHaveLength(2);
+      expect(updatedEp?.pipelineSteps?.[0]?.type).toBe("redis_operation");
+      expect(updatedEp?.pipelineSteps?.[1]?.type).toBe("return_response");
+    });
+
+    it("auto-adds redis_operation step to consumer event when edge is connected to redis-cache node", () => {
+      useBackendCanvasStore.getState().onConnect({
+        source: serviceNodeId,
+        target: cacheNodeId,
+        sourceHandle: `consumedEvents-out-${eventId}`,
+        targetHandle: "database-target",
+      });
+
+      const state = useBackendCanvasStore.getState();
+      const updatedEv = state.events.find((e) => e.id === eventId);
+
+      expect(updatedEv?.pipelineSteps).toHaveLength(1);
+      const redisStep = updatedEv?.pipelineSteps?.[0];
+      expect(redisStep?.type).toBe("redis_operation");
+      expect(redisStep?.tableNodeId).toBe(redisSchemaId);
+    });
+
+    it("getConnectedRedisForEndpoint identifies Redis cache node connected to endpoint", () => {
+      const edges = [
+        {
+          id: "edge-rc-1",
+          source: serviceNodeId,
+          target: cacheNodeId,
+          sourceHandle: `endpoint-out-${endpointId}`,
+          targetHandle: "database-target",
+          fractionalIndex: "a0",
+        },
+      ];
+
+      const state = useBackendCanvasStore.getState();
+      const connected = getConnectedRedisForEndpoint(
+        endpointId,
+        serviceNodeId,
+        state.nodes,
+        edges as any,
+      );
+
+      expect(connected).toHaveLength(1);
+      expect(connected[0]?.cacheNodeId).toBe(cacheNodeId);
+      expect(connected[0]?.schemaId).toBe(redisSchemaId);
+    });
+
+    it("removes redis_operation step when connecting edge is deleted", () => {
+      // 1. Connect
+      useBackendCanvasStore.getState().onConnect({
+        source: serviceNodeId,
+        target: cacheNodeId,
+        sourceHandle: `endpoint-out-${endpointId}`,
+        targetHandle: "database-target",
+      });
+
+      const stateAfterConnect = useBackendCanvasStore.getState();
+      const addedEdge = stateAfterConnect.edges.find(
+        (e) => e.source === serviceNodeId && e.target === cacheNodeId,
+      );
+      expect(addedEdge).toBeDefined();
+      expect(
+        stateAfterConnect.endpoints.find((e) => e.id === endpointId)?.pipelineSteps,
+      ).toHaveLength(2);
+
+      // 2. Delete edge
+      useBackendCanvasStore.getState().deleteEdge(addedEdge!.id);
+
+      const stateAfterDelete = useBackendCanvasStore.getState();
+      const updatedEp = stateAfterDelete.endpoints.find((e) => e.id === endpointId);
+
+      expect(updatedEp?.pipelineSteps).toHaveLength(1);
+      expect(updatedEp?.pipelineSteps?.[0]?.type).toBe("return_response");
+    });
+
+    it("removes redis_operation step when the redis-cache node itself is deleted", () => {
+      // 1. Connect
+      useBackendCanvasStore.getState().onConnect({
+        source: serviceNodeId,
+        target: cacheNodeId,
+        sourceHandle: `endpoint-out-${endpointId}`,
+        targetHandle: "database-target",
+      });
+
+      expect(
+        useBackendCanvasStore.getState().endpoints.find((e) => e.id === endpointId)
+          ?.pipelineSteps,
+      ).toHaveLength(2);
+
+      // 2. Delete redis-cache node
+      useBackendCanvasStore.getState().deleteNode(cacheNodeId);
+
+      const stateAfterDelete = useBackendCanvasStore.getState();
+      const updatedEp = stateAfterDelete.endpoints.find((e) => e.id === endpointId);
+
+      expect(updatedEp?.pipelineSteps).toHaveLength(1);
+      expect(updatedEp?.pipelineSteps?.[0]?.type).toBe("return_response");
+    });
   });
 });

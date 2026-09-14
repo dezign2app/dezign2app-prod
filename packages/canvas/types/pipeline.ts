@@ -152,6 +152,17 @@ export interface ConnectedLangGraph {
   node: BackendNode;
 }
 
+export interface ConnectedRedis {
+  id: string;
+  cacheNodeId: string;
+  cacheNode: BackendNode;
+  schemaId?: string;
+  schemaNode?: BackendNode;
+  instanceId?: string;
+  instanceNode?: BackendNode;
+  label: string;
+}
+
 export interface BindingCheckSource {
   kind?: string;
   field?: string;

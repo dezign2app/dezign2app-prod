@@ -81,6 +81,61 @@ describe("backendCanvasStore - edgeSlice modularization & handlers", () => {
       expect(added?.sourceHandle).toBe("source-0");
       expect(added?.targetHandle).toBe("target-1");
     });
+
+    it("rejects duplicate edges between the exact same handles even if edgeId differs", () => {
+      const store = useBackendCanvasStore.getState();
+      const nodeA: BackendNode = {
+        id: "node-a",
+        type: "service",
+        position: { x: 0, y: 0 },
+        data: { label: "Node A" },
+        fractionalIndex: "a0",
+      };
+      const nodeB: BackendNode = {
+        id: "node-b",
+        type: "redis-cache",
+        position: { x: 200, y: 0 },
+        data: { label: "Cache" },
+        fractionalIndex: "a1",
+      };
+      store.setNodesAndEdges([nodeA, nodeB], [], [], [], [], "proj-edge-test");
+
+      store.addEdge({
+        id: "edge-1",
+        source: "node-a",
+        target: "node-b",
+        sourceHandle: "endpoint-out-1",
+        targetHandle: "database-target",
+        type: "connection",
+      });
+
+      expect(useBackendCanvasStore.getState().edges).toHaveLength(1);
+
+      // Attempt to add duplicate edge with different ID between same handles
+      store.addEdge({
+        id: "edge-2-different-id",
+        source: "node-a",
+        target: "node-b",
+        sourceHandle: "endpoint-out-1",
+        targetHandle: "database-target",
+        type: "connection",
+      });
+
+      expect(useBackendCanvasStore.getState().edges).toHaveLength(1);
+      expect(useBackendCanvasStore.getState().edges[0]?.id).toBe("edge-1");
+
+      // Attempt reverse connection between same handles
+      store.addEdge({
+        id: "edge-3-reverse",
+        source: "node-b",
+        target: "node-a",
+        sourceHandle: "database-target",
+        targetHandle: "endpoint-out-1",
+        type: "connection",
+      });
+
+      expect(useBackendCanvasStore.getState().edges).toHaveLength(1);
+    });
   });
 
   describe("updateEdge and deleteEdge", () => {

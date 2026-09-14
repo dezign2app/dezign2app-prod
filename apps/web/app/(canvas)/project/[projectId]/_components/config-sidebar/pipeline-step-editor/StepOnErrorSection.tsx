@@ -2,7 +2,7 @@
 
 import React from "react";
 import { ShieldAlert, RotateCcw } from "lucide-react";
-import { Input } from "@workspace/ui/components/input";
+import { BufferedInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import {
@@ -178,11 +178,11 @@ export const StepOnErrorSection: React.FC<StepOnErrorSectionProps> = ({
               <div className="flex items-center justify-between gap-2">
                 <Label className="text-[10px] text-muted-foreground shrink-0">HTTP Status</Label>
                 <div className="flex items-center gap-1.5 flex-1 justify-end">
-                  <Input
+                  <BufferedInput
                     type="number"
                     value={statusCode}
-                    onChange={(e) =>
-                      updateOnError({ statusCode: parseInt(e.target.value, 10) || 502 })
+                    onCommit={(val) =>
+                      updateOnError({ statusCode: parseInt(val, 10) || 502 })
                     }
                     className="h-6 w-16 text-xs font-mono text-center bg-background"
                   />
@@ -208,9 +208,9 @@ export const StepOnErrorSection: React.FC<StepOnErrorSectionProps> = ({
 
               <div className="flex flex-col gap-1">
                 <Label className="text-[10px] text-muted-foreground">Error Message / Reason</Label>
-                <Input
+                <BufferedInput
                   value={errorMessage}
-                  onChange={(e) => updateOnError({ errorMessage: e.target.value })}
+                  onCommit={(val) => updateOnError({ errorMessage: val })}
                   placeholder="e.g. Failed to fetch external resource"
                   className="h-6 text-xs bg-background"
                 />
@@ -226,9 +226,9 @@ export const StepOnErrorSection: React.FC<StepOnErrorSectionProps> = ({
                   Assigned to: {step.outputVariable || "output"}
                 </span>
               </div>
-              <Input
+              <BufferedInput
                 value={fallbackValue}
-                onChange={(e) => updateOnError({ fallbackValue: e.target.value })}
+                onCommit={(val) => updateOnError({ fallbackValue: val })}
                 placeholder='e.g. null, [], or {"status": "unavailable"}'
                 className="h-6 text-xs font-mono bg-background"
               />

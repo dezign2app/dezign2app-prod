@@ -8,3 +8,4 @@ export * from "./handlers/frontendConnect";
 export * from "./handlers/endpointConnect";
 export * from "./handlers/foreignKeyConnect";
 export * from "./handlers/langGraphConnect";
+export * from "./handlers/redisCacheConnect";

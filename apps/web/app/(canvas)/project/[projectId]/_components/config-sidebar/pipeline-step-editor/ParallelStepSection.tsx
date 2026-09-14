@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { Endpoint, BackendNode, BackendEdge, AnyMessagingResource } from "@workspace/canvas/types";
-import { Input } from "@workspace/ui/components/input";
+import { BufferedInput } from "./BufferedInput";
 import {
   Select,
   SelectContent,
@@ -152,13 +152,13 @@ export const ParallelStepSection = ({
                   <span className="text-[10px] text-muted-foreground font-semibold">
                     Branch Name:
                   </span>
-                  <Input
+                  <BufferedInput
                     className="h-7 text-xs font-mono bg-background/60 border-border/60 w-48"
                     value={currentBranch.label || ""}
-                    onChange={(e) =>
+                    onCommit={(val) =>
                       updateBranch(activeTab, {
                         ...currentBranch,
-                        label: e.target.value,
+                        label: val,
                       })
                     }
                     placeholder={`Branch ${activeTab + 1}`}

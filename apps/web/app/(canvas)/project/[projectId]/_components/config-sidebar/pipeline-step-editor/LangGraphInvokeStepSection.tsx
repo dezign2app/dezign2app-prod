@@ -18,6 +18,7 @@ import {
 import { BackendNode } from "@workspace/canvas/types";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
+import { BufferedInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
 import { Switch } from "@workspace/ui/components/switch";
 import { Badge } from "@workspace/ui/components/badge";
@@ -300,14 +301,14 @@ export const LangGraphInvokeStepSection: React.FC<
                 </span>
               </div>
               <div className="col-span-6">
-                <Input
+                <BufferedInput
                   value={mapping[ch.key] ?? ""}
                   placeholder={
                     ch.key === "messages"
                       ? "body.message"
                       : `body.${ch.key}`
                   }
-                  onChange={(e) => handleMappingChange(ch.key, e.target.value)}
+                  onCommit={(val) => handleMappingChange(ch.key, val)}
                   className="h-7 text-xs font-mono bg-background/80"
                 />
               </div>
@@ -344,9 +345,9 @@ export const LangGraphInvokeStepSection: React.FC<
                   </span>
                 </div>
                 <div className="col-span-6">
-                  <Input
+                  <BufferedInput
                     value={v}
-                    onChange={(e) => handleMappingChange(k, e.target.value)}
+                    onCommit={(val) => handleMappingChange(k, val)}
                     className="h-7 text-xs font-mono bg-background/80"
                   />
                 </div>
