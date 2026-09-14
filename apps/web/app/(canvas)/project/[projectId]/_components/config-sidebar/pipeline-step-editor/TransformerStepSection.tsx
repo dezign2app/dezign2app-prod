@@ -54,10 +54,16 @@ export const TransformerStepSection = ({
   const selectedTransformer = useMemo(() => {
     return availableTransformers.find(
       (t) =>
+        (step.transformerNodeId &&
+          (t.id === step.transformerNodeId ||
+            t.nodeId === step.transformerNodeId ||
+            t.transformerRefNodeId === step.transformerNodeId)) ||
         t.name === step.functionRef?.name ||
-        t.id === step.functionRef?.name,
+        t.id === step.functionRef?.name ||
+        (step.functionRef?.name &&
+          toVarName(t.name) === toVarName(step.functionRef.name)),
     );
-  }, [step.functionRef?.name, availableTransformers]);
+  }, [step.functionRef?.name, step.transformerNodeId, availableTransformers]);
 
   const selectedTransformerOptionId = useMemo(() => {
     if (selectedTransformer) return selectedTransformer.id;

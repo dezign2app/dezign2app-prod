@@ -161,10 +161,16 @@ export function useStepRowState({
     if (step.type !== "transform") return undefined;
     return availableTransformers.find(
       (t) =>
+        (step.transformerNodeId &&
+          (t.id === step.transformerNodeId ||
+            t.nodeId === step.transformerNodeId ||
+            t.transformerRefNodeId === step.transformerNodeId)) ||
         t.name === step.functionRef?.name ||
-        t.id === step.functionRef?.name,
+        t.id === step.functionRef?.name ||
+        (step.functionRef?.name &&
+          toVarName(t.name) === toVarName(step.functionRef.name)),
     );
-  }, [step.type, step.functionRef?.name, availableTransformers]);
+  }, [step.type, step.functionRef?.name, step.transformerNodeId, availableTransformers]);
 
   // DB nodes & entities
   const allEntityNodes = useMemo(

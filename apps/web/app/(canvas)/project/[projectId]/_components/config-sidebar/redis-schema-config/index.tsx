@@ -17,6 +17,7 @@ import {
   DataStructureSelector,
   CachingArchitectureSection,
   RedisInstanceNoticeCard,
+  RedisSchemaPreviewSection,
   HashStructureConfig,
   GeoStructureConfig,
   StreamStructureConfig,
@@ -293,7 +294,20 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
         updateData={updateData}
       />
 
-      {/* 5. Instance-Level Notice Card */}
+      {/* 5. Live Schema Preview & Code Generation */}
+      <RedisSchemaPreviewSection
+        node={node}
+        data={data}
+        label={localLabel}
+        structure={structure}
+        keyTemplate={keyTemplate}
+        clusterTagParam={clusterTagParam}
+        ttl={ttl}
+        strategy={strategy}
+        hashFields={hashFields}
+      />
+
+      {/* 6. Instance-Level Notice Card */}
       <RedisInstanceNoticeCard
         parentDb={parentDb}
         onConfigureInstance={(dbId) =>
