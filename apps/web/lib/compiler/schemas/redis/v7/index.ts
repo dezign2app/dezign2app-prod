@@ -32,10 +32,21 @@ export function compileRedis7SchemaModule(
     keyTemplateLiteral = `${keyTemplate}:\${id}`;
   }
 
-  const ttlSeconds =
-    typeof schemaNode.data?.ttl === "object"
-      ? schemaNode.data?.ttl?.value || 3600
-      : 3600;
+  let ttlSeconds = 3600;
+  if (typeof schemaNode.data?.ttl === "object" && schemaNode.data?.ttl?.value !== undefined) {
+    const val = schemaNode.data.ttl.value;
+    const unit = schemaNode.data.ttl.unit;
+    ttlSeconds =
+      unit === "d"
+        ? val * 86400
+        : unit === "h"
+          ? val * 3600
+          : unit === "m"
+            ? val * 60
+            : unit === "never"
+              ? 0
+              : val;
+  }
 
   const columns = schemaNode.data?.columns || [];
   const fields = columns.map((c) => ({

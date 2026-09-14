@@ -35,12 +35,27 @@ export function compileRedis74JsonSchema(
   }
 
   if (!interfacesBlock) {
+    const hashFields = schemaNode.data?.hashConfig?.fields;
     const columns = schemaNode.data?.columns || [];
-    const fields = columns.map((c) => ({
-      name: c.name,
-      type: mapColumnTypeToTs(c.type),
-      required: Boolean(c.isPrimaryKey || c.isNotNull),
-    }));
+    const fields =
+      hashFields && hashFields.length > 0
+        ? hashFields.map((f) => ({
+            name: f.name,
+            type:
+              f.type === "number"
+                ? "number"
+                : f.type === "boolean"
+                  ? "boolean"
+                  : f.type === "json"
+                    ? "Record<string, unknown>"
+                    : "string",
+            required: Boolean(f.required),
+          }))
+        : columns.map((c) => ({
+            name: c.name,
+            type: mapColumnTypeToTs(c.type),
+            required: Boolean(c.isPrimaryKey || c.isNotNull),
+          }));
 
     const interfaceFields =
       fields.length > 0
