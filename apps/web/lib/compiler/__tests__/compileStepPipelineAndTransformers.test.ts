@@ -61,7 +61,7 @@ describe("Step Pipeline & Transformer Helpers", () => {
       expect(globalFile?.content).toContain("amount: number;");
       expect(globalFile?.content).toContain("export interface FormatGlobalCurrencyOutput");
       expect(globalFile?.content).toContain("formatted: string;");
-      expect(globalFile?.content).toContain("export function formatGlobalCurrency(input: FormatGlobalCurrencyInput): FormatGlobalCurrencyOutput");
+      expect(globalFile?.content).toContain("export function formatGlobalCurrency({ amount }: FormatGlobalCurrencyInput): FormatGlobalCurrencyOutput");
 
       // Local helper checks
       const localFile = result.files.find((f) => f.filename.includes("apps/productsservice/src/transformers/slugifyProductInput.ts"));
@@ -69,11 +69,34 @@ describe("Step Pipeline & Transformer Helpers", () => {
       expect(localFile?.content).toContain("export interface SlugifyProductInputInput");
       expect(localFile?.content).toContain("name: string;");
       expect(localFile?.content).toContain("category?: string;");
-      expect(localFile?.content).toContain("export function slugifyProductInput(input: SlugifyProductInputInput): SlugifyProductInputOutput");
+      expect(localFile?.content).toContain("export function slugifyProductInput({ name, category }: SlugifyProductInputInput): SlugifyProductInputOutput");
 
       // Reusable functions
       expect(result.reusableFunctions.some((f) => f.name === "slugifyProductInput")).toBe(true);
       expect(result.reusableFunctions.some((f) => f.name === "formatGlobalCurrency")).toBe(true);
+    });
+
+    it("handles full function declarations without double wrapping", () => {
+      const nodes: BackendNode[] = [
+        {
+          id: "trans-custom",
+          type: "transformer",
+          position: { x: 0, y: 0 },
+          fractionalIndex: "a0",
+          data: {
+            label: "customTransformer",
+            functionName: "customTransformer",
+            code: "export function customTransformer(input: CustomTransformerInput): CustomTransformerOutput {\n  return { ok: true };\n}",
+            inputSchema: [{ id: "1", name: "foo", type: "string", required: true }],
+            returnSchema: [{ id: "2", name: "ok", type: "boolean", required: true }],
+          },
+        },
+      ];
+      const result = compileTransformerHelpers(nodes);
+      const file = result.files.find((f) => f.filename.includes("customTransformer.ts"));
+      expect(file).toBeDefined();
+      const occurrences = (file?.content.match(/export function customTransformer/g) || []).length;
+      expect(occurrences).toBe(1);
     });
   });
 

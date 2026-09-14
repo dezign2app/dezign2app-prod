@@ -179,6 +179,7 @@ export const pipelineStepOutputSchemaFieldSchema = z.object({
   type: z.string(),
   required: z.boolean().optional(),
   description: z.string().optional(),
+  isArray: z.boolean().optional(),
 });
 
 export const stepSchemaFieldSchema = z.object({
@@ -188,6 +189,11 @@ export const stepSchemaFieldSchema = z.object({
   required: z.boolean().optional(),
   description: z.string().optional(),
   defaultValue: z.string().optional(),
+  key: z.string().optional(),
+  value: z.string().optional(),
+  enabled: z.boolean().optional(),
+  enumValues: z.array(z.string()).optional(),
+  isArray: z.boolean().optional(),
 });
 
 export interface SwitchCase {
@@ -466,6 +472,27 @@ export const pipelineStepInputSchema = z.lazy(() =>
 // A small, pure data-transformation function (3 sections: Input | Logic | Return)
 // Lives either as a global shared package or attached locally to a service node
 // ---------------------------------------------------------------------------
+export const transformerHelperFieldSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(),
+  type: z.string(),
+  required: z.boolean().optional().default(true),
+  description: z.string().optional(),
+  defaultValue: z.string().optional(),
+  key: z.string().optional(),
+  value: z.string().optional(),
+  enabled: z.boolean().optional(),
+  enumValues: z.array(z.string()).optional(),
+  isArray: z.boolean().optional(),
+});
+export type TransformerHelperField = z.infer<typeof transformerHelperFieldSchema>;
+
+export const transformerHelperFieldInputSchema = transformerHelperFieldSchema.extend({
+  name: z.string().optional(),
+  type: z.string().optional(),
+  required: z.boolean().optional(),
+});
+
 export const transformerHelperSchema = z.object({
   id: z.string(),
   name: z.string().describe("camelCase function name, e.g. slugifyProductInput"),
@@ -475,27 +502,19 @@ export const transformerHelperSchema = z.object({
   /** For local scope: which service node this helper belongs to */
   targetServiceId: z.string().optional(),
   /** Section 1: Input - typed fields this function accepts */
-  inputSchema: z.array(z.object({
-    name: z.string(),
-    type: z.string(),
-    required: z.boolean().optional().default(true),
-    description: z.string().optional(),
-  })),
+  inputSchema: z.array(transformerHelperFieldSchema),
   /** Section 2: Logic - how the transformation is defined */
   logicMode: z.enum(["natural_language", "code"]),
   prompt: z.string().optional().describe("Natural language description of the transformation"),
   code: z.string().optional().describe("TypeScript function body (return statement only, no function signature)"),
   /** Section 3: Return - typed fields this function returns */
-  returnSchema: z.array(z.object({
-    name: z.string(),
-    type: z.string(),
-    required: z.boolean().optional().default(true),
-    description: z.string().optional(),
-  })),
+  returnSchema: z.array(transformerHelperFieldSchema),
   isAsync: z.boolean().optional().default(false),
 });
 export type TransformerHelperDefinition = z.infer<typeof transformerHelperSchema>;
 
 export const transformerHelperInputSchema = transformerHelperSchema.extend({
   id: z.string().optional(),
+  inputSchema: z.array(transformerHelperFieldInputSchema).optional(),
+  returnSchema: z.array(transformerHelperFieldInputSchema).optional(),
 });

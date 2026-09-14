@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, Trash, Braces, ListPlus, Text, X } from "lucide-react";
+import { Plus, Trash, Braces, ListPlus, Text, X, Sparkles } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
 import { Schema, Parameter, BackendNode } from "@/types/canvas";
@@ -13,11 +13,14 @@ export type RequestBodyMode = "field_builder" | "raw_json";
 interface RequestBodyEditorProps {
   title?: string;
   subtitle?: string;
+  badge?: React.ReactNode;
+  headerActions?: React.ReactNode;
   mode: RequestBodyMode;
   onModeChange: (mode: RequestBodyMode) => void;
   schema?: Schema;
   onSchemaChange: (schema: Schema) => void;
   allNodes?: BackendNode[];
+  onCreateTypeForField?: (field: Parameter) => void;
 }
 
 /**
@@ -31,11 +34,14 @@ interface RequestBodyEditorProps {
 export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
   title = "Request Body Schema",
   subtitle,
+  badge,
+  headerActions,
   mode,
   onModeChange,
   schema,
   onSchemaChange,
   allNodes,
+  onCreateTypeForField,
 }) => {
   const safeSchema: Schema = React.useMemo(() => schema || { id: generateId() }, [schema]);
   const fields: Parameter[] = React.useMemo(() => {
@@ -149,9 +155,12 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
       {/* Header + mode tabs */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-col gap-0.5">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {title}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {title}
+            </span>
+            {badge}
+          </div>
           {subtitle && (
             <span className="text-[10px] text-muted-foreground/70">
               {subtitle}
@@ -159,8 +168,10 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
           )}
         </div>
 
-        {/* Tab switcher */}
-        <div className="flex items-center gap-0.5 bg-background/60 p-0.5 rounded-lg border border-border/50">
+        <div className="flex items-center gap-1.5">
+          {headerActions}
+          {/* Tab switcher */}
+          <div className="flex items-center gap-0.5 bg-background/60 p-0.5 rounded-lg border border-border/50">
           <button
             type="button"
             onClick={() => onModeChange("field_builder")}
@@ -187,6 +198,7 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
             <Braces size={12} />
             <span>JSON</span>
           </button>
+        </div>
         </div>
       </div>
 
@@ -344,6 +356,38 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
                         </span>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {/* Inline Helper: Nested Object Detected -> Create Type in TypesNode */}
+                {baseType === "object" && onCreateTypeForField && (
+                  <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Sparkles className="size-3.5 text-amber-400 shrink-0" />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[11px] font-medium text-foreground truncate">
+                          Nested object detected
+                          {f.nestedFields && f.nestedFields.length > 0 && (
+                            <span className="text-amber-400/90 font-mono text-[10px] ml-1.5">
+                              &#123; {f.nestedFields.map((nf) => nf.name).join(", ")} &#125;
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/80 truncate">
+                          Create custom interface in TypesNode for strict typing
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-6 px-2 text-[11px] font-medium text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 shrink-0 gap-1 cursor-pointer shadow-xs transition-colors"
+                      onClick={() => onCreateTypeForField(f)}
+                    >
+                      <Plus size={11} className="text-amber-300" />
+                      <span>Create Type in TypesNode</span>
+                    </Button>
                   </div>
                 )}
 

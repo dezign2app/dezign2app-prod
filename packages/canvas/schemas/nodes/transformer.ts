@@ -2,6 +2,28 @@ import { z } from "zod";
 import { baseNodeDataSchema } from "./base";
 import { transformerHelperSchema, transformerHelperInputSchema } from "../shared";
 
+export const transformerParameterSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(),
+  type: z.string(),
+  required: z.boolean().optional().default(true),
+  description: z.string().optional(),
+  defaultValue: z.string().optional(),
+  key: z.string().optional(),
+  value: z.string().optional(),
+  enabled: z.boolean().optional(),
+  enumValues: z.array(z.string()).optional(),
+  isArray: z.boolean().optional(),
+  nestedFields: z.array(z.any()).optional(),
+});
+export type TransformerParameter = z.infer<typeof transformerParameterSchema>;
+
+export const transformerParameterInputSchema = transformerParameterSchema.extend({
+  name: z.string().optional(),
+  type: z.string().optional(),
+  required: z.boolean().optional(),
+});
+
 export const transformerNodeDataSchema = baseNodeDataSchema
   .extend({
     description: z.string().optional(),
@@ -15,35 +37,13 @@ export const transformerNodeDataSchema = baseNodeDataSchema
     transformerRef: z.string().optional(),
     inputSchemaMode: z.enum(["field_builder", "raw_json"]).optional(),
     inputSchemaRawJson: z.string().optional(),
-    inputSchema: z
-      .array(
-        z.object({
-          id: z.string().optional(),
-          name: z.string(),
-          type: z.string(),
-          required: z.boolean().optional().default(true),
-          description: z.string().optional(),
-          defaultValue: z.string().optional(),
-        }),
-      )
-      .optional(),
+    inputSchema: z.array(transformerParameterSchema).optional(),
     logicMode: z.enum(["natural_language", "code"]).optional().default("code"),
     prompt: z.string().optional(),
     code: z.string().optional(),
     returnSchemaMode: z.enum(["field_builder", "raw_json"]).optional(),
     returnSchemaRawJson: z.string().optional(),
-    returnSchema: z
-      .array(
-        z.object({
-          id: z.string().optional(),
-          name: z.string(),
-          type: z.string(),
-          required: z.boolean().optional().default(true),
-          description: z.string().optional(),
-          defaultValue: z.string().optional(),
-        }),
-      )
-      .optional(),
+    returnSchema: z.array(transformerParameterSchema).optional(),
     isAsync: z.boolean().optional().default(false),
     transformerHelpers: z.array(transformerHelperSchema).optional(),
   })
@@ -63,35 +63,13 @@ export const transformerNodeDataInputSchema = baseNodeDataSchema
     transformerRef: z.string().optional(),
     inputSchemaMode: z.enum(["field_builder", "raw_json"]).optional(),
     inputSchemaRawJson: z.string().optional(),
-    inputSchema: z
-      .array(
-        z.object({
-          id: z.string().optional(),
-          name: z.string(),
-          type: z.string(),
-          required: z.boolean().optional(),
-          description: z.string().optional(),
-          defaultValue: z.string().optional(),
-        }),
-      )
-      .optional(),
+    inputSchema: z.array(transformerParameterInputSchema).optional(),
     logicMode: z.enum(["natural_language", "code"]).optional(),
     prompt: z.string().optional(),
     code: z.string().optional(),
     returnSchemaMode: z.enum(["field_builder", "raw_json"]).optional(),
     returnSchemaRawJson: z.string().optional(),
-    returnSchema: z
-      .array(
-        z.object({
-          id: z.string().optional(),
-          name: z.string(),
-          type: z.string(),
-          required: z.boolean().optional(),
-          description: z.string().optional(),
-          defaultValue: z.string().optional(),
-        }),
-      )
-      .optional(),
+    returnSchema: z.array(transformerParameterInputSchema).optional(),
     isAsync: z.boolean().optional(),
     transformerHelpers: z.array(transformerHelperInputSchema).optional(),
   })

@@ -37,8 +37,8 @@ export const getSubscriptionStatus = query({
             {
               model: "member",
               where: [
-                { field: "userId", value: authUserId },
                 { field: "organizationId", value: args.organizationId },
+                { field: "userId", value: authUserId },
               ],
             },
           );

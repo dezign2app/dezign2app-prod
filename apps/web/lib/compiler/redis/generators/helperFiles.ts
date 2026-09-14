@@ -256,6 +256,33 @@ export async function get${typeName}List(
       content: getListFnContent,
     });
     cacheHelperBarrelExports.push(`export * from "./get${typeName}List";`);
+
+    const getLengthFnContent = `import { getRedisClient } from "../../client";
+import { get${typeName}Key } from "../../schemas/${varName}";
+import { createLogger } from "@workspace/logger";
+
+const logger = createLogger("get${typeName}Length");
+
+/**
+ * Get length of ${typeName} List
+ */
+export async function get${typeName}Length(${keyArgsSig}): Promise<number> {
+  const key = get${typeName}Key(${templateParams.join(", ") || "id"});
+  try {
+    const redis = await getRedisClient();
+    return await redis.llen(key);
+  } catch (error) {
+    logger.error(\`Failed to get length of List \${key}\`, error);
+    return 0;
+  }
+}
+`;
+    files.push({
+      filename: `src/helpers/${varName}/get${typeName}Length.ts`,
+      language: "typescript",
+      content: getLengthFnContent,
+    });
+    cacheHelperBarrelExports.push(`export * from "./get${typeName}Length";`);
   } else if (dataStructure === "set") {
     // Set structure functions
     const addMembersFnContent = `import { getRedisClient } from "../../client";
@@ -549,6 +576,69 @@ export async function getRecent${typeName}Items(
         content: getRecentFnContent,
       });
       cacheHelperBarrelExports.push(`export * from "./getRecent${typeName}Items";`);
+
+      // pop<Name>Item.ts
+      const popFnContent = `import { getRedisClient } from "../../client";
+import { ${itemType}, get${typeName}Key } from "../../schemas/${varName}";
+import { createLogger } from "@workspace/logger";
+
+const logger = createLogger("pop${typeName}Item");
+
+/**
+ * Pop an item from ${typeName} JSON Array
+ */
+export async function pop${typeName}Item(
+  ${keyArgsSig ? `${keyArgsSig}, ` : ""}
+  index: number = -1,
+): Promise<${itemType} | null> {
+  const key = get${typeName}Key(${templateParams.join(", ") || "id"});
+  try {
+    const redis = await getRedisClient();
+    const result = await redis.json.arrpop(key, "$", index);
+    if (!result) return null;
+    return (Array.isArray(result) ? result[0] : result) as ${itemType};
+  } catch (error) {
+    logger.error(\`Failed to pop item from JSON array \${key}\`, error);
+    return null;
+  }
+}
+`;
+      files.push({
+        filename: `src/helpers/${varName}/pop${typeName}Item.ts`,
+        language: "typescript",
+        content: popFnContent,
+      });
+      cacheHelperBarrelExports.push(`export * from "./pop${typeName}Item";`);
+
+      // get<Name>Length.ts
+      const getArrLenFnContent = `import { getRedisClient } from "../../client";
+import { get${typeName}Key } from "../../schemas/${varName}";
+import { createLogger } from "@workspace/logger";
+
+const logger = createLogger("get${typeName}Length");
+
+/**
+ * Get length of ${typeName} JSON Array
+ */
+export async function get${typeName}Length(${keyArgsSig}): Promise<number> {
+  const key = get${typeName}Key(${templateParams.join(", ") || "id"});
+  try {
+    const redis = await getRedisClient();
+    const result = await redis.json.arrlen(key, "$");
+    if (Array.isArray(result)) return (result[0] as number) || 0;
+    return (result as number) || 0;
+  } catch (error) {
+    logger.error(\`Failed to get length of JSON array \${key}\`, error);
+    return 0;
+  }
+}
+`;
+      files.push({
+        filename: `src/helpers/${varName}/get${typeName}Length.ts`,
+        language: "typescript",
+        content: getArrLenFnContent,
+      });
+      cacheHelperBarrelExports.push(`export * from "./get${typeName}Length";`);
     }
   }
 
@@ -675,54 +765,139 @@ ${cacheHelperBarrelExports.join("\n")}
     content: cacheBarrelContent,
   });
 
-  // Register reusable function metadata for this schema/helper
-  reusableFunctions.push({
-    name: `get${typeName}`,
-    importPath: packageName,
-    signature: `get${typeName}(${keyArgsSig}): Promise<${typeName} | null>`,
-    targetName: varName,
-    kind: "findById",
-  });
-
-  reusableFunctions.push({
-    name: `getAll${typeName}Fields`,
-    importPath: packageName,
-    signature: `getAll${typeName}Fields(${keyArgsSig}): Promise<${typeName} | null>`,
-    targetName: varName,
-    kind: "findAll",
-  });
-
-  reusableFunctions.push({
-    name: `set${typeName}`,
-    importPath: packageName,
-    signature: `set${typeName}(${keyArgsSig ? `${keyArgsSig}, ` : ""}data: Partial<${typeName}>): Promise<void>`,
-    targetName: varName,
-    kind: "create",
-  });
-
-  reusableFunctions.push({
-    name: `set${typeName}Fields`,
-    importPath: packageName,
-    signature: `set${typeName}Fields(${keyArgsSig ? `${keyArgsSig}, ` : ""}data: Partial<${typeName}>): Promise<void>`,
-    targetName: varName,
-    kind: "create",
-  });
-
-  reusableFunctions.push({
-    name: `get${typeName}Field`,
-    importPath: packageName,
-    signature: `get${typeName}Field(${keyArgsSig ? `${keyArgsSig}, ` : ""}field: string): Promise<string | number | boolean | null>`,
-    targetName: varName,
-    kind: "findById",
-  });
-
-  reusableFunctions.push({
-    name: `set${typeName}Field`,
-    importPath: packageName,
-    signature: `set${typeName}Field(${keyArgsSig ? `${keyArgsSig}, ` : ""}field: string, value: string | number | boolean): Promise<void>`,
-    targetName: varName,
-    kind: "update",
-  });
+  // Register reusable function metadata for this schema/helper based on dataStructure
+  if (dataStructure === "list") {
+    reusableFunctions.push({
+      name: `push${typeName}`,
+      importPath: packageName,
+      signature: `push${typeName}(${keyArgsSig ? `${keyArgsSig}, ` : ""}...items: string[]): Promise<number>`,
+      targetName: varName,
+      kind: "create",
+    });
+    reusableFunctions.push({
+      name: `pop${typeName}`,
+      importPath: packageName,
+      signature: `pop${typeName}(${keyArgsSig}): Promise<string | null>`,
+      targetName: varName,
+      kind: "delete",
+    });
+    reusableFunctions.push({
+      name: `get${typeName}List`,
+      importPath: packageName,
+      signature: `get${typeName}List(${keyArgsSig ? `${keyArgsSig}, ` : ""}start: number = 0, stop: number = -1): Promise<string[]>`,
+      targetName: varName,
+      kind: "findAll",
+    });
+    reusableFunctions.push({
+      name: `get${typeName}Length`,
+      importPath: packageName,
+      signature: `get${typeName}Length(${keyArgsSig}): Promise<number>`,
+      targetName: varName,
+      kind: "findById",
+    });
+  } else if (dataStructure === "json" && schema.isJsonArray && schema.itemTypeName) {
+    const itemType = schema.itemTypeName;
+    reusableFunctions.push({
+      name: `append${typeName}Item`,
+      importPath: packageName,
+      signature: `append${typeName}Item(${keyArgsSig ? `${keyArgsSig}, ` : ""}item: ${itemType}): Promise<number>`,
+      targetName: varName,
+      kind: "create",
+    });
+    reusableFunctions.push({
+      name: `pop${typeName}Item`,
+      importPath: packageName,
+      signature: `pop${typeName}Item(${keyArgsSig ? `${keyArgsSig}, ` : ""}index: number = -1): Promise<${itemType} | null>`,
+      targetName: varName,
+      kind: "delete",
+    });
+    reusableFunctions.push({
+      name: `getRecent${typeName}Items`,
+      importPath: packageName,
+      signature: `getRecent${typeName}Items(${keyArgsSig ? `${keyArgsSig}, ` : ""}count: number = 20): Promise<${itemType}[]>`,
+      targetName: varName,
+      kind: "findAll",
+    });
+    reusableFunctions.push({
+      name: `get${typeName}Length`,
+      importPath: packageName,
+      signature: `get${typeName}Length(${keyArgsSig}): Promise<number>`,
+      targetName: varName,
+      kind: "findById",
+    });
+    reusableFunctions.push({
+      name: `get${typeName}`,
+      importPath: packageName,
+      signature: `get${typeName}(${keyArgsSig}): Promise<${typeName} | null>`,
+      targetName: varName,
+      kind: "findById",
+    });
+    reusableFunctions.push({
+      name: `set${typeName}`,
+      importPath: packageName,
+      signature: `set${typeName}(${keyArgsSig ? `${keyArgsSig}, ` : ""}data: Partial<${typeName}>): Promise<void>`,
+      targetName: varName,
+      kind: "create",
+    });
+  } else if (dataStructure === "hash") {
+    reusableFunctions.push({
+      name: `get${typeName}`,
+      importPath: packageName,
+      signature: `get${typeName}(${keyArgsSig}): Promise<${typeName} | null>`,
+      targetName: varName,
+      kind: "findById",
+    });
+    reusableFunctions.push({
+      name: `getAll${typeName}Fields`,
+      importPath: packageName,
+      signature: `getAll${typeName}Fields(${keyArgsSig}): Promise<${typeName} | null>`,
+      targetName: varName,
+      kind: "findAll",
+    });
+    reusableFunctions.push({
+      name: `set${typeName}`,
+      importPath: packageName,
+      signature: `set${typeName}(${keyArgsSig ? `${keyArgsSig}, ` : ""}data: Partial<${typeName}>): Promise<void>`,
+      targetName: varName,
+      kind: "create",
+    });
+    reusableFunctions.push({
+      name: `set${typeName}Fields`,
+      importPath: packageName,
+      signature: `set${typeName}Fields(${keyArgsSig ? `${keyArgsSig}, ` : ""}data: Partial<${typeName}>): Promise<void>`,
+      targetName: varName,
+      kind: "create",
+    });
+    reusableFunctions.push({
+      name: `get${typeName}Field`,
+      importPath: packageName,
+      signature: `get${typeName}Field(${keyArgsSig ? `${keyArgsSig}, ` : ""}field: string): Promise<string | number | boolean | null>`,
+      targetName: varName,
+      kind: "findById",
+    });
+    reusableFunctions.push({
+      name: `set${typeName}Field`,
+      importPath: packageName,
+      signature: `set${typeName}Field(${keyArgsSig ? `${keyArgsSig}, ` : ""}field: string, value: string | number | boolean): Promise<void>`,
+      targetName: varName,
+      kind: "update",
+    });
+  } else {
+    reusableFunctions.push({
+      name: `get${typeName}`,
+      importPath: packageName,
+      signature: `get${typeName}(${keyArgsSig}): Promise<${typeName} | null>`,
+      targetName: varName,
+      kind: "findById",
+    });
+    reusableFunctions.push({
+      name: `set${typeName}`,
+      importPath: packageName,
+      signature: `set${typeName}(${keyArgsSig ? `${keyArgsSig}, ` : ""}data: Partial<${typeName}>): Promise<void>`,
+      targetName: varName,
+      kind: "create",
+    });
+  }
 
   reusableFunctions.push({
     name: `invalidate${typeName}`,

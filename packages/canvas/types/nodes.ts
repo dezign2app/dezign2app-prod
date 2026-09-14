@@ -117,13 +117,7 @@ export interface BaseNodeData {
   targetEventId?: string;
   targetEventIds?: string[];
   transformerRef?: string;
-  inputSchema?: {
-    id?: string;
-    name: string;
-    type: string;
-    required?: boolean;
-    description?: string;
-  }[];
+  inputSchema?: Parameter[];
   inputSchemaMode?: "field_builder" | "raw_json";
   inputSchemaRawJson?: string;
   logicMode?: "natural_language" | "code";

@@ -44,4 +44,12 @@ export interface BusinessLogicBlockProps {
   publishedEvents?: PublishedEventInfo[];
   endpointMethod?: string;
   endpointPath?: string;
+
+  // Function Signature & Type Framing Props
+  functionName?: string;
+  inputTypeName?: string;
+  outputTypeName?: string;
+  isAsync?: boolean;
+  inputSchema?: Array<{ name: string; type: string; required?: boolean }>;
+  returnSchema?: Array<{ name: string; type: string; required?: boolean }>;
 }
