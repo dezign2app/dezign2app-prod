@@ -302,21 +302,101 @@ describe("compileRedisNodes", () => {
     expect(schemaFile!.content).toContain("export type Conversation = ConversationItem[];");
     expect(schemaFile!.content).toContain("export function getConversationKey");
 
-    // 2. Helper functions should include appendConversationItem and getRecentConversationItems
+    // 2. Helper functions should include appendConversationItem, popConversationItem, getRecentConversationItems, and getConversationLength
     const appendHelper = pkg.files.find((f) => f.filename === "src/helpers/conversation/appendConversationItem.ts");
     expect(appendHelper).toBeDefined();
     expect(appendHelper!.content).toContain("redis.json.arrappend");
     expect(appendHelper!.content).toContain("item: ConversationItem");
+
+    const popHelper = pkg.files.find((f) => f.filename === "src/helpers/conversation/popConversationItem.ts");
+    expect(popHelper).toBeDefined();
+    expect(popHelper!.content).toContain("redis.json.arrpop");
 
     const recentHelper = pkg.files.find((f) => f.filename === "src/helpers/conversation/getRecentConversationItems.ts");
     expect(recentHelper).toBeDefined();
     expect(recentHelper!.content).toContain("redis.json.get");
     expect(recentHelper!.content).toContain("path: `$[");
 
+    const lenHelper = pkg.files.find((f) => f.filename === "src/helpers/conversation/getConversationLength.ts");
+    expect(lenHelper).toBeDefined();
+    expect(lenHelper!.content).toContain("redis.json.arrlen");
+
     // 3. Helper barrel should export the array helpers
     const barrel = pkg.files.find((f) => f.filename === "src/helpers/conversation/index.ts");
     expect(barrel).toBeDefined();
     expect(barrel!.content).toContain('export * from "./appendConversationItem"');
+    expect(barrel!.content).toContain('export * from "./popConversationItem"');
     expect(barrel!.content).toContain('export * from "./getRecentConversationItems"');
+    expect(barrel!.content).toContain('export * from "./getConversationLength"');
+
+    // 4. Reusable functions metadata includes JSON array operations
+    expect(result.reusableFunctions).toBeDefined();
+    const fnNames = result.reusableFunctions!.map((fn) => fn.name);
+    expect(fnNames).toContain("appendConversationItem");
+    expect(fnNames).toContain("popConversationItem");
+    expect(fnNames).toContain("getRecentConversationItems");
+    expect(fnNames).toContain("getConversationLength");
+  });
+
+  it("compiles Redis List structure with push, pop, getList, and getLength helpers", () => {
+    const nodes: BackendNode[] = [
+      {
+        id: "redis-1",
+        type: "redis_instance",
+        data: {
+          label: "Queue_Cache",
+          host: "localhost",
+          port: 6379,
+        },
+        position: { x: 0, y: 0 },
+        fractionalIndex: "a0",
+      },
+      {
+        id: "schema-queue",
+        type: "redis_schema",
+        data: {
+          label: "TaskQueue",
+          redisDataStructure: "list",
+          keyTemplate: "queue:{type}",
+          databaseId: "redis-1",
+        },
+        position: { x: 100, y: 100 },
+        fractionalIndex: "a1",
+      },
+    ];
+
+    const result = compileRedisNodes(nodes);
+    expect(result.packages).toHaveLength(1);
+    const pkg = result.packages![0]!;
+
+    const pushHelper = pkg.files.find((f) => f.filename === "src/helpers/taskQueue/pushTaskQueue.ts");
+    expect(pushHelper).toBeDefined();
+    expect(pushHelper!.content).toContain("redis.rpush");
+
+    const popHelper = pkg.files.find((f) => f.filename === "src/helpers/taskQueue/popTaskQueue.ts");
+    expect(popHelper).toBeDefined();
+    expect(popHelper!.content).toContain("redis.lpop");
+
+    const listHelper = pkg.files.find((f) => f.filename === "src/helpers/taskQueue/getTaskQueueList.ts");
+    expect(listHelper).toBeDefined();
+    expect(listHelper!.content).toContain("redis.lrange");
+
+    const lenHelper = pkg.files.find((f) => f.filename === "src/helpers/taskQueue/getTaskQueueLength.ts");
+    expect(lenHelper).toBeDefined();
+    expect(lenHelper!.content).toContain("redis.llen");
+
+    const barrel = pkg.files.find((f) => f.filename === "src/helpers/taskQueue/index.ts");
+    expect(barrel).toBeDefined();
+    expect(barrel!.content).toContain('export * from "./pushTaskQueue"');
+    expect(barrel!.content).toContain('export * from "./popTaskQueue"');
+    expect(barrel!.content).toContain('export * from "./getTaskQueueList"');
+    expect(barrel!.content).toContain('export * from "./getTaskQueueLength"');
+
+    expect(result.reusableFunctions).toBeDefined();
+    const fnNames = result.reusableFunctions!.map((fn) => fn.name);
+    expect(fnNames).toContain("pushTaskQueue");
+    expect(fnNames).toContain("popTaskQueue");
+    expect(fnNames).toContain("getTaskQueueList");
+    expect(fnNames).toContain("getTaskQueueLength");
   });
 });

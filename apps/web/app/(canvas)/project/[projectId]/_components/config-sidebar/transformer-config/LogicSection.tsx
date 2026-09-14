@@ -8,17 +8,27 @@ interface LogicSectionProps {
   prompt: string;
   code: string;
   isAsync?: boolean;
+  functionName?: string;
+  inputTypeName?: string;
+  outputTypeName?: string;
+  inputSchema?: Array<{ name: string; type: string; required?: boolean }>;
+  returnSchema?: Array<{ name: string; type: string; required?: boolean }>;
   onModeChange: (mode: "natural_language" | "code") => void;
   onPromptChange: (prompt: string) => void;
   onCodeChange: (code: string) => void;
   onAsyncChange: (isAsync: boolean) => void;
 }
 
-export const LogicSection: React.FC<LogicSectionProps> = ({
+export const LogicSection = React.memo<LogicSectionProps>(({
   logicMode,
   prompt,
   code,
   isAsync,
+  functionName,
+  inputTypeName,
+  outputTypeName,
+  inputSchema,
+  returnSchema,
   onModeChange,
   onPromptChange,
   onCodeChange,
@@ -34,10 +44,16 @@ export const LogicSection: React.FC<LogicSectionProps> = ({
         code={code || ""}
         onCodeChange={onCodeChange}
         title="2. Transformation Logic"
-        description="Pure TypeScript function body or natural language transformation instructions."
+        description="Pure TypeScript function implementation or natural language transformation instructions."
         promptPlaceholder="Describe how the input fields should be mapped and transformed into the return fields..."
         codePlaceholder={`return {\n  result: input.name.toLowerCase().replace(/\\s+/g, '-'),\n};`}
-        codeLanguageLabel="TypeScript Function Body"
+        codeLanguageLabel="TypeScript Function"
+        functionName={functionName}
+        inputTypeName={inputTypeName}
+        outputTypeName={outputTypeName}
+        isAsync={isAsync}
+        inputSchema={inputSchema}
+        returnSchema={returnSchema}
       />
 
       <label className="flex items-center gap-2 text-[11px] text-muted-foreground/80 cursor-pointer select-none px-1">
@@ -51,4 +67,5 @@ export const LogicSection: React.FC<LogicSectionProps> = ({
       </label>
     </div>
   );
-};
+});
+LogicSection.displayName = "LogicSection";

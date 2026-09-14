@@ -27,5 +27,9 @@ export type {
 export type {
   RedisJsonConfig,
   RedisJsonRootType,
+  DirectRedisCategory,
+  DirectRedisCommandParam,
+  DirectRedisCommand,
 } from "./types/redis";
+
 

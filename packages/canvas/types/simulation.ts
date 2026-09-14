@@ -15,6 +15,7 @@ export type Parameter = {
   enabled?: boolean;
   enumValues?: string[];
   isArray?: boolean;
+  nestedFields?: Parameter[];
 };
 
 export type Schema = {

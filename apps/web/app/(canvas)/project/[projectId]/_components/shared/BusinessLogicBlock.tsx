@@ -13,7 +13,7 @@ export * from "./business-logic-block/types";
 export * from "./business-logic-block/utils";
 export * from "./business-logic-block/generator";
 
-export function BusinessLogicBlock({
+export const BusinessLogicBlock = React.memo(function BusinessLogicBlock({
   mode = "natural_language",
   onModeChange,
   prompt = "",
@@ -37,6 +37,12 @@ export function BusinessLogicBlock({
   endpointPath = "/",
   serviceNodeId,
   endpointId,
+  functionName,
+  inputTypeName,
+  outputTypeName,
+  isAsync,
+  inputSchema,
+  returnSchema,
 }: BusinessLogicBlockProps) {
   const [internalMode, setInternalMode] = useState<LogicMode>(mode);
   const [internalIsGenerating, setInternalIsGenerating] = useState(false);
@@ -90,6 +96,12 @@ export function BusinessLogicBlock({
         onCodeChange={onCodeChange}
         codePlaceholder={codePlaceholder}
         codeLanguageLabel={codeLanguageLabel}
+        functionName={functionName}
+        inputTypeName={inputTypeName}
+        outputTypeName={outputTypeName}
+        isAsync={isAsync}
+        inputSchema={inputSchema}
+        returnSchema={returnSchema}
       />
 
       {onCrudConfigChange && (
@@ -111,4 +123,5 @@ export function BusinessLogicBlock({
       />
     </div>
   );
-}
+});
+BusinessLogicBlock.displayName = "BusinessLogicBlock";

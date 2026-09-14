@@ -1,6 +1,7 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { TransformerHelperNodeData, CompiledFile, ReusableFunction } from "@workspace/canvas/types";
 import { toPascalCase, toVarName } from "./utils";
+import { inferReturnSchemaFromCode } from "@/lib/utils/inferReturnSchema";
 
 export interface CompiledTransformerResult {
   /** Files to write into packages/transformers/ (global) or service src/transformers/ (local) */
@@ -55,9 +56,19 @@ function generateTransformerFile(
       : "  [key: string]: unknown;";
 
   // Build output interface
+  let returnSchema = helper.returnSchema || [];
+  const isDefaultDummy =
+    returnSchema.length === 1 && returnSchema[0]?.name === "result";
+  if ((returnSchema.length === 0 || isDefaultDummy) && helper.code) {
+    const inferred = inferReturnSchemaFromCode(helper.code, helper.inputSchema);
+    if (inferred.length > 0) {
+      returnSchema = inferred;
+    }
+  }
+
   const outputFields =
-    helper.returnSchema && helper.returnSchema.length > 0
-      ? helper.returnSchema
+    returnSchema.length > 0
+      ? returnSchema
           .map(
             (f) =>
               `  ${f.name}${f.required === false ? "?" : ""}: ${mapTypeToTs(f.type)};`,
@@ -65,11 +76,14 @@ function generateTransformerFile(
           .join("\n")
       : "  [key: string]: unknown;";
 
+  const rawCode = (helper.code || "").trim();
+  const hasFunctionDecl = /^(export\s+)?(async\s+)?function\s+/m.test(rawCode);
+
   // Function body — prefer explicit code, fall back to a TODO placeholder
   let body: string;
-  if (helper.code && helper.code.trim()) {
+  if (rawCode) {
     // The user provides just the body (return statement or statements)
-    body = helper.code
+    body = rawCode
       .split("\n")
       .map((l) => `  ${l}`)
       .join("\n");
@@ -92,7 +106,17 @@ function generateTransformerFile(
     ? `/**\n * ${helper.description}\n */\n`
     : `/**\n * Pure data-transformation function: ${fnName}\n * Auto-generated — edit the transformer definition to regenerate.\n */\n`;
 
-  const content = `${fnDescription}export interface ${inputTypeName} {\n${inputFields}\n}\n\nexport interface ${outputTypeName} {\n${outputFields}\n}\n\nexport ${asyncKw}function ${fnName}(input: ${inputTypeName}): ${returnTypeAnnotation} {\n${body}\n}\n`;
+  const inputParamNames = (helper.inputSchema || [])
+    .map((f) => f.name?.trim())
+    .filter(Boolean);
+  const paramSignature =
+    inputParamNames.length > 0
+      ? `{ ${inputParamNames.join(", ")} }: ${inputTypeName}`
+      : `input: ${inputTypeName}`;
+
+  const content = hasFunctionDecl
+    ? `${fnDescription}export interface ${inputTypeName} {\n${inputFields}\n}\n\nexport interface ${outputTypeName} {\n${outputFields}\n}\n\n${rawCode}\n`
+    : `${fnDescription}export interface ${inputTypeName} {\n${inputFields}\n}\n\nexport interface ${outputTypeName} {\n${outputFields}\n}\n\nexport ${asyncKw}function ${fnName}(${paramSignature}): ${returnTypeAnnotation} {\n${body}\n}\n`;
 
   const filename = `src/${fnName}.ts`;
 
@@ -162,6 +186,15 @@ export function compileTransformerHelpers(
         if (other) targetServiceId = other.id;
       }
     }
+    let returnSchema = d.returnSchema || [];
+    const isDefaultDummy =
+      returnSchema.length === 1 && returnSchema[0]?.name === "result";
+    if ((returnSchema.length === 0 || isDefaultDummy) && d.code) {
+      const inferred = inferReturnSchemaFromCode(d.code, d.inputSchema);
+      if (inferred.length > 0) {
+        returnSchema = inferred;
+      }
+    }
 
     const helperData: TransformerHelperNodeData = {
       id: tNode.id,
@@ -173,7 +206,7 @@ export function compileTransformerHelpers(
       logicMode: d.logicMode || "code",
       prompt: d.prompt,
       code: d.code,
-      returnSchema: d.returnSchema || [],
+      returnSchema,
       isAsync: d.isAsync,
     };
 
@@ -211,10 +244,17 @@ export function compileTransformerHelpers(
       // Register as a reusable function
       const inputTypeName = `${toPascalCase(toVarName(helper.name))}Input`;
       const outputTypeName = `${toPascalCase(toVarName(helper.name))}Output`;
+      const inputParamNames = (helper.inputSchema || [])
+        .map((f) => f.name?.trim())
+        .filter(Boolean);
+      const paramSignature =
+        inputParamNames.length > 0
+          ? `{ ${inputParamNames.join(", ")} }: ${inputTypeName}`
+          : `input: ${inputTypeName}`;
       allReusable.push({
         name: helper.name,
         importPath: GLOBAL_PKG,
-        signature: `${helper.name}(input: ${inputTypeName}): ${outputTypeName}`,
+        signature: `${helper.name}(${paramSignature}): ${outputTypeName}`,
         targetName: helper.name,
         kind: "custom",
       });
@@ -301,10 +341,17 @@ export function compileTransformerHelpers(
 
       const inputTypeName = `${toPascalCase(toVarName(helper.name))}Input`;
       const outputTypeName = `${toPascalCase(toVarName(helper.name))}Output`;
+      const inputParamNames = (helper.inputSchema || [])
+        .map((f) => f.name?.trim())
+        .filter(Boolean);
+      const paramSignature =
+        inputParamNames.length > 0
+          ? `{ ${inputParamNames.join(", ")} }: ${inputTypeName}`
+          : `input: ${inputTypeName}`;
       allReusable.push({
         name: helper.name,
         importPath: localImportPath,
-        signature: `${helper.name}(input: ${inputTypeName}): ${outputTypeName}`,
+        signature: `${helper.name}(${paramSignature}): ${outputTypeName}`,
         targetName: helper.name,
         kind: "custom",
       });

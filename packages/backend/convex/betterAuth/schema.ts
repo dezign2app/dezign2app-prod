@@ -145,6 +145,8 @@ export const tables = {
     createdAt: v.number(),
   })
     .index("organizationId", ["organizationId"])
+    .index("organizationId_userId", ["organizationId", "userId"])
+    .index("organizationId_role", ["organizationId", "role"])
     .index("userId", ["userId"]),
 
   invitation: defineTable({
@@ -158,6 +160,7 @@ export const tables = {
     teamId: v.optional(v.union(v.null(), v.string())),
   })
     .index("organizationId", ["organizationId"])
+    .index("organizationId_status", ["organizationId", "status"])
     .index("email", ["email"]),
 };
 

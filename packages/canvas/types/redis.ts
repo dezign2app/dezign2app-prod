@@ -189,3 +189,28 @@ export function isRedisDurationUnit(val: string): val is RedisDurationUnit {
     val === "never"
   );
 }
+
+export type DirectRedisCategory =
+  | "String / Key-Value"
+  | "Hash"
+  | "List"
+  | "Set"
+  | "PubSub & Streams"
+  | "JSON";
+
+export interface DirectRedisCommandParam {
+  name: string;
+  type: string;
+  required: boolean;
+  defaultValue?: string;
+}
+
+export interface DirectRedisCommand {
+  id: string;
+  name: string;
+  category: DirectRedisCategory;
+  description: string;
+  signature: string;
+  params: DirectRedisCommandParam[];
+}
+

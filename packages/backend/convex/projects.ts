@@ -18,8 +18,8 @@ async function isUserAuthorizedForOrg(
     const member = await ctx.runQuery(components.betterAuth.adapter.findOne, {
       model: "member",
       where: [
-        { field: "userId", value: userId },
         { field: "organizationId", value: targetOrgId },
+        { field: "userId", value: userId },
       ],
     });
     return !!member;

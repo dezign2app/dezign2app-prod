@@ -4,6 +4,7 @@ import React from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
+import { LocalInput } from "../../backend-nodes/graph-nodes/shared";
 import {
   Select,
   SelectContent,
@@ -13,13 +14,15 @@ import {
 } from "@workspace/ui/components/select";
 import { Shuffle } from "lucide-react";
 import { Parameter } from "@/types/canvas";
-import { toVarName } from "@/lib/compiler/utils";
+import { toVarName, toPascalCase } from "@/lib/compiler/utils";
 import { RequestBodyMode } from "../RequestBodyEditor";
 import { LocalTargetSection } from "./LocalTargetSection";
 import { GlobalTargetSection } from "./GlobalTargetSection";
 import { InputSchemaSection } from "./InputSchemaSection";
 import { LogicSection } from "./LogicSection";
 import { ReturnSchemaSection } from "./ReturnSchemaSection";
+import { inferReturnSchemaFromCode } from "@/lib/utils/inferReturnSchema";
+import { toast } from "sonner";
 
 export interface TransformerConfigProps {
   id: string;
@@ -121,6 +124,14 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
   const logicMode = data.logicMode || "code";
   const scope = data.scope || "local";
   const functionName = data.functionName || data.label || "transformData";
+  const Pascal = toPascalCase(toVarName(functionName));
+  const inputTypeName = `${Pascal}Input`;
+  const outputTypeName = `${Pascal}Output`;
+
+  // Dynamically infer return schema from function return statements
+  const inferredReturnSchema = React.useMemo(() => {
+    return inferReturnSchemaFromCode(data.code || "", inputSchema);
+  }, [data.code, inputSchema]);
 
   const inputSchemaMode: RequestBodyMode =
     data.inputSchemaMode ??
@@ -129,14 +140,175 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
     data.returnSchemaMode ??
     (data.returnSchemaRawJson ? "raw_json" : "field_builder");
 
-  const updateData = (patch: Partial<typeof data>) => {
-    updateNode(node.id, {
-      data: {
-        ...data,
-        ...patch,
-      },
-    });
-  };
+  const updateData = React.useCallback(
+    (patch: Partial<typeof data>) => {
+      const currentNode = useBackendCanvasStore
+        .getState()
+        .nodes.find((n) => n.id === node.id);
+      if (!currentNode) return;
+      updateNode(node.id, {
+        data: {
+          ...currentNode.data,
+          ...patch,
+        },
+      });
+    },
+    [node.id, updateNode],
+  );
+
+  // Auto-sync return schema on initial load if empty or holding dummy "result" field
+  React.useEffect(() => {
+    const raw = data.returnSchema || [];
+    const isDefaultDummy = raw.length === 1 && raw[0]?.name === "result";
+    const isEmpty = raw.length === 0;
+    if ((isDefaultDummy || isEmpty) && inferredReturnSchema.length > 0) {
+      updateData({ returnSchema: inferredReturnSchema });
+    }
+  }, [inferredReturnSchema, data.returnSchema, updateData]);
+
+  // Handler to explicitly re-infer from code
+  const handleInferFromCode = React.useCallback(() => {
+    const fresh = inferReturnSchemaFromCode(data.code || "", inputSchema);
+    if (fresh.length > 0) {
+      updateData({ returnSchema: fresh });
+    }
+  }, [data.code, inputSchema, updateData]);
+
+  const handleLogicModeChange = React.useCallback(
+    (mode: "natural_language" | "code") => updateData({ logicMode: mode }),
+    [updateData],
+  );
+  const handlePromptChange = React.useCallback(
+    (prompt: string) => updateData({ prompt }),
+    [updateData],
+  );
+  const handleCodeChange = React.useCallback(
+    (code: string) => {
+      const inferred = inferReturnSchemaFromCode(code, inputSchema);
+      if (inferred.length > 0) {
+        // Preserve any custom user-selected types for existing field names
+        const existingMap = new Map((data.returnSchema || []).map((f) => [f.name, f]));
+        const merged = inferred.map((inf) => {
+          const prev = existingMap.get(inf.name);
+          if (prev && prev.type && prev.type !== "string" && prev.type !== "object" && (inf.type === "string" || inf.type === "object")) {
+            return { ...inf, type: prev.type, isArray: prev.isArray ?? inf.isArray };
+          }
+          return inf;
+        });
+        updateData({ code, returnSchema: merged });
+      } else {
+        updateData({ code });
+      }
+    },
+    [data.returnSchema, inputSchema, updateData],
+  );
+
+  const handleCreateTypeForField = React.useCallback(
+    (param: Parameter) => {
+      // 1. Determine suggested type name (e.g. TransformReqToCacheValue)
+      const baseFn = functionName || data.label || "transform";
+      const suggestedTypeName = `${toPascalCase(toVarName(baseFn))}${toPascalCase(toVarName(param.name))}`;
+
+      // 2. Prepare fields for CustomTypeItem from param.nestedFields (or fallback)
+      const fields = (
+        param.nestedFields && param.nestedFields.length > 0
+          ? param.nestedFields
+          : [
+              { id: `f-${Date.now()}-1`, name: "id", type: "string", required: true },
+              { id: `f-${Date.now()}-2`, name: "name", type: "string", required: true },
+            ]
+      ).map((f, i) => ({
+        id: `f-${Date.now()}-${i}`,
+        name: f.name,
+        type: f.type || "string",
+        required: f.required ?? true,
+        isArray: Boolean(f.isArray),
+      }));
+
+      const newTypeId = `type-${Date.now()}`;
+      const newTypeItem = {
+        id: newTypeId,
+        name: suggestedTypeName,
+        kind: "interface" as const,
+        description: `Custom return type for ${baseFn}.${param.name}`,
+        fields,
+      };
+
+      // 3. Find existing custom TypesNode or create a new one
+      const existingTypesNode = allNodes.find(
+        (n) => n.type === "types" && !n.data?.isPackageNode && !n.data?.isReadOnly,
+      );
+
+      if (existingTypesNode) {
+        const currentTypes = Array.isArray(existingTypesNode.data?.types)
+          ? existingTypesNode.data.types
+          : [];
+        const exists = currentTypes.some((t: any) => t.name === suggestedTypeName);
+        const updatedTypes = exists
+          ? currentTypes.map((t: any) => (t.name === suggestedTypeName ? newTypeItem : t))
+          : [...currentTypes, newTypeItem];
+
+        updateNode(existingTypesNode.id, {
+          data: {
+            ...existingTypesNode.data,
+            types: updatedTypes,
+          },
+        });
+      } else {
+        const typesNodeId = `types-${Date.now()}`;
+        const newPos = {
+          x: (node.position?.x ?? 200) + 380,
+          y: node.position?.y ?? 100,
+        };
+
+        addNode({
+          id: typesNodeId,
+          type: "types",
+          position: newPos,
+          data: {
+            label: `${toPascalCase(toVarName(baseFn))} Types`,
+            scope: "global",
+            definitionMode: "visual",
+            types: [newTypeItem],
+          },
+        });
+
+        // Add edge linking types node to transformer node
+        addEdge({
+          id: `edge-types-${typesNodeId}-${node.id}`,
+          source: typesNodeId,
+          target: node.id,
+          sourceHandle: "types-out",
+          targetHandle: "types-in",
+          type: "type-reference",
+          data: { isTypeReference: true },
+        });
+      }
+
+      // 4. Update transformer's return schema: replace "object" with suggestedTypeName
+      const currentReturnSchema = data.returnSchema || [];
+      const updatedReturnSchema = currentReturnSchema.map((f) => {
+        if (f.name === param.name || f.id === param.id) {
+          const isArr = Boolean(f.isArray || f.type?.endsWith("[]"));
+          return {
+            ...f,
+            type: isArr ? `${suggestedTypeName}[]` : suggestedTypeName,
+            isArray: isArr,
+          };
+        }
+        return f;
+      });
+
+      updateData({ returnSchema: updatedReturnSchema });
+      toast.success(`Created type "${suggestedTypeName}" in TypesNode!`);
+    },
+    [functionName, data.label, data.returnSchema, allNodes, node.id, node.position, updateNode, addNode, addEdge, updateData],
+  );
+
+  const handleAsyncChange = React.useCallback(
+    (isAsync: boolean) => updateData({ isAsync }),
+    [updateData],
+  );
 
   /**
    * Synchronizes edges from this local transformer node to the selected service endpoints and consumed events.
@@ -546,9 +718,14 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
           <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
             Function Name
           </Label>
-          <Input
+          <LocalInput
             className="h-8 text-xs font-mono bg-background/60 border-border/60"
             value={functionName}
+            debounceMs={200}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoComplete="off"
+            autoCorrect="off"
             onChange={(e) => {
               const val = toVarName(e.target.value);
               updateData({
@@ -623,9 +800,10 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
         <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
           Description (optional)
         </Label>
-        <Input
+        <LocalInput
           className="h-8 text-xs bg-background/60 border-border/60"
           value={data.description || ""}
+          debounceMs={200}
           onChange={(e) => updateData({ description: e.target.value })}
           placeholder="e.g. Sanitizes input parameters and generates slug"
         />
@@ -649,10 +827,15 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
         prompt={data.prompt || ""}
         code={data.code || ""}
         isAsync={data.isAsync}
-        onModeChange={(mode) => updateData({ logicMode: mode })}
-        onPromptChange={(prompt) => updateData({ prompt })}
-        onCodeChange={(code) => updateData({ code })}
-        onAsyncChange={(isAsync) => updateData({ isAsync })}
+        functionName={functionName}
+        inputTypeName={inputTypeName}
+        outputTypeName={outputTypeName}
+        inputSchema={inputSchema}
+        returnSchema={returnSchema}
+        onModeChange={handleLogicModeChange}
+        onPromptChange={handlePromptChange}
+        onCodeChange={handleCodeChange}
+        onAsyncChange={handleAsyncChange}
       />
 
       {/* 3. RETURN SCHEMA SECTION */}
@@ -661,10 +844,14 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
         returnSchemaMode={returnSchemaMode}
         returnSchema={returnSchema}
         rawJson={data.returnSchemaRawJson || ""}
+        inferredCount={inferredReturnSchema.length}
+        onInferFromCode={handleInferFromCode}
         onModeChange={(mode) => updateData({ returnSchemaMode: mode })}
         onSchemaChange={(fields, rawJson) =>
           updateData({ returnSchema: fields, returnSchemaRawJson: rawJson })
         }
+        onCreateTypeForField={handleCreateTypeForField}
+        allNodes={allNodes}
       />
     </div>
   );
