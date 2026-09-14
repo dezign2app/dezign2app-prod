@@ -15,6 +15,7 @@ import {
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { BackendNode, DEFAULT_DATABASE_ENV_VARS, getUniqueNodeLabel } from "@workspace/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import { DatabaseConnectionCheckCard } from "./database-config/DatabaseConnectionCheckCard";
 
 interface DatabaseConfigProps {
   id: string;
@@ -444,6 +445,18 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
             </code>
           </div>
         )}
+
+        {/* Live Connection Health Check Card */}
+        <DatabaseConnectionCheckCard
+          nodeId={nodeId}
+          engine={engine}
+          host={currentHost}
+          port={currentPort}
+          connectionStringEnv={connStringEnv}
+          dbFilePathEnv={dbFilePathEnv}
+          lastStatus={data.lastConnectionStatus}
+          onStatusUpdate={(status) => handleUpdateField("lastConnectionStatus", status)}
+        />
       </div>
 
       {/* Environment Variable Configurations */}
