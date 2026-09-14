@@ -32,6 +32,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
   );
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const allNodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
 
   // Selected operation ID for detail editing view
   const [selectedOpId, setSelectedOpId] = useState<string | null>(null);
@@ -54,6 +55,23 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
   const columns = node.data.columns || [];
   const indexes = node.data.indexes || [];
   const pascalLabel = label.charAt(0).toUpperCase() + label.slice(1);
+
+  // Resolve parent database / redis_instance node
+  const parentDb =
+    allNodes.find((n) => n.id === node.data.databaseId) ||
+    allNodes.find((n) =>
+      edges.some(
+        (e) =>
+          e.target === nodeId &&
+          e.source === n.id &&
+          (n.type === "database" || n.type === "redis_instance"),
+      ),
+    ) ||
+    allNodes.find((n) =>
+      isRedis
+        ? n.type === "redis_instance" || n.data?.dbEngine === "redis"
+        : n.type === "database",
+    );
 
   const currentOps: DbOperationFunction[] =
     node.data.dbOperations && node.data.dbOperations.length > 0
@@ -241,6 +259,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
           label={label}
           pascalLabel={pascalLabel}
           availableTableNodes={availableTableNodes}
+          parentDb={parentDb}
           onBack={() => setSelectedOpId(null)}
           updateSelectedOp={updateSelectedOp}
           handleTogglePagination={handleTogglePagination}

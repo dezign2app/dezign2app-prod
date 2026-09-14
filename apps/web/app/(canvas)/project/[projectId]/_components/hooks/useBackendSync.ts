@@ -10,6 +10,7 @@ import {
   IdentityProviderWithNode,
 } from "@/lib/stores/backendCanvasStore";
 import { ensureLangGraphDataReachability } from "@workspace/canvas/constants";
+import { sanitizeForConvex } from "@/lib/utils/convexSanitizer";
 import {
   BackendCanvasView,
   BackendNode,
@@ -556,10 +557,12 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
             ...(n.height !== undefined && { height: n.height }),
           };
 
-          const finalData =
+          const baseData =
             n.type === "langgraph"
               ? ensureLangGraphDataReachability(rawData)
               : rawData;
+
+          const finalData = sanitizeForConvex(baseData) as typeof baseData;
 
           return upsertNode({
             projectId: pid,

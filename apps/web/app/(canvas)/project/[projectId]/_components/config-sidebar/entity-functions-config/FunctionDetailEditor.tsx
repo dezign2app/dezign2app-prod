@@ -1,6 +1,7 @@
 import React from "react";
 import { ChevronLeft, Zap, Check, Trash } from "lucide-react";
 import { DbOperationFunction } from "@workspace/canvas/types";
+import { BackendNode } from "@/types/canvas";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
@@ -17,12 +18,14 @@ import {
 } from "../../shared/BusinessLogicBlock";
 import { FunctionParamsSection } from "./FunctionParamsSection";
 import { FunctionReturnTypeSection } from "./FunctionReturnTypeSection";
+import { OperationTestStudio } from "./OperationTestStudio";
 
 interface FunctionDetailEditorProps {
   selectedOp: DbOperationFunction;
   label: string;
   pascalLabel: string;
   availableTableNodes: { id: string; label: string }[];
+  parentDb?: BackendNode;
   onBack: () => void;
   updateSelectedOp: (changes: Partial<DbOperationFunction>) => void;
   handleTogglePagination: (enabled: boolean) => void;
@@ -35,6 +38,7 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = ({
   label,
   pascalLabel,
   availableTableNodes,
+  parentDb,
   onBack,
   updateSelectedOp,
   handleTogglePagination,
@@ -157,7 +161,15 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = ({
         }}
       />
 
-      {/* 4. Function Return Type */}
+      {/* 4. Test Cases & Live Execution Studio */}
+      <OperationTestStudio
+        selectedOp={selectedOp}
+        label={label}
+        parentDb={parentDb}
+        updateSelectedOp={updateSelectedOp}
+      />
+
+      {/* 5. Function Return Type */}
       <FunctionReturnTypeSection
         selectedOp={selectedOp}
         pascalLabel={pascalLabel}

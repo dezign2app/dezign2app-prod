@@ -1,10 +1,20 @@
 import { z } from "zod";
 import { baseNodeDataSchema } from "./base";
 
+export const databaseConnectionStatusSchema = z.object({
+  connected: z.boolean(),
+  latencyMs: z.number().optional(),
+  checkedAt: z.string().optional(),
+  serverInfo: z.record(z.any()).optional(),
+  error: z.string().optional(),
+});
+
 export const databaseDataSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
   dbEngine: z.string().optional(),
-  dbType: z.enum(["relational", "document", "vector", "key-value"]).optional(),
+  dbType: z
+    .enum(["relational", "document", "vector", "key-value", "redis", "nosql"])
+    .optional(),
   dbCategory: z.enum(["sql", "nosql", "vector", "key-value"]).optional(),
   provider: z.string().optional(),
   dbConnectionType: z.enum(["env_var", "connection_string"]).optional(),
@@ -35,4 +45,6 @@ export const databaseDataSchema = baseNodeDataSchema.extend({
   maxmemory: z.string().optional(),
   persistenceMode: z.enum(["RDB", "AOF", "RDB+AOF", "None"]).optional(),
   clustering: z.boolean().optional(),
+  redisVersion: z.string().optional(),
+  lastConnectionStatus: databaseConnectionStatusSchema.optional(),
 });

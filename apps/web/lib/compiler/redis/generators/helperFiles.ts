@@ -530,6 +530,8 @@ export async function append${typeName}Item(
   const key = get${typeName}Key(${templateParams.join(", ") || "id"});
   try {
     const redis = await getRedisClient();
+    // Ensure array root exists (upsert)
+    await redis.json.set(key, "$", [], { nx: true });
     return await redis.json.arrappend(key, "$", item);
   } catch (error) {
     logger.error(\`Failed to append item to JSON array \${key}\`, error);
