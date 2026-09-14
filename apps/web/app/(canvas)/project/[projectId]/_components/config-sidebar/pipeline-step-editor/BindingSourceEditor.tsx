@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useMemo, useState, useRef } from "react";
-import { Input } from "@workspace/ui/components/input";
-import { Textarea } from "@workspace/ui/components/textarea";
+import { BufferedInput, BufferedTextarea } from "./BufferedInput";
 import {
   Select,
   SelectContent,
@@ -189,13 +188,13 @@ export const BindingSourceEditor = ({
         ) : (
           <div className="relative flex-1 min-w-0 flex items-center gap-1">
             {!showTextarea ? (
-              <Input
+              <BufferedInput
                 ref={(el) => { inputRef.current = el; }}
                 className="h-7 text-xs font-mono bg-background/60 border-border/60 flex-1 pr-14"
                 placeholder="e.g. gpt-4o or Prompt: ${body.query}"
                 value={stringVal}
-                onChange={(e) =>
-                  onChange({ ...binding, source: { ...source, value: e.target.value } })
+                onCommit={(val) =>
+                  onChange({ ...binding, source: { ...source, value: val } })
                 }
               />
             ) : null}
@@ -268,14 +267,14 @@ export const BindingSourceEditor = ({
       {/* Expanded Multi-line Textarea */}
       {source.kind === "inline" && showTextarea && (
         <div className="w-full flex flex-col gap-1 pl-[146px]">
-          <Textarea
+          <BufferedTextarea
             ref={(el) => { inputRef.current = el; }}
             rows={4}
             className="text-xs font-mono bg-background/80 border-border/60 w-full resize-y min-h-[80px]"
             placeholder={'Instructions: You are an AI assistant.\nQuery: ${body.query}\n\nOr JSON:\n{\n  name: `demo ${body.query}`\n}'}
             value={stringVal}
-            onChange={(e) =>
-              onChange({ ...binding, source: { ...source, value: e.target.value } })
+            onCommit={(val) =>
+              onChange({ ...binding, source: { ...source, value: val } })
             }
           />
           <span className="text-[9px] text-muted-foreground/60 font-sans">

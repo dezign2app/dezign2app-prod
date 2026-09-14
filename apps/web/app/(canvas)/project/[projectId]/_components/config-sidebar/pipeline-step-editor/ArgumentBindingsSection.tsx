@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Plus, Trash, Edit2, List, AlertTriangle } from "lucide-react";
-import { Input } from "@workspace/ui/components/input";
+import { BufferedInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -237,11 +237,11 @@ export const ArgumentBindingsSection = ({
                 </Select>
               ) : (
                 <div className="flex items-center gap-1 min-w-0">
-                  <Input
+                  <BufferedInput
                     className="h-7 text-xs font-mono bg-background/70 border-border/60 flex-1 min-w-0"
                     value={binding.argName}
-                    onChange={(e) =>
-                      onUpdateBinding(bi, { ...binding, argName: e.target.value })
+                    onCommit={(val) =>
+                      onUpdateBinding(bi, { ...binding, argName: val })
                     }
                     placeholder="argName"
                     autoFocus={isCustomMode}

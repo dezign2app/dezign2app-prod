@@ -3,6 +3,7 @@ export type {
   ConnectedTransformer,
   ConnectedKafka,
   ConnectedLangGraph,
+  ConnectedRedis,
   BindingCheckSource,
   BindingCheckItem,
   EndpointLike,

@@ -86,17 +86,27 @@ export const VectorDBRefNode = ({
           </span>
         </div>
 
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div
+          className="flex items-center gap-0.5 shrink-0 nodrag"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <button
-            className="p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 transition-colors"
+            type="button"
+            className="p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 transition-colors nodrag cursor-pointer"
             onClick={handleOpenConfig}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
             title="Configure Vector Collection"
           >
             <Settings size={12} />
           </button>
           <button
-            className="p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+            type="button"
+            className="p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors nodrag cursor-pointer"
             onClick={handleDelete}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
             title="Delete Node"
           >
             <Trash size={12} />
@@ -105,10 +115,15 @@ export const VectorDBRefNode = ({
       </div>
 
       {/* Bottom row: Collection Selector */}
-      <div className="flex items-center gap-1.5 nodrag">
+      <div
+        className="flex items-center gap-1.5 nodrag"
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <Select
-          value={data.collectionRef || ""}
+          value={data.collectionRef || "__none__"}
           onValueChange={(val) => {
+            if (val === "__none__") return;
             const col = vectorCollections.find((c) => c.id === val);
             updateNode(id, {
               data: {
@@ -121,19 +136,22 @@ export const VectorDBRefNode = ({
             });
           }}
         >
-          <SelectTrigger className="h-6 w-full min-w-0 text-[11px] font-semibold bg-background/60 border-border/70 hover:border-violet-500/50 px-2 py-0 truncate overflow-hidden">
-            <div className="flex items-center gap-1 min-w-0 truncate">
+          <SelectTrigger
+            className="h-6 w-full min-w-0 text-[11px] font-semibold bg-background/60 border-border/70 hover:border-violet-500/50 px-2 py-0 truncate overflow-hidden nodrag cursor-pointer"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-1 min-w-0 truncate pointer-events-none">
               <Layers size={10} className="text-violet-500 shrink-0" />
               <span className="truncate">
                 {selectedCol?.data?.label || "Select Collection..."}
               </span>
             </div>
           </SelectTrigger>
-          <SelectContent className="nodrag z-[100]">
+          <SelectContent position="popper" className="nodrag z-[100]">
             {vectorCollections.length === 0 ? (
-              <div className="p-2 text-xs text-muted-foreground italic">
+              <SelectItem value="__none__" disabled className="text-xs text-muted-foreground italic">
                 No vector collections defined
-              </div>
+              </SelectItem>
             ) : (
               vectorCollections.map((c) => (
                 <SelectItem key={c.id} value={c.id} className="text-xs">

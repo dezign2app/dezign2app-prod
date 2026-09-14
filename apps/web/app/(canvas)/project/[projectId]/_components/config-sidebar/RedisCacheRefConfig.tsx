@@ -12,7 +12,6 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
-import { Textarea } from "@workspace/ui/components/textarea";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import {
@@ -259,22 +258,6 @@ export function RedisCacheRefConfig({ id, nodeId }: RedisCacheRefConfigProps) {
               )}
             </SelectContent>
           </Select>
-        </div>
-
-
-        {/* Description / Notes */}
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs font-medium">Caching Strategy / Description</Label>
-          <Textarea
-            value={data.description || ""}
-            onChange={(e) =>
-              updateNode(nodeId, {
-                data: { ...data, description: e.target.value },
-              })
-            }
-            placeholder="Describe caching pattern (e.g. Cache user profile for 1 hour with write-through)..."
-            className="min-h-[60px] text-xs resize-none"
-          />
         </div>
       </div>
 

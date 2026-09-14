@@ -72,10 +72,14 @@ export function isValidConnection(
   if (options?.existingEdges && options.sourceNodeId && options.targetNodeId) {
     const isDuplicate = options.existingEdges.some(
       (e) =>
-        e.source === options.sourceNodeId &&
-        e.target === options.targetNodeId &&
-        (e.sourceHandle ?? null) === (sourceHandleId ?? null) &&
-        (e.targetHandle ?? null) === (targetHandleId ?? null),
+        (e.source === options.sourceNodeId &&
+          e.target === options.targetNodeId &&
+          (e.sourceHandle ?? null) === (sourceHandleId ?? null) &&
+          (e.targetHandle ?? null) === (targetHandleId ?? null)) ||
+        (e.source === options.targetNodeId &&
+          e.target === options.sourceNodeId &&
+          (e.sourceHandle ?? null) === (targetHandleId ?? null) &&
+          (e.targetHandle ?? null) === (sourceHandleId ?? null)),
     );
     if (isDuplicate) {
       return {

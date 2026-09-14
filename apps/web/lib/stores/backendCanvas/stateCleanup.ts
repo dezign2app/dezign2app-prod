@@ -124,6 +124,29 @@ export function cleanupDeletedNodesState(
   );
   const deletedLangGraphIds = new Set(deletedLangGraphNodes.map((n) => n.id));
 
+  // Track deleted redis nodes for pipeline step cleanup
+  const deletedRedisNodes = currentState.nodes.filter(
+    (n) =>
+      n &&
+      (n.type === "redis-cache" || n.type === "redis_schema" || n.type === "redis_instance") &&
+      allIdsSet.has(n.id),
+  );
+  const deletedRedisIds = new Set(deletedRedisNodes.map((n) => n.id));
+  deletedRedisNodes.forEach((n) => {
+    if (n.type === "redis-cache" && n.data?.schemaRef) {
+      const remainingHasSchema = currentState.nodes.some(
+        (other) =>
+          other &&
+          !allIdsSet.has(other.id) &&
+          other.type === "redis-cache" &&
+          other.data?.schemaRef === n.data.schemaRef,
+      );
+      if (!remainingHasSchema) {
+        deletedRedisIds.add(n.data.schemaRef);
+      }
+    }
+  });
+
   // 2. Events to remove (publishers & consumers)
   const eventsToDelete = currentState.events.filter((ev) =>
     allIdsSet.has(ev.nodeId),
@@ -169,6 +192,24 @@ export function cleanupDeletedNodesState(
               s.type === "langgraph_invoke" &&
               s.langGraphTargetNodeId &&
               deletedLangGraphIds.has(s.langGraphTargetNodeId)
+            ),
+        );
+        if (filteredSteps.length !== updatedEv.pipelineSteps.length) {
+          updatedEv = { ...updatedEv, pipelineSteps: filteredSteps };
+          evChanged = true;
+        }
+      }
+      if (
+        deletedRedisIds.size > 0 &&
+        updatedEv.pipelineSteps &&
+        updatedEv.pipelineSteps.length > 0
+      ) {
+        const filteredSteps = updatedEv.pipelineSteps.filter(
+          (s) =>
+            !(
+              s.type === "redis_operation" &&
+              ((s.tableNodeId && deletedRedisIds.has(s.tableNodeId)) ||
+                (s.databaseId && deletedRedisIds.has(s.databaseId)))
             ),
         );
         if (filteredSteps.length !== updatedEv.pipelineSteps.length) {
@@ -227,6 +268,25 @@ export function cleanupDeletedNodesState(
               s.type === "langgraph_invoke" &&
               s.langGraphTargetNodeId &&
               deletedLangGraphIds.has(s.langGraphTargetNodeId)
+            ),
+        );
+        if (filteredSteps.length !== newPipelineSteps.length) {
+          changed = true;
+          newPipelineSteps = filteredSteps;
+        }
+      }
+
+      if (
+        deletedRedisIds.size > 0 &&
+        newPipelineSteps &&
+        newPipelineSteps.length > 0
+      ) {
+        const filteredSteps = newPipelineSteps.filter(
+          (s) =>
+            !(
+              s.type === "redis_operation" &&
+              ((s.tableNodeId && deletedRedisIds.has(s.tableNodeId)) ||
+                (s.databaseId && deletedRedisIds.has(s.databaseId)))
             ),
         );
         if (filteredSteps.length !== newPipelineSteps.length) {
@@ -700,6 +760,139 @@ export function cleanupDeletedEdgesState(
                   !(
                     step.type === "langgraph_invoke" &&
                     step.langGraphTargetNodeId === lgNode.id
+                  ),
+              );
+              if (updatedSteps.length !== ev.pipelineSteps.length) {
+                eventsChanged = true;
+                const updatedEv = { ...ev, pipelineSteps: updatedSteps };
+                pendingEventUpserts.push(updatedEv);
+                return updatedEv;
+              }
+            }
+            return ev;
+          });
+        }
+      }
+    }
+
+    // Redis Cache <-> Endpoint / Consumed Event edge cleanup: remove redis_operation step when edge is deleted
+    const rcSrcNode = currentState.nodes.find((n) => n.id === edge.source);
+    const rcTgtNode = currentState.nodes.find((n) => n.id === edge.target);
+    const isServiceToRedis =
+      rcSrcNode?.type === "service" && rcTgtNode?.type === "redis-cache";
+    const isRedisToService =
+      rcSrcNode?.type === "redis-cache" && rcTgtNode?.type === "service";
+
+    if (isServiceToRedis || isRedisToService) {
+      const redisNode = isServiceToRedis ? rcTgtNode! : rcSrcNode!;
+      const svcNode = isServiceToRedis ? rcSrcNode! : rcTgtNode!;
+      const handle = isServiceToRedis
+        ? edge.sourceHandle
+        : edge.targetHandle;
+
+      const epId = handle?.startsWith("endpoint-out-")
+        ? handle.replace("endpoint-out-", "")
+        : handle?.startsWith("endpoint-in-")
+        ? handle.replace("endpoint-in-", "")
+        : null;
+
+      const evId = handle?.startsWith("consumedEvents-out-")
+        ? handle.replace("consumedEvents-out-", "")
+        : handle?.startsWith("consumedEvents-in-")
+        ? handle.replace("consumedEvents-in-", "")
+        : null;
+
+      const schemaRef = redisNode.data?.schemaRef;
+      const targetTableNodeId = schemaRef || redisNode.id;
+
+      // Check if any other edge still connects this endpoint or event to this redis-cache node
+      const hasOtherEdge = nextEdges.some((e) => {
+        if (!e) return false;
+        const connectsBoth =
+          (e.source === svcNode.id && e.target === redisNode.id) ||
+          (e.source === redisNode.id && e.target === svcNode.id);
+        if (!connectsBoth) return false;
+        if (epId) {
+          return (
+            e.sourceHandle === `endpoint-out-${epId}` ||
+            e.sourceHandle === `endpoint-in-${epId}` ||
+            e.targetHandle === `endpoint-in-${epId}` ||
+            e.targetHandle === `endpoint-out-${epId}` ||
+            e.sourceHandle === epId ||
+            e.targetHandle === epId
+          );
+        }
+        if (evId) {
+          return (
+            e.sourceHandle === `consumedEvents-out-${evId}` ||
+            e.sourceHandle === `consumedEvents-in-${evId}` ||
+            e.targetHandle === `consumedEvents-in-${evId}` ||
+            e.targetHandle === `consumedEvents-out-${evId}` ||
+            e.sourceHandle === evId ||
+            e.targetHandle === evId
+          );
+        }
+        return true;
+      });
+
+      if (!hasOtherEdge) {
+        if (epId) {
+          nextEndpoints = nextEndpoints.map((ep) => {
+            if (ep.id === epId && ep.pipelineSteps && ep.pipelineSteps.length > 0) {
+              const updatedSteps = ep.pipelineSteps.filter(
+                (step) =>
+                  !(
+                    step.type === "redis_operation" &&
+                    (step.tableNodeId === targetTableNodeId ||
+                      step.tableNodeId === redisNode.id ||
+                      (redisNode.data?.databaseId && step.databaseId === redisNode.data?.databaseId))
+                  ),
+              );
+              if (updatedSteps.length !== ep.pipelineSteps.length) {
+                endpointsChanged = true;
+                const updatedEp = { ...ep, pipelineSteps: updatedSteps };
+                pendingEndpointUpserts.push(updatedEp);
+                return updatedEp;
+              }
+            }
+            return ep;
+          });
+        } else if (!evId) {
+          // If neither epId nor evId was in handle, check if first endpoint had the step
+          const firstEp = currentState.endpoints.find((e) => e.nodeId === svcNode.id);
+          if (firstEp) {
+            nextEndpoints = nextEndpoints.map((ep) => {
+              if (ep.id === firstEp.id && ep.pipelineSteps && ep.pipelineSteps.length > 0) {
+                const updatedSteps = ep.pipelineSteps.filter(
+                  (step) =>
+                    !(
+                      step.type === "redis_operation" &&
+                      (step.tableNodeId === targetTableNodeId ||
+                        step.tableNodeId === redisNode.id ||
+                        (redisNode.data?.databaseId && step.databaseId === redisNode.data?.databaseId))
+                    ),
+                );
+                if (updatedSteps.length !== ep.pipelineSteps.length) {
+                  endpointsChanged = true;
+                  const updatedEp = { ...ep, pipelineSteps: updatedSteps };
+                  pendingEndpointUpserts.push(updatedEp);
+                  return updatedEp;
+                }
+              }
+              return ep;
+            });
+          }
+        }
+        if (evId) {
+          nextEvents = nextEvents.map((ev) => {
+            if (ev.id === evId && ev.pipelineSteps && ev.pipelineSteps.length > 0) {
+              const updatedSteps = ev.pipelineSteps.filter(
+                (step) =>
+                  !(
+                    step.type === "redis_operation" &&
+                    (step.tableNodeId === targetTableNodeId ||
+                      step.tableNodeId === redisNode.id ||
+                      (redisNode.data?.databaseId && step.databaseId === redisNode.data?.databaseId))
                   ),
               );
               if (updatedSteps.length !== ev.pipelineSteps.length) {

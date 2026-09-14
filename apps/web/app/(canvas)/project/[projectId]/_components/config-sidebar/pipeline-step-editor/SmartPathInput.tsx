@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Input } from "@workspace/ui/components/input";
+import { BufferedInput } from "./BufferedInput";
 import {
   Popover,
   PopoverTrigger,
@@ -38,11 +38,11 @@ export const SmartPathInput = ({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <div className="relative flex items-center w-full">
-            <Input
+            <BufferedInput
               className="h-7 text-xs font-mono bg-background/70 border-border/60 pr-6 w-full"
               placeholder={displayPlaceholder}
               value={value}
-              onChange={(e) => onChange(e.target.value)}
+              onCommit={onChange}
               onFocus={() => setOpen(true)}
             />
             <button

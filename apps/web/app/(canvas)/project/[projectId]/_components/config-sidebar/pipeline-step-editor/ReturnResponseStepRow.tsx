@@ -2,9 +2,9 @@
 
 import React, { useState, useMemo, useRef, useCallback } from "react";
 import { Endpoint, BackendNode } from "@workspace/canvas/types";
-import { useBufferedInput } from "@/lib/hooks/useBufferedInput";
 
 import { Input } from "@workspace/ui/components/input";
+import { BufferedInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
 import {
   Select,
@@ -46,19 +46,6 @@ export const ReturnResponseStepRow = ({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  const noteBuffer = useBufferedInput(
-    step.name && step.name !== "Return Response"
-      ? step.name
-      : (step.description ?? ""),
-    useCallback((val: string) => {
-      onChangeRef.current({
-        ...stepRef.current,
-        name: val.trim() || "Return Response",
-        description: val,
-      });
-    }, []),
-    150,
-  );
 
   // Available sources (request body, params, query, headers, prior steps)
   const availableSources = useMemo(
@@ -295,11 +282,21 @@ export const ReturnResponseStepRow = ({
                   <Label className="text-[10px] text-muted-foreground font-medium">
                     Response Action / Note
                   </Label>
-                  <Input
+                  <BufferedInput
                     className="h-7 text-xs bg-background/60 border-border/60"
-                    value={noteBuffer.value}
-                    onChange={(e) => noteBuffer.onChange(e.target.value)}
-                    onBlur={noteBuffer.flush}
+                    value={
+                      step.name && step.name !== "Return Response"
+                        ? step.name
+                        : (step.description ?? "")
+                    }
+                    onCommit={(val) => {
+                      onChange({
+                        ...step,
+                        name: val.trim() || "Return Response",
+                        description: val,
+                      });
+                    }}
+                    debounceMs={350}
                     placeholder="e.g. Return Created Product"
                   />
                 </div>
@@ -366,11 +363,11 @@ export const ReturnResponseStepRow = ({
                       className="grid grid-cols-[1fr_auto_2.2fr_auto] gap-1.5 items-center bg-muted/15 p-1.5 rounded border border-border/40"
                     >
                       {/* Key name */}
-                      <Input
+                      <BufferedInput
                         className="h-7 text-xs font-mono bg-background/70 border-border/60"
                         value={binding.argName}
-                        onChange={(e) =>
-                          updateBinding(bi, { ...binding, argName: e.target.value })
+                        onCommit={(val) =>
+                          updateBinding(bi, { ...binding, argName: val })
                         }
                         placeholder="data / fieldName"
                       />

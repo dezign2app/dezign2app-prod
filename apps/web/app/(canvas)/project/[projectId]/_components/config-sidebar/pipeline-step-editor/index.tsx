@@ -7,6 +7,7 @@ export * from "./AddStepToolbar";
 export * from "./PipelineStepEditor";
 
 export * from "./SmartPathInput";
+export * from "./BufferedInput";
 export * from "./BindingSourceEditor";
 export * from "./TransformerStepSection";
 export * from "./DbOperationStepSection";

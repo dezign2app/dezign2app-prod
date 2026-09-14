@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import { Endpoint, BackendNode, BackendEdge, AnyMessagingResource } from "@workspace/canvas/types";
-import { Input } from "@workspace/ui/components/input";
+import { BufferedInput } from "./BufferedInput";
 import {
   Select,
   SelectContent,
@@ -153,13 +153,13 @@ export const LoopStepSection = ({
                 <span className="text-[9px] font-semibold text-muted-foreground">
                   Index Var
                 </span>
-                <Input
+                <BufferedInput
                   className="h-7 text-xs font-mono bg-background/60 border-border/60"
                   value={iterVar}
-                  onChange={(e) =>
+                  onCommit={(val) =>
                     onChange({
                       ...step,
-                      iteratorVariable: e.target.value,
+                      iteratorVariable: val,
                     })
                   }
                   placeholder="i"
@@ -171,14 +171,14 @@ export const LoopStepSection = ({
                 <span className="text-[9px] font-semibold text-muted-foreground">
                   Start (From)
                 </span>
-                <Input
+                <BufferedInput
                   type="number"
                   className="h-7 text-xs font-mono bg-background/60 border-border/60"
                   value={forStart}
-                  onChange={(e) =>
+                  onCommit={(val) =>
                     onChange({
                       ...step,
-                      loopForStart: parseInt(e.target.value, 10) || 0,
+                      loopForStart: parseInt(val, 10) || 0,
                     })
                   }
                   placeholder="0"
@@ -190,14 +190,14 @@ export const LoopStepSection = ({
                 <span className="text-[9px] font-semibold text-muted-foreground">
                   End (Count &lt;)
                 </span>
-                <Input
+                <BufferedInput
                   type="number"
                   className="h-7 text-xs font-mono bg-background/60 border-border/60"
                   value={forEnd}
-                  onChange={(e) =>
+                  onCommit={(val) =>
                     onChange({
                       ...step,
-                      loopForEnd: parseInt(e.target.value, 10) || 10,
+                      loopForEnd: parseInt(val, 10) || 10,
                     })
                   }
                   placeholder="10"
@@ -209,15 +209,15 @@ export const LoopStepSection = ({
                 <span className="text-[9px] font-semibold text-muted-foreground">
                   Step (+N)
                 </span>
-                <Input
+                <BufferedInput
                   type="number"
                   min={1}
                   className="h-7 text-xs font-mono bg-background/60 border-border/60"
                   value={forStep}
-                  onChange={(e) =>
+                  onCommit={(val) =>
                     onChange({
                       ...step,
-                      loopForStep: parseInt(e.target.value, 10) || 1,
+                      loopForStep: parseInt(val, 10) || 1,
                     })
                   }
                   placeholder="1"
@@ -275,13 +275,13 @@ export const LoopStepSection = ({
                     placeholder="field or (entire output)"
                   />
                 ) : (
-                  <Input
+                  <BufferedInput
                     className="h-7 text-xs font-mono bg-background/60 border-border/60 flex-1"
                     value={String(loopSource.value ?? "")}
-                    onChange={(e) =>
+                    onCommit={(val) =>
                       onChange({
                         ...step,
-                        loopSource: { kind: "inline", value: e.target.value },
+                        loopSource: { kind: "inline", value: val },
                       })
                     }
                     placeholder="e.g. [1, 2, 3]"
@@ -295,13 +295,13 @@ export const LoopStepSection = ({
               <span className="text-[9px] font-semibold text-muted-foreground">
                 Item Variable Name
               </span>
-              <Input
+              <BufferedInput
                 className="h-7 text-xs font-mono bg-background/60 border-border/60"
                 value={iterVar}
-                onChange={(e) =>
+                onCommit={(val) =>
                   onChange({
                     ...step,
-                    iteratorVariable: e.target.value,
+                    iteratorVariable: val,
                   })
                 }
                 placeholder="e.g. item"
@@ -343,16 +343,16 @@ export const LoopStepSection = ({
                   Max Iterations limit (prevents infinite loops):
                 </span>
               </div>
-              <Input
+              <BufferedInput
                 type="number"
                 min={1}
                 max={10000}
                 className="h-6 w-20 text-xs font-mono bg-background border-border/60 text-right"
                 value={maxIterations}
-                onChange={(e) =>
+                onCommit={(val) =>
                   onChange({
                     ...step,
-                    loopMaxIterations: parseInt(e.target.value, 10) || 100,
+                    loopMaxIterations: parseInt(val, 10) || 100,
                   })
                 }
               />

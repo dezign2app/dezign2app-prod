@@ -98,13 +98,21 @@ export function ensureRedisCacheConnection({
     : `endpoint-out-${serviceNodeId}`;
 
   const currentEdges = useBackendCanvasStore.getState().edges;
-  const existingEdge = currentEdges.find(
-    (e) =>
+  const existingEdge = currentEdges.find((e) => {
+    const forwardMatch =
       e.source === serviceNodeId &&
       e.target === cacheNode!.id &&
-      (e.sourceHandle === sourceHandle || !e.sourceHandle) &&
-      (e.targetHandle === "database-target" || !e.targetHandle),
-  );
+      (e.sourceHandle === sourceHandle || !e.sourceHandle || (endpointId && e.sourceHandle.includes(endpointId))) &&
+      (e.targetHandle === "database-target" || !e.targetHandle);
+
+    const reverseMatch =
+      e.source === cacheNode!.id &&
+      e.target === serviceNodeId &&
+      (e.targetHandle === sourceHandle || !e.targetHandle || (endpointId && e.targetHandle.includes(endpointId))) &&
+      (e.sourceHandle === "database-target" || !e.sourceHandle);
+
+    return forwardMatch || reverseMatch;
+  });
 
   if (!existingEdge) {
     store.addEdge({
@@ -327,13 +335,21 @@ export function ensureDatabaseRefConnection({
     : `endpoint-out-${serviceNodeId}`;
 
   const currentEdges = useBackendCanvasStore.getState().edges;
-  const existingEdge = currentEdges.find(
-    (e) =>
+  const existingEdge = currentEdges.find((e) => {
+    const forwardMatch =
       e.source === serviceNodeId &&
       e.target === dbRefNode!.id &&
-      (e.sourceHandle === sourceHandle || !e.sourceHandle) &&
-      e.targetHandle === targetHandle,
-  );
+      (e.sourceHandle === sourceHandle || !e.sourceHandle || (endpointId && e.sourceHandle.includes(endpointId))) &&
+      (e.targetHandle === targetHandle || !e.targetHandle || (resolvedFnName && e.targetHandle.includes(resolvedFnName)));
+
+    const reverseMatch =
+      e.source === dbRefNode!.id &&
+      e.target === serviceNodeId &&
+      (e.targetHandle === sourceHandle || !e.targetHandle || (endpointId && e.targetHandle.includes(endpointId))) &&
+      (e.sourceHandle === targetHandle || !e.sourceHandle || (resolvedFnName && e.sourceHandle.includes(resolvedFnName)));
+
+    return forwardMatch || reverseMatch;
+  });
 
   if (!existingEdge) {
     store.addEdge({
@@ -618,13 +634,21 @@ export function ensurePageRefConnection({
 
   // 4. Ensure canvas edge exists from service to pageRefNode
   const currentEdges = useBackendCanvasStore.getState().edges;
-  const existingEdge = currentEdges.find(
-    (e) =>
+  const existingEdge = currentEdges.find((e) => {
+    const forwardMatch =
       e.source === serviceNodeId &&
       e.target === pageRefNode!.id &&
-      (e.sourceHandle === sourceHandle || !e.sourceHandle) &&
-      (e.targetHandle === "page-ref-in" || e.targetHandle === "ref-in" || !e.targetHandle),
-  );
+      (e.sourceHandle === sourceHandle || !e.sourceHandle || (endpointId && e.sourceHandle.includes(endpointId))) &&
+      (e.targetHandle === "page-ref-in" || e.targetHandle === "ref-in" || !e.targetHandle);
+
+    const reverseMatch =
+      e.source === pageRefNode!.id &&
+      e.target === serviceNodeId &&
+      (e.targetHandle === sourceHandle || !e.targetHandle || (endpointId && e.targetHandle.includes(endpointId))) &&
+      (e.sourceHandle === "page-ref-in" || e.sourceHandle === "ref-in" || !e.sourceHandle);
+
+    return forwardMatch || reverseMatch;
+  });
 
   if (!existingEdge) {
     store.addEdge({

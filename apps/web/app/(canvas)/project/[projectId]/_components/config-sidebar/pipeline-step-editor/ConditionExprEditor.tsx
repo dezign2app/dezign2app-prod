@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { Input } from "@workspace/ui/components/input";
+import { BufferedInput } from "./BufferedInput";
 import {
   Select,
   SelectContent,
@@ -291,11 +291,11 @@ const SourcePicker = ({
           rootVariableName={activeSource?.rootVariableName}
         />
       ) : (
-        <Input
+        <BufferedInput
           className="h-7 text-xs font-mono bg-background/60 border-border/60 flex-1"
           placeholder="inline value"
           value={String(source.value ?? "")}
-          onChange={(e) => onChange({ kind: "inline", value: e.target.value })}
+          onCommit={(val) => onChange({ kind: "inline", value: val })}
         />
       )}
     </div>

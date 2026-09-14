@@ -3,7 +3,7 @@
 import React, { useMemo } from "react";
 import { BackendNode, BackendEdge, Endpoint } from "@workspace/canvas/types";
 import { toFolderName, toPascalCase, toVarName } from "@/lib/compiler/utils";
-import { Input } from "@workspace/ui/components/input";
+import { BufferedInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
 import {
   Select,
@@ -391,15 +391,15 @@ export const ServiceCallStepSection = ({
           <div className="grid grid-cols-2 gap-2 p-2 rounded bg-muted/20 border border-border/40">
             <div className="flex flex-col gap-1">
               <Label className="text-[9px] text-muted-foreground">Compiled Function Name</Label>
-              <Input
+              <BufferedInput
                 className="h-6 text-[11px] font-mono bg-background/60 border-border/60"
                 value={step.functionRef?.name ?? ""}
-                onChange={(e) =>
+                onCommit={(val) =>
                   onChange({
                     ...step,
                     functionRef: {
                       ...(step.functionRef ?? { importPath: "" }),
-                      name: e.target.value,
+                      name: val,
                     },
                   })
                 }
@@ -407,15 +407,15 @@ export const ServiceCallStepSection = ({
             </div>
             <div className="flex flex-col gap-1">
               <Label className="text-[9px] text-muted-foreground">Compiled Import Path</Label>
-              <Input
+              <BufferedInput
                 className="h-6 text-[11px] font-mono bg-background/60 border-border/60"
                 value={step.functionRef?.importPath ?? ""}
-                onChange={(e) =>
+                onCommit={(val) =>
                   onChange({
                     ...step,
                     functionRef: {
                       ...(step.functionRef ?? { name: "" }),
-                      importPath: e.target.value,
+                      importPath: val,
                     },
                   })
                 }

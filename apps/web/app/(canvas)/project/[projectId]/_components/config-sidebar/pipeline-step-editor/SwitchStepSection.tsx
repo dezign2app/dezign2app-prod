@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { Endpoint, BackendNode, BackendEdge, AnyMessagingResource } from "@workspace/canvas/types";
-import { Input } from "@workspace/ui/components/input";
+import { BufferedInput } from "./BufferedInput";
 import {
   Select,
   SelectContent,
@@ -134,13 +134,13 @@ export const SwitchStepSection = ({
               rootVariableName={activeSource?.rootVariableName}
             />
           ) : (
-            <Input
+            <BufferedInput
               className="h-7 text-xs font-mono bg-background/60 border-border/60 flex-1"
               value={String(switchSource.value ?? "")}
-              onChange={(e) =>
+              onCommit={(val) =>
                 onChange({
                   ...step,
-                  switchSource: { kind: "inline", value: e.target.value },
+                  switchSource: { kind: "inline", value: val },
                 })
               }
               placeholder="inline value"
@@ -241,13 +241,13 @@ export const SwitchStepSection = ({
                     <span className="text-[10px] text-muted-foreground font-semibold">
                       Match Value:
                     </span>
-                    <Input
+                    <BufferedInput
                       className="h-7 text-xs font-mono bg-background/60 border-border/60 w-48"
                       value={String(currentCase.value ?? "")}
-                      onChange={(e) =>
+                      onCommit={(val) =>
                         updateCase(caseIndex, {
                           ...currentCase,
-                          value: e.target.value,
+                          value: val,
                         })
                       }
                       placeholder="e.g. pending"

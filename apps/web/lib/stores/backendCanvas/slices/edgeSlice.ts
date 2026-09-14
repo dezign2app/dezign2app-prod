@@ -20,6 +20,7 @@ import {
   handleEndpointConnect,
   handleForeignKeyConnect,
   handleLangGraphConnect,
+  handleRedisCacheConnect,
 } from "../edge";
 
 export interface EdgeSlice {
@@ -177,7 +178,10 @@ export const createEdgeSlice = (
     // 6. Handle LangGraph connections
     handleLangGraphConnect(context);
 
-    // 7. Handle Foreign Key column-to-column metadata updates
+    // 7. Handle Redis Cache connections
+    handleRedisCacheConnect(context);
+
+    // 8. Handle Foreign Key column-to-column metadata updates
     handleForeignKeyConnect(context);
   },
 
@@ -206,6 +210,24 @@ export const createEdgeSlice = (
     // `database-entity-target` at the top of the card. Auto-derive column handles here.
     edge = autoDeriveForeignKeyHandles(edge, nodes);
 
+    // Prevent duplicate edges between the exact same handles in edges
+    const isDuplicate = get().edges.some(
+      (e) =>
+        e.id === edge.id ||
+        (e.source === edge.source &&
+          e.target === edge.target &&
+          (e.sourceHandle ?? null) === (edge.sourceHandle ?? null) &&
+          (e.targetHandle ?? null) === (edge.targetHandle ?? null)) ||
+        (e.source === edge.target &&
+          e.target === edge.source &&
+          (e.sourceHandle ?? null) === (edge.targetHandle ?? null) &&
+          (e.targetHandle ?? null) === (edge.sourceHandle ?? null)),
+    );
+
+    if (isDuplicate) {
+      return;
+    }
+
     const isSchema =
       edge.type === "foreign-key" || edge.type === "database-connection";
     get().pushHistorySnapshot(isSchema ? "schema" : "graph");
@@ -218,7 +240,7 @@ export const createEdgeSlice = (
     const sourceNode = nodes.find((n) => n.id === edge.source);
     const targetNode = nodes.find((n) => n.id === edge.target);
     if (sourceNode && targetNode) {
-      handleLangGraphConnect({
+      const connContext = {
         set,
         get,
         connection: {
@@ -230,7 +252,9 @@ export const createEdgeSlice = (
         sourceNode,
         targetNode,
         newEdge: edge,
-      });
+      };
+      handleLangGraphConnect(connContext);
+      handleRedisCacheConnect(connContext);
     }
   },
 

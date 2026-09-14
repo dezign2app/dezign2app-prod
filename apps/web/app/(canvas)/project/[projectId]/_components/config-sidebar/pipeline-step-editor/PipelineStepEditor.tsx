@@ -67,6 +67,14 @@ export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
     isNested,
   });
 
+  const priorStepsMap = React.useMemo(() => {
+    const map = new Map<number, PipelineStepDraft[]>();
+    for (let i = 0; i < executableSteps.length; i++) {
+      map.set(i, executableSteps.slice(0, i));
+    }
+    return map;
+  }, [executableSteps]);
+
   return (
     <div className="flex flex-col gap-3">
       {hasUnconfiguredInputs && !isNested && (
@@ -108,7 +116,7 @@ export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
                     key={step.id || `step-${i}`}
                     step={step}
                     index={i}
-                    priorSteps={executableSteps.slice(0, i)}
+                    priorSteps={priorStepsMap.get(i) || []}
                     endpoint={endpoint}
                     consumedEvent={consumedEvent}
                     allNodes={allNodes}

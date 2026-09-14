@@ -10,6 +10,7 @@ import {
   ConnectedTransformer,
   ConnectedKafka,
   ConnectedLangGraph,
+  ConnectedRedis,
 } from "@/types/canvas";
 
 /**
@@ -290,6 +291,88 @@ export function getConnectedLangGraphForEndpoint(
       inputChannels: node.data?.inputChannels || [],
       graphSteps: node.data?.graphSteps || [],
       node,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Returns all Redis Cache nodes connected via canvas edges to an endpoint or consumer.
+ */
+export function getConnectedRedisForEndpoint(
+  endpointOrConsumerId: string,
+  serviceNodeId: string,
+  allNodes: BackendNode[] = [],
+  allEdges: BackendEdge[] = [],
+): ConnectedRedis[] {
+  const redisCacheNodes = allNodes.filter((n) => n.type === "redis-cache");
+  if (redisCacheNodes.length === 0) return [];
+  const redisCacheNodeIds = new Set(redisCacheNodes.map((n) => n.id));
+
+  const epOutHandle = `endpoint-out-${endpointOrConsumerId}`;
+  const epInHandle = `endpoint-in-${endpointOrConsumerId}`;
+  const evOutHandle = `consumedEvents-out-${endpointOrConsumerId}`;
+  const evInHandle = `consumedEvents-in-${endpointOrConsumerId}`;
+
+  const connectedCacheNodeIds = new Set<string>();
+
+  for (const edge of allEdges) {
+    if (!edge) continue;
+
+    // Service -> RedisCache
+    if (edge.source === serviceNodeId && redisCacheNodeIds.has(edge.target)) {
+      const isForThisHandle =
+        edge.sourceHandle === epOutHandle ||
+        edge.sourceHandle === epInHandle ||
+        edge.sourceHandle === evOutHandle ||
+        edge.sourceHandle === evInHandle ||
+        edge.sourceHandle === endpointOrConsumerId;
+
+      const isGeneral = !edge.sourceHandle;
+
+      if (isForThisHandle || isGeneral) {
+        connectedCacheNodeIds.add(edge.target);
+      }
+    }
+
+    // RedisCache -> Service
+    if (edge.target === serviceNodeId && redisCacheNodeIds.has(edge.source)) {
+      const isForThisHandle =
+        edge.targetHandle === epInHandle ||
+        edge.targetHandle === epOutHandle ||
+        edge.targetHandle === evInHandle ||
+        edge.targetHandle === evOutHandle ||
+        edge.targetHandle === endpointOrConsumerId;
+
+      const isGeneral = !edge.targetHandle;
+
+      if (isForThisHandle || isGeneral) {
+        connectedCacheNodeIds.add(edge.source);
+      }
+    }
+  }
+
+  const results: ConnectedRedis[] = [];
+  for (const id of connectedCacheNodeIds) {
+    const cacheNode = redisCacheNodes.find((n) => n.id === id);
+    if (!cacheNode) continue;
+
+    const schemaId = cacheNode.data?.schemaRef;
+    const schemaNode = allNodes.find((n) => n.id === schemaId);
+    const instanceId = cacheNode.data?.databaseId || schemaNode?.data?.databaseId;
+    const instanceNode = allNodes.find((n) => n.id === instanceId);
+    const label = schemaNode?.data?.label || cacheNode.data?.label || "Redis Cache";
+
+    results.push({
+      id: cacheNode.id,
+      cacheNodeId: cacheNode.id,
+      cacheNode,
+      schemaId,
+      schemaNode,
+      instanceId,
+      instanceNode,
+      label,
     });
   }
 
