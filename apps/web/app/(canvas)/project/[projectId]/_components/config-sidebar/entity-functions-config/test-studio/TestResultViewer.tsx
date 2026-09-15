@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { CheckCircle2, XCircle, Copy, Check, AlertTriangle } from "lucide-react";
+import { CheckCircle2, XCircle, Copy, Check, AlertTriangle, ServerOff, Layers } from "lucide-react";
 import { DbOperationTestCase } from "@workspace/canvas/types";
 import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
@@ -7,14 +7,25 @@ import { Button } from "@workspace/ui/components/button";
 export interface TestResultViewerProps {
   lastResult: NonNullable<DbOperationTestCase["lastResult"]>;
   testMode: "live" | "sandbox";
+  onSwitchToSandbox?: () => void;
 }
 
 export const TestResultViewer: React.FC<TestResultViewerProps> = ({
   lastResult,
   testMode,
+  onSwitchToSandbox,
 }) => {
   const [copiedOutput, setCopiedOutput] = useState(false);
   const [copiedCommand, setCopiedCommand] = useState(false);
+
+  const isServerOffline =
+    testMode === "live" &&
+    !lastResult.success &&
+    (lastResult.error?.includes("not found") ||
+      lastResult.error?.includes("inactive") ||
+      lastResult.error?.includes("refused") ||
+      lastResult.error?.includes("connect") ||
+      lastResult.error?.includes("timeout"));
 
   const handleCopyCommand = () => {
     if (!lastResult.rawCommand) return;
@@ -46,6 +57,14 @@ export const TestResultViewer: React.FC<TestResultViewerProps> = ({
             >
               <CheckCircle2 size={12} className="text-emerald-500" />
               Test Passed (200 OK)
+            </Badge>
+          ) : isServerOffline ? (
+            <Badge
+              variant="outline"
+              className="bg-destructive/15 border-destructive/40 text-destructive text-xs font-semibold gap-1 py-0.5 px-2"
+            >
+              <ServerOff size={12} />
+              Server Not Found / Inactive
             </Badge>
           ) : (
             <Badge
@@ -94,18 +113,40 @@ export const TestResultViewer: React.FC<TestResultViewerProps> = ({
 
       {/* Error Message Callout if failed */}
       {lastResult.error && (
-        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-xs space-y-1.5">
+        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-xs space-y-2">
           <div className="flex items-start gap-2">
-            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-            <div className="flex flex-col gap-0.5">
-              <span className="font-bold">Execution Error</span>
-              <span className="opacity-90 leading-relaxed font-mono text-[11px]">
+            {isServerOffline ? (
+              <ServerOff size={15} className="shrink-0 mt-0.5 text-destructive" />
+            ) : (
+              <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+            )}
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="font-bold">
+                {isServerOffline ? "Database Server Offline / Not Found" : "Execution Error"}
+              </span>
+              <span className="opacity-90 leading-relaxed font-mono text-[11px] break-all">
                 {lastResult.error}
               </span>
             </div>
           </div>
-          <div className="text-[10px] text-muted-foreground pt-1 border-t border-destructive/20 font-sans">
-            Tip: You can switch to <strong>Simulation Sandbox</strong> mode in the top right to test this operation even when local Redis is offline.
+
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-destructive/20 font-sans flex-wrap">
+            <span className="text-[10px] text-muted-foreground">
+              {isServerOffline
+                ? "The live server is unavailable. You can switch to Simulation Sandbox mode to run mock test cases."
+                : "Switch to Simulation Sandbox mode to run mock test cases without a live server."}
+            </span>
+
+            {isServerOffline && onSwitchToSandbox && (
+              <Button
+                size="sm"
+                onClick={onSwitchToSandbox}
+                className="h-6 text-[11px] px-2.5 font-semibold bg-purple-600 hover:bg-purple-500 text-white gap-1 cursor-pointer shadow-xs"
+              >
+                <Layers size={11} />
+                Switch to Sandbox
+              </Button>
+            )}
           </div>
         </div>
       )}

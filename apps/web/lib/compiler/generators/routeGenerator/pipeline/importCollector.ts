@@ -1,4 +1,5 @@
 import { PipelineStep } from "@workspace/canvas/types";
+import { toVarName } from "../../../utils";
 
 /**
  * Builds an import map from pipeline steps (including recursive nested branches).
@@ -11,7 +12,21 @@ export function collectPipelineImports(
 
   function addStepImports(s: PipelineStep): void {
     if (s.functionRef && s.enabled !== false) {
-      const { name, importPath } = s.functionRef;
+      const name = toVarName(s.functionRef.name || "fn");
+      let importPath = s.functionRef.importPath || "";
+
+      if (s.type === "transform" || importPath.includes("transformers")) {
+        if (s.functionRef.isGlobal || importPath.startsWith("@workspace/transformers")) {
+          importPath = "@workspace/transformers";
+        } else if (
+          importPath.startsWith("@/services/") ||
+          importPath.startsWith("@workspace/services/") ||
+          importPath.startsWith("@/")
+        ) {
+          importPath = `../transformers/${name}`;
+        }
+      }
+
       const existing = imports.get(importPath);
       if (existing) {
         existing.add(name);

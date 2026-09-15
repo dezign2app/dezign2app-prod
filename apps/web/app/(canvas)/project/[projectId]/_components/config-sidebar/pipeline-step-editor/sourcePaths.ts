@@ -450,37 +450,38 @@ export function getAvailableSources(
         addParamPaths(rawReturnSchema);
       }
 
-      // 3. Fallback: infer return schema from code if still empty or only holding dummy 'result'
-      const isOnlyDummyResult =
-        transformerPaths.length === 1 && transformerPaths[0]?.path === "result";
-      if (transformerPaths.length === 0 || isOnlyDummyResult) {
-        const code = matchedNode?.data?.code || matchedHelper?.code;
-        const inSchema = matchedNode?.data?.inputSchema || matchedHelper?.inputSchema || [];
-        if (code) {
-          const inferred = inferReturnSchemaFromCode(code, inSchema);
-          if (inferred.length > 0) {
-            const inferredIsDummy = inferred.length === 1 && inferred[0]?.name === "result";
-            if (!inferredIsDummy || transformerPaths.length === 0) {
-              if (isOnlyDummyResult && !inferredIsDummy) {
-                transformerPaths.length = 0;
-              }
-              const addInferred = (items: InferredFieldDraft[], prefix = "") => {
-                items.forEach((item) => {
-                  if (!item || !item.name) return;
-                  const fullPath = prefix ? `${prefix}.${item.name}` : item.name;
-                  if (!transformerPaths.some((tp) => tp.path === fullPath)) {
-                    transformerPaths.push({
-                      path: fullPath,
-                      type: item.type || "string",
-                    });
-                  }
-                  if (Array.isArray(item.nestedFields) && item.nestedFields.length > 0) {
-                    addInferred(item.nestedFields, fullPath);
-                  }
-                });
-              };
-              addInferred(inferred);
+      // 3. Reconcile / enrich return schema from code (e.g. nested objects or missing fields)
+      const code = matchedNode?.data?.code || matchedHelper?.code;
+      const inSchema = matchedNode?.data?.inputSchema || matchedHelper?.inputSchema || [];
+      if (code) {
+        const isOnlyDummyResult =
+          transformerPaths.length === 1 && transformerPaths[0]?.path === "result";
+        const inferred = inferReturnSchemaFromCode(code, inSchema);
+        if (inferred.length > 0) {
+          const inferredIsDummy = inferred.length === 1 && inferred[0]?.name === "result";
+          if (!inferredIsDummy || transformerPaths.length === 0) {
+            if (isOnlyDummyResult && !inferredIsDummy) {
+              transformerPaths.length = 0;
             }
+            const addInferred = (items: InferredFieldDraft[], prefix = "") => {
+              items.forEach((item) => {
+                if (!item || !item.name) return;
+                const fullPath = prefix ? `${prefix}.${item.name}` : item.name;
+                const existingIdx = transformerPaths.findIndex((tp) => tp.path === fullPath);
+                if (existingIdx === -1) {
+                  transformerPaths.push({
+                    path: fullPath,
+                    type: item.type || "string",
+                  });
+                } else if (item.type && item.type !== "string" && transformerPaths[existingIdx]) {
+                  transformerPaths[existingIdx]!.type = item.type;
+                }
+                if (Array.isArray(item.nestedFields) && item.nestedFields.length > 0) {
+                  addInferred(item.nestedFields, fullPath);
+                }
+              });
+            };
+            addInferred(inferred);
           }
         }
       }
@@ -672,11 +673,12 @@ export function getAvailableTransformers(
   if (Array.isArray(currentHelpers)) {
     currentHelpers.forEach((h: TransformerHelperNodeData) => {
       if (!h.name) return;
+      const cleanName = toVarName(h.name);
       const isLocal = h.scope !== "global";
-      const importPath = isLocal ? `./transformers/${h.name}` : "@workspace/transformers";
+      const importPath = isLocal ? `../transformers/${cleanName}` : "@workspace/transformers";
       transformers.push({
-        id: h.id || `helper-${h.name}`,
-        name: h.name,
+        id: h.id || `helper-${cleanName}`,
+        name: cleanName,
         description: h.description,
         scope: h.scope === "global" ? "global" : "local",
         targetServiceId: serviceNodeId,
@@ -752,7 +754,7 @@ export function getAvailableTransformers(
         scope === "local" &&
         (!targetServiceId || targetServiceId === serviceNodeId);
       const importPath = isLocalToCurrent
-        ? `./transformers/${fnName}`
+        ? `../transformers/${fnName}`
         : "@workspace/transformers";
 
       // Check if there's already a transformer_ref node for this service

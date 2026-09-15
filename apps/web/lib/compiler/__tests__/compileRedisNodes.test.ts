@@ -305,21 +305,21 @@ describe("compileRedisNodes", () => {
     // 2. Helper functions should include appendConversationItem, popConversationItem, getRecentConversationItems, and getConversationLength
     const appendHelper = pkg.files.find((f) => f.filename === "src/helpers/conversation/appendConversationItem.ts");
     expect(appendHelper).toBeDefined();
-    expect(appendHelper!.content).toContain("redis.json.arrappend");
+    expect(appendHelper!.content).toContain('redis.call("JSON.ARRAPPEND"');
     expect(appendHelper!.content).toContain("item: ConversationItem");
 
     const popHelper = pkg.files.find((f) => f.filename === "src/helpers/conversation/popConversationItem.ts");
     expect(popHelper).toBeDefined();
-    expect(popHelper!.content).toContain("redis.json.arrpop");
+    expect(popHelper!.content).toContain('redis.call("JSON.ARRPOP"');
 
     const recentHelper = pkg.files.find((f) => f.filename === "src/helpers/conversation/getRecentConversationItems.ts");
     expect(recentHelper).toBeDefined();
-    expect(recentHelper!.content).toContain("redis.json.get");
-    expect(recentHelper!.content).toContain("path: `$[");
+    expect(recentHelper!.content).toContain('redis.call("JSON.GET"');
+    expect(recentHelper!.content).toContain("PATH");
 
     const lenHelper = pkg.files.find((f) => f.filename === "src/helpers/conversation/getConversationLength.ts");
     expect(lenHelper).toBeDefined();
-    expect(lenHelper!.content).toContain("redis.json.arrlen");
+    expect(lenHelper!.content).toContain('redis.call("JSON.ARRLEN"');
 
     // 3. Helper barrel should export the array helpers
     const barrel = pkg.files.find((f) => f.filename === "src/helpers/conversation/index.ts");

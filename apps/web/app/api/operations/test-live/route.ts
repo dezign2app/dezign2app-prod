@@ -1,5 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
+import net from "net";
 import { sanitizeForConvex } from "@/lib/utils/convexSanitizer";
+
+// Check TCP socket connectivity with timeout
+function checkTcpSocket(
+  host: string,
+  port: number,
+  timeoutMs = 2500,
+): Promise<{ reachable: boolean; latencyMs: number; error?: string }> {
+  return new Promise((resolve) => {
+    const start = performance.now();
+    const socket = new net.Socket();
+
+    socket.setTimeout(timeoutMs);
+
+    socket.on("connect", () => {
+      const latencyMs = Math.round((performance.now() - start) * 10) / 10;
+      socket.destroy();
+      resolve({ reachable: true, latencyMs });
+    });
+
+    socket.on("timeout", () => {
+      socket.destroy();
+      resolve({
+        reachable: false,
+        latencyMs: timeoutMs,
+        error: `Connection timed out after ${timeoutMs}ms`,
+      });
+    });
+
+    socket.on("error", (err) => {
+      socket.destroy();
+      resolve({ reachable: false, latencyMs: 0, error: err.message });
+    });
+
+    try {
+      socket.connect(port, host);
+    } catch (err) {
+      resolve({
+        reachable: false,
+        latencyMs: 0,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+}
 
 // In-memory simulation store for Sandbox mode
 const sandboxStore = new Map<string, unknown>();
@@ -486,7 +531,8 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({
           success: false,
-          error: `Execution failed on redis://${host}:${port}: ${errMessage}`,
+          serverActive: false,
+          error: `Server not found or inactive on redis://${host}:${port}: ${errMessage}`,
           rawCommand: plan.rawCli,
           durationMs,
           mode: "live",
@@ -495,7 +541,33 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. OTHER ENGINES FALLBACK
+    // 3. LIVE RELATIONAL / TCP ENGINES (postgres, mysql, sqlite with TCP host/port)
+    if (mode === "live") {
+      const tcpResult = await checkTcpSocket(host, port, 2500);
+      if (!tcpResult.reachable) {
+        return NextResponse.json({
+          success: false,
+          serverActive: false,
+          error: `Server not found or inactive: Could not reach ${engine.toUpperCase()} database server at ${host}:${port} (${tcpResult.error || "Connection refused"}).`,
+          rawCommand: operation.query || `${operation.name}(${Object.keys(args).join(", ")})`,
+          durationMs: tcpResult.latencyMs || 0,
+          mode: "live",
+          tip: `Ensure your local ${engine} database server is running and listening on port ${port}, or switch to 'Simulation Sandbox' mode to test operations safely without a live server.`,
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        serverActive: true,
+        output: { message: `Live connection verified on ${host}:${port} (${engine})`, args },
+        durationMs: tcpResult.latencyMs,
+        rawCommand: operation.query || `${operation.name}(${Object.keys(args).join(", ")})`,
+        mode: "live",
+        connection: `${host}:${port}`,
+      });
+    }
+
+    // 4. OTHER ENGINES SANDBOX FALLBACK
     return NextResponse.json({
       success: true,
       output: { message: `Query execution for ${engine} is ready`, args },

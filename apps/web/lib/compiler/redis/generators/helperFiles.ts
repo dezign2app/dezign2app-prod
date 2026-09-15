@@ -494,14 +494,42 @@ import {
 /**
  * Store cached value for ${typeName}
  */
+${keyArgsSig ? `export async function set${typeName}(value: ${typeName}, ttlSeconds?: number): Promise<void>;
+export async function set${typeName}(${keyArgsSig}, value: ${typeName}, ttlSeconds?: number): Promise<void>;
+export async function set${typeName}(options: { key?: string | number; id?: string | number; value?: ${typeName}; data?: ${typeName}; ttlSeconds?: number; [k: string]: unknown }): Promise<void>;
 export async function set${typeName}(
-  ${keyArgsSig ? `${keyArgsSig}, ` : ""}
+  arg1: (string | number) | ${typeName} | { key?: string | number; id?: string | number; value?: ${typeName}; data?: ${typeName}; ttlSeconds?: number; [k: string]: unknown },
+  arg2?: ${typeName} | number,
+  arg3?: number,
+): Promise<void> {
+  const isOptions = arg2 === undefined && typeof arg1 === "object" && arg1 !== null && ("key" in arg1 || "id" in arg1 || "value" in arg1 || "data" in arg1);
+  let id: string | number;
+  let value: ${typeName};
+  let ttlSeconds: number;
+  if (isOptions) {
+    const opts = arg1 as Record<string, unknown>;
+    id = (opts.key ?? opts.id ?? "default") as string | number;
+    value = (opts.value ?? opts.data) as ${typeName};
+    ttlSeconds = typeof opts.ttlSeconds === "number" ? opts.ttlSeconds : ${typeName.toUpperCase()}_TTL_SECONDS;
+  } else if (typeof arg2 === "number" || arg2 === undefined) {
+    const rec = arg1 as Record<string, unknown>;
+    id = (rec?.id ?? rec?._id ?? "default") as string | number;
+    value = arg1 as ${typeName};
+    ttlSeconds = (arg2 as number | undefined) ?? ${typeName.toUpperCase()}_TTL_SECONDS;
+  } else {
+    id = arg1 as string | number;
+    value = arg2 as ${typeName};
+    ttlSeconds = arg3 ?? ${typeName.toUpperCase()}_TTL_SECONDS;
+  }
+  const key = get${typeName}Key(${templateParams.length === 1 ? `id as string | number` : templateParams.map((_, i) => i === 0 ? `id as string | number` : `"default"`).join(", ")});
+  return rawSetCache<${typeName}>(key, value, ttlSeconds);
+}` : `export async function set${typeName}(
   value: ${typeName},
   ttlSeconds: number = ${typeName.toUpperCase()}_TTL_SECONDS,
 ): Promise<void> {
   const key = get${typeName}Key(${templateParams.join(", ") || "id"});
   return rawSetCache<${typeName}>(key, value, ttlSeconds);
-}
+}`}
 `;
     files.push({
       filename: `src/helpers/${varName}/set${typeName}.ts`,
@@ -523,16 +551,45 @@ const logger = createLogger("append${typeName}Item");
 /**
  * Append an item to ${typeName} JSON Array
  */
+${keyArgsSig ? `export async function append${typeName}Item(item: ${itemType}): Promise<number>;
+export async function append${typeName}Item(${keyArgsSig}, item: ${itemType}): Promise<number>;
+export async function append${typeName}Item(options: { key?: string | number; id?: string | number; item?: ${itemType}; value?: ${itemType}; [k: string]: unknown }): Promise<number>;
 export async function append${typeName}Item(
-  ${keyArgsSig ? `${keyArgsSig}, ` : ""}
-  item: ${itemType},
+  arg1: (string | number) | ${itemType} | { key?: string | number; id?: string | number; item?: ${itemType}; value?: ${itemType}; [k: string]: unknown },
+  arg2?: ${itemType},
 ): Promise<number> {
-  const key = get${typeName}Key(${templateParams.join(", ") || "id"});
+  const isOptions = arg2 === undefined && typeof arg1 === "object" && arg1 !== null && ("key" in arg1 || "id" in arg1 || "item" in arg1 || "value" in arg1);
+  let id: string | number;
+  let item: ${itemType};
+  if (isOptions) {
+    const opts = arg1 as Record<string, unknown>;
+    id = (opts.key ?? opts.id ?? "default") as string | number;
+    item = (opts.item ?? opts.value ?? opts) as ${itemType};
+  } else if (arg2 === undefined) {
+    const rec = arg1 as Record<string, unknown>;
+    id = (rec?.id ?? rec?.conversationId ?? rec?._id ?? "default") as string | number;
+    item = arg1 as ${itemType};
+  } else {
+    id = arg1 as string | number;
+    item = arg2 as ${itemType};
+  }
+  const key = get${typeName}Key(${templateParams.length === 1 ? `id as string | number` : templateParams.map((_, i) => i === 0 ? `id as string | number` : `"default"`).join(", ")});` : `export async function append${typeName}Item(item: ${itemType}): Promise<number>;
+export async function append${typeName}Item(options: { item?: ${itemType}; value?: ${itemType}; [k: string]: unknown }): Promise<number>;
+export async function append${typeName}Item(
+  arg1: ${itemType} | { item?: ${itemType}; value?: ${itemType}; [k: string]: unknown },
+): Promise<number> {
+  const isOptions = typeof arg1 === "object" && arg1 !== null && ("item" in arg1 || "value" in arg1);
+  const item = isOptions
+    ? (((arg1 as Record<string, unknown>).item ?? (arg1 as Record<string, unknown>).value) as ${itemType})
+    : (arg1 as ${itemType});
+  const key = get${typeName}Key(${templateParams.join(", ") || "id"});`}
   try {
     const redis = await getRedisClient();
     // Ensure array root exists (upsert)
-    await redis.json.set(key, "$", [], { nx: true });
-    return await redis.json.arrappend(key, "$", item);
+    await redis.call("JSON.SET", key, "$", "[]", "NX");
+    const result = await redis.call("JSON.ARRAPPEND", key, "$", typeof item === "string" ? item : JSON.stringify(item));
+    if (Array.isArray(result)) return (result[0] as number) || 1;
+    return typeof result === "number" ? result : 1;
   } catch (error) {
     logger.error(\`Failed to append item to JSON array \${key}\`, error);
     throw error;
@@ -556,16 +613,36 @@ const logger = createLogger("getRecent${typeName}Items");
 /**
  * Retrieve the most recent N items from ${typeName} JSON Array
  */
+${keyArgsSig ? `export async function getRecent${typeName}Items(count?: number): Promise<${itemType}[]>;
+export async function getRecent${typeName}Items(${keyArgsSig}, count?: number): Promise<${itemType}[]>;
+export async function getRecent${typeName}Items(options: { key?: string | number; id?: string | number; count?: number; [k: string]: unknown }): Promise<${itemType}[]>;
 export async function getRecent${typeName}Items(
-  ${keyArgsSig ? `${keyArgsSig}, ` : ""}
+  arg1?: (string | number) | { key?: string | number; id?: string | number; count?: number; [k: string]: unknown },
+  arg2?: number,
+): Promise<${itemType}[]> {
+  const isOptions = arg2 === undefined && typeof arg1 === "object" && arg1 !== null;
+  const isSingleArgCount = typeof arg1 === "number" && arg2 === undefined;
+  let id: string | number;
+  let count: number;
+  if (isOptions) {
+    const opts = arg1 as Record<string, unknown>;
+    id = (opts.key ?? opts.id ?? "default") as string | number;
+    count = typeof opts.count === "number" ? opts.count : 20;
+  } else {
+    id = isSingleArgCount || arg1 === undefined ? "default" : (arg1 as string | number);
+    count = (isSingleArgCount ? arg1 : arg2) ?? 20;
+  }
+  const key = get${typeName}Key(${templateParams.length === 1 ? `id as string | number` : templateParams.map((_, i) => i === 0 ? `id as string | number` : `"default"`).join(", ")});` : `export async function getRecent${typeName}Items(
   count: number = 20,
 ): Promise<${itemType}[]> {
-  const key = get${typeName}Key(${templateParams.join(", ") || "id"});
+  const key = get${typeName}Key(${templateParams.join(", ") || "id"});`}
   try {
     const redis = await getRedisClient();
-    const result = await redis.json.get(key, { path: \`$[-\${count}:]\` });
-    if (!result || !Array.isArray(result) || result.length === 0) return [];
-    return (Array.isArray(result[0]) ? result[0] : result) as ${itemType}[];
+    const result = await redis.call("JSON.GET", key, "PATH", \`$[-\${count}:]\`);
+    if (!result) return [];
+    const parsed = typeof result === "string" ? JSON.parse(result) : result;
+    if (!parsed || !Array.isArray(parsed) || parsed.length === 0) return [];
+    return (Array.isArray(parsed[0]) ? parsed[0] : parsed) as ${itemType}[];
   } catch (error) {
     logger.error(\`Failed to get recent items from JSON array \${key}\`, error);
     return [];
@@ -589,16 +666,26 @@ const logger = createLogger("pop${typeName}Item");
 /**
  * Pop an item from ${typeName} JSON Array
  */
+${keyArgsSig ? `export async function pop${typeName}Item(index?: number): Promise<${itemType} | null>;
+export async function pop${typeName}Item(${keyArgsSig}, index?: number): Promise<${itemType} | null>;
 export async function pop${typeName}Item(
-  ${keyArgsSig ? `${keyArgsSig}, ` : ""}
+  arg1?: (string | number),
+  arg2?: number,
+): Promise<${itemType} | null> {
+  const isSingleArgIndex = typeof arg1 === "number" && arg2 === undefined;
+  const id = isSingleArgIndex || arg1 === undefined ? "default" : arg1;
+  const index = (isSingleArgIndex ? arg1 : arg2) ?? -1;
+  const key = get${typeName}Key(${templateParams.length === 1 ? `id as string | number` : templateParams.map((_, i) => i === 0 ? `id as string | number` : `"default"`).join(", ")});` : `export async function pop${typeName}Item(
   index: number = -1,
 ): Promise<${itemType} | null> {
-  const key = get${typeName}Key(${templateParams.join(", ") || "id"});
+  const key = get${typeName}Key(${templateParams.join(", ") || "id"});`}
   try {
     const redis = await getRedisClient();
-    const result = await redis.json.arrpop(key, "$", index);
+    const result = await redis.call("JSON.ARRPOP", key, "$", index);
     if (!result) return null;
-    return (Array.isArray(result) ? result[0] : result) as ${itemType};
+    const parsed = typeof result === "string" ? JSON.parse(result) : result;
+    if (Array.isArray(parsed)) return (parsed[0] as ${itemType}) ?? null;
+    return parsed as ${itemType};
   } catch (error) {
     logger.error(\`Failed to pop item from JSON array \${key}\`, error);
     return null;
@@ -622,13 +709,17 @@ const logger = createLogger("get${typeName}Length");
 /**
  * Get length of ${typeName} JSON Array
  */
-export async function get${typeName}Length(${keyArgsSig}): Promise<number> {
-  const key = get${typeName}Key(${templateParams.join(", ") || "id"});
+${keyArgsSig ? `export async function get${typeName}Length(): Promise<number>;
+export async function get${typeName}Length(${keyArgsSig}): Promise<number>;
+export async function get${typeName}Length(arg1?: (string | number)): Promise<number> {
+  const id = arg1 ?? "default";
+  const key = get${typeName}Key(${templateParams.length === 1 ? `id as string | number` : templateParams.map((_, i) => i === 0 ? `id as string | number` : `"default"`).join(", ")});` : `export async function get${typeName}Length(): Promise<number> {
+  const key = get${typeName}Key(${templateParams.join(", ") || "id"});`}
   try {
     const redis = await getRedisClient();
-    const result = await redis.json.arrlen(key, "$");
+    const result = await redis.call("JSON.ARRLEN", key, "$");
     if (Array.isArray(result)) return (result[0] as number) || 0;
-    return (result as number) || 0;
+    return typeof result === "number" ? result : 0;
   } catch (error) {
     logger.error(\`Failed to get length of JSON array \${key}\`, error);
     return 0;

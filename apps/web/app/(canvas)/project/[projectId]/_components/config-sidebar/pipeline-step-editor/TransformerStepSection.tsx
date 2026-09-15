@@ -250,14 +250,17 @@ export const TransformerStepSection = ({
       }
     }
 
+    const cleanName = toVarName(t.name);
     onChange({
       ...step,
       name: defaultOutputVar,
       outputVariable: defaultOutputVar,
       transformerNodeId: effectiveTransformerNodeId,
       functionRef: {
-        name: t.name,
-        importPath: t.importPath,
+        name: cleanName,
+        importPath: isGlobal
+          ? "@workspace/transformers"
+          : (t.importPath?.startsWith("@/") ? `../transformers/${cleanName}` : t.importPath || `../transformers/${cleanName}`),
         isGlobal,
         inputSchema: t.inputSchema,
         returnSchema: t.returnSchema,
@@ -319,15 +322,16 @@ export const TransformerStepSection = ({
     }
 
     // 3. Bind current pipeline step to this new transformer
-    const defaultOutputVar = `${fnName}Result`;
+    const cleanFn = toVarName(fnName);
+    const defaultOutputVar = `${cleanFn}Result`;
     onChange({
       ...step,
       name: defaultOutputVar,
       outputVariable: defaultOutputVar,
       transformerNodeId: id,
       functionRef: {
-        name: fnName,
-        importPath: `./transformers/${fnName}`,
+        name: cleanFn,
+        importPath: `../transformers/${cleanFn}`,
       },
       outputSchema: [{ name: "result", type: "string", required: true }],
     });
