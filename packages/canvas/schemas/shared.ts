@@ -235,6 +235,33 @@ export const pipelineStepOnErrorSchema = z.object({
 });
 export type PipelineStepOnError = z.infer<typeof pipelineStepOnErrorSchema>;
 
+export const pipelineStepCacheMissSchema = z.object({
+  enabled: z.boolean().optional(),
+  action: z
+    .enum(["fallback_db", "early_return", "fallback_value", "throw_error"])
+    .optional(),
+  databaseId: z.string().optional(),
+  tableNodeId: z.string().optional(),
+  operationId: z.string().optional(),
+  functionRef: z
+    .object({
+      name: z.string(),
+      importPath: z.string(),
+      signature: z.string().optional(),
+      isGlobal: z.boolean().optional(),
+      inputSchema: z.array(stepSchemaFieldSchema).optional(),
+      returnSchema: z.array(stepSchemaFieldSchema).optional(),
+    })
+    .optional(),
+  inputBindings: z.array(pipelineStepInputBindingSchema).optional(),
+  writeBackToCache: z.boolean().optional(),
+  ttlSeconds: z.number().optional(),
+  statusCode: z.number().optional(),
+  errorMessage: z.string().optional(),
+  fallbackValue: z.string().optional(),
+});
+export type PipelineStepCacheMiss = z.infer<typeof pipelineStepCacheMissSchema>;
+
 export interface PipelineStep {
   id: string;
   name: string;
@@ -246,6 +273,8 @@ export interface PipelineStep {
   runIf?: ConditionExpr;
   /** Optional step-level error handling policy */
   onError?: PipelineStepOnError;
+  /** Optional cache miss handling policy for Redis operations */
+  cacheMiss?: PipelineStepCacheMiss;
   /** HTTP status code for return_response / early_return step (e.g. 200, 201, 204, 400, 404, 500) */
   statusCode?: number;
   /** Mode for return_response step */
@@ -377,6 +406,7 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     enabled: z.boolean().optional().default(true),
     runIf: conditionExprSchema.optional(),
     onError: pipelineStepOnErrorSchema.optional(),
+    cacheMiss: pipelineStepCacheMissSchema.optional(),
     statusCode: z.number().optional(),
     responseMode: z.string().optional(),
     databaseId: z.string().optional(),

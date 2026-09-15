@@ -1,7 +1,29 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// MODULE:  compileTransformerHelpers  (thin orchestrator)
+// LAYER:   compilers
+// PURPOSE: Compiles transformer definitions from all service nodes and
+//          standalone transformer canvas nodes.
+//
+// DELEGATES TO:
+//   transformers/typeMapper.ts       — type utilities
+//   transformers/schemaReconciler.ts — return-schema merging
+//   transformers/transformerEmitter.ts — per-transformer file generation
+//
+// EMITS:
+//   packages/transformers/src/<name>.ts   (global scope helpers)
+//   packages/transformers/src/index.ts    (barrel)
+//   packages/transformers/package.json
+//   packages/transformers/tsconfig.json
+//   apps/<service>/src/transformers/<name>.ts  (local scope helpers)
+//   apps/<service>/src/transformers/index.ts
+// ═══════════════════════════════════════════════════════════════════════════
+
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { TransformerHelperNodeData, CompiledFile, ReusableFunction } from "@workspace/canvas/types";
 import { toPascalCase, toVarName } from "./utils";
-import { inferReturnSchemaFromCode } from "@/lib/utils/inferReturnSchema";
+import { SchemaFieldLike, renderFieldType } from "./transformers/typeMapper";
+import { reconcileReturnSchema } from "./transformers/schemaReconciler";
+import { generateTransformerFile } from "./transformers/transformerEmitter";
 
 export interface CompiledTransformerResult {
   /** Files to write into packages/transformers/ (global) or service src/transformers/ (local) */
@@ -12,233 +34,13 @@ export interface CompiledTransformerResult {
   globalPackageName?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
+// Re-export sub-module utilities so existing imports from this file continue to work
+export { reconcileReturnSchema } from "./transformers/schemaReconciler";
+export { renderFieldType } from "./transformers/typeMapper";
+export type { SchemaFieldLike } from "./transformers/typeMapper";
 
-function mapTypeToTs(type: string): string {
-  const t = (type || "string").toLowerCase();
-  if (["number", "int", "integer", "float", "double"].includes(t)) return "number";
-  if (["boolean", "bool"].includes(t)) return "boolean";
-  if (["string[]", "array"].includes(t)) return "string[]";
-  if (["object", "record"].includes(t)) return "Record<string, unknown>";
-  if (["any"].includes(t)) return "unknown";
-  return "string";
-}
-
-interface SchemaFieldLike {
-  name: string;
-  type: string;
-  isArray?: boolean;
-  required?: boolean;
-  description?: string;
-  nestedFields?: SchemaFieldLike[];
-}
-
-function renderFieldType(f: { name?: string; type?: string; isArray?: boolean; required?: boolean; nestedFields?: any[] }): string {
-  if (f.nestedFields && f.nestedFields.length > 0) {
-    const innerProps = f.nestedFields
-      .filter((nf) => nf && nf.name)
-      .map((nf) => `${nf.name}${nf.required === false ? "?" : ""}: ${renderFieldType(nf)}`)
-      .join("; ");
-    const objType = `{ ${innerProps} }`;
-    return f.isArray ? `${objType}[]` : objType;
-  }
-  const base = mapTypeToTs(f.type || "string");
-  if (f.isArray && !base.endsWith("[]")) {
-    return `${base}[]`;
-  }
-  return base;
-}
-
-export function reconcileReturnSchema(
-  existingSchema: Array<{ name: string; type?: string; isArray?: boolean; required?: boolean; description?: string; nestedFields?: any[] }> = [],
-  code?: string,
-  inputSchema?: any[],
-): SchemaFieldLike[] {
-  const normalizedExisting: SchemaFieldLike[] = existingSchema.map((f) => ({
-    name: f.name,
-    type: f.type || "string",
-    isArray: f.isArray,
-    required: f.required,
-    description: f.description,
-    nestedFields: f.nestedFields,
-  }));
-
-  if (!code || !code.trim()) {
-    return normalizedExisting;
-  }
-
-  const isDefaultDummy =
-    normalizedExisting.length === 1 && normalizedExisting[0]?.name === "result";
-
-  const inferred = inferReturnSchemaFromCode(code, inputSchema);
-  if (!inferred || inferred.length === 0) {
-    return normalizedExisting;
-  }
-
-  if (normalizedExisting.length === 0 || isDefaultDummy) {
-    return inferred.map((inf) => ({
-      name: inf.name,
-      type: inf.type || "string",
-      isArray: inf.isArray,
-      required: inf.required,
-      nestedFields: inf.nestedFields as SchemaFieldLike[] | undefined,
-    }));
-  }
-
-  const inferredMap = new Map(inferred.map((inf) => [inf.name, inf]));
-  const reconciled: SchemaFieldLike[] = normalizedExisting.map((field) => {
-    const inf = inferredMap.get(field.name);
-    if (!inf) return field;
-
-    const hasRicherNested = Boolean(
-      inf.nestedFields &&
-        inf.nestedFields.length > 0 &&
-        (!field.nestedFields || field.nestedFields.length === 0),
-    );
-
-    const hadDefaultStringType =
-      (!field.type || field.type.toLowerCase() === "string") &&
-      inf.type !== "string";
-
-    return {
-      ...field,
-      type: (hasRicherNested || hadDefaultStringType) ? (inf.type || "string") : (field.type || inf.type || "string"),
-      nestedFields: (inf.nestedFields && inf.nestedFields.length > 0)
-        ? (inf.nestedFields as SchemaFieldLike[])
-        : field.nestedFields,
-      isArray: field.isArray ?? inf.isArray,
-      required: field.required ?? inf.required,
-    };
-  });
-
-  for (const inf of inferred) {
-    if (!reconciled.some((f) => f.name === inf.name)) {
-      reconciled.push({
-        name: inf.name,
-        type: inf.type || "string",
-        isArray: inf.isArray,
-        required: inf.required,
-        nestedFields: inf.nestedFields as SchemaFieldLike[] | undefined,
-      });
-    }
-  }
-
-  return reconciled;
-}
-
-/**
- * Generates a single transformer helper TypeScript file from a definition.
- *
- * Generated signature:
- *   export function slugifyProductInput(input: SlugifyProductInputInput): SlugifyProductInputOutput { ... }
- *   OR
- *   export async function ... : Promise<SlugifyProductInputOutput> { ... }
- */
-function generateTransformerFile(
-  helper: TransformerHelperNodeData,
-  importPath: string,
-): CompiledFile {
-  const fnName = toVarName(helper.name || "transform");
-  const Pascal = toPascalCase(fnName);
-
-  const inputTypeName = `${Pascal}Input`;
-  const outputTypeName = `${Pascal}Output`;
-
-  // Build input interface
-  const inputFields =
-    helper.inputSchema && helper.inputSchema.length > 0
-      ? helper.inputSchema
-          .map(
-            (f) =>
-              `  ${f.name}${f.required === false ? "?" : ""}: ${renderFieldType(f)};`,
-          )
-          .join("\n")
-      : "  [key: string]: unknown;";
-
-  // Build output interface
-  const returnSchema = reconcileReturnSchema(
-    (helper.returnSchema || []) as SchemaFieldLike[],
-    helper.code,
-    helper.inputSchema,
-  );
-
-  const outputFields =
-    returnSchema.length > 0
-      ? returnSchema
-          .map(
-            (f) =>
-              `  ${f.name}${f.required === false ? "?" : ""}: ${renderFieldType(f)};`,
-          )
-          .join("\n")
-      : "  [key: string]: unknown;";
-
-  const rawCode = (helper.code || "").trim();
-  const hasFunctionDecl = /^(export\s+)?(async\s+)?function\s+/m.test(rawCode);
-
-  let processedCode = rawCode;
-  if (hasFunctionDecl) {
-    // Ensure function identifier in rawCode is a valid JavaScript identifier matching fnName
-    processedCode = rawCode.replace(
-      /^(export\s+)?(async\s+)?function\s+([a-zA-Z0-9_\s]+?)\s*\(/m,
-      (_, exp = "", asy = "", oldName) => {
-        return `${exp}${asy}function ${toVarName(oldName)}(`;
-      },
-    );
-  }
-
-  // Function body — prefer explicit code, fall back to a TODO placeholder
-  let body: string;
-  if (rawCode) {
-    // The user provides just the body (return statement or statements)
-    body = rawCode
-      .split("\n")
-      .map((l) => `  ${l}`)
-      .join("\n");
-  } else if (helper.prompt && helper.prompt.trim()) {
-    body = [
-      `  // TODO: Implement transformation`,
-      `  // Description: ${helper.prompt.trim()}`,
-      `  throw new Error("${fnName}: transformation not yet implemented");`,
-    ].join("\n");
-  } else {
-    body = `  throw new Error("${fnName}: no implementation provided");`;
-  }
-
-  const asyncKw = helper.isAsync ? "async " : "";
-  const returnTypeAnnotation = helper.isAsync
-    ? `Promise<${outputTypeName}>`
-    : outputTypeName;
-
-  const fnDescription = helper.description
-    ? `/**\n * ${helper.description}\n */\n`
-    : `/**\n * Pure data-transformation function: ${fnName}\n * Auto-generated — edit the transformer definition to regenerate.\n */\n`;
-
-  const inputParamNames = (helper.inputSchema || [])
-    .map((f) => f.name?.trim())
-    .filter(Boolean);
-  const paramSignature =
-    inputParamNames.length > 0
-      ? `{ ${inputParamNames.join(", ")} }: ${inputTypeName}`
-      : `input: ${inputTypeName}`;
-
-  const content = hasFunctionDecl
-    ? `${fnDescription}export interface ${inputTypeName} {\n${inputFields}\n}\n\nexport interface ${outputTypeName} {\n${outputFields}\n}\n\n${processedCode}\n`
-    : `${fnDescription}export interface ${inputTypeName} {\n${inputFields}\n}\n\nexport interface ${outputTypeName} {\n${outputFields}\n}\n\nexport ${asyncKw}function ${fnName}(${paramSignature}): ${returnTypeAnnotation} {\n${body}\n}\n`;
-
-  const filename = `src/${fnName}.ts`;
-
-  return {
-    filename,
-    language: "typescript",
-    content,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Main compilation entry
-// ---------------------------------------------------------------------------
+/** Global transformer package name */
+const GLOBAL_PKG = "@workspace/transformers";
 
 /**
  * Compiles transformer definitions from all service nodes and transformer canvas nodes.
@@ -249,6 +51,8 @@ function generateTransformerFile(
  * Returns:
  *   - files: all compiled TypeScript files
  *   - reusableFunctions: metadata for the route generator to import/use
+ *
+ * @debugTag compile-transformers
  */
 export function compileTransformerHelpers(
   allNodes: BackendNode[],
@@ -262,7 +66,7 @@ export function compileTransformerHelpers(
   const globalHelpers: TransformerHelperNodeData[] = [];
   const localHelpersByService = new Map<string, TransformerHelperNodeData[]>();
 
-  // Collect all helpers from all service nodes
+  // ── Collect helpers from service nodes ───────────────────────────────────
   serviceNodes.forEach((svc) => {
     const helpers = svc.data?.transformerHelpers;
     if (!helpers || helpers.length === 0) return;
@@ -278,14 +82,14 @@ export function compileTransformerHelpers(
     });
   });
 
-  // Collect standalone transformer nodes placed on the canvas
+  // ── Collect standalone transformer nodes from the canvas ─────────────────
   const transformerNodes = allNodes.filter((n) => n.type === "transformer");
   transformerNodes.forEach((tNode) => {
     const d = tNode.data;
     const fnName = toVarName(d.functionName || d.label || "transformData");
     const scope = d.scope || "global";
 
-    // Find connected service if scope is local
+    // Find connected service for local-scope transformers
     let targetServiceId = d.targetServiceId;
     if (!targetServiceId) {
       const edge = allEdges.find((e) => e.source === tNode.id || e.target === tNode.id);
@@ -295,6 +99,7 @@ export function compileTransformerHelpers(
         if (other) targetServiceId = other.id;
       }
     }
+
     const returnSchema = reconcileReturnSchema(
       (d.returnSchema || []) as SchemaFieldLike[],
       d.code,
@@ -311,7 +116,14 @@ export function compileTransformerHelpers(
       logicMode: d.logicMode || "code",
       prompt: d.prompt,
       code: d.code,
-      returnSchema,
+      // Normalize: TransformerHelperNodeData.returnSchema requires type: string (not optional),
+      // but SchemaFieldLike.type is optional during inference. Guarantee the field here.
+      returnSchema: returnSchema.map((f) => ({
+        name: f.name,
+        type: f.type ?? "string",
+        required: f.required,
+        description: f.description,
+      })),
       isAsync: d.isAsync,
     };
 
@@ -326,11 +138,7 @@ export function compileTransformerHelpers(
     }
   });
 
-  // ------------------------------------------------------------------
-  // Compile global helpers → packages/transformers/
-  // ------------------------------------------------------------------
-  const GLOBAL_PKG = "@workspace/transformers";
-
+  // ── Compile global helpers → packages/transformers/ ──────────────────────
   if (globalHelpers.length > 0) {
     const globalBarrelExports: string[] = [];
 
@@ -338,7 +146,7 @@ export function compileTransformerHelpers(
       const cleanName = toVarName(helper.name || "transform");
       const file = generateTransformerFile(helper, GLOBAL_PKG);
 
-      // Prefix the file path so it lives inside packages/transformers/
+      // ✦ emits: packages/transformers/src/<name>.ts
       allFiles.push({
         filename: `packages/transformers/${file.filename}`,
         language: file.language,
@@ -347,7 +155,7 @@ export function compileTransformerHelpers(
 
       globalBarrelExports.push(`export * from "./${cleanName}";`);
 
-      // Register as a reusable function
+      // Register as reusable function for route generators
       const inputTypeName = `${toPascalCase(cleanName)}Input`;
       const outputTypeName = `${toPascalCase(cleanName)}Output`;
       const inputParamNames = (helper.inputSchema || [])
@@ -357,6 +165,7 @@ export function compileTransformerHelpers(
         inputParamNames.length > 0
           ? `{ ${inputParamNames.join(", ")} }: ${inputTypeName}`
           : `input: ${inputTypeName}`;
+
       allReusable.push({
         name: cleanName,
         importPath: GLOBAL_PKG,
@@ -366,14 +175,14 @@ export function compileTransformerHelpers(
       });
     });
 
-    // Barrel index.ts for the global package
+    // ✦ emits: packages/transformers/src/index.ts
     allFiles.push({
       filename: "packages/transformers/src/index.ts",
       language: "typescript",
       content: `/**\n * Global Data Transformation Functions\n * Auto-generated — edit transformer definitions to regenerate.\n */\n${globalBarrelExports.join("\n")}\n`,
     });
 
-    // package.json for packages/transformers
+    // ✦ emits: packages/transformers/package.json
     allFiles.push({
       filename: "packages/transformers/package.json",
       language: "json",
@@ -400,7 +209,7 @@ export function compileTransformerHelpers(
       ),
     });
 
-    // tsconfig.json for packages/transformers
+    // ✦ emits: packages/transformers/tsconfig.json
     allFiles.push({
       filename: "packages/transformers/tsconfig.json",
       language: "json",
@@ -416,10 +225,7 @@ export function compileTransformerHelpers(
     });
   }
 
-  // ------------------------------------------------------------------
-  // Compile local transformers → inside the service package src/transformers/
-  // (the route generator will embed these inline when building the service)
-  // ------------------------------------------------------------------
+  // ── Compile local transformers → apps/<service>/src/transformers/ ─────────
   localHelpersByService.forEach((helpers, serviceNodeId) => {
     const svcNode = serviceNodes.find((n) => n.id === serviceNodeId);
     if (!svcNode) return;
@@ -432,12 +238,11 @@ export function compileTransformerHelpers(
 
     helpers.forEach((helper) => {
       const cleanName = toVarName(helper.name || "transform");
-      // Local import path — resolved at service compile time as a relative import
       const localImportPath = `./transformers/${cleanName}`;
 
       const file = generateTransformerFile(helper, localImportPath);
 
-      // File path: inside the service package (apps/<service>/src/transformers/<name>.ts)
+      // ✦ emits: apps/<service>/src/transformers/<name>.ts
       allFiles.push({
         filename: `apps/${svcLabel}/src/transformers/${cleanName}.ts`,
         language: file.language,
@@ -455,6 +260,7 @@ export function compileTransformerHelpers(
         inputParamNames.length > 0
           ? `{ ${inputParamNames.join(", ")} }: ${inputTypeName}`
           : `input: ${inputTypeName}`;
+
       allReusable.push({
         name: cleanName,
         importPath: localImportPath,
@@ -464,7 +270,7 @@ export function compileTransformerHelpers(
       });
     });
 
-    // Local barrel
+    // ✦ emits: apps/<service>/src/transformers/index.ts
     allFiles.push({
       filename: `apps/${svcLabel}/src/transformers/index.ts`,
       language: "typescript",

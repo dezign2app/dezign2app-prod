@@ -100,8 +100,8 @@ describe("compileExternalNodes", () => {
     expect(content).toContain('"Idempotency-Key": String(input["chargeId"] ?? ""),');
     expect(content).toContain("const response = await fetch(targetUrl");
     expect(content).toContain("if (!response.ok)");
-    expect(content).toContain("data: dataPayload as CallStripeChargeSuccessOutput");
-    expect(content).toContain("error: (typeof errPayload === \"object\"");
+    expect(content).toContain("data: dataPayload,");
+    expect(content).toContain("error: errPayload,");
   });
 
   it("handles GET request with query param authentication", () => {

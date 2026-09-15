@@ -207,7 +207,7 @@ export const DbOperationStepSection = ({
                   const isRedisInstance = db.type === "redis_instance";
                   return (
                     <SelectItem key={db.id} value={db.id} className="text-xs font-mono">
-                      {isRedisInstance ? "🔴" : "🛢"}{" "}
+                      {isRedisInstance ? "⚡" : "🛢"}{" "}
                       {db.data?.label || (isRedisInstance ? "Redis Instance" : "Database")}
                     </SelectItem>
                   );
@@ -239,7 +239,7 @@ export const DbOperationStepSection = ({
                     t.type === "redis_schema" ||
                     t.type === "redis-cache" ||
                     t.data?.dbType === "redis";
-                  const icon = isRedis ? "🔴" : "📄";
+                  const icon = isRedis ? "⚡" : "📄";
                   const label =
                     t.data?.label ||
                     t.data?.tableRef ||

@@ -64,6 +64,43 @@ export function collectPipelineImports(
         }
       }
     }
+
+    // Cache Miss imports for Redis operations
+    if (
+      s.type === "redis_operation" &&
+      s.cacheMiss?.enabled &&
+      s.enabled !== false
+    ) {
+      if (s.cacheMiss.action === "fallback_db" && s.cacheMiss.functionRef?.name) {
+        const dbName = toVarName(s.cacheMiss.functionRef.name);
+        const dbPath = s.cacheMiss.functionRef.importPath || "@workspace/db";
+        const existing = imports.get(dbPath);
+        if (existing) {
+          existing.add(dbName);
+        } else {
+          imports.set(dbPath, new Set([dbName]));
+        }
+      }
+
+      if (s.cacheMiss.writeBackToCache && s.functionRef?.importPath) {
+        const fnName = toVarName(s.functionRef.name || "get");
+        let setFnName: string | undefined;
+        if (fnName.toLowerCase().startsWith("get")) {
+          setFnName = `set${fnName.slice(3)}`;
+        } else if (fnName.toLowerCase().startsWith("find")) {
+          setFnName = `set${fnName.slice(4)}`;
+        }
+        if (setFnName) {
+          const redisPath = s.functionRef.importPath;
+          const existing = imports.get(redisPath);
+          if (existing) {
+            existing.add(setFnName);
+          } else {
+            imports.set(redisPath, new Set([setFnName]));
+          }
+        }
+      }
+    }
     if (s.thenSteps) s.thenSteps.forEach(addStepImports);
     if (s.elseSteps) s.elseSteps.forEach(addStepImports);
     if (s.trySteps) s.trySteps.forEach(addStepImports);

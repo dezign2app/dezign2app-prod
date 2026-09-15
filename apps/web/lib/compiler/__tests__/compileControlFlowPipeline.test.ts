@@ -457,6 +457,80 @@ describe("Control Flow Pipeline Steps Compilation", () => {
       expect(code).toContain("const dbProduct = await findProductById(");
     });
 
+    it("compiles redis_operation with dedicated cacheMiss fallback_db and writeBackToCache", () => {
+      const steps: PipelineStep[] = [
+        {
+          id: "step-cache-conv",
+          name: "getConversation",
+          type: "redis_operation",
+          enabled: true,
+          functionRef: {
+            name: "getConversation",
+            importPath: "@workspace/redis",
+          },
+          inputBindings: [
+            { argName: "id", source: { kind: "req_body", field: "conversation_id" } },
+          ],
+          outputVariable: "getConversationResult",
+          cacheMiss: {
+            enabled: true,
+            action: "fallback_db",
+            functionRef: {
+              name: "findConversationById",
+              importPath: "@workspace/db/helpers/conversations",
+            },
+            inputBindings: [
+              { argName: "id", source: { kind: "req_body", field: "conversation_id" } },
+            ],
+            writeBackToCache: true,
+            ttlSeconds: 3600,
+          },
+        },
+      ];
+
+      const lines = renderPipeline(steps, "body");
+      const code = lines.join("\n");
+
+      expect(code).toContain("let getConversationResult = await getConversation(body.conversation_id);");
+      expect(code).toContain("if (getConversationResult === null || getConversationResult === undefined) {");
+      expect(code).toContain("getConversationResult = await findConversationById(");
+      expect(code).toContain("id: body.conversation_id");
+      expect(code).toContain("if (getConversationResult !== null && getConversationResult !== undefined) {");
+      expect(code).toContain("await setConversation(body.conversation_id, getConversationResult, { ttl: 3600 });");
+    });
+
+    it("compiles redis_operation with dedicated cacheMiss early_return 404", () => {
+      const steps: PipelineStep[] = [
+        {
+          id: "step-cache-user",
+          name: "getUserSession",
+          type: "redis_operation",
+          enabled: true,
+          functionRef: {
+            name: "getUserSession",
+            importPath: "@workspace/redis",
+          },
+          inputBindings: [
+            { argName: "token", source: { kind: "req_headers", field: "authorization" } },
+          ],
+          outputVariable: "session",
+          cacheMiss: {
+            enabled: true,
+            action: "early_return",
+            statusCode: 401,
+            errorMessage: "Invalid or expired session",
+          },
+        },
+      ];
+
+      const lines = renderPipeline(steps, "body");
+      const code = lines.join("\n");
+
+      expect(code).toContain("const session = await getUserSession(req.headers[\"authorization\"]);");
+      expect(code).toContain("if (session === null || session === undefined) {");
+      expect(code).toContain("return res.status(401).json({ error: \"Invalid or expired session\" });");
+    });
+
     it("recursively collects all imports from nested control flow branches", () => {
       const steps: PipelineStep[] = [
         {

@@ -141,22 +141,22 @@ export const RedisConfig: React.FC<RedisConfigProps> = React.memo(({
   );
 
   return (
-    <div className="flex flex-col gap-1.5 p-2 bg-red-500/5 dark:bg-red-950/20 border-b border-red-500/20 nodrag">
+    <div className="flex flex-col gap-1.5 p-2 bg-muted/20 border-b border-border/40 nodrag">
       {/* Key Template Input & Auto-Pattern Display */}
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between text-[10px]">
-          <span className="font-semibold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-1">
-            <Key size={10} /> Key Template
+          <span className="font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+            <Key size={11} className="text-amber-500" /> Key Template
           </span>
           <code
-            className="text-[9px] font-mono px-1 py-0.2 rounded bg-background/80 text-muted-foreground border border-border/40 max-w-[170px] truncate"
+            className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-background/80 text-foreground/80 border border-border/50 max-w-[170px] truncate"
             title={`Scan Pattern: ${keyPattern}`}
           >
             {keyPattern}
           </code>
         </div>
         <Input
-          className="h-6 text-xs font-mono bg-background border-red-500/30 focus-visible:ring-red-500/40"
+          className="h-7 text-xs font-mono font-medium bg-background border-border/60 focus-visible:ring-primary/30"
           placeholder="e.g. user:{id}:profile"
           value={localTemplate}
           onChange={(e) => setLocalTemplate(e.target.value)}
@@ -176,10 +176,10 @@ export const RedisConfig: React.FC<RedisConfigProps> = React.memo(({
                 <Badge
                   key={param}
                   variant="outline"
-                  className={`text-[9px] px-1 py-0 font-mono cursor-pointer transition-colors ${
+                  className={`text-[10px] px-1.5 py-0.5 font-mono font-medium cursor-pointer transition-colors ${
                     isClusterTag
-                      ? "bg-red-500/20 border-red-500/50 text-red-600 dark:text-red-400 font-bold"
-                      : "bg-background/60 text-muted-foreground border-border/40 hover:border-red-500/40"
+                      ? "bg-primary/15 border-primary/40 text-primary"
+                      : "bg-background/60 text-muted-foreground border-border/50 hover:border-border"
                   }`}
                   title={
                     isClusterTag
@@ -206,13 +206,13 @@ export const RedisConfig: React.FC<RedisConfigProps> = React.memo(({
       </div>
 
       {/* Badges Strip (Structure, TTL, Strategy) */}
-      <div className="flex items-center justify-between gap-1 pt-1 border-t border-red-500/15 text-[9px] text-muted-foreground">
+      <div className="flex items-center justify-between gap-1 pt-1 border-t border-border/30 text-[10px] text-muted-foreground">
         <div className="flex items-center gap-1">
           <Select
             value={structure}
             onValueChange={(val: RedisDataStructure) => handleStructureChange(val)}
           >
-            <SelectTrigger className="nodrag h-5 text-[10px] w-auto gap-1 px-1.5 font-semibold bg-background border-red-500/30">
+            <SelectTrigger className="nodrag h-6 text-[10px] w-auto gap-1 px-2 font-medium bg-background border-border/60">
               <SelectValue>
                 {structure === "json" && data.jsonRootType === "array"
                   ? "RedisJSON[]"
@@ -233,10 +233,10 @@ export const RedisConfig: React.FC<RedisConfigProps> = React.memo(({
           {/* [ ] Array of Objects Toggle Button */}
           <button
             type="button"
-            className={`nodrag h-5 px-1.5 rounded border text-[10px] font-mono font-bold transition-all cursor-pointer flex items-center justify-center ${
+            className={`nodrag h-6 px-1.5 rounded border text-[10px] font-mono font-medium transition-all cursor-pointer flex items-center justify-center ${
               structure === "json" && data.jsonRootType === "array"
-                ? "bg-red-500/20 border-red-500/50 text-red-600 dark:text-red-400 shadow-xs"
-                : "bg-background/80 border-border/40 text-muted-foreground hover:text-foreground hover:border-red-500/30"
+                ? "bg-primary/15 border-primary/40 text-primary shadow-xs"
+                : "bg-background/80 border-border/50 text-muted-foreground hover:text-foreground hover:border-border"
             }`}
             title={
               structure === "json" && data.jsonRootType === "array"
@@ -266,19 +266,19 @@ export const RedisConfig: React.FC<RedisConfigProps> = React.memo(({
             [ ]
           </button>
 
-          <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-background/80 border border-border/40 font-mono">
-            <Clock size={9} className="text-red-500" />
+          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-background/80 border border-border/50 font-mono text-[10px]">
+            <Clock size={10} className="text-amber-500" />
             <span>{ttl.unit === "never" ? "No TTL" : `${ttl.value}${ttl.unit}`}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 font-mono">
-          <span className="px-1.5 py-0.5 rounded bg-background/80 border border-border/40">
+        <div className="flex items-center gap-1 font-mono text-[10px]">
+          <span className="px-1.5 py-0.5 rounded bg-background/80 border border-border/50">
             {strategy}
           </span>
           {data.negativeCaching?.enabled && (
             <span
-              className="px-1 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[8px] font-bold"
+              className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[9px] font-medium"
               title="Negative caching enabled"
             >
               404
@@ -286,7 +286,7 @@ export const RedisConfig: React.FC<RedisConfigProps> = React.memo(({
           )}
           {data.staleWhileRevalidate?.enabled && (
             <span
-              className="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[8px] font-bold"
+              className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[9px] font-medium"
               title="SWR enabled"
             >
               SWR

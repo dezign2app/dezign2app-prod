@@ -10,12 +10,13 @@ import {
   renderResponseStep,
   renderLangGraphInvokeStep,
   renderPushToClientStep,
-} from "./stepRenderers";
+} from "./compilePipelineSteps";
 import { applyStepDecorators } from "./stepDecorators";
 
 export * from "./types";
 export * from "./sourceResolver";
 export * from "./conditionCompiler";
+export * from "./compilePipelineSteps";
 export * from "./stepRenderers";
 export * from "./stepDecorators";
 export * from "./importCollector";

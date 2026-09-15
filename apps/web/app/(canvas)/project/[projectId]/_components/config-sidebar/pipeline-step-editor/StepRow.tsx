@@ -431,6 +431,7 @@ const StepRowComponent = ({
                       allNodes={allNodes}
                       allEdges={allEdges}
                       expectedArgs={expectedArgs}
+                      availableSources={availableSources}
                       selectedDbId={selectedDbId}
                       serviceNodeId={serviceNodeId}
                       endpointId={endpoint?.id}

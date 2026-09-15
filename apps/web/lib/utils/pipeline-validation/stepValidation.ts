@@ -283,6 +283,14 @@ function isRedisOperationStepUnconfigured(
       return true;
     }
   }
+
+  // Validate cache miss fallback DB bindings if enabled
+  if (step.cacheMiss?.enabled && step.cacheMiss.action === "fallback_db") {
+    const dbBindings = step.cacheMiss.inputBindings || [];
+    if (dbBindings.length === 0) return true;
+    if (dbBindings.some((b) => !isBindingSourceConfigured(b))) return true;
+  }
+
   return false;
 }
 

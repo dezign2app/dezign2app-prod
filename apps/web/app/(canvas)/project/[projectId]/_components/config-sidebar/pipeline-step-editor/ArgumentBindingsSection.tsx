@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Trash, Edit2, List, AlertTriangle } from "lucide-react";
+import { Plus, Trash, Edit2, List, AlertTriangle, Sparkles } from "lucide-react";
 import { BufferedInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
 import { cn } from "@workspace/ui/lib/utils";
@@ -106,6 +106,16 @@ export const ArgumentBindingsSection = ({
         </div>
 
         <div className="flex items-center gap-1.5">
+          {expectedArgs.length > 0 && (
+            <button
+              type="button"
+              className="flex items-center gap-1 text-[10px] text-primary/80 hover:text-primary transition-colors"
+              onClick={onAutoMapArguments}
+            >
+              <Sparkles size={10} />
+              Auto-Map
+            </button>
+          )}
           <button
             type="button"
             className="flex items-center gap-1 text-[10px] text-primary/80 hover:text-primary transition-colors"
