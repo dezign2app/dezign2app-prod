@@ -16,6 +16,12 @@ import {
   killTerminal,
 } from "../services/terminal";
 import { isPortOpen } from "../services/network";
+import {
+  executeDbOperation,
+  checkDbConnection,
+  TestDbOperationPayload,
+  CheckDbConnectionPayload,
+} from "../services/dbRunner";
 
 /**
  * Registers all IPC handlers for the Electron main process.
@@ -154,6 +160,15 @@ export function registerIpcHandlers(): void {
   // ── Network Reachability ───────────────────
   ipcMain.handle("network:isPortOpen", async (_event, port: number) => {
     return isPortOpen(port);
+  });
+
+  // ── Database Operations ───────────────────
+  ipcMain.handle("db:execute-operation", async (_event, payload: TestDbOperationPayload) => {
+    return executeDbOperation(payload);
+  });
+
+  ipcMain.handle("db:check-connection", async (_event, payload: CheckDbConnectionPayload) => {
+    return checkDbConnection(payload);
   });
 
   // ── App / Platform Info ────────────────────

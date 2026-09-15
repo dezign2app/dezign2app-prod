@@ -11,7 +11,7 @@ export interface JsonObject {
 }
 export type JsonArray = JsonValue[];
 
-export function isJsonObject(val: JsonValue | undefined): val is JsonObject {
+export function isJsonObject(val: unknown): val is JsonObject {
   return typeof val === "object" && val !== null && !Array.isArray(val);
 }
 
@@ -150,7 +150,7 @@ export interface ExecuteSqliteOptions {
   tableName: string;
   columns?: CanvasEntityColumn[];
   operation: SqliteOperationParams;
-  args: Record<string, JsonValue>;
+  args: Record<string, unknown>;
 }
 
 export interface SqliteExecutionResult {

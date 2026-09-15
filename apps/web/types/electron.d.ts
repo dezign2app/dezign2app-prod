@@ -96,9 +96,115 @@ export interface ElectronAPI {
     isPortOpen(port: number): Promise<boolean>;
   };
 
+  db?: {
+    executeOperation(payload: ElectronTestDbOperationPayload): Promise<ElectronTestDbOperationResult>;
+    checkConnection(payload: ElectronCheckDbConnectionPayload): Promise<ElectronCheckDbConnectionResult>;
+  };
+
   workspace?: {
     setPath?(path: string): void;
     getPath?(): Promise<string | null>;
+  };
+}
+
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
+export interface JsonObject {
+  [key: string]: JsonValue;
+}
+export type JsonArray = JsonValue[];
+
+export interface ElectronTestDbOperationPayload {
+  engine?: string;
+  connection?: {
+    host?: string;
+    port?: number | string;
+    connectionString?: string;
+    connectionStringEnv?: string;
+    dbFilePath?: string;
+    dbFilePathEnv?: string;
+  };
+  entity?: {
+    name?: string;
+    columns?: Array<{
+      name: string;
+      type?: string;
+      isPrimaryKey?: boolean;
+      isPrimary?: boolean;
+      primaryKey?: boolean;
+      required?: boolean;
+      unique?: boolean;
+      defaultValue?: string | number | boolean | null;
+    }>;
+  };
+  operation: {
+    id?: string;
+    name: string;
+    kind?: string;
+    code?: string;
+    query?: string;
+    signature?: string;
+    params?: Array<{ name: string; type: string; defaultValue?: string }>;
+  };
+  args: Record<string, unknown>;
+  mode?: "live" | "sandbox";
+}
+
+export interface ElectronTestDbOperationResult {
+  success: boolean;
+  output?: JsonValue;
+  durationMs?: number;
+  rawCommand?: string;
+  mode?: "live" | "sandbox";
+  connection?: string;
+  serverActive?: boolean;
+  error?: string;
+  tip?: string;
+  dbInfo?: {
+    path?: string;
+    exists?: boolean;
+    sizeBytes?: number;
+    fileStatus?: string;
+    table?: string;
+  };
+}
+
+export interface ElectronCheckDbConnectionPayload {
+  engine?: string;
+  connection?: {
+    host?: string;
+    port?: number | string;
+    connectionString?: string;
+    connectionStringEnv?: string;
+    dbFilePath?: string;
+    dbFilePathEnv?: string;
+  };
+  projectId?: string;
+}
+
+export interface ElectronCheckDbConnectionResult {
+  success: boolean;
+  engine?: string;
+  latencyMs?: number;
+  connectionUri?: string;
+  host?: string;
+  port?: number;
+  error?: string;
+  info?: {
+    version?: string;
+    rawVersion?: string;
+    mode?: string;
+    usedMemory?: string;
+    connectedClients?: string;
+    os?: string;
+    path?: string;
+    exists?: boolean;
+    sizeBytes?: number;
+    tableCount?: number;
+    readable?: boolean;
+    status?: string;
+    reachable?: boolean;
+    socket?: string;
   };
 }
 
