@@ -7,6 +7,7 @@ import { cn } from "@workspace/ui/lib/utils";
 export interface TestStudioHeaderProps {
   connUri: string;
   isParentConnected: boolean;
+  isParentFailed?: boolean;
   parentDb?: BackendNode;
   pingingParent: boolean;
   testMode: "live" | "sandbox";
@@ -17,6 +18,7 @@ export interface TestStudioHeaderProps {
 export const TestStudioHeader: React.FC<TestStudioHeaderProps> = ({
   connUri,
   isParentConnected,
+  isParentFailed,
   parentDb,
   pingingParent,
   testMode,
@@ -39,19 +41,33 @@ export const TestStudioHeader: React.FC<TestStudioHeaderProps> = ({
                 testMode === "live"
                   ? isParentConnected
                     ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
-                    : "bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-400"
+                    : isParentFailed
+                      ? "bg-destructive/15 border-destructive/40 text-destructive"
+                      : "bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-400"
                   : "bg-purple-500/15 border-purple-500/40 text-purple-600 dark:text-purple-400",
               )}
             >
-              {testMode === "live" ? "Live Server" : "Sandbox"}
+              {testMode === "live"
+                ? isParentConnected
+                  ? "Live Server"
+                  : isParentFailed
+                    ? "Live Server (Offline)"
+                    : "Live Server (Untested)"
+                : "Sandbox"}
             </Badge>
           </div>
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono">
             <Server size={11} className="shrink-0" />
             <span>{connUri}</span>
-            {parentDb?.data?.lastConnectionStatus?.latencyMs !== undefined && (
-              <span className="text-emerald-500 font-bold">
-                ({parentDb.data.lastConnectionStatus.latencyMs}ms)
+            {parentDb?.data?.lastConnectionStatus?.latencyMs !== undefined &&
+              parentDb.data.lastConnectionStatus.connected && (
+                <span className="text-emerald-500 font-bold">
+                  ({parentDb.data.lastConnectionStatus.latencyMs}ms)
+                </span>
+              )}
+            {parentDb?.data?.lastConnectionStatus?.connected === false && (
+              <span className="text-destructive font-semibold text-[10px]">
+                (offline)
               </span>
             )}
             {parentDb && (

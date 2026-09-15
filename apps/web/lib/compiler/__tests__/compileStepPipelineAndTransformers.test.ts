@@ -520,5 +520,168 @@ describe("Step Pipeline & Transformer Helpers", () => {
       expect(consumerFile?.content).toContain("const sanitizedOrder = sanitizeOrderPayload(");
       expect(consumerFile?.content).toContain("rawAmount: validatedPayload.rawAmount");
     });
+
+    it("sanitizes transformer names with spaces and normalizes @/services/... aliases to relative ../transformers/<name>", () => {
+      const ep: Endpoint & { nodeId: string } = {
+        id: "ep-cache",
+        nodeId: "service-conv",
+        name: "/insert-cache",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-1",
+            name: "transform req to cache",
+            type: "transform",
+            enabled: true,
+            functionRef: {
+              name: "transform req to cache",
+              importPath: "@/services/service-conv/transformers/transform req to cache",
+            },
+            inputBindings: [
+              {
+                argName: "data",
+                source: { kind: "req_body", field: "data" },
+              },
+            ],
+            outputVariable: "transformData1Result",
+          },
+        ],
+      };
+
+      const result = generateEndpointRouteHandler({
+        ep,
+        index: 0,
+        serviceName: "ConversationService",
+        pascalServiceName: "ConversationService",
+        serviceFolderName: "conversation",
+        allNodes: [],
+        allEdges: [],
+        allEndpoints: [ep],
+        dbFunctions: [],
+        kafkaFunctions: [],
+        redisFunctions: [],
+        nodePublishedEvents: [],
+        usedFileNames: new Set(),
+      });
+
+      const content = result.file.content;
+      // 1. Should NOT contain spaces in import identifier or use invalid @/services/ alias
+      expect(content).not.toContain("import { transform req to cache }");
+      expect(content).not.toContain("transform req to cache(");
+      expect(content).not.toContain("@/services/");
+      // 2. Should import sanitized identifier from relative path ../transformers/transformReqToCache
+      expect(content).toContain('import { transformReqToCache } from "../transformers/transformReqToCache";');
+      // 3. Should call sanitized function name
+      expect(content).toContain("const transformData1Result = transformReqToCache(");
+    });
+
+    it("reconciles return schema to nested object types when code returns nested structure", () => {
+      const nodes: BackendNode[] = [
+        {
+          id: "service-conv",
+          type: "service",
+          position: { x: 0, y: 0 },
+          fractionalIndex: "a0",
+          data: {
+            label: "Conversation",
+            transformerHelpers: [
+              {
+                id: "h-cache",
+                name: "transformReqToCache",
+                scope: "local",
+                targetServiceId: "service-conv",
+                inputSchema: [
+                  { name: "message", type: "string", required: true },
+                  { name: "sender", type: "string", required: true },
+                  { name: "conversationId", type: "string", required: true },
+                ],
+                logicMode: "code",
+                code: `return {\n  key: conversationId,\n  value: { message, sender }\n};`,
+                returnSchema: [
+                  { name: "key", type: "string", required: true },
+                  { name: "value", type: "string", required: true },
+                ],
+              },
+            ],
+          },
+        },
+      ];
+
+      const result = compileTransformerHelpers(nodes);
+      const file = result.files.find((f) => f.filename.includes("transformReqToCache.ts"));
+      expect(file).toBeDefined();
+      expect(file?.content).toContain("value: { message: string; sender: string };");
+      expect(file?.content).not.toContain("value: string;");
+    });
+
+    it("renders redis_operation steps with named bindings positionally instead of wrapping into an object literal", () => {
+      const ep: Endpoint & { nodeId: string } = {
+        id: "ep-insert-cache",
+        nodeId: "service-conv",
+        name: "/insert-cache",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-1",
+            name: "transformData1",
+            type: "transform",
+            enabled: true,
+            functionRef: {
+              name: "transformReqToCache",
+              importPath: "../transformers/transformReqToCache",
+            },
+            inputBindings: [
+              { argName: "data", source: { kind: "req_body" } },
+            ],
+            outputVariable: "transformData1Result",
+          },
+          {
+            id: "step-2",
+            name: "insertCache",
+            type: "redis_operation",
+            enabled: true,
+            functionRef: {
+              name: "appendConversationItem",
+              importPath: "@workspace/primary-cache",
+              signature: "appendConversationItem(id: string | number, item: ConversationItem): Promise<number>",
+            },
+            inputBindings: [
+              {
+                argName: "key",
+                source: { kind: "step_output", stepId: "step-1", field: "key" },
+              },
+              {
+                argName: "item",
+                source: { kind: "step_output", stepId: "step-1", field: "value" },
+              },
+            ],
+            outputVariable: "insertCacheResult",
+          },
+        ],
+      };
+
+      const result = generateEndpointRouteHandler({
+        ep,
+        index: 0,
+        serviceName: "ConversationService",
+        pascalServiceName: "ConversationService",
+        serviceFolderName: "conversation",
+        allNodes: [],
+        allEdges: [],
+        allEndpoints: [ep],
+        dbFunctions: [],
+        kafkaFunctions: [],
+        redisFunctions: [],
+        nodePublishedEvents: [],
+        usedFileNames: new Set(),
+      });
+
+      const content = result.file.content;
+      expect(content).toContain(
+        "const insertCacheResult = await appendConversationItem(transformData1Result.key, transformData1Result.value);",
+      );
+      expect(content).not.toContain("key: transformData1Result.key");
+    });
   });
 });
+

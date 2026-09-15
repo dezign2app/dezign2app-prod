@@ -1,7 +1,79 @@
-import { PipelineStep } from "@workspace/canvas/types";
+import { PipelineStep, PipelineStepInputBinding } from "@workspace/canvas/types";
+import { toVarName } from "../../../utils";
 import { PipelineRenderContext } from "./types";
 import { buildArgList, resolveBinding, resolveSource } from "./sourceResolver";
 import { compileConditionExpr } from "./conditionCompiler";
+
+function extractSigParamNames(signature?: string): string[] {
+  if (!signature) return [];
+  const match = signature.match(/\((.*?)\)/);
+  const paramList = match?.[1];
+  if (!paramList || !paramList.trim()) return [];
+  return paramList
+    .split(",")
+    .map((p) => (p.trim().split(/[:=]/)[0] ?? "").replace(/^\.\.\./, "").trim())
+    .filter(Boolean);
+}
+
+function getRedisArgRank(argName: string): number {
+  const name = argName.toLowerCase();
+  if (name === "key" || name === "id" || name.endsWith("id") || name.endsWith("key")) return 10;
+  if (name === "field") return 20;
+  if (name === "longitude" || name === "lat" || name === "long") return 25;
+  if (name === "latitude") return 26;
+  if (name === "score") return 27;
+  if (["item", "value", "data", "payload", "body", "fields", "items", "member"].includes(name)) return 30;
+  if (["start", "stop", "index"].includes(name)) return 40;
+  if (["lastid"].includes(name)) return 50;
+  if (["count", "limit", "radius"].includes(name)) return 60;
+  if (["ttl", "ttlseconds", "seconds"].includes(name)) return 70;
+  if (["unit"].includes(name)) return 80;
+  return 100;
+}
+
+function sortRedisBindings(
+  bindings: PipelineStepInputBinding[],
+  signature?: string,
+): PipelineStepInputBinding[] {
+  const sigParams = extractSigParamNames(signature);
+
+  return [...bindings].sort((a, b) => {
+    if (sigParams.length > 0) {
+      const idxA = sigParams.findIndex((p) => {
+        const pLower = p.toLowerCase();
+        const aLower = a.argName.toLowerCase();
+        if (pLower === aLower) return true;
+        if (
+          (pLower === "id" || pLower === "key") &&
+          (aLower === "key" || aLower === "id" || aLower.endsWith("id") || aLower.endsWith("key"))
+        ) return true;
+        if (
+          ["item", "value", "data"].includes(pLower) &&
+          ["item", "value", "data", "payload", "body"].includes(aLower)
+        ) return true;
+        return false;
+      });
+      const idxB = sigParams.findIndex((p) => {
+        const pLower = p.toLowerCase();
+        const bLower = b.argName.toLowerCase();
+        if (pLower === bLower) return true;
+        if (
+          (pLower === "id" || pLower === "key") &&
+          (bLower === "key" || bLower === "id" || bLower.endsWith("id") || bLower.endsWith("key"))
+        ) return true;
+        if (
+          ["item", "value", "data"].includes(pLower) &&
+          ["item", "value", "data", "payload", "body"].includes(bLower)
+        ) return true;
+        return false;
+      });
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+    }
+    return getRedisArgRank(a.argName) - getRedisArgRank(b.argName);
+  });
+}
 
 /**
  * Renders a "transform" pipeline step (pure synchronous function call).
@@ -14,16 +86,17 @@ export function renderTransformStep(
   if (!functionRef) {
     return [`// [pipeline] step "${step.name}": missing functionRef`];
   }
+  const fnName = toVarName(functionRef.name || "transform");
   const args = buildArgList(inputBindings, ctx);
   const isMultiLine = args.includes("\n");
   if (isMultiLine) {
     return [
-      `const ${outputVariable} = ${functionRef.name}(`,
+      `const ${outputVariable} = ${fnName}(`,
       ...args.split("\n").map((l) => `  ${l}`),
       `);`,
     ];
   }
-  const callExpr = args ? `${functionRef.name}(${args})` : `${functionRef.name}()`;
+  const callExpr = args ? `${fnName}(${args})` : `${fnName}()`;
   return [`const ${outputVariable} = ${callExpr};`];
 }
 
@@ -38,25 +111,49 @@ export function renderAsyncOperationStep(
   if (!functionRef) {
     return [`// [pipeline] step "${step.name}": missing functionRef`];
   }
+  const fnName = toVarName(functionRef.name || "operation");
   const rawLines: string[] = [];
-  const args = buildArgList(inputBindings, ctx);
+  const isRedisOp =
+    type === "redis_operation" ||
+    Boolean(
+      functionRef.importPath &&
+        (functionRef.importPath.includes("cache") ||
+          functionRef.importPath.includes("redis")),
+    );
+
+  let args: string;
+  if (isRedisOp && inputBindings.length > 0) {
+    const allPositional = inputBindings.every((b) => /^\d+$/.test(b.argName));
+    const isSingleSpread =
+      inputBindings.length === 1 && inputBindings[0]?.argName === "_spread";
+
+    if (allPositional || isSingleSpread) {
+      args = buildArgList(inputBindings, ctx);
+    } else {
+      const sorted = sortRedisBindings(inputBindings, functionRef.signature);
+      args = sorted.map((b) => resolveBinding(b, ctx)).join(", ");
+    }
+  } else {
+    args = buildArgList(inputBindings, ctx);
+  }
+
   const isMultiLine = args.includes("\n");
   if (isMultiLine) {
-    rawLines.push(`const ${outputVariable} = await ${functionRef.name}(`);
+    rawLines.push(`const ${outputVariable} = await ${fnName}(`);
     args.split("\n").forEach((l) => rawLines.push(`  ${l}`));
     rawLines.push(`);`);
   } else {
     const callExpr = args
-      ? `await ${functionRef.name}(${args})`
-      : `await ${functionRef.name}()`;
+      ? `await ${fnName}(${args})`
+      : `await ${fnName}()`;
     rawLines.push(`const ${outputVariable} = ${callExpr};`);
   }
 
   // DB reads by ID get a 404 guard
   if (
     type === "db_operation" &&
-    (functionRef.name.toLowerCase().includes("byid") ||
-      functionRef.name.toLowerCase().includes("findone"))
+    (fnName.toLowerCase().includes("byid") ||
+      fnName.toLowerCase().includes("findone"))
   ) {
     rawLines.push(`if (${outputVariable} === undefined || ${outputVariable} === null) {`);
     rawLines.push(`  return res.status(404).json({ error: "Not found" });`);
@@ -75,18 +172,19 @@ export function renderExternalCallStep(
 ): string[] {
   const { outputVariable, functionRef, inputBindings = [] } = step;
   if (functionRef) {
+    const fnName = toVarName(functionRef.name || "fetchCall");
     const args = buildArgList(inputBindings, ctx);
     const isMultiLine = args.includes("\n");
     if (isMultiLine) {
       return [
-        `const ${outputVariable} = await ${functionRef.name}(`,
+        `const ${outputVariable} = await ${fnName}(`,
         ...args.split("\n").map((l) => `  ${l}`),
         `);`,
       ];
     }
     const callExpr = args
-      ? `await ${functionRef.name}(${args})`
-      : `await ${functionRef.name}()`;
+      ? `await ${fnName}(${args})`
+      : `await ${fnName}()`;
     return [`const ${outputVariable} = ${callExpr};`];
   }
 
@@ -159,7 +257,8 @@ export function renderKafkaPublishStep(
     return [`// [pipeline] step "${step.name}": missing functionRef`];
   }
   const rawLines: string[] = [];
-  const isGeneric = functionRef.name === "publishKafkaEvent";
+  const fnName = toVarName(functionRef.name || "publishKafkaEvent");
+  const isGeneric = fnName === "publishKafkaEvent" || functionRef.name === "publishKafkaEvent";
   const topicBinding = inputBindings.find((b) => b.argName === "topic");
   const keyBinding = inputBindings.find((b) => b.argName === "key");
 
@@ -220,7 +319,7 @@ export function renderKafkaPublishStep(
 
   const keyExpr = keyBinding ? resolveBinding(keyBinding, ctx) : null;
 
-  rawLines.push(`const ${outputVariable} = await ${functionRef.name}(`);
+  rawLines.push(`const ${outputVariable} = await ${fnName}(`);
   if (isGeneric) {
     rawLines.push(`  ${topicExpr},`);
   }

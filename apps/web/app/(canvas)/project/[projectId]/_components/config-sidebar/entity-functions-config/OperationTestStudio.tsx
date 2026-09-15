@@ -10,6 +10,7 @@ import {
   TestParamsForm,
   TestRunBar,
   TestResultViewer,
+  ServerOfflineBanner,
 } from "./test-studio";
 
 export interface OperationTestStudioProps {
@@ -38,6 +39,8 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
   const port = parentDb?.data?.port || (isRedis ? 6379 : 5432);
   const connUri = isRedis ? `redis://${host}:${port}` : `${host}:${port}`;
   const isParentConnected = parentDb?.data?.lastConnectionStatus?.connected === true;
+  const isParentFailed = parentDb?.data?.lastConnectionStatus?.connected === false;
+  const connectionError = parentDb?.data?.lastConnectionStatus?.error;
 
   // Studio Mode: live vs sandbox
   const [testMode, setTestMode] = useState<"live" | "sandbox">("live");
@@ -219,6 +222,18 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
     }
   };
 
+  // Auto-verify server connection if untested when in Live mode
+  useEffect(() => {
+    if (
+      testMode === "live" &&
+      parentDb &&
+      parentDb.data?.lastConnectionStatus === undefined &&
+      !pingingParent
+    ) {
+      handlePingConnection();
+    }
+  }, [testMode, parentDb?.id]);
+
   // Execute the active test case
   const handleRunTest = async () => {
     if (!activeCase || executing) return;
@@ -253,6 +268,44 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
 
       const data = await res.json();
 
+      // Sync parent node connection status based on live test result
+      if (parentDb && testMode === "live") {
+        if (!data.success || data.serverActive === false) {
+          const isConnErr =
+            data.serverActive === false ||
+            data.error?.includes("connect") ||
+            data.error?.includes("refused") ||
+            data.error?.includes("not found") ||
+            data.error?.includes("timeout") ||
+            data.error?.includes("offline");
+
+          if (isConnErr) {
+            updateNode(parentDb.id, {
+              data: {
+                ...parentDb.data,
+                lastConnectionStatus: {
+                  connected: false,
+                  checkedAt: new Date().toLocaleTimeString(),
+                  latencyMs: 0,
+                  error: data.error,
+                },
+              },
+            });
+          }
+        } else if (data.success) {
+          updateNode(parentDb.id, {
+            data: {
+              ...parentDb.data,
+              lastConnectionStatus: {
+                connected: true,
+                checkedAt: new Date().toLocaleTimeString(),
+                latencyMs: data.durationMs,
+              },
+            },
+          });
+        }
+      }
+
       const lastResult = {
         success: !!data.success,
         output: sanitizeForConvex(data.output),
@@ -268,6 +321,20 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
       setTestCases(updated);
       persistTestCases(updated, true);
     } catch (err) {
+      if (parentDb && testMode === "live") {
+        updateNode(parentDb.id, {
+          data: {
+            ...parentDb.data,
+            lastConnectionStatus: {
+              connected: false,
+              checkedAt: new Date().toLocaleTimeString(),
+              latencyMs: 0,
+              error: err instanceof Error ? err.message : "Network error executing test",
+            },
+          },
+        });
+      }
+
       const lastResult = {
         success: false,
         error: err instanceof Error ? err.message : "Network error executing test",
@@ -303,12 +370,27 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
       <TestStudioHeader
         connUri={connUri}
         isParentConnected={isParentConnected}
+        isParentFailed={isParentFailed}
         parentDb={parentDb}
         pingingParent={pingingParent}
         testMode={testMode}
         onPingConnection={handlePingConnection}
         onSetTestMode={setTestMode}
       />
+
+      {/* 1.1 Server Not Active Error Banner */}
+      {testMode === "live" && (!isParentConnected || isParentFailed) && (
+        <ServerOfflineBanner
+          connUri={connUri}
+          engine={engine}
+          host={host}
+          port={port}
+          error={connectionError}
+          pingingParent={pingingParent}
+          onPingConnection={handlePingConnection}
+          onSwitchToSandbox={() => setTestMode("sandbox")}
+        />
+      )}
 
       {/* 2. Test Cases Tab Selector */}
       <TestCaseTabs
@@ -341,6 +423,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
         <TestResultViewer
           lastResult={activeCase.lastResult}
           testMode={testMode}
+          onSwitchToSandbox={() => setTestMode("sandbox")}
         />
       )}
     </div>
