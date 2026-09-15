@@ -16,6 +16,10 @@ import {
   TestResultViewer,
   ServerOfflineBanner,
 } from "./test-studio";
+import {
+  testDatabaseOperation,
+  checkDatabaseConnection,
+} from "@/lib/services/databaseService";
 
 export interface OperationTestStudioProps {
   selectedOp: DbOperationFunction;
@@ -203,21 +207,16 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
     if (!parentDb) return;
     setPingingParent(true);
     try {
-      const res = await fetch("/api/operations/check-connection", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          engine,
-          connection: {
-            host,
-            port,
-            connectionStringEnv: parentDb.data?.connectionStringEnv,
-            dbFilePath,
-            dbFilePathEnv,
-          },
-        }),
+      const data = await checkDatabaseConnection({
+        engine,
+        connection: {
+          host,
+          port,
+          connectionStringEnv: parentDb.data?.connectionStringEnv,
+          dbFilePath,
+          dbFilePathEnv,
+        },
       });
-      const data = await res.json();
       updateNode(parentDb.id, {
         data: {
           ...parentDb.data,
@@ -258,36 +257,30 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
     persistTestCases(testCases, true);
 
     try {
-      const res = await fetch("/api/operations/test-live", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          engine,
-          connection: {
-            host,
-            port,
-            dbFilePath,
-            dbFilePathEnv,
-          },
-          entity: {
-            name: label,
-            columns,
-          },
-          operation: {
-            id: selectedOp.id,
-            name: selectedOp.name,
-            kind: selectedOp.kind,
-            code: selectedOp.code,
-            query: selectedOp.query,
-            signature: selectedOp.signature,
-            params: selectedOp.params,
-          },
-          args: activeCase.params,
-          mode: testMode,
-        }),
+      const data = await testDatabaseOperation({
+        engine,
+        connection: {
+          host,
+          port,
+          dbFilePath,
+          dbFilePathEnv,
+        },
+        entity: {
+          name: label,
+          columns,
+        },
+        operation: {
+          id: selectedOp.id,
+          name: selectedOp.name,
+          kind: selectedOp.kind,
+          code: selectedOp.code,
+          query: selectedOp.query,
+          signature: selectedOp.signature,
+          params: selectedOp.params,
+        },
+        args: activeCase.params,
+        mode: testMode,
       });
-
-      const data = await res.json();
 
       // Sync parent node connection status based on live test result
       if (parentDb && testMode === "live") {

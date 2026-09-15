@@ -4,6 +4,7 @@ import { BackendNode } from "@/types/canvas";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { checkDatabaseConnection } from "@/lib/services/databaseService";
 
 interface RedisInstanceNoticeCardProps {
   parentDb?: BackendNode;
@@ -28,19 +29,14 @@ export const RedisInstanceNoticeCard: React.FC<RedisInstanceNoticeCardProps> = (
     if (!parentDb) return;
     setChecking(true);
     try {
-      const res = await fetch("/api/operations/check-connection", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          engine: "redis",
-          connection: {
-            host,
-            port,
-            connectionStringEnv: parentDb.data?.connectionStringEnv,
-          },
-        }),
+      const data = await checkDatabaseConnection({
+        engine: "redis",
+        connection: {
+          host,
+          port,
+          connectionStringEnv: parentDb.data?.connectionStringEnv,
+        },
       });
-      const data = await res.json();
       updateNode(parentDb.id, {
         data: {
           ...parentDb.data,

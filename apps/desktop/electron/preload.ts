@@ -1,4 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type {
+  TestDbOperationPayload,
+  TestDbOperationResult,
+  CheckDbConnectionPayload,
+  CheckDbConnectionResult,
+} from "./services/dbRunner";
 
 // ─────────────────────────────────────────────
 //  Types
@@ -89,6 +95,12 @@ export interface ElectronAPI {
   network: {
     isPortOpen(port: number): Promise<boolean>;
   };
+
+  /** Native database execution and connection checks */
+  db: {
+    executeOperation(payload: TestDbOperationPayload): Promise<TestDbOperationResult>;
+    checkConnection(payload: CheckDbConnectionPayload): Promise<CheckDbConnectionResult>;
+  };
 }
 
 // ─────────────────────────────────────────────
@@ -174,5 +186,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   network: {
     isPortOpen: (port: number) => ipcRenderer.invoke("network:isPortOpen", port),
+  },
+
+  db: {
+    executeOperation: (payload: TestDbOperationPayload) =>
+      ipcRenderer.invoke("db:execute-operation", payload),
+    checkConnection: (payload: CheckDbConnectionPayload) =>
+      ipcRenderer.invoke("db:check-connection", payload),
   },
 } satisfies ElectronAPI);

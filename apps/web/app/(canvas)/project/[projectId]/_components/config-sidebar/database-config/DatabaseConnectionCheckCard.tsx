@@ -14,6 +14,7 @@ import {
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import { cn } from "@workspace/ui/lib/utils";
+import { checkDatabaseConnection } from "@/lib/services/databaseService";
 
 interface ConnectionStatusData {
   connected: boolean;
@@ -68,23 +69,18 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
   const handleCheckConnection = async () => {
     setChecking(true);
     try {
-      const res = await fetch("/api/operations/check-connection", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          engine,
-          connection: {
-            host: currentHost,
-            port: currentPort,
-            connectionString,
-            connectionStringEnv,
-            dbFilePath,
-            dbFilePathEnv,
-          },
-        }),
+      const data = await checkDatabaseConnection({
+        engine,
+        connection: {
+          host: currentHost,
+          port: currentPort,
+          connectionString,
+          connectionStringEnv,
+          dbFilePath,
+          dbFilePathEnv,
+        },
       });
 
-      const data = await res.json();
       const updated: ConnectionStatusData = {
         connected: !!data.success,
         latencyMs: data.latencyMs,
