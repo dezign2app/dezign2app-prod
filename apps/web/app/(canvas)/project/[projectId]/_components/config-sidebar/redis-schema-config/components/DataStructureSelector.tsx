@@ -16,8 +16,8 @@ export const DataStructureSelector: React.FC<DataStructureSelectorProps> = ({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
-        <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-          <Layers size={14} className="text-red-500" /> Redis Data Structure
+        <span className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <Layers size={14} className="text-amber-500" /> Redis Data Structure
         </span>
       </div>
 
@@ -33,18 +33,18 @@ export const DataStructureSelector: React.FC<DataStructureSelectorProps> = ({
               className={cn(
                 "p-2.5 rounded-lg border flex flex-col gap-1 cursor-pointer transition-all",
                 isSelected
-                  ? "bg-red-500/15 border-red-500 text-foreground font-semibold shadow-sm"
+                  ? "bg-primary/10 border-primary text-foreground font-medium shadow-xs"
                   : "bg-background/60 border-border/50 text-muted-foreground hover:bg-secondary/40 hover:text-foreground",
               )}
             >
               <div className="flex items-center gap-1.5">
                 <Icon
                   size={14}
-                  className={isSelected ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}
+                  className={isSelected ? "text-primary" : "text-muted-foreground"}
                 />
                 <span className="text-xs">{opt.label}</span>
               </div>
-              <span className="text-[10px] text-muted-foreground/80 line-clamp-1">{opt.desc}</span>
+              <span className="text-[11px] text-muted-foreground/80 line-clamp-1">{opt.desc}</span>
             </div>
           );
         })}

@@ -31,7 +31,7 @@ export interface RedisSchemaPreviewSectionProps {
   keyTemplate: string;
   clusterTagParam?: string;
   ttl: RedisDuration;
-  strategy: string;
+  strategy?: string;
   hashFields: RedisHashField[];
 }
 
@@ -533,7 +533,7 @@ export async function invalidate${typeName}(${keyParamSig}): Promise<void> {
           className="flex items-center gap-2 cursor-pointer select-none group"
           onClick={() => setIsOpen(!isOpen)}
         >
-          <div className="p-1 rounded-md bg-red-500/10 text-red-500 border border-red-500/20 group-hover:bg-red-500/20 transition-colors">
+          <div className="p-1 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 group-hover:bg-amber-500/20 transition-colors">
             <Code2 size={14} />
           </div>
           <div className="flex items-center gap-1.5">
@@ -588,7 +588,7 @@ export async function invalidate${typeName}(${keyParamSig}): Promise<void> {
           <div className="flex flex-wrap items-center gap-1.5 text-[10.5px]">
             <Badge
               variant="outline"
-              className="text-[10px] font-mono uppercase bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 font-semibold"
+              className="text-[10px] font-mono uppercase bg-muted text-foreground border-border/60 font-medium"
             >
               {structure}
               {structure === "json" ? (data?.jsonRootType === "array" ? " [ ] Array" : " { } Object") : ""}

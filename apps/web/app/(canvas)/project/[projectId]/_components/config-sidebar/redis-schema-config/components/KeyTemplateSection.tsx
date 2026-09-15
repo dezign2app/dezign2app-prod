@@ -73,20 +73,30 @@ export const KeyTemplateSection: React.FC<KeyTemplateSectionProps> = React.memo(
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-card/40 p-4 shadow-sm">
       <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
-        <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-          <Key size={14} className="text-red-500" /> Keyspace & Key Template
+        <span className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <Key size={14} className="text-amber-500" /> Keyspace & Key Template
         </span>
-        <Badge variant="outline" className="text-[10px] font-mono">
-          Namespace: {namespace}
+        <Badge
+          variant="outline"
+          className="text-xs px-2.5 py-0.5 border-border/60 bg-background/60 font-normal"
+        >
+          <span className="text-muted-foreground mr-1.5">Namespace:</span>
+          <span className="font-mono font-medium text-foreground">{namespace}</span>
         </Badge>
       </div>
 
       {/* Key Template Input */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <Label className="text-xs font-semibold">Key Template (Shape with variables)</Label>
-          <span className="text-[10px] text-muted-foreground">
-            Use <code className="font-mono text-foreground">{`{variable}`}</code> for dynamic segments
+          <Label className="text-xs font-medium text-foreground">
+            Key Template (Shape with variables)
+          </Label>
+          <span className="text-xs text-muted-foreground">
+            Use{" "}
+            <code className="font-mono text-xs font-medium text-foreground bg-muted/60 px-1.5 py-0.5 rounded border border-border/40">
+              {`{variable}`}
+            </code>{" "}
+            for dynamic segments
           </span>
         </div>
         <Input
@@ -99,26 +109,29 @@ export const KeyTemplateSection: React.FC<KeyTemplateSectionProps> = React.memo(
             }
           }}
           placeholder="e.g. user:{id}:profile or session:{token}"
-          className="h-8 text-xs font-mono bg-background"
+          className="h-8 text-xs font-mono font-medium bg-background border-border/60 focus-visible:ring-primary/30"
         />
       </div>
 
       {/* Auto-Derived Key Pattern & Cluster Hash Tag */}
-      <div className="grid grid-cols-2 gap-3 p-2.5 rounded-lg bg-secondary/30 border border-border/30 text-xs">
-        <div className="flex flex-col gap-1">
-          <span className="text-[11px] font-semibold text-muted-foreground">
+      <div className="grid grid-cols-2 gap-3 p-3 rounded-lg bg-secondary/20 border border-border/40">
+        <div className="flex flex-col gap-1.5 min-w-0">
+          <span className="text-xs font-medium text-muted-foreground">
             Auto-Derived Scan Pattern
           </span>
-          <code className="text-xs font-mono font-bold text-foreground bg-background/80 px-2 py-1 rounded border border-border/40 truncate">
+          <div
+            className="flex items-center h-8 px-2.5 rounded-md bg-background/80 border border-border/60 font-mono text-xs font-medium text-foreground truncate select-all"
+            title={`SCAN Pattern: ${keyPattern}`}
+          >
             {keyPattern}
-          </code>
-          <span className="text-[10px] text-muted-foreground">
+          </div>
+          <span className="text-[11px] text-muted-foreground leading-normal">
             Used for SCAN / wildcard keyspace operations.
           </span>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <span className="text-[11px] font-semibold text-muted-foreground">
+        <div className="flex flex-col gap-1.5 min-w-0">
+          <span className="text-xs font-medium text-muted-foreground">
             Cluster Hash Tag Variable
           </span>
           {params.length > 0 ? (
@@ -130,49 +143,52 @@ export const KeyTemplateSection: React.FC<KeyTemplateSectionProps> = React.memo(
                 })
               }
             >
-              <SelectTrigger className="h-7 text-xs font-mono bg-background/80">
+              <SelectTrigger className="h-8 text-xs bg-background/80 border-border/60">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none" className="text-xs italic text-muted-foreground">
+                <SelectItem value="none" className="text-xs text-muted-foreground">
                   None (Default Hashing)
                 </SelectItem>
                 {params.map((p) => (
-                  <SelectItem key={p} value={p} className="text-xs font-mono">
-                    {`{${p}}`} (Cluster Shard Co-location)
+                  <SelectItem key={p} value={p} className="text-xs">
+                    <span className="font-mono font-medium">{`{${p}}`}</span>{" "}
+                    <span className="text-muted-foreground text-[11px] ml-1">
+                      (Cluster Shard Co-location)
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           ) : (
-            <span className="text-xs italic text-muted-foreground py-1">
+            <div className="flex items-center h-8 px-2.5 rounded-md bg-background/50 border border-border/40 text-xs italic text-muted-foreground">
               No variables in template
-            </span>
+            </div>
           )}
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-[11px] text-muted-foreground leading-normal">
             Co-locates keys with the same tag onto the same Redis shard.
           </span>
         </div>
       </div>
 
       {/* Live Key Resolver Preview */}
-      <div className="flex items-center justify-between p-2.5 rounded-lg bg-background/60 border border-border/40">
+      <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-background/70 border border-border/50">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className="text-[11px] font-semibold text-muted-foreground shrink-0">
+          <span className="text-xs font-medium text-muted-foreground shrink-0">
             Resolved Key Example:
           </span>
-          <code className="text-xs font-mono font-bold text-red-600 dark:text-red-400 truncate">
+          <code className="text-xs font-mono font-medium text-foreground bg-muted/50 border border-border/50 px-2 py-0.5 rounded truncate">
             {sampleKey}
           </code>
         </div>
         <Button
           size="sm"
-          variant="ghost"
-          className="h-6 text-[11px] gap-1 shrink-0 text-muted-foreground hover:text-foreground"
+          variant="outline"
+          className="h-7 text-xs px-2.5 gap-1.5 shrink-0 text-muted-foreground hover:text-foreground border-border/60 bg-background/50"
           onClick={handleCopyKey}
         >
           {copiedKey ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
-          {copiedKey ? "Copied" : "Copy"}
+          <span>{copiedKey ? "Copied" : "Copy"}</span>
         </Button>
       </div>
     </div>

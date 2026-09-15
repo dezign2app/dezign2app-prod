@@ -16,4 +16,5 @@ export type {
   ConditionExpr,
   SwitchCase,
   ParallelBranch,
+  PipelineStepCacheMiss,
 } from "@workspace/canvas/types";

@@ -64,20 +64,9 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
   const keyTemplate = data.keyTemplate ?? "";
   const clusterTagParam = data.clusterHashTagParam;
   const ttl: RedisDuration = data.ttl || { value: 3600, unit: "s" };
-  const strategy = data.cacheStrategy || "Cache Aside";
-  const negativeCaching = data.negativeCaching || { enabled: false, ttl: { value: 60, unit: "s" } };
-  const staleWhileRevalidate = data.staleWhileRevalidate || {
-    enabled: false,
-    refreshInterval: { value: 300, unit: "s" },
-  };
 
   // Parent Database Node (supports both standard database and redis_instance)
   const parentDb = allNodes.find((n) => n.id === data.databaseId);
-
-  // Available Table Nodes on Canvas for Source of Truth
-  const tableNodes = allNodes.filter(
-    (n) => n.type === "entity" && n.id !== nodeId && n.data?.dbType !== "redis",
-  );
 
   const updateData = (changes: Partial<BackendNode["data"]>) => {
     const nextData = {
@@ -135,7 +124,7 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
       {/* Header */}
       <div className="flex flex-col gap-3 border-b border-border/50 pb-5">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+          <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
             <DatabaseZap size={22} />
           </div>
           <div className="flex flex-col min-w-0 flex-1">
@@ -143,7 +132,7 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
               <h2 className="text-lg font-bold tracking-tight truncate">{localLabel}</h2>
               <Badge
                 variant="outline"
-                className="text-[10px] uppercase font-mono bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400 font-semibold"
+                className="text-[10px] uppercase font-mono bg-muted text-foreground border-border/60 font-medium"
               >
                 {structure}
               </Badge>
@@ -156,7 +145,7 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
 
         {/* Schema Label Renaming */}
         <div className="flex flex-col gap-1 pt-1">
-          <Label className="text-xs font-semibold">Schema Identifier / Label</Label>
+          <Label className="text-xs font-medium">Schema Identifier / Label</Label>
           <Input
             value={localLabel}
             onChange={(e) => setLocalLabel(e.target.value)}
@@ -280,17 +269,12 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
         )}
       </div>
 
-      {/* 4. Caching Architecture & Lifecycle */}
+      {/* 4. TTL & Expiration Policies */}
       <CachingArchitectureSection
         structure={structure}
         ttl={ttl}
-        strategy={strategy}
-        negativeCaching={negativeCaching}
-        staleWhileRevalidate={staleWhileRevalidate}
-        sourceOfTruth={data.sourceOfTruth}
         serialization={data.serialization}
         compression={data.compression}
-        tableNodes={tableNodes}
         updateData={updateData}
       />
 
@@ -303,7 +287,6 @@ export const RedisSchemaConfig: React.FC<RedisSchemaConfigProps> = ({
         keyTemplate={keyTemplate}
         clusterTagParam={clusterTagParam}
         ttl={ttl}
-        strategy={strategy}
         hashFields={hashFields}
       />
 

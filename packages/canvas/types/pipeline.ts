@@ -3,6 +3,7 @@ import type {
   PipelineStepType,
   PipelineStepInputBinding,
   PipelineStepInputSource,
+  PipelineStepCacheMiss,
   ConditionOperator,
   ConditionClause,
   ConditionExpr,
@@ -29,6 +30,7 @@ export type {
   ConditionExpr,
   SwitchCase,
   ParallelBranch,
+  PipelineStepCacheMiss,
 };
 
 

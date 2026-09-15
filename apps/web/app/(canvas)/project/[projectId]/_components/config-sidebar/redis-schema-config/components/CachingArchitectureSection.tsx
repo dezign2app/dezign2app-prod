@@ -1,17 +1,14 @@
 import React from "react";
-import { Clock, ShieldAlert, RotateCw } from "lucide-react";
+import { Clock } from "lucide-react";
 import {
-  BackendNode,
   RedisDataStructure,
   RedisDuration,
-  isCacheStrategy,
   isRedisDurationUnit,
   isSerializationFormat,
   isCompressionFormat,
 } from "@/types/canvas";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
-import { Switch } from "@workspace/ui/components/switch";
 import {
   Select,
   SelectContent,
@@ -19,47 +16,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import {
-  Combobox,
-  ComboboxInput,
-  ComboboxContent,
-  ComboboxList,
-  ComboboxItem,
-  ComboboxEmpty,
-} from "@workspace/ui/components/combobox";
 import { cn } from "@workspace/ui/lib/utils";
 import { TTL_PRESETS } from "../constants";
 
 interface CachingArchitectureSectionProps {
   structure: RedisDataStructure;
   ttl: RedisDuration;
-  strategy: string;
-  negativeCaching: NonNullable<BackendNode["data"]["negativeCaching"]>;
-  staleWhileRevalidate: NonNullable<BackendNode["data"]["staleWhileRevalidate"]>;
-  sourceOfTruth?: BackendNode["data"]["sourceOfTruth"];
   serialization?: string;
   compression?: string;
-  tableNodes: BackendNode[];
-  updateData: (changes: Partial<BackendNode["data"]>) => void;
+  updateData: (changes: Record<string, any>) => void;
 }
 
 export const CachingArchitectureSection: React.FC<CachingArchitectureSectionProps> = ({
   structure,
   ttl,
-  strategy,
-  negativeCaching,
-  staleWhileRevalidate,
-  sourceOfTruth,
   serialization,
   compression,
-  tableNodes,
   updateData,
 }) => {
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-card/40 p-4 shadow-sm">
       <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
         <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-          <Clock size={14} className="text-red-500" /> Caching Policies & Lifecycle
+          <Clock size={14} className="text-amber-500" /> TTL & Expiration Policies
         </span>
       </div>
 
@@ -118,7 +97,7 @@ export const CachingArchitectureSection: React.FC<CachingArchitectureSectionProp
                 className={cn(
                   "px-2 py-0.5 rounded text-[10px] font-mono transition-all border",
                   ttl.value === p.duration.value && ttl.unit === p.duration.unit
-                    ? "bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/50 font-bold"
+                    ? "bg-primary/20 text-primary border-primary/50 font-bold"
                     : "bg-background/60 text-muted-foreground border-border/40 hover:bg-secondary hover:text-foreground",
                 )}
               >
@@ -127,159 +106,6 @@ export const CachingArchitectureSection: React.FC<CachingArchitectureSectionProp
             ))}
           </div>
         </div>
-      </div>
-
-      {/* Cache Strategy */}
-      <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/30">
-        <div className="flex flex-col">
-          <Label className="text-xs font-semibold">Cache Strategy</Label>
-          <span className="text-[10px] text-muted-foreground">Access & invalidation pattern</span>
-        </div>
-        <Select
-          value={strategy}
-          onValueChange={(val) => {
-            if (isCacheStrategy(val)) {
-              updateData({ cacheStrategy: val });
-            }
-          }}
-        >
-          <SelectTrigger className="w-[180px] h-8 text-xs font-semibold bg-background">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Cache Aside" className="text-xs">Cache Aside (Lazy Load)</SelectItem>
-            <SelectItem value="Read Through" className="text-xs">Read Through</SelectItem>
-            <SelectItem value="Write Through" className="text-xs">Write Through</SelectItem>
-            <SelectItem value="Write Behind" className="text-xs">Write Behind (Async)</SelectItem>
-            <SelectItem value="Refresh Ahead" className="text-xs">Refresh Ahead</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Negative Caching Toggle & Shorter TTL */}
-      <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 border border-border/40">
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
-            <ShieldAlert size={14} className="text-amber-500" />
-            <span>Negative Caching (Cache 404 / Missing Records)</span>
-          </div>
-          <span className="text-[10px] text-muted-foreground">
-            Stores a sentinel value for null lookups to prevent cache penetration & database stampedes.
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          {negativeCaching.enabled && (
-            <div className="flex items-center gap-1">
-              <Input
-                type="number"
-                min={1}
-                value={negativeCaching.ttl?.value || 60}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value);
-                  updateData({
-                    negativeCaching: {
-                      enabled: true,
-                      ttl: { value: isNaN(val) ? 60 : val, unit: "s" },
-                    },
-                  });
-                }}
-                className="h-6 w-16 text-[11px] font-mono text-right bg-background"
-              />
-              <span className="text-[10px] text-muted-foreground font-mono">s</span>
-            </div>
-          )}
-          <Switch
-            checked={negativeCaching.enabled}
-            onCheckedChange={(checked) =>
-              updateData({
-                negativeCaching: {
-                  enabled: checked,
-                  ttl: negativeCaching.ttl || { value: 60, unit: "s" },
-                },
-              })
-            }
-            className="scale-90"
-          />
-        </div>
-      </div>
-
-      {/* Stale-While-Revalidate (SWR) Toggle & Refresh Interval */}
-      <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 border border-border/40">
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
-            <RotateCw size={14} className="text-emerald-500" />
-            <span>Stale-While-Revalidate (SWR Background Refresh)</span>
-          </div>
-          <span className="text-[10px] text-muted-foreground">
-            Serves stale cached data immediately while revalidating in the background.
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          {staleWhileRevalidate.enabled && (
-            <div className="flex items-center gap-1">
-              <Input
-                type="number"
-                min={1}
-                value={staleWhileRevalidate.refreshInterval?.value || 300}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value);
-                  updateData({
-                    staleWhileRevalidate: {
-                      enabled: true,
-                      refreshInterval: { value: isNaN(val) ? 300 : val, unit: "s" },
-                    },
-                  });
-                }}
-                className="h-6 w-16 text-[11px] font-mono text-right bg-background"
-              />
-              <span className="text-[10px] text-muted-foreground font-mono">s</span>
-            </div>
-          )}
-          <Switch
-            checked={staleWhileRevalidate.enabled}
-            onCheckedChange={(checked) =>
-              updateData({
-                staleWhileRevalidate: {
-                  enabled: checked,
-                  refreshInterval: staleWhileRevalidate.refreshInterval || { value: 300, unit: "s" },
-                },
-              })
-            }
-            className="scale-90"
-          />
-        </div>
-      </div>
-
-      {/* Source of Truth Table Linkage */}
-      <div className="flex flex-col gap-1.5 pt-2 border-t border-border/30">
-        <Label className="text-xs font-semibold">Source of Truth (Underlying Database Entity)</Label>
-        <Combobox
-          value={sourceOfTruth?.tableName || ""}
-          onValueChange={(val) => {
-            const matchedNode = tableNodes.find((t) => t.data?.label === val);
-            updateData({
-              sourceOfTruth: {
-                tableNodeId: matchedNode?.id,
-                tableName: val || undefined,
-              },
-            });
-          }}
-        >
-          <ComboboxInput
-            placeholder="e.g. users or products"
-            className="text-xs w-full bg-background"
-          />
-          <ComboboxContent>
-            <ComboboxList>
-              <ComboboxEmpty>No relational tables found on canvas.</ComboboxEmpty>
-              {tableNodes.map((t) => (
-                <ComboboxItem key={t.id} value={t.data?.label || "Table"}>
-                  {t.data?.label || "Table"} ({t.data?.dbEngine || "sqlite"})
-                </ComboboxItem>
-              ))}
-            </ComboboxList>
-          </ComboboxContent>
-        </Combobox>
       </div>
 
       {/* Conditional Serialization & Compression (only for string, hash, list, set, zset) */}

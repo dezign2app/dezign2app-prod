@@ -12,6 +12,7 @@ export * from "./BindingSourceEditor";
 export * from "./TransformerStepSection";
 export * from "./DbOperationStepSection";
 export * from "./RedisOperationStepSection";
+export * from "./RedisCacheMissSection";
 export * from "./KafkaPublishStepSection";
 export * from "./ServiceCallStepSection";
 export * from "./ExternalCallStepSection";

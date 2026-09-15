@@ -20,8 +20,9 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { Zap, Database, Code2, Settings, Sparkles, Layers } from "lucide-react";
-import { PipelineStepDraft, ExpectedArg } from "./types";
+import { PipelineStepDraft, ExpectedArg, AvailableSource } from "./types";
 import { ensureRedisCacheConnection } from "./utils";
+import { RedisCacheMissSection } from "./RedisCacheMissSection";
 
 export type { DirectRedisCommand };
 export { DIRECT_REDIS_COMMANDS };
@@ -31,6 +32,7 @@ export interface RedisOperationStepSectionProps {
   allNodes: BackendNode[];
   allEdges: BackendEdge[];
   expectedArgs?: ExpectedArg[];
+  availableSources?: AvailableSource[];
   selectedDbId?: string;
   serviceNodeId?: string;
   endpointId?: string;
@@ -47,6 +49,7 @@ export const RedisOperationStepSection = ({
   allNodes,
   allEdges,
   expectedArgs,
+  availableSources,
   selectedDbId = "all",
   serviceNodeId,
   endpointId,
@@ -287,15 +290,15 @@ export const RedisOperationStepSection = ({
   };
 
   return (
-    <div className="flex flex-col gap-3 p-2.5 rounded-lg border border-red-500/25 bg-red-500/[0.04]">
+    <div className="flex flex-col gap-3 p-2.5 rounded-lg border border-border/60 bg-muted/20">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-red-400">
-          <Zap size={13} />
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground/90">
+          <Zap size={13} className="text-amber-500" />
           <span>Redis Cache & Key-Value Operation</span>
         </div>
         {(selectedSchemaOp || selectedDirectCommand) && (
-          <span className="text-[10px] font-mono text-red-300 bg-red-500/15 border border-red-500/25 px-1.5 py-0.2 rounded font-medium">
+          <span className="text-[10px] font-mono text-foreground/80 bg-muted/60 border border-border/60 px-1.5 py-0.2 rounded font-medium">
             {selectedSchemaOp?.name || selectedDirectCommand?.name}
           </span>
         )}
@@ -316,13 +319,13 @@ export const RedisOperationStepSection = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all" className="text-xs">
-                🔴 All Redis Instances (Default)
+                ⚡ All Redis Instances (Default)
               </SelectItem>
               {redisInstances
                 .filter((inst) => Boolean(inst && inst.id && inst.id.trim()))
                 .map((inst) => (
                   <SelectItem key={inst.id} value={inst.id} className="text-xs font-mono">
-                    🔴 {inst.data?.label || "Redis Instance"} ({inst.data?.host || "localhost"}:{inst.data?.port || 6379})
+                    ⚡ {inst.data?.label || "Redis Instance"} ({inst.data?.host || "localhost"}:{inst.data?.port || 6379})
                   </SelectItem>
                 ))}
             </SelectContent>
@@ -378,7 +381,7 @@ export const RedisOperationStepSection = ({
                   .filter((cmd) => Boolean(cmd && cmd.id && cmd.id.trim()))
                   .map((cmd) => (
                     <SelectItem key={cmd.id} value={cmd.id} className="text-xs font-mono">
-                      <span className="font-semibold text-red-300">{cmd.name}</span>
+                      <span className="font-semibold text-foreground">{cmd.name}</span>
                       <span className="text-[9px] text-muted-foreground ml-1.5">
                         — {cmd.description}
                       </span>
@@ -389,7 +392,7 @@ export const RedisOperationStepSection = ({
                   .filter((op) => Boolean(op && op.name && op.name.trim()))
                   .map((op) => (
                     <SelectItem key={op.id} value={op.name} className="text-xs font-mono">
-                      <span className="font-semibold text-red-300">{op.name}</span>
+                      <span className="font-semibold text-foreground">{op.name}</span>
                       <span className="text-[9px] text-muted-foreground ml-1.5 uppercase">
                         ({op.kind})
                       </span>
@@ -403,7 +406,7 @@ export const RedisOperationStepSection = ({
 
       {/* Expected arguments preview & quick mapping button */}
       {expectedArgs && expectedArgs.length > 0 && (
-        <div className="flex flex-col gap-1.5 pt-1.5 border-t border-red-500/15">
+        <div className="flex flex-col gap-1.5 pt-1.5 border-t border-border/40">
           <div className="flex items-center justify-between flex-wrap gap-1">
             <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
               <span>Expected args:</span>
@@ -426,7 +429,7 @@ export const RedisOperationStepSection = ({
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/30 transition-colors"
+                className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded bg-secondary/80 text-secondary-foreground hover:bg-secondary border border-border/60 transition-colors"
                 onClick={onAutoMapArguments}
                 title="Smart map missing arguments from route params, query, request body, and prior steps"
               >
@@ -441,8 +444,17 @@ export const RedisOperationStepSection = ({
       {/* Argument Bindings */}
       {children}
 
+      {/* Dedicated Cache Miss Handling */}
+      <RedisCacheMissSection
+        step={step}
+        allNodes={allNodes}
+        allEdges={allEdges}
+        availableSources={availableSources}
+        onChange={onChange}
+      />
+
       {/* Advanced function settings toggle */}
-      <div className="flex flex-col gap-1.5 pt-1 border-t border-red-500/15">
+      <div className="flex flex-col gap-1.5 pt-1 border-t border-border/40">
         <button
           type="button"
           className="flex items-center gap-1 text-[9px] text-muted-foreground/60 hover:text-muted-foreground transition-colors self-start"
