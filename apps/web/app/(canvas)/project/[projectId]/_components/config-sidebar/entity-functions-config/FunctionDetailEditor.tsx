@@ -1,6 +1,6 @@
 import React from "react";
 import { ChevronLeft, Zap, Check, Trash } from "lucide-react";
-import { DbOperationFunction } from "@workspace/canvas/types";
+import { DbOperationFunction, CanvasEntityColumn } from "@workspace/canvas/types";
 import { BackendNode } from "@/types/canvas";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
@@ -23,6 +23,7 @@ import { OperationTestStudio } from "./OperationTestStudio";
 interface FunctionDetailEditorProps {
   selectedOp: DbOperationFunction;
   label: string;
+  columns?: CanvasEntityColumn[];
   pascalLabel: string;
   availableTableNodes: { id: string; label: string }[];
   parentDb?: BackendNode;
@@ -36,6 +37,7 @@ interface FunctionDetailEditorProps {
 export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = ({
   selectedOp,
   label,
+  columns,
   pascalLabel,
   availableTableNodes,
   parentDb,
@@ -165,6 +167,7 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = ({
       <OperationTestStudio
         selectedOp={selectedOp}
         label={label}
+        columns={columns}
         parentDb={parentDb}
         updateSelectedOp={updateSelectedOp}
       />

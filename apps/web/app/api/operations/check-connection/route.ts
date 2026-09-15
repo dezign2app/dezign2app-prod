@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import net from "net";
 import fs from "fs";
 import path from "path";
+import { checkSqliteConnection } from "@/lib/utils/sqliteRunner";
 
 // Helper to resolve env variable from local .env
 function resolveEnvValue(envKey: string, projectDir?: string): string | undefined {
@@ -147,7 +148,7 @@ export async function POST(req: NextRequest) {
             os: infoObj.os || "Linux/Windows",
           },
         });
-      } catch (err: unknown) {
+      } catch (err) {
         const errorMsg = socketErrorRef.message || (err instanceof Error ? err.message : String(err));
         return NextResponse.json({
           success: false,
@@ -163,36 +164,28 @@ export async function POST(req: NextRequest) {
 
     // 2. SQLITE ENGINE
     if (engine === "sqlite") {
-      const start = performance.now();
       let dbFilePath = connection.dbFilePath || "dev.db";
       if (connection.dbFilePathEnv) {
         const envVal = resolveEnvValue(connection.dbFilePathEnv);
         if (envVal) dbFilePath = envVal;
       }
 
-      const resolvedPath = path.isAbsolute(dbFilePath)
-        ? dbFilePath
-        : path.join(process.cwd(), dbFilePath);
+      const check = checkSqliteConnection(dbFilePath);
 
-      const exists = fs.existsSync(resolvedPath);
-      let sizeBytes = 0;
-      if (exists) {
-        try {
-          const stats = fs.statSync(resolvedPath);
-          sizeBytes = stats.size;
-        } catch {}
-      }
-
-      const latencyMs = Math.round((performance.now() - start) * 10) / 10;
       return NextResponse.json({
-        success: true,
+        success: check.success,
         engine: "sqlite",
-        latencyMs,
+        latencyMs: check.latencyMs,
+        connectionUri: `sqlite:${dbFilePath}`,
+        error: check.error,
         info: {
-          path: resolvedPath,
-          exists,
-          sizeBytes,
+          path: check.path,
+          exists: check.success,
+          sizeBytes: check.sizeBytes,
+          tableCount: check.tableCount,
           readable: true,
+          status: "Connected (SQLite Database Active)",
+          version: "SQLite 3.x (Embedded Node DatabaseSync)",
         },
       });
     }

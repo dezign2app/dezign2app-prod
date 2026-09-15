@@ -52,13 +52,18 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
   const [localStatus, setLocalStatus] = useState<ConnectionStatusData | undefined>(lastStatus);
 
   const isRedis = engine === "redis";
+  const isSqlite = engine === "sqlite";
   const status = localStatus || lastStatus;
   const isConnected = status?.connected === true;
   const isFailed = status?.connected === false;
 
   const currentHost = host || "127.0.0.1";
-  const currentPort = port || (isRedis ? 6379 : 5432);
-  const uri = isRedis ? `redis://${currentHost}:${currentPort}` : `${currentHost}:${currentPort}`;
+  const currentPort = port || (isRedis ? 6379 : isSqlite ? undefined : 5432);
+  const uri = isRedis
+    ? `redis://${currentHost}:${currentPort}`
+    : isSqlite
+      ? `sqlite:${dbFilePath || "dev.db"}`
+      : `${currentHost}:${currentPort}`;
 
   const handleCheckConnection = async () => {
     setChecking(true);
@@ -128,10 +133,16 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
                   : "bg-muted text-muted-foreground border-border/50",
             )}
           >
-            <Activity size={14} className={checking ? "animate-pulse" : ""} />
+            {isSqlite ? (
+              <Database size={14} className={checking ? "animate-pulse" : ""} />
+            ) : (
+              <Activity size={14} className={checking ? "animate-pulse" : ""} />
+            )}
           </div>
           <div className="flex flex-col">
-            <span className="text-xs font-bold leading-tight">Live Connection Test</span>
+            <span className="text-xs font-bold leading-tight">
+              {isSqlite ? "Embedded DB File Test" : "Live Connection Test"}
+            </span>
             <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[200px]">
               {uri}
             </span>
@@ -146,7 +157,7 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
               className="bg-emerald-500/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold gap-1 py-0.5 px-2"
             >
               <CheckCircle2 size={11} className="text-emerald-500" />
-              Connected
+              {isSqlite ? "Ready" : "Connected"}
               {status.latencyMs !== undefined && (
                 <span className="font-mono text-[9px] opacity-80">({status.latencyMs}ms)</span>
               )}
@@ -175,19 +186,19 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
         <div className="grid grid-cols-3 gap-2 pt-1">
           <div className="p-2 rounded-lg bg-background/80 border border-border/40 flex flex-col">
             <span className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-              <Server size={10} /> Version
+              {isSqlite ? <Database size={10} /> : <Server size={10} />} {isSqlite ? "Engine" : "Version"}
             </span>
             <span className="text-xs font-mono font-semibold truncate text-foreground mt-0.5">
-              {String(status.serverInfo.version || status.serverInfo.rawVersion || "7.x")}
+              {String(status.serverInfo.version || status.serverInfo.rawVersion || (isSqlite ? "SQLite 3" : "7.x"))}
             </span>
           </div>
 
           <div className="p-2 rounded-lg bg-background/80 border border-border/40 flex flex-col">
             <span className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-              <Cpu size={10} /> Memory
+              <Cpu size={10} /> {isSqlite ? "File Status" : "Memory"}
             </span>
             <span className="text-xs font-mono font-semibold truncate text-foreground mt-0.5">
-              {String(status.serverInfo.usedMemory || "N/A")}
+              {String(status.serverInfo.status || status.serverInfo.usedMemory || (isSqlite ? "Embedded" : "N/A"))}
             </span>
           </div>
 
@@ -208,15 +219,21 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
           <div className="flex items-start gap-1.5">
             <AlertCircle size={13} className="shrink-0 mt-0.5" />
             <div className="flex flex-col gap-0.5 leading-relaxed">
-              <span className="font-semibold text-[11px]">Cannot reach server</span>
+              <span className="font-semibold text-[11px]">
+                {isSqlite ? "Cannot access database file" : "Cannot reach server"}
+              </span>
               <span className="text-[10px] opacity-90">{status?.error}</span>
             </div>
           </div>
-          {isRedis && (
+          {isRedis ? (
             <div className="mt-1 pt-1 border-t border-destructive/20 text-[10px] text-muted-foreground font-mono">
               💡 Tip: Run <code className="text-foreground bg-muted/60 px-1 py-0.5 rounded">redis-server</code> in your terminal or start your Docker container.
             </div>
-          )}
+          ) : isSqlite ? (
+            <div className="mt-1 pt-1 border-t border-destructive/20 text-[10px] text-muted-foreground font-mono">
+              💡 Tip: SQLite database file is initialized automatically on first application write, or verify the file path.
+            </div>
+          ) : null}
         </div>
       )}
 

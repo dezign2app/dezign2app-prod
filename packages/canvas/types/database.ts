@@ -155,6 +155,7 @@ export interface CanvasDatabaseNodeData {
   provider?: string;
   dbConnectionType?: "env_var" | "connection_string";
   connectionStringEnv?: string;
+  dbFilePath?: string;
   dbFilePathEnv?: string;
   hostEnv?: string;
   portEnv?: string;

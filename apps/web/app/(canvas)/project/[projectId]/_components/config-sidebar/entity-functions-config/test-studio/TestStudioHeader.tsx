@@ -1,5 +1,5 @@
 import React from "react";
-import { Terminal, Server, Activity, Layers } from "lucide-react";
+import { Terminal, Server, Database, Activity, Layers } from "lucide-react";
 import { Badge } from "@workspace/ui/components/badge";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -25,6 +25,8 @@ export const TestStudioHeader: React.FC<TestStudioHeaderProps> = ({
   onPingConnection,
   onSetTestMode,
 }) => {
+  const isSqlite = parentDb?.data?.dbEngine === "sqlite" || connUri.startsWith("sqlite:");
+
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/50">
       <div className="flex items-center gap-2.5">
@@ -49,15 +51,25 @@ export const TestStudioHeader: React.FC<TestStudioHeaderProps> = ({
             >
               {testMode === "live"
                 ? isParentConnected
-                  ? "Live Server"
+                  ? isSqlite
+                    ? "Embedded DB (Ready)"
+                    : "Live Server"
                   : isParentFailed
-                    ? "Live Server (Offline)"
-                    : "Live Server (Untested)"
+                    ? isSqlite
+                      ? "Embedded DB (Offline)"
+                      : "Live Server (Offline)"
+                    : isSqlite
+                      ? "Embedded DB"
+                      : "Live Server (Untested)"
                 : "Sandbox"}
             </Badge>
           </div>
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono">
-            <Server size={11} className="shrink-0" />
+            {isSqlite ? (
+              <Database size={11} className="shrink-0 text-amber-500" />
+            ) : (
+              <Server size={11} className="shrink-0" />
+            )}
             <span>{connUri}</span>
             {parentDb?.data?.lastConnectionStatus?.latencyMs !== undefined &&
               parentDb.data.lastConnectionStatus.connected && (
@@ -97,8 +109,12 @@ export const TestStudioHeader: React.FC<TestStudioHeaderProps> = ({
               : "text-muted-foreground hover:text-foreground",
           )}
         >
-          <Activity size={12} className={testMode === "live" ? "text-emerald-500" : ""} />
-          Live Server
+          {isSqlite ? (
+            <Database size={12} className={testMode === "live" ? "text-emerald-500" : ""} />
+          ) : (
+            <Activity size={12} className={testMode === "live" ? "text-emerald-500" : ""} />
+          )}
+          {isSqlite ? "Live DB" : "Live Server"}
         </button>
         <button
           type="button"
