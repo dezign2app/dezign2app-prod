@@ -257,6 +257,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
         <FunctionDetailEditor
           selectedOp={selectedOp}
           label={label}
+          columns={columns}
           pascalLabel={pascalLabel}
           availableTableNodes={availableTableNodes}
           parentDb={parentDb}

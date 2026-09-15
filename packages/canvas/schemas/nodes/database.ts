@@ -19,6 +19,7 @@ export const databaseDataSchema = baseNodeDataSchema.extend({
   provider: z.string().optional(),
   dbConnectionType: z.enum(["env_var", "connection_string"]).optional(),
   connectionStringEnv: z.string().optional(),
+  dbFilePath: z.string().optional(),
   dbFilePathEnv: z.string().optional(),
   hostEnv: z.string().optional(),
   portEnv: z.string().optional(),

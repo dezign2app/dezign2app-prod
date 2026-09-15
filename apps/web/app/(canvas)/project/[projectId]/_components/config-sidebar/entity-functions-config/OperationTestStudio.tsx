@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { DbOperationFunction, DbOperationTestCase } from "@workspace/canvas/types";
+import {
+  DbOperationFunction,
+  DbOperationTestCase,
+  CanvasEntityColumn,
+} from "@workspace/canvas/types";
 import { BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { sanitizeForConvex } from "@/lib/utils/convexSanitizer";
@@ -16,6 +20,7 @@ import {
 export interface OperationTestStudioProps {
   selectedOp: DbOperationFunction;
   label: string;
+  columns?: CanvasEntityColumn[];
   parentDb?: BackendNode;
   updateSelectedOp: (changes: Partial<DbOperationFunction>) => void;
 }
@@ -23,6 +28,7 @@ export interface OperationTestStudioProps {
 export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
   selectedOp,
   label,
+  columns,
   parentDb,
   updateSelectedOp,
 }) => {
@@ -34,10 +40,17 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
     parentDb?.data?.dbEngine === "redis" ||
     selectedOp.id.startsWith("redis-");
 
-  const engine = isRedis ? "redis" : (parentDb?.data?.dbEngine as string) || "sqlite";
+  const engine = isRedis ? "redis" : parentDb?.data?.dbEngine || "sqlite";
+  const isSqlite = engine === "sqlite";
   const host = parentDb?.data?.host || "localhost";
-  const port = parentDb?.data?.port || (isRedis ? 6379 : 5432);
-  const connUri = isRedis ? `redis://${host}:${port}` : `${host}:${port}`;
+  const port: number | string = parentDb?.data?.port ?? (isRedis ? 6379 : isSqlite ? 0 : 5432);
+  const dbFilePath = parentDb?.data?.dbFilePath || "dev.db";
+  const dbFilePathEnv = parentDb?.data?.dbFilePathEnv || "DB_FILE_PATH";
+  const connUri = isRedis
+    ? `redis://${host}:${port}`
+    : isSqlite
+      ? `sqlite:${dbFilePath}`
+      : `${host}:${port}`;
   const isParentConnected = parentDb?.data?.lastConnectionStatus?.connected === true;
   const isParentFailed = parentDb?.data?.lastConnectionStatus?.connected === false;
   const connectionError = parentDb?.data?.lastConnectionStatus?.error;
@@ -199,6 +212,8 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
             host,
             port,
             connectionStringEnv: parentDb.data?.connectionStringEnv,
+            dbFilePath,
+            dbFilePathEnv,
           },
         }),
       });
@@ -251,6 +266,12 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
           connection: {
             host,
             port,
+            dbFilePath,
+            dbFilePathEnv,
+          },
+          entity: {
+            name: label,
+            columns,
           },
           operation: {
             id: selectedOp.id,

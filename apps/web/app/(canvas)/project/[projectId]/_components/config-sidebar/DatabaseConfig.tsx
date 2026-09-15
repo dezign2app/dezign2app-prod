@@ -72,6 +72,8 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
   const dbFilePathEnv = data.dbFilePathEnv || DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv;
 
   const isRedis = dbNode.type === "redis_instance" || engine === "redis";
+  const isSqlite = engine === "sqlite";
+  const dbFilePath = data.dbFilePath || "dev.db";
 
   // Check for other Redis instances on the canvas to identify port conflicts
   const allRedisInstances = nodes.filter(
@@ -365,66 +367,100 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
         </div>
       )}
 
-      {/* Network & Host / Port Configuration */}
+      {/* Network & Host / Port Configuration (or Embedded File Configuration for SQLite) */}
       <div className="space-y-4 pt-2 border-t border-border/40">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <Radio size={14} className={isRedis ? "text-red-500" : "text-amber-500"} />
-            Network & Connection (Host & Port)
+            {isSqlite ? (
+              <Database size={14} className="text-amber-500" />
+            ) : (
+              <Radio size={14} className={isRedis ? "text-red-500" : "text-amber-500"} />
+            )}
+            {isSqlite ? "Embedded Storage (File Database)" : "Network & Connection (Host & Port)"}
           </h3>
-          {isRedis && (
+          {isRedis ? (
             <Badge
               variant="outline"
               className="text-[10px] font-mono px-1.5 py-0 bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 font-semibold"
             >
               :{currentPort}
             </Badge>
-          )}
+          ) : isSqlite ? (
+            <Badge
+              variant="outline"
+              className="text-[10px] font-mono px-1.5 py-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 font-semibold"
+            >
+              Serverless (File)
+            </Badge>
+          ) : null}
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          {/* Host */}
-          <div className="col-span-2 space-y-1.5">
-            <Label className="text-xs font-semibold">Host / Hostname</Label>
-            <Input
-              value={data.host || "localhost"}
-              onChange={(e) => handleUpdateField("host", e.target.value)}
-              placeholder="localhost or 127.0.0.1"
-              className="h-8 text-xs font-mono"
-            />
-            <p className="text-[10px] text-muted-foreground">
-              {isRedis ? "Redis daemon binding host (local or remote)." : "Database host address."}
-            </p>
-          </div>
-
-          {/* Port */}
-          <div className="col-span-1 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold">Port</Label>
-              {portConflict && (
-                <span title={`Conflict with ${portConflict.data?.label || "another instance"}`}>
-                  <AlertTriangle size={12} className="text-amber-500" />
-                </span>
-              )}
+        {isSqlite ? (
+          <div className="space-y-2.5">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Database File Path</Label>
+              <Input
+                value={dbFilePath}
+                onChange={(e) => handleUpdateField("dbFilePath", e.target.value)}
+                placeholder="dev.db"
+                className="h-8 text-xs font-mono"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Local SQLite database file. No background server daemon or TCP port required.
+              </p>
             </div>
-            <Input
-              type="number"
-              value={data.port ?? (isRedis ? "6379" : "5432")}
-              onChange={(e) => {
-                const val = e.target.value ? e.target.value : undefined;
-                handleUpdateField("port", val);
-              }}
-              placeholder={isRedis ? "6379" : "5432"}
-              className={cn(
-                "h-8 text-xs font-mono",
-                portConflict && "border-amber-500/70 focus-visible:ring-amber-500/50"
-              )}
-            />
-            <p className="text-[10px] text-muted-foreground">
-              {isRedis ? "Default: 6379" : "Port"}
-            </p>
+            <div className="p-2.5 rounded-lg bg-secondary/30 border border-border/40 flex items-center justify-between text-xs font-mono">
+              <span className="text-muted-foreground text-[10px] uppercase font-sans font-bold">URI:</span>
+              <code className="text-amber-600 dark:text-amber-400 text-xs font-bold truncate">
+                sqlite:{dbFilePath}
+              </code>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            {/* Host */}
+            <div className="col-span-2 space-y-1.5">
+              <Label className="text-xs font-semibold">Host / Hostname</Label>
+              <Input
+                value={data.host || "localhost"}
+                onChange={(e) => handleUpdateField("host", e.target.value)}
+                placeholder="localhost or 127.0.0.1"
+                className="h-8 text-xs font-mono"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                {isRedis ? "Redis daemon binding host (local or remote)." : "Database host address."}
+              </p>
+            </div>
+
+            {/* Port */}
+            <div className="col-span-1 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">Port</Label>
+                {portConflict && (
+                  <span title={`Conflict with ${portConflict.data?.label || "another instance"}`}>
+                    <AlertTriangle size={12} className="text-amber-500" />
+                  </span>
+                )}
+              </div>
+              <Input
+                type="number"
+                value={data.port ?? (isRedis ? "6379" : "5432")}
+                onChange={(e) => {
+                  const val = e.target.value ? e.target.value : undefined;
+                  handleUpdateField("port", val);
+                }}
+                placeholder={isRedis ? "6379" : "5432"}
+                className={cn(
+                  "h-8 text-xs font-mono",
+                  portConflict && "border-amber-500/70 focus-visible:ring-amber-500/50"
+                )}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                {isRedis ? "Default: 6379" : "Port"}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Port Conflict Alert */}
         {portConflict && (
@@ -453,6 +489,7 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
           host={currentHost}
           port={currentPort}
           connectionStringEnv={connStringEnv}
+          dbFilePath={dbFilePath}
           dbFilePathEnv={dbFilePathEnv}
           lastStatus={data.lastConnectionStatus}
           onStatusUpdate={(status) => handleUpdateField("lastConnectionStatus", status)}

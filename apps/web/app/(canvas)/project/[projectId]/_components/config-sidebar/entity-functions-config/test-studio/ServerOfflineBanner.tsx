@@ -1,5 +1,5 @@
 import React from "react";
-import { ServerOff, Layers, RefreshCw, AlertCircle, Terminal } from "lucide-react";
+import { ServerOff, Layers, RefreshCw, AlertCircle, Terminal, Database } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 
@@ -25,6 +25,7 @@ export const ServerOfflineBanner: React.FC<ServerOfflineBannerProps> = ({
   onSwitchToSandbox,
 }) => {
   const isRedis = engine === "redis";
+  const isSqlite = engine === "sqlite" || connUri.startsWith("sqlite:");
 
   return (
     <div className="rounded-xl border border-destructive/30 bg-destructive/10 dark:bg-destructive/15 p-3.5 shadow-sm space-y-3 transition-all animate-in fade-in-50 duration-200">
@@ -32,12 +33,12 @@ export const ServerOfflineBanner: React.FC<ServerOfflineBannerProps> = ({
       <div className="flex items-start justify-between gap-2.5">
         <div className="flex items-start gap-2.5 min-w-0">
           <div className="p-2 rounded-lg bg-destructive/20 text-destructive border border-destructive/30 shrink-0 mt-0.5">
-            <ServerOff size={16} />
+            {isSqlite ? <Database size={16} /> : <ServerOff size={16} />}
           </div>
           <div className="flex flex-col gap-0.5 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold text-destructive">
-                Live Server Inactive / Not Found
+                {isSqlite ? "SQLite Database File Inaccessible" : "Live Server Inactive / Not Found"}
               </span>
               <Badge
                 variant="outline"
@@ -52,7 +53,7 @@ export const ServerOfflineBanner: React.FC<ServerOfflineBannerProps> = ({
               <code className="font-mono font-semibold text-foreground px-1 py-0.5 rounded bg-muted/60 text-[10px]">
                 {connUri}
               </code>
-              . The live {engine.toUpperCase()} server is offline or unreachable.
+              . {isSqlite ? "The SQLite database file could not be verified." : `The live ${engine.toUpperCase()} server is offline or unreachable.`}
             </p>
           </div>
         </div>
@@ -73,6 +74,10 @@ export const ServerOfflineBanner: React.FC<ServerOfflineBannerProps> = ({
           {isRedis ? (
             <span>
               Start Redis with <code className="text-foreground font-mono bg-muted/50 px-1 py-0.5 rounded">redis-server</code> or Docker.
+            </span>
+          ) : isSqlite ? (
+            <span>
+              SQLite is an embedded database. Verify your file path in DB settings or use <strong className="text-foreground">Simulation Sandbox</strong>.
             </span>
           ) : (
             <span>
