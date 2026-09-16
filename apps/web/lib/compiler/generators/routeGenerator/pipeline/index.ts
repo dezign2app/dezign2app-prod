@@ -1,4 +1,5 @@
-import { PipelineStep } from "@workspace/canvas/types";
+import { PipelineStep, ReusableFunction } from "@workspace/canvas/types";
+import { BackendNode } from "@/types/canvas";
 import { PipelineRenderContext } from "./types";
 import {
   renderTransformStep,
@@ -33,6 +34,12 @@ export function renderPipelineStep(
   ctx: PipelineRenderContext,
 ): string[] {
   if (step.enabled === false) return [];
+  if (!ctx.narrowedOutputs) {
+    ctx.narrowedOutputs = new Set();
+  }
+  if (!ctx.stepOutputMeta) {
+    ctx.stepOutputMeta = new Map();
+  }
 
   let rawLines: string[] = [];
   const { type } = step;
@@ -121,10 +128,19 @@ export function renderPipelineNested(
 export function renderPipeline(
   steps: PipelineStep[],
   bodyVar = "body",
+  options?: {
+    reusableFunctions?: ReusableFunction[];
+    allNodes?: BackendNode[];
+    stepOutputMeta?: Map<string, { isArray: boolean }>;
+  },
 ): string[] {
   const ctx: PipelineRenderContext = {
     priorOutputs: new Map(),
     bodyVar,
+    narrowedOutputs: new Set(),
+    stepOutputMeta: options?.stepOutputMeta || new Map(),
+    reusableFunctions: options?.reusableFunctions,
+    allNodes: options?.allNodes,
   };
 
   const allLines: string[] = [];

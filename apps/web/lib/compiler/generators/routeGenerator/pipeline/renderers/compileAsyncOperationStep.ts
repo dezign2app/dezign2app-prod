@@ -98,6 +98,60 @@ export function renderAsyncOperationStep(
     rawLines.push(`${declKeyword} ${outputVariable}${typeAnnotation} = ${callExpr};`);
   }
 
+  if (outputVariable) {
+    const sig = functionRef.signature ?? "";
+    const sigHasArrayReturn =
+      /:\s*(?:Promise<)?\s*[\w<>]+\[\]/i.test(sig) ||
+      /=>\s*(?:Promise<)?\s*[\w<>]+\[\]/i.test(sig);
+
+    // 1. Look up in ctx.reusableFunctions
+    const matchedFn = ctx.reusableFunctions?.find(
+      (f) =>
+        f.name.toLowerCase() === fnName.toLowerCase() ||
+        f.name.toLowerCase() === (functionRef.name || "").toLowerCase(),
+    );
+    const fnSaysArray = matchedFn?.returnIsArray === true;
+
+    // 2. Check if the target node schema has jsonRootType === "array"
+    const targetNodeId =
+      step.tableNodeId ||
+      (step as { redisNodeId?: string }).redisNodeId ||
+      (step as { databaseId?: string }).databaseId;
+    const targetNode = ctx.allNodes?.find(
+      (n) =>
+        (targetNodeId && n.id === targetNodeId) ||
+        (Boolean(n.data?.label) &&
+          fnName.toLowerCase().includes(String(n.data?.label).toLowerCase())),
+    );
+    const schemaIsArray =
+      targetNode?.data?.jsonRootType === "array" &&
+      (fnName.startsWith("get") ||
+        fnName.startsWith("find") ||
+        fnName.startsWith("list"));
+
+    // 3. Name heuristics
+    const fnNameIsArray =
+      fnName.toLowerCase().startsWith("findall") ||
+      fnName.toLowerCase().startsWith("findrecent") ||
+      fnName.toLowerCase().startsWith("getrecent") ||
+      fnName.toLowerCase().includes("items") ||
+      fnName.toLowerCase().endsWith("list");
+
+    const isArray =
+      step.functionRef?.returnIsArray === true ||
+      sigHasArrayReturn ||
+      fnSaysArray ||
+      schemaIsArray ||
+      fnNameIsArray;
+
+    if (isArray) {
+      if (step.id) {
+        ctx.stepOutputMeta?.set(step.id, { isArray: true });
+      }
+      ctx.stepOutputMeta?.set(outputVariable, { isArray: true });
+    }
+  }
+
   // Cache Miss handling for Redis operations
   if (hasCacheMiss) {
     rawLines.push(`if (${outputVariable} === null || ${outputVariable} === undefined) {`);
@@ -106,6 +160,8 @@ export function renderAsyncOperationStep(
       const childCtx: PipelineRenderContext = {
         ...ctx,
         priorOutputs: new Map(ctx.priorOutputs),
+        narrowedOutputs: new Set(ctx.narrowedOutputs),
+        stepOutputMeta: ctx.stepOutputMeta ? new Map(ctx.stepOutputMeta) : new Map(),
       };
       if (outputVariable) {
         childCtx.priorOutputs.set(step.id, outputVariable);
@@ -129,78 +185,80 @@ export function renderAsyncOperationStep(
       } = step.cacheMiss;
 
       if (action === "fallback_db") {
-      if (dbFnRef?.name) {
-        const dbFn = toVarName(dbFnRef.name);
-        let dbArgs: string;
-        if (dbBindings.length > 0) {
-          const firstDbBinding = dbBindings[0];
-          const fnLower = dbFn.toLowerCase();
-          const isById =
-            fnLower.includes("byid") ||
-            fnLower.includes("findone") ||
-            (dbBindings.length === 1 &&
-              firstDbBinding &&
-              (firstDbBinding.argName === "id" || firstDbBinding.argName === "key"));
+        if (dbFnRef?.name) {
+          const dbFn = toVarName(dbFnRef.name);
+          let dbArgs: string;
+          if (dbBindings.length > 0) {
+            const firstDbBinding = dbBindings[0];
+            const fnLower = dbFn.toLowerCase();
+            const isById =
+              fnLower.includes("byid") ||
+              fnLower.includes("findone") ||
+              (dbBindings.length === 1 &&
+                firstDbBinding &&
+                (firstDbBinding.argName === "id" || firstDbBinding.argName === "key"));
 
-          if (isById && dbBindings.length === 1 && firstDbBinding) {
-            dbArgs = resolveBinding(firstDbBinding, ctx);
+            if (isById && dbBindings.length === 1 && firstDbBinding) {
+              dbArgs = resolveBinding(firstDbBinding, ctx);
+            } else {
+              dbArgs = buildArgList(dbBindings, ctx);
+            }
           } else {
-            dbArgs = buildArgList(dbBindings, ctx);
+            dbArgs = args;
           }
-        } else {
-          dbArgs = args;
-        }
 
-        if (dbArgs.includes("\n")) {
-          rawLines.push(`  ${outputVariable} = await ${dbFn}(`);
-          dbArgs.split("\n").forEach((l) => rawLines.push(`    ${l}`));
-          rawLines.push(`  );`);
-        } else {
-          rawLines.push(`  ${outputVariable} = await ${dbFn}(${dbArgs});`);
-        }
-      }
-      if (writeBackToCache && step.cacheMiss?.writeBackFunctionRef?.name) {
-        const writeBackFn = toVarName(step.cacheMiss.writeBackFunctionRef.name);
-
-        const childCtx: PipelineRenderContext = {
-          ...ctx,
-          priorOutputs: new Map(ctx.priorOutputs),
-        };
-        const outVar = outputVariable || "result";
-        childCtx.priorOutputs.set(step.id, outVar);
-        if (step.cacheMiss.tableNodeId) {
-          childCtx.priorOutputs.set(`db-fallback-${step.cacheMiss.tableNodeId}`, outVar);
-        }
-
-        let writeBackArgs: string;
-        const writeBackBindings = step.cacheMiss.writeBackInputBindings;
-
-        if (writeBackBindings && writeBackBindings.length > 0) {
-          const allPositional = writeBackBindings.every((b) => /^\d+$/.test(b.argName));
-          const isSingleSpread =
-            writeBackBindings.length === 1 && writeBackBindings[0]?.argName === "_spread";
-
-          if (allPositional || isSingleSpread) {
-            writeBackArgs = buildArgList(writeBackBindings, childCtx);
+          if (dbArgs.includes("\n")) {
+            rawLines.push(`  ${outputVariable} = await ${dbFn}(`);
+            dbArgs.split("\n").forEach((l) => rawLines.push(`    ${l}`));
+            rawLines.push(`  );`);
           } else {
-            const sorted = sortRedisBindings(
-              writeBackBindings,
-              step.cacheMiss.writeBackFunctionRef.signature,
-            );
-            writeBackArgs = sorted.map((b) => resolveBinding(b, childCtx)).join(", ");
+            rawLines.push(`  ${outputVariable} = await ${dbFn}(${dbArgs});`);
           }
-        } else {
-          const keyArg = args.split(",")[0]?.trim() || "id";
-          writeBackArgs = `${keyArg}, ${outputVariable}`;
         }
+        if (writeBackToCache && step.cacheMiss?.writeBackFunctionRef?.name) {
+          const writeBackFn = toVarName(step.cacheMiss.writeBackFunctionRef.name);
 
-        rawLines.push(`  if (${outputVariable} !== null && ${outputVariable} !== undefined) {`);
-        if (ttlSeconds && ttlSeconds > 0) {
-          rawLines.push(`    await ${writeBackFn}(${writeBackArgs}, { ttl: ${ttlSeconds} });`);
-        } else {
-          rawLines.push(`    await ${writeBackFn}(${writeBackArgs});`);
-        }
-        rawLines.push(`  }`);
+          const childCtx: PipelineRenderContext = {
+            ...ctx,
+            priorOutputs: new Map(ctx.priorOutputs),
+            narrowedOutputs: new Set(ctx.narrowedOutputs),
+            stepOutputMeta: ctx.stepOutputMeta ? new Map(ctx.stepOutputMeta) : new Map(),
+          };
+          const outVar = outputVariable || "result";
+          childCtx.priorOutputs.set(step.id, outVar);
+          if (step.cacheMiss.tableNodeId) {
+            childCtx.priorOutputs.set(`db-fallback-${step.cacheMiss.tableNodeId}`, outVar);
+          }
+
+          let writeBackArgs: string;
+          const writeBackBindings = step.cacheMiss.writeBackInputBindings;
+
+          if (writeBackBindings && writeBackBindings.length > 0) {
+            const allPositional = writeBackBindings.every((b) => /^\d+$/.test(b.argName));
+            const isSingleSpread =
+              writeBackBindings.length === 1 && writeBackBindings[0]?.argName === "_spread";
+
+            if (allPositional || isSingleSpread) {
+              writeBackArgs = buildArgList(writeBackBindings, childCtx);
+            } else {
+              const sorted = sortRedisBindings(
+                writeBackBindings,
+                step.cacheMiss.writeBackFunctionRef.signature,
+              );
+              writeBackArgs = sorted.map((b) => resolveBinding(b, childCtx)).join(", ");
+            }
+          } else {
+            const keyArg = args.split(",")[0]?.trim() || "id";
+            writeBackArgs = `${keyArg}, ${outputVariable}`;
+          }
+
+          rawLines.push(`  if (${outputVariable} !== null && ${outputVariable} !== undefined) {`);
+          if (ttlSeconds && ttlSeconds > 0) {
+            rawLines.push(`    await ${writeBackFn}(${writeBackArgs}, { ttl: ${ttlSeconds} });`);
+          } else {
+            rawLines.push(`    await ${writeBackFn}(${writeBackArgs});`);
+          }
+          rawLines.push(`  }`);
         }
       } else if (action === "early_return") {
         rawLines.push(`  return res.status(${statusCode}).json({ error: "${errorMessage}" });`);
@@ -212,17 +270,78 @@ export function renderAsyncOperationStep(
     }
 
     rawLines.push(`}`);
+
+    if (outputVariable) {
+      const action = step.cacheMiss?.action ?? "fallback_db";
+      if (action === "early_return" || action === "throw_error") {
+        ctx.narrowedOutputs?.add(outputVariable);
+      } else if (action === "fallback_db" || hasMissSteps) {
+        rawLines.push(`if (${outputVariable} === null || ${outputVariable} === undefined) {`);
+        rawLines.push(`  return res.status(404).json({ error: "Not found" });`);
+        rawLines.push(`}`);
+        ctx.narrowedOutputs?.add(outputVariable);
+      } else if (action === "fallback_value") {
+        if (
+          step.cacheMiss?.fallbackValue &&
+          step.cacheMiss.fallbackValue !== "null" &&
+          step.cacheMiss.fallbackValue !== "undefined"
+        ) {
+          ctx.narrowedOutputs?.add(outputVariable);
+        }
+      }
+    }
+  } else if (isRedisOp && outputVariable) {
+    const fnLower = fnName.toLowerCase();
+    const isRedisRead =
+      step.operationId === "get" ||
+      step.operationId === "hget" ||
+      fnLower.startsWith("get") ||
+      fnLower.includes("get");
+
+    if (isRedisRead) {
+      rawLines.push(`if (${outputVariable} === null || ${outputVariable} === undefined) {`);
+      rawLines.push(`  return res.status(404).json({ error: "Not found" });`);
+      rawLines.push(`}`);
+      ctx.narrowedOutputs?.add(outputVariable);
+    } else {
+      ctx.narrowedOutputs?.add(outputVariable);
+    }
   }
 
-  // DB reads by ID get a 404 guard
-  if (
-    type === "db_operation" &&
-    (fnName.toLowerCase().includes("byid") ||
-      fnName.toLowerCase().includes("findone"))
-  ) {
-    rawLines.push(`if (${outputVariable} === undefined || ${outputVariable} === null) {`);
-    rawLines.push(`  return res.status(404).json({ error: "Not found" });`);
-    rawLines.push(`}`);
+  // DB operations: single-record reads get a 404 guard; others (findAll, create, etc.) are non-null
+  if (type === "db_operation" && outputVariable) {
+    const fnLower = fnName.toLowerCase();
+    const isDbSingleRead =
+      (step.operationId === "findById" ||
+        step.operationId === "findOne" ||
+        step.operationId === "findByField" ||
+        step.operationId === "get" ||
+        fnLower.includes("byid") ||
+        fnLower.includes("findone") ||
+        (fnLower.startsWith("find") && !fnLower.includes("all") && !fnLower.includes("many")) ||
+        (fnLower.startsWith("get") && !fnLower.includes("all") && !fnLower.includes("many"))) &&
+      !fnLower.includes("create") &&
+      !fnLower.includes("insert") &&
+      !fnLower.includes("update") &&
+      !fnLower.includes("upsert") &&
+      !fnLower.includes("delete") &&
+      !fnLower.includes("count") &&
+      step.operationId !== "findAll" &&
+      step.operationId !== "findMany" &&
+      step.operationId !== "create" &&
+      step.operationId !== "update" &&
+      step.operationId !== "delete";
+
+    if (isDbSingleRead) {
+      rawLines.push(`if (${outputVariable} === undefined || ${outputVariable} === null) {`);
+      rawLines.push(`  return res.status(404).json({ error: "Not found" });`);
+      rawLines.push(`}`);
+      ctx.narrowedOutputs?.add(outputVariable);
+    } else {
+      ctx.narrowedOutputs?.add(outputVariable);
+    }
+  } else if (type === "service_call" && outputVariable) {
+    ctx.narrowedOutputs?.add(outputVariable);
   }
 
   return rawLines;

@@ -313,6 +313,7 @@ export interface PipelineStep {
     isGlobal?: boolean;
     inputSchema?: z.infer<typeof stepSchemaFieldSchema>[];
     returnSchema?: z.infer<typeof stepSchemaFieldSchema>[];
+    returnIsArray?: boolean;
   };
   /** Optional reference to the canvas transformer node ID */
   transformerNodeId?: string;
@@ -436,6 +437,7 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
         isGlobal: z.boolean().optional(),
         inputSchema: z.array(stepSchemaFieldSchema).optional(),
         returnSchema: z.array(stepSchemaFieldSchema).optional(),
+        returnIsArray: z.boolean().optional(),
       })
       .optional(),
     transformerNodeId: z.string().optional(),

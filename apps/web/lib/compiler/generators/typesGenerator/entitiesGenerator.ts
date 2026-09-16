@@ -24,12 +24,22 @@ export function generateEntitiesModule(
       isNotNull?: boolean;
       required?: boolean;
     }>,
+    isJsonArray = false,
   ) {
     const singularPascal = toPascalCase(toSingular(rawName));
     const pluralPascal = toPascalCase(toPlural(rawName));
+    const itemType = isJsonArray ? `${pascal}Item` : pascal;
+
+    if (isJsonArray) {
+      seenNames.add(itemType);
+    }
 
     if (!cols || cols.length === 0) {
-      code += `export interface ${pascal} {\n  id: string;\n  [key: string]: unknown;\n}\n`;
+      if (isJsonArray) {
+        code += `export interface ${itemType} {\n  id: string;\n  [key: string]: unknown;\n}\n\nexport type ${pascal} = ${itemType}[];\n`;
+      } else {
+        code += `export interface ${pascal} {\n  id: string;\n  [key: string]: unknown;\n}\n`;
+      }
     } else {
       const fieldLines = cols.map((col) => {
         const fieldName = col.name || "field";
@@ -64,13 +74,21 @@ export function generateEntitiesModule(
       });
 
       fieldLines.push("  [key: string]: unknown;");
-      code += `export interface ${pascal} {\n${fieldLines.join("\n")}\n}\n`;
+      if (isJsonArray) {
+        code += `export interface ${itemType} {\n${fieldLines.join("\n")}\n}\n\nexport type ${pascal} = ${itemType}[];\n`;
+      } else {
+        code += `export interface ${pascal} {\n${fieldLines.join("\n")}\n}\n`;
+      }
     }
 
     // Generate dual singular/plural type aliases so both "Product" and "Products" work seamlessly
     if (singularPascal && singularPascal !== pascal && !seenNames.has(singularPascal)) {
       seenNames.add(singularPascal);
       code += `export type ${singularPascal} = ${pascal};\n`;
+      if (isJsonArray && !seenNames.has(`${singularPascal}Item`)) {
+        seenNames.add(`${singularPascal}Item`);
+        code += `export type ${singularPascal}Item = ${itemType};\n`;
+      }
     }
     if (pluralPascal && pluralPascal !== pascal && !seenNames.has(pluralPascal)) {
       seenNames.add(pluralPascal);
@@ -94,8 +112,11 @@ export function generateEntitiesModule(
     if (!pascal || seenNames.has(pascal)) return;
     seenNames.add(pascal);
 
+    const isJsonArray =
+      (node.type === "redis_schema" || node.type === "redis-cache") &&
+      node.data?.jsonRootType === "array";
     const cols = node.data?.columns || [];
-    renderEntityInterface(pascal, rawName, cols);
+    renderEntityInterface(pascal, rawName, cols, isJsonArray);
   });
 
   // 2. Database nodes with embedded tables

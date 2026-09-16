@@ -63,7 +63,7 @@ export const SmartPathInput = ({
           align="start"
           side="bottom"
           sideOffset={4}
-          className="p-1 w-[var(--radix-popover-trigger-width)] min-w-[220px] max-h-56 overflow-y-auto z-[100] bg-popover border border-border rounded-md shadow-lg"
+          className="p-1 w-[var(--radix-popover-trigger-width)] min-w-[220px] max-h-56 overflow-y-auto z-[100] bg-popover border border-border rounded-md shadow-lg hide-scrollbar"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/40 mb-1">

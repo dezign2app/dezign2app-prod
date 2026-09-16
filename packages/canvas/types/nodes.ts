@@ -288,6 +288,8 @@ export interface ReusableFunction {
   targetName: string;
   /** CRUD operation kind or category */
   kind: "findAll" | "findById" | "create" | "update" | "delete" | "publish" | "consume" | "custom";
+  /** Whether the return type is an array (used for safe element navigation in response mapping) */
+  returnIsArray?: boolean;
 }
 
 /**

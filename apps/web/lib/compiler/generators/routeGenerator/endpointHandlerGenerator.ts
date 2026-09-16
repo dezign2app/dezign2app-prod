@@ -228,7 +228,15 @@ export function generateEndpointRouteHandler(
   const hasPipelineSteps = Array.isArray(pipelineSteps) && pipelineSteps.length > 0;
 
   if (hasPipelineSteps) {
-    const pipelineLines = renderPipeline(pipelineSteps, payloadVar);
+    const allReusableFunctions = [
+      ...dbFunctions,
+      ...(redisFunctions || []),
+      ...(kafkaFunctions || []),
+    ];
+    const pipelineLines = renderPipeline(pipelineSteps, payloadVar, {
+      reusableFunctions: allReusableFunctions,
+      allNodes,
+    });
     pipelineLines.forEach((line) => {
       routeHandlerCode += `    ${line}\n`;
     });

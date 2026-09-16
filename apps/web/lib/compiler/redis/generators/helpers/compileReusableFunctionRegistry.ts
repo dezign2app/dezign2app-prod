@@ -33,6 +33,7 @@ export function compileReusableFunctionRegistry(ctx: HelperContext): ReusableFun
       signature: `get${typeName}List(${keyArgsSig ? `${keyArgsSig}, ` : ""}start: number = 0, stop: number = -1): Promise<string[]>`,
       targetName: varName,
       kind: "findAll",
+      returnIsArray: true,
     });
     reusableFunctions.push({
       name: `get${typeName}Length`,
@@ -63,6 +64,7 @@ export function compileReusableFunctionRegistry(ctx: HelperContext): ReusableFun
       signature: `getRecent${typeName}Items(${keyArgsSig ? `${keyArgsSig}, ` : ""}count: number = 20): Promise<${itemType}[]>`,
       targetName: varName,
       kind: "findAll",
+      returnIsArray: true,
     });
     reusableFunctions.push({
       name: `get${typeName}Length`,
@@ -77,6 +79,7 @@ export function compileReusableFunctionRegistry(ctx: HelperContext): ReusableFun
       signature: `get${typeName}(${keyArgsSig}): Promise<${typeName} | null>`,
       targetName: varName,
       kind: "findById",
+      returnIsArray: true,
     });
     reusableFunctions.push({
       name: `set${typeName}`,

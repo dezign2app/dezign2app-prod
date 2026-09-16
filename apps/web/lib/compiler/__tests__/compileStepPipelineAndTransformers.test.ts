@@ -4,6 +4,7 @@ import { renderPipeline, collectPipelineImports } from "../generators/routeGener
 import { generateEndpointRouteHandler } from "../generators/routeGenerator/endpointHandlerGenerator";
 import { generateConsumers } from "../generators/consumerGenerator";
 import { schemaToTsInterface, schemaToZodSchema } from "../generators/schemaToTypeScript";
+import { generateResponseInterface } from "../generators/typesGenerator/responseInference";
 import { compileMonorepo } from "../compileMonorepo";
 import { BackendNode, BackendEdge, Endpoint, AnyMessagingResource } from "@workspace/canvas/types";
 
@@ -682,6 +683,210 @@ describe("Step Pipeline & Transformer Helpers", () => {
       );
       expect(content).not.toContain("key: transformData1Result.key");
     });
+
+    it("emits array element navigation [0]?.field when step output has array return type", () => {
+      const ep: Endpoint & { nodeId: string } = {
+        id: "ep-get-conversations",
+        nodeId: "service-conv",
+        name: "/get-conversations",
+        type: "GET",
+        pipelineSteps: [
+          {
+            id: "step-get-conv",
+            name: "getConversationResult",
+            type: "redis_operation",
+            enabled: true,
+            functionRef: {
+              name: "getConversation",
+              importPath: "@workspace/primary-cache",
+              signature: "getConversation(id: string): Promise<Conversation | null>",
+              returnIsArray: true,
+            },
+            inputBindings: [
+              { argName: "id", source: { kind: "req_body", field: "conversation_id" } },
+            ],
+            outputVariable: "getConversationResult",
+          },
+          {
+            id: "step-ret",
+            name: "Return Response",
+            type: "return_response",
+            enabled: true,
+            statusCode: 200,
+            inputBindings: [
+              {
+                argName: "data",
+                source: { kind: "step_output", stepId: "step-get-conv", field: "message" },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = generateEndpointRouteHandler({
+        ep,
+        index: 0,
+        serviceName: "ConversationsService",
+        pascalServiceName: "ConversationsService",
+        serviceFolderName: "conversations",
+        allNodes: [],
+        allEdges: [],
+        allEndpoints: [ep],
+        dbFunctions: [],
+        kafkaFunctions: [],
+        redisFunctions: [],
+        nodePublishedEvents: [],
+        usedFileNames: new Set(),
+      });
+
+      const content = result.file.content;
+      expect(content).toContain("return res.status(200).json(getConversationResult[0]?.message);");
+    });
+
+    it("infers string | undefined response type when step output field is mapped from redis operation", () => {
+      const ep: Endpoint = {
+        id: "ep-get-conversations",
+        name: "/get-conversations",
+        type: "GET",
+        pipelineSteps: [
+          {
+            id: "step-get-conv",
+            name: "getConversationResult",
+            type: "redis_operation",
+            enabled: true,
+            functionRef: {
+              name: "getConversation",
+              importPath: "@workspace/primary-cache",
+              signature: "getConversation(id: string): Promise<Conversation | null>",
+              returnIsArray: true,
+            },
+            inputBindings: [
+              { argName: "id", source: { kind: "req_body", field: "conversation_id" } },
+            ],
+            outputVariable: "getConversationResult",
+          },
+          {
+            id: "step-ret",
+            name: "Return Response",
+            type: "return_response",
+            enabled: true,
+            statusCode: 200,
+            inputBindings: [
+              {
+                argName: "data",
+                source: { kind: "step_output", stepId: "step-get-conv", field: "message" },
+              },
+            ],
+          },
+        ],
+      };
+
+      const nodes: BackendNode[] = [
+        {
+          id: "redis-node-1",
+          type: "redis_schema",
+          data: {
+            label: "conversation",
+            jsonRootType: "array",
+            columns: [
+              { name: "message", type: "string" },
+              { name: "sender", type: "string" },
+            ],
+          },
+          position: { x: 0, y: 0 },
+          fractionalIndex: "a0",
+        },
+      ];
+
+      const res = generateResponseInterface("ConversationsGetGetConversationsResponse", [], undefined, nodes, ep);
+      expect(res.code).toContain("export type ConversationsGetGetConversationsResponse = string | undefined;");
+    });
+
+    it("resolves array step field navigation even without returnIsArray on dynamic step functionRef", () => {
+      const ep: Endpoint & { nodeId: string } = {
+        id: "ep-conv",
+        nodeId: "svc-1",
+        name: "/get-conversations",
+        type: "GET",
+        pipelineSteps: [
+          {
+            id: "step-1",
+            name: "getConversationResult",
+            type: "redis_operation",
+            enabled: true,
+            // Notice: returnIsArray is omitted, simulating dynamic canvas state
+            functionRef: {
+              name: "getConversation",
+              importPath: "@workspace/primary-cache",
+              signature: "getConversation(id: string): Promise<Conversation | null>",
+            },
+            inputBindings: [
+              { argName: "id", source: { kind: "req_body", field: "conversation_id" } },
+            ],
+            outputVariable: "getConversationResult",
+          },
+          {
+            id: "step-2",
+            name: "Return Response",
+            type: "return_response",
+            enabled: true,
+            statusCode: 200,
+            inputBindings: [
+              {
+                argName: "data",
+                source: { kind: "step_output", stepId: "step-1", field: "id" },
+              },
+            ],
+          },
+        ],
+      };
+
+      const redisNode: BackendNode = {
+        id: "redis-node-1",
+        type: "redis_schema",
+        data: {
+          label: "conversation",
+          jsonRootType: "array",
+          columns: [
+            { name: "id", type: "string" },
+            { name: "role", type: "string" },
+            { name: "message", type: "string" },
+          ],
+        },
+        position: { x: 0, y: 0 },
+        fractionalIndex: "a0",
+      };
+
+      const result = generateEndpointRouteHandler({
+        ep,
+        index: 0,
+        serviceName: "conversations",
+        pascalServiceName: "Conversations",
+        serviceFolderName: "conversations",
+        allNodes: [redisNode],
+        allEdges: [],
+        allEndpoints: [ep],
+        dbFunctions: [],
+        kafkaFunctions: [],
+        redisFunctions: [
+          {
+            name: "getConversation",
+            importPath: "@workspace/primary-cache",
+            signature: "getConversation(id: string): Promise<Conversation | null>",
+            targetName: "conversation",
+            kind: "findById",
+            returnIsArray: true,
+          },
+        ],
+        nodePublishedEvents: [],
+        usedFileNames: new Set(),
+      });
+
+      // Must emit [0]?.id instead of invalid .id on array
+      expect(result.file.content).toContain("getConversationResult[0]?.id");
+      expect(result.file.content).not.toContain("getConversationResult.id");
+    });
   });
 });
+
 

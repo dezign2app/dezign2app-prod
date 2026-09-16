@@ -42,6 +42,7 @@ export function inferBindingType(
         if (pascalEntity) {
           entityImports.add(pascalEntity);
           const op = ((step as { operation?: string }).operation || "").toLowerCase();
+          const fnName = (step.functionRef?.name || "").toLowerCase();
           if (source.field) {
             if (source.field === "message") {
               return "string | undefined";
@@ -62,15 +63,26 @@ export function inferBindingType(
                 tsType = "boolean";
               }
               const isOptional = !col.isNotNull && !col.isPrimaryKey;
-              return isOptional ? `${tsType} | null | undefined` : tsType;
+              return isOptional ? `${tsType} | null | undefined` : `${tsType} | undefined`;
             }
             return "string | undefined";
           }
-          if (op === "find_all" || op === "query") {
+          if (op === "find_all" || op === "query" || fnName.startsWith("findall") || fnName.startsWith("list")) {
             return `${pascalEntity}[]`;
           }
           if (op === "delete") {
             return "{ success: boolean }";
+          }
+          if (
+            op === "find_unique" ||
+            op === "find_first" ||
+            op === "find_by_id" ||
+            op === "find_one" ||
+            fnName.startsWith("findone") ||
+            fnName.startsWith("findbyid") ||
+            fnName.startsWith("getbyid")
+          ) {
+            return `${pascalEntity} | null`;
           }
           return pascalEntity;
         }
@@ -91,14 +103,40 @@ export function inferBindingType(
           : nodes.find((n) => n.type === "redis_schema" || n.type === "redis-cache" || n.type === "redis_instance" || n.data?.redisDataStructure || n.data?.dbType === "redis");
         const rawName = redisNode?.data?.label || redisNode?.data?.tableName || "Item";
         const pascalName = toPascalCase(rawName);
-        const itemType = `${pascalName}Item`;
+        const isJsonArray = redisNode?.data?.jsonRootType === "array" || step.functionRef?.returnIsArray === true;
+        const itemType = isJsonArray ? `${pascalName}Item` : pascalName;
         const fnName = (step.functionRef?.name || (step as { operation?: string }).operation || step.name || "").toLowerCase();
+
+        if (source.field) {
+          if (source.field === "message") {
+            return "string | undefined";
+          }
+          if (source.field === "success") {
+            return "boolean | undefined";
+          }
+          const columns = redisNode?.data?.columns || [];
+          const hashFields = redisNode?.data?.hashConfig?.fields;
+          const matchedField =
+            columns.find((c: { name?: string }) => c.name?.toLowerCase() === source.field?.toLowerCase()) ||
+            hashFields?.find((f: { name?: string }) => f.name?.toLowerCase() === source.field?.toLowerCase());
+          if (matchedField) {
+            const fType = ((matchedField as { type?: string }).type || "string").toLowerCase();
+            if (["integer", "int", "number", "float", "double"].includes(fType)) return "number | undefined";
+            if (["boolean", "bool"].includes(fType)) return "boolean | undefined";
+            return "string | undefined";
+          }
+          return "string | undefined";
+        }
 
         if (fnName.includes("recent") || fnName.includes("all") || fnName.includes("list") || fnName.includes("range")) {
           if (itemType) entityImports.add(itemType);
           return `${itemType}[]`;
         }
         if (fnName.includes("get") || fnName.includes("pop")) {
+          if (isJsonArray && fnName.includes("get")) {
+            if (itemType) entityImports.add(itemType);
+            return `${itemType}[] | null`;
+          }
           if (itemType) entityImports.add(itemType);
           return `${itemType} | null`;
         }
@@ -109,7 +147,7 @@ export function inferBindingType(
           return "boolean";
         }
         if (itemType) entityImports.add(itemType);
-        return `${itemType} | null`;
+        return isJsonArray ? `${itemType}[] | null` : `${itemType} | null`;
       }
       if (step.type === "transform") {
         const transformerId = (step as { transformerNodeId?: string }).transformerNodeId;
