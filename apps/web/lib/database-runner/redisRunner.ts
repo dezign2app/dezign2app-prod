@@ -6,6 +6,7 @@ import {
   JsonValue,
   JsonObject,
 } from "./types";
+import Redis from "ioredis";
 
 /**
  * Plans a Redis command and CLI representation from operation details and arguments.
@@ -320,10 +321,11 @@ export async function executeLiveRedisOperation(params: {
   const start = performance.now();
   const socketErrorRef = { message: "" };
 
+  let client: Redis | null = null;
   try {
     const { default: Redis } = await import("ioredis");
 
-    const client = new Redis({
+    client = new Redis({
       host,
       port,
       connectTimeout: 2500,
@@ -346,7 +348,26 @@ export async function executeLiveRedisOperation(params: {
         ),
       ),
     ]);
+  } catch (connErr) {
+    const durationMs = Math.round((performance.now() - start) * 10) / 10;
+    const errMessage =
+      socketErrorRef.message ||
+      (connErr instanceof Error ? connErr.message : String(connErr));
 
+    return {
+      success: false,
+      serverActive: false,
+      error: `Could not connect to Redis server at ${host}:${port}: ${errMessage}`,
+      rawCommand: plan.rawCli,
+      durationMs,
+      mode: "live",
+      connection: `redis://${host}:${port}`,
+      tip: "Verify local Redis is running on this port, or switch to 'Simulation Sandbox' mode in the header to run mock test cases.",
+    };
+  }
+
+  // Server is active and connected
+  try {
     if (plan.command === "JSON.ARRAPPEND") {
       const targetKey = String(plan.args[0] ?? "");
       const rootPath = String(plan.args[1] ?? "$");
@@ -395,27 +416,46 @@ export async function executeLiveRedisOperation(params: {
 
     return {
       success: true,
+      serverActive: true,
       output: sanitized,
       durationMs,
       rawCommand: plan.rawCli,
       mode: "live",
       connection: `redis://${host}:${port}`,
     };
-  } catch (err) {
+  } catch (cmdErr) {
     const durationMs = Math.round((performance.now() - start) * 10) / 10;
+    try {
+      client?.disconnect();
+    } catch {}
+
     const errMessage =
-      socketErrorRef.message ||
-      (err instanceof Error ? err.message : String(err));
+      cmdErr instanceof Error ? cmdErr.message : String(cmdErr);
+
+    // If JSON.ARRLEN is called on a key that doesn't exist yet, array length is 0
+    if (
+      plan.command === "JSON.ARRLEN" &&
+      errMessage.toLowerCase().includes("doesn't exist")
+    ) {
+      return {
+        success: true,
+        serverActive: true,
+        output: 0,
+        durationMs,
+        rawCommand: plan.rawCli,
+        mode: "live",
+        connection: `redis://${host}:${port}`,
+      };
+    }
 
     return {
       success: false,
-      serverActive: false,
-      error: `Server not found or inactive on redis://${host}:${port}: ${errMessage}`,
+      serverActive: true,
+      error: errMessage,
       rawCommand: plan.rawCli,
       durationMs,
       mode: "live",
       connection: `redis://${host}:${port}`,
-      tip: "Verify local Redis is running on this port, or switch to 'Simulation Sandbox' mode in the header to run mock test cases.",
     };
   }
 }

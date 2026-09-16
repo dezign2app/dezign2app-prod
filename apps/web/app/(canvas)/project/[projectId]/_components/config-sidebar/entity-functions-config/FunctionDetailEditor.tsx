@@ -17,7 +17,6 @@ import {
   generateCodeWithAI,
 } from "../../shared/BusinessLogicBlock";
 import { FunctionParamsSection } from "./FunctionParamsSection";
-import { FunctionReturnTypeSection } from "./FunctionReturnTypeSection";
 import { OperationTestStudio } from "./OperationTestStudio";
 
 interface FunctionDetailEditorProps {
@@ -74,7 +73,7 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = ({
           )}
         </div>
         <span className="text-xs text-muted-foreground">
-          Define function signature, input parameters, pagination, implementation logic, and return type contract.
+          Define function signature, input parameters, pagination, and implementation logic.
         </span>
       </div>
 
@@ -172,12 +171,6 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = ({
         updateSelectedOp={updateSelectedOp}
       />
 
-      {/* 5. Function Return Type */}
-      <FunctionReturnTypeSection
-        selectedOp={selectedOp}
-        pascalLabel={pascalLabel}
-        updateSelectedOp={updateSelectedOp}
-      />
 
       {/* Actions Footer */}
       <div className="flex items-center justify-between pt-4 border-t border-border/40">
