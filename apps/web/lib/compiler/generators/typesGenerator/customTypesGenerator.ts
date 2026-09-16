@@ -24,7 +24,14 @@ export function generateCustomTypesModule(
     return {};
   }
 
-  let customTypesCode = `// @ts-nocheck\n/* eslint-disable */\n/**\n * Custom Reusable Types & Domain Models\n * Defined via Architecture Canvas Types Nodes\n */\n\n// Ambient helper types for package-extracted types & React compatibility\ntype ReactMouseEvent<T = any> = any;\ntype ReactNode = any;\ntype CSSProperties = any;\ntype SVGProps<T = any> = any;\ntype RefAttributes<T = any> = any;\ntype ForwardRefExoticComponent<P = any> = any;\ntype HTMLAttributes<T = any> = any;\ntype ComponentType<P = any> = any;\ntype SVGSVGElement = any;\ntype HTMLDivElement = any;\ntype NodeType = any;\ntype EdgeType = any;\n\n`;
+  let customTypesCode = `// @ts-nocheck
+/* eslint-disable */
+/**
+ * Custom Reusable Types & Domain Models
+ * Defined via Architecture Canvas Types Nodes
+ */
+
+`;
 
   typesNodes.forEach((tNode) => {
     const nodeLabel = tNode.data?.label || "Custom Types";

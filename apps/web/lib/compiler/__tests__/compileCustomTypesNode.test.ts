@@ -122,9 +122,9 @@ describe("compileCustomTypesNode - generateTypesPackage", () => {
     // Must sanitize function signature to a valid type
     expect(customFile?.content).toContain("onReconnectEnd?: (...args: any[]) => any;");
     expect(customFile?.content).toContain("complexUnion: any;");
-    // Must include @ts-nocheck and ambient helpers
+    // Must include @ts-nocheck without polluting custom.ts with ambient any helper types
     expect(customFile?.content).toContain("// @ts-nocheck");
-    expect(customFile?.content).toContain("type ReactMouseEvent<T = any> = any;");
+    expect(customFile?.content).not.toContain("type ReactMouseEvent<T = any> = any;");
   });
 });
 

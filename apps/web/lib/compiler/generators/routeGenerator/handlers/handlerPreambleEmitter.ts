@@ -148,7 +148,7 @@ ${allExtraImportLines ? `${allExtraImportLines}\n` : ""}\nconst logger = createL
 
 type ${pascalName}ErrorResponse = {
   error: string;
-  details?: string | { formErrors: string[]; fieldErrors: Record<string, string[] | undefined> } | Record<string, unknown>;
+  details?: string | { formErrors: string[]; fieldErrors: Record<string, string[] | undefined> } | Record<string, string | number | boolean | null>;
 };
 
 export type ${pascalName}Request =
@@ -161,12 +161,12 @@ export type ${pascalName}Request =
     };
 
 ${hasStreamingStep ? `export type ${pascalName}ResponseContext = Response;\n` : `export type ${pascalName}ResponseContext =
-  | Response<${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | unknown[] | string | number | boolean | null | undefined>
+  | Response<${pascalName}Response | ${pascalName}ErrorResponse>
   | {
       status: (code: number) => {
-        json: (data?: ${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | unknown[] | string | number | boolean | null) => void | Response;
+        json: (data?: ${pascalName}Response | ${pascalName}ErrorResponse) => void | Response;
       };
-      json: (data?: ${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | unknown[] | string | number | boolean | null) => void | Response;
+      json: (data?: ${pascalName}Response | ${pascalName}ErrorResponse) => void | Response;
     };
 `}
 
