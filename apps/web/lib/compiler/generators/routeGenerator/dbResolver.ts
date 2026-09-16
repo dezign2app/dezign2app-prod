@@ -44,6 +44,14 @@ export function pickDbFunctionsForEndpoint(
 
   const isIdRoute = path.includes(":id") || path.includes("{id}");
 
+  const isHealth =
+    path === "/health" ||
+    path === "health" ||
+    path.endsWith("/health") ||
+    path === "/" ||
+    Boolean(ep.summary && ep.summary.toLowerCase().includes("health")) ||
+    Boolean(ep.businessLogic && ep.businessLogic.toLowerCase().includes("health"));
+
   const nodeDbNodeIds =
     ep.databaseNodeIds ||
     (ep.databaseNodeId && ep.databaseNodeId !== "none" ? [ep.databaseNodeId] : []);
@@ -52,6 +60,10 @@ export function pickDbFunctionsForEndpoint(
     ep.crudOperations && Object.keys(ep.crudOperations).length > 0
       ? Object.keys(ep.crudOperations)
       : [];
+
+  if (isHealth && crudDbNodeIds.length === 0) {
+    return [];
+  }
 
   const edgeDbNodeIds: string[] = [];
   const epNodeId = ep.nodeId;

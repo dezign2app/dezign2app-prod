@@ -125,8 +125,10 @@ export function generateServiceRouteTypes(
         singleRouteCode += `// --- Input Schemas ---\n`;
         singleRouteCode += paramsTypeRes.code + "\n";
         singleRouteCode += queryTypeRes.code + "\n";
-        if (isBodyMethod) {
+        if (bodyTypeRes.hasContent) {
           singleRouteCode += bodyTypeRes.code + "\n";
+        } else if (isBodyMethod) {
+          singleRouteCode += `export type ${pascalName}Body = Record<string, string | number | boolean | null>;\n\n`;
         } else {
           singleRouteCode += `export type ${pascalName}Body = never;\n\n`;
         }
@@ -138,17 +140,17 @@ export function generateServiceRouteTypes(
           if (errorRes.hasContent) {
             singleRouteCode += errorRes.code + "\n";
           } else {
-            singleRouteCode += `export interface ${pascalName}ErrorResponse {\n  error: string;\n  message: string;\n  statusCode?: number;\n  details?: unknown;\n}\n\n`;
+            singleRouteCode += `export interface ${pascalName}ErrorResponse {\n  error: string;\n  message: string;\n  statusCode?: number;\n  details?: string | Record<string, string | number | boolean | null>;\n}\n\n`;
           }
         } else {
-          singleRouteCode += `export interface ${pascalName}ErrorResponse {\n  error: string;\n  message: string;\n  statusCode?: number;\n  details?: unknown;\n}\n\n`;
+          singleRouteCode += `export interface ${pascalName}ErrorResponse {\n  error: string;\n  message: string;\n  statusCode?: number;\n  details?: string | Record<string, string | number | boolean | null>;\n}\n\n`;
         }
 
         singleRouteCode += `// --- Zod Validation Schemas ---\n`;
         if (queryTypeRes.hasContent) {
           singleRouteCode += queryZodRes.code + "\n";
         }
-        if (isBodyMethod && bodyTypeRes.hasContent) {
+        if (bodyTypeRes.hasContent) {
           singleRouteCode += bodyZodRes.code + "\n";
         }
 

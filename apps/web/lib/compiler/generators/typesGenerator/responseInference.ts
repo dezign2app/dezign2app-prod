@@ -96,8 +96,8 @@ export function inferBindingType(
         switch (f.type) {
           case "number": return "number";
           case "boolean": return "boolean";
-          case "array": return "unknown[]";
-          case "object": return "Record<string, unknown>";
+          case "array": return "string[]";
+          case "object": return "Record<string, string | number | boolean | null>";
           default: return "string";
         }
       }
@@ -125,12 +125,12 @@ export function inferBindingType(
     if (typeof source.value === "number") return "number";
     if (typeof source.value === "boolean") return "boolean";
     if (typeof source.value === "string") return "string";
-    return "unknown";
+    return "string | number | boolean | null";
   }
 
   if (source.kind === "context") {
     if (source.field === "timestamp") return "string";
-    if (source.field === "user") return "Record<string, unknown>";
+    if (source.field === "user") return "Record<string, string | number | boolean | null>";
     return "string";
   }
 
@@ -277,18 +277,15 @@ export function generateResponseInterface(
       const lastBraceIndex = legacy.code.lastIndexOf("}");
       if (lastBraceIndex !== -1) {
         const entityShape = ep ? classifyEndpointShape(ep, nodes) : { kind: "unknown" as const };
-        let dataType = "Record<string, string | number | boolean | null>";
         if (entityShape.kind === "entity") {
           entityImports.add(entityShape.entity);
-          dataType = entityShape.cardinality === "one" ? entityShape.entity : `${entityShape.entity}[]`;
-        } else if (entityShape.kind === "health") {
-          dataType = "{ status: string; service: string; timestamp: string }";
+          const dataType = entityShape.cardinality === "one" ? entityShape.entity : `${entityShape.entity}[]`;
+          const augmentedCode =
+            legacy.code.slice(0, lastBraceIndex) +
+            `  data?: ${dataType};\n` +
+            legacy.code.slice(lastBraceIndex);
+          return { code: augmentedCode, entityImports };
         }
-        const augmentedCode =
-          legacy.code.slice(0, lastBraceIndex) +
-          `  data?: ${dataType};\n` +
-          legacy.code.slice(lastBraceIndex);
-        return { code: augmentedCode, entityImports };
       }
     }
     return { code: legacy.code, entityImports };
@@ -338,8 +335,12 @@ export function generateResponseInterface(
               : typeof val === "string"
               ? "string"
               : Array.isArray(val)
-              ? "unknown[]"
-              : "Record<string, unknown>";
+              ? val.length > 0 && typeof val[0] === "number"
+                ? "number[]"
+                : val.length > 0 && typeof val[0] === "boolean"
+                ? "boolean[]"
+                : "string[]"
+              : "Record<string, string | number | boolean | null>";
           props.push(`  ${key}: ${valType};`);
         }
         return {

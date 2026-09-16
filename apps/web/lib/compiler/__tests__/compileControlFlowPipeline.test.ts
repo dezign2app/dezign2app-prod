@@ -491,10 +491,9 @@ describe("Control Flow Pipeline Steps Compilation", () => {
       const lines = renderPipeline(steps, "body");
       const code = lines.join("\n");
 
-      expect(code).toContain("let getConversationResult = await getConversation(body.conversation_id);");
+      expect(code).toContain("let getConversationResult: Awaited<ReturnType<typeof getConversation>> | Awaited<ReturnType<typeof findConversationById>> = await getConversation(body.conversation_id);");
       expect(code).toContain("if (getConversationResult === null || getConversationResult === undefined) {");
-      expect(code).toContain("getConversationResult = await findConversationById(");
-      expect(code).toContain("id: body.conversation_id");
+      expect(code).toContain("getConversationResult = await findConversationById(body.conversation_id);");
       expect(code).toContain("if (getConversationResult !== null && getConversationResult !== undefined) {");
       expect(code).toContain("await setConversation(body.conversation_id, getConversationResult, { ttl: 3600 });");
     });

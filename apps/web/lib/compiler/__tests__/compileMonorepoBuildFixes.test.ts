@@ -894,7 +894,175 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
     expect(eventsTypeFile?.content).toContain("export interface MessageSentEventPayload");
     expect(eventsTypeFile?.content).toContain("export const messageSentPayloadSchema");
   });
+
+  it("should correctly compile GET endpoint with requestBody schema and Redis fallback_db cache-aside", () => {
+    const serviceNode: BackendNode = {
+      id: "node-conversation-service",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "conversation",
+        port: "8080",
+        techStack: "express",
+      },
+    };
+
+    const redisNode: BackendNode = {
+      id: "node-redis",
+      type: "redis_instance",
+      position: { x: 0, y: 150 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Redis",
+      },
+    };
+
+    const redisSchemaNode: BackendNode = {
+      id: "node-redis-schema-conv",
+      type: "redis_schema",
+      position: { x: 100, y: 150 },
+      fractionalIndex: "a1_sub",
+      data: {
+        label: "conversation",
+        databaseId: "node-redis",
+        redisDataStructure: "json",
+      },
+    };
+
+    const dbNode: BackendNode = {
+      id: "node-db",
+      type: "database",
+      position: { x: 0, y: 300 },
+      fractionalIndex: "a2",
+      data: {
+        label: "DB",
+        dbEngine: "sqlite",
+      },
+    };
+
+    const entityNode: BackendNode = {
+      id: "node-entity-conversations",
+      type: "entity",
+      position: { x: 0, y: 450 },
+      fractionalIndex: "a3",
+      data: {
+        label: "conversations",
+        databaseId: "node-db",
+        columns: [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "title", type: "string" },
+        ],
+      },
+    };
+
+    const edges: BackendEdge[] = [
+      { id: "e1", source: "node-conversation-service", target: "node-redis", type: "connection", fractionalIndex: "e1" },
+      { id: "e2", source: "node-conversation-service", target: "node-db", type: "connection", fractionalIndex: "e2" },
+      { id: "e3", source: "node-db", target: "node-entity-conversations", type: "connection", fractionalIndex: "e3" },
+    ];
+
+    const getConversationsEndpoint: Endpoint & { nodeId: string } = {
+      id: "ep-get-conversations",
+      nodeId: "node-conversation-service",
+      name: "/get-conversations",
+      type: "GET",
+      summary: "Get conversations with body and cache-aside",
+      requestBody: {
+        id: "rb-1",
+        fields: [
+          { id: "f1", name: "conversation_id", type: "string", required: true },
+        ],
+      },
+      pipelineSteps: [
+        {
+          id: "step-cache-conv",
+          name: "getConversationResult",
+          type: "redis_operation",
+          enabled: true,
+          outputVariable: "getConversationResult",
+          functionRef: {
+            name: "getConversation",
+            importPath: "@workspace/redis",
+          },
+          inputBindings: [
+            { argName: "key", source: { kind: "req_body", field: "conversation_id" } },
+          ],
+          cacheMiss: {
+            enabled: true,
+            action: "fallback_db",
+            functionRef: {
+              name: "findConversationById",
+              importPath: "@workspace/db",
+            },
+            inputBindings: [
+              { argName: "id", source: { kind: "req_body", field: "conversation_id" } },
+            ],
+            writeBackToCache: true,
+          },
+        },
+      ],
+    };
+
+    const healthEndpoint: Endpoint & { nodeId: string } = {
+      id: "ep-health",
+      nodeId: "node-conversation-service",
+      name: "/health",
+      type: "GET",
+      summary: "Health check",
+    };
+
+    const result = compileMonorepo(
+      [serviceNode, redisNode, redisSchemaNode, dbNode, entityNode],
+      [getConversationsEndpoint, healthEndpoint],
+      [],
+      edges,
+      [],
+      "TestCacheAsideApp",
+    );
+
+    // 1. Verify types package generates non-never Body and Zod schema for GET endpoint with requestBody
+    const typeRouteFile = result.files.find((f) =>
+      f.filename.includes("packages/types/src/conversation/getGetConversations.ts"),
+    );
+    expect(typeRouteFile).toBeDefined();
+    expect(typeRouteFile?.content).toContain("export interface ConversationGetGetConversationsBody {");
+    expect(typeRouteFile?.content).toContain("conversation_id: string;");
+    expect(typeRouteFile?.content).not.toContain("export type ConversationGetGetConversationsBody = never;");
+    expect(typeRouteFile?.content).toContain("conversationGetGetConversationsBodySchema = z.object({");
+
+    // 2. Verify route handler file parses req.body with Zod and uses body.conversation_id
+    const routeHandlerFile = result.files.find((f) =>
+      f.filename.includes("apps/conversation/src/routes/getGetConversations.ts"),
+    );
+    expect(routeHandlerFile).toBeDefined();
+    expect(routeHandlerFile?.content).toContain("conversationGetGetConversationsBodySchema.safeParse(req.body)");
+    expect(routeHandlerFile?.content).toContain("const body = bodyParsed.data;");
+    expect(routeHandlerFile?.content).toContain("let getConversationResult: Awaited<ReturnType<typeof getConversation>> | Awaited<ReturnType<typeof findConversationById>> = await getConversation(body.conversation_id);");
+    // Verify findConversationById receives string positional arg, NOT object literal { id: ... } and NO as any cast
+    expect(routeHandlerFile?.content).toContain("getConversationResult = await findConversationById(body.conversation_id);");
+    expect(routeHandlerFile?.content).not.toContain("{ id: req.body.conversation_id }");
+    expect(routeHandlerFile?.content).not.toContain("{ id: body.conversation_id }");
+    expect(routeHandlerFile?.content).not.toContain("as any");
+    expect(routeHandlerFile?.content).toContain("await setConversation(body.conversation_id, getConversationResult);");
+
+    // 3. Verify health route response type has clean typed message without auto-inferred entity data leaks
+    const healthTypeFile = result.files.find((f) =>
+      f.filename.includes("packages/types/src/conversation/getHealth.ts"),
+    );
+    expect(healthTypeFile).toBeDefined();
+    expect(healthTypeFile?.content).toContain("message: string;");
+    expect(healthTypeFile?.content).not.toContain("data?: unknown;");
+
+    const healthRouteFile = result.files.find((f) =>
+      f.filename.includes("apps/conversation/src/routes/getHealth.ts"),
+    );
+    expect(healthRouteFile).toBeDefined();
+    expect(healthRouteFile?.content).toContain('message: "Successfully executed GET /health"');
+    expect(healthRouteFile?.content).not.toContain("conversationList");
+  });
 });
+
 
 
 

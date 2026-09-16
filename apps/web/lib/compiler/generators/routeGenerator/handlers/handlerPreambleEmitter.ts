@@ -135,7 +135,7 @@ export function emitHandlerPreamble(params: HandlerPreambleParams): HandlerPream
   if (queryTypeResHasContent) {
     typeImportsList.push(`${schemaVarPrefix}QuerySchema`);
   }
-  if (isBodyMethod && bodyTypeResHasContent) {
+  if (bodyTypeResHasContent) {
     typeImportsList.push(`${schemaVarPrefix}BodySchema`);
   }
 
@@ -148,7 +148,7 @@ ${allExtraImportLines ? `${allExtraImportLines}\n` : ""}\nconst logger = createL
 
 type ${pascalName}ErrorResponse = {
   error: string;
-  details?: string | { formErrors: string[]; fieldErrors: Record<string, string[] | undefined> } | Record<string, string | number | boolean | null>;
+  details?: string | { formErrors: string[]; fieldErrors: Record<string, string[] | undefined> } | Record<string, unknown>;
 };
 
 export type ${pascalName}Request =
@@ -157,16 +157,16 @@ export type ${pascalName}Request =
       headers?: Record<string, string | string[] | undefined>;
       params: ${pascalName}Params;
       query: ${pascalName}Query;
-      body: ${pascalName}Body;
+      body?: ${pascalName}Body;
     };
 
 ${hasStreamingStep ? `export type ${pascalName}ResponseContext = Response;\n` : `export type ${pascalName}ResponseContext =
-  | Response<${pascalName}Response | ${pascalName}ErrorResponse | Record<string, string | number | boolean | null> | string | number | boolean | null | undefined>
+  | Response<${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | unknown[] | string | number | boolean | null | undefined>
   | {
       status: (code: number) => {
-        json: (data?: ${pascalName}Response | ${pascalName}ErrorResponse | Record<string, string | number | boolean | null> | string | number | boolean | null) => void | Response;
+        json: (data?: ${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | unknown[] | string | number | boolean | null) => void | Response;
       };
-      json: (data?: ${pascalName}Response | ${pascalName}ErrorResponse | Record<string, string | number | boolean | null> | string | number | boolean | null) => void | Response;
+      json: (data?: ${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | unknown[] | string | number | boolean | null) => void | Response;
     };
 `}
 
