@@ -202,7 +202,7 @@ export function generateEndpointRouteHandler(
   const { requiresAuth, authOptions } = resolveEndpointAuth(ep, trace);
 
   // 3. Validation Checks
-  const hasValidatedBody = isBodyMethod && bodyTypeRes.hasContent;
+  const hasValidatedBody = bodyTypeRes.hasContent;
   routeHandlerCode += emitValidationBlocks({
     schemaVarPrefix,
     hasValidatedBody,

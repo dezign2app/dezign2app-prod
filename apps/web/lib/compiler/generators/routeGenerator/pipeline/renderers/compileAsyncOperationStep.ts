@@ -43,6 +43,27 @@ export function renderAsyncOperationStep(
       const sorted = sortRedisBindings(inputBindings, functionRef.signature);
       args = sorted.map((b) => resolveBinding(b, ctx)).join(", ");
     }
+  } else if (type === "db_operation" && inputBindings.length > 0) {
+    const fnLower = fnName.toLowerCase();
+    const isById =
+      fnLower.includes("byid") ||
+      fnLower.includes("findone") ||
+      step.operationId === "findById" ||
+      step.operationId === "deleteById";
+
+    const firstBinding = inputBindings[0];
+    if (
+      isById &&
+      inputBindings.length === 1 &&
+      firstBinding &&
+      (firstBinding.argName === "id" ||
+        firstBinding.argName === "key" ||
+        /^\d+$/.test(firstBinding.argName))
+    ) {
+      args = resolveBinding(firstBinding, ctx);
+    } else {
+      args = buildArgList(inputBindings, ctx);
+    }
   } else {
     args = buildArgList(inputBindings, ctx);
   }
@@ -55,16 +76,20 @@ export function renderAsyncOperationStep(
         step.cacheMiss.action === "fallback_value"),
   );
   const declKeyword = isDeclLet ? "let" : "const";
+  const typeAnnotation =
+    isDeclLet && step.cacheMiss?.action === "fallback_db" && step.cacheMiss.functionRef?.name
+      ? `: Awaited<ReturnType<typeof ${fnName}>> | Awaited<ReturnType<typeof ${toVarName(step.cacheMiss.functionRef.name)}>>`
+      : "";
 
   if (isMultiLine) {
-    rawLines.push(`${declKeyword} ${outputVariable} = await ${fnName}(`);
+    rawLines.push(`${declKeyword} ${outputVariable}${typeAnnotation} = await ${fnName}(`);
     args.split("\n").forEach((l) => rawLines.push(`  ${l}`));
     rawLines.push(`);`);
   } else {
     const callExpr = args
       ? `await ${fnName}(${args})`
       : `await ${fnName}()`;
-    rawLines.push(`${declKeyword} ${outputVariable} = ${callExpr};`);
+    rawLines.push(`${declKeyword} ${outputVariable}${typeAnnotation} = ${callExpr};`);
   }
 
   // Cache Miss handling for Redis operations
@@ -85,7 +110,26 @@ export function renderAsyncOperationStep(
     if (action === "fallback_db") {
       if (dbFnRef?.name) {
         const dbFn = toVarName(dbFnRef.name);
-        const dbArgs = dbBindings.length > 0 ? buildArgList(dbBindings, ctx) : args;
+        let dbArgs: string;
+        if (dbBindings.length > 0) {
+          const firstDbBinding = dbBindings[0];
+          const fnLower = dbFn.toLowerCase();
+          const isById =
+            fnLower.includes("byid") ||
+            fnLower.includes("findone") ||
+            (dbBindings.length === 1 &&
+              firstDbBinding &&
+              (firstDbBinding.argName === "id" || firstDbBinding.argName === "key"));
+
+          if (isById && dbBindings.length === 1 && firstDbBinding) {
+            dbArgs = resolveBinding(firstDbBinding, ctx);
+          } else {
+            dbArgs = buildArgList(dbBindings, ctx);
+          }
+        } else {
+          dbArgs = args;
+        }
+
         if (dbArgs.includes("\n")) {
           rawLines.push(`  ${outputVariable} = await ${dbFn}(`);
           dbArgs.split("\n").forEach((l) => rawLines.push(`    ${l}`));
