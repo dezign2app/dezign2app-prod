@@ -82,7 +82,52 @@ export function inferBindingType(
         return "Record<string, string | number | boolean | null>";
       }
       if (step.type === "redis_operation") {
-        return "string | null";
+        const redisNodeId =
+          (step as { redisNodeId?: string; tableNodeId?: string; databaseId?: string }).redisNodeId ||
+          (step as { redisNodeId?: string; tableNodeId?: string; databaseId?: string }).tableNodeId ||
+          (step as { redisNodeId?: string; tableNodeId?: string; databaseId?: string }).databaseId;
+        const redisNode = redisNodeId
+          ? nodes.find((n) => n.id === redisNodeId)
+          : nodes.find((n) => n.type === "redis_schema" || n.type === "redis-cache" || n.type === "redis_instance" || n.data?.redisDataStructure || n.data?.dbType === "redis");
+        const rawName = redisNode?.data?.label || redisNode?.data?.tableName || "Item";
+        const pascalName = toPascalCase(rawName);
+        const itemType = `${pascalName}Item`;
+        const fnName = (step.functionRef?.name || (step as { operation?: string }).operation || step.name || "").toLowerCase();
+
+        if (fnName.includes("recent") || fnName.includes("all") || fnName.includes("list") || fnName.includes("range")) {
+          if (itemType) entityImports.add(itemType);
+          return `${itemType}[]`;
+        }
+        if (fnName.includes("get") || fnName.includes("pop")) {
+          if (itemType) entityImports.add(itemType);
+          return `${itemType} | null`;
+        }
+        if (fnName.includes("length") || fnName.includes("len") || fnName.includes("append") || fnName.includes("push") || fnName.includes("count")) {
+          return "number";
+        }
+        if (fnName.includes("delete") || fnName.includes("del") || fnName.includes("exist")) {
+          return "boolean";
+        }
+        if (itemType) entityImports.add(itemType);
+        return `${itemType} | null`;
+      }
+      if (step.type === "transform") {
+        const transformerId = (step as { transformerNodeId?: string }).transformerNodeId;
+        const fnName = step.functionRef?.name;
+        const transNode = transformerId
+          ? nodes.find((n) => n.id === transformerId)
+          : nodes.find((n) => n.type === "transformer" || n.data?.label === fnName);
+        const returnSchema = transNode?.data?.returnSchema;
+        if (Array.isArray(returnSchema) && returnSchema.length > 0) {
+          if (source.field) {
+            const f = returnSchema.find((f: { name?: string }) => f.name === source.field);
+            if (f?.type) return f.type;
+          }
+          const props = returnSchema.map((f: { name: string; type: string; required?: boolean }) =>
+            `  ${f.name}${f.required ? "" : "?"}: ${f.type || "string"};`
+          );
+          return `{\n${props.join("\n")}\n}`;
+        }
       }
     }
   }
@@ -312,6 +357,46 @@ export function generateResponseInterface(
         entityImports.add(pascalEntity);
         const op = ((lastStep as { operation?: string }).operation || "").toLowerCase();
         lastDataType = op === "find_all" || op === "query" ? `${pascalEntity}[]` : pascalEntity;
+      }
+    } else if (lastStep?.type === "redis_operation") {
+      const redisNodeId =
+        (lastStep as { redisNodeId?: string; tableNodeId?: string; databaseId?: string }).redisNodeId ||
+        (lastStep as { redisNodeId?: string; tableNodeId?: string; databaseId?: string }).tableNodeId ||
+        (lastStep as { redisNodeId?: string; tableNodeId?: string; databaseId?: string }).databaseId;
+      const redisNode = redisNodeId
+        ? nodes.find((n) => n.id === redisNodeId)
+        : nodes.find((n) => n.type === "redis_schema" || n.type === "redis-cache" || n.type === "redis_instance" || n.data?.redisDataStructure || n.data?.dbType === "redis");
+      const rawName = redisNode?.data?.label || redisNode?.data?.tableName || "Item";
+      const pascalName = toPascalCase(rawName);
+      const itemType = `${pascalName}Item`;
+      const fnName = (lastStep.functionRef?.name || (lastStep as { operation?: string }).operation || lastStep.name || "").toLowerCase();
+
+      if (fnName.includes("recent") || fnName.includes("all") || fnName.includes("list") || fnName.includes("range")) {
+        if (itemType) entityImports.add(itemType);
+        lastDataType = `${itemType}[]`;
+      } else if (fnName.includes("get") || fnName.includes("pop")) {
+        if (itemType) entityImports.add(itemType);
+        lastDataType = `${itemType} | null`;
+      } else if (fnName.includes("length") || fnName.includes("len") || fnName.includes("append") || fnName.includes("push") || fnName.includes("count")) {
+        lastDataType = "number";
+      } else if (fnName.includes("delete") || fnName.includes("del") || fnName.includes("exist")) {
+        lastDataType = "boolean";
+      } else {
+        if (itemType) entityImports.add(itemType);
+        lastDataType = itemType;
+      }
+    } else if (lastStep?.type === "transform") {
+      const transformerId = (lastStep as { transformerNodeId?: string }).transformerNodeId;
+      const fnName = lastStep.functionRef?.name;
+      const transNode = transformerId
+        ? nodes.find((n) => n.id === transformerId)
+        : nodes.find((n) => n.type === "transformer" || n.data?.label === fnName);
+      const returnSchema = transNode?.data?.returnSchema;
+      if (Array.isArray(returnSchema) && returnSchema.length > 0) {
+        const props = returnSchema.map((f: { name: string; type: string; required?: boolean }) =>
+          `  ${f.name}${f.required ? "" : "?"}: ${f.type || "string"};`
+        );
+        lastDataType = `{\n${props.join("\n")}\n}`;
       }
     }
     return {
