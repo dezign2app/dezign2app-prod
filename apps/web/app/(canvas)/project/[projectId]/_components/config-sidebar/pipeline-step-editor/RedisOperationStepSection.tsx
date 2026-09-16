@@ -6,10 +6,13 @@ import {
   BackendEdge,
   DbOperationFunction,
   DirectRedisCommand,
+  Endpoint,
+  AnyMessagingResource,
 } from "@workspace/canvas/types";
 import { DIRECT_REDIS_COMMANDS } from "@workspace/canvas/constants";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 import { toFolderName, toVarName } from "@/lib/compiler/utils";
+import { cn } from "@workspace/ui/lib/utils";
 import { BufferedInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
 import {
@@ -19,13 +22,96 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Zap, Database, Code2, Settings, Sparkles, Layers } from "lucide-react";
+import { Zap, Database, Code2, Settings, Sparkles, Layers, Search, PencilLine } from "lucide-react";
 import { PipelineStepDraft, ExpectedArg, AvailableSource } from "./types";
 import { ensureRedisCacheConnection } from "./utils";
 import { RedisCacheMissSection } from "./RedisCacheMissSection";
 
 export type { DirectRedisCommand };
 export { DIRECT_REDIS_COMMANDS };
+
+export type RedisOperationMode = "read" | "write";
+
+const REDIS_READ_IDENTIFIERS = new Set<string>([
+  "redis.get",
+  "redis-get",
+  "redis.exists",
+  "redis-exists",
+  "redis.ttl",
+  "redis-ttl",
+  "redis.hget",
+  "redis-hget",
+  "redis.hgetall",
+  "redis-hgetall",
+  "redis.smembers",
+  "redis-smembers",
+  "redis.json.get",
+  "redis-json-get",
+  "redis.json.arrlen",
+  "redis-json-arrlen",
+]);
+
+export function isRedisCommandRead(cmdOrName?: string): boolean {
+  if (!cmdOrName) return true;
+  if (REDIS_READ_IDENTIFIERS.has(cmdOrName)) return true;
+  const name = cmdOrName.replace(/^redis[-.]/, "").toLowerCase();
+  if (
+    name.startsWith("get") ||
+    name.startsWith("find") ||
+    name.startsWith("read") ||
+    name.startsWith("fetch") ||
+    name.startsWith("exists") ||
+    name.startsWith("ttl") ||
+    name.startsWith("hget") ||
+    name.startsWith("mget") ||
+    name.startsWith("smembers") ||
+    name.startsWith("scard") ||
+    name.startsWith("lrange") ||
+    name.startsWith("llen") ||
+    name.startsWith("json.get") ||
+    name.startsWith("json-get") ||
+    name.startsWith("json.arrlen") ||
+    name.startsWith("json-arrlen")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function isDbOperationRead(op: DbOperationFunction): boolean {
+  if (
+    op.kind === "findAll" ||
+    op.kind === "findById" ||
+    op.kind === "fetchByIndex" ||
+    op.kind === "join"
+  ) {
+    return true;
+  }
+  if (op.kind === "create" || op.kind === "update" || op.kind === "delete") {
+    return false;
+  }
+  const name = op.name.toLowerCase();
+  if (
+    name.startsWith("set") ||
+    name.startsWith("put") ||
+    name.startsWith("del") ||
+    name.startsWith("remove") ||
+    name.startsWith("update") ||
+    name.startsWith("create") ||
+    name.startsWith("add") ||
+    name.startsWith("insert") ||
+    name.startsWith("write") ||
+    name.startsWith("save") ||
+    name.startsWith("push") ||
+    name.startsWith("pop") ||
+    name.startsWith("expire") ||
+    name.startsWith("incr") ||
+    name.startsWith("decr")
+  ) {
+    return false;
+  }
+  return true;
+}
 
 export interface RedisOperationStepSectionProps {
   step: PipelineStepDraft;
@@ -35,8 +121,11 @@ export interface RedisOperationStepSectionProps {
   availableSources?: AvailableSource[];
   selectedDbId?: string;
   serviceNodeId?: string;
+  endpoint?: Endpoint;
+  consumedEvent?: AnyMessagingResource;
   endpointId?: string;
   consumedEventId?: string;
+  depth?: number;
   showAdvancedSettings: boolean;
   onToggleAdvancedSettings: () => void;
   onChange: (updated: PipelineStepDraft) => void;
@@ -52,8 +141,11 @@ export const RedisOperationStepSection = ({
   availableSources,
   selectedDbId = "all",
   serviceNodeId,
+  endpoint,
+  consumedEvent,
   endpointId,
   consumedEventId,
+  depth = 0,
   showAdvancedSettings,
   onToggleAdvancedSettings,
   onChange,
@@ -125,6 +217,45 @@ export const RedisOperationStepSection = ({
     );
   }, [schemaOperations, step.functionRef?.name, step.operationId]);
 
+  // Determine current operation mode: Read (cache lookup) vs Write (cache mutation)
+  const isCurrentOpRead = useMemo((): boolean => {
+    if (selectedDirectCommand) {
+      return isRedisCommandRead(selectedDirectCommand.name);
+    }
+    if (selectedSchemaOp) {
+      return isDbOperationRead(selectedSchemaOp);
+    }
+    if (step.functionRef?.name) {
+      return isRedisCommandRead(step.functionRef.name);
+    }
+    if (step.operationId) {
+      const direct = DIRECT_REDIS_COMMANDS.find((cmd) => cmd.id === step.operationId);
+      if (direct) {
+        return isRedisCommandRead(direct.name);
+      }
+      const schemaOp = schemaOperations.find((o) => o.id === step.operationId);
+      if (schemaOp) {
+        return isDbOperationRead(schemaOp);
+      }
+    }
+    return true;
+  }, [selectedDirectCommand, selectedSchemaOp, step.functionRef?.name, step.operationId, schemaOperations]);
+
+  const currentMode: RedisOperationMode = isCurrentOpRead ? "read" : "write";
+
+  // Filter available operations by current mode
+  const filteredDirectCommands = useMemo(() => {
+    return DIRECT_REDIS_COMMANDS.filter((cmd) =>
+      currentMode === "read" ? isRedisCommandRead(cmd.name) : !isRedisCommandRead(cmd.name),
+    );
+  }, [currentMode]);
+
+  const filteredSchemaOperations = useMemo(() => {
+    return schemaOperations.filter((op) =>
+      currentMode === "read" ? isDbOperationRead(op) : !isDbOperationRead(op),
+    );
+  }, [schemaOperations, currentMode]);
+
   // Handle selecting a Redis Instance
   const handleSelectInstance = (instanceId: string) => {
     const cleanInstanceId = instanceId === "all" ? undefined : instanceId;
@@ -146,7 +277,11 @@ export const RedisOperationStepSection = ({
   // Handle selecting a Redis Schema / Model
   const handleSelectSchema = (schemaId: string) => {
     if (schemaId === "__direct__") {
-      const defaultDirect = DIRECT_REDIS_COMMANDS[0]!;
+      const defaultDirect =
+        DIRECT_REDIS_COMMANDS.find((cmd) =>
+          currentMode === "write" ? !isRedisCommandRead(cmd.name) : isRedisCommandRead(cmd.name),
+        ) || DIRECT_REDIS_COMMANDS[0];
+      if (!defaultDirect) return;
       const varName = `${toVarName(defaultDirect.name.replace("redis.", ""))}Result`;
       onChange({
         ...step,
@@ -186,7 +321,10 @@ export const RedisOperationStepSection = ({
     if (!targetNode) return;
 
     const ops = getEntityDbOperations(targetNode, allNodes);
-    const defaultOp = ops[0];
+    const defaultOp =
+      ops.find((op) =>
+        currentMode === "write" ? !isDbOperationRead(op) : isDbOperationRead(op),
+      ) || ops[0];
     const targetInstance = redisInstances.find((i) => i.id === step.databaseId || i.id === targetNode.data?.databaseId);
     const instanceLabel = targetInstance?.data?.label || "primary-redis-cache";
     const importPath = `@workspace/${toFolderName(instanceLabel)}`;
@@ -289,6 +427,51 @@ export const RedisOperationStepSection = ({
     }
   };
 
+  // Handle toggling between Read (cache lookup) and Write (cache mutate)
+  const handleModeChange = (newMode: RedisOperationMode) => {
+    if (newMode === currentMode) return;
+
+    if (isDirectMode || !selectedSchemaNode) {
+      const targetCommand = DIRECT_REDIS_COMMANDS.find((cmd) =>
+        newMode === "read" ? isRedisCommandRead(cmd.name) : !isRedisCommandRead(cmd.name),
+      );
+      if (targetCommand) {
+        handleSelectOperation(targetCommand.id);
+      }
+    } else {
+      const targetOp = schemaOperations.find((op) =>
+        newMode === "read" ? isDbOperationRead(op) : !isDbOperationRead(op),
+      );
+      if (targetOp) {
+        handleSelectOperation(targetOp.id || targetOp.name);
+      } else {
+        // If the schema does not provide operations for this mode, switch to direct command
+        const targetCommand = DIRECT_REDIS_COMMANDS.find((cmd) =>
+          newMode === "read" ? isRedisCommandRead(cmd.name) : !isRedisCommandRead(cmd.name),
+        );
+        if (targetCommand) {
+          const targetInstance = redisInstances.find(
+            (i) => i.id === step.databaseId || i.id === selectedSchemaNode.data?.databaseId,
+          );
+          const instanceLabel = targetInstance?.data?.label || "primary-redis-cache";
+          const varName = `${toVarName(targetCommand.name.replace("redis.", ""))}Result`;
+          onChange({
+            ...step,
+            tableNodeId: "__direct__",
+            operationId: targetCommand.id,
+            functionRef: {
+              name: targetCommand.name,
+              importPath: `@workspace/${toFolderName(instanceLabel)}`,
+              signature: targetCommand.signature,
+            },
+            name: varName,
+            outputVariable: varName,
+          });
+        }
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col gap-3 p-2.5 rounded-lg border border-border/60 bg-muted/20">
       {/* Header */}
@@ -302,6 +485,38 @@ export const RedisOperationStepSection = ({
             {selectedSchemaOp?.name || selectedDirectCommand?.name}
           </span>
         )}
+      </div>
+
+      {/* Operation Mode Segmented Switch (Read / Write) */}
+      <div className="flex flex-col gap-1">
+        <div className="grid grid-cols-2 p-0.5 rounded-md border border-border/70 bg-background/80 shadow-xs">
+          <button
+            type="button"
+            onClick={() => handleModeChange("read")}
+            className={cn(
+              "flex items-center justify-center gap-1.5 py-1 px-2 rounded text-[11px] font-medium transition-all",
+              currentMode === "read"
+                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/30 shadow-xs"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/40",
+            )}
+          >
+            <Search size={12} className={currentMode === "read" ? "text-emerald-500" : "text-muted-foreground"} />
+            <span>Read (Lookup)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleModeChange("write")}
+            className={cn(
+              "flex items-center justify-center gap-1.5 py-1 px-2 rounded text-[11px] font-medium transition-all",
+              currentMode === "write"
+                ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold border border-amber-500/30 shadow-xs"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/40",
+            )}
+          >
+            <PencilLine size={12} className={currentMode === "write" ? "text-amber-500" : "text-muted-foreground"} />
+            <span>Write (Mutate)</span>
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-2.5">
@@ -346,7 +561,7 @@ export const RedisOperationStepSection = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__direct__" className="text-xs font-mono text-primary font-semibold">
-                ⚡ Direct Redis Commands (get, set, hget, etc.)
+                ⚡ Direct Redis Commands ({currentMode === "read" ? "get, hget, exists, etc." : "set, del, expire, etc."})
               </SelectItem>
               {filteredRedisSchemas
                 .filter((schema) => Boolean(schema && schema.id && schema.id.trim()))
@@ -366,7 +581,7 @@ export const RedisOperationStepSection = ({
         {/* 3. Operation / Function selector */}
         <div className="flex flex-col gap-1">
           <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
-            <Code2 size={10} /> Redis Operation / Function
+            <Code2 size={10} /> Redis Operation ({currentMode === "read" ? "Read / Lookup" : "Write / Mutation"})
           </Label>
           <Select
             value={step.functionRef?.name || step.operationId || "__none__"}
@@ -377,7 +592,7 @@ export const RedisOperationStepSection = ({
             </SelectTrigger>
             <SelectContent>
               {isDirectMode || !selectedSchemaNode ? (
-                DIRECT_REDIS_COMMANDS
+                filteredDirectCommands
                   .filter((cmd) => Boolean(cmd && cmd.id && cmd.id.trim()))
                   .map((cmd) => (
                     <SelectItem key={cmd.id} value={cmd.id} className="text-xs font-mono">
@@ -387,8 +602,8 @@ export const RedisOperationStepSection = ({
                       </span>
                     </SelectItem>
                   ))
-              ) : (
-                schemaOperations
+              ) : filteredSchemaOperations.length > 0 ? (
+                filteredSchemaOperations
                   .filter((op) => Boolean(op && op.name && op.name.trim()))
                   .map((op) => (
                     <SelectItem key={op.id} value={op.name} className="text-xs font-mono">
@@ -398,6 +613,10 @@ export const RedisOperationStepSection = ({
                       </span>
                     </SelectItem>
                   ))
+              ) : (
+                <SelectItem value="__none__" disabled className="text-xs text-muted-foreground italic">
+                  No {currentMode} operations found in schema
+                </SelectItem>
               )}
             </SelectContent>
           </Select>
@@ -444,14 +663,20 @@ export const RedisOperationStepSection = ({
       {/* Argument Bindings */}
       {children}
 
-      {/* Dedicated Cache Miss Handling */}
-      <RedisCacheMissSection
-        step={step}
-        allNodes={allNodes}
-        allEdges={allEdges}
-        availableSources={availableSources}
-        onChange={onChange}
-      />
+      {/* Dedicated Cache Miss Handling - Only available for Read operations */}
+      {currentMode === "read" && (
+        <RedisCacheMissSection
+          step={step}
+          allNodes={allNodes}
+          allEdges={allEdges}
+          availableSources={availableSources}
+          endpoint={endpoint}
+          consumedEvent={consumedEvent}
+          serviceNodeId={serviceNodeId}
+          depth={depth}
+          onChange={onChange}
+        />
+      )}
 
       {/* Advanced function settings toggle */}
       <div className="flex flex-col gap-1.5 pt-1 border-t border-border/40">
@@ -504,3 +729,4 @@ export const RedisOperationStepSection = ({
     </div>
   );
 };
+

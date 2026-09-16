@@ -109,6 +109,16 @@ export const safePipelineStepCacheMissSchema = z.object({
     .optional(),
   inputBindings: z.array(pipelineStepInputBindingSchema).optional(),
   writeBackToCache: z.boolean().optional(),
+  writeBackOperationId: z.string().optional(),
+  writeBackFunctionRef: z
+    .object({
+      name: z.string(),
+      importPath: z.string(),
+      signature: z.string().optional(),
+    })
+    .optional(),
+  writeBackInputBindings: z.array(pipelineStepInputBindingSchema).optional(),
+  reassignVariable: z.string().optional(),
   ttlSeconds: z.number().optional(),
   statusCode: z.number().optional(),
   errorMessage: z.string().optional(),
@@ -157,6 +167,7 @@ export const safePipelineStepSchema = z.object({
   elseSteps: z.array(z.any()).optional(),
   trySteps: z.array(z.any()).optional(),
   catchSteps: z.array(z.any()).optional(),
+  cacheMissSteps: z.array(z.any()).optional(),
   switchSource: pipelineStepInputSourceSchema.optional(),
   switchCases: z.array(safeSwitchCaseSchema).optional(),
   switchDefault: z.array(z.any()).optional(),

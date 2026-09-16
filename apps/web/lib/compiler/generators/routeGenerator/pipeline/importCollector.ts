@@ -82,22 +82,20 @@ export function collectPipelineImports(
         }
       }
 
-      if (s.cacheMiss.writeBackToCache && s.functionRef?.importPath) {
-        const fnName = toVarName(s.functionRef.name || "get");
-        let setFnName: string | undefined;
-        if (fnName.toLowerCase().startsWith("get")) {
-          setFnName = `set${fnName.slice(3)}`;
-        } else if (fnName.toLowerCase().startsWith("find")) {
-          setFnName = `set${fnName.slice(4)}`;
-        }
-        if (setFnName) {
-          const redisPath = s.functionRef.importPath;
-          const existing = imports.get(redisPath);
-          if (existing) {
-            existing.add(setFnName);
-          } else {
-            imports.set(redisPath, new Set([setFnName]));
-          }
+      if (
+        s.cacheMiss.writeBackToCache &&
+        s.cacheMiss.writeBackFunctionRef?.name
+      ) {
+        const writeBackFn = toVarName(s.cacheMiss.writeBackFunctionRef.name);
+        const redisPath =
+          s.cacheMiss.writeBackFunctionRef.importPath ||
+          s.functionRef?.importPath ||
+          "@workspace/redis";
+        const existing = imports.get(redisPath);
+        if (existing) {
+          existing.add(writeBackFn);
+        } else {
+          imports.set(redisPath, new Set([writeBackFn]));
         }
       }
     }
@@ -105,6 +103,7 @@ export function collectPipelineImports(
     if (s.elseSteps) s.elseSteps.forEach(addStepImports);
     if (s.trySteps) s.trySteps.forEach(addStepImports);
     if (s.catchSteps) s.catchSteps.forEach(addStepImports);
+    if (s.cacheMissSteps) s.cacheMissSteps.forEach(addStepImports);
     if (s.switchCases) s.switchCases.forEach((c) => c.steps?.forEach(addStepImports));
     if (s.switchDefault) s.switchDefault.forEach(addStepImports);
     if (s.parallelBranches) s.parallelBranches.forEach((b) => b.steps?.forEach(addStepImports));

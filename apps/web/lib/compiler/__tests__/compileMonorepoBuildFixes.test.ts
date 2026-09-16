@@ -999,6 +999,10 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
               { argName: "id", source: { kind: "req_body", field: "conversation_id" } },
             ],
             writeBackToCache: true,
+            writeBackFunctionRef: {
+              name: "setConversation",
+              importPath: "@workspace/redis",
+            },
           },
         },
       ],

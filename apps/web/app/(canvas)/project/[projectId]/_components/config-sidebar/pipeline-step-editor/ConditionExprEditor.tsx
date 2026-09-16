@@ -246,7 +246,16 @@ const SourcePicker = ({
     return source.kind;
   }, [source]);
 
-  const activeSource = availableSources.find((s) => s.id === currentSourceOptionId);
+  const uniqueSources = useMemo(() => {
+    const seen = new Set<string>();
+    return availableSources.filter((s) => {
+      if (!s || !s.id || !s.id.trim() || seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
+  }, [availableSources]);
+
+  const activeSource = uniqueSources.find((s) => s.id === currentSourceOptionId);
 
   const handleSourceSelect = (selectedId: string) => {
     if (selectedId.startsWith("step:")) {
@@ -272,7 +281,7 @@ const SourcePicker = ({
           <SelectValue placeholder="Source..." />
         </SelectTrigger>
         <SelectContent>
-          {availableSources
+          {uniqueSources
             .filter((s) => Boolean(s && s.id && s.id.trim()))
             .map((s) => (
               <SelectItem key={s.id} value={s.id} className="text-xs">

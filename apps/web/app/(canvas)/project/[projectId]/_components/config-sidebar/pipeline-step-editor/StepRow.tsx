@@ -434,8 +434,11 @@ const StepRowComponent = ({
                       availableSources={availableSources}
                       selectedDbId={selectedDbId}
                       serviceNodeId={serviceNodeId}
+                      endpoint={endpoint}
+                      consumedEvent={consumedEvent}
                       endpointId={endpoint?.id}
                       consumedEventId={consumedEvent?.id}
+                      depth={depth}
                       showAdvancedSettings={showAdvancedSettings}
                       onToggleAdvancedSettings={() => setShowAdvancedSettings((v) => !v)}
                       onChange={onChange}
