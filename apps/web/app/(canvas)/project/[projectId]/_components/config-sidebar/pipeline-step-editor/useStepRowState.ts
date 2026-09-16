@@ -212,6 +212,9 @@ export function useStepRowState({
         const writableCols = columns.filter((c) => !c.isPrimaryKey && c.name && c.name.trim());
 
         const opName = (step.functionRef?.name || step.operationId || "").toLowerCase();
+        if (opName.includes("findall")) {
+          return [];
+        }
         if (opName.includes("create") || opName.includes("insert")) {
           return writableCols.map((c) => ({
             name: toVarName(c.name),
@@ -232,6 +235,24 @@ export function useStepRowState({
         if (opName.includes("byid") || opName.includes("findone") || opName.includes("delete")) {
           return [{ name: toVarName(pkName), type: pkType, required: true }];
         }
+
+        const ops = getEntityDbOperations(selectedTableNode, allNodes);
+        const matchedOp = ops.find(
+          (o) =>
+            o.id === step.operationId ||
+            o.name?.toLowerCase() === opName ||
+            (step.functionRef?.name && o.name === step.functionRef.name),
+        );
+        if (matchedOp && matchedOp.params && matchedOp.kind !== "findAll") {
+          return matchedOp.params
+            .filter((p) => p && p.name && p.name.trim())
+            .map((p) => ({
+              name: p.name.trim(),
+              type: p.type || "string",
+              required: p.required !== false,
+            }));
+        }
+        return [];
       }
 
       if (step.type === "redis_operation") {

@@ -5,6 +5,7 @@ import {
   BackendNode,
   BackendEdge,
   DbOperationFunction,
+  EntityColumn,
 } from "@workspace/canvas/types";
 
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
@@ -19,7 +20,59 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { Database, Table as TableIcon, Code2, Settings, Sparkles } from "lucide-react";
-import { PipelineStepDraft, ExpectedArg } from "./types";
+import { PipelineStepDraft, ExpectedArg, StepBinding } from "./types";
+
+function computeDbOpBindings(
+  op: DbOperationFunction | undefined,
+  targetNode: BackendNode | undefined,
+  currentBindings: StepBinding[] = [],
+): StepBinding[] {
+  if (!op || !targetNode) return [];
+
+  const opName = (op.name || op.id || "").toLowerCase();
+
+  // 1. findAll operations have NO input arguments
+  if (op.kind === "findAll" || opName.includes("findall")) {
+    return [];
+  }
+
+  const columns: EntityColumn[] = targetNode.data?.columns || [];
+  const pkCol = columns.find((c) => c.isPrimaryKey) || columns[0];
+  const pkName = pkCol?.name || "id";
+  const writableCols = columns.filter((c) => !c.isPrimaryKey && c.name && c.name.trim());
+
+  let argNames: string[] = [];
+
+  if (opName.includes("create") || opName.includes("insert")) {
+    argNames = writableCols.map((c) => toVarName(c.name));
+  } else if (opName.includes("update")) {
+    argNames = [toVarName(pkName), ...writableCols.map((c) => toVarName(c.name))];
+  } else if (
+    opName.includes("byid") ||
+    opName.includes("findone") ||
+    opName.includes("delete")
+  ) {
+    argNames = [toVarName(pkName)];
+  } else if (op.params && op.params.length > 0) {
+    argNames = op.params
+      .filter((p) => p && p.name && p.name.trim())
+      .map((p) => p.name.trim());
+  }
+
+  // Pre-populate bindings: preserve existing configured binding if present, else empty map
+  return argNames.map((argName) => {
+    const existing = currentBindings.find(
+      (b) => (b.argName || "").trim().toLowerCase() === argName.toLowerCase(),
+    );
+    if (existing) {
+      return existing;
+    }
+    return {
+      argName,
+      source: { kind: "req_body", field: "" },
+    };
+  });
+}
 
 export interface DbOperationStepSectionProps {
   step: PipelineStepDraft;
@@ -103,6 +156,7 @@ export const DbOperationStepSection = ({
         ...step,
         tableNodeId: undefined,
         operationId: undefined,
+        inputBindings: [],
       });
       return;
     }
@@ -123,6 +177,8 @@ export const DbOperationStepSection = ({
       ? `${toVarName(defaultOp.name)}Result`
       : step.outputVariable || step.name || "dbResult";
 
+    const nextBindings = computeDbOpBindings(defaultOp, targetNode, []);
+
     onChange({
       ...step,
       tableNodeId: cleanTableId,
@@ -136,6 +192,7 @@ export const DbOperationStepSection = ({
         : step.functionRef,
       name: varName,
       outputVariable: varName,
+      inputBindings: nextBindings,
     });
   };
 
@@ -156,6 +213,7 @@ export const DbOperationStepSection = ({
       : `@workspace/db/helpers/${toTableName(tableLabel)}`;
 
     const varName = `${toVarName(op.name)}Result`;
+    const nextBindings = computeDbOpBindings(op, selectedTableNode, step.inputBindings || []);
 
     onChange({
       ...step,
@@ -167,6 +225,7 @@ export const DbOperationStepSection = ({
       },
       name: varName,
       outputVariable: varName,
+      inputBindings: nextBindings,
     });
   };
 

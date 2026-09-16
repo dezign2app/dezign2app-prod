@@ -139,3 +139,177 @@ describe("pipeline-validation: isStepInputUnconfigured for push_to_client", () =
     expect(isStepInputUnconfigured(step, [])).toBe(true);
   });
 });
+
+describe("pipeline-validation: isStepInputUnconfigured for db_operation", () => {
+  const mockTableNode = {
+    id: "table-conversations",
+    type: "entity",
+    data: {
+      label: "conversations",
+      tableRef: "conversations",
+      columns: [
+        { name: "id", type: "string", isPrimaryKey: true },
+        { name: "title", type: "string", isNotNull: true },
+        { name: "description", type: "string", isNotNull: false },
+      ],
+    },
+  } as any;
+
+  it("returns false (configured, no error) for findAll function with zero arguments", () => {
+    const step: PipelineStepDraft = {
+      id: "step-db-1",
+      name: "findAllConversationsResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-conversations",
+      operationId: "auto-find-all-conversations",
+      functionRef: {
+        name: "findAllConversations",
+        importPath: "@workspace/db/helpers/conversations",
+      },
+      inputBindings: [],
+    };
+
+    expect(isStepInputUnconfigured(step, [mockTableNode])).toBe(false);
+  });
+
+  it("returns false (configured) for findAll function when optional limit/offset are mapped", () => {
+    const step: PipelineStepDraft = {
+      id: "step-db-1",
+      name: "findAllConversationsResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-conversations",
+      operationId: "auto-find-all-conversations",
+      functionRef: {
+        name: "findAllConversations",
+        importPath: "@workspace/db/helpers/conversations",
+      },
+      inputBindings: [
+        { argName: "limit", source: { kind: "inline", value: "20" } },
+      ],
+    };
+
+    expect(isStepInputUnconfigured(step, [mockTableNode])).toBe(false);
+  });
+
+  it("returns true (unconfigured error) when create operation has fields with empty map (unconfigured source)", () => {
+    const step: PipelineStepDraft = {
+      id: "step-db-2",
+      name: "createConversationResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-conversations",
+      operationId: "auto-create-conversations",
+      functionRef: {
+        name: "createConversation",
+        importPath: "@workspace/db/helpers/conversations",
+      },
+      // Pre-populated fields with empty map
+      inputBindings: [
+        { argName: "title", source: { kind: "req_body", field: "" } },
+        { argName: "description", source: { kind: "req_body", field: "" } },
+      ],
+    };
+
+    expect(isStepInputUnconfigured(step, [mockTableNode])).toBe(true);
+  });
+
+  it("returns false (configured, no error) when create operation fields are properly mapped", () => {
+    const step: PipelineStepDraft = {
+      id: "step-db-2",
+      name: "createConversationResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-conversations",
+      operationId: "auto-create-conversations",
+      functionRef: {
+        name: "createConversation",
+        importPath: "@workspace/db/helpers/conversations",
+      },
+      inputBindings: [
+        { argName: "title", source: { kind: "req_body", field: "title" } },
+        { argName: "description", source: { kind: "req_body", field: "description" } },
+      ],
+    };
+
+    expect(isStepInputUnconfigured(step, [mockTableNode])).toBe(false);
+  });
+
+  it("returns true (unconfigured error) when findById has empty map pk binding", () => {
+    const step: PipelineStepDraft = {
+      id: "step-db-3",
+      name: "findConversationByIdResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-conversations",
+      operationId: "auto-find-by-id-conversations",
+      functionRef: {
+        name: "findConversationById",
+        importPath: "@workspace/db/helpers/conversations",
+      },
+      inputBindings: [
+        { argName: "id", source: { kind: "req_params", field: "" } },
+      ],
+    };
+
+    expect(isStepInputUnconfigured(step, [mockTableNode])).toBe(true);
+  });
+
+  it("returns false (configured, no error) when findById has properly mapped pk binding", () => {
+    const step: PipelineStepDraft = {
+      id: "step-db-3",
+      name: "findConversationByIdResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-conversations",
+      operationId: "auto-find-by-id-conversations",
+      functionRef: {
+        name: "findConversationById",
+        importPath: "@workspace/db/helpers/conversations",
+      },
+      inputBindings: [
+        { argName: "id", source: { kind: "req_params", field: "id" } },
+      ],
+    };
+
+    expect(isStepInputUnconfigured(step, [mockTableNode])).toBe(false);
+  });
+});
+
+describe("pipeline-validation: isStepInputUnconfigured for zero-arg transformer & redis", () => {
+  it("returns false for transformer with empty inputSchema and zero bindings", () => {
+    const step: PipelineStepDraft = {
+      id: "step-tr-1",
+      name: "transformResult",
+      type: "transform",
+      enabled: true,
+      functionRef: {
+        name: "noArgTransformer",
+        importPath: "@/lib/transformers/noArgTransformer",
+        inputSchema: [],
+        returnSchema: [],
+      },
+      inputBindings: [],
+    };
+
+    expect(isStepInputUnconfigured(step, [])).toBe(false);
+  });
+
+  it("returns false for redis ping command with zero bindings", () => {
+    const step: PipelineStepDraft = {
+      id: "step-redis-1",
+      name: "pingResult",
+      type: "redis_operation",
+      enabled: true,
+      operationId: "ping",
+      functionRef: {
+        name: "redis.ping",
+        importPath: "@workspace/primary-redis-cache",
+      },
+      inputBindings: [],
+    };
+
+    expect(isStepInputUnconfigured(step, [])).toBe(false);
+  });
+});

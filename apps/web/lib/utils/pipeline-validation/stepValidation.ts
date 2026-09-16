@@ -171,6 +171,10 @@ function isTransformerStepUnconfigured(
         return true;
       }
     }
+  } else if (inputSchema && inputSchema.length === 0) {
+    // Explicitly zero arguments required for this transformer
+    if (bindings.some((b) => !isBindingSourceConfigured(b))) return true;
+    return false;
   } else {
     if (bindings.length === 0) return true;
     if (bindings.some((b) => !isBindingSourceConfigured(b))) return true;
@@ -196,7 +200,19 @@ function isDbOperationStepUnconfigured(
   const columns: EntityColumn[] = tableNode?.data?.columns || [];
   const pkCol = columns.find((c) => c.isPrimaryKey) || columns[0];
   const op = (step.operationId || step.functionRef?.name || "").toLowerCase();
+  if (!op) return true;
 
+  // Any binding that is present must be properly configured (non-empty source/field)
+  if (bindings.some((b) => !isBindingSourceConfigured(b))) {
+    return true;
+  }
+
+  // 1. findAll operations have no required input arguments
+  if (op.includes("findall")) {
+    return false;
+  }
+
+  // 2. create / insert: requires not-null columns (or writable cols if none)
   if (op.includes("create") || op.includes("insert")) {
     const requiredCols = columns.filter(
       (c) => c.isNotNull && !c.isPrimaryKey && Boolean(c.name && c.name.trim()),
@@ -214,15 +230,34 @@ function isDbOperationStepUnconfigured(
           return true;
         }
       }
-    } else {
-      if (bindings.length === 0) return true;
-      if (bindings.some((b) => !isBindingSourceConfigured(b))) return true;
+      return false;
+    }
+    const writableCols = columns.filter((c) => !c.isPrimaryKey && Boolean(c.name && c.name.trim()));
+    if (writableCols.length > 0 && bindings.length === 0) {
+      return true;
     }
     return false;
   }
 
+  // 3. update: requires primary key
+  if (op.includes("update")) {
+    const pkName = pkCol?.name || "id";
+    const pkBinding = bindings.find(
+      (b) =>
+        (b.argName || "").trim().toLowerCase() ===
+          pkName.trim().toLowerCase() ||
+        (b.argName || "").trim().toLowerCase() ===
+          toVarName(pkName).toLowerCase() ||
+        (b.argName || "").trim().toLowerCase() === "id",
+    );
+    if (!pkBinding || !isBindingSourceConfigured(pkBinding)) {
+      return true;
+    }
+    return false;
+  }
+
+  // 4. byid / findone / delete: requires primary key
   if (
-    op.includes("update") ||
     op.includes("byid") ||
     op.includes("findone") ||
     op.includes("delete")
@@ -242,8 +277,35 @@ function isDbOperationStepUnconfigured(
     return false;
   }
 
-  if (bindings.length === 0) return true;
-  if (bindings.some((b) => !isBindingSourceConfigured(b))) return true;
+  // 5. Check if tableNode has custom dbOperations with parameter definitions
+  const customOps: any[] = tableNode?.data?.dbOperations || [];
+  const matchedOp = customOps.find(
+    (o) =>
+      o.id === step.operationId ||
+      o.name?.toLowerCase() === op ||
+      (step.functionRef?.name && o.name === step.functionRef.name),
+  );
+  if (matchedOp) {
+    if (matchedOp.kind === "findAll") return false;
+    const requiredParams = (matchedOp.params || []).filter(
+      (p: any) => p && p.name && p.required !== false,
+    );
+    if (requiredParams.length > 0) {
+      for (const p of requiredParams) {
+        const binding = bindings.find(
+          (b) => (b.argName || "").trim().toLowerCase() === p.name.trim().toLowerCase(),
+        );
+        if (!binding || !isBindingSourceConfigured(binding)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    if ((matchedOp.params || []).length === 0 && bindings.length === 0) {
+      return false;
+    }
+  }
+
   return false;
 }
 
@@ -254,8 +316,20 @@ function isRedisOperationStepUnconfigured(
   const fn = (step.functionRef?.name || step.operationId || "").toLowerCase();
   if (!fn) return true;
 
+  if (bindings.some((b) => !isBindingSourceConfigured(b))) {
+    return true;
+  }
+
   let requiredArgNames: string[] = ["key"];
-  if (fn.includes("setex")) {
+  if (
+    fn.includes("ping") ||
+    fn.includes("dbsize") ||
+    fn.includes("flushdb") ||
+    fn.includes("time") ||
+    fn.includes("info")
+  ) {
+    requiredArgNames = [];
+  } else if (fn.includes("setex")) {
     requiredArgNames = ["key", "seconds", "value"];
   } else if (fn.includes("hset")) {
     requiredArgNames = ["key", "field", "value"];

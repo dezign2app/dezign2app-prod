@@ -15,6 +15,7 @@ import {
   PipelineStepDraft,
   AvailableTransformer,
   ExpectedArg,
+  StepBinding,
 } from "./types";
 import { generateId } from "./utils";
 import { toVarName } from "@/lib/compiler/utils";
@@ -251,11 +252,28 @@ export const TransformerStepSection = ({
     }
 
     const cleanName = toVarName(t.name);
+    const currentBindings = step.inputBindings || [];
+    const nextBindings: StepBinding[] = (t.inputSchema || [])
+      .filter((field) => field && field.name && field.name.trim())
+      .map((field) => {
+        const existing = currentBindings.find(
+          (b) => (b.argName || "").trim().toLowerCase() === field.name.trim().toLowerCase(),
+        );
+        if (existing) {
+          return existing;
+        }
+        return {
+          argName: field.name.trim(),
+          source: { kind: "req_body", field: "" },
+        };
+      });
+
     onChange({
       ...step,
       name: defaultOutputVar,
       outputVariable: defaultOutputVar,
       transformerNodeId: effectiveTransformerNodeId,
+      inputBindings: nextBindings,
       functionRef: {
         name: cleanName,
         importPath: isGlobal
