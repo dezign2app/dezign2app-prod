@@ -653,7 +653,17 @@ export function getAvailableSources(
     paths: [],
   });
 
-  return sources;
+  const uniqueSources: AvailableSource[] = [];
+  const seenIds = new Set<string>();
+
+  for (const s of sources) {
+    if (s && s.id && !seenIds.has(s.id)) {
+      seenIds.add(s.id);
+      uniqueSources.push(s);
+    }
+  }
+
+  return uniqueSources;
 }
 
 /**

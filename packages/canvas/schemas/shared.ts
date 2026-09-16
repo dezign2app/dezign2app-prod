@@ -255,6 +255,16 @@ export const pipelineStepCacheMissSchema = z.object({
     .optional(),
   inputBindings: z.array(pipelineStepInputBindingSchema).optional(),
   writeBackToCache: z.boolean().optional(),
+  writeBackOperationId: z.string().optional(),
+  writeBackFunctionRef: z
+    .object({
+      name: z.string(),
+      importPath: z.string(),
+      signature: z.string().optional(),
+    })
+    .optional(),
+  writeBackInputBindings: z.array(pipelineStepInputBindingSchema).optional(),
+  reassignVariable: z.string().optional(),
   ttlSeconds: z.number().optional(),
   statusCode: z.number().optional(),
   errorMessage: z.string().optional(),
@@ -275,6 +285,8 @@ export interface PipelineStep {
   onError?: PipelineStepOnError;
   /** Optional cache miss handling policy for Redis operations */
   cacheMiss?: PipelineStepCacheMiss;
+  /** Child pipeline steps executed on Redis cache miss (result is null/undefined) */
+  cacheMissSteps?: PipelineStep[];
   /** HTTP status code for return_response / early_return step (e.g. 200, 201, 204, 400, 404, 500) */
   statusCode?: number;
   /** Mode for return_response step */
@@ -438,6 +450,8 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
 
     trySteps: z.array(pipelineStepSchema).optional(),
     catchSteps: z.array(pipelineStepSchema).optional(),
+
+    cacheMissSteps: z.array(pipelineStepSchema).optional(),
 
     switchSource: pipelineStepInputSourceSchema.optional(),
     switchCases: z.array(switchCaseSchema).optional(),

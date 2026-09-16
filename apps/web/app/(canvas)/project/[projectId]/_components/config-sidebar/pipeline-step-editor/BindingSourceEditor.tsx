@@ -35,17 +35,26 @@ export const BindingSourceEditor = ({
   const [variablePopoverOpen, setVariablePopoverOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
 
+  const uniqueSources = useMemo(() => {
+    const seen = new Set<string>();
+    return availableSources.filter((s) => {
+      if (!s || !s.id || !s.id.trim() || seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
+  }, [availableSources]);
+
   const currentSourceOptionId = useMemo(() => {
     if (source.kind === "step_output") {
       return `step:${source.stepId}`;
     }
-    const matched = availableSources.find(
+    const matched = uniqueSources.find(
       (s) => s.id === source.kind || s.kind === source.kind,
     );
     return matched ? matched.id : source.kind;
-  }, [source, availableSources]);
+  }, [source, uniqueSources]);
 
-  const activeSource = availableSources.find((s) => s.id === currentSourceOptionId);
+  const activeSource = uniqueSources.find((s) => s.id === currentSourceOptionId);
 
   const handleSourceSelect = (selectedId: string) => {
     if (selectedId.startsWith("step:")) {
@@ -55,14 +64,23 @@ export const BindingSourceEditor = ({
         source: { kind: "step_output", stepId, field: "" },
       });
     } else {
-      const foundSource = availableSources.find((s) => s.id === selectedId);
+      const foundSource = uniqueSources.find((s) => s.id === selectedId);
       if (foundSource) {
         if (foundSource.kind === "inline") {
           onChange({ ...binding, source: { kind: "inline", value: "" } });
+        } else if (foundSource.kind === "step_output") {
+          onChange({
+            ...binding,
+            source: {
+              kind: "step_output",
+              stepId: foundSource.stepId || selectedId.replace("step:", ""),
+              field: "",
+            },
+          });
         } else {
           onChange({
             ...binding,
-            source: { kind: foundSource.kind as any, field: "" },
+            source: { kind: foundSource.kind, field: "" },
           });
         }
       } else if (selectedId === "inline") {
@@ -83,7 +101,7 @@ export const BindingSourceEditor = ({
   const insertableVariables = useMemo(() => {
     const list: Array<{ label: string; token: string; category: string; type?: string }> = [];
 
-    for (const src of availableSources) {
+    for (const src of uniqueSources) {
       if (src.kind === "inline") continue;
 
       const category = src.label;
@@ -129,7 +147,7 @@ export const BindingSourceEditor = ({
     });
 
     return list;
-  }, [availableSources]);
+  }, [uniqueSources]);
 
   const handleInsertToken = (token: string) => {
     const currentVal = String(source.kind === "inline" ? source.value ?? "" : "");
@@ -166,7 +184,7 @@ export const BindingSourceEditor = ({
             <SelectValue placeholder="Source..." />
           </SelectTrigger>
           <SelectContent>
-            {availableSources
+            {uniqueSources
               .filter((s) => Boolean(s && s.id && s.id.trim()))
               .map((s) => (
                 <SelectItem key={s.id} value={s.id} className="text-xs">

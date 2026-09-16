@@ -483,6 +483,10 @@ describe("Control Flow Pipeline Steps Compilation", () => {
               { argName: "id", source: { kind: "req_body", field: "conversation_id" } },
             ],
             writeBackToCache: true,
+            writeBackFunctionRef: {
+              name: "setConversation",
+              importPath: "@workspace/redis",
+            },
             ttlSeconds: 3600,
           },
         },
@@ -496,6 +500,176 @@ describe("Control Flow Pipeline Steps Compilation", () => {
       expect(code).toContain("getConversationResult = await findConversationById(body.conversation_id);");
       expect(code).toContain("if (getConversationResult !== null && getConversationResult !== undefined) {");
       expect(code).toContain("await setConversation(body.conversation_id, getConversationResult, { ttl: 3600 });");
+    });
+
+    it("does NOT emit write-back code when writeBackFunctionRef is not configured", () => {
+      const steps: PipelineStep[] = [
+        {
+          id: "step-cache-conv",
+          name: "getConversation",
+          type: "redis_operation",
+          enabled: true,
+          functionRef: {
+            name: "getConversation",
+            importPath: "@workspace/redis",
+          },
+          inputBindings: [
+            { argName: "id", source: { kind: "req_body", field: "conversation_id" } },
+          ],
+          outputVariable: "getConversationResult",
+          cacheMiss: {
+            enabled: true,
+            action: "fallback_db",
+            functionRef: {
+              name: "findConversationById",
+              importPath: "@workspace/db/helpers/conversations",
+            },
+            inputBindings: [
+              { argName: "id", source: { kind: "req_body", field: "conversation_id" } },
+            ],
+            writeBackToCache: true,
+            // writeBackFunctionRef omitted
+          },
+        },
+      ];
+
+      const lines = renderPipeline(steps, "body");
+      const code = lines.join("\n");
+
+      expect(code).not.toContain("setConversation(");
+      expect(code).not.toContain("await set");
+    });
+
+    it("compiles getConversationLength with explicitly configured setConversation writeBackFunctionRef without guessing setConversationLength", () => {
+      const steps: PipelineStep[] = [
+        {
+          id: "step-cache-conv-len",
+          name: "getConversationLength",
+          type: "redis_operation",
+          enabled: true,
+          functionRef: {
+            name: "getConversationLength",
+            importPath: "@workspace/primary-cache",
+          },
+          inputBindings: [
+            { argName: "key", source: { kind: "req_body", field: "conversation_id" } },
+          ],
+          outputVariable: "convResult",
+          cacheMiss: {
+            enabled: true,
+            action: "fallback_db",
+            functionRef: {
+              name: "findConversationById",
+              importPath: "@workspace/db/helpers/conversations",
+            },
+            inputBindings: [
+              { argName: "id", source: { kind: "req_body", field: "conversation_id" } },
+            ],
+            writeBackToCache: true,
+            writeBackFunctionRef: {
+              name: "setConversation",
+              importPath: "@workspace/primary-cache",
+            },
+            ttlSeconds: 1800,
+          },
+        },
+      ];
+
+      const lines = renderPipeline(steps, "body");
+      const code = lines.join("\n");
+
+      expect(code).not.toContain("setConversationLength");
+      expect(code).toContain("await setConversation(body.conversation_id, convResult, { ttl: 1800 });");
+    });
+
+    it("compiles redis_operation with writeBackInputBindings mapped from DB response", () => {
+      const steps: PipelineStep[] = [
+        {
+          id: "step-cache-msg",
+          name: "getRecentMessages",
+          type: "redis_operation",
+          enabled: true,
+          functionRef: {
+            name: "getRecentMessages",
+            importPath: "@workspace/primary-cache",
+          },
+          inputBindings: [
+            { argName: "key", source: { kind: "req_body", field: "conversation_id" } },
+          ],
+          outputVariable: "cachedMsg",
+          cacheMiss: {
+            enabled: true,
+            action: "fallback_db",
+            functionRef: {
+              name: "findMessageById",
+              importPath: "@workspace/db/helpers/messages",
+            },
+            inputBindings: [
+              { argName: "id", source: { kind: "req_body", field: "message_id" } },
+            ],
+            writeBackToCache: true,
+            writeBackFunctionRef: {
+              name: "appendConversationItem",
+              importPath: "@workspace/primary-cache",
+              signature: "appendConversationItem(key: string, item: any): Promise<number>",
+            },
+            writeBackInputBindings: [
+              { argName: "key", source: { kind: "req_body", field: "conversation_id" } },
+              { argName: "item", source: { kind: "step_output", stepId: "step-cache-msg", field: "" } },
+            ],
+          },
+        },
+      ];
+
+      const lines = renderPipeline(steps, "body");
+      const code = lines.join("\n");
+
+      expect(code).toContain("await appendConversationItem(body.conversation_id, cachedMsg);");
+    });
+
+    it("compiles redis_operation with writeBackInputBindings mapped from specific DB response columns", () => {
+      const steps: PipelineStep[] = [
+        {
+          id: "step-cache-entry",
+          name: "getEntry",
+          type: "redis_operation",
+          enabled: true,
+          functionRef: {
+            name: "getEntry",
+            importPath: "@workspace/primary-cache",
+          },
+          inputBindings: [
+            { argName: "key", source: { kind: "req_body", field: "entry_id" } },
+          ],
+          outputVariable: "entryResult",
+          cacheMiss: {
+            enabled: true,
+            action: "fallback_db",
+            functionRef: {
+              name: "findEntryById",
+              importPath: "@workspace/db/helpers/entries",
+            },
+            inputBindings: [
+              { argName: "id", source: { kind: "req_body", field: "entry_id" } },
+            ],
+            writeBackToCache: true,
+            writeBackFunctionRef: {
+              name: "setEntryData",
+              importPath: "@workspace/primary-cache",
+              signature: "setEntryData(key: string, payload: any): Promise<void>",
+            },
+            writeBackInputBindings: [
+              { argName: "key", source: { kind: "step_output", stepId: "step-cache-entry", field: "id" } },
+              { argName: "payload", source: { kind: "step_output", stepId: "step-cache-entry", field: "details" } },
+            ],
+          },
+        },
+      ];
+
+      const lines = renderPipeline(steps, "body");
+      const code = lines.join("\n");
+
+      expect(code).toContain("await setEntryData(entryResult.id, entryResult.details);");
     });
 
     it("compiles redis_operation with dedicated cacheMiss early_return 404", () => {
@@ -528,6 +702,126 @@ describe("Control Flow Pipeline Steps Compilation", () => {
       expect(code).toContain("const session = await getUserSession(req.headers[\"authorization\"]);");
       expect(code).toContain("if (session === null || session === undefined) {");
       expect(code).toContain("return res.status(401).json({ error: \"Invalid or expired session\" });");
+    });
+
+    it("compiles redis_operation with arbitrary cacheMissSteps (e.g. early_return custom response)", () => {
+      const steps: PipelineStep[] = [
+        {
+          id: "step-redis",
+          name: "Get User Cache",
+          type: "redis_operation",
+          enabled: true,
+          outputVariable: "cachedUser",
+          functionRef: {
+            name: "getCachedUser",
+            importPath: "@workspace/cache",
+          },
+          inputBindings: [
+            {
+              argName: "key",
+              source: { kind: "req_params", field: "id" },
+            },
+          ],
+          cacheMissSteps: [
+            {
+              id: "step-early-return",
+              name: "Custom 404 Return",
+              type: "early_return",
+              enabled: true,
+              statusCode: 404,
+              inputBindings: [
+                {
+                  argName: "error",
+                  source: { kind: "inline", value: "User not found in cache" },
+                },
+              ],
+            },
+          ],
+        },
+      ];
+
+      const lines = renderPipeline(steps, "body");
+      const code = lines.join("\n");
+
+      expect(code).toContain("let cachedUser = await getCachedUser(req.params.id);");
+      expect(code).toContain("if (cachedUser === null || cachedUser === undefined) {");
+      expect(code).toContain("return res.status(404).json({");
+      expect(code).toContain("error: \"User not found in cache\"");
+    });
+
+    it("compiles redis_operation with arbitrary cacheMissSteps (DB fetch + Redis set + reassignVariable)", () => {
+      const steps: PipelineStep[] = [
+        {
+          id: "step-redis",
+          name: "Get Cached Profile",
+          type: "redis_operation",
+          enabled: true,
+          outputVariable: "userProfile",
+          functionRef: {
+            name: "getProfile",
+            importPath: "@workspace/cache",
+          },
+          inputBindings: [
+            {
+              argName: "key",
+              source: { kind: "req_params", field: "id" },
+            },
+          ],
+          cacheMiss: {
+            enabled: true,
+            reassignVariable: "dbProfile",
+          },
+          cacheMissSteps: [
+            {
+              id: "step-db",
+              name: "Fetch Profile From DB",
+              type: "db_operation",
+              enabled: true,
+              outputVariable: "dbProfile",
+              functionRef: {
+                name: "findProfileById",
+                importPath: "@workspace/db",
+              },
+              inputBindings: [
+                {
+                  argName: "id",
+                  source: { kind: "req_params", field: "id" },
+                },
+              ],
+            },
+            {
+              id: "step-writeback",
+              name: "Repopulate Profile Cache",
+              type: "redis_operation",
+              enabled: true,
+              outputVariable: "setResult",
+              functionRef: {
+                name: "setProfile",
+                importPath: "@workspace/cache",
+              },
+              inputBindings: [
+                {
+                  argName: "key",
+                  source: { kind: "req_params", field: "id" },
+                },
+                {
+                  argName: "value",
+                  source: { kind: "step_output", stepId: "step-db", field: "" },
+                },
+              ],
+            },
+          ],
+        },
+      ];
+
+      const lines = renderPipeline(steps, "body");
+      const code = lines.join("\n");
+
+      expect(code).toContain("let userProfile = await getProfile(req.params.id);");
+      expect(code).toContain("if (userProfile === null || userProfile === undefined) {");
+      expect(code).toContain("const dbProfile = await findProfileById(req.params.id);");
+      expect(code).toContain("const setResult = await setProfile(req.params.id, dbProfile);");
+      expect(code).toContain("userProfile = dbProfile;");
     });
 
     it("recursively collects all imports from nested control flow branches", () => {

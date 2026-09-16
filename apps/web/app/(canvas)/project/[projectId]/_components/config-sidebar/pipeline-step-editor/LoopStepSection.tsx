@@ -54,7 +54,16 @@ export const LoopStepSection = ({
     return loopSource.kind;
   }, [loopSource]);
 
-  const activeSource = availableSources.find((s) => s.id === currentSourceOptionId);
+  const uniqueSources = useMemo(() => {
+    const seen = new Set<string>();
+    return availableSources.filter((s) => {
+      if (!s || !s.id || !s.id.trim() || seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
+  }, [availableSources]);
+
+  const activeSource = uniqueSources.find((s) => s.id === currentSourceOptionId);
 
   const handleSourceSelect = (selectedId: string) => {
     if (selectedId.startsWith("step:")) {
@@ -245,14 +254,14 @@ export const LoopStepSection = ({
                     <SelectValue placeholder="Source..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableSources
+                    {uniqueSources
                       .filter((s) => Boolean(s && s.id && s.id.trim()))
                       .map((s) => (
                         <SelectItem key={s.id} value={s.id} className="text-xs">
                           {s.label}
                         </SelectItem>
                       ))}
-                    {!availableSources.some((s) => s.id === "inline") && (
+                    {!uniqueSources.some((s) => s.id === "inline") && (
                       <SelectItem value="inline" className="text-xs">
                         Inline / Fixed Array
                       </SelectItem>

@@ -16,6 +16,7 @@ import { sortRedisBindings } from "./compileRedisBindingSorter";
 export function renderAsyncOperationStep(
   step: PipelineStep,
   ctx: PipelineRenderContext,
+  renderNested?: (steps: PipelineStep[], ctx: PipelineRenderContext) => string[],
 ): string[] {
   const { outputVariable, functionRef, inputBindings = [], type } = step;
   if (!functionRef) {
@@ -69,11 +70,16 @@ export function renderAsyncOperationStep(
   }
 
   const isMultiLine = args.includes("\n");
-  const isDeclLet = Boolean(
+  const hasMissSteps = Boolean(step.cacheMissSteps && step.cacheMissSteps.length > 0);
+  const hasCacheMiss = Boolean(
     isRedisOp &&
-      step.cacheMiss?.enabled &&
-      (step.cacheMiss.action === "fallback_db" ||
-        step.cacheMiss.action === "fallback_value"),
+      (step.cacheMiss?.enabled ?? hasMissSteps),
+  );
+  const isDeclLet = Boolean(
+    hasCacheMiss &&
+      ((step.cacheMiss?.action === "fallback_db" ||
+        step.cacheMiss?.action === "fallback_value") ||
+        hasMissSteps),
   );
   const declKeyword = isDeclLet ? "let" : "const";
   const typeAnnotation =
@@ -93,21 +99,36 @@ export function renderAsyncOperationStep(
   }
 
   // Cache Miss handling for Redis operations
-  if (isRedisOp && step.cacheMiss?.enabled) {
-    const {
-      action = "fallback_db",
-      functionRef: dbFnRef,
-      inputBindings: dbBindings = [],
-      statusCode = 404,
-      errorMessage = "Record not found",
-      fallbackValue = "null",
-      writeBackToCache = true,
-      ttlSeconds,
-    } = step.cacheMiss;
-
+  if (hasCacheMiss) {
     rawLines.push(`if (${outputVariable} === null || ${outputVariable} === undefined) {`);
 
-    if (action === "fallback_db") {
+    if (hasMissSteps && renderNested) {
+      const childCtx: PipelineRenderContext = {
+        ...ctx,
+        priorOutputs: new Map(ctx.priorOutputs),
+      };
+      if (outputVariable) {
+        childCtx.priorOutputs.set(step.id, outputVariable);
+      }
+      const nestedLines = renderNested(step.cacheMissSteps!, childCtx);
+      nestedLines.forEach((l) => rawLines.push(`  ${l}`));
+
+      if (step.cacheMiss?.reassignVariable) {
+        rawLines.push(`  ${outputVariable} = ${step.cacheMiss.reassignVariable};`);
+      }
+    } else if (step.cacheMiss) {
+      const {
+        action = "fallback_db",
+        functionRef: dbFnRef,
+        inputBindings: dbBindings = [],
+        statusCode = 404,
+        errorMessage = "Record not found",
+        fallbackValue = "null",
+        writeBackToCache = true,
+        ttlSeconds,
+      } = step.cacheMiss;
+
+      if (action === "fallback_db") {
       if (dbFnRef?.name) {
         const dbFn = toVarName(dbFnRef.name);
         let dbArgs: string;
@@ -138,30 +159,56 @@ export function renderAsyncOperationStep(
           rawLines.push(`  ${outputVariable} = await ${dbFn}(${dbArgs});`);
         }
       }
-      if (writeBackToCache) {
-        let setFnName: string | undefined;
-        if (fnName.toLowerCase().startsWith("get")) {
-          setFnName = `set${fnName.slice(3)}`;
-        } else if (fnName.toLowerCase().startsWith("find")) {
-          setFnName = `set${fnName.slice(4)}`;
+      if (writeBackToCache && step.cacheMiss?.writeBackFunctionRef?.name) {
+        const writeBackFn = toVarName(step.cacheMiss.writeBackFunctionRef.name);
+
+        const childCtx: PipelineRenderContext = {
+          ...ctx,
+          priorOutputs: new Map(ctx.priorOutputs),
+        };
+        const outVar = outputVariable || "result";
+        childCtx.priorOutputs.set(step.id, outVar);
+        if (step.cacheMiss.tableNodeId) {
+          childCtx.priorOutputs.set(`db-fallback-${step.cacheMiss.tableNodeId}`, outVar);
         }
-        const keyArg = args.split(",")[0]?.trim() || "id";
-        if (setFnName) {
-          rawLines.push(`  if (${outputVariable} !== null && ${outputVariable} !== undefined) {`);
-          if (ttlSeconds && ttlSeconds > 0) {
-            rawLines.push(`    await ${setFnName}(${keyArg}, ${outputVariable}, { ttl: ${ttlSeconds} });`);
+
+        let writeBackArgs: string;
+        const writeBackBindings = step.cacheMiss.writeBackInputBindings;
+
+        if (writeBackBindings && writeBackBindings.length > 0) {
+          const allPositional = writeBackBindings.every((b) => /^\d+$/.test(b.argName));
+          const isSingleSpread =
+            writeBackBindings.length === 1 && writeBackBindings[0]?.argName === "_spread";
+
+          if (allPositional || isSingleSpread) {
+            writeBackArgs = buildArgList(writeBackBindings, childCtx);
           } else {
-            rawLines.push(`    await ${setFnName}(${keyArg}, ${outputVariable});`);
+            const sorted = sortRedisBindings(
+              writeBackBindings,
+              step.cacheMiss.writeBackFunctionRef.signature,
+            );
+            writeBackArgs = sorted.map((b) => resolveBinding(b, childCtx)).join(", ");
           }
-          rawLines.push(`  }`);
+        } else {
+          const keyArg = args.split(",")[0]?.trim() || "id";
+          writeBackArgs = `${keyArg}, ${outputVariable}`;
         }
+
+        rawLines.push(`  if (${outputVariable} !== null && ${outputVariable} !== undefined) {`);
+        if (ttlSeconds && ttlSeconds > 0) {
+          rawLines.push(`    await ${writeBackFn}(${writeBackArgs}, { ttl: ${ttlSeconds} });`);
+        } else {
+          rawLines.push(`    await ${writeBackFn}(${writeBackArgs});`);
+        }
+        rawLines.push(`  }`);
+        }
+      } else if (action === "early_return") {
+        rawLines.push(`  return res.status(${statusCode}).json({ error: "${errorMessage}" });`);
+      } else if (action === "fallback_value") {
+        rawLines.push(`  ${outputVariable} = ${fallbackValue};`);
+      } else if (action === "throw_error") {
+        rawLines.push(`  throw new Error("${errorMessage}");`);
       }
-    } else if (action === "early_return") {
-      rawLines.push(`  return res.status(${statusCode}).json({ error: "${errorMessage}" });`);
-    } else if (action === "fallback_value") {
-      rawLines.push(`  ${outputVariable} = ${fallbackValue};`);
-    } else if (action === "throw_error") {
-      rawLines.push(`  throw new Error("${errorMessage}");`);
     }
 
     rawLines.push(`}`);
