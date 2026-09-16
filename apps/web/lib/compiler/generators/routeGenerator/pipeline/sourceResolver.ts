@@ -50,7 +50,16 @@ export function resolveSource(
         const fallback = `/* step "${source.stepId}" not found */ undefined`;
         return field ? `${fallback}?.${field}` : fallback;
       }
-      return field ? `${varName}.${field}` : varName;
+      if (field) {
+        const meta =
+          ctx.stepOutputMeta?.get(source.stepId) ||
+          ctx.stepOutputMeta?.get(varName);
+        if (meta?.isArray) {
+          return `${varName}[0]?.${field}`;
+        }
+        return `${varName}.${field}`;
+      }
+      return varName;
     }
     case "inline": {
       const v = source.value;

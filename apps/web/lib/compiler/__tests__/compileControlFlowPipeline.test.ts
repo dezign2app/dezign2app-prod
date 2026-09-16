@@ -995,7 +995,7 @@ describe("Control Flow Pipeline Steps Compilation", () => {
       });
       const code = lines.join("\n");
 
-      expect(code).toContain("let analyticsRes: Record<string, string | number | boolean | null> | null = null;");
+      expect(code).toContain("let analyticsRes: Awaited<ReturnType<typeof sendAnalytics>> | null = null;");
       expect(code).toContain("try {");
       expect(code).toContain("analyticsRes = await sendAnalytics();");
       expect(code).toContain("} catch (stepErr) {");

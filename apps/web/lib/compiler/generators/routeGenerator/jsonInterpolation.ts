@@ -1,6 +1,7 @@
 export interface PipelineRenderContextLike {
   bodyVar?: string;
   priorOutputs?: Map<string, string>;
+  narrowedOutputs?: Set<string>;
 }
 
 /**

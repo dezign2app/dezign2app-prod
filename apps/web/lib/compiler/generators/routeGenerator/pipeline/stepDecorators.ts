@@ -1,6 +1,31 @@
 import { PipelineStep } from "@workspace/canvas/types";
+import { toVarName } from "../../../utils";
 import { PipelineRenderContext } from "./types";
 import { compileConditionExpr } from "./conditionCompiler";
+
+function getStepTypeDeclaration(step: PipelineStep): string {
+  if (step.functionRef?.name) {
+    const fn = toVarName(step.functionRef.name);
+    return `: Awaited<ReturnType<typeof ${fn}>> | null = null;`;
+  }
+  return `: Record<string, string | number | boolean | null> | null = null;`;
+}
+
+function stripVariableDeclaration(lines: string[], outVar: string): string[] {
+  const constPrefix = `const ${outVar}`;
+  const letPrefix = `let ${outVar}`;
+  return lines.map((line) => {
+    if (line.startsWith(constPrefix)) {
+      const eqIdx = line.indexOf("=");
+      return eqIdx !== -1 ? `${outVar} =${line.slice(eqIdx + 1)}` : line;
+    }
+    if (line.startsWith(letPrefix)) {
+      const eqIdx = line.indexOf("=");
+      return eqIdx !== -1 ? `${outVar} =${line.slice(eqIdx + 1)}` : line;
+    }
+    return line;
+  });
+}
 
 /**
  * Applies step decorators (onError retries, fallback / ignore / early_return error actions,
@@ -22,13 +47,10 @@ export function applyStepDecorators(
     if (onError.retries && onError.retries > 0) {
       const stepKey = (id || "step").replace(/[^a-zA-Z0-9_]/g, "_");
       if (outVar) {
-        const transformedLines = resultLines.map((line) =>
-          line.startsWith(`const ${outVar} =`)
-            ? line.replace(`const ${outVar} =`, `${outVar} =`)
-            : line,
-        );
+        const transformedLines = stripVariableDeclaration(resultLines, outVar);
+        const typeDecl = getStepTypeDeclaration(step);
         resultLines = [
-          `let ${outVar}: Record<string, string | number | boolean | null> | null = null;`,
+          `let ${outVar}${typeDecl}`,
           `let attempts_${stepKey} = 0;`,
           `while (attempts_${stepKey} <= ${onError.retries}) {`,
           `  try {`,
@@ -74,13 +96,11 @@ export function applyStepDecorators(
       ];
     } else if (onError.action === "fallback") {
       if (outVar) {
-        const transformedLines = resultLines.map((line) =>
-          line.startsWith(`const ${outVar} =`)
-            ? line.replace(`const ${outVar} =`, `${outVar} =`)
-            : line,
-        );
+        ctx.narrowedOutputs?.delete(outVar);
+        const transformedLines = stripVariableDeclaration(resultLines, outVar);
+        const typeDecl = getStepTypeDeclaration(step);
         resultLines = [
-          `let ${outVar}: Record<string, string | number | boolean | null> | null = null;`,
+          `let ${outVar}${typeDecl}`,
           `try {`,
           ...transformedLines.map((l) => `  ${l}`),
           `} catch (stepErr) {`,
@@ -99,13 +119,11 @@ export function applyStepDecorators(
       }
     } else if (onError.action === "ignore") {
       if (outVar) {
-        const transformedLines = resultLines.map((line) =>
-          line.startsWith(`const ${outVar} =`)
-            ? line.replace(`const ${outVar} =`, `${outVar} =`)
-            : line,
-        );
+        ctx.narrowedOutputs?.delete(outVar);
+        const transformedLines = stripVariableDeclaration(resultLines, outVar);
+        const typeDecl = getStepTypeDeclaration(step);
         resultLines = [
-          `let ${outVar}: Record<string, string | number | boolean | null> | null = null;`,
+          `let ${outVar}${typeDecl}`,
           `try {`,
           ...transformedLines.map((l) => `  ${l}`),
           `} catch (stepErr) {`,

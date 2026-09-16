@@ -23,6 +23,9 @@ export function renderTransformStep(
   const fnName = toVarName(functionRef.name || "transform");
   const args = buildArgList(inputBindings, ctx);
   const isMultiLine = args.includes("\n");
+  if (outputVariable) {
+    ctx.narrowedOutputs?.add(outputVariable);
+  }
   if (isMultiLine) {
     return [
       `const ${outputVariable} = ${fnName}(`,
