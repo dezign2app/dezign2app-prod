@@ -105,6 +105,33 @@ export function createDefaultStepDraft({
       }
     }
 
+    let initialBindings: StepBinding[] = [];
+    if (firstEntity && defaultOp) {
+      const opName = (defaultOp.name || defaultOp.id || "").toLowerCase();
+      if (defaultOp.kind !== "findAll" && !opName.includes("findall")) {
+        const columns = firstEntity.data?.columns || [];
+        const pkCol = columns.find((c: any) => c.isPrimaryKey) || columns[0];
+        const pkName = pkCol?.name || "id";
+        const writableCols = columns.filter((c: any) => !c.isPrimaryKey && c.name && c.name.trim());
+
+        let argNames: string[] = [];
+        if (opName.includes("create") || opName.includes("insert")) {
+          argNames = writableCols.map((c: any) => toVarName(c.name));
+        } else if (opName.includes("update")) {
+          argNames = [toVarName(pkName), ...writableCols.map((c: any) => toVarName(c.name))];
+        } else if (opName.includes("byid") || opName.includes("findone") || opName.includes("delete")) {
+          argNames = [toVarName(pkName)];
+        } else if (defaultOp.params && defaultOp.params.length > 0) {
+          argNames = defaultOp.params.filter((p) => p && p.name && p.name.trim()).map((p) => p.name.trim());
+        }
+
+        initialBindings = argNames.map((argName) => ({
+          argName,
+          source: { kind: "req_body", field: "" },
+        }));
+      }
+    }
+
     const connectionResult = ensureDatabaseRefConnection({
       tableNodeId: firstEntity?.id,
       databaseId: targetDbId,
@@ -127,7 +154,7 @@ export function createDefaultStepDraft({
         : undefined,
       name: varName,
       outputVariable: varName,
-      inputBindings: [],
+      inputBindings: initialBindings,
     };
   } else if (type === "redis_operation") {
     const redisCacheNodes = allNodes.filter((n) => n.type === "redis-cache");

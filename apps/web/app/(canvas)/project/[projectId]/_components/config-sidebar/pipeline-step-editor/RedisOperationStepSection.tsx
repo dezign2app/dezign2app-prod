@@ -23,9 +23,55 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { Zap, Database, Code2, Settings, Sparkles, Layers, Search, PencilLine } from "lucide-react";
-import { PipelineStepDraft, ExpectedArg, AvailableSource } from "./types";
+import { PipelineStepDraft, ExpectedArg, AvailableSource, StepBinding } from "./types";
 import { ensureRedisCacheConnection } from "./utils";
 import { RedisCacheMissSection } from "./RedisCacheMissSection";
+
+function computeRedisOpBindings(
+  opIdentifier: string,
+  schemaOp?: DbOperationFunction,
+  currentBindings: StepBinding[] = [],
+): StepBinding[] {
+  let argNames: string[] = [];
+
+  if (schemaOp && schemaOp.params && schemaOp.params.length > 0) {
+    argNames = schemaOp.params.filter((p) => p && p.name && p.name.trim()).map((p) => p.name.trim());
+  } else {
+    const fn = opIdentifier.toLowerCase();
+    if (fn.includes("ping") || fn.includes("dbsize") || fn.includes("flushdb") || fn.includes("time") || fn.includes("info")) {
+      argNames = [];
+    } else if (fn.includes("setex")) {
+      argNames = ["key", "seconds", "value"];
+    } else if (fn.includes("hset")) {
+      argNames = ["key", "field", "value"];
+    } else if (fn.includes("hget") || fn.includes("hdel")) {
+      argNames = ["key", "field"];
+    } else if (fn.includes("set") || fn.includes("lpush") || fn.includes("rpush")) {
+      argNames = ["key", "value"];
+    } else if (fn.includes("publish")) {
+      argNames = ["channel", "message"];
+    } else if (fn.includes("xadd")) {
+      argNames = ["stream", "fields"];
+    } else if (fn.includes("expire")) {
+      argNames = ["key", "seconds"];
+    } else {
+      argNames = ["key"];
+    }
+  }
+
+  return argNames.map((argName) => {
+    const existing = currentBindings.find(
+      (b) => (b.argName || "").trim().toLowerCase() === argName.toLowerCase(),
+    );
+    if (existing) {
+      return existing;
+    }
+    return {
+      argName,
+      source: { kind: "req_body", field: "" },
+    };
+  });
+}
 
 export type { DirectRedisCommand };
 export { DIRECT_REDIS_COMMANDS };
@@ -368,6 +414,7 @@ export const RedisOperationStepSection = ({
       const targetInstance = redisInstances.find((i) => i.id === step.databaseId);
       const instanceLabel = targetInstance?.data?.label || "primary-redis-cache";
       const varName = `${toVarName(direct.name.replace("redis.", ""))}Result`;
+      const nextBindings = computeRedisOpBindings(direct.name, undefined, step.inputBindings || []);
 
       onChange({
         ...step,
@@ -380,6 +427,7 @@ export const RedisOperationStepSection = ({
         },
         name: varName,
         outputVariable: varName,
+        inputBindings: nextBindings,
       });
 
       if (serviceNodeId) {
@@ -403,6 +451,7 @@ export const RedisOperationStepSection = ({
     const instanceLabel = targetInstance?.data?.label || "primary-redis-cache";
     const importPath = `@workspace/${toFolderName(instanceLabel)}`;
     const varName = `${toVarName(op.name)}Result`;
+    const nextBindings = computeRedisOpBindings(op.name, op, step.inputBindings || []);
 
     onChange({
       ...step,
@@ -414,6 +463,7 @@ export const RedisOperationStepSection = ({
       },
       name: varName,
       outputVariable: varName,
+      inputBindings: nextBindings,
     });
 
     if (serviceNodeId) {
