@@ -21,11 +21,11 @@ export const TestResultViewer: React.FC<TestResultViewerProps> = ({
   const isServerOffline =
     testMode === "live" &&
     !lastResult.success &&
-    (lastResult.error?.includes("not found") ||
-      lastResult.error?.includes("inactive") ||
-      lastResult.error?.includes("refused") ||
-      lastResult.error?.includes("connect") ||
-      lastResult.error?.includes("timeout"));
+    (lastResult.error?.includes("Could not connect") ||
+      lastResult.error?.includes("Connection refused") ||
+      lastResult.error?.includes("ECONNREFUSED") ||
+      lastResult.error?.includes("Server not found or inactive") ||
+      lastResult.error?.includes("timed out"));
 
   const handleCopyCommand = () => {
     if (!lastResult.rawCommand) return;

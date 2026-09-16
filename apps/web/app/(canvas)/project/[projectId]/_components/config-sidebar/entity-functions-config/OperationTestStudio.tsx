@@ -284,36 +284,26 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
 
       // Sync parent node connection status based on live test result
       if (parentDb && testMode === "live") {
-        if (!data.success || data.serverActive === false) {
-          const isConnErr =
-            data.serverActive === false ||
-            data.error?.includes("connect") ||
-            data.error?.includes("refused") ||
-            data.error?.includes("not found") ||
-            data.error?.includes("timeout") ||
-            data.error?.includes("offline");
-
-          if (isConnErr) {
-            updateNode(parentDb.id, {
-              data: {
-                ...parentDb.data,
-                lastConnectionStatus: {
-                  connected: false,
-                  checkedAt: new Date().toLocaleTimeString(),
-                  latencyMs: 0,
-                  error: data.error,
-                },
+        if (data.serverActive === false) {
+          updateNode(parentDb.id, {
+            data: {
+              ...parentDb.data,
+              lastConnectionStatus: {
+                connected: false,
+                checkedAt: new Date().toLocaleTimeString(),
+                latencyMs: 0,
+                error: data.error,
               },
-            });
-          }
-        } else if (data.success) {
+            },
+          });
+        } else if (data.serverActive === true || data.success) {
           updateNode(parentDb.id, {
             data: {
               ...parentDb.data,
               lastConnectionStatus: {
                 connected: true,
                 checkedAt: new Date().toLocaleTimeString(),
-                latencyMs: data.durationMs,
+                latencyMs: data.durationMs || 1,
               },
             },
           });

@@ -34,7 +34,9 @@ export async function testDatabaseOperation(
   payload: TestDbOperationPayload,
 ): Promise<TestDbOperationResult> {
   const electron = getElectronAPI();
-  if (electron?.db?.executeOperation) {
+  // Only route SQLite to Electron IPC (where local filesystem access via host Node is needed).
+  // Network engines (like Redis) have full live execution with ioredis implemented in Server Actions.
+  if (electron?.db?.executeOperation && payload.engine === "sqlite") {
     try {
       return await electron.db.executeOperation(payload);
     } catch (err) {
@@ -52,8 +54,8 @@ export async function testDatabaseOperation(
  * Check database connection status, reachability, and metadata.
  *
  * Automatically routes:
- * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.checkConnection`)
- * 2. In Browser development -> Next.js Server Action (`checkDbConnectionAction`)
+ * 1. SQLite -> Desktop IPC pipe (`window.electronAPI.db.checkConnection`)
+ * 2. Redis & others -> Next.js Server Action (`checkDbConnectionAction`)
  *
  * Zero manual `fetch()` or REST HTTP `/api` calls.
  */
@@ -61,7 +63,7 @@ export async function checkDatabaseConnection(
   payload: CheckDbConnectionPayload,
 ): Promise<CheckDbConnectionResult> {
   const electron = getElectronAPI();
-  if (electron?.db?.checkConnection) {
+  if (electron?.db?.checkConnection && payload.engine === "sqlite") {
     try {
       return await electron.db.checkConnection(payload);
     } catch (err) {
