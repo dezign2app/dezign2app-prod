@@ -29,7 +29,7 @@ export interface OperationTestStudioProps {
   updateSelectedOp: (changes: Partial<DbOperationFunction>) => void;
 }
 
-export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
+export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.memo(({
   selectedOp,
   label,
   columns,
@@ -80,6 +80,8 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
 
   const [testCases, setTestCases] = useState<DbOperationTestCase[]>(initialCases);
   const [activeCaseId, setActiveCaseId] = useState<string>(initialCases[0]?.id || "case-1");
+  const latestTestCasesRef = useRef(testCases);
+  latestTestCasesRef.current = testCases;
 
   // Sync test cases when switching operation
   const prevOpIdRef = useRef(selectedOp.id);
@@ -97,6 +99,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
               },
             ];
       setTestCases(cases);
+      latestTestCasesRef.current = cases;
       setActiveCaseId(cases[0]?.id || "case-1");
     }
   }, [selectedOp.id, selectedOp.testCases, selectedOp.params, label]);
@@ -125,9 +128,11 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+        updateSelectedOp({ testCases: latestTestCasesRef.current });
       }
     };
-  }, []);
+  }, [updateSelectedOp]);
 
   // Active test case guaranteed non-null
   const activeCase: DbOperationTestCase =
@@ -432,4 +437,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = ({
       )}
     </div>
   );
-};
+});
+
+OperationTestStudio.displayName = "OperationTestStudio";
+

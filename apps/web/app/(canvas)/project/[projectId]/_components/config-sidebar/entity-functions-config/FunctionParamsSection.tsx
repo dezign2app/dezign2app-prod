@@ -1,7 +1,7 @@
 import React from "react";
 import { Plus, Trash } from "lucide-react";
 import { DbOperationFunction } from "@workspace/canvas/types";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../backend-nodes/graph-nodes/common/LocalInput";
 import { Button } from "@workspace/ui/components/button";
 import { Switch } from "@workspace/ui/components/switch";
 import { Label } from "@workspace/ui/components/label";
@@ -21,7 +21,7 @@ interface FunctionParamsSectionProps {
   handleChangePaginationMode: (mode: "offset" | "cursor") => void;
 }
 
-export const FunctionParamsSection: React.FC<FunctionParamsSectionProps> = ({
+export const FunctionParamsSection: React.FC<FunctionParamsSectionProps> = React.memo(({
   selectedOp,
   updateSelectedOp,
   handleTogglePagination,
@@ -80,9 +80,10 @@ export const FunctionParamsSection: React.FC<FunctionParamsSectionProps> = ({
         <div className="grid grid-cols-3 gap-3 p-2.5 rounded-lg bg-secondary/30 border border-border/30">
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">Default Limit</Label>
-            <Input
+            <LocalInput
               type="number"
               min={0}
+              debounceMs={150}
               value={selectedOp.pagination?.defaultLimit ?? 20}
               onChange={(e) => {
                 const parsed = parseInt(e.target.value, 10);
@@ -99,9 +100,10 @@ export const FunctionParamsSection: React.FC<FunctionParamsSectionProps> = ({
 
           <div className="flex flex-col gap-1">
             <Label className="text-[11px]">Max Limit</Label>
-            <Input
+            <LocalInput
               type="number"
               min={0}
+              debounceMs={150}
               value={selectedOp.pagination?.maxLimit ?? 100}
               onChange={(e) => {
                 const parsed = parseInt(e.target.value, 10);
@@ -148,9 +150,10 @@ export const FunctionParamsSection: React.FC<FunctionParamsSectionProps> = ({
 
             return (
               <div key={idx} className="flex items-center gap-2">
-                <Input
+                <LocalInput
                   value={p.name}
                   placeholder="name"
+                  debounceMs={150}
                   onChange={(e) => {
                     const updated = [...(selectedOp.params || [])];
                     updated[idx] = { ...updated[idx]!, name: e.target.value };
@@ -192,4 +195,7 @@ export const FunctionParamsSection: React.FC<FunctionParamsSectionProps> = ({
       )}
     </div>
   );
-};
+});
+
+FunctionParamsSection.displayName = "FunctionParamsSection";
+

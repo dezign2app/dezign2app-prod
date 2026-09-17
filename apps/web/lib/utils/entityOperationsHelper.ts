@@ -973,14 +973,17 @@ export function getEntityDbOperations(
       ? entityNode.data.dbOperations
       : generateDefaultDbOperations(label, columns, indexes, allNodes);
 
-  // Deduplicate operations by name and id
+  // Deduplicate operations by id and non-empty name
+  const seenIds = new Set<string>();
   const seenNames = new Set<string>();
   const deduped: DbOperationFunction[] = [];
 
   rawOps.forEach((op) => {
-    if (!op || !op.name) return;
-    if (seenNames.has(op.name)) return;
-    seenNames.add(op.name);
+    if (!op || !op.id) return;
+    if (seenIds.has(op.id)) return;
+    seenIds.add(op.id);
+    if (op.name && seenNames.has(op.name)) return;
+    if (op.name) seenNames.add(op.name);
     deduped.push(op);
   });
 
