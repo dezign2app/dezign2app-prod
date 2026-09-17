@@ -488,4 +488,94 @@ describe("compileRedisNodes", () => {
       expect(file.content).not.toMatch(/<T\s*=/);
     }
   });
+
+  it("does NOT generate streams.ts or pubsub.ts when neither is configured for Redis cache instance", () => {
+    const nodes: BackendNode[] = [
+      {
+        id: "redis-cache-only",
+        type: "redis_instance",
+        data: {
+          label: "Primary_Cache",
+          host: "localhost",
+          port: 6379,
+        },
+        position: { x: 0, y: 0 },
+        fractionalIndex: "a0",
+      },
+      {
+        id: "schema-cache",
+        type: "redis_schema",
+        data: {
+          label: "SessionCache",
+          redisDataStructure: "hash",
+          keyTemplate: "session:{id}",
+          databaseId: "redis-cache-only",
+        },
+        position: { x: 100, y: 100 },
+        fractionalIndex: "a1",
+      },
+    ];
+
+    const result = compileRedisNodes(nodes);
+    const pkg = result.packages![0]!;
+
+    // streams.ts and pubsub.ts must not be present
+    expect(pkg.files.find((f) => f.filename === "src/streams.ts")).toBeUndefined();
+    expect(pkg.files.find((f) => f.filename === "src/pubsub.ts")).toBeUndefined();
+
+    // src/index.ts should not export streams or pubsub
+    const indexFile = pkg.files.find((f) => f.filename === "src/index.ts");
+    expect(indexFile).toBeDefined();
+    expect(indexFile!.content).not.toContain('export * from "./streams";');
+    expect(indexFile!.content).not.toContain('export * from "./pubsub";');
+    expect(indexFile!.content).toContain('export * from "./cache";');
+
+    // package.json should not export ./streams or ./pubsub
+    const pkgJsonFile = pkg.files.find((f) => f.filename === "package.json");
+    expect(pkgJsonFile).toBeDefined();
+    const parsedPkg = JSON.parse(pkgJsonFile!.content);
+    expect(parsedPkg.exports["./streams"]).toBeUndefined();
+    expect(parsedPkg.exports["./pubsub"]).toBeUndefined();
+  });
+
+  it("generates streams.ts and exports it when redis-streams node or stream data structure is configured", () => {
+    const nodes: BackendNode[] = [
+      {
+        id: "redis-streams-inst",
+        type: "redis_instance",
+        data: {
+          label: "Events_Redis",
+          host: "localhost",
+          port: 6379,
+        },
+        position: { x: 0, y: 0 },
+        fractionalIndex: "a0",
+      },
+      {
+        id: "stream-node-1",
+        type: "redis-streams",
+        data: {
+          label: "OrderEventsStream",
+          databaseId: "redis-streams-inst",
+        },
+        position: { x: 100, y: 100 },
+        fractionalIndex: "a1",
+      },
+    ];
+
+    const result = compileRedisNodes(nodes);
+    const pkg = result.packages![0]!;
+
+    const streamsFile = pkg.files.find((f) => f.filename === "src/streams.ts");
+    expect(streamsFile).toBeDefined();
+    expect(streamsFile!.content).toContain("readStreamGroup");
+    expect(streamsFile!.content).toContain("as unknown as StreamGroupResponse");
+
+    const indexFile = pkg.files.find((f) => f.filename === "src/index.ts");
+    expect(indexFile!.content).toContain('export * from "./streams";');
+
+    const pkgJsonFile = pkg.files.find((f) => f.filename === "package.json");
+    const parsedPkg = JSON.parse(pkgJsonFile!.content);
+    expect(parsedPkg.exports["./streams"]).toBe("./src/streams.ts");
+  });
 });

@@ -3,7 +3,32 @@ import { CompiledFile } from "@workspace/canvas/types";
 export function generatePackageJson(
   packageName: string,
   instLabel: string,
+  options?: {
+    hasStreams?: boolean;
+    hasPubSub?: boolean;
+    hasSchemas?: boolean;
+  },
 ): CompiledFile {
+  const exportsMap: Record<string, string> = {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./config": "./src/config.ts",
+    "./cache": "./src/cache.ts",
+  };
+
+  if (options?.hasPubSub ?? true) {
+    exportsMap["./pubsub"] = "./src/pubsub.ts";
+  }
+  if (options?.hasStreams ?? true) {
+    exportsMap["./streams"] = "./src/streams.ts";
+  }
+  if (options?.hasSchemas ?? true) {
+    exportsMap["./schemas"] = "./src/schemas/index.ts";
+    exportsMap["./schemas/*"] = "./src/schemas/*.ts";
+    exportsMap["./helpers"] = "./src/helpers/index.ts";
+    exportsMap["./helpers/*"] = "./src/helpers/*";
+  }
+
   const packageJson = JSON.stringify(
     {
       name: packageName,
@@ -12,18 +37,7 @@ export function generatePackageJson(
       description: `Redis client, caching schemas, pub/sub, streams, and data structure helpers for ${instLabel}`,
       main: "src/index.ts",
       types: "src/index.ts",
-      exports: {
-        ".": "./src/index.ts",
-        "./client": "./src/client.ts",
-        "./config": "./src/config.ts",
-        "./cache": "./src/cache.ts",
-        "./pubsub": "./src/pubsub.ts",
-        "./streams": "./src/streams.ts",
-        "./schemas": "./src/schemas/index.ts",
-        "./schemas/*": "./src/schemas/*.ts",
-        "./helpers": "./src/helpers/index.ts",
-        "./helpers/*": "./src/helpers/*",
-      },
+      exports: exportsMap,
       scripts: {
         build: "tsc",
         "check-types": "tsc --noEmit",

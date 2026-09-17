@@ -349,7 +349,9 @@ export async function readStreamGroup(
       streamKey,
       ">",
     );
-    const response: StreamGroupResponse = Array.isArray(raw) ? raw : [];
+    const response: StreamGroupResponse = Array.isArray(raw)
+      ? (raw as unknown as StreamGroupResponse)
+      : [];
 
     if (response.length === 0) {
       return [];
@@ -393,17 +395,41 @@ export async function readStreamGroup(
 export function generateIndex(
   instLabel: string,
   packageName: string,
-  hasSchemas: boolean,
+  options:
+    | {
+        hasSchemas?: boolean;
+        hasStreams?: boolean;
+        hasPubSub?: boolean;
+      }
+    | boolean,
 ): CompiledFile {
+  const opts =
+    typeof options === "boolean"
+      ? { hasSchemas: options, hasStreams: true, hasPubSub: true }
+      : { hasSchemas: false, hasStreams: false, hasPubSub: false, ...options };
+
+  const exportsList: string[] = [
+    'export * from "./config";',
+    'export * from "./client";',
+    'export * from "./cache";',
+  ];
+
+  if (opts.hasPubSub) {
+    exportsList.push('export * from "./pubsub";');
+  }
+  if (opts.hasStreams) {
+    exportsList.push('export * from "./streams";');
+  }
+  if (opts.hasSchemas) {
+    exportsList.push('export * from "./schemas";');
+    exportsList.push('export * from "./helpers";');
+  }
+
   const indexContent = `/**
  * Redis Package for ${instLabel} (${packageName})
  */
-export * from "./config";
-export * from "./client";
-export * from "./cache";
-export * from "./pubsub";
-export * from "./streams";
-${hasSchemas ? `export * from "./schemas";\nexport * from "./helpers";\n` : ""}`;
+${exportsList.join("\n")}
+`;
 
   return {
     filename: "src/index.ts",
