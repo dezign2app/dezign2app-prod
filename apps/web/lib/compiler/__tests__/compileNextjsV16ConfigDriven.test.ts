@@ -782,6 +782,86 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     expect(content).toContain("undefined,");
     expect(content).toMatch(/await onTrigger\?\.[\s\S]*undefined,\s*\);/);
   });
+
+  it("derives package.json name from appSlug or webAppNode label", () => {
+    const webAppNode: BackendNode = {
+      id: "web-app-demo",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "demo",
+        appSlug: "demo",
+        port: "3000",
+      },
+      fractionalIndex: "a0",
+    };
+    const pageNode: BackendNode = {
+      id: "page-1",
+      type: "webPage",
+      position: { x: 100, y: 100 },
+      data: {
+        label: "/",
+        appSlug: "demo",
+      },
+      fractionalIndex: "a1",
+    };
+
+    const result = compileNextjsV16WebClient(
+      [pageNode],
+      [],
+      [],
+      [webAppNode, pageNode],
+      [],
+      "DemoProject",
+      [],
+      undefined,
+      webAppNode,
+    );
+
+    const pkgJsonFile = result.files.find((f: CompiledFile) => f.filename === "package.json");
+    expect(pkgJsonFile).toBeDefined();
+    const pkgJson = JSON.parse(pkgJsonFile!.content);
+    expect(pkgJson.name).toBe("@workspace/demo");
+  });
+
+  it("falls back to webAppNode.data.label when appSlug is not provided", () => {
+    const webAppNode: BackendNode = {
+      id: "web-app-demo-fallback",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "demo",
+        port: "3000",
+      },
+      fractionalIndex: "a0",
+    };
+    const pageNode: BackendNode = {
+      id: "page-1",
+      type: "webPage",
+      position: { x: 100, y: 100 },
+      data: {
+        label: "/",
+      },
+      fractionalIndex: "a1",
+    };
+
+    const result = compileNextjsV16WebClient(
+      [pageNode],
+      [],
+      [],
+      [webAppNode, pageNode],
+      [],
+      "DemoProject",
+      [],
+      undefined,
+      webAppNode,
+    );
+
+    const pkgJsonFile = result.files.find((f: CompiledFile) => f.filename === "package.json");
+    expect(pkgJsonFile).toBeDefined();
+    const pkgJson = JSON.parse(pkgJsonFile!.content);
+    expect(pkgJson.name).toBe("@workspace/demo");
+  });
 });
 
 

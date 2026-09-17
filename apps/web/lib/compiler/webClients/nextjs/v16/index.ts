@@ -52,6 +52,9 @@ export function compileNextjsV16WebClient(
   const effectiveAppSlug =
     appSlug ||
     webAppNode?.data?.appSlug ||
+    (webAppNode?.data?.label
+      ? webAppNode.data.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+      : undefined) ||
     webClientNodes[0]?.data.appSlug ||
     "web-app";
 

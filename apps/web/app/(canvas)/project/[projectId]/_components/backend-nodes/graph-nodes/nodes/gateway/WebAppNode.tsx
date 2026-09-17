@@ -225,6 +225,22 @@ export const WebAppNode = ({
         icon={Globe}
         title="Web App"
         selected={selected}
+        onSave={(newLabel) => {
+          const trimmed = newLabel.trim();
+          const newSlug = trimmed
+            ? trimmed
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "")
+            : "web-app";
+          updateNode(id, {
+            data: {
+              ...data,
+              label: trimmed,
+              appSlug: newSlug,
+            },
+          });
+        }}
         rightElement={
           <div className="flex items-center gap-1">
             <button
