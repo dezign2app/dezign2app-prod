@@ -125,6 +125,26 @@ export function ensureRedisCacheConnection({
     });
   }
 
+  // 4. Update endpoint databaseNodeIds if endpointId exists
+  if (endpointId) {
+    const ep = store.endpoints.find((e) => e.id === endpointId);
+    if (ep) {
+      const currentDbIds =
+        ep.databaseNodeIds ||
+        (ep.databaseNodeId && ep.databaseNodeId !== "none"
+          ? [ep.databaseNodeId]
+          : []);
+
+      if (!currentDbIds.includes(cacheNode.id)) {
+        const nextDbIds = [...currentDbIds, cacheNode.id];
+        store.updateEndpoint(endpointId, {
+          databaseNodeIds: nextDbIds,
+          databaseNodeId: nextDbIds[0] || cacheNode.id,
+        });
+      }
+    }
+  }
+
   return cacheNode.id;
 }
 
@@ -186,6 +206,32 @@ export function cleanupRedisCacheConnection({
   });
 
   edgesToDelete.forEach((e) => store.deleteEdge(e.id));
+
+  // Cascade deletion of orphaned redis-cache node if no connected edges remain
+  matchingCacheNodes.forEach((cacheNode) => {
+    const remainingEdges = store.edges.filter(
+      (edge) =>
+        (edge.target === cacheNode.id || edge.source === cacheNode.id) &&
+        !edgesToDelete.some((delEdge) => delEdge.id === edge.id),
+    );
+    if (remainingEdges.length === 0) {
+      store.deleteNode(cacheNode.id);
+    }
+  });
+
+  // Clean up endpoint databaseNodeIds
+  if (endpointId) {
+    const ep = store.endpoints.find((e) => e.id === endpointId);
+    if (ep && ep.databaseNodeIds) {
+      const nextDbIds = ep.databaseNodeIds.filter(
+        (id) => !matchingCacheNodeIds.has(id),
+      );
+      store.updateEndpoint(endpointId, {
+        databaseNodeIds: nextDbIds,
+        databaseNodeId: nextDbIds[0] || "none",
+      });
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -134,6 +134,11 @@ describe("pipeline-step-editor: Redis Cache Node and Edge Synchronization", () =
       (e) => e.source === serviceNodeId && e.target === cacheNodeId,
     );
     expect(remainingEdges.length).toBe(0);
+    // Cascade deletion of orphaned redis-cache node
+    expect(state.nodes.find((n) => n.id === cacheNodeId)).toBeUndefined();
+    // Endpoint databaseNodeIds should be cleaned up
+    const ep = state.endpoints.find((e) => e.id === endpointId);
+    expect(ep?.databaseNodeIds || []).not.toContain(cacheNodeId);
   });
 
   it("keeps the edge if another redis_operation step in the pipeline still uses the schema", () => {

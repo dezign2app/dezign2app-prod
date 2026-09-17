@@ -166,8 +166,85 @@ export function compileRedisNodes(
     const instanceFiles: CompiledFile[] = [];
     const instanceReusableFunctions: ReusableFunction[] = [];
 
+    // Check if streams are configured for this Redis instance
+    const hasStreamNodes = allNodes.some(
+      (n) =>
+        n.type === "redis-streams" &&
+        (!n.data?.databaseId ||
+          n.data?.databaseId === inst.id ||
+          n.data?.databaseId === inst.nodeId ||
+          allEdges.some(
+            (e) =>
+              (e.source === inst.id && e.target === n.id) ||
+              (e.target === inst.id && e.source === n.id),
+          )),
+    );
+    const hasStreamSchemas = instanceSchemas.some(
+      (s) => s.data?.redisDataStructure === "stream",
+    );
+    const hasStreamSteps = allNodes.some((n) => {
+      const eps = [
+        ...(n.data?.endpoints || []),
+        ...(n.data?.routeGroups?.flatMap((rg: any) => rg.endpoints || []) || []),
+      ];
+      return eps.some((ep: any) =>
+        ep.pipelineSteps?.some(
+          (step: any) =>
+            step.type === "redis_operation" &&
+            (!step.databaseId ||
+              step.databaseId === inst.id ||
+              step.databaseId === inst.nodeId) &&
+            (step.operationId?.includes("xadd") ||
+              step.operationId?.includes("stream") ||
+              step.functionRef?.name?.includes("xadd") ||
+              step.functionRef?.name?.includes("stream")),
+        ),
+      );
+    });
+    const hasStreams = Boolean(hasStreamNodes || hasStreamSchemas || hasStreamSteps);
+
+    // Check if pub/sub is configured for this Redis instance
+    const hasPubSubNodes = allNodes.some(
+      (n) =>
+        n.type === "redis-pubsub" &&
+        (!n.data?.databaseId ||
+          n.data?.databaseId === inst.id ||
+          n.data?.databaseId === inst.nodeId ||
+          allEdges.some(
+            (e) =>
+              (e.source === inst.id && e.target === n.id) ||
+              (e.target === inst.id && e.source === n.id),
+          )),
+    );
+    const hasPubSubSteps = allNodes.some((n) => {
+      const eps = [
+        ...(n.data?.endpoints || []),
+        ...(n.data?.routeGroups?.flatMap((rg: any) => rg.endpoints || []) || []),
+      ];
+      return eps.some((ep: any) =>
+        ep.pipelineSteps?.some(
+          (step: any) =>
+            step.type === "redis_operation" &&
+            (!step.databaseId ||
+              step.databaseId === inst.id ||
+              step.databaseId === inst.nodeId) &&
+            (step.operationId?.includes("publish") ||
+              step.operationId?.includes("pubsub") ||
+              step.functionRef?.name?.includes("publish") ||
+              step.functionRef?.name?.includes("pubsub")),
+        ),
+      );
+    });
+    const hasPubSub = Boolean(hasPubSubNodes || hasPubSubSteps);
+
     // 3.1. package.json
-    instanceFiles.push(generatePackageJson(packageName, instLabel));
+    instanceFiles.push(
+      generatePackageJson(packageName, instLabel, {
+        hasStreams,
+        hasPubSub,
+        hasSchemas: instanceSchemas.length > 0,
+      }),
+    );
 
     // 3.2. tsconfig.json
     instanceFiles.push(generateTsConfig());
@@ -193,11 +270,15 @@ export function compileRedisNodes(
     // 3.5. src/cache.ts
     instanceFiles.push(generateCache(instLabel));
 
-    // 3.6. src/pubsub.ts
-    instanceFiles.push(generatePubSub(instLabel));
+    // 3.6. src/pubsub.ts (only when pubsub is configured)
+    if (hasPubSub) {
+      instanceFiles.push(generatePubSub(instLabel));
+    }
 
-    // 3.7. src/streams.ts
-    instanceFiles.push(generateStreams(instLabel));
+    // 3.7. src/streams.ts (only when streams are configured)
+    if (hasStreams) {
+      instanceFiles.push(generateStreams(instLabel));
+    }
 
     // 3.8. Schemas & Helpers
     const schemaBarrelExports: string[] = [];
@@ -227,7 +308,11 @@ export function compileRedisNodes(
 
     // 3.11. src/index.ts
     instanceFiles.push(
-      generateIndex(instLabel, packageName, instanceSchemas.length > 0),
+      generateIndex(instLabel, packageName, {
+        hasSchemas: instanceSchemas.length > 0,
+        hasStreams,
+        hasPubSub,
+      }),
     );
 
     // 3.12. docker-compose.yml
