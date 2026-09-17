@@ -1,6 +1,11 @@
-import { CompiledFile } from "@workspace/canvas/types";
+import {
+  CompiledFile,
+  Endpoint,
+  AnyMessagingResource,
+  PipelineStep,
+  RealtimeConnection,
+} from "@workspace/canvas/types";
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { Endpoint, AnyMessagingResource } from "@workspace/canvas/types";
 import {
   resolveEndpointTrace,
   resolveConsumerTrace,
@@ -14,14 +19,16 @@ import {
   GRPC_DEFAULT_PORT,
 } from "@workspace/canvas";
 
-export function generateLibFiles(hasDb: boolean = true): CompiledFile[] {
+export function generateLibFiles(
+  hasDb: boolean = true,
+  hasRealtime: boolean = true,
+): CompiledFile[] {
   const dbExport = hasDb ? `export * from "@workspace/db/helpers";\n\n` : "";
+  const realtimeExport = hasRealtime ? `export * from "./realtime";\n\n` : "";
   const libIndexCode = `/**
  * Shared lib helpers for this service.${hasDb ? "\n * DB access goes through @workspace/db/helpers — injection-safe prepared statements." : ""}
  */
-${dbExport}export * from "./realtime";
-
-export function formatResponse<T>(data: T, message = "Success") {
+${dbExport}${realtimeExport}export function formatResponse<T>(data: T, message = "Success") {
   return {
     success: true,
     message,
@@ -281,6 +288,16 @@ export function webrtcBroadcast(eventName: string, data: JsonValue, room?: strin
 
 `;
 
+  if (!hasRealtime) {
+    return [
+      {
+        filename: "src/lib/index.ts",
+        language: "typescript",
+        content: libIndexCode,
+      },
+    ];
+  }
+
   return [
     {
       filename: "src/lib/index.ts",
@@ -312,6 +329,112 @@ export function isGrpcEnabledForService(
   });
 }
 
+export interface ServiceRealtimeCapabilities {
+  hasSse: boolean;
+  hasWs: boolean;
+}
+
+export function resolveServiceRealtimeCapabilities(
+  node?: BackendNode,
+  endpoints: (Endpoint & { nodeId?: string })[] = [],
+  events: (AnyMessagingResource & { nodeId?: string; variant?: "publish" | "consume" })[] = [],
+  allNodes: BackendNode[] = [],
+  allEdges: BackendEdge[] = [],
+): ServiceRealtimeCapabilities {
+  const data = (node?.data || {}) as Record<string, any>;
+  const explicitWs = typeof data.enableWebSocket === "boolean" ? data.enableWebSocket : undefined;
+  const explicitSse = typeof data.enableSse === "boolean" ? data.enableSse : undefined;
+  const explicitRealtime = typeof data.enableRealtime === "boolean" ? data.enableRealtime : undefined;
+
+  let hasSse = explicitSse ?? explicitRealtime ?? false;
+  let hasWs = explicitWs ?? explicitRealtime ?? false;
+
+  const protocols = new Set<string>();
+
+  const checkSteps = (steps: PipelineStep[] | undefined) => {
+    if (!steps || !Array.isArray(steps)) return;
+    for (const s of steps) {
+      if (s.enabled !== false && s.type === "push_to_client") {
+        const proto = String(s.clientDeliveryProtocol || "SSE").toUpperCase();
+        protocols.add(proto);
+      }
+      if (s.thenSteps) checkSteps(s.thenSteps);
+      if (s.elseSteps) checkSteps(s.elseSteps);
+      if (s.trySteps) checkSteps(s.trySteps);
+      if (s.catchSteps) checkSteps(s.catchSteps);
+      if (s.loopBody) checkSteps(s.loopBody);
+      if (s.cacheMissSteps) checkSteps(s.cacheMissSteps);
+      if (s.switchCases) s.switchCases.forEach((c) => checkSteps(c.steps));
+      if (s.switchDefault) checkSteps(s.switchDefault);
+      if (s.parallelBranches) s.parallelBranches.forEach((b) => checkSteps(b.steps));
+    }
+  };
+
+  // Inspect endpoints
+  endpoints.forEach((ep) => checkSteps(ep.pipelineSteps as PipelineStep[]));
+  if (Array.isArray(data.endpoints)) {
+    (data.endpoints as Endpoint[]).forEach((ep) => checkSteps(ep.pipelineSteps as PipelineStep[]));
+  }
+  if (Array.isArray(data.routeGroups)) {
+    data.routeGroups.forEach((g: any) => {
+      if (Array.isArray(g.endpoints)) {
+        g.endpoints.forEach((ep: Endpoint) => checkSteps(ep.pipelineSteps as PipelineStep[]));
+      }
+    });
+  }
+
+  // Inspect consumed events
+  events.forEach((ev) => checkSteps(ev.pipelineSteps as PipelineStep[]));
+  if (Array.isArray(data.consumedEvents)) {
+    (data.consumedEvents as AnyMessagingResource[]).forEach((ev) => checkSteps(ev.pipelineSteps as PipelineStep[]));
+  }
+
+  if (protocols.has("SSE")) hasSse = true;
+  if (protocols.has("WEBSOCKET") || protocols.has("WS") || protocols.has("WEBRTC")) hasWs = true;
+
+  // Inspect connected WebPage nodes on canvas
+  if (node) {
+    const serviceNodes = allNodes.filter((n) => n.type === "service");
+    const isSingleService = serviceNodes.length === 1;
+
+    for (const n of allNodes) {
+      if (n.type === "webPage") {
+        const conns: RealtimeConnection[] = Array.isArray(n.data?.realtimeConnections)
+          ? n.data.realtimeConnections
+          : [];
+
+        for (const conn of conns) {
+          let targetsThisService = false;
+          if (conn.sourceServiceNodeId === node.id) {
+            targetsThisService = true;
+          } else if (
+            allEdges.some(
+              (e) =>
+                (e.source === node.id && e.target === n.id) ||
+                (e.target === node.id && e.source === n.id),
+            )
+          ) {
+            targetsThisService = true;
+          } else if (isSingleService) {
+            targetsThisService = true;
+          }
+
+          if (targetsThisService) {
+            const proto = String(conn.protocol || "SSE").toUpperCase();
+            if (proto === "SSE") hasSse = true;
+            if (proto === "WEBSOCKET" || proto === "WS" || proto === "WEBRTC") hasWs = true;
+          }
+        }
+      }
+    }
+  }
+
+  if (explicitSse === false) hasSse = false;
+  if (explicitWs === false) hasWs = false;
+
+  return { hasSse, hasWs };
+}
+
 export function generateServerFile(
   serviceName: string,
   port: string,
@@ -320,19 +443,29 @@ export function generateServerFile(
   node?: BackendNode,
   allNodes: BackendNode[] = [],
   allEdges: BackendEdge[] = [],
+  endpoints: (Endpoint & { nodeId: string })[] = [],
+  events: (AnyMessagingResource & {
+    nodeId: string;
+    variant?: "publish" | "consume";
+  })[] = [],
 ): CompiledFile {
   const grpcEnabled = node ? isGrpcEnabledForService(node, allNodes, allEdges) : false;
   const grpcPort = node?.data?.grpcPort || "50051";
+  const { hasSse, hasWs } = resolveServiceRealtimeCapabilities(node, endpoints, events, allNodes, allEdges);
+
+  const libImports: string[] = [];
+  if (hasSse) libImports.push("handleSseConnection");
+  if (hasWs) libImports.push("initWebSocketServer");
+  const libImportLine = libImports.length > 0 ? `import { ${libImports.join(", ")} } from "./lib";\n` : "";
+  const httpImportLine = hasWs ? `import http from "http";\n` : "";
 
   let serverCode = `import "dotenv/config";
-import http from "http";
-import express, { Request, Response, NextFunction } from "express";
+${httpImportLine}import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { createLogger } from "@workspace/logger";
 import { router as apiRouter } from "./routes";
 import { initConsumers } from "./consumer";
-import { handleSseConnection, initWebSocketServer } from "./lib";
-
+${libImportLine}
 const logger = createLogger("${serviceName}");
 const app = express();
 const PORT = process.env.PORT || ${port};
@@ -366,11 +499,11 @@ app.get("/health", (_req: Request, res: Response) => {
     timestamp: new Date().toISOString()
   });
 });
-
+${hasSse ? `
 // --- Realtime SSE Streams ---
 app.get("/events", handleSseConnection);
 app.get("/sse", handleSseConnection);
-
+` : ""}
 // --- Mount Routes ---
 app.use("/", apiRouter);
 
@@ -378,7 +511,10 @@ app.use("/", apiRouter);
 initConsumers().catch((err: unknown) => {
   logger.error("Failed to initialize event consumers:", err);
 });
+`;
 
+  if (hasWs) {
+    serverCode += `
 // --- Server & WebSocket Startup ---
 const server = http.createServer(app);
 initWebSocketServer(server);
@@ -386,10 +522,17 @@ initWebSocketServer(server);
 server.listen(PORT, () => {
   logger.info(\`🚀 Service "${serviceName}" operational at http://localhost:\${PORT}\`);
   logger.info(\`📋 Health check available at http://localhost:\${PORT}/health\`);
-  logger.info(\`📡 SSE realtime stream at http://localhost:\${PORT}/events\`);
-  logger.info(\`🔌 WebSocket realtime server at ws://localhost:\${PORT}/ws\`);
+${hasSse ? `  logger.info(\`📡 SSE realtime stream at http://localhost:\${PORT}/events\`);\n` : ""}  logger.info(\`🔌 WebSocket realtime server at ws://localhost:\${PORT}/ws\`);
 });
 `;
+  } else {
+    serverCode += `
+app.listen(PORT, () => {
+  logger.info(\`🚀 Service "${serviceName}" operational at http://localhost:\${PORT}\`);
+  logger.info(\`📋 Health check available at http://localhost:\${PORT}/health\`);
+${hasSse ? `  logger.info(\`📡 SSE realtime stream at http://localhost:\${PORT}/events\`);\n` : ""}});
+`;
+  }
 
   if (grpcEnabled) {
     serverCode += `
@@ -466,6 +609,8 @@ export function generateConfigFiles(
     }
   }
 
+  const { hasWs } = resolveServiceRealtimeCapabilities(node, endpoints, events, allNodes, allEdges);
+
   const dependencies: Record<string, string> = {
     ...(hasDb ? { "@workspace/db": "workspace:*" } : {}),
     ...(hasKafka ? { [kafkaPackageName]: "workspace:*" } : {}),
@@ -477,7 +622,7 @@ export function generateConfigFiles(
     dotenv: "^16.4.5",
     zod: "^3.24.2",
     jose: "^5.9.6",
-    ws: "^8.18.0",
+    ...(hasWs ? { ws: "^8.18.0" } : {}),
   };
 
   if (grpcEnabled) {
@@ -490,7 +635,7 @@ export function generateConfigFiles(
     "@types/express": "^4.17.21",
     "@types/cors": "^2.8.17",
     "@types/node": "^20.11.0",
-    "@types/ws": "^8.5.12",
+    ...(hasWs ? { "@types/ws": "^8.5.12" } : {}),
     "ts-node-dev": "^2.0.0",
     typescript: "^5.3.3",
     vitest: "^1.6.0",

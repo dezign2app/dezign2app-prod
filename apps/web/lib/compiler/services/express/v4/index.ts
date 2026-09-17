@@ -7,6 +7,7 @@ import {
   generateLibFiles,
   generateServerFile,
   generateConfigFiles,
+  resolveServiceRealtimeCapabilities,
 } from "../../../generators/configGenerator";
 import { generateServiceUnitTests } from "../../../generators/testGenerator";
 
@@ -104,6 +105,15 @@ export function compileExpressV4Service(
     (n) => n.type === "database" || n.type === "entity" || n.type === "db_ref" || n.type === "auth",
   );
 
+  const { hasSse, hasWs } = resolveServiceRealtimeCapabilities(
+    node,
+    nodeEndpoints,
+    nodeConsumedEvents,
+    allNodes,
+    allEdges,
+  );
+  const hasRealtime = hasSse || hasWs;
+
   const files: CompiledFile[] = [
     ...generateRoutes(
       serviceName,
@@ -132,8 +142,18 @@ export function compileExpressV4Service(
       allNodes,
       allEdges,
     ),
-    ...generateLibFiles(hasDb),
-    generateServerFile(serviceName, port, cors, corsOrigins, node, allNodes, allEdges),
+    ...generateLibFiles(hasDb, hasRealtime),
+    generateServerFile(
+      serviceName,
+      port,
+      cors,
+      corsOrigins,
+      node,
+      allNodes,
+      allEdges,
+      nodeEndpoints,
+      nodeConsumedEvents,
+    ),
 
     ...generateConfigFiles(
       node,
@@ -141,8 +161,8 @@ export function compileExpressV4Service(
       serviceName,
       port,
       cors,
-      endpoints,
-      events,
+      nodeEndpoints,
+      nodeConsumedEvents,
       allNodes,
       allEdges,
     ),

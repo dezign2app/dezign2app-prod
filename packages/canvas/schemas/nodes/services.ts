@@ -443,6 +443,9 @@ export const serviceDataSchema = baseNodeDataSchema
       .enum([INTER_SERVICE_PROTOCOL_HTTP, INTER_SERVICE_PROTOCOL_GRPC])
       .optional(),
     cors: z.boolean().optional(),
+    enableWebSocket: z.boolean().optional(),
+    enableSse: z.boolean().optional(),
+    enableRealtime: z.boolean().optional(),
 
     corsOrigins: z.string().optional(),
     rateLimit: z.string().optional(),
@@ -489,6 +492,9 @@ export const serviceDataInputSchema = baseNodeDataSchema
       .enum([INTER_SERVICE_PROTOCOL_HTTP, INTER_SERVICE_PROTOCOL_GRPC])
       .optional(),
     cors: z.boolean().optional(),
+    enableWebSocket: z.boolean().optional(),
+    enableSse: z.boolean().optional(),
+    enableRealtime: z.boolean().optional(),
 
 
     corsOrigins: z.string().optional(),
