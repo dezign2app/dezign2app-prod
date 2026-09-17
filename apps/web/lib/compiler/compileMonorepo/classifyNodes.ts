@@ -24,6 +24,8 @@ export interface ClassifiedNodes {
   webPageNodes: BackendNode[];
   /** All "webApp" nodes — full-stack Next.js web application containers. */
   webAppNodes: BackendNode[];
+  /** All "payments" nodes — Creem / payment subscription and billing services. */
+  paymentsNodes: BackendNode[];
   /**
    * Service nodes that compile into a standalone microservice app directory.
    *
@@ -55,6 +57,7 @@ export function classifyNodes(
   );
   const webPageNodes = nodes.filter((n) => n.type === "webPage");
   const webAppNodes = nodes.filter((n) => n.type === "webApp");
+  const paymentsNodes = nodes.filter((n) => n.type === "payments");
 
   // ── Standalone service filter ───────────────────────────────────────────
   // A "service" node that is connected to a WebApp compiles INTO that WebApp
@@ -71,6 +74,7 @@ export function classifyNodes(
     entityNodes,
     webPageNodes,
     webAppNodes,
+    paymentsNodes,
     standaloneServiceNodes,
   };
 }

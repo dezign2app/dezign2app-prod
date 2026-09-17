@@ -1,5 +1,15 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { EndpointWithNode } from "../types";
+import { EndpointWithNode, BackendCanvasState } from "../types";
+
+export type NodeCreationCanvasState = Pick<
+  BackendCanvasState,
+  | "nodes"
+  | "edges"
+  | "endpoints"
+  | "pendingNodeUpserts"
+  | "pendingEdgeUpserts"
+  | "pendingEndpointUpserts"
+>;
 
 export interface PreparedNodeResult {
   nodes: BackendNode[];

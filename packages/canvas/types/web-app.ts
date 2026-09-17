@@ -134,6 +134,7 @@ export interface CanvasWebAppNodeData {
   zones?: WebAppZone[];
   authMode?: "none" | "connected_auth_node" | "custom_jwt" | "better_auth";
   authNodeId?: string;
+  paymentsNodeId?: string;
   defaultLoginRoute?: string;
   corsOrigins?: string;
   showNav?: boolean;

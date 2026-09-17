@@ -9,6 +9,7 @@ import {
 import {
   BETTER_AUTH_TABLE_DEFINITIONS,
   isBetterAuthTableRequired,
+  PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION,
 } from "@workspace/canvas";
 import { toTableName, toVarName, toSingular, toPlural } from "./utils";
 import { compileRawSqliteDatabase } from "./databases/sqlite/raw";
@@ -166,6 +167,47 @@ export function compileDatabaseNodes(
 
     if (syntheticEntities.length > 0) {
       effectiveNodes = [...effectiveNodes, ...syntheticEntities];
+    }
+  }
+
+  // 2.5 Synthesize or enrich Subscription table if Payments nodes exist
+  const paymentsNodes = allNodes.filter((n) => n.type === "payments");
+  if (paymentsNodes.length > 0) {
+    const userSubEntity = effectiveNodes.find((n) => {
+      if (n.type !== "entity" && n.type !== "db_ref") return false;
+      const lbl = (n.data?.label || "").toLowerCase();
+      return lbl === "subscription" || lbl === "subscriptions";
+    });
+
+    if (userSubEntity) {
+      // User placed the entity on canvas: ensure required payment columns exist while preserving user's custom columns
+      const existingCols = userSubEntity.data?.columns || [];
+      const existingColNames = new Set(existingCols.map((c: { name?: string }) => (c.name || "").toLowerCase()));
+      const missingRequiredCols = PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultColumns.filter(
+        (dc) => !existingColNames.has((dc.name || "").toLowerCase())
+      );
+      if (missingRequiredCols.length > 0) {
+        userSubEntity.data = {
+          ...userSubEntity.data,
+          columns: [...existingCols, ...missingRequiredCols],
+        };
+      }
+    } else {
+      // Synthesize default subscription entity
+      const targetDbId = dbNodes[0]?.id || dbNodes[0]?.nodeId;
+      const syntheticSubEntity: BackendNode = {
+        id: "synthetic-payments-subscription",
+        type: "entity",
+        fractionalIndex: "a0",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "subscription",
+          description: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.description,
+          columns: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultColumns,
+          databaseId: targetDbId,
+        },
+      };
+      effectiveNodes = [...effectiveNodes, syntheticSubEntity];
     }
   }
 

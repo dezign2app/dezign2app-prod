@@ -384,9 +384,10 @@ export function ensureDatabaseDependencies(
       n.data?.dbType !== "redis",
   );
   const authNodes = allNodes.filter((n) => n.type === "auth");
+  const paymentsNodes = allNodes.filter((n) => n.type === "payments");
 
   const hasDatabaseNodes =
-    dbNodes.length > 0 || entityNodes.length > 0 || authNodes.length > 0;
+    dbNodes.length > 0 || entityNodes.length > 0 || authNodes.length > 0 || paymentsNodes.length > 0;
 
   if (hasDatabaseNodes) {
     const pkgFileIdx = files.findIndex((f) => f.filename === "package.json");

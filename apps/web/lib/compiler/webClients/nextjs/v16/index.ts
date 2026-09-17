@@ -19,6 +19,9 @@ import {
   ensureDatabaseDependencies,
 } from "./authFileGenerator";
 import {
+  generatePaymentsFilesAndDependencies,
+} from "./paymentsFileGenerator";
+import {
   generatePageAndComponentFiles,
 } from "./pageFileGenerator";
 import { generateZustandStores } from "./storeGenerators";
@@ -256,6 +259,16 @@ export function compileNextjsV16WebClient(
     allNodes,
     allEdges,
     testCases,
+  });
+
+  // 4.5 Payments (Creem) Client, Checkout & Webhooks (if payments node connected)
+  generatePaymentsFilesAndDependencies({
+    files,
+    webAppNode,
+    authNode,
+    allNodes,
+    allEdges,
+    effectiveAppSlug,
   });
 
   // 5. Database Dependencies (if database nodes exist on canvas)
