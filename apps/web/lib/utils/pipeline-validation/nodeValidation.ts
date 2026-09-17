@@ -123,8 +123,8 @@ export function isNodePipelineUnconfigured(
     }
   }
 
-  // C) Database Table Reference Node or Entity Node
-  if (targetNode.type === "db_ref" || targetNode.type === "entity") {
+  // C) Database Table Reference Node
+  if (targetNode.type === "db_ref") {
     const tableRef = targetNode.data?.tableRef || targetNode.id;
 
     const relevantDbSteps = allSteps.filter(
