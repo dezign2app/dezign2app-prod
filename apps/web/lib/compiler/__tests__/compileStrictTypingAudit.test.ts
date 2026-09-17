@@ -83,7 +83,7 @@ describe("compileStrictTypingAudit - Verifying strict typing across generated mo
             actions: [
               {
                 id: "ev-get",
-                name: "GetConversationsAction",
+                name: "Get Conversations",
                 event: "click",
               },
             ],
@@ -180,10 +180,13 @@ describe("compileStrictTypingAudit - Verifying strict typing across generated mo
       expect(p.content).not.toContain(") as any);");
     }
 
-    // 4. Check action component for 0 requestBody?: unknown
+    // 4. Check action component for 0 requestBody?: unknown and 0 unknown payloadBody
     const actionFiles = result.files.filter((f) => f.filename.includes("GetConversationsAction.tsx"));
+    expect(actionFiles.length).toBeGreaterThan(0);
     for (const a of actionFiles) {
       expect(a.content).not.toContain("requestBody?: unknown");
+      expect(a.content).not.toContain("let payloadBody");
+      expect(a.content).not.toContain("payloadBody,");
     }
 
     // 5. Check Redis files for 0 any, 0 unknown, 0 'as <Type>' casts, and 0 loose <T> generics

@@ -119,8 +119,7 @@ ${hasQueryParams ? `    const search = new URLSearchParams();
     setIsSubmitting(true);
     try {
       const finalUrl = computeFinalUrl();
-      let payloadBody: ${hasBodyFields || hasRawJson ? `${componentName}RequestBody` : "unknown"} | undefined = undefined;
-${hasBodyFields ? `      // Form fields payload
+${hasBodyFields || hasRawJson ? `      let payloadBody: ${componentName}RequestBody | undefined = undefined;\n` : ""}${hasBodyFields ? `      // Form fields payload
       payloadBody = { ...bodyFields } as ${componentName}RequestBody;
 ` : ""}${hasRawJson ? `      // Raw JSON payload
       if (rawJsonBody.trim()) {
@@ -142,7 +141,7 @@ ${hasBodyFields ? `      // Form fields payload
         ${Boolean(requireAuth)},
         ${hasHeaders ? "Object.keys(customHeaders).length > 0 ? customHeaders : undefined" : "undefined"},
         ${hasQueryParams ? "Object.keys(queryParams).length > 0 ? queryParams : undefined" : "undefined"},
-        payloadBody,
+        ${hasBodyFields || hasRawJson ? "payloadBody" : "undefined"},
       );
     } finally {
       setIsSubmitting(false);
