@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { Code2 } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import { DbOperationFunction, DbOperationTestCase } from "@workspace/canvas/types";
@@ -11,7 +11,35 @@ export interface TestParamsFormProps {
   onParamChange: (paramName: string, value: unknown) => void;
 }
 
-export const TestParamsForm: React.FC<TestParamsFormProps> = ({
+interface ParamFieldRowProps {
+  param: { name: string; type: string; required?: boolean };
+  value: unknown;
+  label: string;
+  onParamChange: (paramName: string, value: unknown) => void;
+}
+
+const ParamFieldRow: React.FC<ParamFieldRowProps> = React.memo(
+  ({ param, value, label, onParamChange }) => {
+    const handleCommit = useCallback(
+      (val: unknown) => {
+        onParamChange(param.name, val);
+      },
+      [onParamChange, param.name],
+    );
+
+    return (
+      <ParamFieldEditor
+        param={param}
+        value={value}
+        onCommit={handleCommit}
+        label={label}
+      />
+    );
+  },
+);
+ParamFieldRow.displayName = "ParamFieldRow";
+
+export const TestParamsForm: React.FC<TestParamsFormProps> = React.memo(({
   selectedOp,
   activeCase,
   label,
@@ -36,15 +64,18 @@ export const TestParamsForm: React.FC<TestParamsFormProps> = ({
 
       <div className="grid grid-cols-1 gap-3">
         {paramDefs.map((p) => (
-          <ParamFieldEditor
+          <ParamFieldRow
             key={`${activeCase.id}-${p.name}`}
             param={p}
             value={activeCase.params[p.name]}
-            onCommit={(val) => onParamChange(p.name, val)}
             label={label}
+            onParamChange={onParamChange}
           />
         ))}
       </div>
     </div>
   );
-};
+});
+
+TestParamsForm.displayName = "TestParamsForm";
+

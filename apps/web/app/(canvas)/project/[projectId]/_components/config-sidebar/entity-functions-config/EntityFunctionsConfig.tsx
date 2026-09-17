@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { DbOperationFunction } from "@workspace/canvas/types";
 import {
@@ -36,6 +36,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
 
   // Selected operation ID for detail editing view
   const [selectedOpId, setSelectedOpId] = useState<string | null>(null);
+  const [isNewOp, setIsNewOp] = useState<boolean>(false);
   const [opToDelete, setOpToDelete] = useState<{ id: string; name: string } | null>(null);
 
   if (!node || (node.type !== "entity" && node.type !== "redis_schema")) {
@@ -57,21 +58,24 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
   const pascalLabel = label.charAt(0).toUpperCase() + label.slice(1);
 
   // Resolve parent database / redis_instance node
-  const parentDb =
-    allNodes.find((n) => n.id === node.data.databaseId) ||
-    allNodes.find((n) =>
-      edges.some(
-        (e) =>
-          e.target === nodeId &&
-          e.source === n.id &&
-          (n.type === "database" || n.type === "redis_instance"),
-      ),
-    ) ||
-    allNodes.find((n) =>
-      isRedis
-        ? n.type === "redis_instance" || n.data?.dbEngine === "redis"
-        : n.type === "database",
+  const parentDb = useMemo(() => {
+    return (
+      allNodes.find((n) => n.id === node.data.databaseId) ||
+      allNodes.find((n) =>
+        edges.some(
+          (e) =>
+            e.target === nodeId &&
+            e.source === n.id &&
+            (n.type === "database" || n.type === "redis_instance"),
+        ),
+      ) ||
+      allNodes.find((n) =>
+        isRedis
+          ? n.type === "redis_instance" || n.data?.dbEngine === "redis"
+          : n.type === "database",
+      )
     );
+  }, [allNodes, edges, nodeId, node.data.databaseId, isRedis]);
 
   const currentOps: DbOperationFunction[] =
     node.data.dbOperations && node.data.dbOperations.length > 0
@@ -82,22 +86,28 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
 
   const selectedOp = currentOps.find((op) => op.id === selectedOpId);
 
-  const saveOps = (updated: DbOperationFunction[]) => {
-    updateNode(nodeId, {
-      data: {
-        ...node.data,
-        dbOperations: updated,
-      },
-    });
-  };
+  const saveOps = useCallback(
+    (updated: DbOperationFunction[]) => {
+      updateNode(nodeId, {
+        data: {
+          ...node.data,
+          dbOperations: updated,
+        },
+      });
+    },
+    [nodeId, node.data, updateNode],
+  );
 
-  const updateSelectedOp = (changes: Partial<DbOperationFunction>) => {
-    if (!selectedOpId) return;
-    const updated = currentOps.map((op) =>
-      op.id === selectedOpId ? { ...op, ...changes } : op,
-    );
-    saveOps(updated);
-  };
+  const updateSelectedOp = useCallback(
+    (changes: Partial<DbOperationFunction>) => {
+      if (!selectedOpId) return;
+      const updated = currentOps.map((op) =>
+        op.id === selectedOpId ? { ...op, ...changes } : op,
+      );
+      saveOps(updated);
+    },
+    [selectedOpId, currentOps, saveOps],
+  );
 
   const handleRegenerateDefaults = () => {
     const defaults = isRedis
@@ -123,7 +133,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
   const handleCreateNewFunction = () => {
     const newOp: DbOperationFunction = {
       id: `custom-op-${Date.now()}`,
-      name: isRedis ? `custom${pascalLabel}Op` : `custom${pascalLabel}Query`,
+      name: "",
       kind: "custom",
       description: isRedis ? `Custom Redis operation for ${label}` : `Custom database query for ${label}`,
       returnTypeMode: "fixed",
@@ -146,107 +156,118 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
 
     saveOps([...currentOps, newOp]);
     setSelectedOpId(newOp.id);
+    setIsNewOp(true);
   };
 
   // Sync pagination parameters into function params when pagination toggling occurs
-  const handleTogglePagination = (enabled: boolean) => {
-    if (!selectedOp) return;
-    const currentPagination = selectedOp.pagination || {
-      defaultLimit: 20,
-      maxLimit: 100,
-      mode: "offset",
-    };
+  const handleTogglePagination = useCallback(
+    (enabled: boolean) => {
+      if (!selectedOp) return;
+      const currentPagination = selectedOp.pagination || {
+        defaultLimit: 20,
+        maxLimit: 100,
+        mode: "offset",
+      };
 
-    let params = selectedOp.params || [];
+      let params = selectedOp.params || [];
 
-    if (enabled) {
-      const mode = currentPagination.mode || "offset";
-      const hasLimit = params.some((p) => p.name === "limit");
-      const hasOffset = params.some((p) => p.name === "offset");
-      const hasCursor = params.some((p) => p.name === "cursor");
+      if (enabled) {
+        const mode = currentPagination.mode || "offset";
+        const hasLimit = params.some((p) => p.name === "limit");
+        const hasOffset = params.some((p) => p.name === "offset");
+        const hasCursor = params.some((p) => p.name === "cursor");
 
-      const newParams = [...params];
-      if (!hasLimit) {
-        newParams.push({
-          name: "limit",
-          type: "number",
-          required: false,
-          defaultValue: String(currentPagination.defaultLimit ?? 20),
-        });
+        const newParams = [...params];
+        if (!hasLimit) {
+          newParams.push({
+            name: "limit",
+            type: "number",
+            required: false,
+            defaultValue: String(currentPagination.defaultLimit ?? 20),
+          });
+        }
+        if (mode === "offset" && !hasOffset) {
+          newParams.push({
+            name: "offset",
+            type: "number",
+            required: false,
+            defaultValue: "0",
+          });
+        } else if (mode === "cursor" && !hasCursor) {
+          newParams.push({
+            name: "cursor",
+            type: "string",
+            required: false,
+          });
+        }
+
+        params = newParams;
+      } else {
+        params = params.filter(
+          (p) => p.name !== "limit" && p.name !== "offset" && p.name !== "cursor",
+        );
       }
-      if (mode === "offset" && !hasOffset) {
-        newParams.push({
-          name: "offset",
-          type: "number",
-          required: false,
-          defaultValue: "0",
-        });
-      } else if (mode === "cursor" && !hasCursor) {
-        newParams.push({
-          name: "cursor",
-          type: "string",
-          required: false,
-        });
-      }
 
-      params = newParams;
-    } else {
-      params = params.filter(
-        (p) => p.name !== "limit" && p.name !== "offset" && p.name !== "cursor",
-      );
-    }
-
-    updateSelectedOp({
-      pagination: { ...currentPagination, enabled },
-      params,
-    });
-  };
+      updateSelectedOp({
+        pagination: { ...currentPagination, enabled },
+        params,
+      });
+    },
+    [selectedOp, updateSelectedOp],
+  );
 
   // Sync parameters when pagination mode changes (offset vs cursor)
-  const handleChangePaginationMode = (mode: "offset" | "cursor") => {
-    if (!selectedOp) return;
-    let params = selectedOp.params || [];
-    if (mode === "offset") {
-      params = params.filter((p) => p.name !== "cursor");
-      if (!params.some((p) => p.name === "offset")) {
-        params.push({
-          name: "offset",
-          type: "number",
-          required: false,
-          defaultValue: "0",
-        });
+  const handleChangePaginationMode = useCallback(
+    (mode: "offset" | "cursor") => {
+      if (!selectedOp) return;
+      let params = selectedOp.params || [];
+      if (mode === "offset") {
+        params = params.filter((p) => p.name !== "cursor");
+        if (!params.some((p) => p.name === "offset")) {
+          params.push({
+            name: "offset",
+            type: "number",
+            required: false,
+            defaultValue: "0",
+          });
+        }
+      } else {
+        params = params.filter((p) => p.name !== "offset");
+        if (!params.some((p) => p.name === "cursor")) {
+          params.push({
+            name: "cursor",
+            type: "string",
+            required: false,
+          });
+        }
       }
-    } else {
-      params = params.filter((p) => p.name !== "offset");
-      if (!params.some((p) => p.name === "cursor")) {
-        params.push({
-          name: "cursor",
-          type: "string",
-          required: false,
-        });
-      }
-    }
 
-    updateSelectedOp({
-      pagination: {
-        ...(selectedOp.pagination || {
-          enabled: true,
-          defaultLimit: 20,
-          maxLimit: 100,
-        }),
-        mode,
-      },
-      params,
-    });
-  };
+      updateSelectedOp({
+        pagination: {
+          ...(selectedOp.pagination || {
+            enabled: true,
+            defaultLimit: 20,
+            maxLimit: 100,
+          }),
+          mode,
+        },
+        params,
+      });
+    },
+    [selectedOp, updateSelectedOp],
+  );
 
   // Available table nodes for BusinessLogicBlock context
-  const availableTableNodes = allNodes
-    .filter((n) => n?.type === "entity")
-    .map((n) => ({
-      id: n.id,
-      label: n.data?.label || "Table",
-    }));
+  const availableTableNodes = useMemo(
+    () =>
+      allNodes
+        .filter((n) => n?.type === "entity")
+        .map((n) => ({
+          id: n.id,
+          label: n.data?.label || "Table",
+        })),
+    [allNodes],
+  );
 
   const autoOps = currentOps.filter((op) => op.isAutoGenerated);
   const customOps = currentOps.filter((op) => !op.isAutoGenerated);
@@ -255,13 +276,25 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
     <>
       {selectedOp ? (
         <FunctionDetailEditor
+          key={selectedOp.id}
           selectedOp={selectedOp}
+          isNew={isNewOp}
+          onCancelNew={() => {
+            handleDeleteOp(selectedOp.id);
+            setIsNewOp(false);
+          }}
+          onSaveNew={() => {
+            setIsNewOp(false);
+          }}
           label={label}
           columns={columns}
           pascalLabel={pascalLabel}
           availableTableNodes={availableTableNodes}
           parentDb={parentDb}
-          onBack={() => setSelectedOpId(null)}
+          onBack={() => {
+            setSelectedOpId(null);
+            setIsNewOp(false);
+          }}
           updateSelectedOp={updateSelectedOp}
           handleTogglePagination={handleTogglePagination}
           handleChangePaginationMode={handleChangePaginationMode}
@@ -272,7 +305,10 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
           label={label}
           autoOps={autoOps}
           customOps={customOps}
-          onSelectOp={(id) => setSelectedOpId(id)}
+          onSelectOp={(id) => {
+            setSelectedOpId(id);
+            setIsNewOp(false);
+          }}
           onToggle={handleToggle}
           onRegenerateDefaults={handleRegenerateDefaults}
           onCreateNewFunction={handleCreateNewFunction}

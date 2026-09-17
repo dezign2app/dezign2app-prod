@@ -33,11 +33,17 @@ export const ParamFieldEditor: React.FC<ParamFieldEditorProps> = React.memo(
     const [text, setText] = useState<string>(() => formatInitial(value));
     const isFocusedRef = useRef(false);
     const commitTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const latestTextRef = useRef(text);
+    latestTextRef.current = text;
+    const onCommitRef = useRef(onCommit);
+    onCommitRef.current = onCommit;
 
     // Sync from parent only when not actively focused / typing
     useEffect(() => {
       if (!isFocusedRef.current) {
-        setText(formatInitial(value));
+        const nextVal = formatInitial(value);
+        setText(nextVal);
+        latestTextRef.current = nextVal;
       }
     }, [value]);
 
@@ -46,28 +52,40 @@ export const ParamFieldEditor: React.FC<ParamFieldEditorProps> = React.memo(
         if (isJsonType) {
           try {
             const parsed = JSON.parse(currentText);
-            onCommit(parsed);
+            onCommitRef.current(parsed);
           } catch {
-            onCommit(currentText);
+            onCommitRef.current(currentText);
           }
         } else if (param.type === "number") {
           const n = Number(currentText);
-          onCommit(isNaN(n) ? 0 : n);
+          onCommitRef.current(isNaN(n) ? 0 : n);
         } else {
-          onCommit(currentText);
+          onCommitRef.current(currentText);
         }
       },
-      [isJsonType, param.type, onCommit],
+      [isJsonType, param.type],
     );
+
+    // Flush on unmount so no parameter values are lost
+    useEffect(() => {
+      return () => {
+        if (commitTimerRef.current) {
+          clearTimeout(commitTimerRef.current);
+          commitTimerRef.current = null;
+          commit(latestTextRef.current);
+        }
+      };
+    }, [commit]);
 
     const handleChange = (newText: string) => {
       setText(newText);
+      latestTextRef.current = newText;
       if (commitTimerRef.current) {
         clearTimeout(commitTimerRef.current);
       }
       commitTimerRef.current = setTimeout(() => {
         commit(newText);
-      }, 200);
+      }, 350);
     };
 
     const handleBlur = () => {
@@ -84,7 +102,8 @@ export const ParamFieldEditor: React.FC<ParamFieldEditorProps> = React.memo(
         const parsed = JSON.parse(text);
         const formatted = JSON.stringify(parsed, null, 2);
         setText(formatted);
-        onCommit(parsed);
+        latestTextRef.current = formatted;
+        onCommitRef.current(parsed);
       } catch {}
     };
 
