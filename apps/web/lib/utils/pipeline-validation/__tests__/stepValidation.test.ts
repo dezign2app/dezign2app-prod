@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isBindingSourceConfigured, isStepInputUnconfigured } from "../stepValidation";
+import { isNodePipelineUnconfigured } from "../nodeValidation";
 import { PipelineStepDraft } from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/pipeline-step-editor/types";
 
 describe("pipeline-validation: isBindingSourceConfigured", () => {
@@ -311,5 +312,65 @@ describe("pipeline-validation: isStepInputUnconfigured for zero-arg transformer 
     };
 
     expect(isStepInputUnconfigured(step, [])).toBe(false);
+  });
+});
+
+describe("pipeline-validation: isNodePipelineUnconfigured for db_ref vs entity", () => {
+  const entityTableNode = {
+    id: "table-conversations",
+    type: "entity",
+    data: {
+      label: "conversations",
+      columns: [
+        { name: "id", type: "string", isPrimaryKey: true },
+        { name: "title", type: "string", isNotNull: true },
+      ],
+    },
+  } as any;
+
+  const dbRefNode = {
+    id: "db-ref-1",
+    type: "db_ref",
+    data: {
+      tableRef: "table-conversations",
+    },
+  } as any;
+
+  const endpointWithUnmappedStep = {
+    id: "ep-1",
+    nodeId: "service-1",
+    pipelineSteps: [
+      {
+        id: "step-1",
+        name: "createConversation",
+        type: "db_operation",
+        enabled: true,
+        tableNodeId: "table-conversations",
+        operationId: "create",
+        inputBindings: [], // Missing required 'title'
+      },
+    ],
+  } as any;
+
+  it("returns false for entity node (table / dbschema node) even when step is unmapped", () => {
+    const hasError = isNodePipelineUnconfigured(
+      "table-conversations",
+      [entityTableNode, dbRefNode],
+      [],
+      [endpointWithUnmappedStep],
+      [],
+    );
+    expect(hasError).toBe(false);
+  });
+
+  it("returns true for db_ref node (DatabaseTableRefNode) when step referencing the table is unmapped", () => {
+    const hasError = isNodePipelineUnconfigured(
+      "db-ref-1",
+      [entityTableNode, dbRefNode],
+      [],
+      [endpointWithUnmappedStep],
+      [],
+    );
+    expect(hasError).toBe(true);
   });
 });
