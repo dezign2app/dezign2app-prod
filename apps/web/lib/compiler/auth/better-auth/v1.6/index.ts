@@ -23,10 +23,34 @@ export function compileBetterAuthV16(
   _allNodes: BackendNode[] = [],
   _allEdges: BackendEdge[] = []
 ): CompiledServiceResult & { authNodeId: string } {
-  const data = (node.data || {}) as BetterAuthV16NodeData;
-  const serviceName = data.label || "Auth";
-  const authPort = data.port || "3000";
-  const authBaseUrl = data.baseUrl || `http://localhost:${authPort}`;
+  const rawData = (node.data || {}) as BetterAuthV16NodeData;
+  const serviceName = rawData.label || "Auth";
+  const authPort = rawData.port || "3000";
+  const authBaseUrl = rawData.baseUrl || `http://localhost:${authPort}`;
+
+  // Check if Payments node is wired to this AuthNode
+  const paymentsEdge = _allEdges.find(
+    (e) =>
+      (e.target === node.id && (e.targetHandle === "payments-plugin-in" || e.targetHandle === "auth-in")) ||
+      (e.source === node.id && e.sourceHandle === "payments-plugin-in")
+  );
+  const connectedPaymentsNode = paymentsEdge
+    ? _allNodes.find(
+        (n) => n.id === (paymentsEdge.target === node.id ? paymentsEdge.source : paymentsEdge.target) && n.type === "payments"
+      )
+    : _allNodes.find((n) => n.type === "payments" && _allNodes.filter((x) => x.type === "auth").length <= 1);
+
+  const data: BetterAuthV16NodeData = {
+    ...rawData,
+    paymentsPlugin: rawData.paymentsPlugin || (connectedPaymentsNode
+      ? {
+          provider: "creem",
+          apiKeyEnv: connectedPaymentsNode.data?.apiKeyEnv || "CREEM_API_KEY",
+          webhookSecretEnv: connectedPaymentsNode.data?.webhookSecretEnv || "CREEM_WEBHOOK_SECRET",
+        }
+      : undefined),
+  };
+
   const enabledPlugins = data.plugins || ["bearer", "admin", "organization", "jwt"];
   const clientPlugins: string[] = [];
   if (enabledPlugins.includes("admin")) clientPlugins.push("adminClient");

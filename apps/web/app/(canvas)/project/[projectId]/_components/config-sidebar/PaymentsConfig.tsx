@@ -10,8 +10,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { CreditCard, Plus, Trash, PlugZap, ShieldCheck } from "lucide-react";
-import { PaymentsPlanConfig } from "@workspace/canvas";
+import {
+  CreditCard,
+  Plus,
+  Trash,
+  PlugZap,
+  ShieldCheck,
+  Database,
+  Table as TableIcon,
+  CheckCircle2,
+} from "lucide-react";
+import {
+  PaymentsPlanConfig,
+  PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION,
+  SUBSCRIPTION_STATUSES,
+  DEFAULT_DATABASE_NODE_LABEL,
+  DEFAULT_DATABASE_ENGINE,
+  DEFAULT_DATABASE_ENV_VARS,
+  getUniqueNodeLabel,
+} from "@workspace/canvas";
 
 export const PaymentsConfig = ({
   id,
@@ -56,6 +73,66 @@ export const PaymentsConfig = ({
             : connectedAuthEdge.source),
       )
     : null;
+
+  const subscriptionEntity = nodes.find(
+    (n) =>
+      (n.type === "entity" || n.type === "db_ref") &&
+      (n.data?.label?.toLowerCase() === "subscription" ||
+        n.data?.label?.toLowerCase() === "subscriptions"),
+  );
+
+  const addNode = useBackendCanvasStore((s) => s.addNode);
+  const addEdge = useBackendCanvasStore((s) => s.addEdge);
+
+  const handleAddSubscriptionTable = () => {
+    let dbNode = nodes.find((n) => n.type === "database" && n.data?.dbEngine !== "redis");
+    let dbId = dbNode?.id;
+
+    if (!dbId) {
+      dbId = crypto.randomUUID();
+      const dbLabel = getUniqueNodeLabel(nodes, DEFAULT_DATABASE_NODE_LABEL, "database");
+      addNode({
+        id: dbId,
+        type: "database",
+        position: { x: (node.position?.x ?? 0) - 250, y: (node.position?.y ?? 0) + 250 },
+        data: {
+          label: dbLabel,
+          dbEngine: DEFAULT_DATABASE_ENGINE,
+          dbType: "relational",
+          dbCategory: "sql",
+          dbConnectionType: "env_var",
+          connectionStringEnv: DEFAULT_DATABASE_ENV_VARS.connectionStringEnv,
+          dbFilePathEnv: DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv,
+          color: "#f59e0b",
+          isDefault: true,
+        },
+      });
+    }
+
+    const tableId = `entity-${Date.now()}-subscription`;
+    addNode({
+      id: tableId,
+      type: "entity",
+      position: { x: node.position?.x ?? 0, y: (node.position?.y ?? 0) + 250 },
+      data: {
+        label: "subscription",
+        description: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.description,
+        columns: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultColumns,
+        databaseId: dbId,
+      },
+    });
+
+    if (dbId) {
+      addEdge({
+        id: `edge-${dbId}-${tableId}`,
+        source: dbId,
+        target: tableId,
+        sourceHandle: "database-source",
+        targetHandle: "database-entity-target",
+        type: "database-connection",
+      });
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6 mt-4 pb-12 text-foreground">
@@ -216,6 +293,52 @@ export const PaymentsConfig = ({
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Subscriptions Table & Customization */}
+      <div className="flex flex-col gap-3 p-3.5 bg-muted/20 rounded-lg border border-border/40">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Database className="w-4 h-4 text-emerald-500" />
+            <Label className="text-xs font-semibold">Subscriptions Database Table</Label>
+          </div>
+          {subscriptionEntity ? (
+            <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-medium">
+              <CheckCircle2 className="w-3 h-3" /> Added to Schema           </span>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+              onClick={handleAddSubscriptionTable}
+            >
+              <TableIcon className="w-3.5 h-3.5 mr-1" /> Add Table to Canvas
+            </Button>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          {subscriptionEntity
+            ? "The subscription entity is on your canvas. Click the table node on the canvas to add custom fields (e.g. seats, metadata, billing details)."
+            : "Add the subscriptions table as a visual entity node on the canvas to customize fields, or let the compiler synthesize standard fields automatically."}
+        </p>
+
+        {/* Predefined Statuses */}
+        <div className="flex flex-col gap-1.5 pt-1">
+          <Label className="text-[11px] font-semibold text-muted-foreground uppercase">
+            Predefined Subscription Statuses
+          </Label>
+          <div className="flex flex-wrap gap-1">
+            {SUBSCRIPTION_STATUSES.map((status) => (
+              <span
+                key={status}
+                className="px-1.5 py-0.5 rounded bg-background text-[10px] font-mono text-muted-foreground border border-border/60"
+              >
+                {status}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 

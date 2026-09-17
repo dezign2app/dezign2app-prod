@@ -23,6 +23,7 @@ import {
   Layout,
   LayoutTemplate,
   Braces,
+  CreditCard,
 } from "lucide-react";
 import { useReactFlow } from "@xyflow/react";
 import {
@@ -200,6 +201,15 @@ export function NodePaletteSidebar({
                 >
                   <ShieldCheck className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   Auth Node
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
+                  onClick={() => handleAddGraphNode("payments", "")}
+                >
+                  <CreditCard className="w-3.5 h-3.5 mr-2 text-emerald-500 shrink-0" />
+                  Creem Payments
                 </Button>
                 <Button
                   variant="outline"

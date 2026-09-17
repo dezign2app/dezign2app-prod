@@ -10,7 +10,7 @@ import type { PageSection } from "@workspace/canvas/types";
 import { generateKeyBetween } from "fractional-indexing";
 import { BackendCanvasState, EndpointWithNode } from "../types";
 import { getLastIndex } from "../utils";
-import { PreparedNodeResult } from "./types";
+import { PreparedNodeResult, NodeCreationCanvasState } from "./types";
 
 /**
  * Prepares and allocates ports, default endpoints, child web pages, and fractional indices
@@ -18,7 +18,7 @@ import { PreparedNodeResult } from "./types";
  */
 export function prepareNodeForAddition(
   nodeWithoutIndex: Omit<BackendNode, "fractionalIndex">,
-  currentState: BackendCanvasState,
+  currentState: NodeCreationCanvasState,
 ): PreparedNodeResult {
   let finalNode = nodeWithoutIndex;
 
@@ -116,6 +116,26 @@ export function prepareNodeForAddition(
         label: effectiveLabel,
         appSlug: effectiveSlug,
         port: nodeWithoutIndex.data?.port || String(nextPort),
+      },
+    };
+  }
+
+  // 3.5 Payments node default configuration
+  if (nodeWithoutIndex.type === "payments") {
+    const existingData = nodeWithoutIndex.data;
+    finalNode = {
+      ...finalNode,
+      data: {
+        provider: "creem",
+        apiKeyEnv: "CREEM_API_KEY",
+        webhookSecretEnv: "CREEM_WEBHOOK_SECRET",
+        plans: [
+          { id: "plan-free", name: "Free Tier", price: "$0", interval: "monthly" },
+          { id: "plan-pro", name: "Pro Plan", price: "$29", interval: "monthly" },
+          { id: "plan-enterprise", name: "Enterprise", price: "$199", interval: "monthly" },
+        ],
+        ...existingData,
+        label: existingData?.label || "Creem Payments",
       },
     };
   }

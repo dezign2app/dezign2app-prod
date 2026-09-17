@@ -278,5 +278,20 @@ export function createGraphNodeData(
     };
   }
 
+  if (type === "payments") {
+    return {
+      ...baseData,
+      label: label || "Creem Payments",
+      provider: "creem",
+      apiKeyEnv: "CREEM_API_KEY",
+      webhookSecretEnv: "CREEM_WEBHOOK_SECRET",
+      plans: [
+        { id: "plan-free", name: "Free Tier", price: "$0", interval: "monthly" },
+        { id: "plan-pro", name: "Pro Plan", price: "$29", interval: "monthly" },
+        { id: "plan-enterprise", name: "Enterprise", price: "$199", interval: "monthly" },
+      ],
+    };
+  }
+
   return baseData;
 }

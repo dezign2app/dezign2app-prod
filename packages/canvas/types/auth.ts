@@ -398,6 +398,21 @@ export interface BetterAuthTableDefinition {
   }>;
 }
 
+export interface PaymentsTableDefinition {
+  key: string;
+  name: string;
+  category: "payments";
+  description: string;
+  defaultColumns: Array<{
+    name: string;
+    type: string;
+    isPrimaryKey?: boolean;
+    isForeignKey?: boolean;
+    isUnique?: boolean;
+    references?: { table: string; column: string };
+  }>;
+}
+
 export interface PaymentsPlanConfig {
   id: string;
   name: string;

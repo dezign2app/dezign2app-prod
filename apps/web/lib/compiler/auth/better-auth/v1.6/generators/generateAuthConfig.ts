@@ -91,27 +91,33 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
     );
   }
 
-  // customSession plugin configuration for session claims
+  // customSession plugin configuration for session claims & payments
   const sessionConfig = data.session;
   const sessionClaims: SessionClaimConfig[] = sessionConfig?.claims || [];
   const customSessionClaims = sessionClaims.filter(
     (c: SessionClaimConfig) => c.deliveryMode === "session" || c.destination === "session"
   );
+  const hasPayments = Boolean(data.paymentsPlugin);
 
-  if (customSessionClaims.length > 0) {
+  if (customSessionClaims.length > 0 || hasPayments) {
     pluginImports.add("customSession");
-    const claimFields = customSessionClaims
-      .map((claim: SessionClaimConfig) => {
-        const key = claim.key || "claim";
-        if (claim.source === "orgRole") {
-          return `        ${key}: session.activeOrganizationId ? "member" : undefined,`;
-        }
-        return `        ${key}: "${claim.targetValue || "default_value"}", // Resolved from ${claim.source}`;
-      })
-      .join("\n");
+    const claimLines: string[] = customSessionClaims.map((claim: SessionClaimConfig) => {
+      const key = claim.key || "claim";
+      if (claim.source === "orgRole") {
+        return `        ${key}: session.activeOrganizationId ? "member" : undefined,`;
+      }
+      return `        ${key}: "${claim.targetValue || "default_value"}", // Resolved from ${claim.source}`;
+    });
+
+    if (hasPayments) {
+      claimLines.push(
+        `        plan: "plan" in user && typeof user.plan === "string" ? user.plan : "free",`,
+        `        creemCustomerId: "creemCustomerId" in user && typeof user.creemCustomerId === "string" ? user.creemCustomerId : undefined,`,
+      );
+    }
 
     pluginCalls.push(
-      `customSession(async ({ user, session }) => {\n    return {\n      user,\n      session: {\n        ...session,\n${claimFields}\n      },\n    };\n  })`
+      `customSession(async ({ user, session }) => {\n    return {\n      user,\n      session: {\n        ...session,\n${claimLines.join("\n")}\n      },\n    };\n  })`
     );
   }
 
@@ -253,6 +259,12 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
     }
   }
 
+  // User Additional Fields (payments plan & customer ID)
+  let userBlock = "";
+  if (data.paymentsPlugin) {
+    userBlock = `\n  user: {\n    additionalFields: {\n      plan: {\n        type: "string",\n        defaultValue: "free",\n      },\n      creemCustomerId: {\n        type: "string",\n        required: false,\n      },\n    },\n  },`;
+  }
+
   // Imports
   const pluginImportStr = pluginImports.size > 0
     ? `import { ${Array.from(pluginImports).join(", ")} } from "better-auth/plugins";\n`
@@ -267,7 +279,7 @@ import { nextCookies } from "better-auth/next-js";
 ${adapterConfig.importStatement}
 ${createMiddlewareImport}${pluginImportStr}
 export const auth = betterAuth({
-  database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}
+  database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${userBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}
   plugins: [
     ${pluginCalls.join(",\n    ")},
     nextCookies(),

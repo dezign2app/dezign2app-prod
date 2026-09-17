@@ -1,4 +1,4 @@
-import type { BetterAuthTableDefinition, AuthLifecycleHookDefinition } from "../types/auth";
+import type { BetterAuthTableDefinition, AuthLifecycleHookDefinition, PaymentsTableDefinition } from "../types/auth";
 import { DB_COLUMN_TYPES } from "./database";
 
 // ─── Auth Framework & Better Auth Options ───────────────────────────────────────
@@ -224,9 +224,35 @@ export const SUBSCRIPTION_STATUSES = [
   "past_due",
   "canceled",
   "expired",
+  "unpaid",
+  "paused",
 ] as const;
 
 export type SubscriptionStatusType = (typeof SUBSCRIPTION_STATUSES)[number];
+
+export const PAYMENTS_TABLE_NAMES = {
+  SUBSCRIPTION: "subscription",
+} as const;
+
+export const PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION: PaymentsTableDefinition = {
+  key: "subscriptionEntityId",
+  name: "subscription",
+  category: "payments",
+  description: "User subscription records, plan tiers, billing cycles, and Creem customer/subscription links.",
+  defaultColumns: [
+    { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true },
+    { name: "userId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: "user", column: "id" } },
+    { name: "creemSubscriptionId", type: DB_COLUMN_TYPES.TEXT, isUnique: true },
+    { name: "creemCustomerId", type: DB_COLUMN_TYPES.TEXT },
+    { name: "plan", type: DB_COLUMN_TYPES.TEXT },
+    { name: "status", type: DB_COLUMN_TYPES.TEXT },
+    { name: "currentPeriodStart", type: DB_COLUMN_TYPES.TEXT },
+    { name: "currentPeriodEnd", type: DB_COLUMN_TYPES.TEXT },
+    { name: "cancelAtPeriodEnd", type: DB_COLUMN_TYPES.BOOLEAN },
+    { name: "createdAt", type: DB_COLUMN_TYPES.TEXT },
+    { name: "updatedAt", type: DB_COLUMN_TYPES.TEXT },
+  ],
+};
 
 export const PAYMENTS_INTERVALS = ["monthly", "yearly"] as const;
 export type PaymentsIntervalType = (typeof PAYMENTS_INTERVALS)[number];
