@@ -302,26 +302,43 @@ describe("compileRedisNodes", () => {
     expect(schemaFile!.content).toContain("export type Conversation = ConversationItem[];");
     expect(schemaFile!.content).toContain("export function getConversationKey");
 
-    // 2. Helper functions should include appendConversationItem, popConversationItem, getRecentConversationItems, and getConversationLength
+    // 2. Schema should export named per-operation Success, Failure, and Result types
+    expect(schemaFile!.content).toContain("export interface GetRecentConversationItemsSuccess");
+    expect(schemaFile!.content).toContain("export interface GetRecentConversationItemsFailure");
+    expect(schemaFile!.content).toContain("export type GetRecentConversationItemsResult =");
+    expect(schemaFile!.content).toContain("export interface AppendConversationItemSuccess");
+    expect(schemaFile!.content).toContain("export type AppendConversationItemResult =");
+
+    // 3. Helper functions should return named Result types and have success/error blocks
     const appendHelper = pkg.files.find((f) => f.filename === "src/helpers/conversation/appendConversationItem.ts");
     expect(appendHelper).toBeDefined();
     expect(appendHelper!.content).toContain('redis.call("JSON.ARRAPPEND"');
     expect(appendHelper!.content).toContain("item: ConversationItem");
+    expect(appendHelper!.content).toContain("Promise<AppendConversationItemResult>");
+    expect(appendHelper!.content).toContain("success: true");
+    expect(appendHelper!.content).toContain("success: false");
 
     const popHelper = pkg.files.find((f) => f.filename === "src/helpers/conversation/popConversationItem.ts");
     expect(popHelper).toBeDefined();
     expect(popHelper!.content).toContain('redis.call("JSON.ARRPOP"');
+    expect(popHelper!.content).toContain("Promise<PopConversationItemResult>");
+    expect(popHelper!.content).toContain("success: true");
 
     const recentHelper = pkg.files.find((f) => f.filename === "src/helpers/conversation/getRecentConversationItems.ts");
     expect(recentHelper).toBeDefined();
     expect(recentHelper!.content).toContain('redis.call("JSON.GET"');
     expect(recentHelper!.content).toContain("PATH");
+    expect(recentHelper!.content).toContain("Promise<GetRecentConversationItemsResult>");
+    expect(recentHelper!.content).toContain("success: true");
+    expect(recentHelper!.content).toContain("success: false");
 
     const lenHelper = pkg.files.find((f) => f.filename === "src/helpers/conversation/getConversationLength.ts");
     expect(lenHelper).toBeDefined();
     expect(lenHelper!.content).toContain('redis.call("JSON.ARRLEN"');
+    expect(lenHelper!.content).toContain("Promise<GetConversationLengthResult>");
+    expect(lenHelper!.content).toContain("success: true");
 
-    // 3. Helper barrel should export the array helpers
+    // 4. Helper barrel should export the array helpers
     const barrel = pkg.files.find((f) => f.filename === "src/helpers/conversation/index.ts");
     expect(barrel).toBeDefined();
     expect(barrel!.content).toContain('export * from "./appendConversationItem"');
@@ -398,5 +415,77 @@ describe("compileRedisNodes", () => {
     expect(fnNames).toContain("popTaskQueue");
     expect(fnNames).toContain("getTaskQueueList");
     expect(fnNames).toContain("getTaskQueueLength");
+  });
+
+  it("strictly avoids any, unknown, or 'as <type>' type casts across all emitted Redis files", () => {
+    const nodes: BackendNode[] = [
+      {
+        id: "redis-1",
+        type: "redis_instance",
+        data: {
+          label: "Primary_Redis_Cache",
+          host: "localhost",
+          port: 6379,
+        },
+        position: { x: 0, y: 0 },
+        fractionalIndex: "a0",
+      },
+      {
+        id: "schema-1",
+        type: "redis_schema",
+        data: {
+          label: "Conversations",
+          redisDataStructure: "json",
+          isNestedJsonSchema: true,
+          jsonRootType: "array",
+          rawJsonSchema: JSON.stringify([
+            {
+              message: "Hello world",
+              sender: "alice",
+              timestamp: "2026-09-14T14:00:00.000Z",
+            },
+          ]),
+          keyTemplate: "conversations:{id}",
+          databaseId: "redis-1",
+        },
+        position: { x: 100, y: 100 },
+        fractionalIndex: "a1",
+      },
+      {
+        id: "schema-2",
+        type: "redis_schema",
+        data: {
+          label: "UserSession",
+          redisDataStructure: "hash",
+          keyTemplate: "session:{id}",
+          databaseId: "redis-1",
+          hashConfig: {
+            fields: [
+              { name: "token", type: "string", required: true },
+              { name: "userId", type: "number", required: true },
+            ],
+          },
+        },
+        position: { x: 100, y: 200 },
+        fractionalIndex: "a2",
+      },
+    ];
+
+    const result = compileRedisNodes(nodes);
+    const pkg = result.packages![0]!;
+
+    for (const file of pkg.files) {
+      if (!file.filename.endsWith(".ts")) continue;
+      // No : any or <any>
+      expect(file.content).not.toMatch(/:\s*any\b/);
+      expect(file.content).not.toMatch(/<any>/);
+      // No : unknown or <unknown>
+      expect(file.content).not.toMatch(/:\s*unknown\b/);
+      expect(file.content).not.toMatch(/<unknown>/);
+      // No 'as <Type>' assertions
+      expect(file.content).not.toMatch(/\bas\s+[A-Za-z0-9_]+/);
+      // No loose generics like <T = ...>
+      expect(file.content).not.toMatch(/<T\s*=/);
+    }
   });
 });

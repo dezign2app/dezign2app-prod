@@ -39,7 +39,7 @@ export function compileRedis74StreamSchema(
   if (streamConfig?.consumerGroups && streamConfig.consumerGroups.length > 0) {
     const groupsConst = `${typeName.toUpperCase()}_CONSUMER_GROUPS`;
     metaLines.push(
-      `export const ${groupsConst} = ${JSON.stringify(streamConfig.consumerGroups.map((g) => g.name))} as const;`,
+      `export const ${groupsConst}: readonly string[] = ${JSON.stringify(streamConfig.consumerGroups.map((g) => g.name))};`,
     );
     exportedSymbols.push(groupsConst);
   }

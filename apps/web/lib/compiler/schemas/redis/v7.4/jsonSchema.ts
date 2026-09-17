@@ -53,7 +53,7 @@ export function compileRedis74JsonSchema(
                   : f.type === "boolean"
                     ? "boolean"
                     : f.type === "json"
-                      ? "Record<string, unknown>"
+                      ? "Record<string, string | number | boolean | null>"
                       : "string",
               required: Boolean(f.required),
             }))
@@ -66,7 +66,7 @@ export function compileRedis74JsonSchema(
               (f) =>
                 `  ${f.name}${f.required ? "" : "?"}: ${f.type || "string"};`,
             )
-            .join("\n")
+            .join("\n") + "\n  [key: string]: string | number | boolean | null | undefined;"
         : "  id: string;\n  [key: string]: string | number | boolean | null | undefined;";
 
     if (schemaNode.data?.jsonRootType === "array") {
@@ -77,6 +77,46 @@ export function compileRedis74JsonSchema(
     } else {
       interfacesBlock = `export interface ${typeName} {\n${interfaceFields}\n}`;
     }
+  }
+
+  // --- Per-Operation Schema Types (Option B: Named Interfaces) ---
+  const operationTypes: string[] = [];
+  if (isJsonArray && itemTypeName) {
+    const opPrefixes = [
+      { name: `GetRecent${typeName}Items`, dataType: `${itemTypeName}[]` },
+      { name: `Append${typeName}Item`, dataType: "number" },
+      { name: `Pop${typeName}Item`, dataType: `${itemTypeName} | null` },
+      { name: `Get${typeName}Length`, dataType: "number" },
+      { name: `Get${typeName}`, dataType: `${typeName} | null` },
+      { name: `Set${typeName}`, dataType: "void" },
+    ];
+    opPrefixes.forEach(({ name, dataType }) => {
+      exportedSymbols.push(`${name}Success`, `${name}Failure`, `${name}Result`);
+      operationTypes.push(
+        `export interface ${name}Success {\n  success: true;\n  data: ${dataType};\n}\n\n` +
+          `export interface ${name}Failure {\n  success: false;\n  error: {\n    message: string;\n    code?: string;\n    details?: string;\n  };\n}\n\n` +
+          `export type ${name}Result =\n  | ${name}Success\n  | ${name}Failure;`,
+      );
+    });
+  } else {
+    const opPrefixes = [
+      { name: `Get${typeName}`, dataType: `${typeName} | null` },
+      { name: `Set${typeName}`, dataType: "void" },
+    ];
+    opPrefixes.forEach(({ name, dataType }) => {
+      exportedSymbols.push(`${name}Success`, `${name}Failure`, `${name}Result`);
+      operationTypes.push(
+        `export interface ${name}Success {\n  success: true;\n  data: ${dataType};\n}\n\n` +
+          `export interface ${name}Failure {\n  success: false;\n  error: {\n    message: string;\n    code?: string;\n    details?: string;\n  };\n}\n\n` +
+          `export type ${name}Result =\n  | ${name}Success\n  | ${name}Failure;`,
+      );
+    });
+  }
+
+  if (operationTypes.length > 0) {
+    interfacesBlock +=
+      `\n\n// ─── Per-Operation Result Schemas (Success | Failure) ─────────\n` +
+      operationTypes.join("\n\n");
   }
 
   return {

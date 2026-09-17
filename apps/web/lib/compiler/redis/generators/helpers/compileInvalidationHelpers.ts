@@ -12,7 +12,6 @@ export function compileInvalidationHelpers(ctx: HelperContext): HelperEmitResult
   const barrelExports: string[] = [];
 
   const invalidateFnContent = `import { getRedisClient } from "../../client";
-import { deleteCache as rawDeleteCache } from "../../cache";
 import {
   get${typeName}Key,
   ${typeName.toUpperCase()}_KEY_PATTERN,
@@ -26,7 +25,14 @@ const logger = createLogger("invalidate${typeName}");
  */
 export async function invalidate${typeName}(${keyArgsSig}): Promise<boolean> {
   const key = get${typeName}Key(${templateParams.join(", ") || "id"});
-  return rawDeleteCache(key);
+  try {
+    const redis = await getRedisClient();
+    const result = await redis.del(key);
+    return result > 0;
+  } catch (error) {
+    logger.error(\`Failed to invalidate key \${key}\`, error);
+    return false;
+  }
 }
 
 export const delete${typeName} = invalidate${typeName};
@@ -40,7 +46,7 @@ export async function invalidateAll${typeName}(): Promise<number> {
     const stream = redis.scanStream({ match: ${typeName.toUpperCase()}_KEY_PATTERN, count: 100 });
     let deletedCount = 0;
     for await (const resultKeys of stream) {
-      const keys = resultKeys as string[];
+      const keys: string[] = Array.isArray(resultKeys) ? resultKeys : [];
       if (keys.length > 0) {
         await redis.del(...keys);
         deletedCount += keys.length;
