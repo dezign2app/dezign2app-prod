@@ -118,14 +118,20 @@ function generateTableHelpers(
   code += `\n`;
   code += `const logger = createLogger("db:${tableName}");\n\n`;
 
+  const colVarNames = new Set(cols.map((c) => toVarName(c.name)));
+
   // Types
   code += `// ── Types ────────────────────────────────────────────────────────────────────\n\n`;
   code += `export type ${Pascal}Row = {\n`;
   cols.forEach((c) => {
     code += `  ${toVarName(c.name)}: ${toTsType(c.type)};\n`;
   });
-  code += `  message?: string;\n`;
-  code += `  success?: boolean;\n`;
+  if (!colVarNames.has("message")) {
+    code += `  message?: string;\n`;
+  }
+  if (!colVarNames.has("success")) {
+    code += `  success?: boolean;\n`;
+  }
   code += `};\n\n`;
   code += `export type Create${Pascal}Data = ${dataType};\n\n`;
   code += `export type Update${Pascal}Data = Partial<Create${Pascal}Data>;\n\n`;
@@ -288,6 +294,7 @@ function generateTableHelpers(
       !opCode.includes(`randomUUID`);
 
     const isLegacyMissingMessage =
+      !colVarNames.has("message") &&
       (op.kind === "create" || op.kind === "update" || op.kind === "delete") &&
       Boolean(op.code) &&
       !opCode.includes("message:");
@@ -427,7 +434,8 @@ function generateTableHelpers(
         code += `  const _rowId = ${rowIdExpr};\n`;
       }
       code += `  logger.info("✓ Record created in ${tableName}", { ${pkColName}: _rowId });\n`;
-      code += `  return { ${pkColName}: _rowId, message: "${pascalSingular} created successfully", ...data, ${writableCols.filter((c) => {
+      const operationalCreatedMsg = colVarNames.has("message") ? "" : `message: "${pascalSingular} created successfully", `;
+      code += `  return { ${pkColName}: _rowId, ${operationalCreatedMsg}...data, ${writableCols.filter((c) => {
         const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
         return nameLower === "createdat" || nameLower === "updatedat" || nameLower === "created_at" || nameLower === "updated_at";
       }).map((c) => {
@@ -446,7 +454,8 @@ function generateTableHelpers(
           : `typeof info.lastInsertRowid === "bigint" ? info.lastInsertRowid.toString() : String(info.lastInsertRowid)`;
       code += `  const _rowId = ${rowIdExpr};\n`;
       code += `  logger.info("✓ Record created in ${tableName}", { ${pkColName}: _rowId });\n`;
-      code += `  return { ${pkColName}: _rowId, message: "${pascalSingular} created successfully" } as unknown as ${Pascal}Row;\n`;
+      const operationalCreatedDefaultMsg = colVarNames.has("message") ? "" : `, message: "${pascalSingular} created successfully"`;
+      code += `  return { ${pkColName}: _rowId${operationalCreatedDefaultMsg} } as unknown as ${Pascal}Row;\n`;
       code += `}\n\n`;
     } else if (op.kind === "update" && writableCols.length > 0) {
       code += `/** ${op.description || `Update a ${tableName} row by primary key`} */\n`;
@@ -461,7 +470,8 @@ function generateTableHelpers(
       code += `  stmtUpdate.run(${writableCols.map((c) => `updated.${toVarName(c.name)}`).join(", ")}, ${pkVarName});\n`;
       code += `  logger.info("✓ Record updated in ${tableName}", { ${pkVarName} });\n`;
       code += `  const fresh = find${toPascal(tableName)}ById(${pkVarName});\n`;
-      code += `  return fresh ? ({ ...fresh, message: "${pascalSingular} updated successfully" } as unknown as ${Pascal}Row) : undefined;\n`;
+      const operationalUpdatedMsg = colVarNames.has("message") ? "" : `, message: "${pascalSingular} updated successfully"`;
+      code += `  return fresh ? ({ ...fresh${operationalUpdatedMsg} } as unknown as ${Pascal}Row) : undefined;\n`;
       code += `}\n\n`;
     } else if (op.kind === "delete") {
       code += `/** ${op.description || `Delete a ${tableName} row by primary key`} */\n`;
@@ -525,11 +535,25 @@ export function compileRawSqliteDatabase(
 
   const ddlStatements: string[] = [];
   const createdTableNames = new Set<string>();
+  const tableSchemas: Record<string, Array<{ name: string; type: string }>> = {};
+  const viewsToRefresh: Array<{ view: string; target: string }> = [];
 
   tables.forEach((tableNode) => {
     const tableName = toTableName(tableNode.data.label || "table");
     createdTableNames.add(tableName.toLowerCase());
     const cols = getColumns(tableNode);
+
+    tableSchemas[tableName] = cols
+      .filter((c) => !c.isPrimaryKey)
+      .map((c) => {
+        let colType = "TEXT";
+        const t = (c.type || "").toLowerCase();
+        if (isSqlNumericType(t) || isSqlBooleanType(t)) {
+          colType = "INTEGER";
+        }
+        return { name: c.name, type: colType };
+      });
+
     const colDefs = cols.map((c) => {
       let colType = "TEXT";
       const t = (c.type || "").toLowerCase();
@@ -549,10 +573,12 @@ export function compileRawSqliteDatabase(
     const pluralName = toPlural(tableName);
     if (singularName !== tableName && !createdTableNames.has(singularName.toLowerCase())) {
       ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "${singularName}" AS SELECT * FROM "${tableName}";`);
+      viewsToRefresh.push({ view: singularName, target: tableName });
       createdTableNames.add(singularName.toLowerCase());
     }
     if (pluralName !== tableName && !createdTableNames.has(pluralName.toLowerCase())) {
       ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "${pluralName}" AS SELECT * FROM "${tableName}";`);
+      viewsToRefresh.push({ view: pluralName, target: tableName });
       createdTableNames.add(pluralName.toLowerCase());
     }
   });
@@ -752,6 +778,42 @@ export function compileRawSqliteDatabase(
     'db.pragma("journal_mode = WAL");',
     'db.pragma("foreign_keys = ON");',
     ddlBlock,
+    "",
+    "// Auto-migrate schema: ensure all defined columns exist on already-created tables",
+    `const tableSchemas: Record<string, Array<{ name: string; type: string }>> = ${JSON.stringify(tableSchemas, null, 2)};`,
+    "",
+    "for (const [tName, columns] of Object.entries(tableSchemas)) {",
+    "  try {",
+    "    const info = db.pragma(`table_info(\"${tName}\")`) as Array<{ name: string }>;",
+    "    if (info && info.length > 0) {",
+    "      const existingCols = new Set(info.map((c) => c.name.toLowerCase()));",
+    "      for (const col of columns) {",
+    "        if (!existingCols.has(col.name.toLowerCase())) {",
+    "          try {",
+    '            db.exec(`ALTER TABLE "${tName}" ADD COLUMN "${col.name}" ${col.type}`);',
+    "          } catch {",
+    "            // Column might already exist or table is a view",
+    "          }",
+    "        }",
+    "      }",
+    "    }",
+    "  } catch {",
+    "    // Ignore schema sync error",
+    "  }",
+    "}",
+    ...(viewsToRefresh.length > 0 ? [
+      "",
+      "// Refresh views to include any newly added columns",
+      `const viewsToRefresh: Array<{ view: string; target: string }> = ${JSON.stringify(viewsToRefresh)};`,
+      "for (const { view, target } of viewsToRefresh) {",
+      "  try {",
+      '    db.exec(`DROP VIEW IF EXISTS "${view}"`);',
+      '    db.exec(`CREATE VIEW IF NOT EXISTS "${view}" AS SELECT * FROM "${target}"`);',
+      "  } catch {",
+      "    // Ignore view refresh error",
+      "  }",
+      "}",
+    ] : []),
   ].join("\n");
 
   files.push({

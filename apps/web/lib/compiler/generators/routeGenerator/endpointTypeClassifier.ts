@@ -112,11 +112,7 @@ function resolveEntityName(
 
     // For database-type nodes, check sub-table matching
     if (entityNode.type === "database") {
-      const tables = (
-        entityNode.data as unknown as {
-          tables?: Array<{ id?: string; name?: string }>;
-        }
-      )?.tables;
+      const tables = entityNode.data?.tables;
       if (tables && tables.length > 0) {
         const matchedTable =
           tables.find(

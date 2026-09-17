@@ -182,6 +182,11 @@ export function generateDefaultDbOperations(
       ? `typeof info.lastInsertRowid === "bigint" ? Number(info.lastInsertRowid) : info.lastInsertRowid`
       : `typeof info.lastInsertRowid === "bigint" ? info.lastInsertRowid.toString() : String(info.lastInsertRowid)`;
 
+  const hasMessageCol = columns.some((c) => toVarName(c.name || "") === "message");
+  const createMsgSnippet = hasMessageCol ? "" : `message: "${pascalSingular} created successfully", `;
+  const createDefaultMsgSnippet = hasMessageCol ? "" : `, message: "${pascalSingular} created successfully"`;
+  const updateMsgSnippet = hasMessageCol ? "" : `, message: "${pascalSingular} updated successfully"`;
+
   const createCode = insertColList.length > 0
     ? `export function create${pascalSingular}(data: Create${pascal}Data): ${pascal}Row {\n${
         isStringPk
@@ -189,12 +194,12 @@ export function generateDefaultDbOperations(
           : ""
       }  const info = stmtInsert.run(${insertBindArgs});\n${
         !isStringPk ? `  const _rowId = ${rowIdExpr};\n` : ""
-      }  return { ${pkColName}: _rowId, message: "${pascalSingular} created successfully", ...data } as unknown as ${pascal}Row;\n}`
-    : `export function create${pascalSingular}(): ${pascal}Row {\n  const info = db.prepare("INSERT INTO ${tableName} DEFAULT VALUES").run();\n  const _rowId = ${rowIdExpr};\n  return { ${pkColName}: _rowId, message: "${pascalSingular} created successfully" } as unknown as ${pascal}Row;\n}`;
+      }  return { ${pkColName}: _rowId, ${createMsgSnippet}...data } as unknown as ${pascal}Row;\n}`
+    : `export function create${pascalSingular}(): ${pascal}Row {\n  const info = db.prepare("INSERT INTO ${tableName} DEFAULT VALUES").run();\n  const _rowId = ${rowIdExpr};\n  return { ${pkColName}: _rowId${createDefaultMsgSnippet} } as unknown as ${pascal}Row;\n}`;
 
   const updateCode = writableCols.length > 0
-    ? `export function update${pascalSingular}(${pkVarName}: ${pkType}, data: Update${pascal}Data): ${pascal}Row | undefined {\n  const current = find${pascalSingular}ById(${pkVarName});\n  if (!current) return undefined;\n  const updated = { ...current, ...data };\n  stmtUpdate.run(${writableCols.map((c) => `updated.${toVarName(c.name)}`).join(", ")}, ${pkVarName});\n  const fresh = find${pascalSingular}ById(${pkVarName});\n  return fresh ? ({ ...fresh, message: "${pascalSingular} updated successfully" } as unknown as ${pascal}Row) : undefined;\n}`
-    : `export function update${pascalSingular}(${pkVarName}: ${pkType}): ${pascal}Row | undefined {\n  const fresh = find${pascalSingular}ById(${pkVarName});\n  return fresh ? ({ ...fresh, message: "${pascalSingular} updated successfully" } as unknown as ${pascal}Row) : undefined;\n}`;
+    ? `export function update${pascalSingular}(${pkVarName}: ${pkType}, data: Update${pascal}Data): ${pascal}Row | undefined {\n  const current = find${pascalSingular}ById(${pkVarName});\n  if (!current) return undefined;\n  const updated = { ...current, ...data };\n  stmtUpdate.run(${writableCols.map((c) => `updated.${toVarName(c.name)}`).join(", ")}, ${pkVarName});\n  const fresh = find${pascalSingular}ById(${pkVarName});\n  return fresh ? ({ ...fresh${updateMsgSnippet} } as unknown as ${pascal}Row) : undefined;\n}`
+    : `export function update${pascalSingular}(${pkVarName}: ${pkType}): ${pascal}Row | undefined {\n  const fresh = find${pascalSingular}ById(${pkVarName});\n  return fresh ? ({ ...fresh${updateMsgSnippet} } as unknown as ${pascal}Row) : undefined;\n}`;
 
   const deleteCode = `export function delete${pascalSingular}ById(${pkVarName}: ${pkType}): { success: boolean; message: string } {\n  stmtDelete.run(${pkVarName});\n  return { success: true, message: "${pascalSingular} deleted successfully" };\n};`;
 

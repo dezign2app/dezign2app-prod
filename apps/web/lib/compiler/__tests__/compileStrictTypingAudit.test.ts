@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { compileMonorepo } from "../compileMonorepo";
+import { generateEntitiesModule } from "../generators/typesGenerator/entitiesGenerator";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { Endpoint } from "@workspace/canvas/types";
 
@@ -196,5 +197,57 @@ describe("compileStrictTypingAudit - Verifying strict typing across generated mo
       expect(rf.content).not.toMatch(/\bas\s+[A-Za-z0-9_]+/);
       expect(rf.content).not.toMatch(/<T\s*=/);
     }
+
+    // 6. Check packages/types/src/entities/index.ts for 0 unknown, 0 any, 0 [key: string]: unknown, and 0 as casts
+    const entitiesFile = result.files.find((f) => f.filename === "packages/types/src/entities/index.ts");
+    expect(entitiesFile).toBeDefined();
+    expect(entitiesFile?.content).not.toContain("unknown");
+    expect(entitiesFile?.content).not.toContain(": any");
+    expect(entitiesFile?.content).not.toContain("<any>");
+    expect(entitiesFile?.content).not.toContain("[key: string]: unknown");
+    expect(entitiesFile?.content).not.toContain("as ");
+  });
+
+  it("generateEntitiesModule emits clean types without unknown, any, or index signatures", () => {
+    const nodes: BackendNode[] = [
+      {
+        id: "n-db",
+        type: "database",
+        position: { x: 0, y: 0 },
+        fractionalIndex: "a0",
+        data: {
+          label: "PostgresDB",
+          tables: [
+            {
+              name: "user_profiles",
+              columns: [
+                { name: "id", type: "string", isPrimaryKey: true },
+                { name: "metadata", type: "json" },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        id: "n-empty",
+        type: "entity",
+        position: { x: 0, y: 0 },
+        fractionalIndex: "a1",
+        data: {
+          label: "EmptyEntity",
+          columns: [],
+        },
+      },
+    ];
+
+    const code = generateEntitiesModule(nodes, new Set(["ReferencedFallback"]));
+    expect(code).not.toContain("unknown");
+    expect(code).not.toContain(": any");
+    expect(code).not.toContain("<any>");
+    expect(code).not.toContain("[key: string]: unknown");
+    expect(code).not.toContain("as ");
+    expect(code).toContain("export interface EmptyEntity {\n  id: string;\n}");
+    expect(code).toContain("export interface UserProfiles {\n  id: string;\n  metadata?: Record<string, string | number | boolean | null>;\n}\nexport type UserProfile = UserProfiles;\n");
+    expect(code).toContain("export interface ReferencedFallback {\n  id: string;\n}");
   });
 });

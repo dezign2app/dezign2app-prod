@@ -147,8 +147,34 @@ export interface CanvasEntityNodeData {
   seedRows?: Record<string, string | number | boolean | null>[];
 }
 
+export interface DatabaseTableDefinition {
+  id?: string;
+  name?: string;
+  label?: string;
+  tableRef?: string;
+  columns?: Array<{
+    name?: string;
+    type?: string;
+    isPrimaryKey?: boolean;
+    isPrimary?: boolean;
+    primaryKey?: boolean;
+    isNotNull?: boolean;
+    required?: boolean;
+  }>;
+  fields?: Array<{
+    name?: string;
+    type?: string;
+    isPrimaryKey?: boolean;
+    isPrimary?: boolean;
+    primaryKey?: boolean;
+    isNotNull?: boolean;
+    required?: boolean;
+  }>;
+}
+
 /** Database node fields — connection configurations, environment variables, engine. */
 export interface CanvasDatabaseNodeData {
+  tables?: DatabaseTableDefinition[];
   dbEngine?: DatabaseEngine | string;
   dbType?: "relational" | "document" | "vector" | "redis" | "key-value" | "nosql";
   dbCategory?: "sql" | "nosql" | "vector" | "key-value";

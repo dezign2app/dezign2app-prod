@@ -36,9 +36,9 @@ export function generateEntitiesModule(
 
     if (!cols || cols.length === 0) {
       if (isJsonArray) {
-        code += `export interface ${itemType} {\n  id: string;\n  [key: string]: unknown;\n}\n\nexport type ${pascal} = ${itemType}[];\n`;
+        code += `export interface ${itemType} {\n  id: string;\n}\n\nexport type ${pascal} = ${itemType};\n`;
       } else {
-        code += `export interface ${pascal} {\n  id: string;\n  [key: string]: unknown;\n}\n`;
+        code += `export interface ${pascal} {\n  id: string;\n}\n`;
       }
     } else {
       const fieldLines = cols.map((col) => {
@@ -65,7 +65,7 @@ export function generateEntitiesModule(
             break;
           case "json":
           case "object":
-            tsType = "Record<string, unknown>";
+            tsType = "Record<string, string | number | boolean | null>";
             break;
           default:
             tsType = "string";
@@ -73,9 +73,8 @@ export function generateEntitiesModule(
         return `  ${fieldName}${isReq ? "" : "?"}: ${tsType};`;
       });
 
-      fieldLines.push("  [key: string]: unknown;");
       if (isJsonArray) {
-        code += `export interface ${itemType} {\n${fieldLines.join("\n")}\n}\n\nexport type ${pascal} = ${itemType}[];\n`;
+        code += `export interface ${itemType} {\n${fieldLines.join("\n")}\n}\n\nexport type ${pascal} = ${itemType};\n`;
       } else {
         code += `export interface ${pascal} {\n${fieldLines.join("\n")}\n}\n`;
       }
@@ -97,50 +96,26 @@ export function generateEntitiesModule(
     code += `\n`;
   }
 
-  // 1. Entity and Ref nodes
-  const entityNodes = nodes.filter(
-    (n) =>
-      n.type === "entity" ||
-      n.type === "db_ref" ||
-      n.type === "redis_schema" ||
-      n.type === "redis-cache",
+  // 1. Relational Entity and DB Ref nodes (Primary persisted domain models)
+  const dbEntityNodes = nodes.filter(
+    (n) => n.type === "entity" || n.type === "db_ref",
   );
 
-  entityNodes.forEach((node) => {
+  dbEntityNodes.forEach((node) => {
     const rawName = node.data?.label || node.data?.tableRef || "Entity";
     const pascal = toPascalCase(rawName);
     if (!pascal || seenNames.has(pascal)) return;
     seenNames.add(pascal);
 
-    const isJsonArray =
-      (node.type === "redis_schema" || node.type === "redis-cache") &&
-      node.data?.jsonRootType === "array";
     const cols = node.data?.columns || [];
-    renderEntityInterface(pascal, rawName, cols, isJsonArray);
+    renderEntityInterface(pascal, rawName, cols, false);
   });
 
   // 2. Database nodes with embedded tables
   const dbNodes = nodes.filter((n) => n.type === "database");
 
   dbNodes.forEach((dbNode) => {
-    const tables: Array<{
-      name?: string;
-      label?: string;
-      tableRef?: string;
-      columns?: Array<{ name?: string; type?: string }>;
-      fields?: Array<{ name?: string; type?: string }>;
-    }> =
-      (
-        dbNode.data as unknown as {
-          tables?: Array<{
-            name?: string;
-            label?: string;
-            tableRef?: string;
-            columns?: Array<{ name?: string; type?: string }>;
-            fields?: Array<{ name?: string; type?: string }>;
-          }>;
-        }
-      )?.tables || [];
+    const tables = dbNode.data?.tables || [];
     tables.forEach((tbl) => {
       const rawName = tbl.name || tbl.label || tbl.tableRef || "Entity";
       const pascal = toPascalCase(rawName);
@@ -148,8 +123,35 @@ export function generateEntitiesModule(
       seenNames.add(pascal);
 
       const cols = tbl.columns || tbl.fields || [];
-      renderEntityInterface(pascal, rawName, cols);
+      renderEntityInterface(pascal, rawName, cols, false);
     });
+  });
+
+  // 3. Redis schema and cache nodes (Secondary cache structures)
+  const redisNodes = nodes.filter(
+    (n) => n.type === "redis_schema" || n.type === "redis-cache",
+  );
+
+  redisNodes.forEach((node) => {
+    const rawName = node.data?.label || node.data?.tableRef || "Entity";
+    const pascal = toPascalCase(rawName);
+    const singularPascal = toPascalCase(toSingular(rawName));
+    const pluralPascal = toPascalCase(toPlural(rawName));
+    const isJsonArray = node.data?.jsonRootType === "array";
+    const itemType = isJsonArray ? `${singularPascal || pascal}Item` : pascal;
+
+    // If an entity with this name was already defined by a relational DB table, don't overwrite it
+    if (seenNames.has(pascal) || seenNames.has(singularPascal) || seenNames.has(pluralPascal)) {
+      if (isJsonArray && !seenNames.has(itemType)) {
+        seenNames.add(itemType);
+        code += `export type ${itemType} = ${singularPascal || pascal};\n\n`;
+      }
+      return;
+    }
+
+    seenNames.add(pascal);
+    const cols = node.data?.columns || [];
+    renderEntityInterface(pascal, rawName, cols, isJsonArray);
   });
 
   // 3. Fallback for any entities referenced by endpoints (e.g. Products, Users)
@@ -164,7 +166,7 @@ export function generateEntitiesModule(
   }
 
   if (seenNames.size === 0) {
-    code += `export type GenericEntity = Record<string, unknown>;\n`;
+    code += `export type GenericEntity = Record<string, string | number | boolean | null>;\n`;
   }
 
   return code;
