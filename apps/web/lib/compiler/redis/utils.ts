@@ -83,7 +83,7 @@ export function jsonToTypeScriptInterfaces(
     if (typeof val === "string") return "string";
 
     if (Array.isArray(val)) {
-      if (val.length === 0) return "unknown[]";
+      if (val.length === 0) return "string[]";
       const first = val[0];
       if (typeof first === "object" && first !== null) {
         const itemTypeName = capitalize(propName) + "Item";
@@ -99,7 +99,7 @@ export function jsonToTypeScriptInterfaces(
       return nestedTypeName;
     }
 
-    return "unknown";
+    return "string";
   }
 
   function mapValToSqlType(val: unknown): string {
@@ -115,7 +115,7 @@ export function jsonToTypeScriptInterfaces(
       const tsType = inferType(val, key);
       lines.push(`  ${key}: ${tsType};`);
     }
-    const ifaceCode = `export interface ${name} {\n${lines.length > 0 ? lines.join("\n") : "  [key: string]: unknown;"}\n}`;
+    const ifaceCode = `export interface ${name} {\n${lines.length > 0 ? lines.join("\n") : "  [key: string]: string | number | boolean | null | undefined;"}\n}`;
     if (!subInterfaces.some((i) => i.startsWith(`export interface ${name} `))) {
       subInterfaces.push(ifaceCode);
     }
@@ -135,7 +135,7 @@ export function jsonToTypeScriptInterfaces(
   let fullCode = "";
   if (isArray) {
     const itemTypeName = `${cleanName}Item`;
-    const itemInterface = `export interface ${itemTypeName} {\n${rootLines.length > 0 ? rootLines.join("\n") : "  [key: string]: unknown;"}\n}`;
+    const itemInterface = `export interface ${itemTypeName} {\n${rootLines.length > 0 ? rootLines.join("\n") : "  [key: string]: string | number | boolean | null | undefined;"}\n}`;
     const allInterfaces = [...subInterfaces, itemInterface];
     fullCode = `${allInterfaces.join("\n\n")}\n\nexport type ${cleanName} = ${itemTypeName}[];`;
     return {
@@ -146,7 +146,7 @@ export function jsonToTypeScriptInterfaces(
       topLevelFields,
     };
   } else {
-    const rootInterface = `export interface ${cleanName} {\n${rootLines.length > 0 ? rootLines.join("\n") : "  [key: string]: unknown;"}\n}`;
+    const rootInterface = `export interface ${cleanName} {\n${rootLines.length > 0 ? rootLines.join("\n") : "  [key: string]: string | number | boolean | null | undefined;"}\n}`;
     const allInterfaces = [...subInterfaces, rootInterface];
     fullCode = allInterfaces.join("\n\n");
     return {

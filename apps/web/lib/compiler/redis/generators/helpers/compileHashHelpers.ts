@@ -13,7 +13,12 @@ export function compileHashHelpers(ctx: HelperContext): HelperEmitResult {
 
   // 1. get<Name>.ts
   const getFnContent = `import { getRedisClient } from "../../client";
-import { ${typeName}, get${typeName}Key } from "../../schemas/${varName}";
+import {
+  ${typeName},
+  get${typeName}Key,
+  Get${typeName}Result,
+  GetAll${typeName}FieldsResult,
+} from "../../schemas/${varName}";
 import { createLogger } from "@workspace/logger";
 
 const logger = createLogger("get${typeName}");
@@ -21,20 +26,28 @@ const logger = createLogger("get${typeName}");
 /**
  * Retrieve entire Hash object for ${typeName}
  */
-export async function get${typeName}(${keyArgsSig}): Promise<${typeName} | null> {
+export async function get${typeName}(${keyArgsSig}): Promise<Get${typeName}Result> {
   const key = get${typeName}Key(${templateParams.join(", ") || "id"});
   try {
     const redis = await getRedisClient();
     const raw = await redis.hgetall(key);
-    if (!raw || Object.keys(raw).length === 0) return null;
-    return raw as unknown as ${typeName};
+    if (!raw || Object.keys(raw).length === 0) return { success: true, data: null };
+    const data: ${typeName} = Object.assign({ id: key }, raw);
+    return { success: true, data };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     logger.error(\`Failed to get \${key} from Redis Hash\`, error);
-    return null;
+    return {
+      success: false,
+      error: {
+        message,
+        code: "REDIS_HASH_GET_ERROR",
+      },
+    };
   }
 }
 
-export const getAll${typeName}Fields = get${typeName};
+export const getAll${typeName}Fields: (${keyArgsSig}) => Promise<GetAll${typeName}FieldsResult> = get${typeName};
 `;
   files.push({
     filename: `src/helpers/${varName}/get${typeName}.ts`,
@@ -49,6 +62,8 @@ import {
   ${typeName},
   get${typeName}Key,
   ${typeName.toUpperCase()}_TTL_SECONDS,
+  Set${typeName}Result,
+  Set${typeName}FieldsResult,
 } from "../../schemas/${varName}";
 import { createLogger } from "@workspace/logger";
 
@@ -57,11 +72,11 @@ const logger = createLogger("set${typeName}");
 /**
  * Set Hash fields for ${typeName}
  */
-export async function set${typeName}<T = Partial<${typeName}>>(
+export async function set${typeName}(
   ${keyArgsSig ? `${keyArgsSig}, ` : ""}
-  data: T,
+  data: Partial<${typeName}>,
   ttlSeconds?: number | { ttl?: number },
-): Promise<void> {
+): Promise<Set${typeName}Result> {
   const resolvedTtl =
     typeof ttlSeconds === "number"
       ? ttlSeconds
@@ -72,7 +87,7 @@ export async function set${typeName}<T = Partial<${typeName}>>(
   try {
     const redis = await getRedisClient();
     const entries: Record<string, string> = {};
-    Object.entries(data as Record<string, unknown>).forEach(([k, v]) => {
+    Object.entries(data).forEach(([k, v]) => {
       if (v !== undefined && v !== null) {
         entries[k] = typeof v === "object" ? JSON.stringify(v) : String(v);
       }
@@ -83,9 +98,17 @@ export async function set${typeName}<T = Partial<${typeName}>>(
         await redis.expire(key, resolvedTtl);
       }
     }
+    return { success: true, data: undefined };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     logger.error(\`Failed to set \${key} in Redis Hash\`, error);
-    throw error;
+    return {
+      success: false,
+      error: {
+        message,
+        code: "REDIS_HASH_SET_ERROR",
+      },
+    };
   }
 }
 
@@ -100,7 +123,7 @@ export const set${typeName}Fields = set${typeName};
 
   // 3. get<Name>Field.ts
   const getFieldFnContent = `import { getRedisClient } from "../../client";
-import { ${typeName}, get${typeName}Key } from "../../schemas/${varName}";
+import { ${typeName}, get${typeName}Key, Get${typeName}FieldResult } from "../../schemas/${varName}";
 import { createLogger } from "@workspace/logger";
 
 const logger = createLogger("get${typeName}Field");
@@ -111,15 +134,22 @@ const logger = createLogger("get${typeName}Field");
 export async function get${typeName}Field<K extends keyof ${typeName}>(
   ${keyArgsSig ? `${keyArgsSig}, ` : ""}
   field: K,
-): Promise<${typeName}[K] | null> {
+): Promise<Get${typeName}FieldResult> {
   const key = get${typeName}Key(${templateParams.join(", ") || "id"});
   try {
     const redis = await getRedisClient();
     const val = await redis.hget(key, String(field));
-    return (val as unknown as ${typeName}[K]) ?? null;
+    return { success: true, data: val };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     logger.error(\`Failed to get field \${String(field)} from \${key}\`, error);
-    return null;
+    return {
+      success: false,
+      error: {
+        message,
+        code: "REDIS_HASH_GETFIELD_ERROR",
+      },
+    };
   }
 }
 `;
@@ -132,7 +162,7 @@ export async function get${typeName}Field<K extends keyof ${typeName}>(
 
   // 4. set<Name>Field.ts
   const setFieldFnContent = `import { getRedisClient } from "../../client";
-import { ${typeName}, get${typeName}Key } from "../../schemas/${varName}";
+import { ${typeName}, get${typeName}Key, Set${typeName}FieldResult } from "../../schemas/${varName}";
 import { createLogger } from "@workspace/logger";
 
 const logger = createLogger("set${typeName}Field");
@@ -144,15 +174,23 @@ export async function set${typeName}Field<K extends keyof ${typeName}>(
   ${keyArgsSig ? `${keyArgsSig}, ` : ""}
   field: K,
   value: ${typeName}[K],
-): Promise<void> {
+): Promise<Set${typeName}FieldResult> {
   const key = get${typeName}Key(${templateParams.join(", ") || "id"});
   try {
     const redis = await getRedisClient();
     const valStr = typeof value === "object" ? JSON.stringify(value) : String(value);
     await redis.hset(key, String(field), valStr);
+    return { success: true, data: undefined };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     logger.error(\`Failed to set field \${String(field)} on \${key}\`, error);
-    throw error;
+    return {
+      success: false,
+      error: {
+        message,
+        code: "REDIS_HASH_SETFIELD_ERROR",
+      },
+    };
   }
 }
 `;

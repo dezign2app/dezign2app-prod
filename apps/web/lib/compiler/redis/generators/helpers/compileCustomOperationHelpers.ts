@@ -56,7 +56,7 @@ export function compileCustomOperationHelpers(ctx: HelperContext): HelperEmitRes
     if (op.enabled !== false && op.code && op.code.trim()) {
       const customFnName = op.name || `custom${typeName}Op`;
       const customFnFile = `import { getRedisClient } from "../../client";
-import { getCache as rawGetCache, setCache as rawSetCache, deleteCache as rawDeleteCache } from "../../cache";
+import { getCache, setCache, deleteCache } from "../../cache";
 import {
   ${typeName},
   get${typeName}Key,

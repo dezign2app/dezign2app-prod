@@ -85,6 +85,19 @@ export function applyStepDecorators(
       resultLines = [
         `try {`,
         ...resultLines.map((l) => `  ${l}`),
+        ...(outVar
+          ? [
+              `  if (${outVar} && typeof ${outVar} === "object" && "success" in ${outVar} && !(${outVar} as { success: boolean }).success) {`,
+              `    const errMsg = (${outVar} as { error?: { message?: string } }).error?.message || "${onError.errorMessage || `${safeStepName} execution failed`}";`,
+              `    logger.error("Step ${safeStepName} failed (early return):", errMsg);`,
+              `    return res.status(${onError.statusCode || 502}).json({`,
+              `      error: "${onError.errorMessage || `${safeStepName} execution failed`}",`,
+              `      details: errMsg,`,
+              `      statusCode: ${onError.statusCode || 502},`,
+              `    });`,
+              `  }`,
+            ]
+          : []),
         `} catch (stepErr) {`,
         `  logger.error("Step ${safeStepName} failed (early return):", stepErr);`,
         `  return res.status(${onError.statusCode || 502}).json({`,
@@ -103,6 +116,10 @@ export function applyStepDecorators(
           `let ${outVar}${typeDecl}`,
           `try {`,
           ...transformedLines.map((l) => `  ${l}`),
+          `  if (${outVar} && typeof ${outVar} === "object" && "success" in ${outVar} && !(${outVar} as { success: boolean }).success) {`,
+          `    logger.warn("Step ${safeStepName} returned failure, using fallback value:", (${outVar} as { error?: unknown }).error);`,
+          `    ${outVar} = ${onError.fallbackValue || "null"};`,
+          `  }`,
           `} catch (stepErr) {`,
           `  logger.warn("Step ${safeStepName} failed, using fallback value:", stepErr);`,
           `  ${outVar} = ${onError.fallbackValue || "null"};`,
@@ -143,6 +160,15 @@ export function applyStepDecorators(
       resultLines = [
         `try {`,
         ...resultLines.map((l) => `  ${l}`),
+        ...(outVar
+          ? [
+              `  if (${outVar} && typeof ${outVar} === "object" && "success" in ${outVar} && !(${outVar} as { success: boolean }).success) {`,
+              `    const errMsg = (${outVar} as { error?: { message?: string } }).error?.message || "${onError.errorMessage || `${safeStepName} execution failed`}";`,
+              `    logger.error("Step ${safeStepName} failed:", errMsg);`,
+              `    throw new Error(errMsg);`,
+              `  }`,
+            ]
+          : []),
         `} catch (stepErr) {`,
         `  logger.error("Step ${safeStepName} failed:", stepErr);`,
         `  throw stepErr;`,

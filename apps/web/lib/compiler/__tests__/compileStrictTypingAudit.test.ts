@@ -184,5 +184,17 @@ describe("compileStrictTypingAudit - Verifying strict typing across generated mo
     for (const a of actionFiles) {
       expect(a.content).not.toContain("requestBody?: unknown");
     }
+
+    // 5. Check Redis files for 0 any, 0 unknown, 0 'as <Type>' casts, and 0 loose <T> generics
+    const redisFiles = result.files.filter((f) => f.filename.includes("packages/redis") || f.filename.includes("/schemas/conversation") || f.filename.includes("/helpers/conversation"));
+    for (const rf of redisFiles) {
+      if (!rf.filename.endsWith(".ts")) continue;
+      expect(rf.content).not.toMatch(/:\s*any\b/);
+      expect(rf.content).not.toMatch(/<any>/);
+      expect(rf.content).not.toMatch(/:\s*unknown\b/);
+      expect(rf.content).not.toMatch(/<unknown>/);
+      expect(rf.content).not.toMatch(/\bas\s+[A-Za-z0-9_]+/);
+      expect(rf.content).not.toMatch(/<T\s*=/);
+    }
   });
 });

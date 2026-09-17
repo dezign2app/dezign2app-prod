@@ -47,21 +47,21 @@ export function compileReusableFunctionRegistry(ctx: HelperContext): ReusableFun
     reusableFunctions.push({
       name: `append${typeName}Item`,
       importPath: packageName,
-      signature: `append${typeName}Item(${keyArgsSig ? `${keyArgsSig}, ` : ""}item: ${itemType}): Promise<number>`,
+      signature: `append${typeName}Item(${keyArgsSig ? `${keyArgsSig}, ` : ""}item: ${itemType}): Promise<Append${typeName}ItemResult>`,
       targetName: varName,
       kind: "create",
     });
     reusableFunctions.push({
       name: `pop${typeName}Item`,
       importPath: packageName,
-      signature: `pop${typeName}Item(${keyArgsSig ? `${keyArgsSig}, ` : ""}index: number = -1): Promise<${itemType} | null>`,
+      signature: `pop${typeName}Item(${keyArgsSig ? `${keyArgsSig}, ` : ""}index: number = -1): Promise<Pop${typeName}ItemResult>`,
       targetName: varName,
       kind: "delete",
     });
     reusableFunctions.push({
       name: `getRecent${typeName}Items`,
       importPath: packageName,
-      signature: `getRecent${typeName}Items(${keyArgsSig ? `${keyArgsSig}, ` : ""}count: number = 20): Promise<${itemType}[]>`,
+      signature: `getRecent${typeName}Items(${keyArgsSig ? `${keyArgsSig}, ` : ""}count: number = 20): Promise<GetRecent${typeName}ItemsResult>`,
       targetName: varName,
       kind: "findAll",
       returnIsArray: true,
@@ -69,14 +69,14 @@ export function compileReusableFunctionRegistry(ctx: HelperContext): ReusableFun
     reusableFunctions.push({
       name: `get${typeName}Length`,
       importPath: packageName,
-      signature: `get${typeName}Length(${keyArgsSig}): Promise<number>`,
+      signature: `get${typeName}Length(${keyArgsSig}): Promise<Get${typeName}LengthResult>`,
       targetName: varName,
       kind: "findById",
     });
     reusableFunctions.push({
       name: `get${typeName}`,
       importPath: packageName,
-      signature: `get${typeName}(${keyArgsSig}): Promise<${typeName} | null>`,
+      signature: `get${typeName}(${keyArgsSig}): Promise<Get${typeName}Result>`,
       targetName: varName,
       kind: "findById",
       returnIsArray: true,
@@ -84,7 +84,7 @@ export function compileReusableFunctionRegistry(ctx: HelperContext): ReusableFun
     reusableFunctions.push({
       name: `set${typeName}`,
       importPath: packageName,
-      signature: `set${typeName}(${keyArgsSig ? `${keyArgsSig}, ` : ""}data: Partial<${typeName}>): Promise<void>`,
+      signature: `set${typeName}(${keyArgsSig ? `${keyArgsSig}, ` : ""}data: ${typeName}): Promise<Set${typeName}Result>`,
       targetName: varName,
       kind: "create",
     });
@@ -92,42 +92,42 @@ export function compileReusableFunctionRegistry(ctx: HelperContext): ReusableFun
     reusableFunctions.push({
       name: `get${typeName}`,
       importPath: packageName,
-      signature: `get${typeName}(${keyArgsSig}): Promise<${typeName} | null>`,
+      signature: `get${typeName}(${keyArgsSig}): Promise<Get${typeName}Result>`,
       targetName: varName,
       kind: "findById",
     });
     reusableFunctions.push({
       name: `getAll${typeName}Fields`,
       importPath: packageName,
-      signature: `getAll${typeName}Fields(${keyArgsSig}): Promise<${typeName} | null>`,
+      signature: `getAll${typeName}Fields(${keyArgsSig}): Promise<GetAll${typeName}FieldsResult>`,
       targetName: varName,
       kind: "findAll",
     });
     reusableFunctions.push({
       name: `set${typeName}`,
       importPath: packageName,
-      signature: `set${typeName}(${keyArgsSig ? `${keyArgsSig}, ` : ""}data: Partial<${typeName}>): Promise<void>`,
+      signature: `set${typeName}(${keyArgsSig ? `${keyArgsSig}, ` : ""}data: Partial<${typeName}>): Promise<Set${typeName}Result>`,
       targetName: varName,
       kind: "create",
     });
     reusableFunctions.push({
       name: `set${typeName}Fields`,
       importPath: packageName,
-      signature: `set${typeName}Fields(${keyArgsSig ? `${keyArgsSig}, ` : ""}data: Partial<${typeName}>): Promise<void>`,
+      signature: `set${typeName}Fields(${keyArgsSig ? `${keyArgsSig}, ` : ""}data: Partial<${typeName}>): Promise<Set${typeName}FieldsResult>`,
       targetName: varName,
       kind: "create",
     });
     reusableFunctions.push({
       name: `get${typeName}Field`,
       importPath: packageName,
-      signature: `get${typeName}Field(${keyArgsSig ? `${keyArgsSig}, ` : ""}field: string): Promise<string | number | boolean | null>`,
+      signature: `get${typeName}Field(${keyArgsSig ? `${keyArgsSig}, ` : ""}field: string): Promise<Get${typeName}FieldResult>`,
       targetName: varName,
       kind: "findById",
     });
     reusableFunctions.push({
       name: `set${typeName}Field`,
       importPath: packageName,
-      signature: `set${typeName}Field(${keyArgsSig ? `${keyArgsSig}, ` : ""}field: string, value: string | number | boolean): Promise<void>`,
+      signature: `set${typeName}Field(${keyArgsSig ? `${keyArgsSig}, ` : ""}field: string, value: string | number | boolean): Promise<Set${typeName}FieldResult>`,
       targetName: varName,
       kind: "update",
     });
@@ -135,14 +135,14 @@ export function compileReusableFunctionRegistry(ctx: HelperContext): ReusableFun
     reusableFunctions.push({
       name: `get${typeName}`,
       importPath: packageName,
-      signature: `get${typeName}(${keyArgsSig}): Promise<${typeName} | null>`,
+      signature: `get${typeName}(${keyArgsSig}): Promise<Get${typeName}Result>`,
       targetName: varName,
       kind: "findById",
     });
     reusableFunctions.push({
       name: `set${typeName}`,
       importPath: packageName,
-      signature: `set${typeName}(${keyArgsSig ? `${keyArgsSig}, ` : ""}data: Partial<${typeName}>): Promise<void>`,
+      signature: `set${typeName}(${keyArgsSig ? `${keyArgsSig}, ` : ""}data: ${typeName}): Promise<Set${typeName}Result>`,
       targetName: varName,
       kind: "create",
     });

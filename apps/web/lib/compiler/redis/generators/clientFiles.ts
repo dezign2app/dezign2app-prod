@@ -15,7 +15,28 @@ export function generateConfig(
   const configContent = `/**
  * Redis Configuration & Schema Catalog for ${instLabel}
  */
-export const REDIS_CONFIG = {
+export interface RedisSchemaConfig {
+  id: string;
+  label: string;
+  dataStructure: string;
+  keyTemplate: string;
+  ttlSeconds: number;
+  cacheStrategy: string;
+}
+
+export interface RedisInstanceConfig {
+  instanceId: string;
+  label: string;
+  connectionEnv: string;
+  defaultHost: string;
+  defaultPort: number;
+  maxmemoryPolicy: string;
+  maxmemory: string;
+  persistenceMode: string;
+  schemas: RedisSchemaConfig[];
+}
+
+export const REDIS_CONFIG: RedisInstanceConfig = {
   instanceId: "${inst.id}",
   label: "${instLabel}",
   connectionEnv: "${instEnvKey}",
@@ -43,7 +64,7 @@ ${instanceSchemas
   })
   .join("\n")}
   ],
-} as const;
+};
 `;
 
   return {
@@ -129,30 +150,27 @@ import { createLogger } from "@workspace/logger";
 
 const logger = createLogger("RedisCache [${instLabel}]");
 
-export async function getCache<T = Record<string, string | number | boolean | null>>(key: string): Promise<T | null> {
+export async function getCache(key: string): Promise<string | null> {
   try {
     const redis = await getRedisClient();
-    const data = await redis.get(key);
-    if (!data) return null;
-    return JSON.parse(data) as T;
+    return await redis.get(key);
   } catch (error) {
     logger.error(\`Error reading key [\${key}] from Redis cache\`, error);
     return null;
   }
 }
 
-export async function setCache<T = Record<string, string | number | boolean | null>>(
+export async function setCache(
   key: string,
-  value: T,
+  value: string,
   ttlSeconds?: number,
 ): Promise<void> {
   try {
     const redis = await getRedisClient();
-    const serialized = JSON.stringify(value);
     if (ttlSeconds && ttlSeconds > 0) {
-      await redis.setex(key, ttlSeconds, serialized);
+      await redis.setex(key, ttlSeconds, value);
     } else {
-      await redis.set(key, serialized);
+      await redis.set(key, value);
     }
     logger.info(\`Cached key [\${key}]\${ttlSeconds ? \` with TTL \${ttlSeconds}s\` : ""}\`);
   } catch (error) {
@@ -181,20 +199,6 @@ export async function hasCache(key: string): Promise<boolean> {
     logger.error(\`Error checking existence of key [\${key}] in Redis cache\`, error);
     return false;
   }
-}
-
-export async function getOrSetCache<T>(
-  key: string,
-  fetcher: () => Promise<T>,
-  ttlSeconds?: number,
-): Promise<T> {
-  const cached = await getCache<T>(key);
-  if (cached !== null && cached !== undefined) {
-    return cached;
-  }
-  const fresh = await fetcher();
-  await setCache(key, fresh, ttlSeconds);
-  return fresh;
 }
 
 export async function flushCache(): Promise<void> {
@@ -226,16 +230,15 @@ const logger = createLogger("RedisPubSub [${instLabel}]");
 let pubClient: Redis | null = null;
 let subClient: Redis | null = null;
 
-export async function publishRedisMessage<T = Record<string, string | number | boolean | null>>(
+export async function publishRedisMessage(
   channel: string,
-  message: T,
+  message: string,
 ): Promise<number> {
   try {
     if (!pubClient) {
       pubClient = createRedisClient();
     }
-    const payload = JSON.stringify(message);
-    const count = await pubClient.publish(channel, payload);
+    const count = await pubClient.publish(channel, message);
     logger.info(
       \`Published message to Redis channel [\${channel}], received by \${count} subscriber(s)\`,
     );
@@ -246,9 +249,9 @@ export async function publishRedisMessage<T = Record<string, string | number | b
   }
 }
 
-export async function subscribeRedisChannel<T = Record<string, string | number | boolean | null>>(
+export async function subscribeRedisChannel(
   channel: string,
-  handler: (message: T, channelName: string) => void | Promise<void>,
+  handler: (message: string, channelName: string) => void | Promise<void>,
 ): Promise<Redis> {
   if (!subClient) {
     subClient = createRedisClient();
@@ -260,8 +263,7 @@ export async function subscribeRedisChannel<T = Record<string, string | number |
   subClient.on("message", async (chan: string, rawMsg: string) => {
     if (chan === channel) {
       try {
-        const parsed = JSON.parse(rawMsg) as T;
-        await handler(parsed, chan);
+        await handler(rawMsg, chan);
       } catch (err) {
         logger.error(\`Failed to process message on channel [\${chan}]\`, err);
       }
@@ -347,7 +349,7 @@ export async function readStreamGroup(
       streamKey,
       ">",
     );
-    const response = (raw || []) as StreamGroupResponse;
+    const response: StreamGroupResponse = Array.isArray(raw) ? raw : [];
 
     if (response.length === 0) {
       return [];

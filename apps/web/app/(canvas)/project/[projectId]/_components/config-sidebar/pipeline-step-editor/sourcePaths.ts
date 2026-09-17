@@ -506,7 +506,91 @@ export function getAvailableSources(
 
     if (s.tableNodeId) {
       const tableNode = allNodes.find((n) => n.id === s.tableNodeId);
-      if (tableNode?.data?.columns) {
+
+      // ── Redis step: derive paths based on operation kind ──────────────────
+      const isRedisNode =
+        tableNode?.type === "redis_schema" ||
+        tableNode?.type === "redis-cache" ||
+        (tableNode?.type === "entity" && tableNode?.data?.dbType === "redis") ||
+        s.type === "redis_operation";
+
+      if (isRedisNode && tableNode?.data) {
+        // Determine if the selected operation returns an array (findAll) or single item
+        const selectedOpId = s.operationId;
+        const selectedFnName = s.functionRef?.name;
+        const ops = tableNode.data.dbOperations as Array<{ id?: string; name?: string; kind?: string }> | undefined;
+
+        let opKind: string | undefined;
+        if (ops && (selectedOpId || selectedFnName)) {
+          const matchedOp = ops.find(
+            (op) =>
+              (selectedOpId && (op.id === selectedOpId || op.name === selectedOpId)) ||
+              (selectedFnName && op.name === selectedFnName),
+          );
+          opKind = matchedOp?.kind;
+        }
+
+        // Fallback: infer from function name pattern
+        if (!opKind && selectedFnName) {
+          const fnLower = selectedFnName.toLowerCase();
+          if (
+            fnLower.startsWith("getrecent") ||
+            fnLower.startsWith("findall") ||
+            fnLower.startsWith("getall") ||
+            fnLower.startsWith("gettop") ||
+            fnLower.startsWith("get") && fnLower.endsWith("list") ||
+            fnLower.startsWith("search") ||
+            fnLower.startsWith("read") && fnLower.endsWith("stream")
+          ) {
+            opKind = "findAll";
+          }
+        }
+
+        const isArrayReturn = opKind === "findAll";
+        const schemaColumns: Array<{ name?: string; type?: string }> =
+          tableNode.data.columns || [];
+
+        // Expose standard Success | Failure envelope paths
+        if (!stepPaths.some((p) => p.path === "success")) {
+          stepPaths.push({ path: "success", type: "boolean", description: "Whether the operation succeeded" });
+        }
+        if (!stepPaths.some((p) => p.path === "data")) {
+          stepPaths.push({ path: "data", type: isArrayReturn ? "array" : "object", description: "Returned data payload on success" });
+        }
+        if (!stepPaths.some((p) => p.path === "error.message")) {
+          stepPaths.push({ path: "error.message", type: "string", description: "Error message if operation failed" });
+        }
+
+        if (isArrayReturn) {
+          if (!stepPaths.some((p) => p.path === "data.length")) {
+            stepPaths.push({ path: "data.length", type: "number", description: "Number of items in the returned array" });
+          }
+          if (!stepPaths.some((p) => p.path === "length")) {
+            stepPaths.push({ path: "length", type: "number", description: "Number of items (legacy alias for data.length)" });
+          }
+          schemaColumns.forEach((col) => {
+            if (!col.name) return;
+            const hint = `data[n].${col.name}`;
+            if (!stepPaths.some((p) => p.path === hint)) {
+              stepPaths.push({ path: hint, type: col.type || "string", description: `Field on each array element` });
+            }
+          });
+        } else {
+          schemaColumns.forEach((col) => {
+            if (col.name) {
+              const dataPath = `data.${col.name}`;
+              if (!stepPaths.some((p) => p.path === dataPath)) {
+                stepPaths.push({ path: dataPath, type: col.type || "string" });
+              }
+              // Also keep flat path for backward compatibility
+              if (!stepPaths.some((p) => p.path === col.name)) {
+                stepPaths.push({ path: col.name, type: col.type || "string" });
+              }
+            }
+          });
+        }
+      } else if (tableNode?.data?.columns) {
+        // Non-Redis node: keep existing flat column path behavior
         tableNode.data.columns.forEach((col) => {
           if (col.name && !stepPaths.some((p) => p.path === col.name)) {
             stepPaths.push({ path: col.name, type: col.type });

@@ -50,10 +50,38 @@ export function compileRedis74HashSchema(
             (f) =>
               `  ${f.name}${f.required ? "" : "?"}: ${f.type || "string"};`,
           )
-          .join("\n")
+          .join("\n") + "\n  [key: string]: string | number | boolean | null | undefined;"
       : "  id: string;\n  [key: string]: string | number | boolean | null | undefined;";
 
-  const interfacesBlock = `export interface ${typeName} {\n${interfaceFields}\n}`;
+  let interfacesBlock = `export interface ${typeName} {\n${interfaceFields}\n}`;
+
+  // Per-Operation Schema Types (Option B: Named Interfaces)
+  const opPrefixes = [
+    { name: `Get${typeName}`, dataType: `${typeName} | null` },
+    { name: `GetAll${typeName}Fields`, dataType: `${typeName} | null` },
+    { name: `Set${typeName}`, dataType: "void" },
+    { name: `Set${typeName}Fields`, dataType: "void" },
+    { name: `Get${typeName}Field`, dataType: "string | null" },
+    { name: `Set${typeName}Field`, dataType: "void" },
+    { name: `Delete${typeName}`, dataType: "boolean" },
+    { name: `Delete${typeName}Field`, dataType: "boolean" },
+  ];
+
+  const operationTypes: string[] = [];
+  opPrefixes.forEach(({ name, dataType }) => {
+    exportedSymbols.push(`${name}Success`, `${name}Failure`, `${name}Result`);
+    operationTypes.push(
+      `export interface ${name}Success {\n  success: true;\n  data: ${dataType};\n}\n\n` +
+        `export interface ${name}Failure {\n  success: false;\n  error: {\n    message: string;\n    code?: string;\n    details?: string;\n  };\n}\n\n` +
+        `export type ${name}Result =\n  | ${name}Success\n  | ${name}Failure;`,
+    );
+  });
+
+  if (operationTypes.length > 0) {
+    interfacesBlock +=
+      `\n\n// ─── Per-Operation Result Schemas (Success | Failure) ─────────\n` +
+      operationTypes.join("\n\n");
+  }
 
   // Redis 7.4+ Field-level TTL (HEXPIRE) constants
   const fieldTtls: string[] = [];

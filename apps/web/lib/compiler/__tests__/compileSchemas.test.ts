@@ -113,7 +113,7 @@ describe("Modular Schema Compilers (Technologies & Versions)", () => {
       expect(result.file.content).toContain("export interface OrderEvents");
       expect(result.file.content).toContain("ORDEREVENTS_STREAM_MAX_LEN = 10000");
       expect(result.file.content).toContain(
-        'ORDEREVENTS_CONSUMER_GROUPS = ["fulfillment-workers"]',
+        'ORDEREVENTS_CONSUMER_GROUPS: readonly string[] = ["fulfillment-workers"]',
       );
     });
 
