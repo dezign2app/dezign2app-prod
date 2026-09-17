@@ -149,7 +149,7 @@ export function compileServiceNode(
         dbFunctions,
         kafkaFunctions,
         folderName,
-        endpoints,
+        endpoints.length > 0 ? endpoints : nodeEndpoints,
         redisFunctions,
       );
   }
