@@ -658,10 +658,12 @@ export function compileRawSqliteDatabase(
   }
 
   // Pre-seed default test users and active sessions for endpoint testing and dev execution
-  ddlStatements.push(`  INSERT OR IGNORE INTO "user" ("id", "name", "email", "role", "createdAt") VALUES
-    ('fake_admin_1', 'Admin User', 'admin@example.com', 'admin', '2026-01-01T00:00:00.000Z'),
-    ('fake_user_1', 'Standard User', 'user@example.com', 'user', '2026-01-01T00:00:00.000Z'),
-    ('fake_superadmin_1', 'Super Admin', 'superadmin@example.com', 'superadmin', '2026-01-01T00:00:00.000Z');`);
+  // Note: omit 'role' from INSERT — it only exists on the auth-managed user table, not on
+  // user-defined canvas tables. Role is auth-internal and must not be assumed to exist.
+  ddlStatements.push(`  INSERT OR IGNORE INTO "user" ("id", "name", "email", "createdAt") VALUES
+    ('fake_admin_1', 'Admin User', 'admin@example.com', '2026-01-01T00:00:00.000Z'),
+    ('fake_user_1', 'Standard User', 'user@example.com', '2026-01-01T00:00:00.000Z'),
+    ('fake_superadmin_1', 'Super Admin', 'superadmin@example.com', '2026-01-01T00:00:00.000Z');`);
 
   ddlStatements.push(`  INSERT OR IGNORE INTO "session" ("id", "userId", "token", "expiresAt", "createdAt") VALUES
     ('fake_session_admin', 'fake_admin_1', 'fake_admin_token', '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'),

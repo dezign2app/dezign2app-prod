@@ -119,13 +119,13 @@ ${hasQueryParams ? `    const search = new URLSearchParams();
     setIsSubmitting(true);
     try {
       const finalUrl = computeFinalUrl();
-      let payloadBody: unknown = undefined;
+      let payloadBody: ${hasBodyFields || hasRawJson ? `${componentName}RequestBody` : "unknown"} | undefined = undefined;
 ${hasBodyFields ? `      // Form fields payload
-      payloadBody = { ...bodyFields };
+      payloadBody = { ...bodyFields } as ${componentName}RequestBody;
 ` : ""}${hasRawJson ? `      // Raw JSON payload
       if (rawJsonBody.trim()) {
         try {
-          payloadBody = JSON.parse(rawJsonBody);
+          payloadBody = JSON.parse(rawJsonBody) as ${componentName}RequestBody;
           setJsonError(null);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
