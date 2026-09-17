@@ -80,7 +80,7 @@ export function generateServiceRouteTypes(
         const method = (ep.type || "GET").toLowerCase();
         const pascalName = `${pascalServiceName}${toPascalCase(routeFileName)}`;
         const schemaVarPrefix = `${serviceFolderName}${toPascalCase(routeFileName)}`;
-        const isBodyMethod = ["post", "put", "patch"].includes(method);
+        const isBodyMethod = ["post", "put", "patch", "delete"].includes(method);
 
         const paramsTypeRes = parametersToTsInterface(
           `${pascalName}Params`,

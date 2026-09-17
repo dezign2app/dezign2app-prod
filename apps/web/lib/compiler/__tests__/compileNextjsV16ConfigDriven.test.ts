@@ -686,5 +686,102 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     expect(pageFile?.content).toContain('import type { AnalyticsServiceGetApiMetricsResponse } from "@workspace/types";');
     expect(pageFile?.content).toContain("useState<AnalyticsServiceGetApiMetricsResponse | null>(null)");
   });
+
+  it("should generate interactive form for GET action with query parameters passing undefined for requestBody", () => {
+    const pageNode: BackendNode = {
+      id: "node-page-conversations",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Conversations",
+        appSlug: "web-app",
+        sections: [
+          {
+            id: "sec-main",
+            name: "Main",
+            renderMode: "client",
+            loadStrategy: "eager",
+            actions: [
+              {
+                id: "evt-get-conv",
+                name: "Get Conversations",
+                event: "click",
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-service-conv",
+      type: "service",
+      position: { x: 400, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "ConversationService",
+        port: "8082",
+        endpoints: [],
+      },
+    };
+
+    const endpoints: (Endpoint & { nodeId: string })[] = [
+      {
+        id: "ep-get-conversations",
+        nodeId: "node-service-conv",
+        name: "/api/conversations",
+        type: "GET",
+        queryParams: [
+          { id: "q1", name: "limit", type: "number", required: false },
+          { id: "q2", name: "cursor", type: "string", required: false },
+        ],
+      },
+    ];
+
+    const edges: BackendEdge[] = [
+      {
+        id: "edge-get-conv",
+        source: "node-page-conversations",
+        target: "node-service-conv",
+        sourceHandle: "events-evt-get-conv",
+        targetHandle: "endpoint-in-ep-get-conversations",
+        type: "connection",
+        fractionalIndex: "a0",
+      },
+    ];
+
+    const result = compileNextjsV16WebClient(
+      [pageNode],
+      endpoints,
+      [],
+      [pageNode, serviceNode],
+      edges,
+      "ConversationsApp",
+    );
+
+    const actionFile = result.files.find((f: CompiledFile) =>
+      f.filename.includes("GetConversationsAction.tsx"),
+    );
+    expect(actionFile).toBeDefined();
+    const content = actionFile?.content || "";
+
+    // 1. Should be an interactive form since query parameters are configured
+    expect(content).toContain("queryParams");
+    expect(content).toContain("setQueryParams");
+
+    // 2. Should strongly type requestBody as the canonical endpoint body type (which is never for GET)
+    expect(content).toContain("requestBody?: GetConversationsActionRequestBody");
+    expect(content).not.toContain("requestBody?: unknown");
+
+    // 3. Should NOT declare payloadBody as unknown or pass unknown payloadBody to onTrigger
+    expect(content).not.toContain("let payloadBody");
+    expect(content).not.toContain("payloadBody,");
+
+    // 4. Should pass undefined for the requestBody argument in onTrigger
+    expect(content).toContain("undefined,");
+    expect(content).toMatch(/await onTrigger\?\.[\s\S]*undefined,\s*\);/);
+  });
 });
+
 

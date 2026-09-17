@@ -157,7 +157,7 @@ ${hasPathParams ? `  pathParams?: ${componentName}PathParams;\n` : ""}${hasQuery
     requireAuth?: boolean,
     customHeaders?: Record<string, string>,
     queryParams?: Record<string, string>,
-    requestBody?: ${hasBodyFields || hasRawJson ? `${componentName}RequestBody` : "unknown"},
+    requestBody?: ${hasBodyFields || hasRawJson ? `${componentName}RequestBody` : "never"},
   ) => void;
   onRequestChange?: (payload: ${componentName}RequestPayload) => void;
   className?: string;
