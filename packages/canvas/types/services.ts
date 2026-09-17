@@ -90,6 +90,9 @@ export interface CanvasServiceNodeData {
   grpcPort?: string;
   interServiceProtocol?: InterServiceProtocol;
   endpoints?: Endpoint[];
+  enableWebSocket?: boolean;
+  enableSse?: boolean;
+  enableRealtime?: boolean;
 
   isRoot?: boolean;
   isAuthPage?: boolean;
