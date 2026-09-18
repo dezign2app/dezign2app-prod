@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
-import { Info, Code2, FileCode, Copy, Check } from "lucide-react";
+import { Info, Code2, FileCode, Copy, Check, RotateCcw } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
+import { Button } from "@workspace/ui/components/button";
 import { LocalTextarea } from "../../../backend-nodes/graph-nodes/shared";
 import { LogicMode } from "../types";
 import { toPascalCase, toVarName } from "../utils";
@@ -20,6 +21,8 @@ interface LogicInputSectionProps {
   isAsync?: boolean;
   inputSchema?: Array<{ name: string; type: string; required?: boolean }>;
   returnSchema?: Array<{ name: string; type: string; required?: boolean }>;
+  onResetContext?: () => void;
+  contextType?: "endpoint" | "db_operation" | "transformer" | "langgraph";
 }
 
 function formatInterfaceFields(
@@ -49,6 +52,8 @@ export const LogicInputSection = React.memo(function LogicInputSection({
   isAsync,
   inputSchema,
   returnSchema,
+  onResetContext,
+  contextType,
 }: LogicInputSectionProps) {
   const [viewMode, setViewMode] = useState<"framed" | "preview">("framed");
   const [copied, setCopied] = useState(false);
@@ -117,9 +122,24 @@ export const LogicInputSection = React.memo(function LogicInputSection({
           <Label className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
             <span>Natural Language Prompt / Spec</span>
           </Label>
-          <span className="text-[9px] font-mono text-muted-foreground bg-secondary/50 px-1.5 py-0.5 rounded border border-border/50">
-            ✨ AI Transformation
-          </span>
+          <div className="flex items-center gap-1.5">
+            {onResetContext && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onResetContext}
+                className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground gap-1 border border-border/40 hover:bg-secondary cursor-pointer"
+                title="Reset prompt to default schema context"
+              >
+                <RotateCcw className="w-2.5 h-2.5" />
+                <span>Reset Context</span>
+              </Button>
+            )}
+            <span className="text-[9px] font-mono text-muted-foreground bg-secondary/50 px-1.5 py-0.5 rounded border border-border/50">
+              ✨ AI Transformation
+            </span>
+          </div>
         </div>
 
         <LocalTextarea
@@ -133,9 +153,9 @@ export const LogicInputSection = React.memo(function LogicInputSection({
         <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground leading-tight bg-secondary/20 p-2 rounded border border-border/40">
           <Info className="w-3 h-3 text-muted-foreground shrink-0 mt-0.5" />
           <span>
-            Write instructions in plain language. The AI compiler will
-            automatically convert this into production code when generating
-            the microservice.
+            {contextType === "db_operation"
+              ? "Specify query logic and directives using the schema context above. Use AI Generate Code to produce clean, type-safe database query functions."
+              : "Write instructions in plain language. The AI compiler will automatically convert this into production code when generating the microservice."}
           </span>
         </div>
       </div>

@@ -16,7 +16,9 @@ export function InfrastructurePreview({
   publishedEvents = [],
   endpointMethod = "POST",
 }: InfrastructurePreviewProps) {
-  const hasDbOps = crudConfig.some((c) => c.tableNodeId && c.operations.length > 0);
+  const hasDbOps = crudConfig.some(
+    (c) => c.tableNodeId && (c.operations?.length || 0) > 0,
+  );
   const hasEvents = publishedEvents && publishedEvents.length > 0;
 
   if (!hasDbOps && !hasEvents) {
@@ -40,7 +42,11 @@ export function InfrastructurePreview({
       <div className="flex flex-col gap-2.5 bg-background/90 p-3 rounded-lg border border-border/60 font-mono text-[11px] leading-relaxed shadow-inner">
         {/* Database Prepared Statements Preview */}
         {crudConfig.map((configItem, idx) => {
-          if (!configItem.tableNodeId || configItem.operations.length === 0)
+          if (
+            !configItem.tableNodeId ||
+            !configItem.operations ||
+            configItem.operations.length === 0
+          )
             return null;
 
           const tableObj = availableTableNodes.find(
@@ -61,7 +67,7 @@ export function InfrastructurePreview({
                 <span>import &#123; ... &#125; from "@workspace/db/helpers/{varName}"</span>
               </div>
 
-              {configItem.operations.map((op) => {
+              {(configItem.operations || []).map((op) => {
                 let snippet = "";
                 if (op === "create") snippet = `create${Pascal}(body);`;
                 else if (op === "read")

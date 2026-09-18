@@ -134,6 +134,43 @@ export function compileDatabaseNodes(
           : authDbEdge.source
         : (authNode.data?.databaseId || dbNodes[0]?.id || dbNodes[0]?.nodeId);
 
+      // Backfill missing required columns on pre-existing canvas entities
+      BETTER_AUTH_TABLE_DEFINITIONS.forEach((def) => {
+        if (
+          !isBetterAuthTableRequired(def, {
+            isOrgEnabled,
+            enabledPlugins,
+            providers: authNode.data?.providers,
+          })
+        ) {
+          return;
+        }
+
+        const existingEntity = entityNodes.find((n) => {
+          const raw = n.data?.label || n.data?.tableRef || "";
+          if (!raw) return false;
+          const clean = toTableName(raw).toLowerCase();
+          const target = def.name.toLowerCase();
+          return clean === target || toSingular(clean) === target || toPlural(clean) === target;
+        });
+
+        if (existingEntity) {
+          const existingCols = existingEntity.data?.columns || [];
+          const existingColNames = new Set(
+            existingCols.map((c: { name?: string }) => (c.name || "").toLowerCase()),
+          );
+          const missingCols = def.defaultColumns.filter(
+            (dc) => !existingColNames.has((dc.name || "").toLowerCase()),
+          );
+          if (missingCols.length > 0) {
+            existingEntity.data = {
+              ...existingEntity.data,
+              columns: [...existingCols, ...missingCols],
+            };
+          }
+        }
+      });
+
       const neededDefs = BETTER_AUTH_TABLE_DEFINITIONS.filter(
         (def) =>
           isBetterAuthTableRequired(def, {
@@ -170,9 +207,32 @@ export function compileDatabaseNodes(
     }
   }
 
-  // 2.5 Synthesize or enrich Subscription table if Payments nodes exist
+  // 2.5 Synthesize or enrich Subscription and User tables if Payments nodes exist
   const paymentsNodes = allNodes.filter((n) => n.type === "payments");
-  if (paymentsNodes.length > 0) {
+  const hasPayments = paymentsNodes.length > 0 || connectedAuthNodes.some((a) => Boolean(a.data?.paymentsPlugin));
+  if (hasPayments) {
+    // Ensure User entity has plan and creemCustomerId columns
+    const userEntity = effectiveNodes.find((n) => {
+      if (n.type !== "entity" && n.type !== "db_ref") return false;
+      const lbl = (n.data?.label || n.data?.tableRef || "").toLowerCase();
+      return lbl === "user" || lbl === "users";
+    });
+    if (userEntity) {
+      const existingCols = userEntity.data?.columns || [];
+      const existingColNames = new Set(existingCols.map((c: { name?: string }) => (c.name || "").toLowerCase()));
+      const paymentUserCols = [
+        { name: "plan", type: "string" },
+        { name: "creemCustomerId", type: "string" },
+      ];
+      const missing = paymentUserCols.filter((pc) => !existingColNames.has(pc.name.toLowerCase()));
+      if (missing.length > 0) {
+        userEntity.data = {
+          ...userEntity.data,
+          columns: [...existingCols, ...missing],
+        };
+      }
+    }
+
     const userSubEntity = effectiveNodes.find((n) => {
       if (n.type !== "entity" && n.type !== "db_ref") return false;
       const lbl = (n.data?.label || "").toLowerCase();
@@ -192,7 +252,7 @@ export function compileDatabaseNodes(
           columns: [...existingCols, ...missingRequiredCols],
         };
       }
-    } else {
+    } else if (paymentsNodes.length > 0) {
       // Synthesize default subscription entity
       const targetDbId = dbNodes[0]?.id || dbNodes[0]?.nodeId;
       const syntheticSubEntity: BackendNode = {
