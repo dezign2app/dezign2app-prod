@@ -1,0 +1,777 @@
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { DbOperationFunction, CanvasEntityColumn } from "@workspace/canvas/types";
+import { BackendNode } from "@/types/canvas";
+import {
+  generateCodeWithAI,
+  buildDefaultDbPromptContext,
+  TableSchemaInfo,
+} from "../../../shared/BusinessLogicBlock";
+import {
+  inferDbOperationReturnType,
+  cleanInnerFunctionBody,
+  deriveDbFunctionSignature,
+} from "@/lib/utils/entityOperationsHelper";
+import { ConnectedDatabaseInfo } from "../ConnectedDatabasesSection";
+import { toVarName } from "@/lib/compiler/utils";
+import {
+  FunctionDetailEditorProps,
+  UseFunctionEditorStateReturn,
+} from "./types";
+
+export function useFunctionEditorState({
+  selectedOp,
+  isNew = false,
+  onCancelNew,
+  onSaveNew,
+  label,
+  columns,
+  indexes,
+  dbType: externalDbType,
+  pascalLabel,
+  availableTableNodes,
+  allTableSchemas,
+  parentDb,
+  allNodes = [],
+  onBack,
+  updateSelectedOp,
+  onDeleteRequest,
+}: FunctionDetailEditorProps): UseFunctionEditorStateReturn {
+  // Local draft state to eliminate global store roundtrips on every keystroke
+  const [draftOp, setDraftOp] = useState<DbOperationFunction>(selectedOp);
+  const isNewRef = useRef<boolean>(isNew);
+  const previousValidNameRef = useRef<string>(selectedOp.name?.trim() || "");
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const latestDraftOpRef = useRef<DbOperationFunction>(draftOp);
+  latestDraftOpRef.current = draftOp;
+
+  const isRedis =
+    parentDb?.type === "redis_instance" ||
+    parentDb?.data?.dbEngine === "redis" ||
+    draftOp.id.startsWith("redis-");
+
+  const effectiveDbType: string =
+    externalDbType ||
+    (isRedis ? "redis" : (parentDb?.data?.dbEngine || parentDb?.data?.dbType || "sqlite"));
+
+  const pendingChangesRef = useRef<Partial<DbOperationFunction>>({});
+  const debouncedSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const astInferenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const updateSelectedOpRef = useRef<(changes: Partial<DbOperationFunction>) => void>(updateSelectedOp);
+  updateSelectedOpRef.current = updateSelectedOp;
+
+  // Focus name field on mount when adding a new function
+  useEffect(() => {
+    isNewRef.current = isNew;
+    if (isNew) {
+      const timer = setTimeout(() => {
+        nameInputRef.current?.focus();
+        nameInputRef.current?.select();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isNew]);
+
+  const flushPending = useCallback(() => {
+    if (astInferenceTimerRef.current) {
+      clearTimeout(astInferenceTimerRef.current);
+      astInferenceTimerRef.current = null;
+      const currentCode = latestDraftOpRef.current.code || "";
+      const currentName = latestDraftOpRef.current.name;
+      const cleaned = cleanInnerFunctionBody(currentCode, currentName);
+      const inferredReturnType = inferDbOperationReturnType(cleaned, {
+        pascalLabel,
+        tableName: label,
+      });
+      const derivedSig = deriveDbFunctionSignature(
+        currentName,
+        latestDraftOpRef.current.params,
+        inferredReturnType || latestDraftOpRef.current.returnType,
+      );
+      if (inferredReturnType && inferredReturnType !== latestDraftOpRef.current.returnType) {
+        pendingChangesRef.current.returnType = inferredReturnType;
+        latestDraftOpRef.current.returnType = inferredReturnType;
+      }
+      if (derivedSig && derivedSig !== latestDraftOpRef.current.signature) {
+        pendingChangesRef.current.signature = derivedSig;
+        latestDraftOpRef.current.signature = derivedSig;
+      }
+    }
+    if (debouncedSaveTimerRef.current) {
+      clearTimeout(debouncedSaveTimerRef.current);
+      debouncedSaveTimerRef.current = null;
+    }
+    if (Object.keys(pendingChangesRef.current).length > 0) {
+      const changesToFlush = { ...pendingChangesRef.current };
+      pendingChangesRef.current = {};
+      updateSelectedOpRef.current(changesToFlush);
+    }
+  }, [label, pascalLabel]);
+
+  // Flush on unmount so no changes are ever lost
+  useEffect(() => {
+    return () => {
+      const trimmed = (latestDraftOpRef.current.name || "").trim();
+      if (!trimmed && !isNewRef.current && previousValidNameRef.current) {
+        updateSelectedOpRef.current({ name: previousValidNameRef.current });
+      } else {
+        flushPending();
+      }
+    };
+  }, [flushPending]);
+
+  // Sync external prop if operation ID changes
+  const prevOpIdRef = useRef<string>(selectedOp.id);
+  useEffect(() => {
+    if (selectedOp.id !== prevOpIdRef.current) {
+      flushPending();
+      prevOpIdRef.current = selectedOp.id;
+      setDraftOp(selectedOp);
+      previousValidNameRef.current = selectedOp.name?.trim() || "";
+    }
+  }, [selectedOp, flushPending]);
+
+  const handleUpdateOp = useCallback(
+    (changes: Partial<DbOperationFunction>, immediate = false) => {
+      setDraftOp((prev) => {
+        const next: DbOperationFunction = { ...prev, ...changes };
+        if (
+          (changes.name !== undefined ||
+            changes.params !== undefined ||
+            changes.returnType !== undefined) &&
+          changes.signature === undefined
+        ) {
+          next.signature = deriveDbFunctionSignature(
+            next.name,
+            next.params,
+            next.returnType,
+          );
+        }
+        return next;
+      });
+
+      const currentDraft = latestDraftOpRef.current;
+      const enrichedChanges: Partial<DbOperationFunction> = { ...changes };
+      if (
+        (changes.name !== undefined ||
+          changes.params !== undefined ||
+          changes.returnType !== undefined) &&
+        changes.signature === undefined
+      ) {
+        enrichedChanges.signature = deriveDbFunctionSignature(
+          changes.name ?? currentDraft.name,
+          changes.params ?? currentDraft.params,
+          changes.returnType ?? currentDraft.returnType,
+        );
+      }
+
+      pendingChangesRef.current = { ...pendingChangesRef.current, ...enrichedChanges };
+
+      if (debouncedSaveTimerRef.current) {
+        clearTimeout(debouncedSaveTimerRef.current);
+        debouncedSaveTimerRef.current = null;
+      }
+
+      if (immediate) {
+        flushPending();
+      } else {
+        debouncedSaveTimerRef.current = setTimeout(() => {
+          flushPending();
+        }, 500);
+      }
+    },
+    [flushPending],
+  );
+
+  const handleNameChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const nextVal = e.target.value;
+      const trimmed = nextVal.trim();
+      const hasCode = !!latestDraftOpRef.current.code?.trim();
+      const isPredicate =
+        trimmed.startsWith("is") ||
+        trimmed.startsWith("has") ||
+        trimmed.startsWith("can") ||
+        trimmed.startsWith("check") ||
+        trimmed.startsWith("should");
+      const currentReturnType = latestDraftOpRef.current.returnType;
+      const isDefaultReturn =
+        !currentReturnType ||
+        currentReturnType === `${pascalLabel}Row[]` ||
+        currentReturnType === "boolean";
+
+      const effectiveReturn =
+        !hasCode && trimmed && isDefaultReturn
+          ? isPredicate
+            ? "boolean"
+            : `${pascalLabel}Row[]`
+          : currentReturnType || (isPredicate ? "boolean" : `${pascalLabel}Row[]`);
+
+      const derivedSig = deriveDbFunctionSignature(
+        nextVal,
+        latestDraftOpRef.current.params,
+        effectiveReturn,
+      );
+
+      if (!hasCode && trimmed && isDefaultReturn) {
+        setDraftOp((prev) => ({
+          ...prev,
+          name: nextVal,
+          returnType: effectiveReturn,
+          signature: derivedSig,
+        }));
+        handleUpdateOp({ name: nextVal, returnType: effectiveReturn, signature: derivedSig });
+      } else {
+        setDraftOp((prev) => ({ ...prev, name: nextVal, signature: derivedSig }));
+        if (trimmed) {
+          handleUpdateOp({ name: nextVal, signature: derivedSig });
+        }
+      }
+    },
+    [handleUpdateOp, pascalLabel],
+  );
+
+  const handleNameBlur = useCallback(() => {
+    const trimmed = (latestDraftOpRef.current.name || "").trim();
+
+    if (!trimmed) {
+      if (isNewRef.current) {
+        if (debouncedSaveTimerRef.current) {
+          clearTimeout(debouncedSaveTimerRef.current);
+          debouncedSaveTimerRef.current = null;
+          pendingChangesRef.current = {};
+        }
+        if (onCancelNew) {
+          onCancelNew();
+        } else {
+          onDeleteRequest({
+            id: draftOp.id,
+            name: draftOp.name || "Function",
+          });
+        }
+        return;
+      } else {
+        const restored =
+          previousValidNameRef.current ||
+          (isRedis ? `custom${pascalLabel}Op` : `custom${pascalLabel}Query`);
+        setDraftOp((prev) => ({ ...prev, name: restored }));
+        handleUpdateOp({ name: restored }, true);
+        return;
+      }
+    }
+
+    previousValidNameRef.current = trimmed;
+    isNewRef.current = false;
+    onSaveNew?.();
+    handleUpdateOp({ name: trimmed }, true);
+  }, [
+    draftOp.id,
+    draftOp.name,
+    isRedis,
+    pascalLabel,
+    handleUpdateOp,
+    onCancelNew,
+    onDeleteRequest,
+    onSaveNew,
+  ]);
+
+  const handleNameKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        nameInputRef.current?.blur();
+      } else if (e.key === "Escape") {
+        if (isNewRef.current) {
+          if (debouncedSaveTimerRef.current) {
+            clearTimeout(debouncedSaveTimerRef.current);
+            debouncedSaveTimerRef.current = null;
+            pendingChangesRef.current = {};
+          }
+          if (onCancelNew) {
+            onCancelNew();
+          } else {
+            onDeleteRequest({
+              id: draftOp.id,
+              name: draftOp.name || "Function",
+            });
+          }
+        } else {
+          const restored =
+            previousValidNameRef.current ||
+            (isRedis ? `custom${pascalLabel}Op` : `custom${pascalLabel}Query`);
+          setDraftOp((prev) => ({ ...prev, name: restored }));
+          handleUpdateOp({ name: restored }, true);
+          nameInputRef.current?.blur();
+        }
+      }
+    },
+    [
+      draftOp.id,
+      draftOp.name,
+      isRedis,
+      pascalLabel,
+      handleUpdateOp,
+      onCancelNew,
+      onDeleteRequest,
+    ],
+  );
+
+  const handleBack = useCallback(() => {
+    const trimmed = (latestDraftOpRef.current.name || "").trim();
+    if (!trimmed) {
+      if (isNewRef.current) {
+        if (debouncedSaveTimerRef.current) {
+          clearTimeout(debouncedSaveTimerRef.current);
+          debouncedSaveTimerRef.current = null;
+          pendingChangesRef.current = {};
+        }
+        if (onCancelNew) {
+          onCancelNew();
+        } else {
+          onDeleteRequest({
+            id: draftOp.id,
+            name: draftOp.name || "Function",
+          });
+        }
+        return;
+      } else {
+        const restored =
+          previousValidNameRef.current ||
+          (isRedis ? `custom${pascalLabel}Op` : `custom${pascalLabel}Query`);
+        handleUpdateOp({ name: restored }, true);
+      }
+    }
+    flushPending();
+    onBack();
+  }, [
+    draftOp.id,
+    draftOp.name,
+    isRedis,
+    pascalLabel,
+    onCancelNew,
+    onDeleteRequest,
+    flushPending,
+    onBack,
+    handleUpdateOp,
+  ]);
+
+  const handleDelete = useCallback(() => {
+    if (debouncedSaveTimerRef.current) {
+      clearTimeout(debouncedSaveTimerRef.current);
+      debouncedSaveTimerRef.current = null;
+      pendingChangesRef.current = {};
+    }
+    onDeleteRequest({
+      id: draftOp.id,
+      name: draftOp.name || "Function",
+    });
+  }, [draftOp.id, draftOp.name, onDeleteRequest]);
+
+  const handleTogglePagination = useCallback(
+    (enabled: boolean) => {
+      const currentPagination = draftOp.pagination || {
+        defaultLimit: 20,
+        maxLimit: 100,
+        mode: "offset",
+      };
+
+      let params = draftOp.params || [];
+      if (enabled) {
+        const mode = currentPagination.mode || "offset";
+        const hasLimit = params.some((p) => p.name === "limit");
+        const hasOffset = params.some((p) => p.name === "offset");
+        const hasCursor = params.some((p) => p.name === "cursor");
+
+        const newParams = [...params];
+        if (!hasLimit) {
+          newParams.push({
+            name: "limit",
+            type: "number",
+            required: false,
+            defaultValue: String(currentPagination.defaultLimit ?? 20),
+          });
+        }
+        if (mode === "offset" && !hasOffset) {
+          newParams.push({
+            name: "offset",
+            type: "number",
+            required: false,
+            defaultValue: "0",
+          });
+        } else if (mode === "cursor" && !hasCursor) {
+          newParams.push({
+            name: "cursor",
+            type: "string",
+            required: false,
+          });
+        }
+        params = newParams;
+      } else {
+        params = params.filter(
+          (p) => p.name !== "limit" && p.name !== "offset" && p.name !== "cursor",
+        );
+      }
+
+      handleUpdateOp(
+        {
+          pagination: { ...currentPagination, enabled },
+          params,
+        },
+        true,
+      );
+    },
+    [draftOp.pagination, draftOp.params, handleUpdateOp],
+  );
+
+  const handleChangePaginationMode = useCallback(
+    (mode: "offset" | "cursor") => {
+      let params = draftOp.params || [];
+      if (mode === "offset") {
+        params = params.filter((p) => p.name !== "cursor");
+        if (!params.some((p) => p.name === "offset")) {
+          params.push({
+            name: "offset",
+            type: "number",
+            required: false,
+            defaultValue: "0",
+          });
+        }
+      } else {
+        params = params.filter((p) => p.name !== "offset");
+        if (!params.some((p) => p.name === "cursor")) {
+          params.push({
+            name: "cursor",
+            type: "string",
+            required: false,
+          });
+        }
+      }
+
+      handleUpdateOp(
+        {
+          pagination: {
+            ...(draftOp.pagination || {
+              enabled: true,
+              defaultLimit: 20,
+              maxLimit: 100,
+            }),
+            mode,
+          },
+          params,
+        },
+        true,
+      );
+    },
+    [draftOp.pagination, draftOp.params, handleUpdateOp],
+  );
+
+  const handlePromptChange = useCallback(
+    (prompt: string) => {
+      handleUpdateOp({ prompt, query: prompt });
+    },
+    [handleUpdateOp],
+  );
+
+  const currentInferredReturnType: string =
+    (draftOp.code && draftOp.code.trim()
+      ? inferDbOperationReturnType(draftOp.code, { pascalLabel, tableName: label })
+      : null) ||
+    draftOp.returnType ||
+    (isRedis ? `Promise<${pascalLabel} | null>` : `${pascalLabel}Row[]`);
+
+  const handleResetContext = useCallback(() => {
+    const isPredicate =
+      draftOp.name?.startsWith("is") ||
+      draftOp.name?.startsWith("has") ||
+      draftOp.name?.startsWith("can") ||
+      draftOp.name?.startsWith("check") ||
+      draftOp.name?.startsWith("should");
+    const effectiveReturnType =
+      (draftOp.code && draftOp.code.trim()
+        ? inferDbOperationReturnType(draftOp.code, { pascalLabel, tableName: label })
+        : null) ||
+      draftOp.returnType ||
+      (isPredicate ? "boolean" : `${pascalLabel}Row[]`);
+
+    const defaultText = buildDefaultDbPromptContext({
+      dbType: effectiveDbType,
+      tableName: label,
+      columns,
+      indexes,
+      operation: {
+        name: draftOp.name,
+        kind: draftOp.kind,
+        description: draftOp.description,
+        params: draftOp.params,
+        returnType: effectiveReturnType,
+      },
+    });
+    handleUpdateOp({ prompt: defaultText, query: defaultText, returnType: effectiveReturnType });
+  }, [
+    effectiveDbType,
+    label,
+    columns,
+    indexes,
+    draftOp.name,
+    draftOp.kind,
+    draftOp.description,
+    draftOp.params,
+    draftOp.returnType,
+    draftOp.code,
+    handleUpdateOp,
+    pascalLabel,
+  ]);
+
+  const functionInputSchema = useMemo(() => {
+    return (draftOp.params || []).map((p) => ({
+      name: p.name,
+      type: p.type || "any",
+      required: p.required,
+    }));
+  }, [draftOp.params]);
+
+  // Pre-populate default prompt context if empty on mount, and sanitize code/signature
+  useEffect(() => {
+    if (!draftOp.prompt && !draftOp.query) {
+      const defaultText = buildDefaultDbPromptContext({
+        dbType: effectiveDbType,
+        tableName: label,
+        columns,
+        indexes,
+        operation: {
+          name: draftOp.name,
+          kind: draftOp.kind,
+          description: draftOp.description,
+          params: draftOp.params,
+          returnType: draftOp.returnType,
+        },
+      });
+      handleUpdateOp({ prompt: defaultText, query: defaultText });
+    }
+
+    if (draftOp.code && draftOp.code.trim()) {
+      const cleaned = cleanInnerFunctionBody(draftOp.code, draftOp.name);
+      const inferred = inferDbOperationReturnType(cleaned, {
+        pascalLabel,
+        tableName: label,
+      });
+      const derivedSig = deriveDbFunctionSignature(
+        draftOp.name,
+        draftOp.params,
+        inferred || draftOp.returnType,
+      );
+      const updates: Partial<DbOperationFunction> = {};
+      if (cleaned !== draftOp.code) updates.code = cleaned;
+      if (inferred && inferred !== draftOp.returnType) updates.returnType = inferred;
+      if (derivedSig && derivedSig !== draftOp.signature) updates.signature = derivedSig;
+      if (Object.keys(updates).length > 0) {
+        handleUpdateOp(updates, true);
+      }
+    } else {
+      const derivedSig = deriveDbFunctionSignature(
+        draftOp.name,
+        draftOp.params,
+        draftOp.returnType,
+      );
+      if (derivedSig && derivedSig !== draftOp.signature) {
+        handleUpdateOp({ signature: derivedSig }, true);
+      }
+    }
+  }, []);
+
+  const handleCodeChange = useCallback(
+    (code: string) => {
+      // 1. Update draftOp.code immediately for snappy, lag-free typing
+      setDraftOp((prev) => ({ ...prev, code }));
+      pendingChangesRef.current = { ...pendingChangesRef.current, code };
+
+      // 2. Debounce store flush to 1200ms
+      if (debouncedSaveTimerRef.current) {
+        clearTimeout(debouncedSaveTimerRef.current);
+      }
+      debouncedSaveTimerRef.current = setTimeout(() => {
+        flushPending();
+      }, 1200);
+
+      // 3. Debounce expensive AST type inference & signature derivation (600ms)
+      if (astInferenceTimerRef.current) {
+        clearTimeout(astInferenceTimerRef.current);
+      }
+      astInferenceTimerRef.current = setTimeout(() => {
+        astInferenceTimerRef.current = null;
+        const currentCode = latestDraftOpRef.current.code || "";
+        const currentName = latestDraftOpRef.current.name;
+        const cleaned = cleanInnerFunctionBody(currentCode, currentName);
+        const inferredReturnType = inferDbOperationReturnType(cleaned, {
+          pascalLabel,
+          tableName: label,
+        });
+        const derivedSig = deriveDbFunctionSignature(
+          currentName,
+          latestDraftOpRef.current.params,
+          inferredReturnType || latestDraftOpRef.current.returnType,
+        );
+
+        const updates: Partial<DbOperationFunction> = {};
+        if (inferredReturnType && inferredReturnType !== latestDraftOpRef.current.returnType) {
+          updates.returnType = inferredReturnType;
+        }
+        if (derivedSig && derivedSig !== latestDraftOpRef.current.signature) {
+          updates.signature = derivedSig;
+        }
+        if (Object.keys(updates).length > 0) {
+          setDraftOp((prev) => ({ ...prev, ...updates }));
+          pendingChangesRef.current = { ...pendingChangesRef.current, ...updates };
+        }
+      }, 600);
+    },
+    [flushPending, pascalLabel, label],
+  );
+
+  const connectedDatabases: ConnectedDatabaseInfo[] = useMemo(() => {
+    if (!allNodes || !draftOp.connectedDbIds || draftOp.connectedDbIds.length === 0) {
+      return [];
+    }
+    const selectedSet = new Set(draftOp.connectedDbIds);
+    return allNodes
+      .filter(
+        (n) =>
+          selectedSet.has(n.id) &&
+          n.type === "database" &&
+          n.data?.dbEngine !== "redis" &&
+          n.data?.dbType !== "redis",
+      )
+      .map((n) => {
+        const engine = n.data?.dbEngine || n.data?.dbType || "sqlite";
+        const rawLabel = n.data?.label || `${engine.toUpperCase()} DB`;
+        const cleanVar = `${toVarName(rawLabel)}Db`;
+        return {
+          id: n.id,
+          label: rawLabel,
+          engine,
+          isRedis: false,
+          isPrimary: false,
+          varName: cleanVar,
+          importPath: `@/lib/db/${cleanVar}`,
+        };
+      });
+  }, [allNodes, draftOp.connectedDbIds]);
+
+  const handleToggleDb = useCallback(
+    (dbId: string) => {
+      const current = latestDraftOpRef.current.connectedDbIds || [];
+      const next = current.includes(dbId)
+        ? current.filter((id) => id !== dbId)
+        : [...current, dbId];
+      handleUpdateOp({ connectedDbIds: next }, true);
+    },
+    [handleUpdateOp],
+  );
+
+  const handleInsertSnippet = useCallback(
+    (snippet: string) => {
+      const currentCode = latestDraftOpRef.current.code || "";
+      const newCode = currentCode.trim()
+        ? `${currentCode.trimEnd()}\n\n${snippet}`
+        : snippet;
+      handleCodeChange(newCode);
+    },
+    [handleCodeChange],
+  );
+
+  const handleModeChange = useCallback(
+    (logicMode: "natural_language" | "code") => {
+      handleUpdateOp({ logicMode }, true);
+    },
+    [handleUpdateOp],
+  );
+
+  const handleGenerateCode = useCallback(async (): Promise<void> => {
+    const promptText =
+      draftOp.prompt ||
+      draftOp.query ||
+      `Query function for ${draftOp.name}`;
+    const generated = await generateCodeWithAI({
+      contextType: "db_operation",
+      prompt: promptText,
+      dbType: effectiveDbType,
+      tableName: label,
+      tableSchema: {
+        name: label,
+        columns: columns || [],
+        indexes: indexes || [],
+      },
+      allTableSchemas,
+      operation: {
+        id: draftOp.id,
+        name: draftOp.name,
+        kind: draftOp.kind,
+        description: draftOp.description,
+        signature: draftOp.signature,
+        params: draftOp.params || [],
+        returnType: currentInferredReturnType,
+        returnTypeMode: "inferred",
+        pagination: draftOp.pagination,
+      },
+      availableTableNodes,
+    });
+    if (generated) {
+      const cleaned = cleanInnerFunctionBody(generated, draftOp.name);
+      const inferredReturnType = inferDbOperationReturnType(cleaned, {
+        pascalLabel,
+        tableName: label,
+      });
+      const derivedSig = deriveDbFunctionSignature(
+        draftOp.name,
+        draftOp.params,
+        inferredReturnType,
+      );
+      handleUpdateOp(
+        { code: cleaned, logicMode: "code", returnType: inferredReturnType, signature: derivedSig },
+        true,
+      );
+    }
+  }, [
+    draftOp.prompt,
+    draftOp.query,
+    draftOp.name,
+    draftOp.kind,
+    draftOp.description,
+    draftOp.signature,
+    draftOp.params,
+    currentInferredReturnType,
+    draftOp.pagination,
+    draftOp.id,
+    label,
+    pascalLabel,
+    effectiveDbType,
+    columns,
+    indexes,
+    allTableSchemas,
+    availableTableNodes,
+    handleUpdateOp,
+  ]);
+
+  return {
+    draftOp,
+    isRedis,
+    effectiveDbType,
+    currentInferredReturnType,
+    functionInputSchema,
+    nameInputRef,
+    handleNameChange,
+    handleNameBlur,
+    handleNameKeyDown,
+    handleUpdateOp,
+    handleTogglePagination,
+    handleChangePaginationMode,
+    handlePromptChange,
+    handleCodeChange,
+    handleModeChange,
+    handleResetContext,
+    handleGenerateCode,
+    connectedDatabases,
+    handleToggleDb,
+    handleInsertSnippet,
+    handleDelete,
+    handleBack,
+  };
+}

@@ -32,8 +32,17 @@ export interface DbOperationParamInfo {
   required?: boolean;
   defaultValue?: string;
 }
+export interface ConnectedDbItem {
+  id: string;
+  label: string;
+  varName: string;
+  importPath: string;
+  isRedis: boolean;
+  engine?: string;
+}
 
 export interface BusinessLogicBlockProps {
+  connectedDatabases?: ConnectedDbItem[];
   mode?: LogicMode;
   onModeChange?: (mode: LogicMode) => void;
   prompt?: string;

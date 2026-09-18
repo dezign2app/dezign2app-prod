@@ -3,7 +3,7 @@ import { Info, Code2, FileCode, Copy, Check, RotateCcw } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
 import { LocalTextarea } from "../../../backend-nodes/graph-nodes/shared";
-import { LogicMode } from "../types";
+import { LogicMode, ConnectedDbItem } from "../types";
 import { toPascalCase, toVarName } from "../utils";
 
 interface LogicInputSectionProps {
@@ -23,6 +23,7 @@ interface LogicInputSectionProps {
   returnSchema?: Array<{ name: string; type: string; required?: boolean }>;
   onResetContext?: () => void;
   contextType?: "endpoint" | "db_operation" | "transformer" | "langgraph";
+  connectedDatabases?: ConnectedDbItem[];
 }
 
 function formatInterfaceFields(
@@ -54,6 +55,7 @@ export const LogicInputSection = React.memo(function LogicInputSection({
   returnSchema,
   onResetContext,
   contextType,
+  connectedDatabases = [],
 }: LogicInputSectionProps) {
   const [viewMode, setViewMode] = useState<"framed" | "preview">("framed");
   const [copied, setCopied] = useState(false);
@@ -77,11 +79,26 @@ export const LogicInputSection = React.memo(function LogicInputSection({
     return "TransformOutput";
   }, [outputTypeName, safeFunctionName, functionName]);
 
+  const isDbOp = contextType === "db_operation";
+
   const inputFieldNames = useMemo(() => {
     return (inputSchema || []).map((f) => f.name?.trim()).filter(Boolean);
   }, [inputSchema]);
 
-  const returnTypeAnnotation = isAsync ? `Promise<${outputName}>` : outputName;
+  const effectiveOutputName = useMemo(() => {
+    if (outputTypeName) return outputTypeName;
+    if (isDbOp) return "void";
+    if (safeFunctionName) return `${toPascalCase(safeFunctionName)}Output`;
+    if (functionName) return `${toPascalCase(functionName)}Output`;
+    return "TransformOutput";
+  }, [outputTypeName, isDbOp, safeFunctionName, functionName]);
+
+  const returnTypeAnnotation = useMemo(() => {
+    if (effectiveOutputName.startsWith("Promise<")) return effectiveOutputName;
+    if (isAsync) return `Promise<${effectiveOutputName}>`;
+    return effectiveOutputName;
+  }, [effectiveOutputName, isAsync]);
+
   const asyncKw = isAsync ? "async " : "";
 
   const trimmedCode = (code || "").trim();
@@ -94,7 +111,25 @@ export const LogicInputSection = React.memo(function LogicInputSection({
           .split("\n")
           .map((l) => `  ${l}`)
           .join("\n")
-      : "  // TODO: implement transformation logic";
+      : "  // TODO: implement function logic";
+
+    if (isDbOp) {
+      const dbParamSig = (inputSchema || [])
+        .map((p) => `${p.name}${p.required === false ? "?" : ""}: ${p.type || "string"}`)
+        .join(", ");
+      const fnContent = hasFullDecl
+        ? trimmedCode
+        : `export ${asyncKw}function ${safeFunctionName || functionName}(${dbParamSig}): ${returnTypeAnnotation} {\n${bodyFormatted}\n}`;
+
+      const otherDbImports = (connectedDatabases || [])
+        .map((cd) => `import { ${cd.varName} } from "${cd.importPath}";`)
+        .join("\n");
+      const importsStr = otherDbImports
+        ? `import { db } from "@/lib/db";\n${otherDbImports}\n\n`
+        : `import { db } from "@/lib/db";\n\n`;
+
+      return `${importsStr}${fnContent}\n`;
+    }
 
     const paramSignature =
       inputFieldNames.length > 0
@@ -105,8 +140,23 @@ export const LogicInputSection = React.memo(function LogicInputSection({
       ? trimmedCode
       : `export ${asyncKw}function ${safeFunctionName}(${paramSignature}): ${returnTypeAnnotation} {\n${bodyFormatted}\n}`;
 
-    return `export interface ${inputName} {\n${formatInterfaceFields(inputSchema)}\n}\n\nexport interface ${outputName} {\n${formatInterfaceFields(returnSchema)}\n}\n\n${fnContent}\n`;
-  }, [functionName, safeFunctionName, inputFieldNames, inputName, outputName, returnTypeAnnotation, asyncKw, trimmedCode, hasFullDecl, code, inputSchema, returnSchema]);
+    return `export interface ${inputName} {\n${formatInterfaceFields(inputSchema)}\n}\n\nexport interface ${effectiveOutputName} {\n${formatInterfaceFields(returnSchema)}\n}\n\n${fnContent}\n`;
+  }, [
+    functionName,
+    safeFunctionName,
+    inputFieldNames,
+    inputName,
+    effectiveOutputName,
+    returnTypeAnnotation,
+    asyncKw,
+    trimmedCode,
+    hasFullDecl,
+    code,
+    inputSchema,
+    returnSchema,
+    isDbOp,
+    connectedDatabases,
+  ]);
 
   const handleCopy = () => {
     if (!fullFileContent) return;
@@ -221,13 +271,17 @@ export const LogicInputSection = React.memo(function LogicInputSection({
       {viewMode === "preview" && functionName ? (
         <div className="flex flex-col rounded-lg border border-border/60 bg-secondary/15 overflow-hidden shadow-inner">
           <div className="flex items-center justify-between px-3 py-1.5 bg-muted/40 border-b border-border/40 font-mono text-[10px] text-muted-foreground select-none">
-            <span>src/{functionName}.ts (Generated TypeScript File)</span>
+            <span>
+              {isDbOp
+                ? `src/db/helpers/${functionName}.ts (Generated TypeScript File)`
+                : `src/${functionName}.ts (Generated TypeScript File)`}
+            </span>
           </div>
           <pre className="p-3 text-[11px] font-mono leading-relaxed text-foreground/90 overflow-x-auto whitespace-pre bg-background/50 selection:bg-purple-500/20">
             {fullFileContent}
           </pre>
         </div>
-      ) : functionName && !hasFullDecl ? (
+      ) : functionName && (!hasFullDecl || isDbOp) ? (
         <div className="flex flex-col rounded-lg border border-border/60 bg-secondary/15 overflow-hidden shadow-inner">
           {/* Top Outer Function Signature Bar */}
           <div className="px-3 py-2 bg-muted/40 border-b border-border/40 text-xs font-mono select-none overflow-x-auto">
@@ -237,27 +291,37 @@ export const LogicInputSection = React.memo(function LogicInputSection({
               <span className="text-blue-400 font-semibold">function</span>
               <span className="text-amber-300 font-bold">{safeFunctionName || functionName}</span>
               <span className="text-muted-foreground">( </span>
-              {inputFieldNames.length > 0 ? (
+              {isDbOp ? (
+                inputSchema && inputSchema.length > 0 ? (
+                  inputSchema.map((param, idx) => (
+                    <React.Fragment key={param.name || idx}>
+                      {idx > 0 && <span className="text-muted-foreground">, </span>}
+                      <span className="text-emerald-400 font-medium">{param.name}</span>
+                      {param.required === false && <span className="text-amber-400">?</span>}
+                      <span className="text-muted-foreground">: </span>
+                      <span className="text-cyan-400 font-medium">{param.type || "string"}</span>
+                    </React.Fragment>
+                  ))
+                ) : null
+              ) : inputFieldNames.length > 0 ? (
                 <>
                   <span className="text-muted-foreground">&#123; </span>
                   <span className="text-emerald-400 font-medium">
                     {inputFieldNames.join(", ")}
                   </span>
                   <span className="text-muted-foreground"> &#125;</span>
+                  <span className="text-muted-foreground"> : </span>
+                  <span className="text-cyan-400 font-medium">{inputName}</span>
                 </>
               ) : (
-                <span className="text-emerald-400 font-medium">input</span>
+                <>
+                  <span className="text-emerald-400 font-medium">input</span>
+                  <span className="text-muted-foreground"> : </span>
+                  <span className="text-cyan-400 font-medium">{inputName}</span>
+                </>
               )}
-              <span className="text-muted-foreground"> : </span>
-              <span className="text-cyan-400 font-medium">{inputName}</span>
-              <span className="text-muted-foreground"> ):</span>
-              {isAsync ? (
-                <span className="text-sky-400 font-medium">
-                  Promise&lt;<span className="text-cyan-400">{outputName}</span>&gt;
-                </span>
-              ) : (
-                <span className="text-cyan-400 font-medium">{outputName}</span>
-              )}
+              <span className="text-muted-foreground"> ): </span>
+              <span className="text-cyan-400 font-medium">{returnTypeAnnotation}</span>
               <span className="text-muted-foreground font-bold">&#123;</span>
             </div>
           </div>
@@ -268,6 +332,7 @@ export const LogicInputSection = React.memo(function LogicInputSection({
               value={code}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onCodeChange?.(e.target.value)}
               placeholder={codePlaceholder}
+              debounceMs={400}
               spellCheck={false}
               autoCapitalize="off"
               autoComplete="off"
@@ -287,6 +352,7 @@ export const LogicInputSection = React.memo(function LogicInputSection({
           value={code}
           onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onCodeChange?.(e.target.value)}
           placeholder={codePlaceholder}
+          debounceMs={400}
           spellCheck={false}
           autoCapitalize="off"
           autoComplete="off"
@@ -300,21 +366,46 @@ export const LogicInputSection = React.memo(function LogicInputSection({
         <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground leading-tight bg-secondary/20 p-2 rounded border border-border/40 font-mono">
           <Info className="w-3 h-3 text-muted-foreground shrink-0 mt-0.5" />
           <span>
-            Parameters accessible via{" "}
-            <code className="text-emerald-400 font-semibold">
-              {inputFieldNames.length > 0
-                ? `{ ${inputFieldNames.join(", ")} }`
-                : "input"}
-            </code>{" "}
-            (<code className="text-cyan-400">{inputName}</code>). Return shape must match <code className="text-cyan-400">{outputName}</code>.
+            {isDbOp ? (
+              <>
+                Database clients available: <code className="text-emerald-400 font-semibold">db</code> (primary)
+                {connectedDatabases && connectedDatabases.length > 0 && (
+                  <>
+                    {connectedDatabases.map((cd) => (
+                      <React.Fragment key={cd.id}>
+                        {", "}
+                        <code className={cd.isRedis ? "text-amber-400 font-semibold" : "text-blue-400 font-semibold"}>
+                          {cd.varName}
+                        </code>
+                        <span className="text-[9px] text-muted-foreground"> ({cd.label})</span>
+                      </React.Fragment>
+                    ))}
+                  </>
+                )}
+                {". "}
+                Helper statements: <code className="text-emerald-400 font-semibold">stmtFindAll</code>,{" "}
+                <code className="text-emerald-400 font-semibold">stmtFindById</code>,{" "}
+                <code className="text-emerald-400 font-semibold">stmtDelete</code>. Return type:{" "}
+                <code className="text-cyan-400 font-semibold">{returnTypeAnnotation}</code>.
+              </>
+            ) : (
+              <>
+                Parameters accessible via{" "}
+                <code className="text-emerald-400 font-semibold">
+                  {inputFieldNames.length > 0
+                    ? `{ ${inputFieldNames.join(", ")} }`
+                    : "input"}
+                </code>{" "}
+                (<code className="text-cyan-400">{inputName}</code>). Return shape must match{" "}
+                <code className="text-cyan-400">{effectiveOutputName}</code>.
+              </>
+            )}
           </span>
         </div>
       ) : (
         <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground leading-tight bg-secondary/20 p-2 rounded border border-border/40 font-mono">
           <Info className="w-3 h-3 text-muted-foreground shrink-0 mt-0.5" />
-          <span>
-            Write inner function body statements.
-          </span>
+          <span>Write inner function body statements.</span>
         </div>
       )}
     </div>

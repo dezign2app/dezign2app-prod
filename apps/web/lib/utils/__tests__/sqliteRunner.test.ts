@@ -33,9 +33,9 @@ describe("sqliteRunner real operations", () => {
     expect(conn.tableCount).toBe(0);
   });
 
-  it("should create table, insert record, find by id, and delete", () => {
+  it("should create table, insert record, find by id, and delete", async () => {
     // 1. Initial find by id returns null on empty table
-    const findInitial = executeSqliteLiveOperation({
+    const findInitial = await executeSqliteLiveOperation({
       dbFilePath: TEST_DB,
       tableName: "conversations",
       columns: [
@@ -56,7 +56,7 @@ describe("sqliteRunner real operations", () => {
     expect(findInitial.rawSql).toBe("SELECT * FROM conversations WHERE id = '12' LIMIT 1;");
 
     // 2. Insert a real record with id 12
-    const createResult = executeSqliteLiveOperation({
+    const createResult = await executeSqliteLiveOperation({
       dbFilePath: TEST_DB,
       tableName: "conversations",
       columns: [
@@ -86,7 +86,7 @@ describe("sqliteRunner real operations", () => {
     });
 
     // 3. Find by id 12 now returns the REAL record from SQLite dev.db
-    const findFound = executeSqliteLiveOperation({
+    const findFound = await executeSqliteLiveOperation({
       dbFilePath: TEST_DB,
       tableName: "conversations",
       operation: {
@@ -105,7 +105,7 @@ describe("sqliteRunner real operations", () => {
     });
 
     // 4. Find all returns array containing the row
-    const findAll = executeSqliteLiveOperation({
+    const findAll = await executeSqliteLiveOperation({
       dbFilePath: TEST_DB,
       tableName: "conversations",
       operation: {
@@ -123,7 +123,7 @@ describe("sqliteRunner real operations", () => {
     expect(rows[0]?.id).toBe("12");
 
     // 5. Update record
-    const updateResult = executeSqliteLiveOperation({
+    const updateResult = await executeSqliteLiveOperation({
       dbFilePath: TEST_DB,
       tableName: "conversations",
       operation: {
@@ -146,7 +146,7 @@ describe("sqliteRunner real operations", () => {
     });
 
     // 6. Delete record
-    const deleteResult = executeSqliteLiveOperation({
+    const deleteResult = await executeSqliteLiveOperation({
       dbFilePath: TEST_DB,
       tableName: "conversations",
       operation: {
@@ -160,7 +160,7 @@ describe("sqliteRunner real operations", () => {
     expect(deleteResult.success).toBe(true);
 
     // 7. Verify it is gone
-    const findAfterDelete = executeSqliteLiveOperation({
+    const findAfterDelete = await executeSqliteLiveOperation({
       dbFilePath: TEST_DB,
       tableName: "conversations",
       operation: {
@@ -173,5 +173,45 @@ describe("sqliteRunner real operations", () => {
 
     expect(findAfterDelete.success).toBe(true);
     expect(findAfterDelete.output).toBeNull();
+  });
+
+  it("should execute custom TypeScript/JavaScript function code", async () => {
+    // 1. Simple synchronous function returning a boolean
+    const customRes = await executeSqliteLiveOperation({
+      dbFilePath: TEST_DB,
+      tableName: "conversations",
+      operation: {
+        id: "custom-test",
+        name: "test",
+        kind: "custom",
+        code: "function test(key: string): boolean {\n  return true;\n}",
+      },
+      args: { key: "conversations:1001" },
+    });
+
+    expect(customRes.success).toBe(true);
+    expect(customRes.output).toBe(true);
+    expect(customRes.rawSql).toContain("test(");
+
+    // 2. Custom function querying the database
+    const dbFuncRes = await executeSqliteLiveOperation({
+      dbFilePath: TEST_DB,
+      tableName: "conversations",
+      columns: [
+        { name: "id", type: "string", isPrimaryKey: true },
+        { name: "title", type: "string" },
+      ],
+      operation: {
+        id: "custom-count",
+        name: "countConversations",
+        kind: "custom",
+        code: "function countConversations() {\n  const stmt = db.prepare('SELECT count(*) as count FROM conversations');\n  return stmt.get();\n}",
+      },
+      args: {},
+    });
+
+    expect(dbFuncRes.success).toBe(true);
+    expect(dbFuncRes.output).toEqual({ count: 0 });
+    expect(dbFuncRes.rawSql).toContain("countConversations()");
   });
 });

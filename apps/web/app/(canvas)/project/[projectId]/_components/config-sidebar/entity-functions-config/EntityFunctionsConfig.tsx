@@ -160,7 +160,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
       name: "",
       kind: "custom",
       description: isRedis ? `Custom Redis operation for ${label}` : `Custom database query for ${label}`,
-      returnTypeMode: "fixed",
+      returnTypeMode: "inferred",
       returnType: isRedis ? `Promise<${pascalLabel} | null>` : `${pascalLabel}Row[]`,
       params: isRedis ? [{ name: "key", type: "string", required: true }] : [],
       pagination: {
@@ -330,6 +330,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
           availableTableNodes={availableTableNodes}
           allTableSchemas={allTableSchemas}
           parentDb={parentDb}
+          allNodes={allNodes}
           onBack={() => {
             setSelectedOpId(null);
             setIsNewOp(false);

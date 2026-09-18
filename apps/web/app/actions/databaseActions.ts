@@ -22,6 +22,7 @@ import {
   executeSqlOperation,
   executeInSandbox,
 } from "@/lib/database-runner";
+import { executeFunctionCode } from "@/lib/database-runner/functionCodeRunner";
 
 export type {
   TestDbOperationPayload,
@@ -61,6 +62,34 @@ export async function testDbOperationAction(
     // 1. SANDBOX MODE
     if (mode === "sandbox") {
       const start = performance.now();
+
+      // If custom function code is present, execute it in sandbox
+      const code = (operation.code || "").trim();
+      const hasCustomCode =
+        code.length > 0 &&
+        (operation.kind === "custom" ||
+          code.includes("function") ||
+          code.includes("=>") ||
+          code.includes("return"));
+
+      if (hasCustomCode) {
+        const codeRes = await executeFunctionCode({
+          code,
+          name: operation.name,
+          params: operation.params,
+          args,
+          tableName: entity?.name || extractTableName(operation),
+        });
+        const durationMs = Math.round((performance.now() - start) * 100) / 100;
+        return {
+          success: codeRes.success,
+          output: sanitizeForConvex(codeRes.output),
+          error: codeRes.error,
+          durationMs: Math.max(0.4, durationMs),
+          rawCommand: codeRes.rawCommand,
+          mode: "sandbox",
+        };
+      }
 
       if (engine === "redis") {
         const plan = planRedisCommand(operation, args);
@@ -105,7 +134,7 @@ export async function testDbOperationAction(
       }
 
       const tableName = entity?.name || extractTableName(operation);
-      const result = executeSqliteLiveOperation({
+      const result = await executeSqliteLiveOperation({
         dbFilePath,
         tableName,
         columns: entity?.columns,

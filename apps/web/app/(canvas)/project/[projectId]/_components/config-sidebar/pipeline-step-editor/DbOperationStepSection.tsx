@@ -19,7 +19,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Database, Table as TableIcon, Code2, Settings, Sparkles } from "lucide-react";
+import { Database, Table as TableIcon, Code2, Settings, Sparkles, ExternalLink } from "lucide-react";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import {
+  inferDbOperationReturnType,
+  deriveDbFunctionSignature,
+} from "@/lib/utils/entityOperationsHelper";
 import { PipelineStepDraft, ExpectedArg, StepBinding } from "./types";
 
 function computeDbOpBindings(
@@ -148,6 +153,32 @@ export const DbOperationStepSection = ({
     );
   }, [availableDbOperations, step.functionRef?.name, step.operationId]);
 
+  const effectiveReturnType = useMemo(() => {
+    if (!selectedOp) return undefined;
+    const inferred =
+      selectedOp.code && selectedOp.code.trim()
+        ? inferDbOperationReturnType(selectedOp.code)
+        : null;
+    return inferred || selectedOp.returnType;
+  }, [selectedOp]);
+
+  const liveSignature = useMemo(() => {
+    if (!selectedOp) return undefined;
+    return (
+      deriveDbFunctionSignature(selectedOp.name, selectedOp.params, effectiveReturnType) ||
+      selectedOp.signature
+    );
+  }, [selectedOp, effectiveReturnType]);
+
+  const handleOpenEntityConfig = () => {
+    if (!selectedTableNode?.id) return;
+    useBackendCanvasStore.getState().setActiveConfigItem({
+      type: selectedTableNode.type as any,
+      id: selectedTableNode.id,
+      nodeId: selectedTableNode.id,
+    });
+  };
+
   const handleSelectTable = (tableId: string) => {
     const cleanTableId = tableId === "__none__" ? undefined : tableId;
     const targetNode = allEntityNodes.find((n) => n.id === cleanTableId);
@@ -179,6 +210,19 @@ export const DbOperationStepSection = ({
 
     const nextBindings = computeDbOpBindings(defaultOp, targetNode, []);
 
+    const liveSig = defaultOp
+      ? deriveDbFunctionSignature(defaultOp.name, defaultOp.params, defaultOp.returnType) ||
+        defaultOp.signature
+      : undefined;
+
+    const returnTypeStr = defaultOp
+      ? (defaultOp.code && defaultOp.code.trim()
+          ? inferDbOperationReturnType(defaultOp.code)
+          : null) ||
+        defaultOp.returnType ||
+        "any"
+      : undefined;
+
     onChange({
       ...step,
       tableNodeId: cleanTableId,
@@ -187,9 +231,18 @@ export const DbOperationStepSection = ({
         ? {
             name: defaultOp.name,
             importPath: importPath,
-            signature: defaultOp.signature,
+            signature: liveSig,
           }
         : step.functionRef,
+      outputSchema: returnTypeStr
+        ? [
+            {
+              name: "result",
+              type: returnTypeStr,
+              required: true,
+            },
+          ]
+        : step.outputSchema,
       name: varName,
       outputVariable: varName,
       inputBindings: nextBindings,
@@ -215,14 +268,29 @@ export const DbOperationStepSection = ({
     const varName = `${toVarName(op.name)}Result`;
     const nextBindings = computeDbOpBindings(op, selectedTableNode, step.inputBindings || []);
 
+    const liveSig =
+      deriveDbFunctionSignature(op.name, op.params, op.returnType) || op.signature;
+
+    const returnTypeStr =
+      (op.code && op.code.trim() ? inferDbOperationReturnType(op.code) : null) ||
+      op.returnType ||
+      "any";
+
     onChange({
       ...step,
       operationId: op.id,
       functionRef: {
         name: op.name,
         importPath: importPath,
-        signature: op.signature,
+        signature: liveSig,
       },
+      outputSchema: [
+        {
+          name: "result",
+          type: returnTypeStr,
+          required: true,
+        },
+      ],
       name: varName,
       outputVariable: varName,
       inputBindings: nextBindings,
@@ -352,6 +420,64 @@ export const DbOperationStepSection = ({
           </Select>
         </div>
       </div>
+
+      {/* Selected DB Operation Info Card */}
+      {selectedOp && (
+        <div className="flex flex-col gap-1.5 p-2 rounded bg-background/60 border border-blue-500/20 text-xs">
+          <div className="flex items-center justify-between flex-wrap gap-1">
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-blue-300 font-semibold">
+                {selectedOp.name}
+              </span>
+              <span className="text-[8px] font-mono px-1 py-0.2 rounded font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase">
+                {selectedOp.kind === "fetchByIndex" ? "INDEX" : selectedOp.kind}
+              </span>
+              {selectedOp.pagination?.enabled && (
+                <span className="text-[8px] font-mono px-1 py-0.2 rounded font-medium bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                  PAGE ({selectedOp.pagination.mode || "offset"})
+                </span>
+              )}
+
+              {selectedTableNode && (
+                <button
+                  type="button"
+                  className="flex items-center gap-1 text-[9px] text-blue-300 hover:text-blue-200 hover:underline ml-1 cursor-pointer"
+                  onClick={handleOpenEntityConfig}
+                  title="Configure Entity & Functions"
+                >
+                  <ExternalLink size={9} />
+                  <span>Configure Function</span>
+                </button>
+              )}
+            </div>
+            <span className="text-[9px] font-mono text-muted-foreground/70">
+              import from &quot;{step.functionRef?.importPath || `@workspace/db/helpers/${toTableName(selectedTableNode?.data?.label || selectedTableNode?.data?.tableRef || "table")}`}&quot;
+            </span>
+          </div>
+
+          {liveSignature && (
+            <div className="text-[10px] font-mono text-muted-foreground/90 truncate">
+              {liveSignature}
+            </div>
+          )}
+
+          {selectedOp.description && (
+            <p className="text-[10px] text-muted-foreground/80 italic">
+              {selectedOp.description}
+            </p>
+          )}
+
+          {/* Return Type Badge */}
+          {effectiveReturnType && (
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground pt-0.5">
+              <span className="text-[9px] text-muted-foreground/70">Returns:</span>
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                {effectiveReturnType}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Expected arguments preview & quick mapping buttons */}
       {selectedOp && expectedArgs && expectedArgs.length > 0 && (

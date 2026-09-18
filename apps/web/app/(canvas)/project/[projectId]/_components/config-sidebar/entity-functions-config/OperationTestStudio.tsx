@@ -73,10 +73,10 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
       {
         id: "case-1",
         name: "Standard Case",
-        params: generateDefaultParams(selectedOp, label),
+        params: generateDefaultParams(selectedOp, label, isRedis),
       },
     ];
-  }, [selectedOp.testCases, selectedOp.params, label]);
+  }, [selectedOp.testCases, selectedOp.params, label, isRedis]);
 
   const [testCases, setTestCases] = useState<DbOperationTestCase[]>(initialCases);
   const [activeCaseId, setActiveCaseId] = useState<string>(initialCases[0]?.id || "case-1");
@@ -95,14 +95,14 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
               {
                 id: "case-1",
                 name: "Standard Case",
-                params: generateDefaultParams(selectedOp, label),
+                params: generateDefaultParams(selectedOp, label, isRedis),
               },
             ];
       setTestCases(cases);
       latestTestCasesRef.current = cases;
       setActiveCaseId(cases[0]?.id || "case-1");
     }
-  }, [selectedOp.id, selectedOp.testCases, selectedOp.params, label]);
+  }, [selectedOp.id, selectedOp.testCases, selectedOp.params, label, isRedis]);
 
   // Debounced persistence to parent canvas store
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -140,7 +140,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
     testCases[0] || {
       id: "case-1",
       name: "Standard Case",
-      params: generateDefaultParams(selectedOp, label),
+      params: generateDefaultParams(selectedOp, label, isRedis),
     };
 
   // Add Test Case
@@ -149,7 +149,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
     const newCase: DbOperationTestCase = {
       id: newCaseId,
       name: `Test Case ${testCases.length + 1}`,
-      params: generateDefaultParams(selectedOp, label),
+      params: generateDefaultParams(selectedOp, label, isRedis),
     };
     const updated = [...testCases, newCase];
     setTestCases(updated);
@@ -283,7 +283,18 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
           signature: selectedOp.signature,
           params: selectedOp.params,
         },
-        args: activeCase.params,
+        args: (() => {
+          const opParamNames = new Set((selectedOp.params || []).map((p) => p.name));
+          const effectiveArgs: Record<string, unknown> = {};
+          if (opParamNames.size > 0) {
+            for (const pName of opParamNames) {
+              effectiveArgs[pName] = activeCase.params?.[pName];
+            }
+          } else if (isRedis) {
+            effectiveArgs.key = activeCase.params?.key ?? `${label}:1001`;
+          }
+          return effectiveArgs;
+        })(),
         mode: testMode,
       });
 
@@ -417,6 +428,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
         selectedOp={selectedOp}
         activeCase={activeCase}
         label={label}
+        isRedis={isRedis}
         onParamChange={handleParamChange}
       />
 
@@ -432,6 +444,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
         <TestResultViewer
           lastResult={activeCase.lastResult}
           testMode={testMode}
+          isRedis={isRedis}
           onSwitchToSandbox={() => setTestMode("sandbox")}
         />
       )}

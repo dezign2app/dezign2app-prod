@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { DatabaseSync, SqliteBindValue } from "node:sqlite";
 import { CanvasEntityColumn } from "@workspace/canvas/types";
+import { executeFunctionCode } from "../database-runner/functionCodeRunner";
 
 // Strongly-typed JSON structures avoiding any / unknown
 export type JsonPrimitive = string | number | boolean | null;
@@ -170,9 +171,9 @@ export interface SqliteExecutionResult {
 /**
  * Execute a real query against the SQLite database file dev.db.
  */
-export function executeSqliteLiveOperation(
+export async function executeSqliteLiveOperation(
   options: ExecuteSqliteOptions,
-): SqliteExecutionResult {
+): Promise<SqliteExecutionResult> {
   const start = performance.now();
   const resolvedPath = resolveSqlitePath(options.dbFilePath, options.projectDir);
   const dir = path.dirname(resolvedPath);
@@ -216,6 +217,39 @@ export function executeSqliteLiveOperation(
       name.toLowerCase().startsWith("findbyid") ||
       name.toLowerCase().startsWith("getbyid") ||
       (name.toLowerCase().startsWith("find") && (args.id !== undefined || args.key !== undefined));
+
+    // 0. Custom JavaScript / TypeScript function code execution
+    const code = (operation.code || "").trim();
+    const hasCustomCode =
+      code.length > 0 &&
+      (kind === "custom" ||
+        code.includes("function") ||
+        code.includes("=>") ||
+        code.includes("return") ||
+        code.includes("stmt") ||
+        code.includes("db."));
+
+    if (hasCustomCode && (kind === "custom" || (!isFindAll && !isFindById && !isCreate && !isUpdate && !isDelete))) {
+      const codeRes = await executeFunctionCode({
+        code,
+        name,
+        params: operation.params,
+        args,
+        db,
+        tableName: safeTable,
+        safeTable,
+      });
+
+      const sizeBytes = fs.existsSync(resolvedPath) ? fs.statSync(resolvedPath).size : 0;
+      return {
+        success: codeRes.success,
+        output: codeRes.output as JsonValue,
+        error: codeRes.error,
+        rawSql: codeRes.rawCommand,
+        durationMs: codeRes.durationMs,
+        dbInfo: { path: resolvedPath, sizeBytes, table: safeTable, exists: true },
+      };
+    }
 
     // 1. Custom raw SQL query
     if (

@@ -105,6 +105,7 @@ export const safePipelineStepCacheMissSchema = z.object({
       isGlobal: z.boolean().optional(),
       inputSchema: z.array(stepSchemaFieldSchema).optional(),
       returnSchema: z.array(stepSchemaFieldSchema).optional(),
+      returnIsArray: z.boolean().optional(),
     })
     .optional(),
   inputBindings: z.array(pipelineStepInputBindingSchema).optional(),
@@ -154,6 +155,7 @@ export const safePipelineStepSchema = z.object({
       isGlobal: z.boolean().optional(),
       inputSchema: z.array(stepSchemaFieldSchema).optional(),
       returnSchema: z.array(stepSchemaFieldSchema).optional(),
+      returnIsArray: z.boolean().optional(),
     })
     .optional(),
   transformerNodeId: z.string().optional(),
@@ -794,3 +796,8 @@ export const backendIdentityProviderDataValidator = zodToConvex(
 export const backendEventDataValidator = zodToConvex(
   z.union([safePublishedEventSchema, safeConsumedEventSchema]),
 );
+
+export const backendDatabaseDataValidator = zodToConvex(databaseDataSchema);
+
+export const backendEntityDataValidator = zodToConvex(entityDataSchema);
+

@@ -9,6 +9,25 @@ export const databaseConnectionStatusSchema = z.object({
   error: z.string().optional(),
 });
 
+export const databaseTableColumnSchema = z.object({
+  name: z.string().optional(),
+  type: z.string().optional(),
+  isPrimaryKey: z.boolean().optional(),
+  isPrimary: z.boolean().optional(),
+  primaryKey: z.boolean().optional(),
+  isNotNull: z.boolean().optional(),
+  required: z.boolean().optional(),
+});
+
+export const databaseTableDefinitionSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().optional(),
+  label: z.string().optional(),
+  tableRef: z.string().optional(),
+  columns: z.array(databaseTableColumnSchema).optional(),
+  fields: z.array(databaseTableColumnSchema).optional(),
+});
+
 export const databaseDataSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
   dbEngine: z.string().optional(),
@@ -48,4 +67,5 @@ export const databaseDataSchema = baseNodeDataSchema.extend({
   clustering: z.boolean().optional(),
   redisVersion: z.string().optional(),
   lastConnectionStatus: databaseConnectionStatusSchema.optional(),
+  tables: z.array(databaseTableDefinitionSchema).optional(),
 });
