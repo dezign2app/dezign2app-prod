@@ -1,12 +1,14 @@
 import { BackendNode } from "@/types/canvas";
+import { CanvasEntityColumn } from "@workspace/canvas/types";
 
 export type LogicMode = "natural_language" | "code";
 
 export type CrudOperation = "create" | "read" | "update" | "delete" | string;
 
 export interface TableCrudConfig {
-  tableNodeId: string;
-  operations: CrudOperation[];
+  tableNodeId?: string;
+  tableName?: string;
+  operations?: CrudOperation[];
   explanations?: Record<string, string>;
 }
 
@@ -14,6 +16,21 @@ export interface PublishedEventInfo {
   id?: string;
   name?: string;
   topic?: string;
+}
+
+export interface TableSchemaInfo {
+  id?: string;
+  name: string;
+  dbType?: string;
+  columns?: CanvasEntityColumn[];
+  indexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
+}
+
+export interface DbOperationParamInfo {
+  name: string;
+  type: string;
+  required?: boolean;
+  defaultValue?: string;
 }
 
 export interface BusinessLogicBlockProps {
@@ -24,6 +41,7 @@ export interface BusinessLogicBlockProps {
   code?: string;
   onCodeChange?: (val: string) => void;
   onGenerateCode?: () => Promise<void> | void;
+  onResetContext?: () => void;
   isGenerating?: boolean;
   title?: string;
   description?: string;
@@ -52,4 +70,24 @@ export interface BusinessLogicBlockProps {
   isAsync?: boolean;
   inputSchema?: Array<{ name: string; type: string; required?: boolean }>;
   returnSchema?: Array<{ name: string; type: string; required?: boolean }>;
+
+  // Database Operation Context Props
+  contextType?: "endpoint" | "db_operation" | "transformer" | "langgraph";
+  dbType?: string;
+  tableName?: string;
+  tableSchema?: {
+    name: string;
+    columns?: CanvasEntityColumn[];
+    indexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
+  };
+  allTableSchemas?: TableSchemaInfo[];
+  operationKind?: string;
+  operationParams?: DbOperationParamInfo[];
+  operationReturnType?: string;
+  pagination?: {
+    enabled?: boolean;
+    defaultLimit?: number;
+    maxLimit?: number;
+    mode?: "offset" | "cursor";
+  };
 }

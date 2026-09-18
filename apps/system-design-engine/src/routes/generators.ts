@@ -1,6 +1,6 @@
 import { Router, type Router as ExpressRouter } from "express";
 import { generateCacheConfig } from "../ai/cache-generator";
-import { generateBusinessLogicCode } from "../ai/code-generator";
+import { generateBusinessLogicCode, generateDbOperationCode } from "../ai/code-generator";
 
 export const generatorsRouter: ExpressRouter = Router();
 
@@ -21,7 +21,16 @@ generatorsRouter.post("/generate-cache-config", async (req, res) => {
 
 generatorsRouter.post("/generate-code", async (req, res) => {
   try {
-    const code = await generateBusinessLogicCode(req.body);
+    const isDbOperation =
+      req.body.contextType === "db_operation" ||
+      Boolean(req.body.dbType) ||
+      Boolean(req.body.tableSchema) ||
+      Boolean(req.body.operation);
+
+    const code = isDbOperation
+      ? await generateDbOperationCode(req.body)
+      : await generateBusinessLogicCode(req.body);
+
     res.json({ code });
   } catch (error) {
     console.error("Generate code error:", error);

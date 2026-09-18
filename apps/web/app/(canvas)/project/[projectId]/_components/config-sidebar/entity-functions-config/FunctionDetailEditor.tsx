@@ -15,8 +15,11 @@ import {
 import {
   BusinessLogicBlock,
   generateCodeWithAI,
+  buildDefaultDbPromptContext,
+  TableSchemaInfo,
 } from "../../shared/BusinessLogicBlock";
 import { FunctionParamsSection } from "./FunctionParamsSection";
+import { FunctionReturnTypeSection } from "./FunctionReturnTypeSection";
 import { OperationTestStudio } from "./OperationTestStudio";
 
 interface FunctionDetailEditorProps {
@@ -26,8 +29,11 @@ interface FunctionDetailEditorProps {
   onSaveNew?: () => void;
   label: string;
   columns?: CanvasEntityColumn[];
+  indexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
+  dbType?: string;
   pascalLabel: string;
   availableTableNodes: { id: string; label: string }[];
+  allTableSchemas?: TableSchemaInfo[];
   parentDb?: BackendNode;
   onBack: () => void;
   updateSelectedOp: (changes: Partial<DbOperationFunction>) => void;
@@ -43,8 +49,11 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = ({
   onSaveNew,
   label,
   columns,
+  indexes,
+  dbType: externalDbType,
   pascalLabel,
   availableTableNodes,
+  allTableSchemas,
   parentDb,
   onBack,
   updateSelectedOp,
@@ -64,6 +73,10 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = ({
     parentDb?.type === "redis_instance" ||
     parentDb?.data?.dbEngine === "redis" ||
     draftOp.id.startsWith("redis-");
+
+  const effectiveDbType =
+    externalDbType ||
+    (isRedis ? "redis" : (parentDb?.data?.dbEngine || parentDb?.data?.dbType || "sqlite"));
 
   const pendingChangesRef = useRef<Partial<DbOperationFunction>>({});
   const debouncedSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -140,13 +153,31 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = ({
   const handleNameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const nextVal = e.target.value;
-      setDraftOp((prev) => ({ ...prev, name: nextVal }));
       const trimmed = nextVal.trim();
-      if (trimmed) {
-        handleUpdateOp({ name: nextVal });
+      const isPredicate =
+        trimmed.startsWith("is") ||
+        trimmed.startsWith("has") ||
+        trimmed.startsWith("can") ||
+        trimmed.startsWith("check") ||
+        trimmed.startsWith("should");
+      const currentReturnType = latestDraftOpRef.current.returnType;
+      const isDefaultReturn =
+        !currentReturnType ||
+        currentReturnType === `${pascalLabel}Row[]` ||
+        currentReturnType === "boolean";
+
+      if (trimmed && isDefaultReturn) {
+        const suggestedReturnType = isPredicate ? "boolean" : `${pascalLabel}Row[]`;
+        setDraftOp((prev) => ({ ...prev, name: nextVal, returnType: suggestedReturnType }));
+        handleUpdateOp({ name: nextVal, returnType: suggestedReturnType });
+      } else {
+        setDraftOp((prev) => ({ ...prev, name: nextVal }));
+        if (trimmed) {
+          handleUpdateOp({ name: nextVal });
+        }
       }
     },
-    [handleUpdateOp],
+    [handleUpdateOp, pascalLabel],
   );
 
   const handleNameBlur = useCallback(() => {
@@ -392,6 +423,66 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = ({
     [handleUpdateOp],
   );
 
+  const handleResetContext = useCallback(() => {
+    const isPredicate =
+      draftOp.name?.startsWith("is") ||
+      draftOp.name?.startsWith("has") ||
+      draftOp.name?.startsWith("can") ||
+      draftOp.name?.startsWith("check") ||
+      draftOp.name?.startsWith("should");
+    const effectiveReturnType =
+      isPredicate && (!draftOp.returnType || draftOp.returnType.includes("Row[]"))
+        ? "boolean"
+        : draftOp.returnType || (isPredicate ? "boolean" : `${pascalLabel}Row[]`);
+
+    const defaultText = buildDefaultDbPromptContext({
+      dbType: effectiveDbType,
+      tableName: label,
+      columns,
+      indexes,
+      operation: {
+        name: draftOp.name,
+        kind: draftOp.kind,
+        description: draftOp.description,
+        params: draftOp.params,
+        returnType: effectiveReturnType,
+      },
+    });
+    handleUpdateOp({ prompt: defaultText, query: defaultText, returnType: effectiveReturnType });
+  }, [
+    effectiveDbType,
+    label,
+    columns,
+    indexes,
+    draftOp.name,
+    draftOp.kind,
+    draftOp.description,
+    draftOp.params,
+    draftOp.returnType,
+    handleUpdateOp,
+    pascalLabel,
+  ]);
+
+  // Pre-populate default prompt context if empty on mount
+  useEffect(() => {
+    if (!draftOp.prompt && !draftOp.query) {
+      const defaultText = buildDefaultDbPromptContext({
+        dbType: effectiveDbType,
+        tableName: label,
+        columns,
+        indexes,
+        operation: {
+          name: draftOp.name,
+          kind: draftOp.kind,
+          description: draftOp.description,
+          params: draftOp.params,
+          returnType: draftOp.returnType,
+        },
+      });
+      handleUpdateOp({ prompt: defaultText, query: defaultText });
+    }
+  }, []);
+
   const handleCodeChange = useCallback(
     (code: string) => {
       handleUpdateOp({ code });
@@ -412,9 +503,27 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = ({
       draftOp.query ||
       `Query function for ${draftOp.name}`;
     const generated = await generateCodeWithAI({
+      contextType: "db_operation",
       prompt: promptText,
-      endpointPath: `db.${label}.${draftOp.name}`,
-      endpointMethod: draftOp.kind.toUpperCase(),
+      dbType: effectiveDbType,
+      tableName: label,
+      tableSchema: {
+        name: label,
+        columns: columns || [],
+        indexes: indexes || [],
+      },
+      allTableSchemas,
+      operation: {
+        id: draftOp.id,
+        name: draftOp.name,
+        kind: draftOp.kind,
+        description: draftOp.description,
+        signature: draftOp.signature,
+        params: draftOp.params || [],
+        returnType: draftOp.returnType,
+        returnTypeMode: draftOp.returnTypeMode,
+        pagination: draftOp.pagination,
+      },
       availableTableNodes,
     });
     if (generated) {
@@ -425,7 +534,18 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = ({
     draftOp.query,
     draftOp.name,
     draftOp.kind,
+    draftOp.description,
+    draftOp.signature,
+    draftOp.params,
+    draftOp.returnType,
+    draftOp.returnTypeMode,
+    draftOp.pagination,
+    draftOp.id,
     label,
+    effectiveDbType,
+    columns,
+    indexes,
+    allTableSchemas,
     availableTableNodes,
     handleUpdateOp,
   ]);
@@ -523,7 +643,14 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = ({
         handleChangePaginationMode={handleChangePaginationMode}
       />
 
-      {/* 3. Business Logic Block */}
+      {/* 3. Function Return Type Contract Card */}
+      <FunctionReturnTypeSection
+        selectedOp={draftOp}
+        pascalLabel={pascalLabel}
+        updateSelectedOp={handleUpdateOp}
+      />
+
+      {/* 4. Business Logic Block */}
       <BusinessLogicBlock
         title="Function Body & Business Logic"
         description="Define the function implementation in natural language or write query code. Use AI to generate code from instructions."
@@ -533,6 +660,20 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = ({
         onPromptChange={handlePromptChange}
         code={draftOp.code || ""}
         onCodeChange={handleCodeChange}
+        onResetContext={handleResetContext}
+        contextType="db_operation"
+        dbType={effectiveDbType}
+        tableName={label}
+        tableSchema={{
+          name: label,
+          columns: columns || [],
+          indexes: indexes || [],
+        }}
+        allTableSchemas={allTableSchemas}
+        operationKind={draftOp.kind}
+        operationParams={draftOp.params}
+        operationReturnType={draftOp.returnType}
+        pagination={draftOp.pagination}
         availableTableNodes={availableTableNodes}
         promptPlaceholder={`Describe query function logic for ${draftOp.name}... e.g. Query ${label} table with parameters and pagination limit/offset`}
         codePlaceholder="/* Function implementation code or raw SQL query */"

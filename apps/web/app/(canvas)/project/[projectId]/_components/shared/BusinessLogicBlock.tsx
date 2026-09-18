@@ -43,6 +43,8 @@ export const BusinessLogicBlock = React.memo(function BusinessLogicBlock({
   isAsync,
   inputSchema,
   returnSchema,
+  onResetContext,
+  contextType,
 }: BusinessLogicBlockProps) {
   const [internalMode, setInternalMode] = useState<LogicMode>(mode);
   const [internalIsGenerating, setInternalIsGenerating] = useState(false);
@@ -102,6 +104,8 @@ export const BusinessLogicBlock = React.memo(function BusinessLogicBlock({
         isAsync={isAsync}
         inputSchema={inputSchema}
         returnSchema={returnSchema}
+        onResetContext={onResetContext}
+        contextType={contextType}
       />
 
       {onCrudConfigChange && (

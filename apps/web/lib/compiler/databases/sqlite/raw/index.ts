@@ -589,11 +589,16 @@ export function compileRawSqliteDatabase(
     "id" TEXT PRIMARY KEY,
     "name" TEXT,
     "email" TEXT UNIQUE,
-    "role" TEXT,
     "emailVerified" INTEGER,
     "image" TEXT,
     "createdAt" TEXT,
-    "updatedAt" TEXT
+    "updatedAt" TEXT,
+    "role" TEXT,
+    "banned" INTEGER,
+    "banReason" TEXT,
+    "banExpires" TEXT,
+    "plan" TEXT,
+    "creemCustomerId" TEXT
   );`);
     ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "users" AS SELECT * FROM "user";`);
     createdTableNames.add("user");
@@ -615,7 +620,10 @@ export function compileRawSqliteDatabase(
     "ipAddress" TEXT,
     "userAgent" TEXT,
     "createdAt" TEXT,
-    "updatedAt" TEXT
+    "updatedAt" TEXT,
+    "impersonatedBy" TEXT,
+    "activeOrganizationId" TEXT,
+    "activeTeamId" TEXT
   );`);
     ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "sessions" AS SELECT * FROM "session";`);
     createdTableNames.add("session");
@@ -655,6 +663,118 @@ export function compileRawSqliteDatabase(
     ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "verifications" AS SELECT * FROM "verification";`);
     createdTableNames.add("verification");
     createdTableNames.add("verifications");
+  }
+
+  if (!createdTableNames.has("invitation") && !createdTableNames.has("invitations")) {
+    ddlStatements.push(`  CREATE TABLE IF NOT EXISTS "invitation" (
+    "id" TEXT PRIMARY KEY,
+    "organizationId" TEXT,
+    "email" TEXT,
+    "role" TEXT,
+    "teamId" TEXT,
+    "status" TEXT,
+    "expiresAt" TEXT,
+    "createdAt" TEXT,
+    "inviterId" TEXT
+  );`);
+    ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "invitations" AS SELECT * FROM "invitation";`);
+    createdTableNames.add("invitation");
+    createdTableNames.add("invitations");
+  }
+
+  if (!createdTableNames.has("jwks")) {
+    ddlStatements.push(`  CREATE TABLE IF NOT EXISTS "jwks" (
+    "id" TEXT PRIMARY KEY,
+    "publicKey" TEXT,
+    "privateKey" TEXT,
+    "createdAt" TEXT,
+    "expiresAt" TEXT,
+    "alg" TEXT,
+    "crv" TEXT
+  );`);
+    createdTableNames.add("jwks");
+  }
+
+  // Register fallback auth tables in tableSchemas for automated column migration on existing SQLite files
+  const coreAuthSchemas: Record<string, Array<{ name: string; type: string }>> = {
+    user: [
+      { name: "name", type: "TEXT" },
+      { name: "email", type: "TEXT" },
+      { name: "emailVerified", type: "INTEGER" },
+      { name: "image", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
+      { name: "updatedAt", type: "TEXT" },
+      { name: "role", type: "TEXT" },
+      { name: "banned", type: "INTEGER" },
+      { name: "banReason", type: "TEXT" },
+      { name: "banExpires", type: "TEXT" },
+      { name: "plan", type: "TEXT" },
+      { name: "creemCustomerId", type: "TEXT" },
+    ],
+    session: [
+      { name: "userId", type: "TEXT" },
+      { name: "token", type: "TEXT" },
+      { name: "expiresAt", type: "TEXT" },
+      { name: "ipAddress", type: "TEXT" },
+      { name: "userAgent", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
+      { name: "updatedAt", type: "TEXT" },
+      { name: "impersonatedBy", type: "TEXT" },
+      { name: "activeOrganizationId", type: "TEXT" },
+      { name: "activeTeamId", type: "TEXT" },
+    ],
+    account: [
+      { name: "userId", type: "TEXT" },
+      { name: "accountId", type: "TEXT" },
+      { name: "providerId", type: "TEXT" },
+      { name: "password", type: "TEXT" },
+      { name: "accessToken", type: "TEXT" },
+      { name: "refreshToken", type: "TEXT" },
+      { name: "accessTokenExpiresAt", type: "TEXT" },
+      { name: "refreshTokenExpiresAt", type: "TEXT" },
+      { name: "scope", type: "TEXT" },
+      { name: "idToken", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
+      { name: "updatedAt", type: "TEXT" },
+    ],
+    verification: [
+      { name: "identifier", type: "TEXT" },
+      { name: "value", type: "TEXT" },
+      { name: "expiresAt", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
+      { name: "updatedAt", type: "TEXT" },
+    ],
+    invitation: [
+      { name: "organizationId", type: "TEXT" },
+      { name: "email", type: "TEXT" },
+      { name: "role", type: "TEXT" },
+      { name: "teamId", type: "TEXT" },
+      { name: "status", type: "TEXT" },
+      { name: "expiresAt", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
+      { name: "inviterId", type: "TEXT" },
+    ],
+    jwks: [
+      { name: "publicKey", type: "TEXT" },
+      { name: "privateKey", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
+      { name: "expiresAt", type: "TEXT" },
+      { name: "alg", type: "TEXT" },
+      { name: "crv", type: "TEXT" },
+    ],
+  };
+
+  for (const [authTable, authCols] of Object.entries(coreAuthSchemas)) {
+    if (!tableSchemas[authTable]) {
+      tableSchemas[authTable] = authCols;
+    } else {
+      const existingNames = new Set(tableSchemas[authTable].map((c) => c.name.toLowerCase()));
+      for (const ac of authCols) {
+        if (!existingNames.has(ac.name.toLowerCase())) {
+          tableSchemas[authTable].push(ac);
+        }
+      }
+    }
   }
 
   // Pre-seed default test users and active sessions for endpoint testing and dev execution
