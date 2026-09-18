@@ -16,8 +16,10 @@ describe("Better Auth Database Schema Alignment", () => {
         paymentsPlugin: {
           provider: "creem",
           apiKeyEnv: "CREEM_API_KEY",
+          webhookSecretEnv: "CREEM_WEBHOOK_SECRET",
         },
       },
+      fractionalIndex: "a0",
       position: { x: 0, y: 0 },
     };
 
@@ -28,11 +30,18 @@ describe("Better Auth Database Schema Alignment", () => {
         label: "Payments",
         provider: "creem",
       },
+      fractionalIndex: "a1",
       position: { x: 100, y: 0 },
     };
 
     const edges: BackendEdge[] = [
-      { id: "e1", source: "auth-1", target: "payments-1" },
+      {
+        id: "e1",
+        source: "auth-1",
+        target: "payments-1",
+        type: "connection",
+        fractionalIndex: "a0",
+      },
     ];
 
     const result = compileDatabaseNodes([authNode, paymentsNode], edges);
@@ -55,6 +64,7 @@ describe("Better Auth Database Schema Alignment", () => {
     const customUserEntity: BackendNode = {
       id: "entity-user",
       type: "entity",
+      fractionalIndex: "a0",
       data: {
         label: "user",
         columns: [
@@ -69,6 +79,7 @@ describe("Better Auth Database Schema Alignment", () => {
     const customSessionEntity: BackendNode = {
       id: "entity-session",
       type: "entity",
+      fractionalIndex: "a1",
       data: {
         label: "session",
         columns: [
@@ -82,11 +93,14 @@ describe("Better Auth Database Schema Alignment", () => {
     const authNode: BackendNode = {
       id: "auth-1",
       type: "auth",
+      fractionalIndex: "a2",
       data: {
         label: "Better Auth",
         plugins: ["bearer", "admin", "organization", "jwt"],
         paymentsPlugin: {
           provider: "creem",
+          apiKeyEnv: "CREEM_API_KEY",
+          webhookSecretEnv: "CREEM_WEBHOOK_SECRET",
         },
       },
       position: { x: 100, y: 0 },
@@ -95,12 +109,19 @@ describe("Better Auth Database Schema Alignment", () => {
     const paymentsNode: BackendNode = {
       id: "payments-1",
       type: "payments",
+      fractionalIndex: "a3",
       data: { label: "Payments" },
       position: { x: 150, y: 0 },
     };
 
     const edges: BackendEdge[] = [
-      { id: "e1", source: "auth-1", target: "entity-user" },
+      {
+        id: "e1",
+        source: "auth-1",
+        target: "entity-user",
+        type: "connection",
+        fractionalIndex: "a0",
+      },
     ];
 
     const result = compileDatabaseNodes(
@@ -123,9 +144,17 @@ describe("Better Auth Database Schema Alignment", () => {
     // Verify impersonatedBy and activeOrganizationId were backfilled
     expect(sessionHelper!.content).toContain("impersonatedBy");
     expect(sessionHelper!.content).toContain("activeOrganizationId");
+
+    // Verify indexes were backfilled on entities
+    expect(customUserEntity.data?.indexes).toBeDefined();
+    expect(customUserEntity.data?.indexes?.some((i: { name: string }) => i.name === "idx_user_email")).toBe(true);
+
+    expect(customSessionEntity.data?.indexes).toBeDefined();
+    expect(customSessionEntity.data?.indexes?.some((i: { name: string }) => i.name === "idx_session_userId")).toBe(true);
+    expect(customSessionEntity.data?.indexes?.some((i: { name: string }) => i.name === "idx_session_token")).toBe(true);
   });
 
-  it("compileRawSqliteDatabase generates complete DDL fallbacks and tableSchemas for Better Auth", () => {
+  it("compileRawSqliteDatabase generates complete DDL fallbacks, tableSchemas, and indexes for Better Auth", () => {
     const result = compileRawSqliteDatabase([], []);
     const connectionFile = result.files.find((f) => f.filename === "connection.ts");
     expect(connectionFile).toBeDefined();
@@ -152,10 +181,47 @@ describe("Better Auth Database Schema Alignment", () => {
     expect(code).toContain('\\"alg\\" TEXT');
     expect(code).toContain('\\"crv\\" TEXT');
 
+    // Verify fallback indexes are generated in DDL
+    expect(code).toContain('CREATE UNIQUE INDEX IF NOT EXISTS \\"idx_user_email\\" ON \\"user\\" (\\"email\\")');
+    expect(code).toContain('CREATE INDEX IF NOT EXISTS \\"idx_session_userId\\" ON \\"session\\" (\\"userId\\")');
+    expect(code).toContain('CREATE UNIQUE INDEX IF NOT EXISTS \\"idx_session_token\\" ON \\"session\\" (\\"token\\")');
+    expect(code).toContain('CREATE INDEX IF NOT EXISTS \\"idx_account_userId\\" ON \\"account\\" (\\"userId\\")');
+    expect(code).toContain('CREATE INDEX IF NOT EXISTS \\"idx_verification_identifier\\" ON \\"verification\\" (\\"identifier\\")');
+    expect(code).toContain('CREATE INDEX IF NOT EXISTS \\"idx_invitation_organizationId\\" ON \\"invitation\\" (\\"organizationId\\")');
+    expect(code).toContain('CREATE INDEX IF NOT EXISTS \\"idx_jwks_expiresAt\\" ON \\"jwks\\" (\\"expiresAt\\")');
+    expect(code).toContain('CREATE INDEX IF NOT EXISTS \\"idx_jwks_createdAt\\" ON \\"jwks\\" (\\"createdAt\\")');
+
     // Also verify tableSchemas contains them for auto-migration
     expect(code).toContain('"name": "plan"');
     expect(code).toContain('"name": "creemCustomerId"');
     expect(code).toContain('"name": "impersonatedBy"');
     expect(code).toContain('"name": "activeOrganizationId"');
+  });
+
+  it("compileRawSqliteDatabase emits CREATE INDEX statements for canvas table nodes with custom and default indexes", () => {
+    const tableNode: BackendNode = {
+      id: "node-org",
+      type: "entity",
+      fractionalIndex: "a0",
+      data: {
+        label: "organization",
+        columns: [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "name", type: "string" },
+          { name: "slug", type: "string", isUnique: true },
+        ],
+        indexes: [
+          { name: "idx_organization_slug", columns: "slug", isUnique: true },
+        ],
+      },
+      position: { x: 0, y: 0 },
+    };
+
+    const result = compileRawSqliteDatabase([tableNode], []);
+    const connectionFile = result.files.find((f) => f.filename === "connection.ts");
+    expect(connectionFile).toBeDefined();
+
+    const code = connectionFile!.content;
+    expect(code).toContain('CREATE UNIQUE INDEX IF NOT EXISTS \\"idx_organization_slug\\" ON \\"organization\\" (\\"slug\\")');
   });
 });

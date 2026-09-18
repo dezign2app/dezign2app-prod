@@ -252,6 +252,11 @@ export const PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION: PaymentsTableDefinition = {
     { name: "createdAt", type: DB_COLUMN_TYPES.TEXT },
     { name: "updatedAt", type: DB_COLUMN_TYPES.TEXT },
   ],
+  defaultIndexes: [
+    { name: "idx_subscription_userId", columns: "userId" },
+    { name: "idx_subscription_creemSubscriptionId", columns: "creemSubscriptionId", isUnique: true },
+    { name: "idx_subscription_creemCustomerId", columns: "creemCustomerId" },
+  ],
 };
 
 export const PAYMENTS_INTERVALS = ["monthly", "yearly"] as const;
@@ -352,6 +357,9 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "plan", type: DB_COLUMN_TYPES.TEXT },
       { name: "creemCustomerId", type: DB_COLUMN_TYPES.TEXT },
     ],
+    defaultIndexes: [
+      { name: "idx_user_email", columns: "email", isUnique: true },
+    ],
   },
   {
     key: BETTER_AUTH_TABLE_KEYS.SESSION,
@@ -370,6 +378,11 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "impersonatedBy", type: DB_COLUMN_TYPES.TEXT },
       { name: "activeOrganizationId", type: DB_COLUMN_TYPES.TEXT },
       { name: "activeTeamId", type: DB_COLUMN_TYPES.TEXT },
+    ],
+    defaultIndexes: [
+      { name: "idx_session_userId", columns: "userId" },
+      { name: "idx_session_token", columns: "token", isUnique: true },
+      { name: "idx_session_activeOrganizationId", columns: "activeOrganizationId" },
     ],
   },
   {
@@ -392,6 +405,10 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT },
       { name: "updatedAt", type: DB_COLUMN_TYPES.TEXT },
     ],
+    defaultIndexes: [
+      { name: "idx_account_userId", columns: "userId" },
+      { name: "idx_account_provider_account", columns: "providerId, accountId" },
+    ],
   },
   {
     key: BETTER_AUTH_TABLE_KEYS.VERIFICATION,
@@ -405,6 +422,9 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "expiresAt", type: DB_COLUMN_TYPES.TEXT },
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT },
       { name: "updatedAt", type: DB_COLUMN_TYPES.TEXT },
+    ],
+    defaultIndexes: [
+      { name: "idx_verification_identifier", columns: "identifier" },
     ],
   },
   {
@@ -420,6 +440,9 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "metadata", type: DB_COLUMN_TYPES.TEXT },
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT },
     ],
+    defaultIndexes: [
+      { name: "idx_organization_slug", columns: "slug", isUnique: true },
+    ],
   },
   {
     key: BETTER_AUTH_TABLE_KEYS.MEMBER,
@@ -432,6 +455,11 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "userId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" } },
       { name: "role", type: DB_COLUMN_TYPES.TEXT },
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT },
+    ],
+    defaultIndexes: [
+      { name: "idx_member_organizationId", columns: "organizationId" },
+      { name: "idx_member_userId", columns: "userId" },
+      { name: "idx_member_org_user", columns: "organizationId, userId", isUnique: true },
     ],
   },
   {
@@ -450,6 +478,10 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT },
       { name: "inviterId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" } },
     ],
+    defaultIndexes: [
+      { name: "idx_invitation_organizationId", columns: "organizationId" },
+      { name: "idx_invitation_email", columns: "email" },
+    ],
   },
   {
     key: BETTER_AUTH_TABLE_KEYS.TEAM,
@@ -461,6 +493,9 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "organizationId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.ORG, column: "id" } },
       { name: "name", type: DB_COLUMN_TYPES.TEXT },
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT },
+    ],
+    defaultIndexes: [
+      { name: "idx_team_organizationId", columns: "organizationId" },
     ],
   },
   {
@@ -474,6 +509,11 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "userId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" } },
       { name: "role", type: DB_COLUMN_TYPES.TEXT },
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT },
+    ],
+    defaultIndexes: [
+      { name: "idx_teamMember_teamId", columns: "teamId" },
+      { name: "idx_teamMember_userId", columns: "userId" },
+      { name: "idx_teamMember_team_user", columns: "teamId, userId", isUnique: true },
     ],
   },
   {
@@ -491,6 +531,10 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "transports", type: DB_COLUMN_TYPES.TEXT },
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT },
     ],
+    defaultIndexes: [
+      { name: "idx_passkey_userId", columns: "userId" },
+      { name: "idx_passkey_credentialID", columns: "credentialID", isUnique: true },
+    ],
   },
   {
     key: BETTER_AUTH_TABLE_KEYS.TWO_FACTOR,
@@ -502,6 +546,9 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "userId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" } },
       { name: "secret", type: DB_COLUMN_TYPES.TEXT },
       { name: "backupCodes", type: DB_COLUMN_TYPES.TEXT },
+    ],
+    defaultIndexes: [
+      { name: "idx_twoFactor_userId", columns: "userId" },
     ],
   },
   {
@@ -518,6 +565,10 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "alg", type: DB_COLUMN_TYPES.TEXT },
       { name: "crv", type: DB_COLUMN_TYPES.TEXT },
     ],
+    defaultIndexes: [
+      { name: "idx_jwks_expiresAt", columns: "expiresAt" },
+      { name: "idx_jwks_createdAt", columns: "createdAt" },
+    ],
   },
   {
     key: BETTER_AUTH_TABLE_KEYS.RATE_LIMIT,
@@ -528,6 +579,9 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "key", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true },
       { name: "count", type: DB_COLUMN_TYPES.INTEGER },
       { name: "lastRequest", type: DB_COLUMN_TYPES.INTEGER },
+    ],
+    defaultIndexes: [
+      { name: "idx_rateLimit_lastRequest", columns: "lastRequest" },
     ],
   },
 ];

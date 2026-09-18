@@ -33,6 +33,7 @@ import {
   GitFork,
   Database,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   AuthFunctionRef,
   BetterAuthTableMapping,
@@ -192,16 +193,25 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
 
     if (matchingEntity) {
       targetEntityId = matchingEntity.id;
-      // Inject missing default columns if any
+      // Inject missing default columns & indexes if any
       const currentCols = matchingEntity.data?.columns || [];
       const missingCols = def.defaultColumns.filter(
         (reqCol) => !currentCols.some((c) => c.name.toLowerCase() === reqCol.name.toLowerCase())
       );
-      if (missingCols.length > 0) {
+      const currentIdxs = matchingEntity.data?.indexes || [];
+      const missingIdxs = (def.defaultIndexes || []).filter(
+        (reqIdx) => !currentIdxs.some((idx) =>
+          idx.name.toLowerCase() === reqIdx.name.toLowerCase() ||
+          idx.columns.replace(/\s+/g, "").toLowerCase() === reqIdx.columns.replace(/\s+/g, "").toLowerCase()
+        )
+      );
+
+      if (missingCols.length > 0 || missingIdxs.length > 0) {
         updateNode(matchingEntity.id, {
           data: {
             ...matchingEntity.data,
-            columns: [...currentCols, ...missingCols],
+            columns: missingCols.length > 0 ? [...currentCols, ...missingCols] : currentCols,
+            indexes: missingIdxs.length > 0 ? [...currentIdxs, ...missingIdxs] : currentIdxs,
           },
         });
       }
@@ -242,6 +252,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
           label: def.name,
           description: def.description,
           columns: def.defaultColumns,
+          indexes: def.defaultIndexes ? [...def.defaultIndexes] : [],
           databaseId: dbId,
         },
       });
@@ -271,26 +282,34 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
     });
 
     syncForeignKeysForTable(def, targetEntityId, updatedMappings);
+    toast.success(`Table "${def.name}" configured with columns and indexes.`);
   };
 
   const fixEntitySchema = (
     entityId: string,
     def: BetterAuthTableDefinition,
-    missingColumns: BetterAuthTableDefinition["defaultColumns"],
+    missingColumns: BetterAuthTableDefinition["defaultColumns"] = [],
+    missingIndexes: NonNullable<BetterAuthTableDefinition["defaultIndexes"]> = [],
   ) => {
     const entityNode = schemaEntities.find((e) => e.id === entityId);
     if (!entityNode || entityNode.type !== BACKEND_NODE_ENTITY) return;
 
-    const currentCols = entityNode.data.columns || [];
-    const updatedCols = [...currentCols, ...missingColumns];
+    const currentCols = entityNode.data?.columns || [];
+    const updatedCols = missingColumns.length > 0 ? [...currentCols, ...missingColumns] : currentCols;
+
+    const currentIdxs = entityNode.data?.indexes || [];
+    const updatedIdxs = missingIndexes.length > 0 ? [...currentIdxs, ...missingIndexes] : currentIdxs;
+
     updateNode(entityId, {
       data: {
         ...entityNode.data,
         columns: updatedCols,
+        indexes: updatedIdxs,
       },
     });
 
     syncForeignKeysForTable(def, entityId, tableMappings);
+    toast.success(`Updated ${def.name} table schema with missing columns and indexes.`);
   };
 
   const autoCreateAllMissingTables = () => {
@@ -313,17 +332,6 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
         activeMappings[def.key] = rawId;
       }
     });
-
-    const tablesToCreate = BETTER_AUTH_TABLE_DEFINITIONS.filter((def) => {
-      if (activeMappings[def.key]) return false;
-      return isBetterAuthTableRequired(def, {
-        isOrgEnabled,
-        enabledPlugins,
-        providers: data.providers,
-      });
-    });
-
-    if (tablesToCreate.length === 0) return;
 
     const authNode = storeNodes.find((n) => n.id === nodeId);
     const baseX = (authNode?.position?.x || 100) + 340;
@@ -356,30 +364,51 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
       }
     }
 
+    let syncedCount = 0;
     let createdCount = 0;
-    tablesToCreate.forEach((def) => {
-      // 1. Check if an entity node with matching name already exists on canvas in this DB
-      const matchingEntity = existingEntities.find(
-        (e) => e.data?.label?.toLowerCase().trim() === def.name.toLowerCase().trim()
-      );
+
+    const requiredDefs = BETTER_AUTH_TABLE_DEFINITIONS.filter((def) =>
+      isBetterAuthTableRequired(def, {
+        isOrgEnabled,
+        enabledPlugins,
+        providers: data.providers,
+      })
+    );
+
+    requiredDefs.forEach((def) => {
+      const mappedId = activeMappings[def.key];
+      const matchingEntity = mappedId
+        ? existingEntities.find((e) => e.id === mappedId)
+        : existingEntities.find(
+            (e) => e.data?.label?.toLowerCase().trim() === def.name.toLowerCase().trim()
+          );
 
       if (matchingEntity) {
-        // Map to existing entity
         activeMappings[def.key] = matchingEntity.id;
 
-        // Check if missing any default columns and inject them
+        // Check if missing any default columns or indexes and backfill them
         const currentCols = matchingEntity.data?.columns || [];
         const missingCols = def.defaultColumns.filter(
           (reqCol) => !currentCols.some((c) => c.name.toLowerCase() === reqCol.name.toLowerCase())
         );
 
-        if (missingCols.length > 0) {
+        const currentIdxs = matchingEntity.data?.indexes || [];
+        const missingIdxs = (def.defaultIndexes || []).filter(
+          (reqIdx) => !currentIdxs.some((idx) =>
+            idx.name.toLowerCase() === reqIdx.name.toLowerCase() ||
+            idx.columns.replace(/\s+/g, "").toLowerCase() === reqIdx.columns.replace(/\s+/g, "").toLowerCase()
+          )
+        );
+
+        if (missingCols.length > 0 || missingIdxs.length > 0) {
           updateNode(matchingEntity.id, {
             data: {
               ...matchingEntity.data,
-              columns: [...currentCols, ...missingCols],
+              columns: missingCols.length > 0 ? [...currentCols, ...missingCols] : currentCols,
+              indexes: missingIdxs.length > 0 ? [...currentIdxs, ...missingIdxs] : currentIdxs,
             },
           });
+          syncedCount++;
         }
       } else {
         // Create new entity node
@@ -395,6 +424,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
             label: def.name,
             description: def.description,
             columns: def.defaultColumns,
+            indexes: def.defaultIndexes ? [...def.defaultIndexes] : [],
             databaseId: dbId,
           },
         });
@@ -426,6 +456,14 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
         syncForeignKeysForTable(def, mappedId, activeMappings);
       }
     });
+
+    if (createdCount > 0 || syncedCount > 0) {
+      toast.success(
+        `Better Auth tables updated: ${createdCount} created, ${syncedCount} synchronized with indexes & columns.`
+      );
+    } else {
+      toast.info("All Better Auth tables and indexes are already up to date.");
+    }
   };
 
   const syncAllTableRelationships = () => {
@@ -619,8 +657,9 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
                   size="sm"
                   className="h-7 text-xs bg-primary/10 text-primary hover:bg-primary/20 border-primary/30 shrink-0 font-medium"
                   onClick={autoCreateAllMissingTables}
+                  title="Create missing tables and backfill missing columns & indexes onto existing canvas tables"
                 >
-                  <Wand2 className="w-3.5 h-3.5 mr-1" /> Auto-Create Missing Tables
+                  <Wand2 className="w-3.5 h-3.5 mr-1" /> Auto-Sync Tables & Indexes
                 </Button>
               </div>
             </div>
@@ -685,6 +724,18 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
                               )
                             : [];
 
+                          const existingIdxs = mappedEntity?.type === "entity" ? mappedEntity.data.indexes || [] : [];
+                          const missingIndexes = mappedEntity && def.defaultIndexes
+                            ? def.defaultIndexes.filter(
+                                (reqIdx) => !existingIdxs.some((idx) =>
+                                  idx.name.toLowerCase() === reqIdx.name.toLowerCase() ||
+                                  idx.columns.replace(/\s+/g, "").toLowerCase() === reqIdx.columns.replace(/\s+/g, "").toLowerCase()
+                                ),
+                              )
+                            : [];
+
+                          const isSchemaValid = missingColumns.length === 0 && missingIndexes.length === 0;
+
                           return (
                             <div key={def.key} className="flex flex-col gap-1.5">
                               <div className="grid grid-cols-12 gap-2 items-center p-2 rounded bg-background border border-border/50 text-xs">
@@ -725,7 +776,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
                                       </SelectItem>
                                       {schemaEntities.map((entity) => (
                                         <SelectItem key={entity.id} value={entity.id} className="text-xs font-mono">
-                                          {entity.data.label || "Untitled Entity"} ({entity.data.columns?.length || 0} cols)
+                                          {entity.data.label || "Untitled Entity"} ({entity.data.columns?.length || 0} cols, {entity.data.indexes?.length || 0} idxs)
                                         </SelectItem>
                                       ))}
                                     </SelectContent>
@@ -734,7 +785,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
 
                                 <div className="col-span-3 flex justify-end items-center gap-1.5">
                                   {mappedEntity ? (
-                                    missingColumns.length === 0 ? (
+                                    isSchemaValid ? (
                                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-medium flex items-center gap-1">
                                         <CheckCircle2 className="w-3 h-3" /> Valid
                                       </span>
@@ -743,10 +794,14 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
                                         variant="outline"
                                         size="sm"
                                         className="h-6 text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/20 font-medium"
-                                        onClick={() => fixEntitySchema(mappedEntity.id, def, missingColumns)}
-                                        title={`Add ${missingColumns.map((c) => c.name).join(", ")}`}
+                                        onClick={() => fixEntitySchema(mappedEntity.id, def, missingColumns, missingIndexes)}
+                                        title={`Add missing: ${[...missingColumns.map((c) => c.name), ...missingIndexes.map((i) => i.name)].join(", ")}`}
                                       >
-                                        <Sparkles className="w-3 h-3 mr-1" /> Add {missingColumns.length} Cols
+                                        <Sparkles className="w-3 h-3 mr-1" />
+                                        Fix Schema
+                                        {missingIndexes.length > 0 && missingColumns.length === 0 && ` (+${missingIndexes.length} idxs)`}
+                                        {missingColumns.length > 0 && missingIndexes.length === 0 && ` (+${missingColumns.length} cols)`}
+                                        {missingColumns.length > 0 && missingIndexes.length > 0 && ` (+${missingColumns.length}c, +${missingIndexes.length}i)`}
                                       </Button>
                                     )
                                   ) : (
@@ -762,23 +817,30 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
                                 </div>
                               </div>
 
-                              {/* Schema Missing Columns Banner */}
-                              {mappedEntity && missingColumns.length > 0 && (
+                              {/* Schema Missing Columns / Indexes Banner */}
+                              {mappedEntity && !isSchemaValid && (
                                 <div className="flex items-center justify-between p-2 bg-amber-500/10 border border-amber-500/20 rounded text-[10.5px] text-amber-600 dark:text-amber-400 font-mono">
                                   <div className="flex items-center gap-1.5 truncate">
                                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                                     <span>
-                                      Entity <strong>{mappedEntity.data.label}</strong> missing required fields:{" "}
-                                      <span className="font-bold underline">
-                                        {missingColumns.map((c) => c.name).join(", ")}
-                                      </span>
+                                      Entity <strong>{mappedEntity.data.label}</strong> missing:{" "}
+                                      {missingColumns.length > 0 && (
+                                        <span className="font-bold underline mr-1">
+                                          cols ({missingColumns.map((c) => c.name).join(", ")})
+                                        </span>
+                                      )}
+                                      {missingIndexes.length > 0 && (
+                                        <span className="font-bold underline">
+                                          indexes ({missingIndexes.map((i) => i.name).join(", ")})
+                                        </span>
+                                      )}
                                     </span>
                                   </div>
                                   <button
-                                    onClick={() => fixEntitySchema(mappedEntity.id, def, missingColumns)}
+                                    onClick={() => fixEntitySchema(mappedEntity.id, def, missingColumns, missingIndexes)}
                                     className="ml-2 font-bold underline hover:text-amber-500 text-[10px] shrink-0"
                                   >
-                                    Inject Missing Columns & FKs
+                                    Inject Missing Schema & Indexes
                                   </button>
                                 </div>
                               )}

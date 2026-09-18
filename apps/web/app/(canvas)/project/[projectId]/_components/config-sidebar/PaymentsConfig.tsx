@@ -118,6 +118,9 @@ export const PaymentsConfig = ({
         label: "subscription",
         description: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.description,
         columns: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultColumns,
+        indexes: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultIndexes
+          ? [...PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultIndexes]
+          : [],
         databaseId: dbId,
       },
     });

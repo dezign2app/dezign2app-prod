@@ -39,4 +39,22 @@ export function handleDatabaseConnect({
       },
     });
   }
+
+  // Automatically sync databaseId on Auth node when connecting Database -> Auth or Auth -> Database
+  if (sourceNode.type === "database" && targetNode.type === "auth") {
+    get().updateNode(targetNode.id, {
+      data: {
+        ...targetNode.data,
+        databaseId: sourceNode.id,
+      },
+    });
+  }
+  if (sourceNode.type === "auth" && targetNode.type === "database") {
+    get().updateNode(sourceNode.id, {
+      data: {
+        ...sourceNode.data,
+        databaseId: targetNode.id,
+      },
+    });
+  }
 }

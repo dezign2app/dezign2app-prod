@@ -396,6 +396,11 @@ export interface BetterAuthTableDefinition {
     isUnique?: boolean;
     references?: { table: string; column: string };
   }>;
+  defaultIndexes?: Array<{
+    name: string;
+    columns: string;
+    isUnique?: boolean;
+  }>;
 }
 
 export interface PaymentsTableDefinition {
@@ -410,6 +415,11 @@ export interface PaymentsTableDefinition {
     isForeignKey?: boolean;
     isUnique?: boolean;
     references?: { table: string; column: string };
+  }>;
+  defaultIndexes?: Array<{
+    name: string;
+    columns: string;
+    isUnique?: boolean;
   }>;
 }
 

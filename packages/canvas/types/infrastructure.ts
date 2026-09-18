@@ -119,5 +119,5 @@ export interface CanvasAuthNodeData {
     entityId?: string;
   };
   hooks?: AuthHookConfig[];
-  paymentsPlugin?: { provider: "creem"; apiKeyEnv: string; webhookSecretEnv: string };
+  paymentsPlugin?: { provider: "creem"; apiKeyEnv?: string; webhookSecretEnv?: string };
 }

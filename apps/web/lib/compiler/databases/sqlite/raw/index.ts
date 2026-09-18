@@ -569,6 +569,22 @@ export function compileRawSqliteDatabase(
     });
     ddlStatements.push(`  CREATE TABLE IF NOT EXISTS "${tableName}" (\n${colDefs.join(",\n")}\n  );`);
 
+    // Generate table-level indexes defined on the entity node
+    const indexes = (tableNode.data?.indexes || []).filter(
+      (idx: { name?: string; columns?: string }) => idx && idx.columns,
+    );
+    indexes.forEach((idx: { name?: string; columns?: string; isUnique?: boolean }) => {
+      const colList = (idx.columns || "")
+        .split(",")
+        .map((c) => c.trim())
+        .filter(Boolean);
+      if (colList.length === 0) return;
+      const idxName = idx.name || `idx_${tableName}_${colList.join("_")}`;
+      const uniqueKeyword = idx.isUnique ? "UNIQUE " : "";
+      const colSpecs = colList.map((c) => `"${toSqlIdentifier(c, "col")}"`).join(", ");
+      ddlStatements.push(`  CREATE ${uniqueKeyword}INDEX IF NOT EXISTS "${toSqlIdentifier(idxName, "idx")}" ON "${tableName}" (${colSpecs});`);
+    });
+
     const singularName = toSingular(tableName);
     const pluralName = toPlural(tableName);
     if (singularName !== tableName && !createdTableNames.has(singularName.toLowerCase())) {
@@ -600,6 +616,7 @@ export function compileRawSqliteDatabase(
     "plan" TEXT,
     "creemCustomerId" TEXT
   );`);
+    ddlStatements.push(`  CREATE UNIQUE INDEX IF NOT EXISTS "idx_user_email" ON "user" ("email");`);
     ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "users" AS SELECT * FROM "user";`);
     createdTableNames.add("user");
     createdTableNames.add("users");
@@ -625,6 +642,8 @@ export function compileRawSqliteDatabase(
     "activeOrganizationId" TEXT,
     "activeTeamId" TEXT
   );`);
+    ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_session_userId" ON "session" ("userId");`);
+    ddlStatements.push(`  CREATE UNIQUE INDEX IF NOT EXISTS "idx_session_token" ON "session" ("token");`);
     ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "sessions" AS SELECT * FROM "session";`);
     createdTableNames.add("session");
     createdTableNames.add("sessions");
@@ -646,6 +665,8 @@ export function compileRawSqliteDatabase(
     "createdAt" TEXT,
     "updatedAt" TEXT
   );`);
+    ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_account_userId" ON "account" ("userId");`);
+    ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_account_provider_account" ON "account" ("providerId", "accountId");`);
     ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "accounts" AS SELECT * FROM "account";`);
     createdTableNames.add("account");
     createdTableNames.add("accounts");
@@ -660,6 +681,7 @@ export function compileRawSqliteDatabase(
     "createdAt" TEXT,
     "updatedAt" TEXT
   );`);
+    ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_verification_identifier" ON "verification" ("identifier");`);
     ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "verifications" AS SELECT * FROM "verification";`);
     createdTableNames.add("verification");
     createdTableNames.add("verifications");
@@ -677,6 +699,8 @@ export function compileRawSqliteDatabase(
     "createdAt" TEXT,
     "inviterId" TEXT
   );`);
+    ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_invitation_organizationId" ON "invitation" ("organizationId");`);
+    ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_invitation_email" ON "invitation" ("email");`);
     ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "invitations" AS SELECT * FROM "invitation";`);
     createdTableNames.add("invitation");
     createdTableNames.add("invitations");
@@ -692,7 +716,46 @@ export function compileRawSqliteDatabase(
     "alg" TEXT,
     "crv" TEXT
   );`);
+    ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_jwks_expiresAt" ON "jwks" ("expiresAt");`);
+    ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_jwks_createdAt" ON "jwks" ("createdAt");`);
     createdTableNames.add("jwks");
+  }
+
+  if (!createdTableNames.has("passkey")) {
+    ddlStatements.push(`  CREATE TABLE IF NOT EXISTS "passkey" (
+    "id" TEXT PRIMARY KEY,
+    "name" TEXT,
+    "publicKey" TEXT,
+    "userId" TEXT,
+    "credentialID" TEXT UNIQUE,
+    "counter" INTEGER,
+    "transports" TEXT,
+    "createdAt" TEXT
+  );`);
+    ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_passkey_userId" ON "passkey" ("userId");`);
+    ddlStatements.push(`  CREATE UNIQUE INDEX IF NOT EXISTS "idx_passkey_credentialID" ON "passkey" ("credentialID");`);
+    createdTableNames.add("passkey");
+  }
+
+  if (!createdTableNames.has("twoFactor")) {
+    ddlStatements.push(`  CREATE TABLE IF NOT EXISTS "twoFactor" (
+    "id" TEXT PRIMARY KEY,
+    "userId" TEXT,
+    "secret" TEXT,
+    "backupCodes" TEXT
+  );`);
+    ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_twoFactor_userId" ON "twoFactor" ("userId");`);
+    createdTableNames.add("twoFactor");
+  }
+
+  if (!createdTableNames.has("rateLimit")) {
+    ddlStatements.push(`  CREATE TABLE IF NOT EXISTS "rateLimit" (
+    "key" TEXT PRIMARY KEY,
+    "count" INTEGER,
+    "lastRequest" INTEGER
+  );`);
+    ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_rateLimit_lastRequest" ON "rateLimit" ("lastRequest");`);
+    createdTableNames.add("rateLimit");
   }
 
   // Register fallback auth tables in tableSchemas for automated column migration on existing SQLite files
@@ -761,6 +824,24 @@ export function compileRawSqliteDatabase(
       { name: "expiresAt", type: "TEXT" },
       { name: "alg", type: "TEXT" },
       { name: "crv", type: "TEXT" },
+    ],
+    passkey: [
+      { name: "name", type: "TEXT" },
+      { name: "publicKey", type: "TEXT" },
+      { name: "userId", type: "TEXT" },
+      { name: "credentialID", type: "TEXT" },
+      { name: "counter", type: "INTEGER" },
+      { name: "transports", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
+    ],
+    twoFactor: [
+      { name: "userId", type: "TEXT" },
+      { name: "secret", type: "TEXT" },
+      { name: "backupCodes", type: "TEXT" },
+    ],
+    rateLimit: [
+      { name: "count", type: "INTEGER" },
+      { name: "lastRequest", type: "INTEGER" },
     ],
   };
 

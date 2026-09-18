@@ -162,10 +162,19 @@ export function compileDatabaseNodes(
           const missingCols = def.defaultColumns.filter(
             (dc) => !existingColNames.has((dc.name || "").toLowerCase()),
           );
-          if (missingCols.length > 0) {
+          const existingIdxs = existingEntity.data?.indexes || [];
+          const missingIdxs = (def.defaultIndexes || []).filter(
+            (reqIdx) => !existingIdxs.some((idx: { name?: string; columns?: string }) =>
+              (idx.name || "").toLowerCase() === reqIdx.name.toLowerCase() ||
+              (idx.columns || "").replace(/\s+/g, "").toLowerCase() === reqIdx.columns.replace(/\s+/g, "").toLowerCase()
+            )
+          );
+
+          if (missingCols.length > 0 || missingIdxs.length > 0) {
             existingEntity.data = {
               ...existingEntity.data,
-              columns: [...existingCols, ...missingCols],
+              columns: missingCols.length > 0 ? [...existingCols, ...missingCols] : existingCols,
+              indexes: missingIdxs.length > 0 ? [...existingIdxs, ...missingIdxs] : existingIdxs,
             };
           }
         }
@@ -196,6 +205,7 @@ export function compileDatabaseNodes(
             label: def.name,
             description: def.description,
             columns: def.defaultColumns,
+            indexes: def.defaultIndexes ? [...def.defaultIndexes] : [],
             databaseId: targetDbId,
           },
         });
@@ -240,16 +250,24 @@ export function compileDatabaseNodes(
     });
 
     if (userSubEntity) {
-      // User placed the entity on canvas: ensure required payment columns exist while preserving user's custom columns
+      // User placed the entity on canvas: ensure required payment columns and indexes exist while preserving user's custom columns
       const existingCols = userSubEntity.data?.columns || [];
       const existingColNames = new Set(existingCols.map((c: { name?: string }) => (c.name || "").toLowerCase()));
       const missingRequiredCols = PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultColumns.filter(
         (dc) => !existingColNames.has((dc.name || "").toLowerCase())
       );
-      if (missingRequiredCols.length > 0) {
+      const existingIdxs = userSubEntity.data?.indexes || [];
+      const missingIdxs = (PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultIndexes || []).filter(
+        (reqIdx) => !existingIdxs.some((idx: { name?: string; columns?: string }) =>
+          (idx.name || "").toLowerCase() === reqIdx.name.toLowerCase() ||
+          (idx.columns || "").replace(/\s+/g, "").toLowerCase() === reqIdx.columns.replace(/\s+/g, "").toLowerCase()
+        )
+      );
+      if (missingRequiredCols.length > 0 || missingIdxs.length > 0) {
         userSubEntity.data = {
           ...userSubEntity.data,
-          columns: [...existingCols, ...missingRequiredCols],
+          columns: missingRequiredCols.length > 0 ? [...existingCols, ...missingRequiredCols] : existingCols,
+          indexes: missingIdxs.length > 0 ? [...existingIdxs, ...missingIdxs] : existingIdxs,
         };
       }
     } else if (paymentsNodes.length > 0) {
@@ -264,6 +282,9 @@ export function compileDatabaseNodes(
           label: "subscription",
           description: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.description,
           columns: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultColumns,
+          indexes: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultIndexes
+            ? [...PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultIndexes]
+            : [],
           databaseId: targetDbId,
         },
       };
