@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { executeFunctionCode } from "./functionCodeRunner";
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonArray;
@@ -43,7 +44,7 @@ process.stdin.on("data", (chunk) => {
   input += chunk;
 });
 
-process.stdin.on("end", () => {
+process.stdin.on("end", async () => {
   try {
     if (!DatabaseSyncClass) {
       process.stdout.write(
@@ -162,6 +163,46 @@ process.stdin.on("end", () => {
         }
         return obj;
       };
+
+      // 0. Custom JavaScript / TypeScript function code execution
+      const code = (operation.code || "").trim();
+      const hasCustomCode =
+        code.length > 0 &&
+        (kind === "custom" ||
+          code.includes("function") ||
+          code.includes("=>") ||
+          code.includes("return") ||
+          code.includes("stmt") ||
+          code.includes("db."));
+
+      if (hasCustomCode && (kind === "custom" || (!isFindAll && !isFindById && !isCreate && !isUpdate && !isDelete))) {
+        const codeRes = await executeFunctionCode({
+          code,
+          name,
+          params: operation.params,
+          args,
+          db,
+          tableName: safeTable,
+          safeTable,
+        });
+
+        db.close();
+        const durationMs = Math.round((performance.now() - start) * 100) / 100;
+        const sizeBytes = fs.existsSync(dbFilePath) ? fs.statSync(dbFilePath).size : 0;
+
+        process.stdout.write(
+          JSON.stringify({
+            success: codeRes.success,
+            output: codeRes.output,
+            error: codeRes.error,
+            rawSql: codeRes.rawCommand,
+            durationMs: codeRes.durationMs || durationMs,
+            sizeBytes,
+            table: safeTable,
+          }),
+        );
+        return;
+      }
 
       if (customQuery && !customQuery.startsWith("Query function for") && !customQuery.startsWith("Auto-generated")) {
         rawSql = customQuery.trim();

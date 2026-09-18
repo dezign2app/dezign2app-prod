@@ -6,6 +6,7 @@ import { DbOperationFunction } from "@workspace/canvas/types";
 export function generateDefaultParams(
   op: DbOperationFunction,
   label: string,
+  isRedis = false,
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   const cleanLabel = (label || "item").toLowerCase().replace(/[^a-z0-9_]/g, "_");
@@ -24,12 +25,13 @@ export function generateDefaultParams(
       }
     }
 
-    if (name === "key" || name === "id") {
+    if (name === "key") {
       result[p.name] = `${cleanLabel}:1001`;
+    } else if (name === "id") {
+      result[p.name] = type.includes("number") ? 1 : `${cleanLabel}_1`;
     } else if (name === "item" || name === "data" || name === "record") {
       result[p.name] = {
-        sender: "alice",
-        message: "Hello world from test studio!",
+        title: `Sample ${label}`,
         timestamp: new Date().toISOString(),
       };
     } else if (name === "field") {
@@ -38,7 +40,6 @@ export function generateDefaultParams(
       result[p.name] = {
         name: "Alice",
         role: "admin",
-        active: true,
       };
     } else if (name === "count" || name === "limit") {
       result[p.name] = 10;
@@ -61,8 +62,8 @@ export function generateDefaultParams(
     }
   });
 
-  // Ensure key exists if no params defined
-  if (Object.keys(result).length === 0) {
+  // Only fallback to a redis key if this is a Redis operation with no params
+  if (isRedis && Object.keys(result).length === 0) {
     result.key = `${cleanLabel}:1001`;
   }
 

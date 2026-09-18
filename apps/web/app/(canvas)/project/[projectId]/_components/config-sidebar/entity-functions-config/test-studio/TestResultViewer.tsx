@@ -7,12 +7,14 @@ import { Button } from "@workspace/ui/components/button";
 export interface TestResultViewerProps {
   lastResult: NonNullable<DbOperationTestCase["lastResult"]>;
   testMode: "live" | "sandbox";
+  isRedis?: boolean;
   onSwitchToSandbox?: () => void;
 }
 
 export const TestResultViewer: React.FC<TestResultViewerProps> = ({
   lastResult,
   testMode,
+  isRedis = false,
   onSwitchToSandbox,
 }) => {
   const [copiedOutput, setCopiedOutput] = useState(false);
@@ -27,9 +29,20 @@ export const TestResultViewer: React.FC<TestResultViewerProps> = ({
       lastResult.error?.includes("Server not found or inactive") ||
       lastResult.error?.includes("timed out"));
 
+  const cleanRaw = (lastResult.rawCommand || "").trim();
+  const isRedisCommand = Boolean(isRedis && cleanRaw);
+  const isSqlQuery = Boolean(
+    !isRedis &&
+      cleanRaw &&
+      /^\s*(SELECT|INSERT|UPDATE|DELETE|PRAGMA|CREATE|DROP|ALTER|WITH)\b/i.test(cleanRaw),
+  );
+
   const handleCopyCommand = () => {
     if (!lastResult.rawCommand) return;
-    navigator.clipboard.writeText(lastResult.rawCommand);
+    const toCopy = isRedisCommand
+      ? lastResult.rawCommand.replace(/^\$\s*/, "")
+      : lastResult.rawCommand;
+    navigator.clipboard.writeText(toCopy);
     setCopiedCommand(true);
     setTimeout(() => setCopiedCommand(false), 1500);
   };
@@ -47,7 +60,7 @@ export const TestResultViewer: React.FC<TestResultViewerProps> = ({
 
   return (
     <div className="space-y-3 pt-2 border-t border-border/40">
-      {/* Status & Raw Command Bar */}
+      {/* Status & Action Bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {lastResult.success ? (
@@ -81,7 +94,7 @@ export const TestResultViewer: React.FC<TestResultViewerProps> = ({
           </Badge>
         </div>
 
-        {lastResult.rawCommand && (
+        {isRedisCommand && (
           <Button
             size="sm"
             variant="ghost"
@@ -89,24 +102,51 @@ export const TestResultViewer: React.FC<TestResultViewerProps> = ({
             onClick={handleCopyCommand}
           >
             {copiedCommand ? <Check size={10} className="text-emerald-500" /> : <Copy size={10} />}
-            {copiedCommand ? "Copied" : "Copy Command"}
+            {copiedCommand ? "Copied" : "Copy CLI Command"}
+          </Button>
+        )}
+
+        {isSqlQuery && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-[10px] gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
+            onClick={handleCopyCommand}
+          >
+            {copiedCommand ? <Check size={10} className="text-emerald-500" /> : <Copy size={10} />}
+            {copiedCommand ? "Copied" : "Copy SQL"}
           </Button>
         )}
       </div>
 
-      {/* Raw Executed Command Snippet */}
-      {lastResult.rawCommand && (
+      {/* Redis CLI Command */}
+      {isRedisCommand && (
         <div className="flex flex-col gap-1">
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
-            Executed Raw Command (Redis / Query CLI)
+            Executed Redis CLI Command
           </span>
           <div className="p-2.5 rounded-lg bg-zinc-950 text-zinc-100 font-mono text-xs overflow-x-auto border border-zinc-800 space-y-1">
-            {lastResult.rawCommand.split("\n").map((cmdLine, idx) => (
-              <div key={idx} className="flex items-start">
-                <span className="text-red-400 select-none mr-1.5 shrink-0">$</span>
-                <span className="text-emerald-400 font-semibold">{cmdLine}</span>
-              </div>
-            ))}
+            {cleanRaw.split("\n").map((cmdLine, idx) => {
+              const stripped = cmdLine.replace(/^\$\s*/, "");
+              return (
+                <div key={idx} className="flex items-start">
+                  <span className="text-red-400 select-none mr-1.5 shrink-0">$</span>
+                  <span className="text-emerald-400 font-semibold">{stripped}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Executed SQL Query */}
+      {isSqlQuery && (
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground font-mono">
+            Executed SQL Query
+          </span>
+          <div className="p-2.5 rounded-lg bg-zinc-950 text-sky-300 font-mono text-xs overflow-x-auto border border-zinc-800">
+            <code className="whitespace-pre-wrap">{cleanRaw}</code>
           </div>
         </div>
       )}

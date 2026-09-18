@@ -8,6 +8,7 @@ export interface TestParamsFormProps {
   selectedOp: DbOperationFunction;
   activeCase: DbOperationTestCase;
   label: string;
+  isRedis?: boolean;
   onParamChange: (paramName: string, value: unknown) => void;
 }
 
@@ -43,12 +44,34 @@ export const TestParamsForm: React.FC<TestParamsFormProps> = React.memo(({
   selectedOp,
   activeCase,
   label,
+  isRedis = false,
   onParamChange,
 }) => {
   const paramDefs =
     selectedOp.params && selectedOp.params.length > 0
       ? selectedOp.params
-      : [{ name: "key", type: "string", required: true }];
+      : isRedis
+      ? [{ name: "key", type: "string", required: true }]
+      : [];
+
+  if (paramDefs.length === 0) {
+    return (
+      <div className="space-y-1.5 pt-2">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <Code2 size={13} />
+            Input Parameters (0)
+          </Label>
+          <span className="text-[10px] text-muted-foreground">
+            <code>{selectedOp.name}()</code> takes no arguments
+          </span>
+        </div>
+        <div className="p-3 rounded-lg border border-border/40 bg-secondary/10 text-xs text-muted-foreground">
+          No input parameters required for this function. Click &quot;Run Test&quot; to execute.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3 pt-2">

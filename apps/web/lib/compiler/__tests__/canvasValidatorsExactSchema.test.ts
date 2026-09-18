@@ -4,6 +4,8 @@ import {
   backendEndpointDataValidator,
   backendEventDataValidator,
   backendNodeDataValidator,
+  backendDatabaseDataValidator,
+  backendEntityDataValidator,
 } from "../../../../../packages/backend/convex/schema/canvasValidators";
 
 describe("Convex canvasValidators exact schema", () => {
@@ -341,6 +343,93 @@ describe("Convex canvasValidators exact schema", () => {
     const parsed = webPageDataSchema.safeParse(webPageData);
     expect(parsed.success).toBe(true);
   });
+
+  it("backendDatabaseDataValidator and backendEntityDataValidator are defined valid Convex validators", () => {
+    expect(backendDatabaseDataValidator).toBeDefined();
+    expect(backendEntityDataValidator).toBeDefined();
+  });
+
+  it("validates database node data with tables and column definitions in databaseDataSchema", async () => {
+    const { databaseDataSchema } = await import("@workspace/canvas/schemas");
+    const databaseNodeData = {
+      label: "Main Postgres DB",
+      dbEngine: "postgresql",
+      dbType: "relational" as const,
+      tables: [
+        {
+          id: "tbl-users",
+          name: "users",
+          label: "Users Table",
+          columns: [
+            { name: "id", type: "uuid", isPrimaryKey: true, required: true },
+            { name: "email", type: "text", isNotNull: true, required: true },
+          ],
+        },
+        {
+          id: "tbl-orders",
+          name: "orders",
+          columns: [
+            { name: "id", type: "uuid", isPrimaryKey: true },
+            { name: "user_id", type: "uuid", required: true },
+          ],
+        },
+      ],
+    };
+
+    const parsed = databaseDataSchema.safeParse(databaseNodeData);
+    expect(parsed.success).toBe(true);
+  });
+
+  it("validates entity node data with dbOperations containing connectedDbIds and columns in entityDataSchema", async () => {
+    const { entityDataSchema } = await import("@workspace/canvas/schemas");
+    const entityNodeData = {
+      label: "users",
+      tableName: "users",
+      dbType: "relational" as const,
+      databaseId: "db-node-1",
+      columns: [
+        { name: "id", type: "string", isPrimaryKey: true, required: true },
+        { name: "name", type: "string", isNotNull: true },
+      ],
+      dbOperations: [
+        {
+          id: "op-query-with-connected-dbs",
+          name: "getUsersWithInventory",
+          kind: "custom" as const,
+          connectedDbIds: ["db-warehouse-2", "db-analytics-3"],
+          code: "const rows = db.prepare('SELECT * FROM users').all();",
+          returnType: "Record<string, string>[]",
+        },
+      ],
+    };
+
+    const parsed = entityDataSchema.safeParse(entityNodeData);
+    expect(parsed.success).toBe(true);
+  });
+
+  it("validates db_operation pipeline step with functionRef.returnIsArray", () => {
+    const dbStep = {
+      id: "step-db-fetch",
+      name: "Fetch users",
+      type: "db_operation" as const,
+      enabled: true,
+      databaseId: "db-1",
+      tableNodeId: "users",
+      operationId: "findAll",
+      functionRef: {
+        name: "findAllUsers",
+        importPath: "@/db/operations",
+        signature: "findAllUsers()",
+        returnIsArray: true,
+      },
+      inputBindings: [],
+      outputVariable: "usersList",
+    };
+
+    const parsed = safePipelineStepSchema.safeParse(dbStep);
+    expect(parsed.success).toBe(true);
+  });
 });
+
 
 

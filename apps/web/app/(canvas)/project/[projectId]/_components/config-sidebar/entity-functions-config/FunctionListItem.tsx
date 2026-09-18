@@ -4,6 +4,10 @@ import { DbOperationFunction } from "@workspace/canvas/types";
 import { Switch } from "@workspace/ui/components/switch";
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
+import {
+  inferDbOperationReturnType,
+  deriveDbFunctionSignature,
+} from "@/lib/utils/entityOperationsHelper";
 
 interface FunctionListItemProps {
   op: DbOperationFunction;
@@ -20,6 +24,12 @@ export const FunctionListItem: React.FC<FunctionListItemProps> = ({
 }) => {
   const isEnabled = op.enabled !== false;
   const isPaginated = op.pagination?.enabled;
+  const effectiveReturnType =
+    (op.code && op.code.trim() ? inferDbOperationReturnType(op.code) : null) ||
+    op.returnType;
+  const liveSignature =
+    deriveDbFunctionSignature(op.name, op.params, effectiveReturnType) ||
+    op.signature;
 
   return (
     <div
@@ -43,16 +53,15 @@ export const FunctionListItem: React.FC<FunctionListItemProps> = ({
             </span>
           )}
         </div>
-        {op.signature && (
+        {liveSignature ? (
           <div className="text-[11px] font-mono text-muted-foreground truncate">
-            {op.signature}
+            {liveSignature}
           </div>
-        )}
-        {op.returnType && !op.signature && (
+        ) : effectiveReturnType ? (
           <div className="text-[11px] font-mono text-muted-foreground">
-            Return: {op.returnType}
+            Return: {effectiveReturnType}
           </div>
-        )}
+        ) : null}
         {(op.description || op.prompt || op.query) && (
           <div className="text-xs text-muted-foreground/80 truncate">
             {op.description || op.prompt || op.query}

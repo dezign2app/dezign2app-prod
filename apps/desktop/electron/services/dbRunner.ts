@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import net from "net";
 import { spawnSync } from "child_process";
+import { executeFunctionCode } from "./functionCodeRunner";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
@@ -440,6 +441,32 @@ export async function executeDbOperation(
 
   // 3. SANDBOX SIMULATION
   const tableName = entity?.name || extractTableName(operation);
+  const code = (operation.code || "").trim();
+  const hasCustomCode =
+    code.length > 0 &&
+    (operation.kind === "custom" ||
+      code.includes("function") ||
+      code.includes("=>") ||
+      code.includes("return"));
+
+  if (hasCustomCode) {
+    const codeRes = await executeFunctionCode({
+      code,
+      name: operation.name,
+      params: operation.params,
+      args,
+      tableName,
+    });
+    return {
+      success: codeRes.success,
+      output: codeRes.output as JsonValue,
+      error: codeRes.error,
+      rawCommand: codeRes.rawCommand,
+      durationMs: codeRes.durationMs,
+      mode: "sandbox",
+    };
+  }
+
   const nowIso = new Date().toISOString();
   return {
     success: true,

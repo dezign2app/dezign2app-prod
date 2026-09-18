@@ -2,6 +2,8 @@ import { DbOperationFunction, RedisDataStructure } from "@workspace/canvas/types
 import { sqlColumnToTsType, isSqlNumericType } from "@workspace/canvas/constants";
 import { toSqlIdentifier, toTableName, toVarName } from "@/lib/compiler/utils";
 import type { BackendNode } from "@/types/canvas";
+import { inferDbOperationReturnType } from "./inferDbOperationReturnType";
+export { inferDbOperationReturnType } from "./inferDbOperationReturnType";
 
 function toPascal(str: string): string {
   if (!str) return "Item";
@@ -984,11 +986,66 @@ export function getEntityDbOperations(
     seenIds.add(op.id);
     if (op.name && seenNames.has(op.name)) return;
     if (op.name) seenNames.add(op.name);
+
+    // Automatically synchronize returnType and signature with code for operations with executable code
+    if (op.code && op.code.trim()) {
+      const inferred = inferDbOperationReturnType(op.code, {
+        pascalLabel: toPascal(label || "table"),
+        tableName: label,
+      });
+      if (inferred) {
+        op.returnType = inferred;
+        op.signature = deriveDbFunctionSignature(op.name, op.params, inferred);
+      }
+    } else if (!op.signature && op.name) {
+      op.signature = deriveDbFunctionSignature(op.name, op.params, op.returnType || "void");
+    }
+
     deduped.push(op);
   });
 
   return deduped;
 }
+
+/**
+ * Unwraps outer `function name() { ... }` boilerplate if present,
+ * leaving only the clean inner body statements for the framed editor.
+ */
+export function cleanInnerFunctionBody(code: string, fnName?: string): string {
+  const trimmed = (code || "").trim();
+  if (!trimmed) return "";
+  const regex = new RegExp(
+    `^(?:export\\s+)?(?:async\\s+)?function\\s*(?:${fnName ? toVarName(fnName) : "[a-zA-Z0-9_$]*"})?\\s*\\([^)]*\\)[^{]*\\{([\\s\\S]*)\\}\\s*$`,
+  );
+  const match = trimmed.match(regex);
+  if (match && match[1] !== undefined) {
+    const lines = match[1].split("\n");
+    while (lines.length > 0 && !lines[0]?.trim()) lines.shift();
+    while (lines.length > 0 && !lines[lines.length - 1]?.trim()) lines.pop();
+    const indent = lines[0]?.match(/^\\s*/)?.[0]?.length || 0;
+    return lines.map((l) => (l.startsWith(" ".repeat(indent)) ? l.slice(indent) : l)).join("\n");
+  }
+  return trimmed;
+}
+
+/**
+ * Dynamically derives a clean TypeScript function signature:
+ * e.g. `test(): Promise<boolean>` or `findConversationById(id: string): Promise<ConversationsRow | null>`
+ */
+export function deriveDbFunctionSignature(
+  name: string,
+  params: Array<{ name: string; type?: string; required?: boolean }> = [],
+  returnType = "void",
+): string {
+  const cleanName = toVarName(name) || name || "operation";
+  const paramStr = (params || [])
+    .filter((p) => p && p.name && p.name.trim())
+    .map((p) => `${p.name.trim()}${p.required === false ? "?" : ""}: ${p.type || "string"}`)
+    .join(", ");
+  const retStr = returnType.startsWith("Promise<") ? returnType : `Promise<${returnType}>`;
+  return `${cleanName}(${paramStr}): ${retStr}`;
+}
+
 
 
 
