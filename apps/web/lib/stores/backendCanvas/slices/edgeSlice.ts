@@ -1,5 +1,5 @@
 import { BackendEdge } from "@/types/canvas";
-import { isValidConnection } from "@workspace/canvas";
+import { isValidConnection, normalizePageRoute } from "@workspace/canvas";
 import { toast } from "sonner";
 import {
   applyEdgeChanges,
@@ -131,6 +131,25 @@ export const createEdgeSlice = (
 
         if (alreadyHasLayout) {
           toast.error("This section already has a layout node. Only 1 layout per section is allowed.");
+          return;
+        }
+      } else {
+        const normalizedTarget = normalizePageRoute(pageNode.data?.label || pageNode.data?.path || "");
+        const connectedEdges = get().edges.filter(
+          (e) => e.source === webApp.id || e.target === webApp.id,
+        );
+        const duplicatePage = connectedEdges
+          .map((e) => get().nodes.find((n) => n.id === (e.source === webApp.id ? e.target : e.source)))
+          .find((other) => {
+            if (!other || other.id === pageNode.id || other.type !== "webPage") return false;
+            if (other.data?.isLayout || other.data?.label?.trim().toLowerCase() === "layout") return false;
+            return normalizePageRoute(other.data?.label || other.data?.path || "") === normalizedTarget;
+          });
+
+        if (duplicatePage) {
+          toast.error(
+            `A page with route "${normalizedTarget}" is already connected to this Web App (node "${duplicatePage.data?.label || "Page"}"). Route names must be unique.`,
+          );
           return;
         }
       }
