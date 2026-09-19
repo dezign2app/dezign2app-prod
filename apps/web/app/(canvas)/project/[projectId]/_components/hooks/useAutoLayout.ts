@@ -30,30 +30,30 @@ export type {
  */
 export function useSchemaAutoLayout(options?: UseSchemaAutoLayoutOptions) {
   const { fitView } = useReactFlow();
-  const store = useBackendCanvasStore();
-
-  const nodes: LayoutNode[] =
-    options?.nodes ??
-    store.nodes.filter(
-      (n) =>
-        n.type === "entity" ||
-        n.type === "database" ||
-        n.type === "redis_instance" ||
-        n.type === "redis_schema",
-    );
-  const edges: LayoutEdge[] =
-    options?.edges && options.edges.length > 0
-      ? options.edges
-      : store.edges.filter(
-          (e) =>
-            e.type === "foreign-key" ||
-            e.type === "database-connection" ||
-            e.type === "connection",
-        );
-  const onNodesChange = options?.onNodesChange ?? store.onNodesChange;
 
   const handleLayout = useCallback(
     (direction: string = "LR") => {
+      const currentStore = useBackendCanvasStore.getState();
+      const nodes: LayoutNode[] =
+        options?.nodes ??
+        currentStore.nodes.filter(
+          (n) =>
+            n.type === "entity" ||
+            n.type === "database" ||
+            n.type === "redis_instance" ||
+            n.type === "redis_schema",
+        );
+      const edges: LayoutEdge[] =
+        options?.edges && options.edges.length > 0
+          ? options.edges
+          : currentStore.edges.filter(
+              (e) =>
+                e.type === "foreign-key" ||
+                e.type === "database-connection" ||
+                e.type === "connection",
+            );
+      const onNodesChange = options?.onNodesChange ?? currentStore.onNodesChange;
+
       performSchemaLayout({
         nodes,
         edges,
@@ -62,7 +62,7 @@ export function useSchemaAutoLayout(options?: UseSchemaAutoLayoutOptions) {
         direction,
       });
     },
-    [nodes, edges, onNodesChange, fitView],
+    [options?.nodes, options?.edges, options?.onNodesChange, fitView],
   );
 
   return { handleLayout };
@@ -73,42 +73,39 @@ export function useSchemaAutoLayout(options?: UseSchemaAutoLayoutOptions) {
  */
 export function useGraphAutoLayout(options?: UseGraphAutoLayoutOptions) {
   const { fitView } = useReactFlow();
-  const store = useBackendCanvasStore();
-
-  const nodes: LayoutNode[] =
-    options?.nodes ??
-    store.nodes.filter(
-      (n) =>
-        n.type !== "group" &&
-        n.type !== "entity" &&
-        n.type !== "database" &&
-        n.type !== "redis_instance" &&
-        n.type !== "redis_schema",
-    );
-  const edges: LayoutEdge[] =
-    options?.edges ??
-    store.edges.filter(
-      (e) =>
-        e.type !== "database-connection" &&
-        e.type !== "foreign-key" &&
-        e.type !== "transformer-reference" &&
-        e.type !== "reference",
-    );
-  const onNodesChange = options?.onNodesChange ?? store.onNodesChange;
-
-  const storeEndpoints = store.endpoints;
-  const storeEvents = useMemo(() => {
-    const all = [...store.events];
-    store.endpoints.forEach((ep) => {
-      ep.publishedEvents?.forEach((pev) => {
-        all.push({ ...pev, nodeId: ep.nodeId, variant: "publish" as const });
-      });
-    });
-    return all;
-  }, [store.events, store.endpoints]);
 
   const handleLayout = useCallback(
     (direction: string = "LR") => {
+      const currentStore = useBackendCanvasStore.getState();
+      const nodes: LayoutNode[] =
+        options?.nodes ??
+        currentStore.nodes.filter(
+          (n) =>
+            n.type !== "group" &&
+            n.type !== "entity" &&
+            n.type !== "database" &&
+            n.type !== "redis_instance" &&
+            n.type !== "redis_schema",
+        );
+      const edges: LayoutEdge[] =
+        options?.edges ??
+        currentStore.edges.filter(
+          (e) =>
+            e.type !== "database-connection" &&
+            e.type !== "foreign-key" &&
+            e.type !== "transformer-reference" &&
+            e.type !== "reference",
+        );
+      const onNodesChange = options?.onNodesChange ?? currentStore.onNodesChange;
+
+      const storeEndpoints = currentStore.endpoints;
+      const storeEvents = [...currentStore.events];
+      currentStore.endpoints.forEach((ep) => {
+        ep.publishedEvents?.forEach((pev) => {
+          storeEvents.push({ ...pev, nodeId: ep.nodeId, variant: "publish" as const });
+        });
+      });
+
       performGraphLayout({
         nodes,
         edges,
@@ -119,7 +116,7 @@ export function useGraphAutoLayout(options?: UseGraphAutoLayoutOptions) {
         storeEvents,
       });
     },
-    [nodes, edges, onNodesChange, fitView, storeEndpoints, storeEvents],
+    [options?.nodes, options?.edges, options?.onNodesChange, fitView],
   );
 
   return { handleLayout };
@@ -156,25 +153,14 @@ export function useLangGraphAutoLayout(options?: UseLangGraphAutoLayoutOptions) 
  */
 export function useAutoLayout(options?: UseAutoLayoutOptions) {
   const { fitView } = useReactFlow();
-  const store = useBackendCanvasStore();
-
-  const nodes: LayoutNode[] = options?.nodes ?? store.nodes;
-  const edges: LayoutEdge[] = options?.edges ?? store.edges;
-  const onNodesChange = options?.onNodesChange;
-
-  const storeEndpoints = store.endpoints;
-  const storeEvents = useMemo(() => {
-    const all = [...store.events];
-    store.endpoints.forEach((ep) => {
-      ep.publishedEvents?.forEach((pev) => {
-        all.push({ ...pev, nodeId: ep.nodeId, variant: "publish" as const });
-      });
-    });
-    return all;
-  }, [store.events, store.endpoints]);
 
   const handleLayout = useCallback(
     (direction: string = "LR") => {
+      const currentStore = useBackendCanvasStore.getState();
+      const nodes: LayoutNode[] = options?.nodes ?? currentStore.nodes;
+      const edges: LayoutEdge[] = options?.edges ?? currentStore.edges;
+      const onNodesChange = options?.onNodesChange ?? currentStore.onNodesChange;
+
       const nonHeadNodes = nodes.filter(
         (n) =>
           n.type !== "api_endpoint" &&
@@ -183,29 +169,33 @@ export function useAutoLayout(options?: UseAutoLayoutOptions) {
       );
 
       const isSchemaView =
-        nonHeadNodes.length > 0 &&
-        nonHeadNodes.every(
-          (n) =>
-            n.type === "entity" ||
-            n.type === "database" ||
-            n.type === "redis_instance" ||
-            n.type === "redis_schema",
-        );
+        options?.layoutType === "schema" ||
+        currentStore.canvasView === "schema" ||
+        (nonHeadNodes.length > 0 &&
+          nonHeadNodes.every(
+            (n) =>
+              n.type === "entity" ||
+              n.type === "database" ||
+              n.type === "redis_instance" ||
+              n.type === "redis_schema",
+          ));
 
-      const isLangGraphView = nonHeadNodes.some(
-        (n) =>
-          n.type === "step" ||
-          n.type === "langgraph_agent" ||
-          n.type === "langgraph_node" ||
-          n.type === "start" ||
-          n.id === "START",
-      );
+      const isLangGraphView =
+        options?.layoutType === "langgraph" ||
+        nonHeadNodes.some(
+          (n) =>
+            n.type === "step" ||
+            n.type === "langgraph_agent" ||
+            n.type === "langgraph_node" ||
+            n.type === "start" ||
+            n.id === "START",
+        );
 
       if (isSchemaView) {
         performSchemaLayout({
           nodes,
           edges,
-          onNodesChange: onNodesChange ?? store.onNodesChange,
+          onNodesChange,
           fitView,
           direction,
         });
@@ -218,10 +208,18 @@ export function useAutoLayout(options?: UseAutoLayoutOptions) {
           direction,
         });
       } else {
+        const storeEndpoints = currentStore.endpoints;
+        const storeEvents = [...currentStore.events];
+        currentStore.endpoints.forEach((ep) => {
+          ep.publishedEvents?.forEach((pev) => {
+            storeEvents.push({ ...pev, nodeId: ep.nodeId, variant: "publish" as const });
+          });
+        });
+
         performGraphLayout({
           nodes,
           edges,
-          onNodesChange: onNodesChange ?? store.onNodesChange,
+          onNodesChange,
           fitView,
           direction,
           storeEndpoints,
@@ -229,7 +227,7 @@ export function useAutoLayout(options?: UseAutoLayoutOptions) {
         });
       }
     },
-    [nodes, edges, onNodesChange, fitView, storeEndpoints, storeEvents, store.onNodesChange],
+    [options?.nodes, options?.edges, options?.onNodesChange, options?.layoutType, fitView],
   );
 
   return { handleLayout };
