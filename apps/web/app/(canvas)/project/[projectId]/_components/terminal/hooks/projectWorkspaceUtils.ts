@@ -58,6 +58,62 @@ export function findProjectFolderConflict(
 }
 
 /**
+ * Clears any other project's assignment to the targetPath in localStorage
+ * so that the directory can be reassigned to the current project cleanly.
+ */
+export function clearProjectFolderConflict(
+  currentProjectId: string,
+  targetPath: string
+): void {
+  if (typeof window === "undefined" || !targetPath) return;
+  const targetNorm = normalizeFolderPath(targetPath);
+  if (!targetNorm) return;
+
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith("workspace_dir_")) continue;
+
+      const otherProjectId = key.replace("workspace_dir_", "");
+      if (otherProjectId === currentProjectId) continue;
+
+      const existingPath = localStorage.getItem(key);
+      if (existingPath && normalizeFolderPath(existingPath) === targetNorm) {
+        keysToRemove.push(otherProjectId);
+      }
+    }
+
+    keysToRemove.forEach((otherProjectId) => {
+      localStorage.removeItem(`workspace_dir_${otherProjectId}`);
+      localStorage.removeItem(`docker_dir_${otherProjectId}`);
+      localStorage.removeItem(`workspace_project_name_${otherProjectId}`);
+    });
+  } catch (e) {
+    console.warn("[projectWorkspaceUtils] Error clearing folder conflict:", e);
+  }
+}
+
+/**
+ * Deletes the local workspace folder link for a project.
+ * Cleans up localStorage mapping without touching any files on disk.
+ */
+export function deleteProjectWorkspaceDir(projectId: string): void {
+  if (!projectId || typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(`workspace_dir_${projectId}`);
+    localStorage.removeItem(`docker_dir_${projectId}`);
+    localStorage.removeItem(`workspace_project_name_${projectId}`);
+    localStorage.removeItem(`canvas_terminal_tab_${projectId}`);
+    localStorage.removeItem(`compiler_terminal_tab_${projectId}`);
+    localStorage.removeItem(`compiler_terminal_height_${projectId}`);
+    localStorage.removeItem(`compiler_terminal_maximized_${projectId}`);
+  } catch (e) {
+    console.warn("[projectWorkspaceUtils] Error deleting project workspace link:", e);
+  }
+}
+
+/**
  * Removes the legacy global workspace directory key from localStorage
  * so that projects never inherit a shared fallback directory.
  */
@@ -97,6 +153,7 @@ export function setProjectWorkspaceDir(
   try {
     cleanLegacyGlobalWorkspaceDir();
     if (dir) {
+      clearProjectFolderConflict(projectId, dir);
       localStorage.setItem(`workspace_dir_${projectId}`, dir);
       localStorage.setItem(`docker_dir_${projectId}`, dir);
       if (projectName) {

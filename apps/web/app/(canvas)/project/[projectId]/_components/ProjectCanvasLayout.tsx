@@ -105,6 +105,8 @@ export function ProjectCanvasLayout({
               <Terminal
                 projectId={projectId}
                 projectName={project?.name || "Dezign2App"}
+                outputDir={outputDir}
+                onPickDirectory={() => setProjectFolderModalOpen(true)}
               />
             </div>
 
