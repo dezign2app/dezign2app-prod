@@ -13,14 +13,15 @@ import {
   DEFAULT_DATABASE_ENV_VARS,
   getUniqueNodeLabel,
   isBetterAuthTableRequired,
+  CanvasEntityColumn,
 } from "@workspace/canvas";
-import { BackendNode } from "@/types/canvas";
+import { BackendNode, BackendNodeData } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSchemaAutoLayout } from "../../../../hooks/useAutoLayout";
 
 interface UseBetterAuthTableSyncParams {
-  data: any;
-  updateData: (changes: any) => void;
+  data: BackendNodeData;
+  updateData: (changes: Partial<BackendNodeData>) => void;
   nodeId: string;
   selectedDatabaseId?: string;
   schemaEntities: BackendNode[];
@@ -76,11 +77,11 @@ export function useBetterAuthTableSync({
             );
             if (!hasEdge) {
               const sourceCols = targetNode.data?.columns || targetDef.defaultColumns;
-              const sourcePkIdx = sourceCols.findIndex((c: any) => c.isPrimaryKey);
+              const sourcePkIdx = (sourceCols as CanvasEntityColumn[]).findIndex((c) => c.isPrimaryKey);
               const sourceColIdx = sourcePkIdx !== -1 ? sourcePkIdx : 0;
 
               const targetCols = currentTableNode.data?.columns || def.defaultColumns;
-              const targetFkIdx = targetCols.findIndex((c: any) => c.name === col.name);
+              const targetFkIdx = (targetCols as CanvasEntityColumn[]).findIndex((c) => c.name === col.name);
               const targetColIdx = targetFkIdx !== -1 ? targetFkIdx : colIdx;
 
               addEdge({
@@ -118,13 +119,14 @@ export function useBetterAuthTableSync({
     if (matchingEntity) {
       targetEntityId = matchingEntity.id;
       // Inject missing default columns & indexes if any
-      const currentCols = matchingEntity.data?.columns || [];
+      const currentCols: CanvasEntityColumn[] = matchingEntity.data?.columns ?? [];
       const missingCols = def.defaultColumns.filter(
-        (reqCol) => !currentCols.some((c: any) => c.name.toLowerCase() === reqCol.name.toLowerCase()),
+        (reqCol) => !currentCols.some((c) => c.name.toLowerCase() === reqCol.name.toLowerCase()),
       );
-      const currentIdxs = matchingEntity.data?.indexes || [];
-      const missingIdxs = (def.defaultIndexes || []).filter(
-        (reqIdx) => !currentIdxs.some((idx: any) =>
+      type EntityIndex = { name: string; columns: string; isUnique?: boolean };
+      const currentIdxs: EntityIndex[] = matchingEntity.data?.indexes ?? [];
+      const missingIdxs = (def.defaultIndexes ?? []).filter(
+        (reqIdx) => !currentIdxs.some((idx) =>
           idx.name.toLowerCase() === reqIdx.name.toLowerCase() ||
           idx.columns.replace(/\s+/g, "").toLowerCase() === reqIdx.columns.replace(/\s+/g, "").toLowerCase(),
         ),
@@ -319,14 +321,15 @@ export function useBetterAuthTableSync({
         activeMappings[def.key] = matchingEntity.id;
 
         // Check if missing any default columns or indexes and backfill them
-        const currentCols = matchingEntity.data?.columns || [];
+        const currentCols: CanvasEntityColumn[] = matchingEntity.data?.columns ?? [];
         const missingCols = def.defaultColumns.filter(
-          (reqCol) => !currentCols.some((c: any) => c.name.toLowerCase() === reqCol.name.toLowerCase()),
+          (reqCol) => !currentCols.some((c) => c.name.toLowerCase() === reqCol.name.toLowerCase()),
         );
 
-        const currentIdxs = matchingEntity.data?.indexes || [];
-        const missingIdxs = (def.defaultIndexes || []).filter(
-          (reqIdx) => !currentIdxs.some((idx: any) =>
+        type EntityIndex = { name: string; columns: string; isUnique?: boolean };
+        const currentIdxs: EntityIndex[] = matchingEntity.data?.indexes ?? [];
+        const missingIdxs = (def.defaultIndexes ?? []).filter(
+          (reqIdx) => !currentIdxs.some((idx) =>
             idx.name.toLowerCase() === reqIdx.name.toLowerCase() ||
             idx.columns.replace(/\s+/g, "").toLowerCase() === reqIdx.columns.replace(/\s+/g, "").toLowerCase(),
           ),
