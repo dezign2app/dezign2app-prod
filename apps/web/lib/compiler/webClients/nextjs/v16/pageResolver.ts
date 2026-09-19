@@ -115,53 +115,94 @@ export function resolvePagesInfo(
       matchedZone = appZones.find((z) => z.id === node.data.zoneId);
     }
 
+    // Trace zone hierarchy: from root parent down to matchedZone
+    const zoneAncestors: WebAppZone[] = [];
+    if (matchedZone) {
+      let curr: WebAppZone | undefined = matchedZone;
+      const seen = new Set<string>();
+      while (curr && !seen.has(curr.id)) {
+        seen.add(curr.id);
+        zoneAncestors.unshift(curr);
+        const parentZoneId: string | undefined = curr.parentId;
+        curr = parentZoneId ? appZones.find((z) => z.id === parentZoneId) : undefined;
+      }
+    }
+
     let accessType: "public" | "private" | "role-gated" | "payment-gated" | "org-gated" = "public";
     let redirectTo = node.data.redirectTo || defaultSignInPage;
     let allowedOrgRoles: string[] = node.data.allowedOrgRoles || [];
     let requiredPlans: string[] = node.data.requiredPlans || [];
 
-    if (matchedZone) {
-      const isPublicZone = matchedZone.accessType === "public" || matchedZone.id === "zone-public";
-      if (isPublicZone) {
+    if (zoneAncestors.length > 0) {
+      const rootAncestor = zoneAncestors[0];
+      const isPublicRoot =
+        rootAncestor !== undefined &&
+        (rootAncestor.accessType === "public" || rootAncestor.id === "zone-public");
+      if (isPublicRoot && zoneAncestors.length === 1) {
         accessType = "public";
       } else {
         accessType = "private";
-        if (matchedZone.rule?.redirects) {
-          redirectTo =
-            matchedZone.rule.redirects["no-auth"] ||
-            matchedZone.rule.redirects["default"] ||
-            defaultSignInPage;
-        }
+        for (const ancestor of zoneAncestors) {
+          if (ancestor.rule?.redirects) {
+            redirectTo =
+              ancestor.rule.redirects["wrong-role"] ||
+              ancestor.rule.redirects["wrong-plan"] ||
+              ancestor.rule.redirects["no-access"] ||
+              ancestor.rule.redirects["no-auth"] ||
+              ancestor.rule.redirects["default"] ||
+              redirectTo;
+          }
 
-        if (matchedZone.rule?.conditions) {
-          const extractConditions = (condNode: ConditionNode | undefined): void => {
-            if (!condNode) return;
-            if (condNode.kind === "leaf" && condNode.condition) {
-              const cond = condNode.condition;
-              if (cond.type === "orgRole" && Array.isArray(cond.values)) {
-                allowedOrgRoles = [...allowedOrgRoles, ...cond.values];
+          if (ancestor.rule?.conditions) {
+            const extractConditions = (condNode: ConditionNode | undefined): void => {
+              if (!condNode) return;
+              if (condNode.kind === "leaf" && condNode.condition) {
+                const cond = condNode.condition;
+                if (cond.type === "orgRole" && Array.isArray(cond.values)) {
+                  allowedOrgRoles = [...allowedOrgRoles, ...cond.values];
+                  accessType = "org-gated";
+                }
+                if ((cond.type === "plan" || cond.type === "subscriptionStatus") && Array.isArray(cond.values)) {
+                  requiredPlans = [...requiredPlans, ...cond.values];
+                  accessType = "payment-gated";
+                }
+              } else if (condNode.kind === "group" && Array.isArray(condNode.children)) {
+                condNode.children.forEach(extractConditions);
               }
-              if ((cond.type === "plan" || cond.type === "subscriptionStatus") && Array.isArray(cond.values)) {
-                requiredPlans = [...requiredPlans, ...cond.values];
-              }
-            } else if (condNode.kind === "group" && Array.isArray(condNode.children)) {
-              condNode.children.forEach(extractConditions);
-            }
-          };
-          extractConditions(matchedZone.rule.conditions);
+            };
+            extractConditions(ancestor.rule.conditions);
+          }
         }
       }
     } else {
       accessType = node.data.accessType || "public";
     }
 
+    const zoneToGroupSlug = (z: WebAppZone) => {
+      if (z.id === "zone-public" || z.accessType === "public") return "public";
+      if (z.id === "zone-private") return "private";
+      return labelToSlug(z.name, 0);
+    };
+
+    let routeGroupHierarchy: string[] = [];
+    if (zoneAncestors.length > 0) {
+      routeGroupHierarchy = zoneAncestors.map(zoneToGroupSlug);
+    } else if (node.data.routeGroup) {
+      routeGroupHierarchy = [node.data.routeGroup];
+    } else {
+      routeGroupHierarchy = [accessType !== "public" ? "private" : "public"];
+    }
+
     const routeGroup =
       node.data.routeGroup ||
+      routeGroupHierarchy[routeGroupHierarchy.length - 1] ||
       (accessType !== "public" ? "private" : "public");
+
+    const routeGroupPath = routeGroupHierarchy.map((g) => `(${g})`).join("/");
 
     // Resolve real-time connections (SSE, WebSockets, etc.)
     const rawConnections: RealtimeConnection[] =
-      (node.data?.realtimeConnections as RealtimeConnection[]) || [];
+      node.data?.realtimeConnections || [];
 
     const derivedConnections: RealtimeConnection[] = [];
     const checkPipelineSteps = (
@@ -210,7 +251,7 @@ export function resolvePagesInfo(
             iceServerUrl: step.clientDeliveryIceServer,
             description: sourceItemName || step.name,
             sourceServiceNodeId: srcNodeId,
-            sourceServiceLabel: (srcNode?.data?.label as string) || srcNode?.type || "Service",
+            sourceServiceLabel: srcNode?.data?.label || srcNode?.type || "Service",
             sourceEventId: sourceItemId,
             sourceItemName,
             sourceItemType,
@@ -234,7 +275,7 @@ export function resolvePagesInfo(
     if (endpoints && Array.isArray(endpoints)) {
       endpoints.forEach((ep) => {
         if (ep.pipelineSteps && ep.nodeId) {
-          checkPipelineSteps(ep.pipelineSteps as PipelineStep[], ep.nodeId, ep.name || "Endpoint", ep.id, "endpoint");
+          checkPipelineSteps(ep.pipelineSteps, ep.nodeId, ep.name || "Endpoint", ep.id, "endpoint");
         }
       });
     }
@@ -242,7 +283,7 @@ export function resolvePagesInfo(
     if (events && Array.isArray(events)) {
       events.forEach((ev) => {
         if (ev.pipelineSteps && ev.nodeId) {
-          checkPipelineSteps(ev.pipelineSteps as PipelineStep[], ev.nodeId, ev.name || "Event", ev.id, "event");
+          checkPipelineSteps(ev.pipelineSteps, ev.nodeId, ev.name || "Event", ev.id, "event");
         }
       });
     }
@@ -250,16 +291,16 @@ export function resolvePagesInfo(
     // Also check embedded endpoints/consumedEvents in service nodes on canvas that may not be in top-level array
     allNodes.forEach((n) => {
       if (n.type === "service" && Array.isArray(n.data?.endpoints)) {
-        (n.data.endpoints as Endpoint[]).forEach((ep) => {
+        n.data.endpoints.forEach((ep) => {
           if (!endpoints?.some((e) => e.id === ep.id) && ep.pipelineSteps) {
-            checkPipelineSteps(ep.pipelineSteps as PipelineStep[], n.id, ep.name || "Endpoint", ep.id, "endpoint");
+            checkPipelineSteps(ep.pipelineSteps, n.id, ep.name || "Endpoint", ep.id, "endpoint");
           }
         });
       }
       if (n.type === "service" && Array.isArray(n.data?.consumedEvents)) {
-        (n.data.consumedEvents as AnyMessagingResource[]).forEach((ev) => {
+        n.data.consumedEvents.forEach((ev) => {
           if (!events?.some((e) => e.id === ev.id) && ev.pipelineSteps) {
-            checkPipelineSteps(ev.pipelineSteps as PipelineStep[], n.id, ev.name || "Event", ev.id, "event");
+            checkPipelineSteps(ev.pipelineSteps, n.id, ev.name || "Event", ev.id, "event");
           }
         });
       }
@@ -337,8 +378,8 @@ export function resolvePagesInfo(
       if (!serviceNode) {
         for (const n of allNodes) {
           if (n.type === "service") {
-            const endpoints = Array.isArray(n.data?.endpoints) ? (n.data.endpoints as Endpoint[]) : [];
-            const consumedEvents = Array.isArray(n.data?.consumedEvents) ? (n.data.consumedEvents as AnyMessagingResource[]) : [];
+            const endpoints = Array.isArray(n.data?.endpoints) ? n.data.endpoints : [];
+            const consumedEvents = Array.isArray(n.data?.consumedEvents) ? n.data.consumedEvents : [];
             const hasMatch =
               endpoints.some((ep) =>
                 JSON.stringify(ep.pipelineSteps || []).includes(conn.id),
@@ -461,6 +502,8 @@ export function resolvePagesInfo(
       componentName,
       isRoot,
       routeGroup,
+      routeGroupHierarchy,
+      routeGroupPath,
       accessType,
       allowedRoles: node.data.allowedRoles,
       requiredPlans: requiredPlans.length > 0 ? Array.from(new Set(requiredPlans)) : undefined,

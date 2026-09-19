@@ -85,14 +85,16 @@ export function generatePageAndComponentFiles({
     let nodeRequestBody: JSONValue | undefined = undefined;
     if (node.data?.requestBody?.rawJson) {
       try {
-        nodeRequestBody = JSON.parse(node.data.requestBody.rawJson) as JSONValue;
+        const parsed: JSONValue = JSON.parse(node.data.requestBody.rawJson);
+        nodeRequestBody = parsed;
       } catch {}
     } else if (node.data?.requestBody?.fields && node.data.requestBody.fields.length > 0) {
       const bodyObj: Record<string, JSONValue> = {};
       node.data.requestBody.fields.forEach((f) => {
         const fKey = f.name || f.key;
         if (fKey) {
-          bodyObj[fKey] = (f.value ?? f.defaultValue ?? (f.type === "number" ? 0 : f.type === "boolean" ? true : "")) as JSONValue;
+          const val: JSONValue = f.value ?? f.defaultValue ?? (f.type === "number" ? 0 : f.type === "boolean" ? true : "");
+          bodyObj[fKey] = val;
         }
       });
       nodeRequestBody = bodyObj;
@@ -168,7 +170,7 @@ export function generatePageAndComponentFiles({
         } else if (responseBody?.rawJson) {
           // Attempt to infer types from raw JSON example
           try {
-            const parsed = JSON.parse(responseBody.rawJson) as Record<string, unknown>;
+            const parsed: JSONValue = JSON.parse(responseBody.rawJson);
             if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
               const fieldLines = Object.entries(parsed)
                 .map(([k, v]) => {
@@ -283,7 +285,7 @@ export function generatePageAndComponentFiles({
       }`;
     }
 
-    const groupFolder = pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)";
+    const groupFolder = pageMeta.routeGroupPath || (pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)");
     const baseComponentsDir = pageMeta.isRoot
       ? `app/${groupFolder}/_components`
       : `app/${groupFolder}/${pageMeta.slug}/_components`;

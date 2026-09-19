@@ -5,6 +5,21 @@ import {
 } from "../types";
 import { SubItemSimulationContext, SubItemSimulationResult } from "./types";
 
+function getDescendantZoneIds(rootZoneId: string, zones: WebAppZone[]): Set<string> {
+  const ids = new Set<string>([rootZoneId]);
+  let added = true;
+  while (added) {
+    added = false;
+    for (const z of zones) {
+      if (z.parentId && ids.has(z.parentId) && !ids.has(z.id)) {
+        ids.add(z.id);
+        added = true;
+      }
+    }
+  }
+  return ids;
+}
+
 export function handleZoneDeletion(
   ctx: SubItemSimulationContext,
   target: DeletionZoneTarget,
@@ -26,7 +41,8 @@ export function handleZoneDeletion(
   const nextNodes = nodes.map((n) => {
     if (n.id === target.nodeId) {
       const zones: WebAppZone[] = n.data?.zones || [];
-      const remainingZones = zones.filter((z) => z.id !== target.zone.id);
+      const idsToDelete = getDescendantZoneIds(target.zone.id, zones);
+      const remainingZones = zones.filter((z) => !idsToDelete.has(z.id));
       return {
         ...n,
         data: {

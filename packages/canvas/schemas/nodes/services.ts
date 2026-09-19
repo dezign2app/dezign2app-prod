@@ -23,6 +23,7 @@ import {
   INTER_SERVICE_PROTOCOL_HTTP,
   INTER_SERVICE_PROTOCOL_GRPC,
 } from "../../constants";
+import type { ConditionNode } from "../../types/auth";
 
 
 export const nodeDependencyItemSchema = z.object({
@@ -376,8 +377,75 @@ export const webAppRouteSchema = z.object({
 });
 export type WebAppRoute = z.infer<typeof webAppRouteSchema>;
 
+export const conditionPrimitiveSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("auth"),
+    op: z.enum(["signedIn", "signedOut"]),
+  }),
+  z.object({
+    type: z.literal("org"),
+    op: z.enum(["required", "notRequired"]),
+  }),
+  z.object({
+    type: z.literal("orgRole"),
+    op: z.enum(["in", "notIn"]),
+    values: z.array(z.string()),
+  }),
+  z.object({
+    type: z.literal("access"),
+    op: z.enum(["granted", "notGranted"]),
+  }),
+  z.object({
+    type: z.literal("subscriptionStatus"),
+    op: z.enum(["statusIn", "statusNotIn"]),
+    values: z.array(z.enum(["active", "trialing", "past_due", "canceled", "expired"])),
+  }),
+  z.object({
+    type: z.literal("plan"),
+    op: z.enum(["in", "notIn"]),
+    values: z.array(z.string()),
+  }),
+  z.object({
+    type: z.literal("customClaim"),
+    key: z.string(),
+    op: z.enum(["eq", "neq", "in", "notIn", "truthy", "falsy"]),
+    value: z.union([z.string(), z.number(), z.boolean()]).optional(),
+    values: z.array(z.string()).optional(),
+  }),
+  z.object({
+    type: z.literal("serverGuard"),
+    entityNodeId: z.string(),
+    entityLabel: z.string().optional(),
+    dbFunctionId: z.string().optional(),
+    entityField: z.string().optional(),
+  }),
+]);
+
+export const conditionLeafSchema = z.object({
+  kind: z.literal("leaf"),
+  condition: conditionPrimitiveSchema,
+});
+
+export const conditionGroupLevel1Schema = z.object({
+  kind: z.literal("group"),
+  op: z.enum(["AND", "OR", "NOT"]),
+  children: z.array(conditionLeafSchema),
+});
+
+export const conditionGroupSchema = z.object({
+  kind: z.literal("group"),
+  op: z.enum(["AND", "OR", "NOT"]),
+  children: z.array(z.union([conditionLeafSchema, conditionGroupLevel1Schema])),
+});
+
+export const conditionNodeSchema = z.union([
+  conditionLeafSchema,
+  conditionGroupSchema,
+]);
+
 export const webAppZoneSchema = z.object({
   id: z.string(),
+  parentId: z.string().optional(),
   name: z.string(),
   handleId: z.string(),
   accessType: z.enum(["public", "protected"]),
@@ -403,7 +471,7 @@ export const webAppZoneSchema = z.object({
     .object({
       id: z.string(),
       scope: z.enum(["zone", "page"]),
-      conditions: z.record(z.string(), z.unknown()).optional(),
+      conditions: conditionNodeSchema.optional(),
       redirects: z.record(z.string(), z.string()).optional(),
       customLogic: z
         .object({

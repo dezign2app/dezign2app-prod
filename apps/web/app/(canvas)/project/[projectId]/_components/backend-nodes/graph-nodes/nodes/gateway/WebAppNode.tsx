@@ -8,6 +8,8 @@ import {
   Plus,
   Trash,
   LayoutTemplate,
+  CornerDownRight,
+  CreditCard,
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { WebAppZone } from "@workspace/canvas/types";
@@ -122,38 +124,64 @@ export const WebAppNode = ({
   // User-defined zones or default zones
   const zones: WebAppZone[] = Array.isArray(data.zones) ? data.zones : DEFAULT_ZONES;
 
+  const getDescendantZoneIds = (rootZoneId: string, allZones: WebAppZone[]): string[] => {
+    const result: string[] = [rootZoneId];
+    const queue: string[] = [rootZoneId];
+    while (queue.length > 0) {
+      const pId = queue.shift()!;
+      const children = allZones.filter((z) => z.parentId === pId);
+      for (const child of children) {
+        if (!result.includes(child.id)) {
+          result.push(child.id);
+          queue.push(child.id);
+        }
+      }
+    }
+    return result;
+  };
+
   const handleDeleteZone = (zoneId: string) => {
-    const updatedZones = zones.filter((z) => z.id !== zoneId);
+    const idsToDelete = new Set(getDescendantZoneIds(zoneId, zones));
+    const updatedZones = zones.filter((z) => !idsToDelete.has(z.id));
     updateNode(id, { data: { ...data, zones: updatedZones } });
 
-    // Clean up connected edges to this zone handle
-    const targetZone = zones.find((z) => z.id === zoneId);
-    if (targetZone) {
-      const handleId = targetZone.handleId;
-      const connectedEdges = edges.filter(
-        (e) =>
-          (e.target === id && e.targetHandle === handleId) ||
-          (e.source === id && e.sourceHandle === handleId),
-      );
-      connectedEdges.forEach((e) => deleteEdge(e.id));
-    }
+    // Clean up connected edges to all deleted zone handles
+    const targetZones = zones.filter((z) => idsToDelete.has(z.id));
+    const handleIds = new Set(targetZones.map((z) => z.handleId));
+    const connectedEdges = edges.filter(
+      (e) =>
+        (e.target === id && handleIds.has(e.targetHandle || "")) ||
+        (e.source === id && handleIds.has(e.sourceHandle || "")),
+    );
+    connectedEdges.forEach((e) => deleteEdge(e.id));
 
     // Reset active config item if deleted zone was active
     const activeItem = useBackendCanvasStore.getState().activeConfigItem;
-    if (activeItem?.id === zoneId) {
+    if (activeItem && idsToDelete.has(activeItem.id)) {
       setActiveConfigItem(null);
     }
   };
 
-  const handleAddZone = () => {
+  const handleAddZone = (parentId?: string) => {
     const newZoneId = `zone-${Date.now()}`;
+    const parentZone = parentId ? zones.find((z) => z.id === parentId) : undefined;
+    const childCount = parentId
+      ? zones.filter((z) => z.parentId === parentId).length + 1
+      : zones.length + 1;
+    const zoneName = parentZone
+      ? `${parentZone.name} Sub ${childCount}`
+      : `Custom Zone ${zones.length + 1}`;
+
     const newZone: WebAppZone = {
       id: newZoneId,
-      name: `Custom Zone ${zones.length + 1}`,
+      parentId,
+      name: zoneName,
       handleId: `${newZoneId}-in`,
       accessType: "protected",
       hasLayout: true,
-      layoutDescription: "Custom route group layout",
+      layoutDescription: parentZone
+        ? `Nested sub-layout inheriting from ${parentZone.name}`
+        : "Custom route group layout",
       rule: {
         id: `rule-${newZoneId}`,
         scope: "zone",
@@ -162,6 +190,45 @@ export const WebAppNode = ({
       },
     };
     updateNode(id, { data: { ...data, zones: [...zones, newZone] } });
+  };
+
+  const buildZoneTree = (allZones: WebAppZone[]) => {
+    const result: { zone: WebAppZone; depth: number }[] = [];
+    const rootZones = allZones.filter(
+      (z) => !z.parentId || !allZones.some((p) => p.id === z.parentId),
+    );
+
+    const traverse = (parentId: string, depth: number) => {
+      const children = allZones.filter((z) => z.parentId === parentId);
+      children.forEach((child) => {
+        result.push({ zone: child, depth });
+        traverse(child.id, depth + 1);
+      });
+    };
+
+    rootZones.forEach((root) => {
+      result.push({ zone: root, depth: 0 });
+      traverse(root.id, 1);
+    });
+
+    return result;
+  };
+
+  const getZoneIcon = (zone: WebAppZone) => {
+    if (zone.accessType === "public") {
+      return <Globe className="w-3.5 h-3.5 text-foreground shrink-0" />;
+    }
+    if (zone.protectionMode === "server-guard") {
+      return <ShieldCheck className="w-3.5 h-3.5 text-amber-500 shrink-0" />;
+    }
+    const condStr = JSON.stringify(zone.rule?.conditions || {});
+    if (condStr.includes('"plan"') || condStr.includes('"subscriptionStatus"')) {
+      return <CreditCard className="w-3.5 h-3.5 text-emerald-400 shrink-0" />;
+    }
+    if (condStr.includes('"orgRole"') || condStr.includes('"role"')) {
+      return <ShieldCheck className="w-3.5 h-3.5 text-purple-400 shrink-0" />;
+    }
+    return <Lock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />;
   };
 
   const handleToggleZoneLayout = (zoneId: string, enabled?: boolean) => {
@@ -193,7 +260,7 @@ export const WebAppNode = ({
   return (
     <div
       className={cn(
-        "shadow-xl rounded-xl bg-card border-2 min-w-[290px] max-w-[370px] flex flex-col transition-all duration-300 relative",
+        "shadow-xl rounded-xl bg-card border-2 min-w-[310px] max-w-[390px] flex flex-col transition-all duration-300 relative",
         selected ? "border-indigo-500" : "border-border",
       )}
     >
@@ -315,7 +382,7 @@ export const WebAppNode = ({
 
       {/* Dynamic Protection Sections Container */}
       <div className="p-2.5 flex flex-col gap-2 bg-muted/60 opacity-100 nodrag">
-        {zones.map((zone) => {
+        {buildZoneTree(zones).map(({ zone, depth }) => {
           const connectedPages = getConnectedPages(zone.handleId);
           const isPublic = zone.accessType === "public";
           const isLayoutEnabled = Boolean(zone.hasLayout);
@@ -323,7 +390,13 @@ export const WebAppNode = ({
           return (
             <div
               key={zone.id}
-              className="flex flex-col gap-1.5 p-2.5 rounded-lg bg-card border border-border/80 opacity-100 relative group"
+              style={{
+                marginLeft: depth > 0 ? `${Math.min(depth, 3) * 12}px` : undefined,
+              }}
+              className={cn(
+                "flex flex-col gap-1.5 p-2.5 rounded-lg bg-card border border-border/80 opacity-100 relative group transition-all",
+                depth > 0 && "border-l-2 border-l-indigo-500/60 bg-card/95 shadow-xs",
+              )}
             >
               {/* Dynamic Section Handle (Right) */}
               <Handle
@@ -341,15 +414,29 @@ export const WebAppNode = ({
               {/* Zone Top Row */}
               <div className="flex items-center justify-between gap-1">
                 <span className="text-[11px] font-semibold text-foreground flex items-center gap-1.5 truncate min-w-0">
-                  {isPublic ? (
-                    <Globe className="w-3.5 h-3.5 text-foreground shrink-0" />
-                  ) : (
-                    <Lock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                  {depth > 0 && (
+                    <CornerDownRight className="w-3 h-3 text-indigo-400 shrink-0" />
                   )}
+                  {getZoneIcon(zone)}
                   <span className="truncate">{zone.name}</span>
                 </span>
 
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* Add Sub-section Button (on protected sections) */}
+                  {!isPublic && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddZone(zone.id);
+                      }}
+                      className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-indigo-400 transition-colors cursor-pointer"
+                      title={`Add nested sub-section under ${zone.name}`}
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  )}
+
                   {/* Sleek Layout Toggle Switch */}
                   <button
                     type="button"
@@ -442,7 +529,7 @@ export const WebAppNode = ({
 
         {/* Add Custom Section Button */}
         <button
-          onClick={handleAddZone}
+          onClick={() => handleAddZone()}
           className="flex items-center justify-center gap-1.5 p-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground bg-card/60 hover:bg-card border border-dashed border-border/80 rounded-lg transition-colors cursor-pointer"
         >
           <Plus className="w-3 h-3" /> Add Protected Section

@@ -1,4 +1,4 @@
-import { ConditionPrimitive, SessionClaimConfig } from "@workspace/canvas";
+import { ConditionPrimitive, SessionClaimConfig, WebAppZone } from "@workspace/canvas";
 import { BackendNode } from "@/types/canvas";
 
 export interface AccessConditionsSectionProps {
@@ -6,6 +6,7 @@ export interface AccessConditionsSectionProps {
   onToggle: () => void;
   leaves: ConditionPrimitive[];
   connectedPages: BackendNode[];
+  parentZone?: WebAppZone;
   authClaims?: SessionClaimConfig[];
   authNodeLabel?: string;
   isAuthConnected?: boolean;
