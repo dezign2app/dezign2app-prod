@@ -59,6 +59,7 @@ export const WebPageNode = ({
     isStacked,
     toggleZoneHand,
     selectCard,
+    moveCard,
   } = useZoneHandLayout(id, nodes, edges, updateNode);
 
   // Find incoming WebApp edge connecting to this page
@@ -350,9 +351,11 @@ export const WebPageNode = ({
       style={{
         zIndex: isStacked
           ? selected
-            ? 100
+            ? 1000
             : 10 + cardIndex
-          : undefined,
+          : selected
+            ? 1000
+            : undefined,
       }}
       className={cn(
         "shadow-md rounded-xl bg-card border-2 min-w-[240px] max-w-[320px] flex flex-col transition-all duration-200 relative",
@@ -410,10 +413,10 @@ export const WebPageNode = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          selectCard(cardIndex - 1);
+                          moveCard("up");
                         }}
                         className="px-1 py-0.5 hover:bg-indigo-500/30 text-indigo-400 hover:text-indigo-200 transition-colors cursor-pointer"
-                        title="View previous card in stack"
+                        title="Move page up in stack"
                       >
                         <ChevronUp size={10} />
                       </button>
@@ -430,10 +433,10 @@ export const WebPageNode = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          selectCard(cardIndex + 1);
+                          moveCard("down");
                         }}
                         className="px-1 py-0.5 hover:bg-indigo-500/30 text-indigo-400 hover:text-indigo-200 transition-colors cursor-pointer"
-                        title="View next card in stack"
+                        title="Move page down in stack"
                       >
                         <ChevronDown size={10} />
                       </button>
@@ -446,10 +449,10 @@ export const WebPageNode = ({
                       toggleZoneHand();
                     }}
                     className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-400 hover:text-indigo-300 border border-indigo-500/30 text-[9px] font-semibold transition-colors cursor-pointer shrink-0"
-                    title="Fan out all pages in this section"
+                    title="Spread all pages in this section"
                   >
                     <Maximize2 size={9} />
-                    <span>Fan Out</span>
+                    <span>Spread</span>
                   </button>
                 </div>
               ) : (
@@ -463,7 +466,7 @@ export const WebPageNode = ({
                   title="Stack pages of this section into a hand of cards"
                 >
                   <Layers size={9} />
-                  <span>Stack Hand</span>
+                  <span>Stack</span>
                 </button>
               )
             )}

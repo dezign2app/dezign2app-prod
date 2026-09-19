@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { NodeProps, Handle, Position } from "@xyflow/react";
+import { NodeProps, Handle, Position, NodeChange } from "@xyflow/react";
 import {
   Globe,
   Lock,
@@ -77,6 +77,9 @@ export const WebAppNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const activeConfigItem = useBackendCanvasStore(
+    (s) => s.activeConfigItem,
+  );
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
   );
@@ -84,6 +87,16 @@ export const WebAppNode = ({
   const edges = useBackendCanvasStore((s) => s.edges);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
   const [zoneToDelete, setZoneToDelete] = useState<{ id: string; name: string } | null>(null);
+
+  const selectThisNode = () => {
+    const store = useBackendCanvasStore.getState();
+    const selectChanges: NodeChange[] = nodes.map((n) => ({
+      type: "select",
+      id: n.id,
+      selected: n.id === id,
+    }));
+    store.onNodesChange(selectChanges);
+  };
 
   const appSlug =
     data.appSlug ||
@@ -268,8 +281,22 @@ export const WebAppNode = ({
     .map((e) => nodes.find((n) => n.id === (e.source === id ? e.target : e.source)))
     .filter((n): n is BackendNode => Boolean(n && n.type === "webPage"));
 
+  const isDirectActive = Boolean(
+    selected ||
+      (activeConfigItem &&
+        (activeConfigItem.nodeId === id || activeConfigItem.id === id)),
+  );
+
   return (
     <div
+      onClick={() => {
+        if (!selected) {
+          selectThisNode();
+        }
+      }}
+      style={{
+        zIndex: isDirectActive ? 1000 : undefined,
+      }}
       className={cn(
         "shadow-xl rounded-xl bg-card border-2 min-w-[310px] max-w-[390px] flex flex-col transition-all duration-300 relative",
         selected ? "border-indigo-500" : "border-border",
@@ -324,6 +351,7 @@ export const WebAppNode = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                selectThisNode();
                 setActiveConfigItem({
                   type: "webApp",
                   id,
@@ -495,9 +523,9 @@ export const WebAppNode = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        const thisNode =
-                          nodes.find((n) => n.id === id) ||
-                          ({ id, data, type: "webApp" } as BackendNode);
+                        selectThisNode();
+                        const thisNode = nodes.find((n) => n.id === id);
+                        if (!thisNode) return;
                         toggleZoneHandLayout({
                           webAppNode: thisNode,
                           zoneId: zone.id,
@@ -519,7 +547,7 @@ export const WebAppNode = ({
                         (() => {
                           const isExp = Array.isArray(data.expandedZones) && data.expandedZones.includes(zone.id);
                           return !isExp
-                            ? `Pages are stacked on Z-axis (${connectedPages.length}). Click to fan out`
+                            ? `Pages are stacked on Z-axis (${connectedPages.length}). Click to Spread`
                             : "Pages are fanned out. Click to stack into hand of cards";
                         })()
                       }
@@ -535,13 +563,14 @@ export const WebAppNode = ({
                   )}
 
                   <button
-                    onClick={() =>
+                    onClick={() => {
+                      selectThisNode();
                       setActiveConfigItem({
                         type: "zone",
                         id: zone.id,
                         nodeId: id,
-                      })
-                    }
+                      });
+                    }}
                     className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     title={`Configure rules & layout for ${zone.name}`}
                   >

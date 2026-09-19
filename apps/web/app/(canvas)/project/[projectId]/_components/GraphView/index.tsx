@@ -19,7 +19,7 @@ import {
   TransformerReferenceEdge,
   TypeReferenceEdge,
 } from "../backend-nodes/CustomEdges";
-import { isValidConnection } from "@workspace/canvas";
+import { isValidConnection, WebAppZone } from "@workspace/canvas";
 import { useCanvasHandlers } from "../hooks/useCanvasHandlers";
 import { useGraphAutoLayout } from "../hooks/useAutoLayout";
 import { TopToolbarPanel } from "./TopToolbarPanel";
@@ -43,6 +43,7 @@ export interface GraphViewProps {
 export function GraphView({ projectId }: GraphViewProps) {
   const { nodes, edges, onEdgesChange, onConnect, addNode, setView } =
     useBackendCanvasStore();
+  const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
 
   useEffect(() => {
     setView("graph");
@@ -210,18 +211,18 @@ export function GraphView({ projectId }: GraphViewProps) {
     const pageHandMap = new Map<string, { cardIndex: number; totalCards: number; isStacked: boolean }>();
 
     webAppNodes.forEach((webApp) => {
-      const defaultZones = [
-        { id: "zone-public", handleId: "public-in" },
-        { id: "zone-private", handleId: "private-in" },
+      const defaultZones: WebAppZone[] = [
+        { id: "zone-public", handleId: "public-in", name: "Public Section", accessType: "public" },
+        { id: "zone-private", handleId: "private-in", name: "Private Section", accessType: "protected" },
       ];
-      const zones = Array.isArray(webApp.data?.zones) && webApp.data.zones.length > 0
+      const zones: WebAppZone[] = Array.isArray(webApp.data?.zones) && webApp.data.zones.length > 0
         ? webApp.data.zones
         : defaultZones;
       const expandedZones = Array.isArray(webApp.data?.expandedZones)
         ? webApp.data.expandedZones
         : [];
 
-      zones.forEach((zone: any) => {
+      zones.forEach((zone: WebAppZone) => {
         const isFannedOut = expandedZones.includes(zone.id);
         const handleId = zone.handleId;
         const zoneEdges = graphEdges.filter(
@@ -249,11 +250,19 @@ export function GraphView({ projectId }: GraphViewProps) {
 
     const nodesWithZ = graphNodes.map((node) => {
       const handInfo = pageHandMap.get(node.id);
+      const isSelected = Boolean(node.selected);
+      const isDragging = Boolean(node.dragging);
+      const isActiveConfig = Boolean(
+        activeConfigItem &&
+          (activeConfigItem.nodeId === node.id || activeConfigItem.id === node.id),
+      );
+      const isActive = isSelected || isDragging || isActiveConfig;
+
       let z = node.type === "webAppGroup" ? -1 : 1;
       if (handInfo && handInfo.isStacked) {
-        z = node.selected ? 100 : 10 + handInfo.cardIndex;
-      } else if (node.selected) {
-        z = 100;
+        z = isActive ? 1000 : 10 + handInfo.cardIndex;
+      } else if (isActive) {
+        z = isActiveConfig ? 1001 : 1000;
       }
       return {
         ...node,
@@ -266,14 +275,31 @@ export function GraphView({ projectId }: GraphViewProps) {
       if (b.type === "webAppGroup") return 1;
       const zA = a.zIndex ?? 0;
       const zB = b.zIndex ?? 0;
-      return zA - zB;
+      if (zA !== zB) {
+        return zA - zB;
+      }
+      const aIsActiveConfig = Boolean(
+        activeConfigItem && (activeConfigItem.nodeId === a.id || activeConfigItem.id === a.id),
+      );
+      const bIsActiveConfig = Boolean(
+        activeConfigItem && (activeConfigItem.nodeId === b.id || activeConfigItem.id === b.id),
+      );
+      if (aIsActiveConfig && !bIsActiveConfig) return 1;
+      if (!aIsActiveConfig && bIsActiveConfig) return -1;
+      return 0;
     });
-  }, [graphNodes, graphEdges]);
+  }, [graphNodes, graphEdges, activeConfigItem]);
 
   const visualGraphNodes = React.useMemo(() => {
     const hasRun = simulation.status !== "idle";
     if (!hasRun) {
-      return sortedGraphNodes;
+      return sortedGraphNodes.map((node) => ({
+        ...node,
+        style: {
+          ...node.style,
+          zIndex: node.zIndex,
+        },
+      }));
     }
 
     return sortedGraphNodes.map((node) => {
@@ -342,6 +368,7 @@ export function GraphView({ projectId }: GraphViewProps) {
         ...node,
         style: {
           ...node.style,
+          zIndex: node.zIndex,
           opacity: !isVisited ? 0.14 : 1,
           transition: "opacity 180ms ease, filter 180ms ease",
           filter: isCurrent
@@ -371,6 +398,7 @@ export function GraphView({ projectId }: GraphViewProps) {
         fitView
         fitViewOptions={{ padding: 0.35, maxZoom: 0.65 }}
         elevateEdgesOnSelect={true}
+        elevateNodesOnSelect={true}
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeDragStart={handleNodeDragStart}

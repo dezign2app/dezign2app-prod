@@ -90,6 +90,8 @@ export interface BarycenterRefinementParams {
   hangingRefEdges?: LayoutEdge[];
   hangingRefNodes?: LayoutNode[];
   paymentsPluginEdges?: LayoutEdge[];
+  dimensionOverrides?: Map<string, { width: number; height: number }>;
+  stackHandleRatios?: Map<string, number>;
 }
 
 export function runBarycenterRefinement({
@@ -104,9 +106,17 @@ export function runBarycenterRefinement({
   hangingRefEdges = [],
   hangingRefNodes = [],
   paymentsPluginEdges = [],
+  dimensionOverrides,
+  stackHandleRatios,
 }: BarycenterRefinementParams): void {
   // Whether any entity nodes are present — used to tune gaps
   const hasEntityNodesLocal = flowNodes.some((n) => n.type === "entity");
+
+  const getDim = (node: LayoutNode): { width: number; height: number } => {
+    const override = dimensionOverrides?.get(node.id);
+    if (override) return override;
+    return getNodeDimensions(node);
+  };
 
   const endpointYRatio = new Map<string, number>();
   const epsByNode = new Map<string, string[]>();
@@ -141,9 +151,13 @@ export function runBarycenterRefinement({
     if (!handle) return neighborY + neighborH / 2;
 
     const neighborNode = flowNodes.find((n) => n.id === neighborId);
-    if (neighborNode && neighborNode.type === "entity") {
+    if (neighborNode) {
+      if (stackHandleRatios?.has(neighborId)) {
+        const ratio = stackHandleRatios.get(neighborId)!;
+        return neighborY + ratio * neighborH;
+      }
       const ratio = getHandleYRatio(neighborNode, handle);
-      return neighborY + ratio * neighborH;
+      if (ratio !== 0.5) return neighborY + ratio * neighborH;
     }
 
     if (
@@ -178,9 +192,12 @@ export function runBarycenterRefinement({
   ): number => {
     if (!handle) return 0.5;
 
-    if (node.type === "entity") {
-      return getHandleYRatio(node, handle);
+    if (stackHandleRatios?.has(node.id)) {
+      return stackHandleRatios.get(node.id)!;
     }
+
+    const ratio = getHandleYRatio(node, handle);
+    if (ratio !== 0.5) return ratio;
 
     if (
       handle.startsWith("endpoint-in-") ||
@@ -219,7 +236,7 @@ export function runBarycenterRefinement({
     if (!node) return 0;
     const pos = positionsMap.get(nodeId);
     if (!pos) return 0;
-    const { height } = getNodeDimensions(node);
+    const { height } = getDim(node);
 
     const nodeEdges = flowEdges.filter(
       (e) => e.source === nodeId || e.target === nodeId,
@@ -235,7 +252,7 @@ export function runBarycenterRefinement({
       if (!neighborNode) return;
       const neighborPos = positionsMap.get(neighborId);
       if (!neighborPos) return;
-      const { height: nh } = getNodeDimensions(neighborNode);
+      const { height: nh } = getDim(neighborNode);
 
       const neighborHandle = isSrc ? edge.targetHandle : edge.sourceHandle;
       const myHandle = isSrc ? edge.sourceHandle : edge.targetHandle;
@@ -251,7 +268,7 @@ export function runBarycenterRefinement({
         const idealCenterY = neighborHandleY - myRatio * height + height / 2;
         sum += idealCenterY;
       } else {
-        sum += neighborPos.x + getNodeDimensions(neighborNode).width / 2;
+        sum += neighborPos.x + getDim(neighborNode).width / 2;
       }
       count++;
     });
@@ -312,7 +329,7 @@ export function runBarycenterRefinement({
         ids.forEach((id) => {
           const node = flowNodes.find((n) => n.id === id);
           if (!node) return;
-          const { width, height } = getNodeDimensions(node);
+          const { width, height } = getDim(node);
           if (width > maxNodeWidth) maxNodeWidth = width;
           if (height > maxNodeHeight) maxNodeHeight = height;
         });
@@ -333,7 +350,7 @@ export function runBarycenterRefinement({
             const pos = positionsMap.get(id);
             if (!pos) return s;
             const node = flowNodes.find((n) => n.id === id)!;
-            const { width, height } = getNodeDimensions(node);
+            const { width, height } = getDim(node);
             return s + (isHorizontal ? pos.x + width / 2 : pos.y + height / 2);
           }, 0) / ids.length;
 
@@ -445,7 +462,7 @@ export function runBarycenterRefinement({
       let totalLen = 0;
       ids.forEach((id, idx) => {
         const node = flowNodes.find((n) => n.id === id)!;
-        const { width, height } = getNodeDimensions(node);
+        const { width, height } = getDim(node);
         totalLen += (isHorizontal ? height : width) + (idx > 0 ? nodeGap : 0);
       });
 
@@ -458,7 +475,7 @@ export function runBarycenterRefinement({
           const pos = positionsMap.get(id);
           if (!pos) return s;
           const node = flowNodes.find((n) => n.id === id)!;
-          const { width, height } = getNodeDimensions(node);
+          const { width, height } = getDim(node);
           return s + (isHorizontal ? pos.x + width / 2 : pos.y + height / 2);
         }, 0) / ids.length;
 
@@ -466,7 +483,7 @@ export function runBarycenterRefinement({
       const maxHalfSize = Math.max(
         ...ids.map((id) => {
           const node = flowNodes.find((n) => n.id === id)!;
-          const { width, height } = getNodeDimensions(node);
+          const { width, height } = getDim(node);
           return (isHorizontal ? width : height) / 2;
         }),
       );
@@ -500,7 +517,7 @@ export function runBarycenterRefinement({
 
       ids.forEach((id) => {
         const node = flowNodes.find((n) => n.id === id)!;
-        const { width, height } = getNodeDimensions(node);
+        const { width, height } = getDim(node);
         if (isHorizontal) {
           positionsMap.set(id, { x: secondaryPos - width / 2, y: cursor });
           cursor += height + nodeGap;
@@ -643,8 +660,8 @@ export function runBarycenterRefinement({
       const tgtPos = positionsMap.get(edge.target);
       if (!srcPos || !tgtPos) return;
 
-      const srcH = getNodeDimensions(srcNode).height;
-      const tgtH = getNodeDimensions(tgtNode).height;
+      const srcH = getDim(srcNode).height;
+      const tgtH = getDim(tgtNode).height;
 
       const srcHandleY = resolveHandleY(
         edge.source,
@@ -671,7 +688,7 @@ export function runBarycenterRefinement({
           if (!nNode) return;
           const nPos = positionsMap.get(nodeId);
           if (!nPos) return;
-          const { height: nH } = getNodeDimensions(nNode);
+          const { height: nH } = getDim(nNode);
 
           const isConnectedToSkipEdge = flowEdges.some(
             (e) =>
@@ -735,8 +752,8 @@ export function runBarycenterRefinement({
         const tgtPos = positionsMap.get(edge.target);
         if (!srcPos || !tgtPos) return;
 
-        const srcDim = getNodeDimensions(srcNode);
-        const tgtDim = getNodeDimensions(tgtNode);
+        const srcDim = getDim(srcNode);
+        const tgtDim = getDim(tgtNode);
 
         const srcHandleY = resolveHandleY(
           edge.source,
@@ -799,7 +816,7 @@ export function runBarycenterRefinement({
           if (node.id === edge.source || node.id === edge.target) return;
           const pos = positionsMap.get(node.id);
           if (!pos) return;
-          const { width, height } = getNodeDimensions(node);
+          const { width, height } = getDim(node);
 
           const nodeLeft = pos.x - clearance;
           const nodeRight = pos.x + width + clearance;
@@ -876,13 +893,13 @@ export function runBarycenterRefinement({
         const nodeA = flowNodes[i]!;
         const posA = positionsMap.get(nodeA.id);
         if (!posA) continue;
-        const dimA = getNodeDimensions(nodeA);
+        const dimA = getDim(nodeA);
 
         for (let j = i + 1; j < flowNodes.length; j++) {
           const nodeB = flowNodes[j]!;
           const posB = positionsMap.get(nodeB.id);
           if (!posB) continue;
-          const dimB = getNodeDimensions(nodeB);
+          const dimB = getDim(nodeB);
 
           const overlapX =
             Math.min(

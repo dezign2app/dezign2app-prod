@@ -344,10 +344,46 @@ export function getHandleYRatio(
   }
   if (handleId === "auth-in") {
     const { height } = getNodeDimensions(node);
-    return Math.min(0.95, Math.max(0.05, 54 / height));
+    return Math.min(0.95, Math.max(0.05, 18 / height));
+  }
+  if (handleId === "types-in") {
+    const { height } = getNodeDimensions(node);
+    return Math.min(0.95, Math.max(0.05, 36 / height));
   }
   if (handleId === "auth-out") {
     return 0.5;
+  }
+
+  if (node.type === "webApp") {
+    const { height } = getNodeDimensions(node);
+    const zones =
+      node.data &&
+      typeof node.data === "object" &&
+      "zones" in node.data &&
+      Array.isArray(node.data.zones) &&
+      node.data.zones.length > 0
+        ? node.data.zones
+        : [
+            { id: "zone-public", handleId: "public-in", name: "Public Section", accessType: "public" },
+            { id: "zone-private", handleId: "private-in", name: "Private Section", accessType: "protected" },
+          ];
+
+    const zoneIndex = zones.findIndex((z: any) => z.handleId === handleId);
+    if (zoneIndex >= 0) {
+      const headerH = 78;
+      const paddingH = 10;
+      const availableH = Math.max(60, height - headerH - paddingH - 10);
+      const estZoneH = Math.max(45, (availableH - (zones.length - 1) * 8) / zones.length);
+      const targetY = headerH + paddingH + zoneIndex * (estZoneH + 8) + estZoneH / 2;
+      return Math.min(0.95, Math.max(0.05, targetY / height));
+    }
+  }
+
+  if (node.type === "webPage") {
+    if (handleId === "page-in") {
+      const { height } = getNodeDimensions(node);
+      return Math.min(0.95, Math.max(0.02, 18 / height));
+    }
   }
 
   if (node.type === "entity" || node.type === "redis_schema") {

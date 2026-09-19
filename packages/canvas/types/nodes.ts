@@ -263,6 +263,8 @@ export type BackendNode = {
   width?: number;
   height?: number;
   selected?: boolean;
+  dragging?: boolean;
+  zIndex?: number;
 };
 
 // BackendNodeData is defined above (composite of all node domain sub-types).
