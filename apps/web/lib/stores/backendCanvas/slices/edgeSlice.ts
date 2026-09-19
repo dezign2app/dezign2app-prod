@@ -1,5 +1,6 @@
 import { BackendEdge } from "@/types/canvas";
 import { isValidConnection } from "@workspace/canvas";
+import { toast } from "sonner";
 import {
   applyEdgeChanges,
   addEdge as addReactFlowEdge,
@@ -108,6 +109,31 @@ export const createEdgeSlice = (
     // Enforce matching DB engine (Redis DB -> Redis Entity, SQL DB -> SQL/Doc Entity)
     if (!validateDatabaseEngine(sourceNode, targetNode)) {
       return;
+    }
+
+    // Enforce at most 1 layout node per WebApp section
+    const webApp = sourceNode.type === "webApp" ? sourceNode : targetNode.type === "webApp" ? targetNode : null;
+    const pageNode = sourceNode.type === "webPage" ? sourceNode : targetNode.type === "webPage" ? targetNode : null;
+    if (webApp && pageNode) {
+      const isLayout = Boolean(pageNode.data?.isLayout) || pageNode.data?.label?.trim().toLowerCase() === "layout";
+      if (isLayout) {
+        const zoneHandle = sourceNode.type === "webApp" ? connection.sourceHandle : connection.targetHandle;
+        const existingEdges = get().edges.filter(
+          (e) =>
+            (e.source === webApp.id && e.sourceHandle === zoneHandle) ||
+            (e.target === webApp.id && e.targetHandle === zoneHandle)
+        );
+        const alreadyHasLayout = existingEdges.some((e) => {
+          const connectedPageId = e.source === webApp.id ? e.target : e.source;
+          const otherNode = get().nodes.find((n) => n.id === connectedPageId);
+          return otherNode?.id !== pageNode.id && (Boolean(otherNode?.data?.isLayout) || otherNode?.data?.label?.trim().toLowerCase() === "layout");
+        });
+
+        if (alreadyHasLayout) {
+          toast.error("This section already has a layout node. Only 1 layout per section is allowed.");
+          return;
+        }
+      }
     }
 
     const edgeType = result.edgeType;

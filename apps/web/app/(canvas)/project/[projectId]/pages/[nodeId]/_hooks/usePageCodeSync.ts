@@ -30,11 +30,32 @@ export function usePageCodeSync({
     return (rawSlug || rawLabel).toLowerCase().replace(/[^a-z0-9]+/g, "-");
   }, [connectedWebAppNode]);
 
+  const isLayout = useMemo(() => {
+    const rawLabel = typeof node?.data?.label === "string" ? node.data.label : "";
+    return Boolean(node?.data?.isLayout) || rawLabel.trim().toLowerCase() === "layout";
+  }, [node]);
+
   const isRoot = useMemo(() => {
     return !pageFolderSlug || pageFolderSlug === "/" || pageFolderSlug === "page" || pageFolderSlug === "(public)";
   }, [pageFolderSlug]);
 
   const candidatePaths = useMemo<string[]>(() => {
+    if (isLayout) {
+      const group = pageFolderSlug && pageFolderSlug !== "layout" ? pageFolderSlug : "public";
+      return [
+        `apps/${webAppSlug}/app/(${group})/layout.tsx`,
+        `apps/${webAppSlug}/app/(public)/layout.tsx`,
+        `apps/${webAppSlug}/app/(private)/layout.tsx`,
+        `apps/${webAppSlug}/app/(${webAppSlug})/layout.tsx`,
+        `apps/${webAppSlug}/app/layout.tsx`,
+        `app/(${group})/layout.tsx`,
+        `app/(public)/layout.tsx`,
+        `app/(private)/layout.tsx`,
+        `app/(${webAppSlug})/layout.tsx`,
+        `app/layout.tsx`,
+      ];
+    }
+
     return [
       // Standard Monorepo root paths (used by Dezign2App monorepo exports)
       isRoot ? `apps/${webAppSlug}/app/(public)/page.tsx` : `apps/${webAppSlug}/app/(public)/${pageFolderSlug}/page.tsx`,
@@ -47,13 +68,17 @@ export function usePageCodeSync({
       isRoot ? `app/(${pageFolderSlug})/page.tsx` : `app/(${pageFolderSlug})/page.tsx`,
       isRoot ? `app/page.tsx` : `app/${pageFolderSlug}/page.tsx`,
     ];
-  }, [webAppSlug, pageFolderSlug, isRoot]);
+  }, [webAppSlug, pageFolderSlug, isRoot, isLayout]);
 
   const defaultFilePath = useMemo(() => {
+    if (isLayout) {
+      const group = pageFolderSlug && pageFolderSlug !== "layout" ? pageFolderSlug : "public";
+      return `apps/${webAppSlug}/app/(${group})/layout.tsx`;
+    }
     return isRoot
       ? `apps/${webAppSlug}/app/(public)/page.tsx`
       : `apps/${webAppSlug}/app/(public)/${pageFolderSlug}/page.tsx`;
-  }, [webAppSlug, pageFolderSlug, isRoot]);
+  }, [webAppSlug, pageFolderSlug, isRoot, isLayout]);
 
   // Helper to resolve the live code context from disk or Convex
   const resolveCurrentPageCode = useCallback(async (): Promise<ResolvedCodeResult> => {

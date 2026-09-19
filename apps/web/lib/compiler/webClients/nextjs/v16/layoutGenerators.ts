@@ -1,5 +1,13 @@
 import { PageInfo } from "./types";
-import { CompiledFile, BackendNode, WebAppZone, ServerGuardConfig } from "@workspace/canvas/types";
+import {
+  CompiledFile,
+  BackendNode,
+  BackendEdge,
+  WebAppZone,
+  ServerGuardConfig,
+  PageSection,
+  UIEventItem,
+} from "@workspace/canvas/types";
 import { slugToComponentName } from "./slugUtils";
 
 export function generateRootLayout(
@@ -57,11 +65,34 @@ export function generateSectionLayout(
   isAuthConnected: boolean = true,
   layoutDescription?: string,
   zone?: WebAppZone,
+  layoutNode?: BackendNode,
 ): string {
   const isPublic = groupName === "public";
   const componentName = slugToComponentName(groupName).replace(/Page$/, "") + "Layout";
   const descriptionDoc = layoutDescription
     ? `\n/**\n * Layout Specification:\n * ${layoutDescription.replace(/\n/g, "\n * ")}\n */`
+    : "";
+
+  const sections: PageSection[] = layoutNode?.data?.sections ?? [];
+  const nonChildrenSections = sections.filter(
+    (s: PageSection) => !s.name?.toLowerCase().includes("children"),
+  );
+
+  const sectionsJsx = nonChildrenSections.length > 0
+    ? nonChildrenSections
+        .map((sec: PageSection) => {
+          const actionButtons = (sec.actions || [])
+            .map(
+              (act: UIEventItem) =>
+                `          <button type="button" className="px-3 py-1.5 rounded-md text-xs bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity cursor-pointer">${act.name || "Action"}</button>`,
+            )
+            .join("\n");
+          return `      <header className="border-b border-border bg-card/60 backdrop-blur px-6 py-3 flex items-center justify-between">
+        <span className="text-sm font-semibold text-foreground">${sec.name}</span>
+        ${actionButtons ? `<div className="flex items-center gap-2">\n${actionButtons}\n        </div>` : ""}
+      </header>`;
+        })
+        .join("\n")
     : "";
 
   if (isPublic || !isAuthConnected) {
@@ -74,7 +105,7 @@ export default function ${componentName}({
 }) {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
-      <div className="flex-1">{children}</div>
+${sectionsJsx ? `${sectionsJsx}\n` : ""}      <div className="flex-1">{children}</div>
     </div>
   );
 }
@@ -119,7 +150,7 @@ export default async function ${componentName}({
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
-      <div className="flex-1">{children}</div>
+${sectionsJsx ? `${sectionsJsx}\n` : ""}      <div className="flex-1">{children}</div>
     </div>
   );
 }
@@ -211,6 +242,8 @@ export function generateRouteGroupLayouts(
   pagesInfo: PageInfo[],
   isAuthConnected: boolean = true,
   webAppNode?: BackendNode,
+  allNodes: BackendNode[] = [],
+  allEdges: BackendEdge[] = [],
 ): CompiledFile[] {
   const files: CompiledFile[] = [];
   const zones: WebAppZone[] = Array.isArray(webAppNode?.data?.zones)
@@ -252,6 +285,35 @@ export function generateRouteGroupLayouts(
       return;
     }
 
+    // Find any connected layout node for this zone
+    const connectedLayoutNode = allNodes.find((n) => {
+      if (n.type !== "webPage") return false;
+      const isLayout =
+        Boolean(n.data?.isLayout) || n.data?.label?.trim().toLowerCase() === "layout";
+      if (!isLayout) return false;
+      if (!matchedZone) return false;
+      return allEdges.some((e) => {
+        return (
+          (e.source === webAppNode?.id &&
+            e.sourceHandle === matchedZone.handleId &&
+            e.target === n.id) ||
+          (e.target === webAppNode?.id &&
+            e.targetHandle === matchedZone.handleId &&
+            e.source === n.id)
+        );
+      });
+    });
+
+    // If layout node has custom source code written in Studio or AI, use it directly
+    if (connectedLayoutNode?.data?.pageSourceCode) {
+      files.push({
+        filename: `app/${folderPath}/layout.tsx`,
+        language: "typescript",
+        content: connectedLayoutNode.data.pageSourceCode,
+      });
+      return;
+    }
+
     // Server-guard zones get a DB-check layout instead of the JWT requireSession() layout
     if (
       matchedZone?.protectionMode === "server-guard" &&
@@ -263,7 +325,7 @@ export function generateRouteGroupLayouts(
         content: generateServerGuardLayout(
           leafGroup,
           matchedZone.serverGuard,
-          matchedZone.layoutDescription,
+          connectedLayoutNode?.data?.description || matchedZone.layoutDescription,
         ),
       });
       return; // don't fall through to generateSectionLayout
@@ -276,8 +338,9 @@ export function generateRouteGroupLayouts(
       content: generateSectionLayout(
         leafGroup,
         isAuthConnected,
-        matchedZone?.layoutDescription,
+        connectedLayoutNode?.data?.description || matchedZone?.layoutDescription,
         matchedZone,
+        connectedLayoutNode,
       ),
     });
   });

@@ -95,6 +95,7 @@ export interface CanvasServiceNodeData {
   enableRealtime?: boolean;
 
   isRoot?: boolean;
+  isLayout?: boolean;
   isAuthPage?: boolean;
   routeGroup?: string;
   routeGroups?: {

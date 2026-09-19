@@ -7,7 +7,9 @@ import {
   Settings,
   AlertCircle,
   Unlink,
+  LayoutTemplate,
 } from "lucide-react";
+import { toast } from "sonner";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -18,7 +20,7 @@ import {
   getSimulationNodeBorderClass,
 } from "../../common";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { parsePageRoute } from "@workspace/canvas";
+import { parsePageRoute, WebAppZone } from "@workspace/canvas";
 import { RealtimeConnection, ClientDeliveryProtocol } from "@workspace/canvas/types";
 import { SectionList, RealtimeConnectionList } from "./web-page";
 import { NodeDeletionDialog } from "@/app/(canvas)/project/[projectId]/_components/NodeDeletionDialog";
@@ -44,37 +46,6 @@ export const WebPageNode = ({
 
   const [renameDialogOpen, setRenameDialogOpen] = React.useState(false);
   const [pendingRename, setPendingRename] = React.useState<{ oldLabel: string; newLabel: string } | null>(null);
-
-  const handleRequestRename = React.useCallback(
-    (newLabel: string) => {
-      const oldLabel = data.label || "";
-      const cleanNew = parsePageRoute(newLabel) || newLabel.trim();
-
-      if (
-        !oldLabel ||
-        oldLabel.trim() === "" ||
-        oldLabel === "page-server" ||
-        oldLabel === "Untitled" ||
-        oldLabel === "Page"
-      ) {
-        updateNode(id, { data: { ...data, label: cleanNew } });
-        return;
-      }
-
-      const cleanOld = parsePageRoute(oldLabel);
-
-      if (cleanOld === cleanNew) return;
-
-      if (!cleanOld || cleanOld === "page-server" || cleanOld === "Untitled" || cleanOld === "Page") {
-        updateNode(id, { data: { ...data, label: cleanNew } });
-        return;
-      }
-
-      setPendingRename({ oldLabel: cleanOld, newLabel: cleanNew });
-      setRenameDialogOpen(true);
-    },
-    [data, id, updateNode],
-  );
 
   // Find incoming WebApp edge connecting to this page
   const incomingEdge = edges.find((e) => {
@@ -104,17 +75,16 @@ export const WebPageNode = ({
       incomingEdge.source === connectedWebAppNode.id
         ? incomingEdge.sourceHandle
         : incomingEdge.targetHandle;
-    const defaultZones = [
-      { handleId: "public-in", name: "Public Section", accessType: "public" },
-      { handleId: "private-in", name: "Private Section", accessType: "protected" },
+    const defaultZones: WebAppZone[] = [
+      { id: "zone-public", handleId: "public-in", name: "Public Section", accessType: "public" },
+      { id: "zone-private", handleId: "private-in", name: "Private Section", accessType: "protected" },
     ];
-    const zones =
+    const zones: WebAppZone[] =
       connectedWebAppNode.data?.zones && connectedWebAppNode.data.zones.length > 0
         ? connectedWebAppNode.data.zones
         : defaultZones;
     const matchedZone = zones.find(
-      (z: { handleId: string; name: string; accessType?: string }) =>
-        z.handleId === handleId,
+      (z: WebAppZone) => z.handleId === handleId,
     );
     if (matchedZone) {
       connectedZoneName = matchedZone.name;
@@ -132,6 +102,74 @@ export const WebPageNode = ({
     }
   }
 
+  const handleRequestRename = React.useCallback(
+    (newLabel: string) => {
+      const oldLabel = data.label || "";
+      const cleanNew = parsePageRoute(newLabel) || newLabel.trim();
+
+      // Check if user is trying to rename to "layout"
+      if (cleanNew.toLowerCase() === "layout") {
+        if (connectedWebAppNode && incomingEdge) {
+          const handleId =
+            incomingEdge.source === connectedWebAppNode.id
+              ? incomingEdge.sourceHandle
+              : incomingEdge.targetHandle;
+          const alreadyHasOtherLayout = edges.some((e) => {
+            if (e.id === incomingEdge.id) return false;
+            const isTarget =
+              e.target === connectedWebAppNode.id && e.targetHandle === handleId;
+            const isSource =
+              e.source === connectedWebAppNode.id && e.sourceHandle === handleId;
+            if (!isTarget && !isSource) return false;
+            const otherNodeId = isSource ? e.target : e.source;
+            const otherNode = nodes.find((n) => n.id === otherNodeId);
+            return (
+              otherNode?.id !== id &&
+              (Boolean(otherNode?.data?.isLayout) ||
+                otherNode?.data?.label?.trim().toLowerCase() === "layout")
+            );
+          });
+
+          if (alreadyHasOtherLayout) {
+            toast.error(
+              `Section "${connectedZoneName || "current"}" already has a layout node. Only 1 layout per section is allowed.`,
+            );
+            return;
+          }
+        }
+        updateNode(id, { data: { ...data, label: "layout", isLayout: true } });
+        return;
+      }
+
+      // If previously was layout, reset isLayout flag when renamed
+      const nextIsLayout = Boolean(data.isLayout && cleanNew.toLowerCase() === "layout");
+
+      if (
+        !oldLabel ||
+        oldLabel.trim() === "" ||
+        oldLabel === "page-server" ||
+        oldLabel === "Untitled" ||
+        oldLabel === "Page"
+      ) {
+        updateNode(id, { data: { ...data, label: cleanNew, isLayout: nextIsLayout } });
+        return;
+      }
+
+      const cleanOld = parsePageRoute(oldLabel);
+
+      if (cleanOld === cleanNew) return;
+
+      if (!cleanOld || cleanOld === "page-server" || cleanOld === "Untitled" || cleanOld === "Page") {
+        updateNode(id, { data: { ...data, label: cleanNew, isLayout: nextIsLayout } });
+        return;
+      }
+
+      setPendingRename({ oldLabel: cleanOld, newLabel: cleanNew });
+      setRenameDialogOpen(true);
+    },
+    [data, id, updateNode, connectedWebAppNode, incomingEdge, edges, nodes, connectedZoneName],
+  );
+
   const isCustomOverride = Boolean(
     data.useZoneDefault === false || data.protectionOverride,
   );
@@ -147,9 +185,9 @@ export const WebPageNode = ({
           (data.accessType && data.accessType !== "public"),
       );
 
-  // Auto-sanitize existing labels with spaces to valid Next.js route format
+  // Auto-sanitize existing labels with spaces to valid Next.js route format (unless layout)
   React.useEffect(() => {
-    if (data.label && (data.label.includes(" ") || data.label !== parsePageRoute(data.label))) {
+    if (data.label && data.label.toLowerCase() !== "layout" && (data.label.includes(" ") || data.label !== parsePageRoute(data.label))) {
       const parsed = parsePageRoute(data.label);
       if (parsed !== data.label) {
         updateNode(id, { data: { ...data, label: parsed } });
@@ -203,17 +241,40 @@ export const WebPageNode = ({
   const rawLabel = data.label || "";
   const normalizedLabel = parsePageRoute(rawLabel);
   const cleanLabel = normalizedLabel.toLowerCase();
+  const isLayout = Boolean(data.isLayout) || cleanLabel === "layout" || rawLabel.trim().toLowerCase() === "layout";
   const isLandingPage =
-    data.isRoot === true ||
-    cleanLabel === "/";
+    !isLayout && (data.isRoot === true || cleanLabel === "/");
 
-  const displayRoute = isLandingPage
-    ? "/"
-    : data.label
-      ? data.label.startsWith("/")
-        ? data.label
-        : `/${data.label}`
-      : "/";
+  const zoneSlug =
+    connectedZoneName
+      ?.toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || (isZoneProtected ? "private" : "public");
+
+  const displayRoute = isLayout
+    ? `app/(${zoneSlug})/layout.tsx`
+    : isLandingPage
+      ? "/"
+      : data.label
+        ? data.label.startsWith("/")
+          ? data.label
+          : `/${data.label}`
+        : "/";
+
+  // Check if multiple layout nodes are attached to the same section
+  const isDuplicateLayout = isLayout && Boolean(connectedWebAppNode && incomingEdge && (() => {
+    const handleId = incomingEdge.source === connectedWebAppNode.id ? incomingEdge.sourceHandle : incomingEdge.targetHandle;
+    const otherLayoutEdges = edges.filter(e => 
+      e.id !== incomingEdge.id &&
+      ((e.source === connectedWebAppNode.id && e.sourceHandle === handleId) ||
+       (e.target === connectedWebAppNode.id && e.targetHandle === handleId))
+    );
+    return otherLayoutEdges.some(e => {
+      const otherNodeId = e.source === connectedWebAppNode.id ? e.target : e.source;
+      const otherNode = nodes.find(n => n.id === otherNodeId);
+      return otherNode?.id !== id && (Boolean(otherNode?.data?.isLayout) || otherNode?.data?.label?.trim().toLowerCase() === "layout");
+    });
+  })());
 
   const isLocked = Boolean(data.aiEditing);
 
@@ -228,7 +289,12 @@ export const WebPageNode = ({
                 "border-destructive/80 ring-1 ring-destructive/30 shadow-destructive/5",
                 selected && "ring-2 ring-destructive/60 border-destructive",
               )
-            : borderClass,
+            : isLayout
+              ? cn(
+                  "border-indigo-500/60 ring-1 ring-indigo-500/20",
+                  selected && "ring-2 ring-indigo-500/60 border-indigo-500",
+                )
+              : borderClass,
       )}
     >
       {/* Target handle from WebApp Section */}
@@ -248,12 +314,17 @@ export const WebPageNode = ({
         id={id}
         data={data}
         nodeType="webPage"
-        icon={Globe}
-        title={isLandingPage ? "Landing Page" : "Web Page"}
+        icon={isLayout ? LayoutTemplate : Globe}
+        title={isLayout ? "Route Group Layout" : isLandingPage ? "Landing Page" : "Web Page"}
         selected={selected}
         onSave={handleRequestRename}
         rightElement={
           <div className="flex items-center gap-1 shrink-0 ml-2">
+            {isLayout && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
+                LAYOUT
+              </span>
+            )}
             {isDisconnected && !isLocked && (
               <div
                 className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 text-[9px] font-semibold shrink-0"
@@ -298,6 +369,14 @@ export const WebPageNode = ({
         <div className="px-3 py-1.5 bg-destructive/10 border-b border-destructive/25 flex items-center gap-1.5 text-[10px] text-destructive font-medium leading-tight nodrag">
           <AlertCircle size={12} className="shrink-0 text-destructive animate-pulse" />
           <span>Connect to a WebApp node to build</span>
+        </div>
+      )}
+
+      {/* Duplicate layout warning banner */}
+      {isDuplicateLayout && (
+        <div className="px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/25 flex items-center gap-1.5 text-[10px] text-amber-500 font-medium leading-tight nodrag">
+          <AlertCircle size={12} className="shrink-0 text-amber-500 animate-pulse" />
+          <span>Duplicate layout: Section already has layout.tsx</span>
         </div>
       )}
 

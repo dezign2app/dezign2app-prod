@@ -82,7 +82,15 @@ export function compileNextjsV16WebClient(
   );
 
   // 2. Generate Route Group Layouts
-  files.push(...generateRouteGroupLayouts(pagesInfo, Boolean(authNode), webAppNode));
+  files.push(
+    ...generateRouteGroupLayouts(
+      pagesInfo,
+      Boolean(authNode),
+      webAppNode,
+      allNodes,
+      allEdges,
+    ),
+  );
 
   // 2.5 Resolve State Store Nodes, Global Stores (Zustand) & App Providers (Context)
   const appGlobalStores: GlobalStoreDefinition[] = webAppNode?.data?.globalStores || [];

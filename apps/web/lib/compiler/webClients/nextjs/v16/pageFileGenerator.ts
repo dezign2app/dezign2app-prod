@@ -54,6 +54,11 @@ export function generatePageAndComponentFiles({
 
   webClientNodes.forEach((node, idx) => {
     const pageMeta = pagesInfo[idx]!;
+    // Layout nodes are compiled as layout.tsx via generateRouteGroupLayouts, not as route pages
+    if (pageMeta.isLayout) {
+      return;
+    }
+
     if (pageMeta.isRoot) {
       hasExplicitRoot = true;
     }
