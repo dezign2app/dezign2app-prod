@@ -10,6 +10,7 @@ import {
   ServerGuardConfig,
   DEFAULT_ZONES,
   PRESET_TRIGGER_OPTIONS,
+  normalizePageRoute,
 } from "@workspace/canvas";
 
 import {
@@ -207,9 +208,27 @@ export const ZoneConfig = ({
       "Docs Page",
       "Contact Page",
     ];
-    const suggestedLabel =
-      pageSuggestions[connectedPages.length] ||
-      `Public Page ${totalWebPages + 1}`;
+
+    const allConnectedEdges = edges.filter(
+      (e) => e.source === nodeId || e.target === nodeId,
+    );
+    const existingRoutes = new Set(
+      allConnectedEdges
+        .map((e) => nodes.find((n) => n.id === (e.source === nodeId ? e.target : e.source)))
+        .filter((n): n is BackendNode => Boolean(n && n.type === "webPage"))
+        .map((n) => normalizePageRoute(n.data?.label || n.data?.path || "")),
+    );
+
+    let suggestedLabel = pageSuggestions.find(
+      (sug) => !existingRoutes.has(normalizePageRoute(sug)),
+    );
+    if (!suggestedLabel) {
+      let counter = 1;
+      while (existingRoutes.has(normalizePageRoute(isPublicZone ? `Public Page ${counter}` : `Page ${counter}`))) {
+        counter++;
+      }
+      suggestedLabel = isPublicZone ? `Public Page ${counter}` : `Page ${counter}`;
+    }
 
     const newPageNode: BackendNode = {
       id: newPageId,

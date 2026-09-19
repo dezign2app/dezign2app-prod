@@ -18,6 +18,7 @@ import {
   parsePageRoute,
   getUniqueNodeLabel,
   DEFAULT_DATABASE_NODE_LABEL,
+  arePageRoutesEqual,
 } from "@workspace/canvas";
 import { LocalInput } from "./LocalInput";
 import { toast } from "sonner";
@@ -145,16 +146,40 @@ export const NodeHeader = ({
     }
 
     const allNodes = useBackendCanvasStore.getState().nodes;
-    const isDuplicate = allNodes.some(
-      (n) =>
-        n.id !== id &&
-        (n.type === nodeType || (nodeType === "service" && n.type === "service")) &&
-        (n.data?.label || "").trim().toLowerCase() === finalLabel.toLowerCase(),
-    );
+    let isDuplicate = false;
+    if (nodeType === "webPage") {
+      if (finalLabel.toLowerCase() !== "layout") {
+        const edges = useBackendCanvasStore.getState().edges;
+        const webAppEdge = edges.find(
+          (e) =>
+            (e.source === id || e.target === id) &&
+            allNodes.find((n) => n.id === (e.source === id ? e.target : e.source))?.type === "webApp",
+        );
+        if (webAppEdge) {
+          const webAppId = webAppEdge.source === id ? webAppEdge.target : webAppEdge.source;
+          const siblingPageEdges = edges.filter((e) => e.source === webAppId || e.target === webAppId);
+          isDuplicate = siblingPageEdges.some((e) => {
+            const siblingId = e.source === webAppId ? e.target : e.source;
+            if (siblingId === id) return false;
+            const sibling = allNodes.find((n) => n.id === siblingId);
+            if (!sibling || sibling.type !== "webPage") return false;
+            if (sibling.data?.isLayout || sibling.data?.label?.trim().toLowerCase() === "layout") return false;
+            return arePageRoutesEqual(sibling.data?.label || sibling.data?.path || "", finalLabel);
+          });
+        }
+      }
+    } else {
+      isDuplicate = allNodes.some(
+        (n) =>
+          n.id !== id &&
+          (n.type === nodeType || (nodeType === "service" && n.type === "service")) &&
+          (n.data?.label || "").trim().toLowerCase() === finalLabel.toLowerCase(),
+      );
+    }
 
     if (isDuplicate) {
-      const typeLabel = nodeType === "service" ? "Service" : title || "Node";
-      toast.error(`${typeLabel} name "${finalLabel}" is already used!`);
+      const typeLabel = nodeType === "service" ? "Service" : nodeType === "webPage" ? "Web Page" : title || "Node";
+      toast.error(`${typeLabel} route/name "${finalLabel}" is already used!`);
       if (data.label && data.label.trim()) {
         setName(data.label);
         setIsEditing(false);

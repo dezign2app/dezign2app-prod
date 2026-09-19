@@ -405,6 +405,36 @@ export function pageRouteToUrl(routeOrLabel: string): string {
 }
 
 /**
+ * Normalizes a page route so that "/<route>" and "<route>" are identical.
+ * Canonical format always starts with "/" unless it's "layout".
+ * - "login" -> "/login"
+ * - "/login" -> "/login"
+ * - "/" or "" or "home" or "index" -> "/"
+ * - "dashboard/user-settings" -> "/dashboard/user-settings"
+ * - "/dashboard/user-settings" -> "/dashboard/user-settings"
+ * - "layout" -> "layout"
+ */
+export function normalizePageRoute(raw: string): string {
+  if (!raw) return "/";
+  const trimmed = raw.trim();
+  if (trimmed.toLowerCase() === "layout" || trimmed.toLowerCase() === "/layout") return "layout";
+  const parsed = parsePageRoute(trimmed);
+  const unslashed = (parsed || "").replace(/^\/+|\/+$/g, "").toLowerCase();
+  if (!parsed || parsed === "/" || unslashed === "home" || unslashed === "index") {
+    return "/";
+  }
+  return parsed.startsWith("/") ? parsed : `/${parsed}`;
+}
+
+/**
+ * Checks if two page route strings point to the same route.
+ * Treats "/<route>" and "<route>" as identical.
+ */
+export function arePageRoutesEqual(routeA: string, routeB: string): boolean {
+  return normalizePageRoute(routeA) === normalizePageRoute(routeB);
+}
+
+/**
  * Normalizes an endpoint route path by replacing whitespace with hyphens,
  * matching compiler endpoint path transformation (e.g. "send msg" -> "send-msg", "/send msg" -> "/send-msg").
  */

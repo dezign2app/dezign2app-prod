@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { WebAppZone } from "@workspace/canvas/types";
+import { normalizePageRoute } from "@workspace/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   AlertDialog,
@@ -256,6 +257,14 @@ export const WebAppNode = ({
       )
       .filter((n): n is BackendNode => Boolean(n));
   };
+
+  // Find all connected WebPage nodes across all sections for duplicate route detection
+  const allConnectedPageEdges = edges.filter(
+    (e) => e.source === id || e.target === id,
+  );
+  const allConnectedPages = allConnectedPageEdges
+    .map((e) => nodes.find((n) => n.id === (e.source === id ? e.target : e.source)))
+    .filter((n): n is BackendNode => Boolean(n && n.type === "webPage"));
 
   return (
     <div
@@ -513,14 +522,37 @@ export const WebAppNode = ({
                     Plug WebClient pages here
                   </span>
                 ) : (
-                  connectedPages.map((p) => (
-                    <span
-                      key={p.id}
-                      className="text-[10px] px-2 py-0.5 rounded bg-secondary text-foreground font-mono border border-border"
-                    >
-                      {p.data.label || "Page"}
-                    </span>
-                  ))
+                  connectedPages.map((p) => {
+                    const normalizedRoute = normalizePageRoute(p.data?.label || p.data?.path || "");
+                    const isLayout = Boolean(p.data?.isLayout) || p.data?.label?.trim().toLowerCase() === "layout";
+                    const hasDuplicate = !isLayout && allConnectedPages.some(
+                      (other) =>
+                        other.id !== p.id &&
+                        !other.data?.isLayout &&
+                        other.data?.label?.trim().toLowerCase() !== "layout" &&
+                        normalizePageRoute(other.data?.label || other.data?.path || "") === normalizedRoute,
+                    );
+
+                    return (
+                      <span
+                        key={p.id}
+                        className={cn(
+                          "text-[10px] px-2 py-0.5 rounded font-mono border transition-colors",
+                          hasDuplicate
+                            ? "bg-destructive/15 text-destructive border-destructive/40 font-semibold"
+                            : "bg-secondary text-foreground border-border",
+                        )}
+                        title={
+                          hasDuplicate
+                            ? `Duplicate route conflict: "${normalizedRoute}" is used by multiple pages in this Web App!`
+                            : `Route: ${normalizedRoute}`
+                        }
+                      >
+                        {hasDuplicate && "⚠️ "}
+                        {p.data.label || "Page"}
+                      </span>
+                    );
+                  })
                 )}
               </div>
             </div>

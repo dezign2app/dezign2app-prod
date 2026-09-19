@@ -20,7 +20,7 @@ import {
   getSimulationNodeBorderClass,
 } from "../../common";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { parsePageRoute, WebAppZone } from "@workspace/canvas";
+import { parsePageRoute, normalizePageRoute, arePageRoutesEqual, WebAppZone } from "@workspace/canvas";
 import { RealtimeConnection, ClientDeliveryProtocol } from "@workspace/canvas/types";
 import { SectionList, RealtimeConnectionList } from "./web-page";
 import { NodeDeletionDialog } from "@/app/(canvas)/project/[projectId]/_components/NodeDeletionDialog";
@@ -141,8 +141,40 @@ export const WebPageNode = ({
         return;
       }
 
+      // Check if another page in the same WebApp already has this route
+      if (cleanNew.toLowerCase() !== "layout" && connectedWebAppNode) {
+        const normalizedNew = normalizePageRoute(cleanNew);
+        const existingPageEdges = edges.filter(
+          (e) => e.source === connectedWebAppNode.id || e.target === connectedWebAppNode.id,
+        );
+        const duplicatePage = existingPageEdges
+          .map((e) => nodes.find((n) => n.id === (e.source === connectedWebAppNode.id ? e.target : e.source)))
+          .find(
+            (other) =>
+              other &&
+              other.id !== id &&
+              other.type === "webPage" &&
+              !other.data?.isLayout &&
+              other.data?.label?.trim().toLowerCase() !== "layout" &&
+              normalizePageRoute(other.data?.label || other.data?.path || "") === normalizedNew,
+          );
+
+        if (duplicatePage) {
+          toast.error(
+            `Route "${normalizedNew}" already exists in this Web App (node "${duplicatePage.data?.label || "Page"}"). Route names must be unique.`,
+          );
+          return;
+        }
+      }
+
       // If previously was layout, reset isLayout flag when renamed
       const nextIsLayout = Boolean(data.isLayout && cleanNew.toLowerCase() === "layout");
+
+      // If oldLabel and cleanNew point to the exact same route (e.g. "/login" vs "login"), update label directly
+      if (arePageRoutesEqual(oldLabel, cleanNew)) {
+        updateNode(id, { data: { ...data, label: cleanNew, isLayout: nextIsLayout } });
+        return;
+      }
 
       if (
         !oldLabel ||
@@ -276,6 +308,25 @@ export const WebPageNode = ({
     });
   })());
 
+  // Check if multiple pages in this WebApp share the same normalized route
+  const currentNormalizedRoute = normalizePageRoute(data.label || data.path || "");
+  const duplicateRoutePage = !isLayout && connectedWebAppNode
+    ? (() => {
+        const connectedEdges = edges.filter(
+          (e) => e.source === connectedWebAppNode.id || e.target === connectedWebAppNode.id,
+        );
+        return connectedEdges
+          .map((e) => nodes.find((n) => n.id === (e.source === connectedWebAppNode.id ? e.target : e.source)))
+          .find((other) => {
+            if (!other || other.id === id || other.type !== "webPage") return false;
+            if (other.data?.isLayout || other.data?.label?.trim().toLowerCase() === "layout") return false;
+            return normalizePageRoute(other.data?.label || other.data?.path || "") === currentNormalizedRoute;
+          });
+      })()
+    : null;
+
+  const isDuplicateRoute = Boolean(duplicateRoutePage);
+
   const isLocked = Boolean(data.aiEditing);
 
   return (
@@ -289,6 +340,11 @@ export const WebPageNode = ({
                 "border-destructive/80 ring-1 ring-destructive/30 shadow-destructive/5",
                 selected && "ring-2 ring-destructive/60 border-destructive",
               )
+            : isDuplicateRoute
+              ? cn(
+                  "border-destructive/80 ring-1 ring-destructive/30 shadow-destructive/5",
+                  selected && "ring-2 ring-destructive/60 border-destructive",
+                )
             : isLayout
               ? cn(
                   "border-indigo-500/60 ring-1 ring-indigo-500/20",
@@ -377,6 +433,14 @@ export const WebPageNode = ({
         <div className="px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/25 flex items-center gap-1.5 text-[10px] text-amber-500 font-medium leading-tight nodrag">
           <AlertCircle size={12} className="shrink-0 text-amber-500 animate-pulse" />
           <span>Duplicate layout: Section already has layout.tsx</span>
+        </div>
+      )}
+
+      {/* Duplicate route warning banner */}
+      {isDuplicateRoute && (
+        <div className="px-3 py-1.5 bg-destructive/10 border-b border-destructive/25 flex items-center gap-1.5 text-[10px] text-destructive font-medium leading-tight nodrag">
+          <AlertCircle size={12} className="shrink-0 text-destructive animate-pulse" />
+          <span>Duplicate route: Route "{currentNormalizedRoute}" conflicts with "{duplicateRoutePage?.data?.label || "Page"}"</span>
         </div>
       )}
 

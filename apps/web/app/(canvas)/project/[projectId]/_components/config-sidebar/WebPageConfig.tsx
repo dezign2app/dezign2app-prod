@@ -153,8 +153,12 @@ export const WebPageConfig = ({
     handleRequestRename,
     handleConfirmRename,
   } = useWebPageRename({
+    nodeId,
     data,
     updateData,
+    connectedWebApp,
+    allNodes,
+    allEdges,
   });
 
   const sectionsCount = (data.sections || []).length;
