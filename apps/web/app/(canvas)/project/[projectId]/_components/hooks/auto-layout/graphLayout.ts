@@ -17,6 +17,7 @@ import {
   layoutHangingReferenceNodes,
   REFERENCE_NODE_TYPES,
 } from "./hangingReferenceLayout";
+import { layoutPaymentsPluginNodes } from "./paymentsPluginLayout";
 import { layoutTypesNodes } from "./typesNodeLayout";
 import type { EndpointWithNode, EventWithNode } from "@workspace/canvas";
 
@@ -122,9 +123,31 @@ export function performGraphLayout({
     return false;
   };
 
+  const isPaymentsPluginEdge = (edge: LayoutEdge): boolean => {
+    const sourceNode = graphNodes.find((n: LayoutNode) => n.id === edge.source);
+    const targetNode = graphNodes.find((n: LayoutNode) => n.id === edge.target);
+    if (!sourceNode || !targetNode) return false;
+
+    if (sourceNode.type === "payments" && targetNode.type === "auth") {
+      return (
+        edge.targetHandle === "payments-plugin-in" ||
+        edge.sourceHandle === "injects-plugin-out" ||
+        !edge.targetHandle
+      );
+    }
+    if (targetNode.type === "payments" && sourceNode.type === "auth") {
+      return (
+        edge.sourceHandle === "payments-plugin-in" ||
+        edge.targetHandle === "injects-plugin-out"
+      );
+    }
+    return false;
+  };
+
   const headEdges: LayoutEdge[] = graphEdges.filter(isHeadConnectionEdge);
   const hangingEdges: LayoutEdge[] = graphEdges.filter(isHangingTransformerEdge);
   const hangingRefEdges: LayoutEdge[] = graphEdges.filter(isHangingReferenceEdge);
+  const paymentsPluginEdges: LayoutEdge[] = graphEdges.filter(isPaymentsPluginEdge);
 
   // 3. Identify attached head nodes, hanging transformer nodes, and hanging reference nodes
   const attachedHeadNodeIdSet = new Set<string>(
@@ -161,20 +184,35 @@ export function performGraphLayout({
     hangingRefNodeIdSet.has(n.id),
   );
 
+  const paymentsPluginNodeIdSet = new Set<string>();
+  paymentsPluginEdges.forEach((e) => {
+    const sourceNode = graphNodes.find((n) => n.id === e.source);
+    const targetNode = graphNodes.find((n) => n.id === e.target);
+    if (sourceNode?.type === "payments") paymentsPluginNodeIdSet.add(sourceNode.id);
+    if (targetNode?.type === "payments") paymentsPluginNodeIdSet.add(targetNode.id);
+  });
+  const paymentsPluginNodes: LayoutNode[] = graphNodes.filter((n: LayoutNode) =>
+    paymentsPluginNodeIdSet.has(n.id),
+  );
+
   const flowEdges: LayoutEdge[] = graphEdges.filter(
     (e: LayoutEdge) =>
       !isHeadConnectionEdge(e) &&
       !isHangingTransformerEdge(e) &&
       !isHangingReferenceEdge(e) &&
+      !isPaymentsPluginEdge(e) &&
       !hangingRefNodeIdSet.has(e.source) &&
-      !hangingRefNodeIdSet.has(e.target),
+      !hangingRefNodeIdSet.has(e.target) &&
+      !paymentsPluginNodeIdSet.has(e.source) &&
+      !paymentsPluginNodeIdSet.has(e.target),
   );
 
   const mainGraphNodes: LayoutNode[] = graphNodes.filter(
     (n: LayoutNode) =>
       !attachedHeadNodeIdSet.has(n.id) &&
       !hangingTransformerNodeIdSet.has(n.id) &&
-      !hangingRefNodeIdSet.has(n.id),
+      !hangingRefNodeIdSet.has(n.id) &&
+      !paymentsPluginNodeIdSet.has(n.id),
   );
 
   // 4. Run Dagre layout for mainGraphNodes and flowEdges
@@ -183,11 +221,7 @@ export function performGraphLayout({
     rankdir: direction,
     marginx: 80,
     marginy: 80,
-    ranksep: isHorizontal
-      ? hangingRefEdges.length > 0
-        ? 520
-        : 200
-      : 150,
+    ranksep: isHorizontal ? 200 : 150,
     nodesep: 50,
   });
 
@@ -231,6 +265,7 @@ export function performGraphLayout({
     hangingEdges,
     hangingRefEdges,
     hangingRefNodes,
+    paymentsPluginEdges,
   });
 
   // 6. Layout attached head nodes grouped by category columns above each target node
@@ -264,7 +299,16 @@ export function performGraphLayout({
     storeEvents,
   });
 
-  // 6.6. Enforce positive canvas origin margin (minX >= 60, minY >= 60)
+  // 6.65. Layout Payments plugin nodes (Creem Payments) immediately preceding their connected Better Auth node
+  layoutPaymentsPluginNodes({
+    nodes: graphNodes,
+    positionsMap,
+    paymentsPluginEdges,
+    paymentsPluginNodes,
+    isHorizontal,
+  });
+
+  // 6.7. Enforce positive canvas origin margin (minX >= 60, minY >= 60)
   let globalMinX = Infinity;
   let globalMinY = Infinity;
   positionsMap.forEach((pos) => {

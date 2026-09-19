@@ -89,6 +89,7 @@ export interface BarycenterRefinementParams {
   hangingEdges?: LayoutEdge[];
   hangingRefEdges?: LayoutEdge[];
   hangingRefNodes?: LayoutNode[];
+  paymentsPluginEdges?: LayoutEdge[];
 }
 
 export function runBarycenterRefinement({
@@ -102,6 +103,7 @@ export function runBarycenterRefinement({
   hangingEdges = [],
   hangingRefEdges = [],
   hangingRefNodes = [],
+  paymentsPluginEdges = [],
 }: BarycenterRefinementParams): void {
   // Whether any entity nodes are present — used to tune gaps
   const hasEntityNodesLocal = flowNodes.some((n) => n.type === "entity");
@@ -344,10 +346,15 @@ export function runBarycenterRefinement({
         const hasHangingReferencesInRank = ids.some((id) =>
           hangingRefEdges.some((e) => e.source === id || e.target === id),
         );
+        const hasPaymentsPluginInRank = ids.some((id) =>
+          paymentsPluginEdges.some((e) => e.source === id || e.target === id),
+        );
         const effectiveRankGap =
           hasHangingTransformersInRank || hasHangingReferencesInRank
             ? Math.max(minRankGap, 500)
-            : minRankGap;
+            : hasPaymentsPluginInRank
+              ? Math.max(minRankGap, 400)
+              : minRankGap;
 
         if (lastRankMaxPrimary !== -Infinity) {
           const minAllowedCenter =
@@ -470,10 +477,15 @@ export function runBarycenterRefinement({
       const hasHangingReferencesInRank = ids.some((id) =>
         hangingRefEdges.some((e) => e.source === id || e.target === id),
       );
+      const hasPaymentsPluginInRank = ids.some((id) =>
+        paymentsPluginEdges.some((e) => e.source === id || e.target === id),
+      );
       const effectiveRankGap =
         hasHangingTransformersInRank || hasHangingReferencesInRank
           ? Math.max(minRankGap, 500)
-          : minRankGap;
+          : hasPaymentsPluginInRank
+            ? Math.max(minRankGap, 400)
+            : minRankGap;
 
       // Enforce clean rank separation from previous rank
       if (lastRankMaxPrimary !== -Infinity) {
