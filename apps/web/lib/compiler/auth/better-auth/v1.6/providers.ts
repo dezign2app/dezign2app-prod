@@ -2,18 +2,26 @@ import { OAuthProviderConfig } from "@workspace/canvas";
 import { BetterAuthV16NodeData } from "./types";
 
 export function resolveOAuthProviders(data: BetterAuthV16NodeData): OAuthProviderConfig[] {
-  const isSocialEnabled = data.providers?.socialEnabled ?? data.providers?.oauthEnabled ?? true;
-  if (!isSocialEnabled) {
+  const providers = data.providers;
+  if (!providers) {
     return [];
   }
 
-  if (Array.isArray(data.providers?.oauth)) {
-    return data.providers!.oauth!;
+  // If social auth is explicitly disabled, return empty array
+  if (providers.socialEnabled === false || providers.oauthEnabled === false) {
+    return [];
   }
 
-  // Fallback for uninitialized AuthNode data: default to Google and GitHub
-  return [
-    { id: "oa-1", provider: "google", clientIdEnv: "GOOGLE_CLIENT_ID", clientSecretEnv: "GOOGLE_CLIENT_SECRET" },
-    { id: "oa-2", provider: "github", clientIdEnv: "GITHUB_CLIENT_ID", clientSecretEnv: "GITHUB_CLIENT_SECRET" },
-  ];
+  // Only return providers that are explicitly configured in the oauth array
+  if (Array.isArray(providers.oauth) && providers.oauth.length > 0) {
+    return providers.oauth
+      .filter((oa) => Boolean(oa && oa.provider && oa.provider.trim()))
+      .map((oa) => ({
+        ...oa,
+        provider: oa.provider.trim().toLowerCase(),
+      }));
+  }
+
+  // If no providers configured, return empty array (show only what is configured)
+  return [];
 }

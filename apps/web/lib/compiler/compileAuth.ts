@@ -5,10 +5,13 @@ import {
   DEFAULT_BETTER_AUTH_VERSION,
   AUTH_FRAMEWORK_BETTER_AUTH,
   BackendNodeData,
+  arePageRoutesEqual,
 } from "@workspace/canvas";
-import { compileBetterAuthV16 } from "./auth/better-auth/v1.6";
+import { compileBetterAuthV16, resolveOAuthProviders, BetterAuthV16NodeData } from "./auth/better-auth/v1.6";
 
 export type { AuthPageMetaInfo };
+
+export type AuthCompilerNodeData = BackendNodeData | BetterAuthV16NodeData | Partial<BackendNodeData>;
 
 export interface CompiledAuthResult {
   authNodeId: string;
@@ -110,33 +113,69 @@ export function compileAuth(
  */
 export function isAuthLoginPage(
   pageMeta: AuthPageMetaInfo,
-  authNodeData?: BackendNodeData
+  authNodeData?: AuthCompilerNodeData
 ): boolean {
   const redirects = authNodeData?.redirects;
-  const hasConfiguredSignIn = Boolean(redirects?.signInPageNodeId || redirects?.signInPageUrl);
 
+  // 1. Direct match by nodeId if configured
   if (redirects?.signInPageNodeId && pageMeta.nodeId === redirects.signInPageNodeId) {
     return true;
   }
 
+  // 2. Direct match by configured signInPageUrl if configured
   const configuredSignInUrl = redirects?.signInPageUrl;
   if (configuredSignInUrl) {
     const cleanSignIn = configuredSignInUrl.startsWith("/") ? configuredSignInUrl : `/${configuredSignInUrl}`;
     const cleanRoutePath = pageMeta.routePath?.startsWith("/") ? pageMeta.routePath : `/${pageMeta.routePath || ""}`;
     const cleanSlug = pageMeta.slug ? `/${pageMeta.slug}` : "";
-    if (cleanRoutePath === cleanSignIn || cleanSlug === cleanSignIn) {
+    if (
+      cleanRoutePath === cleanSignIn ||
+      cleanSlug === cleanSignIn ||
+      arePageRoutesEqual(cleanRoutePath, cleanSignIn) ||
+      arePageRoutesEqual(cleanSlug, cleanSignIn) ||
+      arePageRoutesEqual(pageMeta.label || "", cleanSignIn)
+    ) {
       return true;
     }
   }
 
-  // If a specific sign-in page was configured in AuthConfig, do not match other non-configured pages
-  if (hasConfiguredSignIn) {
-    return false;
+  // 3. Match standard naming conventions for login / sign-in (e.g. "login", "signin", "sign-in", "Sign In")
+  const rawSlug = (pageMeta.slug || "").toLowerCase();
+  const rawRoute = (pageMeta.routePath || "").toLowerCase();
+  const rawLabel = (pageMeta.label || "").toLowerCase();
+  const normSlug = rawSlug.replace(/[-_]/g, "");
+  const normRoute = rawRoute.replace(/[-_]/g, "");
+  const normLabel = rawLabel.replace(/[-_\s]/g, "");
+
+  const matchesSignInConvention =
+    rawSlug === "login" ||
+    rawSlug === "signin" ||
+    rawSlug === "sign-in" ||
+    normSlug === "signin" ||
+    normSlug === "login" ||
+    rawRoute === "/login" ||
+    rawRoute === "/signin" ||
+    rawRoute === "/sign-in" ||
+    normRoute === "/signin" ||
+    normRoute === "/login" ||
+    normLabel === "login" ||
+    normLabel === "signin" ||
+    normLabel === "/login" ||
+    normLabel === "/signin" ||
+    arePageRoutesEqual(rawRoute, "/login") ||
+    arePageRoutesEqual(rawRoute, "/signin") ||
+    arePageRoutesEqual(rawRoute, "/sign-in");
+
+  if (matchesSignInConvention) {
+    return true;
   }
 
-  const slug = (pageMeta.slug || "").toLowerCase();
-  const route = (pageMeta.routePath || "").toLowerCase();
-  return slug === "login" || slug === "signin" || route === "/login" || route === "/signin";
+  // 4. If the page is explicitly flagged as an auth page and is not a register page, treat as sign-in
+  if (pageMeta.isAuthPage && !isAuthRegisterPage(pageMeta, authNodeData)) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -144,33 +183,60 @@ export function isAuthLoginPage(
  */
 export function isAuthRegisterPage(
   pageMeta: AuthPageMetaInfo,
-  authNodeData?: BackendNodeData
+  authNodeData?: AuthCompilerNodeData
 ): boolean {
   const redirects = authNodeData?.redirects;
-  const hasConfiguredSignUp = Boolean(redirects?.signUpPageNodeId || redirects?.signUpPageUrl);
 
+  // 1. Direct match by nodeId if configured
   if (redirects?.signUpPageNodeId && pageMeta.nodeId === redirects.signUpPageNodeId) {
     return true;
   }
 
+  // 2. Direct match by configured signUpPageUrl if configured
   const configuredSignUpUrl = redirects?.signUpPageUrl;
   if (configuredSignUpUrl) {
     const cleanSignUp = configuredSignUpUrl.startsWith("/") ? configuredSignUpUrl : `/${configuredSignUpUrl}`;
     const cleanRoutePath = pageMeta.routePath?.startsWith("/") ? pageMeta.routePath : `/${pageMeta.routePath || ""}`;
     const cleanSlug = pageMeta.slug ? `/${pageMeta.slug}` : "";
-    if (cleanRoutePath === cleanSignUp || cleanSlug === cleanSignUp) {
+    if (
+      cleanRoutePath === cleanSignUp ||
+      cleanSlug === cleanSignUp ||
+      arePageRoutesEqual(cleanRoutePath, cleanSignUp) ||
+      arePageRoutesEqual(cleanSlug, cleanSignUp) ||
+      arePageRoutesEqual(pageMeta.label || "", cleanSignUp)
+    ) {
       return true;
     }
   }
 
-  // If a specific sign-up page was configured in AuthConfig, do not match other non-configured pages
-  if (hasConfiguredSignUp) {
-    return false;
-  }
+  // 3. Match standard naming conventions for register / sign-up (e.g. "register", "signup", "sign-up", "Sign Up")
+  const rawSlug = (pageMeta.slug || "").toLowerCase();
+  const rawRoute = (pageMeta.routePath || "").toLowerCase();
+  const rawLabel = (pageMeta.label || "").toLowerCase();
+  const normSlug = rawSlug.replace(/[-_]/g, "");
+  const normRoute = rawRoute.replace(/[-_]/g, "");
+  const normLabel = rawLabel.replace(/[-_\s]/g, "");
 
-  const slug = (pageMeta.slug || "").toLowerCase();
-  const route = (pageMeta.routePath || "").toLowerCase();
-  return slug === "register" || slug === "signup" || route === "/register" || route === "/signup";
+  const matchesSignUpConvention =
+    rawSlug === "register" ||
+    rawSlug === "signup" ||
+    rawSlug === "sign-up" ||
+    normSlug === "signup" ||
+    normSlug === "register" ||
+    rawRoute === "/register" ||
+    rawRoute === "/signup" ||
+    rawRoute === "/sign-up" ||
+    normRoute === "/signup" ||
+    normRoute === "/register" ||
+    normLabel === "register" ||
+    normLabel === "signup" ||
+    normLabel === "/register" ||
+    normLabel === "/signup" ||
+    arePageRoutesEqual(rawRoute, "/register") ||
+    arePageRoutesEqual(rawRoute, "/signup") ||
+    arePageRoutesEqual(rawRoute, "/sign-up");
+
+  return matchesSignUpConvention;
 }
 
 /**
@@ -178,7 +244,7 @@ export function isAuthRegisterPage(
  */
 export function isAuthPage(
   pageMeta: AuthPageMetaInfo,
-  authNodeData?: BackendNodeData
+  authNodeData?: AuthCompilerNodeData
 ): boolean {
   if (pageMeta.isAuthPage) return true;
   return isAuthLoginPage(pageMeta, authNodeData) || isAuthRegisterPage(pageMeta, authNodeData);
@@ -190,18 +256,16 @@ export function isAuthPage(
  */
 export function shouldGenerateSocialProviders(
   pageMeta: AuthPageMetaInfo,
-  authNodeData?: BackendNodeData
+  authNodeData?: AuthCompilerNodeData
 ): boolean {
-  const isTargetAuthPage = isAuthLoginPage(pageMeta, authNodeData) || isAuthRegisterPage(pageMeta, authNodeData);
+  const isTargetAuthPage =
+    Boolean(pageMeta.isAuthPage) ||
+    isAuthLoginPage(pageMeta, authNodeData) ||
+    isAuthRegisterPage(pageMeta, authNodeData);
   if (!isTargetAuthPage) {
     return false;
   }
 
-  const providers = authNodeData?.providers || {};
-  const isSocialEnabled =
-    providers.socialEnabled ??
-    providers.oauthEnabled ??
-    (authNodeData?.providers ? Boolean(providers.oauth && providers.oauth.length > 0) : true);
-
-  return isSocialEnabled;
+  const oauthList = resolveOAuthProviders((authNodeData || {}) as any);
+  return oauthList.length > 0;
 }

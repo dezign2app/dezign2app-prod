@@ -11,7 +11,7 @@ import {
   EventComponentMeta,
   SectionMeta,
 } from "./componentTemplates";
-import { isAuthPage } from "../../../compileAuth";
+import { isAuthPage, isAuthLoginPage, isAuthRegisterPage } from "../../../compileAuth";
 import { typeStrToTsAndZod } from "../../../generators/schemaToTypeScript";
 import { generateApiClientFile } from "./apiClientTemplate";
 import { deriveRouteFileName, toPascalCase } from "../../../utils";
@@ -467,6 +467,72 @@ export function generatePageAndComponentFiles({
       });
     }
   });
+
+  // If an AuthNode is connected, ensure default sign-in and sign-up pages exist if not explicitly on canvas
+  if (authNode) {
+    const hasSignIn = pagesInfo.some((p) => isAuthLoginPage(p, authNode.data));
+    const hasSignUp = pagesInfo.some((p) => isAuthRegisterPage(p, authNode.data));
+
+    const redirects = authNode.data?.redirects || {};
+    const rawSignIn = (redirects.signInPageUrl || "/login").replace(/^\/+/, "");
+    const rawSignUp = (redirects.signUpPageUrl || "/register").replace(/^\/+/, "");
+
+    if (!hasSignIn) {
+      const signInSlug = rawSignIn || "login";
+      const signInCompName = slugToComponentName(signInSlug);
+      const baseName = signInCompName.replace(/Page$/, "");
+      const formCompName = baseName.endsWith("Form") ? baseName : `${baseName}Form`;
+      const pageMeta: PageInfo = {
+        nodeId: `synthetic-${signInSlug}`,
+        label: `/${signInSlug}`,
+        slug: signInSlug,
+        routePath: `/${signInSlug}`,
+        componentName: signInCompName,
+        isRoot: false,
+        isAuthPage: true,
+      };
+
+      pageFiles.push({
+        filename: `app/(public)/${signInSlug}/_components/${formCompName}.tsx`,
+        language: "typescript",
+        content: generateAuthFormComponent(pageMeta, authNode.data),
+      });
+
+      pageFiles.push({
+        filename: `app/(public)/${signInSlug}/page.tsx`,
+        language: "typescript",
+        content: generatePageCode(pageMeta, "", [], authNode.data),
+      });
+    }
+
+    if (!hasSignUp) {
+      const signUpSlug = rawSignUp || "register";
+      const signUpCompName = slugToComponentName(signUpSlug);
+      const baseName = signUpCompName.replace(/Page$/, "");
+      const formCompName = baseName.endsWith("Form") ? baseName : `${baseName}Form`;
+      const pageMeta: PageInfo = {
+        nodeId: `synthetic-${signUpSlug}`,
+        label: `/${signUpSlug}`,
+        slug: signUpSlug,
+        routePath: `/${signUpSlug}`,
+        componentName: signUpCompName,
+        isRoot: false,
+        isAuthPage: true,
+      };
+
+      pageFiles.push({
+        filename: `app/(public)/${signUpSlug}/_components/${formCompName}.tsx`,
+        language: "typescript",
+        content: generateAuthFormComponent(pageMeta, authNode.data),
+      });
+
+      pageFiles.push({
+        filename: `app/(public)/${signUpSlug}/page.tsx`,
+        language: "typescript",
+        content: generatePageCode(pageMeta, "", [], authNode.data),
+      });
+    }
+  }
 
   return { pageFiles, hasExplicitRoot };
 }

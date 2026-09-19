@@ -1,6 +1,6 @@
 import { PageInfo } from "./types";
 import { BackendNodeData } from "@workspace/canvas";
-import { isAuthPage } from "../../../compileAuth";
+import { isAuthPage, AuthCompilerNodeData } from "../../../compileAuth";
 import { SectionMeta } from "./sectionGenerators";
 import { generateAuthPageCode } from "./authPageGenerators";
 import {
@@ -23,7 +23,7 @@ export function generatePageCode(
   pageMeta: PageInfo,
   pageLoadFetchStatements: string,
   sectionsMeta: SectionMeta[],
-  authNodeData?: BackendNodeData,
+  authNodeData?: AuthCompilerNodeData,
   /** TypeScript type name to use for pageLoadData state (e.g. "PageLoadData" or "JSONValue") */
   pageLoadDataType: string = "JSONValue",
   /** Optional interface declaration to emit for the above type (empty string if using JSONValue) */

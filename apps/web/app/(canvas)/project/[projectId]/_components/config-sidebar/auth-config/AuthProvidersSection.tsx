@@ -49,11 +49,8 @@ export const AuthProvidersSection: React.FC<AuthConfigSectionProps> = ({
 
   const providers = data.providers || {
     emailPassword,
-    socialEnabled: true,
-    oauth: [
-      { id: "oa-1", provider: "google", clientIdEnv: "GOOGLE_CLIENT_ID", clientSecretEnv: "GOOGLE_CLIENT_SECRET" },
-      { id: "oa-2", provider: "github", clientIdEnv: "GITHUB_CLIENT_ID", clientSecretEnv: "GITHUB_CLIENT_SECRET" },
-    ],
+    socialEnabled: false,
+    oauth: [],
     accountLinking,
     magicLink: true,
     passkey: false,
@@ -62,7 +59,7 @@ export const AuthProvidersSection: React.FC<AuthConfigSectionProps> = ({
   const isSocialEnabled =
     providers.socialEnabled ??
     providers.oauthEnabled ??
-    (data.providers ? Boolean(providers.oauth && providers.oauth.length > 0) : true);
+    Boolean(providers.oauth && providers.oauth.length > 0);
 
   return (
     <AccordionItem
