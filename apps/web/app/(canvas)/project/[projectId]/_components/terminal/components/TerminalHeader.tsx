@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { cn } from "@workspace/ui/lib/utils";
 import { Button } from "@workspace/ui/components/button";
 import {
   DropdownMenu,
@@ -324,16 +325,21 @@ export function TerminalHeader({
         {inElectron ? (
           <Button
             size="sm"
-            variant="ghost"
+            variant={outputDir ? "ghost" : "outline"}
             onClick={onPickDirectory}
-            className="h-6 px-2 text-[11px] gap-1.5 text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
+            className={cn(
+              "h-6 px-2 text-[11px] gap-1.5",
+              outputDir
+                ? "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                : "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20"
+            )}
             title={
-              outputDir ? `Workspace: ${outputDir}` : "Choose workspace directory"
+              outputDir ? `Workspace: ${outputDir}` : "Choose unique project workspace directory"
             }
           >
-            <Folder className="w-3 h-3 text-muted-foreground" />
+            <Folder className={cn("w-3 h-3", outputDir ? "text-muted-foreground" : "text-amber-500")} />
             <span className="max-w-[130px] truncate hidden sm:inline font-mono">
-              {outputDir ? outputDir.split(/[\\/]/).pop() : "Folder..."}
+              {outputDir ? outputDir.split(/[\\/]/).pop() : "Select Folder"}
             </span>
           </Button>
         ) : (

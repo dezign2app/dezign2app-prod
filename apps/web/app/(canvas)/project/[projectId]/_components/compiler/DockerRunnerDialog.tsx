@@ -28,6 +28,11 @@ import {
 import { toast } from "sonner";
 import { isElectron, getElectronAPI, openExternalUrl } from "@/lib/electron";
 import { CompiledFile, CompiledMonorepoResult } from "@/lib/compiler";
+import {
+  getProjectWorkspaceDir,
+  setProjectWorkspaceDir,
+  findProjectFolderConflict,
+} from "../terminal/hooks/projectWorkspaceUtils";
 import { DockerTerminalMonitor, ServiceEndpointInfo } from "./DockerTerminalMonitor";
 
 export interface DockerRunnerDialogProps {
@@ -54,42 +59,32 @@ export function DockerRunnerDialog({
 
   // Local state
   const [outputDir, setOutputDir] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        return (
-          localStorage.getItem(`workspace_dir_${projectId}`) ||
-          localStorage.getItem(`docker_dir_${projectId}`) ||
-          localStorage.getItem("dezign2app_workspace_dir") ||
-          ""
-        );
-      } catch (e) {}
-    }
-    return "";
+    return getProjectWorkspaceDir(projectId);
   });
 
   useEffect(() => {
-    if (!projectId || typeof window === "undefined") return;
-    try {
-      const saved =
-        localStorage.getItem(`workspace_dir_${projectId}`) ||
-        localStorage.getItem(`docker_dir_${projectId}`) ||
-        localStorage.getItem("dezign2app_workspace_dir") ||
-        "";
-      if (saved && saved !== outputDir) {
-        setOutputDir(saved);
-      }
-    } catch (e) {}
+    if (!projectId || typeof window === "undefined") {
+      setOutputDir("");
+      return;
+    }
+    const saved = getProjectWorkspaceDir(projectId);
+    setOutputDir(saved);
   }, [projectId]);
 
-  const saveWorkspaceDir = (dir: string) => {
-    setOutputDir(dir);
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem(`workspace_dir_${projectId}`, dir);
-        localStorage.setItem(`docker_dir_${projectId}`, dir);
-        localStorage.setItem("dezign2app_workspace_dir", dir);
-      } catch (e) {}
+  const saveWorkspaceDir = (dir: string): boolean => {
+    if (!projectId) return false;
+    if (dir) {
+      const conflict = findProjectFolderConflict(projectId, dir);
+      if (conflict) {
+        toast.error(
+          `This folder is already assigned to "${conflict.projectName}". Each project must have a unique local folder.`
+        );
+        return false;
+      }
     }
+    setProjectWorkspaceDir(projectId, dir);
+    setOutputDir(dir);
+    return true;
   };
 
   const [logs, setLogs] = useState<string[]>([]);
@@ -183,24 +178,17 @@ export function DockerRunnerDialog({
     const api = getElectronAPI();
     if (!api?.docker?.up || !api?.fs?.writeProject) return;
 
-    let targetDir = outputDir;
-    if (!targetDir && typeof window !== "undefined") {
-      try {
-        targetDir =
-          localStorage.getItem(`workspace_dir_${projectId}`) ||
-          localStorage.getItem(`docker_dir_${projectId}`) ||
-          localStorage.getItem("dezign2app_workspace_dir") ||
-          "";
-      } catch (e) {}
-    }
+    let targetDir = outputDir || getProjectWorkspaceDir(projectId);
 
     if (!targetDir) {
-      targetDir = (await api.fs.pickDirectory()) || "";
-      if (!targetDir) {
+      const selected = (await api.fs.pickDirectory()) || "";
+      if (!selected) {
         toast.error("Please select a target folder to write project files");
         return;
       }
-      saveWorkspaceDir(targetDir);
+      const ok = saveWorkspaceDir(selected);
+      if (!ok) return;
+      targetDir = selected;
     }
 
     setIsExporting(true);

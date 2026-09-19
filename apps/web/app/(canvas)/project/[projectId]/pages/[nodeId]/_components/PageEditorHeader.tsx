@@ -240,7 +240,7 @@ export function PageEditorHeader({
       {/* Right Side: Folder Indicator, Terminal Toggle, AI Assistant Toggle */}
       <div className="flex items-center gap-2 shrink-0">
         {/* Workspace Folder Badge */}
-        {outputDir && (
+        {outputDir ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -254,7 +254,21 @@ export function PageEditorHeader({
             </TooltipTrigger>
             <TooltipContent>Local folder: {outputDir} (Click to change)</TooltipContent>
           </Tooltip>
-        )}
+        ) : onPickDirectory ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onPickDirectory}
+                className="hidden xl:flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors font-medium cursor-pointer"
+              >
+                <Folder className="w-3 h-3 text-amber-500" />
+                <span>Select Folder</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>No project folder selected. Click to select a local folder for this project.</TooltipContent>
+          </Tooltip>
+        ) : null}
 
         {/* Terminal Toggle Button */}
         <Tooltip>

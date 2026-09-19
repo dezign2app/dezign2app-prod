@@ -8,12 +8,11 @@ import { toast } from "sonner";
  * Gets the current project's workspace directory from localStorage if set.
  */
 export function getSavedWorkspaceDir(projectId: string): string {
-  if (typeof window === "undefined") return "";
+  if (typeof window === "undefined" || !projectId) return "";
   try {
     return (
       localStorage.getItem(`workspace_dir_${projectId}`) ||
       localStorage.getItem(`docker_dir_${projectId}`) ||
-      localStorage.getItem("dezign2app_workspace_dir") ||
       ""
     );
   } catch {

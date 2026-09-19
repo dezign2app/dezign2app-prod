@@ -15,6 +15,8 @@ import {
   GitCommit,
   History,
   PanelLeft,
+  Folder,
+  FolderSync,
 } from "lucide-react";
 import { BackendCanvasView } from "@/types/canvas";
 import { Button } from "@workspace/ui/components/button";
@@ -25,6 +27,8 @@ import {
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useSidebarStore } from "@/lib/stores/sidebarStore";
+import { useTerminalWorkspace } from "./terminal/hooks/useTerminalWorkspace";
 
 interface CanvasToolbarProps {
   projectName: string;
@@ -65,6 +69,14 @@ export function CanvasToolbar({
   const undoGraph = useBackendCanvasStore((s) => s.undoGraph);
   const redoSchema = useBackendCanvasStore((s) => s.redoSchema);
   const redoGraph = useBackendCanvasStore((s) => s.redoGraph);
+
+  const { outputDir } = useTerminalWorkspace(projectId, projectName);
+  const setProjectFolderModalOpen = useSidebarStore(
+    (s) => s.setProjectFolderModalOpen
+  );
+  const folderName = outputDir
+    ? outputDir.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || outputDir
+    : "";
 
   const handleUndo = () => {
     if (view === "schema") {
@@ -114,6 +126,41 @@ export function CanvasToolbar({
         <div className="font-medium text-sm truncate max-w-[180px]">
           {projectName}
         </div>
+
+        {/* Project Folder Indicator / Selector */}
+        {outputDir ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => setProjectFolderModalOpen(true)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted/50 hover:bg-muted border border-border/50 text-[11px] text-muted-foreground hover:text-foreground transition-colors font-mono max-w-[130px] truncate cursor-pointer"
+              >
+                <FolderSync className="w-3 h-3 text-emerald-500 shrink-0" />
+                <span className="truncate">{folderName}</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Project Folder: {outputDir} (Click to change)
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => setProjectFolderModalOpen(true)}
+                className="flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-[11px] text-amber-600 dark:text-amber-400 font-medium transition-colors cursor-pointer"
+              >
+                <Folder className="w-3 h-3 shrink-0" />
+                <span>Select Folder</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              No project folder selected. Click to select a unique folder on your computer.
+            </TooltipContent>
+          </Tooltip>
+        )}
 
         {/* Undo / Redo buttons */}
         <div className="flex items-center bg-muted/40 rounded-lg p-0.5 border border-border/50">
