@@ -466,12 +466,17 @@ function SchemaViewBody({ nodes, addNode, getCenterPosition }: SchemaViewBodyPro
 
     if (!dbId) {
       dbId = crypto.randomUUID();
+      const defaultDbLabel = getUniqueNodeLabel(
+        nodes,
+        DEFAULT_DATABASE_NODE_LABEL,
+        "database",
+      );
       addNode({
         id: dbId,
         type: "database",
         position: { x: x - 250, y: y - 100 },
         data: {
-          label: "",
+          label: defaultDbLabel,
           dbEngine: DEFAULT_DATABASE_ENGINE,
           dbType: "relational",
           dbCategory: "sql",
@@ -517,12 +522,17 @@ function SchemaViewBody({ nodes, addNode, getCenterPosition }: SchemaViewBodyPro
 
     if (!dbId) {
       dbId = crypto.randomUUID();
+      const defaultDbLabel = getUniqueNodeLabel(
+        nodes,
+        "Vector Database",
+        "database",
+      );
       addNode({
         id: dbId,
         type: "database",
         position: { x: x - 250, y: y - 100 },
         data: {
-          label: "",
+          label: defaultDbLabel,
           dbEngine: DEFAULT_DATABASE_ENGINE,
           dbType: "relational",
           dbCategory: "sql",

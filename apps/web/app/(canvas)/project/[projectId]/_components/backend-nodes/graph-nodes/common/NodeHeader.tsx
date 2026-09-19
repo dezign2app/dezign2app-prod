@@ -14,7 +14,11 @@ import {
   SERVICE_TECH_OPTIONS,
   WEB_CLIENT_TECH_OPTIONS,
 } from "@/types/canvas";
-import { parsePageRoute } from "@workspace/canvas";
+import {
+  parsePageRoute,
+  getUniqueNodeLabel,
+  DEFAULT_DATABASE_NODE_LABEL,
+} from "@workspace/canvas";
 import { LocalInput } from "./LocalInput";
 import { toast } from "sonner";
 
@@ -112,15 +116,28 @@ export const NodeHeader = ({
   };
 
   const handleSave = () => {
-    const trimmed = name.trim();
+    let trimmed = name.trim();
     if (!trimmed) {
-      if (!data.label || data.label.trim() === "") {
-        removeNode();
+      if (data.label && data.label.trim() !== "") {
+        setName(data.label);
+        setIsEditing(false);
         return;
       }
-      setName(data.label);
-      setIsEditing(false);
-      return;
+      // If there was no existing label, assign a safe unique default label instead of deleting the node
+      const allNodes = useBackendCanvasStore.getState().nodes;
+      const defaultBase =
+        nodeType === "database"
+          ? DEFAULT_DATABASE_NODE_LABEL
+          : nodeType === "entity"
+            ? (title || "table")
+            : nodeType === "webApp"
+              ? "Web App"
+              : nodeType === "service"
+                ? "Service"
+                : nodeType === "webPage"
+                  ? "/page"
+                  : title || "Node";
+      trimmed = getUniqueNodeLabel(allNodes, defaultBase, nodeType || "node");
     }
     let finalLabel = trimmed;
     if (nodeType === "webPage") {
