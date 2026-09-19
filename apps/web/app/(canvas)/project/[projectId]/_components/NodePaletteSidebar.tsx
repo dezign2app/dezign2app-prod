@@ -436,7 +436,7 @@ function SchemaViewBody({ nodes, addNode, getCenterPosition }: SchemaViewBodyPro
       ),
     [nodes],
   );
-  const { handleLayout } = useSchemaAutoLayout({ nodes: schemaNodes, edges: [] });
+  const { handleLayout } = useSchemaAutoLayout({ nodes: schemaNodes });
 
   const handleAddDatabase = () => {
     const { x, y } = getCenterPosition(200, 80);

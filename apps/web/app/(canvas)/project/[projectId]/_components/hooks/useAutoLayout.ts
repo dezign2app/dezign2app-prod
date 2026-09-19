@@ -42,13 +42,14 @@ export function useSchemaAutoLayout(options?: UseSchemaAutoLayoutOptions) {
         n.type === "redis_schema",
     );
   const edges: LayoutEdge[] =
-    options?.edges ??
-    store.edges.filter(
-      (e) =>
-        e.type === "foreign-key" ||
-        e.type === "database-connection" ||
-        e.type === "connection",
-    );
+    options?.edges && options.edges.length > 0
+      ? options.edges
+      : store.edges.filter(
+          (e) =>
+            e.type === "foreign-key" ||
+            e.type === "database-connection" ||
+            e.type === "connection",
+        );
   const onNodesChange = options?.onNodesChange ?? store.onNodesChange;
 
   const handleLayout = useCallback(

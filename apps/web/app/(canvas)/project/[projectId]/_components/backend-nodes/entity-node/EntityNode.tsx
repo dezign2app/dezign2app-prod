@@ -82,7 +82,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       ref={nodeRef}
       tabIndex={-1}
       className={cn(
-        "shadow-md rounded-xl bg-card border-2 min-w-[260px] max-w-[360px] focus:outline-none transition-all",
+        "shadow-md rounded-xl bg-card border-2 min-w-[260px] max-w-[360px] focus:outline-none transition-all relative z-10",
         !dbThemeColor && (selected ? "border-primary" : "border-border"),
       )}
       style={{

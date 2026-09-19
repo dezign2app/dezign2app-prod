@@ -59,7 +59,7 @@ export const RedisSchemaNode = React.memo(({ id, data, selected }: NodeProps<Bac
       tabIndex={-1}
       onDoubleClick={openSettings}
       className={cn(
-        "shadow-md rounded-xl bg-card border-2 min-w-[280px] max-w-[370px] focus:outline-none transition-all",
+        "shadow-md rounded-xl bg-card border-2 min-w-[280px] max-w-[370px] focus:outline-none transition-all relative z-10",
         selected ? "border-primary" : "border-border",
       )}
       style={{

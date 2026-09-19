@@ -239,49 +239,46 @@ export const ForeignKeyEdge = (props: ForeignKeyEdgeProps) => {
         }}
       />
 
-      {/* Interactive Cardinality Badge */}
-      <EdgeLabelRenderer>
-        <div
-          style={{
-            position: "absolute",
-            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-            pointerEvents: "all",
-            zIndex: isHighlighted ? 9999 : 50,
-          }}
-          className="nodrag nopan"
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-        >
+      {/* Interactive Cardinality Badge - shown only when the edge is selected or hovered */}
+      {isHighlighted && (
+        <EdgeLabelRenderer>
           <div
-            onClick={handleCycleCardinality}
-            title="Click to toggle relationship (1:N, 1:1, N:N, N:1)"
-            className={cn(
-              "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold tracking-wider shadow-sm transition-all border backdrop-blur-md cursor-pointer select-none",
-              isHighlighted
-                ? "bg-primary text-primary-foreground border-primary scale-110 shadow-md ring-2 ring-primary/20"
-                : "bg-background/90 text-foreground/80 border-border/60 hover:border-primary/50 hover:text-foreground",
-            )}
+            style={{
+              position: "absolute",
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: "all",
+              zIndex: 9999,
+            }}
+            className="nodrag nopan"
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
           >
-            <span>{relationshipLabel}</span>
-            {isHovered && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (reactFlow?.deleteElements) {
-                    reactFlow.deleteElements({ edges: [{ id }] });
-                  } else {
-                    deleteEdge(id);
-                  }
-                }}
-                className="ml-0.5 rounded-full p-0.5 hover:bg-destructive/30 hover:text-destructive text-primary-foreground/80 transition-colors"
-                title="Delete connection"
-              >
-                <Trash className="w-2.5 h-2.5" />
-              </button>
-            )}
+            <div
+              onClick={handleCycleCardinality}
+              title="Click to toggle relationship (1:N, 1:1, N:N, N:1)"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold tracking-wider shadow-md transition-all border backdrop-blur-md cursor-pointer select-none bg-primary text-primary-foreground border-primary scale-110 ring-2 ring-primary/20"
+            >
+              <span>{relationshipLabel}</span>
+              {isHovered && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (reactFlow?.deleteElements) {
+                      reactFlow.deleteElements({ edges: [{ id }] });
+                    } else {
+                      deleteEdge(id);
+                    }
+                  }}
+                  className="ml-0.5 rounded-full p-0.5 hover:bg-destructive/30 hover:text-destructive text-primary-foreground/80 transition-colors"
+                  title="Delete connection"
+                >
+                  <Trash className="w-2.5 h-2.5" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      </EdgeLabelRenderer>
+        </EdgeLabelRenderer>
+      )}
     </>
   );
 };
