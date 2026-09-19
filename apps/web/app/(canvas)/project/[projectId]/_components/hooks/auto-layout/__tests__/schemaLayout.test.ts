@@ -326,4 +326,136 @@ describe("schemaLayout - Isolated Multi-Cluster Auto-Layout for N Databases & M 
     // Profile is near user
     expect(Math.abs(profilePos.x - userPos.x)).toBeLessThan(1000);
   });
+
+  it("lays out all Better Auth tables without any overlapping bounding boxes", () => {
+    const dbId = "sqlite-auth-db";
+    const dbNode: LayoutNode = {
+      id: dbId,
+      type: "database",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "SQLite DB",
+        dbEngine: "sqlite",
+        dbType: "relational",
+        isDefault: true,
+      },
+    };
+
+    const tableDefs = [
+      { name: "user", cols: 13, idxs: 1 },
+      { name: "session", cols: 11, idxs: 3, fk: "user" },
+      { name: "account", cols: 11, idxs: 2, fk: "user" },
+      { name: "verification", cols: 6, idxs: 1 },
+      { name: "organization", cols: 7, idxs: 1 },
+      { name: "member", cols: 6, idxs: 1, fk: "organization" },
+      { name: "invitation", cols: 8, idxs: 1, fk: "organization" },
+      { name: "twoFactor", cols: 5, idxs: 1, fk: "user" },
+    ];
+
+    const nodes: LayoutNode[] = [
+      dbNode,
+      ...tableDefs.map((t) => ({
+        id: `table-${t.name}`,
+        type: "entity",
+        position: { x: 100, y: 100 },
+        data: {
+          label: t.name,
+          description: `${t.name} table`,
+          databaseId: dbId,
+          columns: Array.from({ length: t.cols }, (_, i) => ({
+            name: i === 0 ? "id" : `col_${i}`,
+            type: "TEXT",
+            isPrimaryKey: i === 0,
+          })),
+          indexes: Array.from({ length: t.idxs }, (_, i) => ({
+            name: `idx_${t.name}_${i}`,
+            columns: "col_1",
+          })),
+        },
+      })),
+    ];
+
+    const edges: LayoutEdge[] = [
+      ...tableDefs.map((t) => ({
+        id: `db-edge-${t.name}`,
+        source: dbId,
+        target: `table-${t.name}`,
+        type: "database-connection",
+      })),
+      ...tableDefs
+        .filter((t) => t.fk)
+        .map((t) => ({
+          id: `fk-${t.name}-${t.fk}`,
+          source: `table-${t.fk}`,
+          target: `table-${t.name}`,
+          type: "foreign-key",
+        })),
+    ];
+
+    let recordedChanges: PositionNodeChange[] = [];
+    const onNodesChange = vi.fn((changes: PositionNodeChange[]) => {
+      recordedChanges = changes;
+    });
+
+    performSchemaLayout({
+      nodes,
+      edges,
+      onNodesChange,
+      fitView: vi.fn(),
+    });
+
+    expect(onNodesChange).toHaveBeenCalled();
+    const posMap = new Map<string, { x: number; y: number }>();
+    recordedChanges.forEach((c) => posMap.set(c.id, c.position));
+
+    // Get bounding boxes for each entity node
+    const boxes = nodes.map((node) => {
+      const pos = posMap.get(node.id)!;
+      expect(pos).toBeDefined();
+
+      // Estimate dimensions using standard schema entity calculation
+      const isDb = node.type === "database";
+      const colCount = Array.isArray(node.data?.columns) ? node.data.columns.length : 0;
+      const idxCount = Array.isArray(node.data?.indexes) ? node.data.indexes.length : 0;
+      const width = isDb ? 280 : 320;
+      const height = isDb
+        ? 160
+        : 68 + 44 + (24 + colCount * 42) + (idxCount > 0 ? 24 + idxCount * 44 : 0) + 30 + 16;
+
+      return {
+        id: node.id,
+        x: pos.x,
+        y: pos.y,
+        width,
+        height,
+      };
+    });
+
+    // Verify database node is above all entity tables
+    const dbBox = boxes.find((b) => b.id === dbId)!;
+    const entityBoxes = boxes.filter((b) => b.id !== dbId);
+
+    entityBoxes.forEach((ent) => {
+      expect(ent.y).toBeGreaterThanOrEqual(dbBox.y + dbBox.height + 60);
+    });
+
+    // Check that NO TWO entity nodes overlap!
+    for (let i = 0; i < entityBoxes.length; i++) {
+      for (let j = i + 1; j < entityBoxes.length; j++) {
+        const a = entityBoxes[i]!;
+        const b = entityBoxes[j]!;
+
+        const horizontalSeparation = a.x + a.width <= b.x || b.x + b.width <= a.x;
+        const verticalSeparation = a.y + a.height <= b.y || b.y + b.height <= a.y;
+
+        const doesOverlap = !horizontalSeparation && !verticalSeparation;
+        if (doesOverlap) {
+          console.error(
+            `Overlap detected between ${a.id} (x:${a.x}, y:${a.y}, w:${a.width}, h:${a.height}) and ${b.id} (x:${b.x}, y:${b.y}, w:${b.width}, h:${b.height})`
+          );
+        }
+        expect(doesOverlap).toBe(false);
+      }
+    }
+  });
 });

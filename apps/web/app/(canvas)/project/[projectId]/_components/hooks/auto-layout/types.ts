@@ -22,6 +22,7 @@ export interface UseAutoLayoutOptions {
   nodes?: LayoutNode[];
   edges?: LayoutEdge[];
   onNodesChange?: (changes: PositionNodeChange[]) => void;
+  layoutType?: "schema" | "graph" | "langgraph";
 }
 
 export type UseGraphAutoLayoutOptions = UseAutoLayoutOptions;
