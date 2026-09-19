@@ -27,7 +27,7 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
       className="pointer-events-auto select-none transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-10"
       style={{
         top: "70px",
-        right: aiPanelOpen ? `${aiPanelWidth + 16}px` : "16px",
+        right: aiPanelOpen ? `${aiPanelWidth + 16}px` : "168px",
       }}
     >
       <div className="flex items-center gap-1 p-1 rounded-xl bg-sidebar/95 backdrop-blur-md border border-sidebar-border shadow-lg">

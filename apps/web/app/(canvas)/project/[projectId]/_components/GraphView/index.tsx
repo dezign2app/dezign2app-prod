@@ -9,6 +9,7 @@ import {
 } from "@xyflow/react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
+import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { nodeTypes } from "../backend-nodes/Nodes";
 import { ForeignKeyEdge } from "../backend-nodes/ForeignKeyEdge";
 import {
@@ -49,6 +50,13 @@ export function GraphView({ projectId }: GraphViewProps) {
   const selectedCaseId = useSimulationStore((state) => state.selectedCaseId);
   const testCases = useSimulationStore((state) => state.testCases);
   const selectTestCase = useSimulationStore((state) => state.selectTestCase);
+
+  const aiPanelOpen = useSidebarStore((s) => s.aiPanelOpen);
+  const aiPanelWidth = useSidebarStore((s) => s.aiPanelWidth);
+  const terminalOpen = useSidebarStore((s) => s.terminalOpen);
+  const terminalHeight = useSidebarStore((s) => s.terminalHeight);
+  const paletteOpen = useSidebarStore((s) => s.paletteOpen);
+  const paletteWidth = useSidebarStore((s) => s.paletteWidth);
 
   const [caseNameDialog, setCaseNameDialog] = useState<{
     mode: "create" | "rename";
@@ -329,8 +337,23 @@ export function GraphView({ projectId }: GraphViewProps) {
         maxZoom={3}
       >
         <Background gap={12} size={1} />
-        <Controls fitViewOptions={{ padding: 0.35, maxZoom: 0.65 }} />
-        <MiniMap />
+        <Controls
+          position="bottom-left"
+          fitViewOptions={{ padding: 0.35, maxZoom: 0.65 }}
+          style={{
+            bottom: terminalOpen ? `${terminalHeight + 14}px` : "16px",
+            left: paletteOpen ? `${paletteWidth + 14}px` : "16px",
+            transition: "all 0.2s cubic-bezier(0.16,1,0.3,1)",
+          }}
+        />
+        <MiniMap
+          position="bottom-right"
+          style={{
+            bottom: terminalOpen ? `${terminalHeight + 14}px` : "16px",
+            right: aiPanelOpen ? `${aiPanelWidth + 16}px` : "16px",
+            transition: "all 0.2s cubic-bezier(0.16,1,0.3,1)",
+          }}
+        />
         <TopToolbarPanel onLayout={handleLayout} />
       </ReactFlow>
 
