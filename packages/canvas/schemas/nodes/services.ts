@@ -381,6 +381,24 @@ export const webAppZoneSchema = z.object({
   name: z.string(),
   handleId: z.string(),
   accessType: z.enum(["public", "protected"]),
+  /** "middleware" = Edge JWT check (default), "server-guard" = server-side DB check */
+  protectionMode: z.enum(["middleware", "server-guard"]).optional(),
+  /** Server-side guard config — only used when protectionMode = "server-guard" */
+  serverGuard: z
+    .object({
+      entityNodeId: z.string(),
+      entityLabel: z.string().optional(),
+      checkMode: z.enum(["dbFunction", "columnValue"]),
+      dbFunctionId: z.string().optional(),
+      dbFunctionName: z.string().optional(),
+      entityField: z.string().optional(),
+      entityFieldExpectedValue: z.string().optional(),
+      param: z.enum(["userId", "sessionToken", "header"]),
+      headerName: z.string().optional(),
+      requireSession: z.boolean().optional(),
+      failRedirect: z.string(),
+    })
+    .optional(),
   rule: z
     .object({
       id: z.string(),

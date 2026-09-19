@@ -6,9 +6,11 @@ import {
   ProtectionRule,
   WebAppZone,
   SessionClaimConfig,
+  ServerGuardConfig,
   DEFAULT_ZONES,
   PRESET_TRIGGER_OPTIONS,
 } from "@workspace/canvas";
+
 import {
   PublicZoneView,
   ProtectedZoneHeader,
@@ -17,7 +19,10 @@ import {
   CustomLogicSection,
   MiddlewareCodePreviewSection,
   ZoneLayoutSection,
+  ServerGuardSection,
+  ServerGuardCodePreview,
 } from "./zone-config";
+
 
 export const ZoneConfig = ({
   id,
@@ -45,7 +50,10 @@ export const ZoneConfig = ({
     redirects: true,
     custom: true,
     preview: true,
+    serverGuard: true,
+    serverGuardPreview: true,
   });
+
 
   const toggleSection = (section: string) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -259,6 +267,17 @@ export const ZoneConfig = ({
     updateNode(nodeId, { data: { ...data, zones: updatedZones } });
   };
 
+  const protectionMode = currentZone.protectionMode ?? "middleware";
+
+  const handleSetProtectionMode = (mode: "middleware" | "server-guard") => {
+    handleUpdateZone({ ...currentZone, protectionMode: mode });
+  };
+
+  const handleUpdateServerGuard = (guard: ServerGuardConfig) => {
+    handleUpdateZone({ ...currentZone, serverGuard: guard });
+  };
+
+
   // Render Public Section View
   if (isPublicZone) {
     return (
@@ -439,6 +458,35 @@ export const ZoneConfig = ({
         onDeleteZone={() => handleDeleteZone(currentZone.id)}
       />
 
+      {/* Protection Mode Toggle */}
+      <div className="flex items-center gap-2 p-3 rounded-xl border border-border/50 bg-card/40">
+        <span className="text-xs font-medium text-muted-foreground shrink-0">Protection mode:</span>
+        <div className="flex gap-1.5 flex-1">
+          <button
+            type="button"
+            onClick={() => handleSetProtectionMode("middleware")}
+            className={`flex-1 text-[11px] font-medium py-1.5 px-2 rounded-md border transition-all cursor-pointer ${
+              protectionMode === "middleware"
+                ? "bg-indigo-500/15 border-indigo-500/40 text-indigo-400"
+                : "bg-muted/30 border-border/40 text-muted-foreground hover:border-border"
+            }`}
+          >
+            ⚡ Middleware (JWT)
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetProtectionMode("server-guard")}
+            className={`flex-1 text-[11px] font-medium py-1.5 px-2 rounded-md border transition-all cursor-pointer ${
+              protectionMode === "server-guard"
+                ? "bg-amber-500/15 border-amber-500/40 text-amber-400"
+                : "bg-muted/30 border-border/40 text-muted-foreground hover:border-border"
+            }`}
+          >
+            🛡 Server Guard (DB)
+          </button>
+        </div>
+      </div>
+
       <div className="flex flex-col gap-6">
         <ZoneLayoutSection
           isOpen={openSections.layout ?? true}
@@ -448,50 +496,75 @@ export const ZoneConfig = ({
           onUpdateZone={handleUpdateZone}
         />
 
-        <AccessConditionsSection
-          isOpen={openSections.conditions ?? true}
-          onToggle={() => toggleSection("conditions")}
-          leaves={leaves}
-          connectedPages={connectedPages}
-          authClaims={authClaims}
-          authNodeLabel={authNodeLabel}
-          isAuthConnected={isAuthConnected}
-          allNodes={nodes}
-          onAddCondition={handleAddCondition}
-          onRemoveCondition={handleRemoveCondition}
-          onUpdateCondition={handleUpdateCondition}
-        />
+        {protectionMode === "middleware" && (
+          <>
+            <AccessConditionsSection
+              isOpen={openSections.conditions ?? true}
+              onToggle={() => toggleSection("conditions")}
+              leaves={leaves}
+              connectedPages={connectedPages}
+              authClaims={authClaims}
+              authNodeLabel={authNodeLabel}
+              isAuthConnected={isAuthConnected}
+              allNodes={nodes}
+              onAddCondition={handleAddCondition}
+              onRemoveCondition={handleRemoveCondition}
+              onUpdateCondition={handleUpdateCondition}
+            />
 
-        <RedirectMapSection
-          isOpen={openSections.redirects ?? true}
-          onToggle={() => toggleSection("redirects")}
-          redirectEntries={redirectEntries}
-          onSelectPresetOrCustomRedirect={handleSelectPresetOrCustomRedirect}
-          onDeleteRedirect={handleDeleteRedirect}
-          onUpdateRedirectKey={handleUpdateRedirectKey}
-          onUpdateRedirectRoute={handleUpdateRedirectRoute}
-        />
+            <RedirectMapSection
+              isOpen={openSections.redirects ?? true}
+              onToggle={() => toggleSection("redirects")}
+              redirectEntries={redirectEntries}
+              onSelectPresetOrCustomRedirect={handleSelectPresetOrCustomRedirect}
+              onDeleteRedirect={handleDeleteRedirect}
+              onUpdateRedirectKey={handleUpdateRedirectKey}
+              onUpdateRedirectRoute={handleUpdateRedirectRoute}
+            />
 
-        <CustomLogicSection
-          isOpen={openSections.custom ?? true}
-          onToggle={() => toggleSection("custom")}
-          rule={rule}
-          onUpdateCustomPrompt={(prompt) =>
-            updateZoneRule({
-              ...rule,
-              customLogic: { mode: "naturalLanguage", prompt },
-            })
-          }
-        />
+            <CustomLogicSection
+              isOpen={openSections.custom ?? true}
+              onToggle={() => toggleSection("custom")}
+              rule={rule}
+              onUpdateCustomPrompt={(prompt) =>
+                updateZoneRule({
+                  ...rule,
+                  customLogic: { mode: "naturalLanguage", prompt },
+                })
+              }
+            />
 
-        <MiddlewareCodePreviewSection
-          isOpen={openSections.preview ?? true}
-          onToggle={() => toggleSection("preview")}
-          currentZone={currentZone}
-          rule={rule}
-          leaves={leaves}
-        />
+            <MiddlewareCodePreviewSection
+              isOpen={openSections.preview ?? true}
+              onToggle={() => toggleSection("preview")}
+              currentZone={currentZone}
+              rule={rule}
+              leaves={leaves}
+            />
+          </>
+        )}
+
+        {protectionMode === "server-guard" && (
+          <>
+            <ServerGuardSection
+              isOpen={openSections.serverGuard ?? true}
+              onToggle={() => toggleSection("serverGuard")}
+              guard={currentZone.serverGuard}
+              allNodes={nodes}
+              onUpdateGuard={handleUpdateServerGuard}
+            />
+
+            <ServerGuardCodePreview
+              isOpen={openSections.serverGuardPreview ?? true}
+              onToggle={() => toggleSection("serverGuardPreview")}
+              guard={currentZone.serverGuard}
+              zoneName={currentZone.name}
+              appSlug={node?.data?.appSlug}
+            />
+          </>
+        )}
       </div>
     </div>
   );
 };
+

@@ -176,9 +176,11 @@ export const ConditionValuesControl: React.FC<ConditionValuesControlProps> = ({
 
       {!isListOp && !isSingleValOp && (
         <div className="h-7 px-2 flex items-center rounded bg-muted/60 text-[10px] text-muted-foreground font-mono border border-border/40">
-          {leaf.op === "signedIn" || leaf.op === "required" || leaf.op === "granted" || leaf.op === "truthy"
-            ? "Truthy (Required)"
-            : "Falsy (Must be empty)"}
+          {leaf.type === "serverGuard"
+            ? "Server Guard"
+            : (leaf.op === "signedIn" || leaf.op === "required" || leaf.op === "granted" || leaf.op === "truthy"
+              ? "Truthy (Required)"
+              : "Falsy (Must be empty)")}
         </div>
       )}
     </div>
