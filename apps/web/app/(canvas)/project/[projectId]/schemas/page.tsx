@@ -14,11 +14,8 @@ import {
   IdentityProviderWithNode,
   useBackendCanvasStore,
 } from "@/lib/stores/backendCanvasStore";
-import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { CanvasToolbar } from "../_components/CanvasToolbar";
 import { BackendCanvas } from "../_components/BackendCanvas";
-import { NodePaletteSidebar } from "../_components/NodePaletteSidebar";
-import { AiPanel } from "../_components/AiPanel";
 import { CreateCommitDialog } from "../_components/history/CreateCommitDialog";
 import { VersionHistoryDrawer } from "../_components/history/VersionHistoryDrawer";
 import { VersionPreviewBanner } from "../_components/history/VersionPreviewBanner";
@@ -26,9 +23,7 @@ import { useCanvasKeyboardShortcuts } from "../_components/hooks/useCanvasKeyboa
 import { Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@workspace/ui/components/button";
-import { ReactFlowProvider } from "@xyflow/react";
 import { toast } from "sonner";
-
 import { z } from "zod";
 import {
   endpointSchema,
@@ -45,10 +40,6 @@ export default function SchemaCanvasPage({
 }): React.JSX.Element {
   const { projectId } = React.use(params);
 
-  const paletteOpen = useSidebarStore((s) => s.paletteOpen);
-  const setPaletteOpen = useSidebarStore((s) => s.setPaletteOpen);
-  const aiPanelOpen = useSidebarStore((s) => s.aiPanelOpen);
-  const setAiPanelOpen = useSidebarStore((s) => s.setAiPanelOpen);
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [previewVersionId, setPreviewVersionId] = useState<Id<"project_versions"> | null>(null);
@@ -205,78 +196,52 @@ export default function SchemaCanvasPage({
   }
 
   return (
-    <ReactFlowProvider>
-      <div className="relative w-full h-full flex-1 min-h-0 overflow-hidden bg-background text-foreground select-none">
-        {/* ========================================================================= */}
-        {/* LAYER 1: CANVAS (BACKWARD) - 100% Fullscreen, Unaffected by UI changes    */}
-        {/* ========================================================================= */}
-        <div className="absolute inset-0 w-full h-full z-0 overflow-hidden">
-          <BackendCanvas projectId={projectId} projectName={project.name} view="schema" />
-        </div>
-
-        {/* ========================================================================= */}
-        {/* LAYER 2: TOOLBARS & SIDEBARS (FORWARD) - Non-overlapping UI Overlay Grid  */}
-        {/* ========================================================================= */}
-        <div className="absolute inset-0 w-full h-full z-20 pointer-events-none flex flex-col overflow-hidden">
-          {/* Top Toolbar & Banners */}
-          <div className="pointer-events-auto shrink-0">
-            <CanvasToolbar
-              projectName={project.name}
-              projectId={projectId}
-              view="schema"
-              paletteOpen={paletteOpen}
-              setPaletteOpen={setPaletteOpen}
-              aiPanelOpen={aiPanelOpen}
-              setAiPanelOpen={setAiPanelOpen}
-              onOpenCommit={() => setCommitDialogOpen(true)}
-              onOpenHistory={() => setHistoryDrawerOpen(true)}
-            />
-
-            {previewVersion && (
-              <VersionPreviewBanner
-                versionNumber={previewVersion.versionNumber}
-                title={previewVersion.title}
-                onExitPreview={() => setPreviewVersionId(null)}
-                onRestore={() => void handleRestoreFromPreview()}
-                isRestoring={isRestoring}
-              />
-            )}
-          </div>
-
-          {/* Middle Layout: Sidebars on Left/Right, Docked Terminal in Center */}
-          <div className="flex-1 min-h-0 w-full flex overflow-hidden relative pointer-events-none">
-            {/* Left: Node Palette Sidebar (Configured for Schema View) */}
-            <NodePaletteSidebar
-              view="schema"
-              isOpen={paletteOpen}
-              onToggle={() => setPaletteOpen(!paletteOpen)}
-            />
-
-            {/* Center Area: Transparent Canvas Pass-Through */}
-            <div className="flex-1 min-w-0 h-full pointer-events-none overflow-hidden relative" />
-
-            {/* Right: AI Assistant Sidebar */}
-            <AiPanel
-              projectId={projectId}
-              isOpen={aiPanelOpen}
-              onClose={() => setAiPanelOpen(false)}
-            />
-          </div>
-        </div>
-
-        {/* Modals & Overlays */}
-        <CreateCommitDialog
-          projectId={projectId}
-          isOpen={commitDialogOpen}
-          onClose={() => setCommitDialogOpen(false)}
-        />
-        <VersionHistoryDrawer
-          projectId={projectId}
-          isOpen={historyDrawerOpen}
-          onClose={() => setHistoryDrawerOpen(false)}
-          onPreviewVersion={(verId) => setPreviewVersionId(verId)}
-        />
+    <div className="relative w-full h-full flex-1 min-h-0 overflow-hidden bg-background text-foreground select-none">
+      {/* ========================================================================= */}
+      {/* LAYER 1: CANVAS (BACKWARD) - 100% Fullscreen, Unaffected by UI changes    */}
+      {/* ========================================================================= */}
+      <div className="absolute inset-0 w-full h-full z-0 overflow-hidden">
+        <BackendCanvas projectId={projectId} projectName={project.name} view="schema" />
       </div>
-    </ReactFlowProvider>
+
+      {/* ========================================================================= */}
+      {/* LAYER 2: TOOLBAR OVERLAY (above canvas, below shared sidebars in layout)  */}
+      {/* ========================================================================= */}
+      <div className="absolute inset-0 w-full h-full z-10 pointer-events-none flex flex-col overflow-hidden">
+        {/* Top Toolbar & Banners */}
+        <div className="pointer-events-auto shrink-0">
+          <CanvasToolbar
+            projectName={project.name}
+            projectId={projectId}
+            view="schema"
+            onOpenCommit={() => setCommitDialogOpen(true)}
+            onOpenHistory={() => setHistoryDrawerOpen(true)}
+          />
+
+          {previewVersion && (
+            <VersionPreviewBanner
+              versionNumber={previewVersion.versionNumber}
+              title={previewVersion.title}
+              onExitPreview={() => setPreviewVersionId(null)}
+              onRestore={() => void handleRestoreFromPreview()}
+              isRestoring={isRestoring}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Modals & Overlays */}
+      <CreateCommitDialog
+        projectId={projectId}
+        isOpen={commitDialogOpen}
+        onClose={() => setCommitDialogOpen(false)}
+      />
+      <VersionHistoryDrawer
+        projectId={projectId}
+        isOpen={historyDrawerOpen}
+        onClose={() => setHistoryDrawerOpen(false)}
+        onPreviewVersion={(verId) => setPreviewVersionId(verId)}
+      />
+    </div>
   );
 }

@@ -35,10 +35,6 @@ interface CanvasToolbarProps {
   projectId: string;
   view: BackendCanvasView;
   setView?: (view: BackendCanvasView) => void;
-  paletteOpen: boolean;
-  setPaletteOpen: (open: boolean) => void;
-  aiPanelOpen: boolean;
-  setAiPanelOpen: (open: boolean) => void;
   onOpenCommit: () => void;
   onOpenHistory: () => void;
 }
@@ -48,13 +44,13 @@ export function CanvasToolbar({
   projectId,
   view,
   setView,
-  paletteOpen,
-  setPaletteOpen,
-  aiPanelOpen,
-  setAiPanelOpen,
   onOpenCommit,
   onOpenHistory,
 }: CanvasToolbarProps): React.JSX.Element {
+  const paletteOpen = useSidebarStore((s) => s.paletteOpen);
+  const setPaletteOpen = useSidebarStore((s) => s.setPaletteOpen);
+  const aiPanelOpen = useSidebarStore((s) => s.aiPanelOpen);
+  const setAiPanelOpen = useSidebarStore((s) => s.setAiPanelOpen);
   const canUndo = useBackendCanvasStore((s) =>
     view === "schema"
       ? s.schemaUndoStack.length > 0

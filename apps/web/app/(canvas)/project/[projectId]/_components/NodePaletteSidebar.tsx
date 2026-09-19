@@ -21,24 +21,22 @@ import {
   ChevronRight,
   Anchor,
   Layout,
-  LayoutTemplate,
   Braces,
   CreditCard,
 } from "lucide-react";
-import { useReactFlow } from "@xyflow/react";
+
 import {
   getUniqueNodeLabel,
   DEFAULT_DATABASE_NODE_LABEL,
   DEFAULT_DATABASE_ENGINE,
   DEFAULT_DATABASE_ENV_VARS,
 } from "@workspace/canvas";
-import { getOffsetPosition } from "./hooks/useCanvasHandlers";
-import { useSchemaAutoLayout } from "./hooks/useAutoLayout";
 import { useCanvasCenterPosition } from "./hooks/useCanvasCenterPosition";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { createGraphNodeData } from "./GraphView/utils";
 import type { GraphNodeType, BackendCanvasView } from "@workspace/canvas";
+import { useSchemaAutoLayout } from "./hooks/useAutoLayout";
 
 interface NodePaletteSidebarProps {
   view?: BackendCanvasView;
@@ -438,6 +436,7 @@ function SchemaViewBody({ nodes, addNode, getCenterPosition }: SchemaViewBodyPro
   );
   const { handleLayout } = useSchemaAutoLayout({ nodes: schemaNodes });
 
+
   const handleAddDatabase = () => {
     const { x, y } = getCenterPosition(200, 80);
     addNode({
@@ -722,18 +721,6 @@ function SchemaViewBody({ nodes, addNode, getCenterPosition }: SchemaViewBodyPro
         </Button>
       </div>
 
-      <div className="h-px bg-sidebar-border mx-1" />
-
-      {/* Auto-layout */}
-      <Button
-        variant="outline"
-        size="sm"
-        className="bg-sidebar-accent/50 hover:bg-sidebar-accent border-sidebar-border/60 text-sidebar-foreground text-xs justify-start h-8 shrink-0 w-full"
-        onClick={() => handleLayout("LR")}
-      >
-        <LayoutTemplate className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
-        Auto-layout
-      </Button>
     </div>
   );
 }
