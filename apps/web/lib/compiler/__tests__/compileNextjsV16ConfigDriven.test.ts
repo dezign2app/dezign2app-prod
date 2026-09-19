@@ -862,6 +862,166 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     const pkgJson = JSON.parse(pkgJsonFile!.content);
     expect(pkgJson.name).toBe("@workspace/demo");
   });
+
+  it("generates server guard layout when zone protectionMode is server-guard with dbFunction", () => {
+    const webAppNode: BackendNode = {
+      id: "web-app-sg",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "portal",
+        appSlug: "portal",
+        zones: [
+          {
+            id: "zone-public",
+            name: "Public",
+            handleId: "public-in",
+            accessType: "public",
+          },
+          {
+            id: "zone-private",
+            name: "Private",
+            handleId: "private-in",
+            accessType: "protected",
+            protectionMode: "server-guard",
+            serverGuard: {
+              entityNodeId: "node-user-entity",
+              entityLabel: "User",
+              checkMode: "dbFunction",
+              dbFunctionName: "validateSubscription",
+              param: "userId",
+              requireSession: true,
+              failRedirect: "/unauthorized",
+            },
+          },
+        ],
+      },
+      fractionalIndex: "a0",
+    };
+
+    const protectedPage: BackendNode = {
+      id: "page-protected",
+      type: "webPage",
+      position: { x: 100, y: 100 },
+      data: {
+        label: "dashboard",
+        accessType: "private",
+        routeGroup: "private",
+      },
+      fractionalIndex: "a1",
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-1",
+      source: "web-app-sg",
+      sourceHandle: "private-in",
+      target: "page-protected",
+      targetHandle: "page-in",
+      type: "connection",
+      fractionalIndex: "e0",
+    };
+
+    const result = compileNextjsV16WebClient(
+      [protectedPage],
+      [],
+      [],
+      [webAppNode, protectedPage],
+      [edge],
+      "PortalApp",
+      [],
+      "portal",
+      webAppNode,
+    );
+
+    const privateLayout = result.files.find(
+      (f: CompiledFile) => f.filename === "app/(private)/layout.tsx",
+    );
+    expect(privateLayout).toBeDefined();
+    expect(privateLayout?.content).toContain("Next.js Server Guard Layout");
+    expect(privateLayout?.content).toContain('import { db } from "@workspace/db";');
+    expect(privateLayout?.content).toContain('import { auth } from "@/lib/auth";');
+    expect(privateLayout?.content).toContain("await db.User.validateSubscription(session.user.id)");
+    expect(privateLayout?.content).toContain('redirect("/unauthorized")');
+    expect(privateLayout?.content).not.toContain("requireSession(");
+  });
+
+  it("generates server guard layout with columnValue check and header param without session", () => {
+    const webAppNode: BackendNode = {
+      id: "web-app-api-gate",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "api-portal",
+        appSlug: "api-portal",
+        zones: [
+          {
+            id: "zone-private",
+            name: "Private",
+            handleId: "private-in",
+            accessType: "protected",
+            protectionMode: "server-guard",
+            serverGuard: {
+              entityNodeId: "node-account-entity",
+              entityLabel: "Account",
+              checkMode: "columnValue",
+              entityField: "tier",
+              entityFieldExpectedValue: "vip",
+              param: "header",
+              headerName: "x-custom-token",
+              requireSession: false,
+              failRedirect: "/upgrade",
+            },
+          },
+        ],
+      },
+      fractionalIndex: "a0",
+    };
+
+    const page: BackendNode = {
+      id: "page-vip",
+      type: "webPage",
+      position: { x: 100, y: 100 },
+      data: {
+        label: "vip-area",
+        accessType: "private",
+        routeGroup: "private",
+      },
+      fractionalIndex: "a1",
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-2",
+      source: "web-app-api-gate",
+      sourceHandle: "private-in",
+      target: "page-vip",
+      targetHandle: "page-in",
+      type: "connection",
+      fractionalIndex: "e0",
+    };
+
+    const result = compileNextjsV16WebClient(
+      [page],
+      [],
+      [],
+      [webAppNode, page],
+      [edge],
+      "ApiPortalApp",
+      [],
+      "api-portal",
+      webAppNode,
+    );
+
+    const privateLayout = result.files.find(
+      (f: CompiledFile) => f.filename === "app/(private)/layout.tsx",
+    );
+    expect(privateLayout).toBeDefined();
+    expect(privateLayout?.content).toContain("Next.js Server Guard Layout");
+    expect(privateLayout?.content).not.toContain('import { auth } from "@/lib/auth";');
+    expect(privateLayout?.content).toContain('(await headers()).get("x-custom-token")');
+    expect(privateLayout?.content).toContain("record?.tier !== \"vip\"");
+    expect(privateLayout?.content).toContain('redirect("/upgrade")');
+  });
 });
+
 
 

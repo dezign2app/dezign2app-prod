@@ -274,6 +274,15 @@ export type ConditionPrimitive =
       op: "eq" | "neq" | "in" | "notIn" | "truthy" | "falsy";
       value?: string | number | boolean;
       values?: string[];
+    }
+  /** Represents a server-side DB guard — used for display purposes in ZoneConfig only.
+   *  The actual guard config lives in WebAppZone.serverGuard. */
+  | {
+      type: "serverGuard";
+      entityNodeId: string;
+      entityLabel?: string;
+      dbFunctionId?: string;
+      entityField?: string;
     };
 
 export type ConditionNode =
@@ -301,13 +310,58 @@ export interface ProtectionRule {
   customLogic?: { mode: "naturalLanguage" | "code"; prompt?: string; code?: string };
 }
 
+// ---- Server Guard (DB-level auth, runs in layout.tsx instead of middleware) ----
+/**
+ * What input is passed to the guard DB function.
+ * - "userId"       → session.user.id from the active session
+ * - "sessionToken" → raw session token string
+ * - "header"       → a custom HTTP header value (e.g. x-api-key)
+ */
+export type ServerGuardParam = "userId" | "sessionToken" | "header";
+
+/** Which thing on the entity to check. */
+export type ServerGuardCheckMode = "dbFunction" | "columnValue";
+
+export interface ServerGuardConfig {
+  /** The entity node whose data is queried. */
+  entityNodeId: string;
+  /** Human label of that entity (denormalised for display). */
+  entityLabel?: string;
+  /** Whether we call a DB operation function or check a column value. */
+  checkMode: ServerGuardCheckMode;
+  /** ID of the DbOperationFunction to call (when checkMode="dbFunction"). */
+  dbFunctionId?: string;
+  /** Name of the DbOperationFunction (denormalised for display/codegen). */
+  dbFunctionName?: string;
+  /** Column name to check (when checkMode="columnValue"). */
+  entityField?: string;
+  /** Expected column value that means "allowed" (when checkMode="columnValue"). */
+  entityFieldExpectedValue?: string;
+  /** What we pass into the DB function / column lookup. */
+  param: ServerGuardParam;
+  /** Header name when param="header" (e.g. "x-api-key"). */
+  headerName?: string;
+  /** Require an active session before running the guard. Default true. */
+  requireSession?: boolean;
+  /** Where to redirect on guard failure. */
+  failRedirect: string;
+}
+
 // ---- Protected Zone / Section (User-Managed Child Entity of WebAppNode) ----
 export interface WebAppZone {
   id: string;
   name: string;
   handleId: string;
   accessType: "public" | "protected";
-  rule: ProtectionRule;
+  /**
+   * Controls which protection strategy is generated for this zone.
+   * - "middleware" (default) → JWT-based check in middleware.ts (Edge-compatible)
+   * - "server-guard"         → DB-based check in layout.tsx (full Node.js runtime)
+   */
+  protectionMode?: "middleware" | "server-guard";
+  /** Only used when protectionMode = "server-guard". */
+  serverGuard?: ServerGuardConfig;
+  rule?: ProtectionRule;
   hasLayout?: boolean;
   layoutDescription?: string;
   layoutSourceCode?: string;
