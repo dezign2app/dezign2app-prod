@@ -517,6 +517,7 @@ export const webAppDataSchema = baseNodeDataSchema
         }),
       )
       .optional(),
+    expandedZones: z.array(z.string()).optional(),
   })
   .passthrough();
 export type WebAppNodeData = z.infer<typeof webAppDataSchema>;

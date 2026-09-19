@@ -8,6 +8,10 @@ import {
   AlertCircle,
   Unlink,
   LayoutTemplate,
+  Layers,
+  Maximize2,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BackendNode } from "@/types/canvas";
@@ -22,7 +26,7 @@ import {
 import { Textarea } from "@workspace/ui/components/textarea";
 import { parsePageRoute, normalizePageRoute, arePageRoutesEqual, WebAppZone } from "@workspace/canvas";
 import { RealtimeConnection, ClientDeliveryProtocol } from "@workspace/canvas/types";
-import { SectionList, RealtimeConnectionList } from "./web-page";
+import { SectionList, RealtimeConnectionList, useZoneHandLayout } from "./web-page";
 import { NodeDeletionDialog } from "@/app/(canvas)/project/[projectId]/_components/NodeDeletionDialog";
 
 export const WebPageNode = ({
@@ -46,6 +50,16 @@ export const WebPageNode = ({
 
   const [renameDialogOpen, setRenameDialogOpen] = React.useState(false);
   const [pendingRename, setPendingRename] = React.useState<{ oldLabel: string; newLabel: string } | null>(null);
+  const [isHovered, setIsHovered] = React.useState(false);
+
+  const {
+    cardIndex,
+    totalCards,
+    hasMultipleCards,
+    isStacked,
+    toggleZoneHand,
+    selectCard,
+  } = useZoneHandLayout(id, nodes, edges, updateNode);
 
   // Find incoming WebApp edge connecting to this page
   const incomingEdge = edges.find((e) => {
@@ -331,8 +345,19 @@ export const WebPageNode = ({
 
   return (
     <div
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        zIndex: isStacked
+          ? selected
+            ? 100
+            : 10 + cardIndex
+          : undefined,
+      }}
       className={cn(
-        "shadow-md rounded-xl bg-card border-2 min-w-[240px] max-w-[320px] flex flex-col transition-all duration-300 relative",
+        "shadow-md rounded-xl bg-card border-2 min-w-[240px] max-w-[320px] flex flex-col transition-all duration-200 relative",
+        isStacked && "shadow-lg backdrop-blur-sm",
+        isStacked && (selected || isHovered) && "ring-2 ring-indigo-500/50 shadow-2xl scale-[1.01] border-indigo-500",
         isLocked
           ? "border-violet-500/80 ring-2 ring-violet-500/30"
           : isDisconnected
@@ -376,6 +401,72 @@ export const WebPageNode = ({
         onSave={handleRequestRename}
         rightElement={
           <div className="flex items-center gap-1 shrink-0 ml-2">
+            {hasMultipleCards && (
+              isStacked ? (
+                <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center rounded text-[9px] font-mono font-bold bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 overflow-hidden shrink-0">
+                    {cardIndex > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectCard(cardIndex - 1);
+                        }}
+                        className="px-1 py-0.5 hover:bg-indigo-500/30 text-indigo-400 hover:text-indigo-200 transition-colors cursor-pointer"
+                        title="View previous card in stack"
+                      >
+                        <ChevronUp size={10} />
+                      </button>
+                    )}
+                    <span
+                      className="px-1.5 py-0.5 flex items-center gap-0.5"
+                      title={`Card ${cardIndex + 1} of ${totalCards} in this section (stacked)`}
+                    >
+                      <Layers size={9} />
+                      <span>{cardIndex + 1}/{totalCards}</span>
+                    </span>
+                    {cardIndex < totalCards - 1 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectCard(cardIndex + 1);
+                        }}
+                        className="px-1 py-0.5 hover:bg-indigo-500/30 text-indigo-400 hover:text-indigo-200 transition-colors cursor-pointer"
+                        title="View next card in stack"
+                      >
+                        <ChevronDown size={10} />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleZoneHand();
+                    }}
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-400 hover:text-indigo-300 border border-indigo-500/30 text-[9px] font-semibold transition-colors cursor-pointer shrink-0"
+                    title="Fan out all pages in this section"
+                  >
+                    <Maximize2 size={9} />
+                    <span>Fan Out</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleZoneHand();
+                  }}
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 hover:text-indigo-300 border border-indigo-500/25 text-[9px] font-medium transition-colors cursor-pointer shrink-0"
+                  title="Stack pages of this section into a hand of cards"
+                >
+                  <Layers size={9} />
+                  <span>Stack Hand</span>
+                </button>
+              )
+            )}
             {isLayout && (
               <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
                 LAYOUT
