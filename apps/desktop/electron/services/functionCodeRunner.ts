@@ -1,5 +1,88 @@
 import vm from "node:vm";
-import ts from "typescript";
+import type * as tsType from "typescript";
+
+// Lazy-load typescript so app launch never crashes if typescript is not bundled in production runtime
+let tsModule: typeof tsType | null = null;
+let tsAttempted = false;
+
+function getTs(): typeof tsType | null {
+  if (tsAttempted) return tsModule;
+  tsAttempted = true;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    tsModule = require("typescript");
+  } catch {
+    tsModule = null;
+  }
+  return tsModule;
+}
+
+/**
+ * Lightweight fallback to strip TypeScript type annotations
+ * and ES module export keywords when typescript module is not bundled in production.
+ */
+function transpileFallback(code: string, fnName?: string): string {
+  let js = code;
+
+  // 1. Remove interfaces: interface Foo { ... }
+  js = js.replace(/(?:^|\n)\s*(?:export\s+)?interface\s+[A-Za-z0-9_$]+(?:\s*<[^>]*>)?(?:\s+extends\s+[^{]+)?\s*\{[\s\S]*?\}/g, "\n");
+
+  // 2. Remove type aliases: type Foo = ...;
+  js = js.replace(/(?:^|\n)\s*(?:export\s+)?type\s+[A-Za-z0-9_$]+(?:\s*<[^>]*>)?\s*=[\s\S]*?;/g, "\n");
+
+  // 3. Remove inline type assertions: 'as const', 'as Type', 'as Type[]'
+  js = js.replace(/\s+as\s+[A-Za-z0-9_$]+(?:\s*<[^>]*>)?(?:\[\])?/g, "");
+
+  // 4. Remove function return type annotations: e.g. "): Promise<void> {" or "): string =>"
+  js = js.replace(/\)\s*:\s*(?:Promise\s*<[^>]+>|[A-Za-z0-9_$]+(?:\s*<[^>]*>)?(?:\[\])?)\s*(=>|\{)/g, ") $1");
+
+  // 5. Remove typed destructuring in parameters: e.g. "({ a, b }: { ... })" -> "({ a, b })"
+  js = js.replace(/\(\s*(\{[\s\S]*?\})\s*:\s*\{[\s\S]*?\}\s*\)/g, "($1)");
+  js = js.replace(/\(\s*(\{[\s\S]*?\})\s*:\s*[A-Za-z0-9_$]+(?:\s*<[^>]*>)?\s*\)/g, "($1)");
+
+  // 6. Remove simple parameter type annotations: e.g. "(a: string, b?: number = 10)" -> "(a, b = 10)"
+  js = js.replace(/\(([^()]*)\)\s*(=>|\{)/g, (fullMatch, paramList: string, trailer: string) => {
+    if (!paramList.includes(":")) return fullMatch;
+    const parts = paramList.split(",");
+    const cleaned = parts.map((p) => {
+      const trimmed = p.trim();
+      if (!trimmed) return "";
+      const colonIdx = trimmed.indexOf(":");
+      const eqIdx = trimmed.indexOf("=");
+      if (colonIdx !== -1 && (eqIdx === -1 || colonIdx < eqIdx)) {
+        const paramName = trimmed.slice(0, colonIdx).replace(/\?$/, "").trim();
+        const defaultVal = eqIdx !== -1 ? " = " + trimmed.slice(eqIdx + 1).trim() : "";
+        return `${paramName}${defaultVal}`;
+      }
+      return trimmed;
+    });
+    return `(${cleaned.join(", ")}) ${trailer}`;
+  });
+
+  // 7. Remove variable type annotations: const x: number = 10 -> var x = 10
+  js = js.replace(
+    /(?:^|\n)\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*:\s*[^=;\n]+(=)/g,
+    "\nvar $1 $2"
+  );
+
+  // 8. Convert top-level `export function` -> `function` and expose to exports
+  js = js.replace(/(?:^|\n)\s*export\s+default\s+(?:async\s+)?function\s+([A-Za-z0-9_$]+)?/g, (match, name) => {
+    const fn = name || "defaultFn";
+    return `\nasync function ${fn}`;
+  });
+  js = js.replace(/(?:^|\n)\s*export\s+(?=(?:async\s+)?function\b)/g, "\n");
+
+  // 9. Convert top-level `export const/let/var name =` -> `var name = exports.name =`
+  js = js.replace(/(?:^|\n)\s*export\s+(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*=/g, "\nvar $1 = exports.$1 =");
+
+  // 10. Convert any top-level `const name =` or `let name =` matching fnName to `var` so it's accessible in VM
+  if (fnName) {
+    js = js.replace(new RegExp(`(?:^|\\n)\\s*(?:const|let)\\s+(${fnName})\\s*=`, "g"), "\nvar $1 = exports.$1 =");
+    js += `\nif (typeof ${fnName} === "function") { try { exports["${fnName}"] = ${fnName}; } catch (e) {} }\n`;
+  }
+
+  return js;
+}
 
 export interface ExecuteFunctionCodeOptions {
   code: string;
@@ -37,7 +120,7 @@ export async function executeFunctionCode(
     db,
     tableName = "table",
     safeTable = tableName,
-    timeoutMs = 5000,
+    timeoutMs = 60_000, // 1 minutes
   } = options;
 
   const rawCode = (code || "").trim();
@@ -78,13 +161,18 @@ export async function executeFunctionCode(
   // 2. Transpile TypeScript to CommonJS JavaScript
   let jsCode: string;
   try {
-    jsCode = ts.transpileModule(codeToTranspile, {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-        removeComments: false,
-      },
-    }).outputText;
+    const ts = getTs();
+    if (ts) {
+      jsCode = ts.transpileModule(codeToTranspile, {
+        compilerOptions: {
+          module: ts.ModuleKind.CommonJS,
+          target: ts.ScriptTarget.ES2022,
+          removeComments: false,
+        },
+      }).outputText;
+    } else {
+      jsCode = transpileFallback(codeToTranspile, name);
+    }
   } catch (transpileErr) {
     const durationMs = Math.round((performance.now() - start) * 100) / 100;
     return {
@@ -218,22 +306,37 @@ function extractParamNames(code: string, fnName: string): { names: string[]; isD
             ? codeParamNames
             : [];
 
-      if (targetFn.length === 0) {
-        output = await Promise.resolve(targetFn());
-      } else if (isDestructured) {
-        output = await Promise.resolve(targetFn(args));
-      } else if (effectiveParamNames.length > 0) {
-        const positionalArgs = effectiveParamNames.map((pName) => args[pName]);
-        output = await Promise.resolve(targetFn(...positionalArgs));
-      } else if (targetFn.length === 1 && Object.keys(args).length === 1) {
-        const singleVal = Object.values(args)[0];
-        try {
-          output = await Promise.resolve(targetFn(singleVal));
-        } catch {
-          output = await Promise.resolve(targetFn(args));
+      const invokeFn = async () => {
+        if (targetFn.length === 0) {
+          return await Promise.resolve(targetFn());
+        } else if (isDestructured) {
+          return await Promise.resolve(targetFn(args));
+        } else if (effectiveParamNames.length > 0) {
+          const positionalArgs = effectiveParamNames.map((pName) => args[pName]);
+          return await Promise.resolve(targetFn(...positionalArgs));
+        } else if (targetFn.length === 1 && Object.keys(args).length === 1) {
+          const singleVal = Object.values(args)[0];
+          try {
+            return await Promise.resolve(targetFn(singleVal));
+          } catch {
+            return await Promise.resolve(targetFn(args));
+          }
+        } else {
+          return await Promise.resolve(targetFn(args));
         }
-      } else {
-        output = await Promise.resolve(targetFn(args));
+      };
+
+      let timer: NodeJS.Timeout | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`Function execution timed out after ${timeoutMs / 1000}s`));
+        }, timeoutMs);
+      });
+
+      try {
+        output = await Promise.race([invokeFn(), timeoutPromise]);
+      } finally {
+        if (timer) clearTimeout(timer);
       }
     } else if (vmContext.__result !== undefined) {
       output = await Promise.resolve(vmContext.__result);
