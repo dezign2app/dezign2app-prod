@@ -150,10 +150,11 @@ export const ConfigSidebar = () => {
     >
       <SheetContent
         hideOverlay
+        onPointerDownOutside={(e) => {
+          e.preventDefault();
+        }}
         onInteractOutside={(e) => {
-          if (type === "eventTesting") {
-            e.preventDefault();
-          }
+          e.preventDefault();
         }}
         className="overflow-hidden p-0 bg-background/80 backdrop-blur-xl border-l border-border/50 shadow-2xl transition-none flex flex-col"
         style={{ maxWidth: "100vw", width: width }}

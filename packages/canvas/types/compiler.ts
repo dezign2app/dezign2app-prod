@@ -120,6 +120,7 @@ export interface CompiledMonorepoResult {
 
 export interface AuthPageMetaInfo {
   nodeId?: string;
+  label?: string;
   slug?: string;
   routePath?: string;
   isAuthPage?: boolean;

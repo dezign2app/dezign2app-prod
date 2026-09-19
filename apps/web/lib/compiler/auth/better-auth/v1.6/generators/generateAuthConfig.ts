@@ -207,9 +207,10 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
   let socialProvidersBlock = "";
   if (oauthProviders.length > 0) {
     const providersList = oauthProviders.map((p) => {
-      const providerName = p.provider || "google";
-      const clientIdEnv = p.clientIdEnv || `${providerName.toUpperCase()}_CLIENT_ID`;
-      const clientSecretEnv = p.clientSecretEnv || `${providerName.toUpperCase()}_CLIENT_SECRET`;
+      const providerName = (p.provider || "google").toLowerCase();
+      const envPrefix = providerName.toUpperCase();
+      const clientIdEnv = p.clientIdEnv || `${envPrefix}_CLIENT_ID`;
+      const clientSecretEnv = p.clientSecretEnv || `${envPrefix}_CLIENT_SECRET`;
       return `    ${providerName}: {\n      clientId: process.env.${clientIdEnv} || "",\n      clientSecret: process.env.${clientSecretEnv} || "",\n    }`;
     }).join(",\n");
     socialProvidersBlock = `\n  socialProviders: {\n${providersList}\n  },`;

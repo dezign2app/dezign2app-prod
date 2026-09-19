@@ -40,29 +40,26 @@ export const SocialProvidersConfigCard: React.FC<SocialProvidersConfigCardProps>
         <div>
           <Label className="text-xs font-semibold">OAuth 2.0 / Social Providers</Label>
         </div>
-        <div className="flex items-center gap-2">
+        <div
+          className="flex items-center gap-2"
+          onClick={(e) => e.stopPropagation()}
+        >
           <Checkbox
             id="enable-social-auth"
             checked={isSocialEnabled}
             onCheckedChange={(checked) => {
               const enabled = Boolean(checked);
-              const defaultOauth = [
-                { id: "oa-1", provider: "google", clientIdEnv: "GOOGLE_CLIENT_ID", clientSecretEnv: "GOOGLE_CLIENT_SECRET" },
-                { id: "oa-2", provider: "github", clientIdEnv: "GITHUB_CLIENT_ID", clientSecretEnv: "GITHUB_CLIENT_SECRET" },
-              ];
               updateData({
                 providers: {
                   ...providers,
                   socialEnabled: enabled,
                   oauthEnabled: enabled,
-                  oauth: enabled
-                    ? (providers.oauth && providers.oauth.length > 0 ? providers.oauth : defaultOauth)
-                    : providers.oauth,
+                  oauth: providers.oauth || [],
                 },
               });
             }}
           />
-          <Label htmlFor="enable-social-auth" className="text-xs font-normal cursor-pointer text-muted-foreground">
+          <Label htmlFor="enable-social-auth" className="text-xs font-normal cursor-pointer text-muted-foreground select-none">
             {isSocialEnabled ? "Enabled" : "Disabled"}
           </Label>
         </div>
@@ -85,13 +82,17 @@ export const SocialProvidersConfigCard: React.FC<SocialProvidersConfigCardProps>
               size="sm"
               className="h-7 text-xs bg-background"
               onClick={() => {
+                const availableProviders = ["google", "github", "discord", "apple", "twitter", "microsoft"];
+                const existingProviders = new Set((providers.oauth || []).map((o) => o.provider));
+                const nextProvider = availableProviders.find((p) => !existingProviders.has(p)) || "google";
+                const nextPrefix = nextProvider.toUpperCase();
                 const newOauth = [
                   ...(providers.oauth || []),
                   {
                     id: `oa-${Date.now()}`,
-                    provider: "discord",
-                    clientIdEnv: "DISCORD_CLIENT_ID",
-                    clientSecretEnv: "DISCORD_CLIENT_SECRET",
+                    provider: nextProvider,
+                    clientIdEnv: `${nextPrefix}_CLIENT_ID`,
+                    clientSecretEnv: `${nextPrefix}_CLIENT_SECRET`,
                   },
                 ];
                 updateData({
@@ -120,8 +121,16 @@ export const SocialProvidersConfigCard: React.FC<SocialProvidersConfigCardProps>
                       <Select
                         value={oa.provider}
                         onValueChange={(val) => {
+                          const envPrefix = val.toUpperCase();
                           const updated = (providers.oauth || []).map((o) =>
-                            o.id === oa.id ? { ...o, provider: val } : o,
+                            o.id === oa.id
+                              ? {
+                                  ...o,
+                                  provider: val,
+                                  clientIdEnv: `${envPrefix}_CLIENT_ID`,
+                                  clientSecretEnv: `${envPrefix}_CLIENT_SECRET`,
+                                }
+                              : o,
                           );
                           updateData({ providers: { ...providers, oauth: updated } });
                         }}
