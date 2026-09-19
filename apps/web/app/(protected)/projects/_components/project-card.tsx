@@ -36,6 +36,8 @@ import { useRouter } from "next/navigation";
 import { cn } from "@workspace/ui/lib/utils";
 import { ProjectDialog } from "./project-dialog";
 
+import { deleteProjectWorkspaceDir } from "@/app/(canvas)/project/[projectId]/_components/terminal/hooks/projectWorkspaceUtils";
+
 dayjs.extend(relativeTime);
 
 interface ProjectCardProps {
@@ -58,6 +60,8 @@ export const ProjectCard = ({ project, className }: ProjectCardProps) => {
       await removeProject({
         projectId: project._id,
       });
+      // Delete the workspace folder link for this project (preserves files on disk)
+      deleteProjectWorkspaceDir(project._id);
       setIsDeleteOpen(false);
       toast.success("Project deleted");
     } catch (error) {

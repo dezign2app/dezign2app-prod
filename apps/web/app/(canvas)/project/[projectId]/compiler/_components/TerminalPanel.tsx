@@ -286,6 +286,8 @@ export function TerminalPanel({
         copied={copied}
         onClear={handleClearCurrentTab}
         hasProjectId={Boolean(projectId)}
+        inElectron={inElectron}
+        outputDir={outputDir}
       />
 
       {/* Tab View Content - Preserved in DOM to retain active process & terminal buffer */}

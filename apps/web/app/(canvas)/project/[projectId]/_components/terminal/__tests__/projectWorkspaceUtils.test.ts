@@ -2,14 +2,18 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   normalizeFolderPath,
   findProjectFolderConflict,
+  clearProjectFolderConflict,
   cleanLegacyGlobalWorkspaceDir,
   getProjectWorkspaceDir,
   setProjectWorkspaceDir,
+  deleteProjectWorkspaceDir,
 } from "../hooks/projectWorkspaceUtils";
+import { useProjectWorkspaceStore } from "../hooks/useTerminalWorkspace";
 
 describe("projectWorkspaceUtils", () => {
   beforeEach(() => {
     localStorage.clear();
+    useProjectWorkspaceStore.setState({ projectDirs: {} });
   });
 
   describe("normalizeFolderPath", () => {
@@ -50,7 +54,27 @@ describe("projectWorkspaceUtils", () => {
     });
   });
 
-  describe("findProjectFolderConflict", () => {
+  describe("deleteProjectWorkspaceDir", () => {
+    it("deletes the workspace folder link and metadata for a deleted project", () => {
+      setProjectWorkspaceDir("proj_to_delete", "C:\\projects\\myApp", "My App");
+      localStorage.setItem("canvas_terminal_tab_proj_to_delete", "terminal");
+      localStorage.setItem("compiler_terminal_height_proj_to_delete", "300");
+
+      expect(getProjectWorkspaceDir("proj_to_delete")).toBe("C:\\projects\\myApp");
+
+      // Delete project link (in-app deletion)
+      deleteProjectWorkspaceDir("proj_to_delete");
+
+      expect(getProjectWorkspaceDir("proj_to_delete")).toBe("");
+      expect(localStorage.getItem("workspace_dir_proj_to_delete")).toBeNull();
+      expect(localStorage.getItem("docker_dir_proj_to_delete")).toBeNull();
+      expect(localStorage.getItem("workspace_project_name_proj_to_delete")).toBeNull();
+      expect(localStorage.getItem("canvas_terminal_tab_proj_to_delete")).toBeNull();
+      expect(localStorage.getItem("compiler_terminal_height_proj_to_delete")).toBeNull();
+    });
+  });
+
+  describe("findProjectFolderConflict & clearProjectFolderConflict", () => {
     it("returns null when directory is not used by any other project", () => {
       setProjectWorkspaceDir("proj_A", "C:\\projects\\appA", "Project A");
 
@@ -76,6 +100,53 @@ describe("projectWorkspaceUtils", () => {
       expect(conflict).not.toBeNull();
       expect(conflict?.projectId).toBe("proj_A");
       expect(conflict?.projectName).toBe("Project Alpha");
+    });
+
+    it("clears conflict cleanly when reassigning folder to a new project", () => {
+      setProjectWorkspaceDir("proj_A", "C:\\projects\\shared", "Project A");
+      expect(findProjectFolderConflict("proj_B", "C:\\projects\\shared")).not.toBeNull();
+
+      // User confirms reassignment
+      clearProjectFolderConflict("proj_B", "C:\\projects\\shared");
+      expect(findProjectFolderConflict("proj_B", "C:\\projects\\shared")).toBeNull();
+      expect(getProjectWorkspaceDir("proj_A")).toBe("");
+    });
+  });
+
+  describe("useProjectWorkspaceStore", () => {
+    it("updates project directory reactively and syncs to localStorage", () => {
+      useProjectWorkspaceStore
+        .getState()
+        .setProjectDir("proj_1", "D:\\workspace\\project-one", "Project One");
+
+      expect(useProjectWorkspaceStore.getState().getProjectDir("proj_1")).toBe(
+        "D:\\workspace\\project-one"
+      );
+      expect(getProjectWorkspaceDir("proj_1")).toBe("D:\\workspace\\project-one");
+    });
+
+    it("syncs from storage when requested", () => {
+      setProjectWorkspaceDir("proj_2", "D:\\workspace\\project-two", "Project Two");
+      const dir = useProjectWorkspaceStore.getState().syncFromStorage("proj_2");
+      expect(dir).toBe("D:\\workspace\\project-two");
+      expect(
+        useProjectWorkspaceStore.getState().projectDirs["proj_2"]
+      ).toBe("D:\\workspace\\project-two");
+    });
+
+    it("deletes project directory from store and localStorage via deleteProjectDir", () => {
+      useProjectWorkspaceStore
+        .getState()
+        .setProjectDir("proj_del", "D:\\workspace\\delete-me", "To Delete");
+
+      expect(useProjectWorkspaceStore.getState().getProjectDir("proj_del")).toBe(
+        "D:\\workspace\\delete-me"
+      );
+
+      useProjectWorkspaceStore.getState().deleteProjectDir("proj_del");
+
+      expect(useProjectWorkspaceStore.getState().projectDirs["proj_del"]).toBeUndefined();
+      expect(getProjectWorkspaceDir("proj_del")).toBe("");
     });
   });
 });

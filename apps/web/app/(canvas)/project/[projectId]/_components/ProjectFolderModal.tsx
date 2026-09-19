@@ -9,11 +9,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@workspace/ui/components/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Folder, FolderOpen, AlertCircle, CheckCircle2, ChevronRight, HardDrive } from "lucide-react";
 import { toast } from "sonner";
-import { findProjectFolderConflict } from "./terminal/hooks/projectWorkspaceUtils";
+import { findProjectFolderConflict, FolderConflict } from "./terminal/hooks/projectWorkspaceUtils";
 
 interface ProjectFolderModalProps {
   open: boolean;
@@ -39,13 +49,66 @@ export function ProjectFolderModal({
   const [isPicking, setIsPicking] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Confirmation dialog state for existing folder conflict
+  const [pendingFolder, setPendingFolder] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<FolderConflict | null>(null);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+
+  const applyFolderSelection = (dir: string) => {
+    const ok = onSaveDirectory(dir);
+    if (ok) {
+      toast.success(`Project folder connected: ${dir}`);
+      setManualPath("");
+      setShowManualInput(false);
+      setIsConfirmOpen(false);
+      setPendingFolder(null);
+      setConflict(null);
+      onOpenChange(false);
+    } else {
+      setErrorMessage("Failed to set directory for this project.");
+    }
+  };
+
+  const processFolderSelection = (selectedPath: string) => {
+    setErrorMessage(null);
+    const trimmed = selectedPath.trim();
+    if (!trimmed) {
+      setErrorMessage("Please select or enter a valid folder path.");
+      return;
+    }
+
+    // Check if the target folder is already assigned to a different project
+    const detectedConflict = findProjectFolderConflict(projectId, trimmed);
+    if (detectedConflict) {
+      setPendingFolder(trimmed);
+      setConflict(detectedConflict);
+      setIsConfirmOpen(true);
+      return;
+    }
+
+    // No conflict, connect directly
+    applyFolderSelection(trimmed);
+  };
+
+  const handleConfirmReassign = () => {
+    if (pendingFolder) {
+      applyFolderSelection(pendingFolder);
+    }
+  };
+
+  const handleCancelReassign = () => {
+    setIsConfirmOpen(false);
+    setPendingFolder(null);
+    setConflict(null);
+  };
+
   const handlePick = async () => {
     setErrorMessage(null);
     setIsPicking(true);
     try {
       const selected = await onPickDirectory();
       if (selected) {
-        onOpenChange(false);
+        processFolderSelection(selected);
       }
     } catch (err) {
       console.warn("[ProjectFolderModal] Pick error:", err);
@@ -61,28 +124,12 @@ export function ProjectFolderModal({
       setErrorMessage("Please enter a folder path.");
       return;
     }
-
-    const conflict = findProjectFolderConflict(projectId, trimmed);
-    if (conflict) {
-      setErrorMessage(
-        `This folder is already assigned to "${conflict.projectName}". Each project must have a unique local folder.`
-      );
-      return;
-    }
-
-    const ok = onSaveDirectory(trimmed);
-    if (ok) {
-      toast.success(`Project folder connected: ${trimmed}`);
-      setManualPath("");
-      setShowManualInput(false);
-      onOpenChange(false);
-    } else {
-      setErrorMessage("Failed to set directory for this project.");
-    }
+    processFolderSelection(trimmed);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden font-sans border-border/60 bg-background/95 backdrop-blur-md shadow-2xl">
         {/* Header with gradient accent */}
         <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-border/40 p-5">
@@ -210,5 +257,45 @@ export function ProjectFolderModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Reassign Folder Confirmation Dialog */}
+    <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+      <AlertDialogContent className="font-sans max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-base font-semibold">
+            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+            <span>Folder Already Assigned</span>
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-xs text-muted-foreground space-y-2.5 text-left leading-relaxed pt-1" asChild>
+            <div>
+              <p>
+                The selected folder is currently assigned to project:
+              </p>
+              <div className="p-2.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 font-semibold text-xs">
+                {conflict?.projectName || "Another Project"}
+              </div>
+              <div className="p-2 rounded bg-muted/60 border border-border/40 font-mono text-[11px] text-foreground truncate" title={pendingFolder || ""}>
+                {pendingFolder}
+              </div>
+              <p className="text-foreground/90 pt-1">
+                Reassigning will disconnect it from <strong>{conflict?.projectName || "the other project"}</strong> and connect it to <strong>{projectName || "this project"}</strong>. Do you want to proceed?
+              </p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="gap-2 sm:gap-0 mt-2">
+          <AlertDialogCancel onClick={handleCancelReassign} className="text-xs">
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleConfirmReassign}
+            className="text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            Reassign to This Project
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

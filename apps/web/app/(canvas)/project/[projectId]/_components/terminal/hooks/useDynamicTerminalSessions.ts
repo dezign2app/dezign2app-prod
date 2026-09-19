@@ -272,21 +272,6 @@ export function useDynamicTerminalSessions({
     });
   }, [inElectron, sessionIdsKey, attachPtyListeners]);
 
-  // Auto-navigate running sessions when output directory genuinely changes
-  const prevOutputDirRef = useRef<string>(outputDir);
-  useEffect(() => {
-    if (!inElectron || !outputDir || outputDir === prevOutputDirRef.current) return;
-    prevOutputDirRef.current = outputDir;
-
-    const api = getElectronAPI();
-    const currentSessions = store.getSessions(projectId);
-    currentSessions.forEach((s) => {
-      if (s.status === "running") {
-        api?.terminal?.write?.(s.id, `cd "${outputDir}"\r`);
-      }
-    });
-  }, [inElectron, outputDir, projectId, store]);
-
   // Create a new dynamic terminal session of user's choice
   const createTerminal = useCallback(
     async (options?: {
@@ -396,6 +381,71 @@ export function useDynamicTerminalSessions({
     },
     [inElectron, outputDir, projectId, store, attachPtyListeners],
   );
+
+  // Auto-navigate running sessions when output directory genuinely changes
+  const prevOutputDirRef = useRef<string>(outputDir);
+  useEffect(() => {
+    if (!outputDir || outputDir === prevOutputDirRef.current) return;
+    prevOutputDirRef.current = outputDir;
+
+    const currentSessions = store.getSessions(projectId);
+
+    // If no terminal sessions exist yet, automatically spawn one rooted in the chosen directory
+    if (currentSessions.length === 0) {
+      createTerminal({
+        type: inElectron ? "shell" : "bash",
+        title: "Main Terminal",
+      });
+      return;
+    }
+
+    // In Browser (non-Electron) mode:
+    const cleanDir = outputDir.replace(/[\\/]+$/, "");
+    const folderName = cleanDir.split(/[\\/]/).pop() || cleanDir || outputDir;
+
+    if (!inElectron) {
+      currentSessions.forEach((s) => {
+        const termHandle = terminalRefs?.current?.get(s.id);
+        const newPrompt = getShellPrompt(s.shell, cleanDir);
+        const msg = `\r\n\x1b[90m[Workspace connected: ${folderName}]\x1b[0m\r\n${newPrompt}`;
+        termHandle?.write?.(msg);
+        store.appendLog(projectId, s.id, msg);
+      });
+      return;
+    }
+
+    // In Electron Desktop mode:
+    const api = getElectronAPI();
+    const sendCdCommand = (session: TerminalSession) => {
+      const shellLower = (session.shell || "").toLowerCase();
+      let cdCmd = "";
+      if (shellLower.includes("powershell") || shellLower.includes("pwsh")) {
+        // -LiteralPath prevents PowerShell wildcard interpretation on brackets [ ]
+        cdCmd = `Set-Location -LiteralPath '${cleanDir.replace(/'/g, "''")}'`;
+      } else if (shellLower.includes("cmd")) {
+        // /d flag ensures drive switch on Windows CMD
+        cdCmd = `cd /d "${cleanDir}"`;
+      } else {
+        // POSIX shells (bash, zsh) require forward slashes
+        cdCmd = `cd "${cleanDir.replace(/\\/g, "/")}"`;
+      }
+      // Send Ctrl+C (\x03) first to clear any current line buffer, then the cd command
+      api?.terminal?.write?.(session.id, `\x03\r\n${cdCmd}\r\n`);
+    };
+
+    currentSessions.forEach((s) => {
+      if (s.status === "running") {
+        sendCdCommand(s);
+        // If session was recently created, send again after 600ms to ensure prompt was ready
+        const age = Date.now() - (s.createdAt || 0);
+        if (age < 2500) {
+          setTimeout(() => {
+            sendCdCommand(s);
+          }, 600);
+        }
+      }
+    });
+  }, [inElectron, outputDir, projectId, store, createTerminal, terminalRefs]);
 
   // Close and terminate a specific terminal session
   const closeTerminal = useCallback(

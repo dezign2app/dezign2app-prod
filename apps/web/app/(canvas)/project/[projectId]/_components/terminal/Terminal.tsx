@@ -32,6 +32,8 @@ export function Terminal({
   projectName = "Dezign2App",
   isOpen: controlledIsOpen,
   onToggleOpen: controlledOnToggleOpen,
+  outputDir: propOutputDir,
+  onPickDirectory: propOnPickDirectory,
 }: TerminalProps) {
   const inElectron = isElectron();
   const terminalRefs = useRef<Map<string, WTermTerminalHandle | null>>(new Map());
@@ -43,6 +45,9 @@ export function Terminal({
   const storeSetTerminalOpen = useSidebarStore((s) => s.setTerminalOpen);
   const terminalHeight = useSidebarStore((s) => s.terminalHeight);
   const setTerminalHeight = useSidebarStore((s) => s.setTerminalHeight);
+  const setProjectFolderModalOpen = useSidebarStore(
+    (s) => s.setProjectFolderModalOpen
+  );
 
   const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : storeTerminalOpen;
   const handleToggleOpen = controlledOnToggleOpen || storeToggleTerminal;
@@ -79,7 +84,17 @@ export function Terminal({
   };
 
   // 1. Workspace directory persistence & folder picker
-  const { outputDir, handlePickDirectory } = useTerminalWorkspace(projectId);
+  const {
+    outputDir: workspaceOutputDir,
+    handlePickDirectory: fallbackPickDirectory,
+  } = useTerminalWorkspace(projectId, projectName);
+
+  const outputDir =
+    (propOutputDir && propOutputDir.trim()) ? propOutputDir.trim() : workspaceOutputDir;
+  const handleFolderClick =
+    propOnPickDirectory ||
+    (() => setProjectFolderModalOpen(true)) ||
+    fallbackPickDirectory;
 
   // 2. Monorepo compilation & endpoints
   const { formattedProjectName, files, serviceEndpoints } =
@@ -289,7 +304,7 @@ export function Terminal({
                 hasProjectId={Boolean(projectId)}
                 inElectron={inElectron}
                 outputDir={outputDir}
-                onPickDirectory={handlePickDirectory}
+                onPickDirectory={handleFolderClick}
                 onDownloadZip={handleDownloadZip}
                 downloadingZip={downloadingZip}
                 syncStatus={syncStatus}

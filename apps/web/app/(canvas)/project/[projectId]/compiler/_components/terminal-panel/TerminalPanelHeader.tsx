@@ -90,6 +90,12 @@ export function TerminalPanelHeader({
       })
     : null;
 
+  const folderLabel = React.useMemo(() => {
+    if (!outputDir) return "Folder...";
+    const clean = outputDir.replace(/[\\/]+$/, "");
+    return clean.split(/[\\/]/).pop() || clean || "Folder...";
+  }, [outputDir]);
+
   return (
     <div className="h-8 bg-[#161b22] px-3 border-b border-border/40 flex items-center justify-between shrink-0 font-sans select-none">
       {/* Left: VS Code Tabs */}
@@ -213,21 +219,24 @@ export function TerminalPanelHeader({
           </button>
         )}
 
-        {/* Directory Selector in Desktop / ZIP Download in Browser */}
-        {inElectron && onPickDirectory ? (
+        {/* Workspace Directory Selector (Electron & Browser) */}
+        {onPickDirectory ? (
           <Button
             size="sm"
             variant="ghost"
             onClick={onPickDirectory}
-            className="h-6 px-2 text-[10px] gap-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+            className="h-6 px-2 text-[10px] gap-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 cursor-pointer"
             title={outputDir ? `Workspace: ${outputDir}` : "Choose workspace directory"}
           >
             <Folder className="w-3 h-3 text-slate-400" />
-            <span className="max-w-[100px] truncate hidden sm:inline font-mono">
-              {outputDir ? outputDir.split(/[\\/]/).pop() : "Folder..."}
+            <span className="max-w-[120px] truncate font-mono">
+              {folderLabel}
             </span>
           </Button>
-        ) : onDownloadZip ? (
+        ) : null}
+
+        {/* ZIP Download in Browser */}
+        {!inElectron && onDownloadZip ? (
           <Button
             size="sm"
             variant="ghost"

@@ -1,51 +1,148 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback } from "react";
+import { create } from "zustand";
 import { toast } from "sonner";
 import { getElectronAPI } from "@/lib/electron";
 import {
   getProjectWorkspaceDir,
   setProjectWorkspaceDir,
+  deleteProjectWorkspaceDir,
   findProjectFolderConflict,
+  clearProjectFolderConflict,
   FolderConflict,
 } from "./projectWorkspaceUtils";
 
-export function useTerminalWorkspace(projectId: string, projectName?: string) {
-  // Target directory strictly scoped to current project
-  const [outputDir, setOutputDir] = useState<string>(() => {
-    return getProjectWorkspaceDir(projectId);
-  });
+export type { FolderConflict };
 
-  // Re-sync outputDir whenever projectId changes
-  useEffect(() => {
-    if (!projectId || typeof window === "undefined") {
-      setOutputDir("");
-      return;
+interface ProjectWorkspaceState {
+  projectDirs: Record<string, string>;
+  getProjectDir: (projectId: string) => string;
+  setProjectDir: (projectId: string, dir: string, projectName?: string) => void;
+  deleteProjectDir: (projectId: string) => void;
+  syncFromStorage: (projectId: string) => string;
+}
+
+export const useProjectWorkspaceStore = create<ProjectWorkspaceState>((set, get) => ({
+  projectDirs: {},
+  getProjectDir: (projectId: string) => {
+    if (!projectId) return "";
+    const existing = get().projectDirs[projectId];
+    if (existing !== undefined) return existing;
+    const fromStorage = getProjectWorkspaceDir(projectId);
+    set((state) => ({
+      projectDirs: { ...state.projectDirs, [projectId]: fromStorage },
+    }));
+    return fromStorage;
+  },
+  setProjectDir: (projectId: string, dir: string, projectName?: string) => {
+    if (!projectId) return;
+    setProjectWorkspaceDir(projectId, dir, projectName);
+    set((state) => ({
+      projectDirs: { ...state.projectDirs, [projectId]: dir },
+    }));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("project-workspace-dir-changed", {
+          detail: { projectId, dir, projectName },
+        })
+      );
     }
-    const saved = getProjectWorkspaceDir(projectId);
-    setOutputDir(saved);
-  }, [projectId]);
+  },
+  deleteProjectDir: (projectId: string) => {
+    if (!projectId) return;
+    deleteProjectWorkspaceDir(projectId);
+    set((state) => {
+      const next = { ...state.projectDirs };
+      delete next[projectId];
+      return { projectDirs: next };
+    });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("project-workspace-dir-changed", {
+          detail: { projectId, dir: "" },
+        })
+      );
+    }
+  },
+  syncFromStorage: (projectId: string) => {
+    if (!projectId) return "";
+    const fromStorage = getProjectWorkspaceDir(projectId);
+    set((state) => ({
+      projectDirs: { ...state.projectDirs, [projectId]: fromStorage },
+    }));
+    return fromStorage;
+  },
+}));
+
+export function useTerminalWorkspace(projectId: string, projectName?: string) {
+  const outputDir = useProjectWorkspaceStore((s) => {
+    if (!projectId) return "";
+    const stored = s.projectDirs[projectId];
+    if (stored !== undefined) return stored;
+    return typeof window !== "undefined" ? getProjectWorkspaceDir(projectId) : "";
+  });
+  const setProjectDir = useProjectWorkspaceStore((s) => s.setProjectDir);
+  const syncFromStorage = useProjectWorkspaceStore((s) => s.syncFromStorage);
+
+  // Initialize from storage on mount or whenever projectId changes
+  useEffect(() => {
+    if (projectId) {
+      syncFromStorage(projectId);
+    }
+  }, [projectId, syncFromStorage]);
+
+  // Sync across windows or custom events
+  useEffect(() => {
+    if (typeof window === "undefined" || !projectId) return;
+
+    const handleStorage = (e: StorageEvent) => {
+      if (
+        e.key === `workspace_dir_${projectId}` ||
+        e.key === `docker_dir_${projectId}`
+      ) {
+        syncFromStorage(projectId);
+      }
+    };
+
+    const handleCustomEvent = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (detail && detail.projectId === projectId) {
+        syncFromStorage(projectId);
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("project-workspace-dir-changed", handleCustomEvent);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(
+        "project-workspace-dir-changed",
+        handleCustomEvent
+      );
+    };
+  }, [projectId, syncFromStorage]);
+
+  const setOutputDir = useCallback(
+    (dir: string) => {
+      if (!projectId) return;
+      setProjectDir(projectId, dir, projectName);
+    },
+    [projectId, projectName, setProjectDir],
+  );
 
   const saveWorkspaceDir = useCallback(
     (dir: string): boolean => {
       if (!projectId) return false;
+      const trimmed = dir.trim();
+      if (!trimmed) return false;
 
-      // Ensure uniqueness: check if another project is already using this directory
-      if (dir) {
-        const conflict = findProjectFolderConflict(projectId, dir);
-        if (conflict) {
-          toast.error(
-            `This folder is already assigned to "${conflict.projectName}". Each project must have a unique local folder.`
-          );
-          return false;
-        }
-      }
-
-      setProjectWorkspaceDir(projectId, dir, projectName);
-      setOutputDir(dir);
+      // Cleanly clear conflict on the directory before reassigning
+      clearProjectFolderConflict(projectId, trimmed);
+      setProjectDir(projectId, trimmed, projectName);
       return true;
     },
-    [projectId, projectName],
+    [projectId, projectName, setProjectDir],
   );
 
   const handlePickDirectory = useCallback(async (): Promise<string | null> => {
@@ -55,11 +152,7 @@ export function useTerminalWorkspace(projectId: string, projectName?: string) {
       try {
         const selected = await api.fs.pickDirectory();
         if (selected) {
-          const ok = saveWorkspaceDir(selected);
-          if (ok) {
-            toast.success(`Target folder: ${selected}`);
-            return selected;
-          }
+          return selected;
         }
       } catch (err) {
         toast.error("Failed to select directory");
@@ -76,11 +169,7 @@ export function useTerminalWorkspace(projectId: string, projectName?: string) {
       try {
         const handle = await window.showDirectoryPicker();
         if (handle && handle.name) {
-          const ok = saveWorkspaceDir(handle.name);
-          if (ok) {
-            toast.success(`Connected to local folder: ${handle.name}`);
-            return handle.name;
-          }
+          return handle.name;
         }
       } catch (err) {
         if (err instanceof Error && err.name !== "AbortError") {
@@ -97,17 +186,12 @@ export function useTerminalWorkspace(projectId: string, projectName?: string) {
         outputDir || ""
       );
       if (input && input.trim()) {
-        const trimmed = input.trim();
-        const ok = saveWorkspaceDir(trimmed);
-        if (ok) {
-          toast.success(`Target folder set to: ${trimmed}`);
-          return trimmed;
-        }
+        return input.trim();
       }
     }
 
     return null;
-  }, [saveWorkspaceDir, outputDir]);
+  }, [outputDir]);
 
   return {
     outputDir,

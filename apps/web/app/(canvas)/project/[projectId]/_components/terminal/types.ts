@@ -3,6 +3,8 @@ export interface TerminalProps {
   projectName?: string;
   isOpen?: boolean;
   onToggleOpen?: () => void;
+  outputDir?: string;
+  onPickDirectory?: () => void;
 }
 
 export type TerminalType =
