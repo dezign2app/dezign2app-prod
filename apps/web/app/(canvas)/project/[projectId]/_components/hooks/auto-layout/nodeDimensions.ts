@@ -220,6 +220,9 @@ export function getNodeDimensions(node: LayoutNode): {
     case "auth": {
       return { width: 300, height: 200 };
     }
+    case "payments": {
+      return { width: 300, height: 190 };
+    }
     case "app": {
       return { width: 280, height: 180 };
     }
@@ -334,6 +337,18 @@ export function getHandleYRatio(
   handleId?: string | null,
 ): number {
   if (!handleId) return 0.5;
+
+  if (handleId === "injects-plugin-out" || handleId === "payments-plugin-in") {
+    const { height } = getNodeDimensions(node);
+    return Math.min(0.95, Math.max(0.05, 18 / height));
+  }
+  if (handleId === "auth-in") {
+    const { height } = getNodeDimensions(node);
+    return Math.min(0.95, Math.max(0.05, 54 / height));
+  }
+  if (handleId === "auth-out") {
+    return 0.5;
+  }
 
   if (node.type === "entity" || node.type === "redis_schema") {
     const colMatch = handleId.match(/^(?:source|target)-(\d+)$/);
