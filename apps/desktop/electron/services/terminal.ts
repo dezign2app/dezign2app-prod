@@ -69,6 +69,8 @@ export async function createTerminal(
       ...(process.env as { [key: string]: string }),
       D2A_PARENT_PID: String(process.pid),
     },
+    useConpty: true,
+    conptyInheritCursor: false,
   });
 
   ptyProcess.onData((data: string) => {

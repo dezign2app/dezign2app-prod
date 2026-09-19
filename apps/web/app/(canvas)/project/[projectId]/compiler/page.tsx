@@ -16,7 +16,7 @@ import { IdeToolbar } from "./_components/IdeToolbar";
 import { AiChatPanel } from "./_components/AiChatPanel";
 import { MonacoEditorPane } from "./_components/MonacoEditorPane";
 import { FileExplorer } from "./_components/FileExplorer";
-import { TerminalPanel, TerminalLog, TerminalPanelTab } from "./_components/TerminalPanel";
+import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { buildFileTree, getParentPaths } from "../_components/compiler";
 import { useBackendSync } from "../_components/hooks/useBackendSync";
 import { useTerminalWorkspace } from "../_components/terminal/hooks/useTerminalWorkspace";
@@ -106,79 +106,11 @@ export default function CompilerPage({
   const [copied, setCopied] = useState(false);
   const [downloadingZip, setDownloadingZip] = useState(false);
   const [aiChatOpen, setAiChatOpen] = useState(false);
-  const [terminalOpen, setTerminalOpen] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(`compiler_terminal_open_${projectId}`);
-        if (saved !== null) return saved === "true";
-      } catch (e) {}
-    }
-    return true;
-  });
 
-  const [terminalTab, setTerminalTab] = useState<TerminalPanelTab>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(`compiler_terminal_tab_${projectId}`);
-        if (saved && ["problems", "output", "terminal", "ports"].includes(saved)) {
-          return saved as TerminalPanelTab;
-        }
-      } catch (e) {}
-    }
-    return "terminal";
-  });
-
-  const [terminalLogs, setTerminalLogs] = useState<TerminalLog[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(`compiler_terminal_logs_${projectId}`);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch (e) {}
-    }
-    return [
-      {
-        id: "1",
-        timestamp: new Date().toLocaleTimeString(),
-        type: "info",
-        text: `Monorepo workspace loaded (${files.length} files generated)`,
-      },
-      {
-        id: "2",
-        timestamp: new Date().toLocaleTimeString(),
-        type: "success",
-        text: `Compiler ready · Project: ${formattedProjectName}`,
-      },
-    ];
-  });
-
-  const handleSelectTab = (tab: TerminalPanelTab) => {
-    setTerminalTab(tab);
-    try {
-      localStorage.setItem(`compiler_terminal_tab_${projectId}`, tab);
-    } catch (e) {}
-  };
-
-  const handleToggleTerminal = () => {
-    setTerminalOpen((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(`compiler_terminal_open_${projectId}`, String(next));
-      } catch (e) {}
-      return next;
-    });
-  };
-
-  const handleClearLogs = () => {
-    setTerminalLogs([]);
-    try {
-      localStorage.setItem(`compiler_terminal_logs_${projectId}`, JSON.stringify([]));
-    } catch (e) {}
-  };
+  const terminalOpen = useSidebarStore((s) => s.terminalOpen);
+  const setTerminalOpen = useSidebarStore((s) => s.setTerminalOpen);
+  const toggleTerminal = useSidebarStore((s) => s.toggleTerminal);
+  const handleToggleTerminal = toggleTerminal;
 
   const detectedPorts = useMemo(() => {
     const list: Array<{ port: number | string; name: string; type?: string; url?: string }> = [];
@@ -401,7 +333,7 @@ export default function CompilerPage({
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0d1117]">
+    <div className="flex flex-col h-full w-full flex-1 min-h-0 overflow-hidden bg-[#0d1117]">
       <IdeToolbar
         projectName={projectName}
         projectId={projectId}
@@ -426,7 +358,7 @@ export default function CompilerPage({
           onSelectFile={handleSelectFile}
         />
 
-        {/* Center: Editor on top, VS Code-style Terminal Panel docked at bottom */}
+        {/* Center: Editor Pane */}
         <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden relative">
           <MonacoEditorPane
             activeFile={activeFile}
@@ -434,26 +366,6 @@ export default function CompilerPage({
             onCopy={handleCopy}
             onDownload={handleDownload}
             copied={copied}
-          />
-
-          <TerminalPanel
-            projectId={projectId}
-            outputDir={outputDir}
-            logs={terminalLogs}
-            onClearLogs={handleClearLogs}
-            isOpen={terminalOpen}
-            onToggleOpen={handleToggleTerminal}
-            activeTab={terminalTab}
-            onSelectTab={handleSelectTab}
-            ports={detectedPorts}
-            outputLogs={[
-              `[Monorepo Compiler] ${formattedProjectName}`,
-              `✔ Compiled ${files.length} files across ${nodes.length} architecture nodes`,
-              `✔ Monorepo workspaces: apps/*, packages/*, services/*`,
-              `✔ TypeScript, Next.js, and Docker build configurations verified`,
-              `✔ ${detectedPorts.length} services configured with local ports`,
-              `[Ready] Waiting for dev or build triggers in Terminal...`,
-            ]}
           />
         </div>
 
@@ -487,9 +399,8 @@ export default function CompilerPage({
             onClick={() => {
               setTerminalOpen(true);
               try {
-                localStorage.setItem(`compiler_terminal_open_${projectId}`, "true");
+                localStorage.setItem(`canvas_terminal_tab_${projectId}`, "problems");
               } catch (e) {}
-              handleSelectTab("problems");
             }}
             className="flex items-center gap-1 text-slate-300 hover:text-white transition-colors"
           >
@@ -501,10 +412,7 @@ export default function CompilerPage({
 
           <button
             type="button"
-            onClick={() => {
-              handleToggleTerminal();
-              handleSelectTab("terminal");
-            }}
+            onClick={handleToggleTerminal}
             className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-colors ${
               terminalOpen
                 ? "bg-slate-700/60 text-white"
@@ -520,9 +428,8 @@ export default function CompilerPage({
             onClick={() => {
               setTerminalOpen(true);
               try {
-                localStorage.setItem(`compiler_terminal_open_${projectId}`, "true");
+                localStorage.setItem(`canvas_terminal_tab_${projectId}`, "ports");
               } catch (e) {}
-              handleSelectTab("ports");
             }}
             className="flex items-center gap-1 text-slate-300 hover:text-white transition-colors"
           >

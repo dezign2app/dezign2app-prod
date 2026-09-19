@@ -19,7 +19,6 @@ import { CanvasToolbar } from "../_components/CanvasToolbar";
 import { BackendCanvas } from "../_components/BackendCanvas";
 import { NodePaletteSidebar } from "../_components/NodePaletteSidebar";
 import { AiPanel } from "../_components/AiPanel";
-import { Terminal } from "../_components/terminal";
 import { CreateCommitDialog } from "../_components/history/CreateCommitDialog";
 import { VersionHistoryDrawer } from "../_components/history/VersionHistoryDrawer";
 import { VersionPreviewBanner } from "../_components/history/VersionPreviewBanner";
@@ -207,7 +206,7 @@ export default function SchemaCanvasPage({
 
   return (
     <ReactFlowProvider>
-      <div className="relative w-screen h-screen overflow-hidden bg-background text-foreground select-none">
+      <div className="relative w-full h-full flex-1 min-h-0 overflow-hidden bg-background text-foreground select-none">
         {/* ========================================================================= */}
         {/* LAYER 1: CANVAS (BACKWARD) - 100% Fullscreen, Unaffected by UI changes    */}
         {/* ========================================================================= */}
@@ -253,10 +252,8 @@ export default function SchemaCanvasPage({
               onToggle={() => setPaletteOpen(!paletteOpen)}
             />
 
-            {/* Center Area: Transparent Canvas Pass-Through + Docked Bottom Terminal */}
-            <div className="flex-1 min-w-0 h-full flex flex-col justify-end pointer-events-none overflow-hidden relative">
-              <Terminal projectId={projectId} projectName={project.name} />
-            </div>
+            {/* Center Area: Transparent Canvas Pass-Through */}
+            <div className="flex-1 min-w-0 h-full pointer-events-none overflow-hidden relative" />
 
             {/* Right: AI Assistant Sidebar */}
             <AiPanel

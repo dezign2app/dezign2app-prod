@@ -472,12 +472,14 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
           return;
         }
 
+        focusTerminal();
+
         // Focus without jumping or scrolling
         if (!autoScroll && mouseDownScrollMapRef.current) {
           restoreCapturedScrolls(mouseDownScrollMapRef.current);
         }
       },
-      [autoScroll, interactive],
+      [autoScroll, interactive, focusTerminal],
     );
 
     return (
