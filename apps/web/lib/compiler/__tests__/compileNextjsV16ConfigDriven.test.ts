@@ -477,11 +477,10 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
       target: serviceNode.id,
     };
 
-    const endpoint = {
+    const endpoint: Endpoint & { nodeId: string } = {
       id: "ep-1",
       name: "getUsers",
-      type: "GET" as const,
-      path: "/users",
+      type: "GET",
       nodeId: serviceNode.id,
     };
 
@@ -587,19 +586,17 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
       target: analyticsServiceNode.id,
     };
 
-    const userEndpoint = {
+    const userEndpoint: Endpoint & { nodeId: string } = {
       id: "ep-user",
       name: "getData",
-      type: "GET" as const,
-      path: "/data",
+      type: "GET",
       nodeId: userServiceNode.id,
     };
 
-    const analyticsEndpoint = {
+    const analyticsEndpoint: Endpoint & { nodeId: string } = {
       id: "ep-analytics",
       name: "getData",
-      type: "GET" as const,
-      path: "/data",
+      type: "GET",
       nodeId: analyticsServiceNode.id,
     };
 
@@ -1020,6 +1017,202 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     expect(privateLayout?.content).toContain('(await headers()).get("x-custom-token")');
     expect(privateLayout?.content).toContain("record?.tier !== \"vip\"");
     expect(privateLayout?.content).toContain('redirect("/upgrade")');
+  });
+
+  it("generates nested route groups, cascaded layouts, and child pages for hierarchical sub-sections", () => {
+    const webAppNode: BackendNode = {
+      id: "web-app-hierarchical",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "saas-app",
+        appSlug: "saas-app",
+        zones: [
+          {
+            id: "zone-public",
+            name: "Public",
+            handleId: "public-in",
+            accessType: "public",
+          },
+          {
+            id: "zone-private",
+            name: "Private",
+            handleId: "private-in",
+            accessType: "protected",
+            rule: {
+              id: "rule-private",
+              scope: "zone",
+              conditions: { kind: "leaf", condition: { type: "auth", op: "signedIn" } },
+              redirects: { default: "/login" },
+            },
+          },
+          {
+            id: "zone-subscribed",
+            parentId: "zone-private",
+            name: "Subscribed",
+            handleId: "subscribed-in",
+            accessType: "protected",
+            rule: {
+              id: "rule-subscribed",
+              scope: "zone",
+              conditions: {
+                kind: "leaf",
+                condition: { type: "subscriptionStatus", op: "statusIn", values: ["active"] },
+              },
+              redirects: { "wrong-plan": "/pricing", default: "/pricing" },
+            },
+          },
+          {
+            id: "zone-admin",
+            parentId: "zone-subscribed",
+            name: "Admin",
+            handleId: "admin-in",
+            accessType: "protected",
+            rule: {
+              id: "rule-admin",
+              scope: "zone",
+              conditions: {
+                kind: "leaf",
+                condition: { type: "orgRole", op: "in", values: ["admin"] },
+              },
+              redirects: { "wrong-role": "/unauthorized", default: "/unauthorized" },
+            },
+          },
+        ],
+      },
+      fractionalIndex: "a0",
+    };
+
+    const dashboardPage: BackendNode = {
+      id: "page-dashboard",
+      type: "webPage",
+      position: { x: 100, y: 0 },
+      data: { label: "dashboard" },
+      fractionalIndex: "a1",
+    };
+
+    const proToolsPage: BackendNode = {
+      id: "page-pro-tools",
+      type: "webPage",
+      position: { x: 100, y: 150 },
+      data: { label: "pro-tools" },
+      fractionalIndex: "a2",
+    };
+
+    const teamPage: BackendNode = {
+      id: "page-team",
+      type: "webPage",
+      position: { x: 100, y: 300 },
+      data: { label: "team" },
+      fractionalIndex: "a3",
+    };
+
+    const edges: BackendEdge[] = [
+      {
+        id: "edge-priv",
+        source: "web-app-hierarchical",
+        sourceHandle: "private-in",
+        target: "page-dashboard",
+        targetHandle: "page-in",
+        type: "connection",
+        fractionalIndex: "e0",
+      },
+      {
+        id: "edge-sub",
+        source: "web-app-hierarchical",
+        sourceHandle: "subscribed-in",
+        target: "page-pro-tools",
+        targetHandle: "page-in",
+        type: "connection",
+        fractionalIndex: "e1",
+      },
+      {
+        id: "edge-admin",
+        source: "web-app-hierarchical",
+        sourceHandle: "admin-in",
+        target: "page-team",
+        targetHandle: "page-in",
+        type: "connection",
+        fractionalIndex: "e2",
+      },
+    ];
+
+    const authNode: BackendNode = {
+      id: "node-auth",
+      type: "auth",
+      position: { x: -200, y: 0 },
+      data: { label: "better-auth", framework: "better_auth" },
+      fractionalIndex: "a00",
+    };
+
+    const authEdge: BackendEdge = {
+      id: "edge-auth",
+      source: "node-auth",
+      target: "web-app-hierarchical",
+      type: "connection",
+      fractionalIndex: "ea",
+    };
+
+    const allEdges = [authEdge, ...edges];
+
+    const result = compileNextjsV16WebClient(
+      [dashboardPage, proToolsPage, teamPage],
+      [],
+      [],
+      [authNode, webAppNode, dashboardPage, proToolsPage, teamPage],
+      allEdges,
+      "SaasApp",
+      [],
+      "saas-app",
+      webAppNode,
+    );
+
+    // 1. Verify Layouts at all 3 tiers
+    const privateLayout = result.files.find(
+      (f: CompiledFile) => f.filename === "app/(private)/layout.tsx",
+    );
+    expect(privateLayout).toBeDefined();
+    expect(privateLayout?.content).toContain("PrivateLayout");
+
+    const subscribedLayout = result.files.find(
+      (f: CompiledFile) => f.filename === "app/(private)/(subscribed)/layout.tsx",
+    );
+    expect(subscribedLayout).toBeDefined();
+    expect(subscribedLayout?.content).toContain("SubscribedLayout");
+    expect(subscribedLayout?.content).toContain('await requireSession("/pricing")');
+
+    const adminLayout = result.files.find(
+      (f: CompiledFile) => f.filename === "app/(private)/(subscribed)/(admin)/layout.tsx",
+    );
+    expect(adminLayout).toBeDefined();
+    expect(adminLayout?.content).toContain("AdminLayout");
+    expect(adminLayout?.content).toContain('await requireSession("/unauthorized")');
+
+    // 2. Verify Page placement inside nested route group folders
+    const dashboardPageFile = result.files.find(
+      (f: CompiledFile) => f.filename === "app/(private)/dashboard/page.tsx",
+    );
+    expect(dashboardPageFile).toBeDefined();
+
+    const proToolsPageFile = result.files.find(
+      (f: CompiledFile) => f.filename === "app/(private)/(subscribed)/pro-tools/page.tsx",
+    );
+    expect(proToolsPageFile).toBeDefined();
+
+    const teamPageFile = result.files.find(
+      (f: CompiledFile) => f.filename === "app/(private)/(subscribed)/(admin)/team/page.tsx",
+    );
+    expect(teamPageFile).toBeDefined();
+
+    // 3. Verify Proxy / Middleware includes accumulated rules
+    const proxyFile = result.files.find(
+      (f: CompiledFile) => f.filename === "proxy.ts" || f.filename === "middleware.ts",
+    );
+    expect(proxyFile).toBeDefined();
+    expect(proxyFile?.content).toContain('path: "/pro-tools"');
+    expect(proxyFile?.content).toContain('path: "/team"');
+    expect(proxyFile?.content).toContain('requiredPlans: ["active"]');
+    expect(proxyFile?.content).toContain('allowedOrgRoles: ["admin"]');
   });
 });
 

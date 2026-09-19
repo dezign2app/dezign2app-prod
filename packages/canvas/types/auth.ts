@@ -195,7 +195,7 @@ export const IDENTITY_PROVIDER_PRESETS: Record<string, IdentityProviderPreset> =
       },
       outputs: { user: false, tokens: false, claims: false },
     },
-  } as const;
+  };
 
 export type GatewayRoute = {
   id: string;
@@ -350,6 +350,7 @@ export interface ServerGuardConfig {
 // ---- Protected Zone / Section (User-Managed Child Entity of WebAppNode) ----
 export interface WebAppZone {
   id: string;
+  parentId?: string;
   name: string;
   handleId: string;
   accessType: "public" | "protected";

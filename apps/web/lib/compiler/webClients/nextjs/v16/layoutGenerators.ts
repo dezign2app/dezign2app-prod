@@ -2,7 +2,6 @@ import { PageInfo } from "./types";
 import { CompiledFile, BackendNode, WebAppZone, ServerGuardConfig } from "@workspace/canvas/types";
 import { slugToComponentName } from "./slugUtils";
 
-
 export function generateRootLayout(
   projectName: string,
   pagesNavLinks?: string,
@@ -57,9 +56,10 @@ export function generateSectionLayout(
   groupName: string,
   isAuthConnected: boolean = true,
   layoutDescription?: string,
+  zone?: WebAppZone,
 ): string {
   const isPublic = groupName === "public";
-  const componentName = slugToComponentName(groupName) + "Layout";
+  const componentName = slugToComponentName(groupName).replace(/Page$/, "") + "Layout";
   const descriptionDoc = layoutDescription
     ? `\n/**\n * Layout Specification:\n * ${layoutDescription.replace(/\n/g, "\n * ")}\n */`
     : "";
@@ -81,6 +81,14 @@ export default function ${componentName}({
 `;
   }
 
+  const failRedirect =
+    zone?.rule?.redirects?.["wrong-role"] ||
+    zone?.rule?.redirects?.["wrong-plan"] ||
+    zone?.rule?.redirects?.["no-access"] ||
+    zone?.rule?.redirects?.["no-auth"] ||
+    zone?.rule?.redirects?.["default"] ||
+    "/login";
+
   return `import React from "react";
 ${descriptionDoc}
 /**
@@ -94,14 +102,19 @@ export default async function ${componentName}({
 }) {
   try {
     const { requireSession } = await import("@/lib/auth/require-session");
-    await requireSession("/login");
+    await requireSession("${failRedirect}");
   } catch (err) {
-    const isRedirect = err && typeof err === "object" && "digest" in err && String((err as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT");
-    if (isRedirect) {
+    if (
+      Boolean(err) &&
+      typeof err === "object" &&
+      err !== null &&
+      "digest" in err &&
+      String(err.digest).startsWith("NEXT_REDIRECT")
+    ) {
       throw err;
     }
     const { redirect } = await import("next/navigation");
-    redirect("/login");
+    redirect("${failRedirect}");
   }
 
   return (
@@ -122,7 +135,7 @@ export function generateServerGuardLayout(
   guard: ServerGuardConfig,
   layoutDescription?: string,
 ): string {
-  const componentName = slugToComponentName(groupName) + "Layout";
+  const componentName = slugToComponentName(groupName).replace(/Page$/, "") + "Layout";
   const entityLabel = guard.entityLabel || "Entity";
   const failRedirect = guard.failRedirect || "/unauthorized";
   const requireSession = guard.requireSession !== false;
@@ -200,22 +213,38 @@ export function generateRouteGroupLayouts(
   webAppNode?: BackendNode,
 ): CompiledFile[] {
   const files: CompiledFile[] = [];
-  const routeGroups = new Set<string>();
-  pagesInfo.forEach((p) => {
-    if (p.routeGroup) routeGroups.add(p.routeGroup);
-  });
-  if (routeGroups.size === 0) routeGroups.add("public");
-
   const zones: WebAppZone[] = Array.isArray(webAppNode?.data?.zones)
     ? webAppNode.data.zones
     : [];
 
-  routeGroups.forEach((groupName) => {
+  // Collect all unique route group folder paths across pages
+  // e.g. "(private)", "(private)/(subscribed)", "(public)"
+  const prefixMap = new Map<string, { folderPath: string; leafGroup: string }>();
+
+  pagesInfo.forEach((p) => {
+    if (p.routeGroupHierarchy && p.routeGroupHierarchy.length > 0) {
+      for (let i = 1; i <= p.routeGroupHierarchy.length; i++) {
+        const subHierarchy = p.routeGroupHierarchy.slice(0, i);
+        const folderPath = subHierarchy.map((g) => `(${g})`).join("/");
+        const leafGroup = subHierarchy[subHierarchy.length - 1] ?? "public";
+        prefixMap.set(folderPath, { folderPath, leafGroup });
+      }
+    } else {
+      const g = p.routeGroup || "public";
+      prefixMap.set(`(${g})`, { folderPath: `(${g})`, leafGroup: g });
+    }
+  });
+
+  if (prefixMap.size === 0) {
+    prefixMap.set("(public)", { folderPath: "(public)", leafGroup: "public" });
+  }
+
+  prefixMap.forEach(({ folderPath, leafGroup }) => {
     const matchedZone = zones.find(
       (z) =>
-        z.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") === groupName ||
-        (groupName === "public" && (z.id === "zone-public" || z.accessType === "public")) ||
-        (groupName === "private" && (z.id === "zone-private" || z.accessType === "protected")),
+        z.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") === leafGroup ||
+        (leafGroup === "public" && (z.id === "zone-public" || z.accessType === "public")) ||
+        (leafGroup === "private" && (z.id === "zone-private" || z.accessType === "protected")),
     );
 
     // If zone explicitly has layout disabled, skip generating layout.tsx
@@ -229,10 +258,10 @@ export function generateRouteGroupLayouts(
       matchedZone.serverGuard?.entityNodeId
     ) {
       files.push({
-        filename: `app/(${groupName})/layout.tsx`,
+        filename: `app/${folderPath}/layout.tsx`,
         language: "typescript",
         content: generateServerGuardLayout(
-          groupName,
+          leafGroup,
           matchedZone.serverGuard,
           matchedZone.layoutDescription,
         ),
@@ -242,19 +271,16 @@ export function generateRouteGroupLayouts(
 
     // Default: JWT-based middleware + requireSession() layout
     files.push({
-      filename: `app/(${groupName})/layout.tsx`,
+      filename: `app/${folderPath}/layout.tsx`,
       language: "typescript",
       content: generateSectionLayout(
-        groupName,
+        leafGroup,
         isAuthConnected,
         matchedZone?.layoutDescription,
+        matchedZone,
       ),
     });
   });
 
-
   return files;
 }
-
-
-

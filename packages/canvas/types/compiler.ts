@@ -178,6 +178,8 @@ export interface PageInfo {
   componentName: string;
   isRoot: boolean;
   routeGroup?: string;
+  routeGroupHierarchy?: string[];
+  routeGroupPath?: string;
   accessType?: "public" | "private" | "role-gated" | "payment-gated" | "org-gated";
   allowedRoles?: string[];
   requiredPlans?: string[];

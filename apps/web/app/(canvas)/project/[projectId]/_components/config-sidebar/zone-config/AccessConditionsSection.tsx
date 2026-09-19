@@ -1,5 +1,5 @@
 import React from "react";
-import { Settings, ChevronDown, ChevronRight } from "lucide-react";
+import { Settings, ChevronDown, ChevronRight, ShieldCheck } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import {
   Select,
@@ -21,16 +21,22 @@ import { ConfiguredClaimsBanner } from "./access-conditions/ConfiguredClaimsBann
 import { ConditionCard } from "./access-conditions/ConditionCard";
 import { ConnectedPagesList } from "./access-conditions/ConnectedPagesList";
 
-const VALID_SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
-  "active",
-  "trialing",
-  "past_due",
-  "canceled",
-  "expired",
-];
-
 const isSubscriptionStatus = (v: string): v is SubscriptionStatus =>
-  VALID_SUBSCRIPTION_STATUSES.includes(v as SubscriptionStatus);
+  v === "active" ||
+  v === "trialing" ||
+  v === "past_due" ||
+  v === "canceled" ||
+  v === "expired";
+
+const isConditionPrimitiveType = (val: string): val is ConditionPrimitive["type"] =>
+  val === "auth" ||
+  val === "org" ||
+  val === "orgRole" ||
+  val === "access" ||
+  val === "subscriptionStatus" ||
+  val === "plan" ||
+  val === "customClaim" ||
+  val === "serverGuard";
 
 const filterSubscriptionStatuses = (vals: string[]): SubscriptionStatus[] =>
   vals.filter(isSubscriptionStatus);
@@ -40,6 +46,7 @@ export const AccessConditionsSection = ({
   onToggle,
   leaves,
   connectedPages,
+  parentZone,
   authClaims = [],
   authNodeLabel,
   isAuthConnected = false,
@@ -240,6 +247,14 @@ export const AccessConditionsSection = ({
 
       {isOpen && (
         <div className="flex flex-col gap-4 pt-2 border-t border-border/50">
+          {parentZone && (
+            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/25 text-xs text-indigo-300">
+              <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0" />
+              <span>
+                Inherits all access rules and session validation from <strong className="text-foreground">{parentZone.name}</strong>. Rules below are additive and evaluated together.
+              </span>
+            </div>
+          )}
           <ConfiguredClaimsBanner
             authClaims={authClaims}
             authNodeLabel={authNodeLabel}
@@ -260,8 +275,8 @@ export const AccessConditionsSection = ({
                   else if (claimKey === "subscriptionStatus") onAddCondition("subscriptionStatus");
                   else if (claimKey === "planId" || claimKey === "plan") onAddCondition("plan");
                   else onAddCondition("customClaim", claimKey);
-                } else {
-                  onAddCondition(val as ConditionPrimitive["type"]);
+                } else if (isConditionPrimitiveType(val)) {
+                  onAddCondition(val);
                 }
               }}
             >

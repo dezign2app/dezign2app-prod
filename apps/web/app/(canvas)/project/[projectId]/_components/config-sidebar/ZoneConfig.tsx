@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
+  BackendNode,
   ConditionNode,
   ConditionPrimitive,
   ProtectionRule,
@@ -152,6 +153,21 @@ export const ZoneConfig = ({
     updateNode(nodeId, { data: { ...data, zones: updatedZones } });
   };
 
+  const updateZoneParent = (parentId?: string) => {
+    const updatedZone: WebAppZone = {
+      ...currentZone,
+      parentId: parentId || undefined,
+    };
+    const updatedZones = zones.map((z) =>
+      z.id === currentZone.id ? updatedZone : z,
+    );
+    updateNode(nodeId, { data: { ...data, zones: updatedZones } });
+  };
+
+  const parentZone = currentZone.parentId
+    ? zones.find((z) => z.id === currentZone.parentId)
+    : undefined;
+
   const isPublicZone =
     currentZone.accessType === "public" || currentZone.id === "zone-public";
   const allWebPageNodes = nodes.filter((n) => n.type === "webPage");
@@ -186,9 +202,10 @@ export const ZoneConfig = ({
       pageSuggestions[connectedPages.length] ||
       `Public Page ${totalWebPages + 1}`;
 
-    const newPageNode = {
+    const newPageNode: BackendNode = {
       id: newPageId,
-      type: "webPage" as const,
+      type: "webPage",
+      fractionalIndex: "a0",
       position: {
         x: baseX + 340,
         y: baseY + connectedPages.length * 150,
@@ -200,8 +217,8 @@ export const ZoneConfig = ({
           {
             id: `sec-${Date.now()}`,
             name: "Main Section",
-            renderMode: "server" as const,
-            loadStrategy: "eager" as const,
+            renderMode: "server",
+            loadStrategy: "eager",
             actions: [
               {
                 id: `evt-${Date.now()}`,
@@ -364,9 +381,9 @@ export const ZoneConfig = ({
         ? rule.conditions.children
         : [{ kind: "leaf", condition: rule.conditions.condition }];
 
-    const updatedChildren = initialChildren.map((child, idx) => {
+    const updatedChildren: ConditionNode[] = initialChildren.map((child, idx): ConditionNode => {
       if (idx === index) {
-        return { kind: "leaf" as const, condition: updatedCondition };
+        return { kind: "leaf", condition: updatedCondition };
       }
       return child;
     });
@@ -454,7 +471,9 @@ export const ZoneConfig = ({
     <div className="flex flex-col gap-6 mt-6 pb-12">
       <ProtectedZoneHeader
         currentZone={currentZone}
+        allZones={zones}
         onUpdateZoneName={updateZoneName}
+        onUpdateZoneParent={updateZoneParent}
         onDeleteZone={() => handleDeleteZone(currentZone.id)}
       />
 
@@ -503,6 +522,7 @@ export const ZoneConfig = ({
               onToggle={() => toggleSection("conditions")}
               leaves={leaves}
               connectedPages={connectedPages}
+              parentZone={parentZone}
               authClaims={authClaims}
               authNodeLabel={authNodeLabel}
               isAuthConnected={isAuthConnected}

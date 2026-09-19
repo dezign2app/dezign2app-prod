@@ -1,6 +1,13 @@
 import React, { useState } from "react";
-import { Lock, Edit2, Check, Trash } from "lucide-react";
+import { Lock, Edit2, Check, Trash, ChevronRight, GitFork } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select";
 import { WebAppZone } from "@workspace/canvas";
 import {
   AlertDialog,
@@ -15,20 +22,75 @@ import {
 
 interface ProtectedZoneHeaderProps {
   currentZone: WebAppZone;
+  allZones?: WebAppZone[];
   onUpdateZoneName: (name: string) => void;
+  onUpdateZoneParent?: (parentId?: string) => void;
   onDeleteZone?: () => void;
 }
 
 export const ProtectedZoneHeader = ({
   currentZone,
+  allZones = [],
   onUpdateZoneName,
+  onUpdateZoneParent,
   onDeleteZone,
 }: ProtectedZoneHeaderProps) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
+  // Compute ancestor chain for breadcrumbs
+  const ancestors: WebAppZone[] = [];
+  if (currentZone.parentId && allZones.length > 0) {
+    let currId: string | undefined = currentZone.parentId;
+    const seen = new Set<string>();
+    while (currId && !seen.has(currId)) {
+      seen.add(currId);
+      const parent = allZones.find((z) => z.id === currId);
+      if (parent) {
+        ancestors.unshift(parent);
+        currId = parent.parentId;
+      } else {
+        break;
+      }
+    }
+  }
+
+  // Prevent circular parent-child loops
+  const getDescendantIds = (rootId: string): Set<string> => {
+    const ids = new Set<string>([rootId]);
+    let added = true;
+    while (added) {
+      added = false;
+      for (const z of allZones) {
+        if (z.parentId && ids.has(z.parentId) && !ids.has(z.id)) {
+          ids.add(z.id);
+          added = true;
+        }
+      }
+    }
+    return ids;
+  };
+
+  const invalidParentIds = getDescendantIds(currentZone.id);
+  const eligibleParents = allZones.filter(
+    (z) => !invalidParentIds.has(z.id) && z.accessType === "protected",
+  );
+
   return (
-    <div className="flex flex-col gap-2 border-b border-border/50 pb-6">
+    <div className="flex flex-col gap-3 border-b border-border/50 pb-6">
+      {/* Breadcrumb Hierarchy */}
+      {ancestors.length > 0 && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+          {ancestors.map((anc) => (
+            <React.Fragment key={anc.id}>
+              <span className="font-medium text-foreground/80">{anc.name}</span>
+              <ChevronRight className="w-3 h-3 text-muted-foreground/60" />
+            </React.Fragment>
+          ))}
+          <span className="text-foreground font-semibold">{currentZone.name}</span>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 flex-wrap">
           <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-primary/15 text-primary rounded border border-primary/20 shadow-sm flex items-center gap-1">
@@ -88,7 +150,7 @@ export const ProtectedZoneHeader = ({
                     Delete Section "{currentZone.name}"?
                   </AlertDialogTitle>
                   <AlertDialogDescription className="text-zinc-400 text-xs leading-relaxed">
-                    Are you sure you want to delete this access control section? All access rules, redirect configurations, and canvas connection handles will be removed.
+                    Are you sure you want to delete this access control section? Any nested sub-sections and connected WebClient pages will be removed.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -113,8 +175,35 @@ export const ProtectedZoneHeader = ({
           </>
         )}
       </div>
-      <span className="text-sm text-muted-foreground">
-        Configure rule conditions, redirects by failure reason, and custom access logic for this zone cluster.
+
+      {/* Parent Section Selector */}
+      {onUpdateZoneParent && eligibleParents.length > 0 && (
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/40">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <GitFork className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span>Parent Section:</span>
+          </div>
+          <Select
+            value={currentZone.parentId || "none"}
+            onValueChange={(val) => onUpdateZoneParent(val === "none" ? undefined : val)}
+          >
+            <SelectTrigger className="h-7 text-xs w-[180px] bg-background/50">
+              <SelectValue placeholder="Root Section (None)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Root Section (No Parent)</SelectItem>
+              {eligibleParents.map((pz) => (
+                <SelectItem key={pz.id} value={pz.id}>
+                  {pz.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <span className="text-xs text-muted-foreground">
+        Configure rule conditions, redirects by failure reason, and custom access logic for this zone.
       </span>
     </div>
   );
