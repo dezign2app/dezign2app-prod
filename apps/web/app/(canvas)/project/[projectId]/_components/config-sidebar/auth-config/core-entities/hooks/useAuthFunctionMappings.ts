@@ -2,12 +2,12 @@ import {
   AuthFunctionRef,
   DbOperationFunction,
 } from "@workspace/canvas";
-import { BackendNode } from "@/types/canvas";
+import { BackendNode, BackendNodeData } from "@/types/canvas";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 
 interface UseAuthFunctionMappingsParams {
   authFunctions: AuthFunctionRef[];
-  updateData: (changes: any) => void;
+  updateData: (changes: Partial<BackendNodeData>) => void;
   schemaEntities: BackendNode[];
   allNodes: BackendNode[];
 }

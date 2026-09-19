@@ -1,4 +1,5 @@
 import vm from "node:vm";
+import type { DatabaseSync } from "node:sqlite";
 import type * as tsType from "typescript";
 
 // Lazy-load typescript so execution never crashes if typescript is not bundled in runtime
@@ -89,7 +90,7 @@ export interface ExecuteFunctionCodeOptions {
   name?: string;
   params?: { name: string; type?: string; required?: boolean }[];
   args?: Record<string, unknown>;
-  db?: any;
+  db?: DatabaseSync;
   tableName?: string;
   safeTable?: string;
   timeoutMs?: number;
