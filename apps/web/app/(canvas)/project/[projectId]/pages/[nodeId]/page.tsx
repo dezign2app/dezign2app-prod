@@ -162,14 +162,25 @@ export default function PageEditorPage({
   // In-memory edits cache for files
   const fileOverridesRef = useRef<Map<string, string>>(new Map());
 
+  const isLayout = useMemo(() => {
+    const raw = typeof node?.data?.label === "string" ? node.data.label : "";
+    return Boolean(node?.data?.isLayout) || raw.trim().toLowerCase() === "layout";
+  }, [node]);
+
   // Check if active file is the current page node's TSX file
   const isCurrentPageNode = useMemo(() => {
+    if (isLayout) {
+      return (
+        activeFilePath === defaultFilePath ||
+        activeFilePath.endsWith("/layout.tsx")
+      );
+    }
     return (
       activeFilePath === defaultFilePath ||
       activeFilePath.endsWith(`/${pageFolderSlug}/page.tsx`) ||
       (pageFolderSlug === "page" && activeFilePath.endsWith("/page.tsx"))
     );
-  }, [activeFilePath, defaultFilePath, pageFolderSlug]);
+  }, [activeFilePath, defaultFilePath, pageFolderSlug, isLayout]);
 
   // Sync active file content when activeFilePath, node.data.pageSourceCode, or outputDir change
   useEffect(() => {

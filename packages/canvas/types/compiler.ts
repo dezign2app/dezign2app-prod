@@ -177,6 +177,7 @@ export interface PageInfo {
   routePath: string;
   componentName: string;
   isRoot: boolean;
+  isLayout?: boolean;
   routeGroup?: string;
   routeGroupHierarchy?: string[];
   routeGroupPath?: string;

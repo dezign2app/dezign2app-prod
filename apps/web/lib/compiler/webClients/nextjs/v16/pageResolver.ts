@@ -87,9 +87,12 @@ export function resolvePagesInfo(
     usedSlugs.add(slug);
 
     const cleanLabel = rawLabel.trim().toLowerCase();
+    const isLayout =
+      Boolean(node.data?.isLayout) ||
+      cleanLabel === "layout" ||
+      rawLabel.trim().toLowerCase() === "layout";
     const isRoot =
-      node.data.isRoot === true ||
-      cleanLabel === "/";
+      !isLayout && (node.data.isRoot === true || cleanLabel === "/");
     const routePath = isRoot ? "/" : `/${slug}`;
     const componentName = isRoot ? "HomePage" : slugToComponentName(slug);
 
@@ -501,6 +504,7 @@ export function resolvePagesInfo(
       routePath,
       componentName,
       isRoot,
+      isLayout,
       routeGroup,
       routeGroupHierarchy,
       routeGroupPath,

@@ -154,6 +154,8 @@ export interface CanvasWebPageNodeData {
   allowedOrgRoles?: string[];
   redirectTo?: string;
   isAuthPage?: boolean;
+  isRoot?: boolean;
+  isLayout?: boolean;
   authNodeId?: string;
   zoneId?: string;
   useZoneDefault?: boolean;

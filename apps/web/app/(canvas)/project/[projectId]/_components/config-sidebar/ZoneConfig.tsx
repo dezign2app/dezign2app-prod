@@ -23,6 +23,13 @@ import {
   ServerGuardSection,
   ServerGuardCodePreview,
 } from "./zone-config";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@workspace/ui/components/tabs";
+import { Shield, LayoutTemplate } from "lucide-react";
 
 
 export const ZoneConfig = ({
@@ -44,6 +51,8 @@ export const ZoneConfig = ({
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
   );
+
+  const [activeTab, setActiveTab] = useState<string>("security");
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     layout: true,
@@ -477,113 +486,142 @@ export const ZoneConfig = ({
         onDeleteZone={() => handleDeleteZone(currentZone.id)}
       />
 
-      {/* Protection Mode Toggle */}
-      <div className="flex items-center gap-2 p-3 rounded-xl border border-border/50 bg-card/40">
-        <span className="text-xs font-medium text-muted-foreground shrink-0">Protection mode:</span>
-        <div className="flex gap-1.5 flex-1">
-          <button
-            type="button"
-            onClick={() => handleSetProtectionMode("middleware")}
-            className={`flex-1 text-[11px] font-medium py-1.5 px-2 rounded-md border transition-all cursor-pointer ${
-              protectionMode === "middleware"
-                ? "bg-indigo-500/15 border-indigo-500/40 text-indigo-400"
-                : "bg-muted/30 border-border/40 text-muted-foreground hover:border-border"
-            }`}
+      {/* Tabs: Security & Rules vs UX */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="w-full grid grid-cols-2 p-1 bg-muted/50 rounded-lg">
+          <TabsTrigger
+            value="security"
+            className="text-xs flex items-center justify-center gap-1.5 data-[state=active]:bg-background cursor-pointer"
           >
-            ⚡ Middleware (JWT)
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSetProtectionMode("server-guard")}
-            className={`flex-1 text-[11px] font-medium py-1.5 px-2 rounded-md border transition-all cursor-pointer ${
-              protectionMode === "server-guard"
-                ? "bg-amber-500/15 border-amber-500/40 text-amber-400"
-                : "bg-muted/30 border-border/40 text-muted-foreground hover:border-border"
-            }`}
+            <Shield className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Security & Rules</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="ux"
+            className="text-xs flex items-center justify-center gap-1.5 data-[state=active]:bg-background cursor-pointer"
           >
-            🛡 Server Guard (DB)
-          </button>
-        </div>
-      </div>
+            <LayoutTemplate className="w-3.5 h-3.5 text-indigo-400" />
+            <span>UX</span>
+            {currentZone.hasLayout && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 ml-0.5" />
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-      <div className="flex flex-col gap-6">
-        <ZoneLayoutSection
-          isOpen={openSections.layout ?? true}
-          onToggle={() => toggleSection("layout")}
-          currentZone={currentZone}
-          webAppNodeId={nodeId}
-          onUpdateZone={handleUpdateZone}
-        />
+        {/* Tab 1: Security & Rules */}
+        <TabsContent value="security" className="flex flex-col gap-6 mt-4 outline-none">
+          {/* Protection Mode Toggle */}
+          <div className="flex items-center gap-2 p-3 rounded-xl border border-border/50 bg-card/40">
+            <span className="text-xs font-medium text-muted-foreground shrink-0">Protection mode:</span>
+            <div className="flex gap-1.5 flex-1">
+              <button
+                type="button"
+                onClick={() => handleSetProtectionMode("middleware")}
+                className={`flex-1 text-[11px] font-medium py-1.5 px-2 rounded-md border transition-all cursor-pointer ${
+                  protectionMode === "middleware"
+                    ? "bg-indigo-500/15 border-indigo-500/40 text-indigo-400"
+                    : "bg-muted/30 border-border/40 text-muted-foreground hover:border-border"
+                }`}
+              >
+                ⚡ Middleware (JWT)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetProtectionMode("server-guard")}
+                className={`flex-1 text-[11px] font-medium py-1.5 px-2 rounded-md border transition-all cursor-pointer ${
+                  protectionMode === "server-guard"
+                    ? "bg-amber-500/15 border-amber-500/40 text-amber-400"
+                    : "bg-muted/30 border-border/40 text-muted-foreground hover:border-border"
+                }`}
+              >
+                🛡 Server Guard (DB)
+              </button>
+            </div>
+          </div>
 
-        {protectionMode === "middleware" && (
-          <>
-            <AccessConditionsSection
-              isOpen={openSections.conditions ?? true}
-              onToggle={() => toggleSection("conditions")}
-              leaves={leaves}
-              connectedPages={connectedPages}
-              parentZone={parentZone}
-              authClaims={authClaims}
-              authNodeLabel={authNodeLabel}
-              isAuthConnected={isAuthConnected}
-              allNodes={nodes}
-              onAddCondition={handleAddCondition}
-              onRemoveCondition={handleRemoveCondition}
-              onUpdateCondition={handleUpdateCondition}
-            />
+          <div className="flex flex-col gap-6">
+            {protectionMode === "middleware" && (
+              <>
+                <AccessConditionsSection
+                  isOpen={openSections.conditions ?? true}
+                  onToggle={() => toggleSection("conditions")}
+                  leaves={leaves}
+                  connectedPages={connectedPages}
+                  parentZone={parentZone}
+                  authClaims={authClaims}
+                  authNodeLabel={authNodeLabel}
+                  isAuthConnected={isAuthConnected}
+                  allNodes={nodes}
+                  onAddCondition={handleAddCondition}
+                  onRemoveCondition={handleRemoveCondition}
+                  onUpdateCondition={handleUpdateCondition}
+                />
 
-            <RedirectMapSection
-              isOpen={openSections.redirects ?? true}
-              onToggle={() => toggleSection("redirects")}
-              redirectEntries={redirectEntries}
-              onSelectPresetOrCustomRedirect={handleSelectPresetOrCustomRedirect}
-              onDeleteRedirect={handleDeleteRedirect}
-              onUpdateRedirectKey={handleUpdateRedirectKey}
-              onUpdateRedirectRoute={handleUpdateRedirectRoute}
-            />
+                <RedirectMapSection
+                  isOpen={openSections.redirects ?? true}
+                  onToggle={() => toggleSection("redirects")}
+                  redirectEntries={redirectEntries}
+                  onSelectPresetOrCustomRedirect={handleSelectPresetOrCustomRedirect}
+                  onDeleteRedirect={handleDeleteRedirect}
+                  onUpdateRedirectKey={handleUpdateRedirectKey}
+                  onUpdateRedirectRoute={handleUpdateRedirectRoute}
+                />
 
-            <CustomLogicSection
-              isOpen={openSections.custom ?? true}
-              onToggle={() => toggleSection("custom")}
-              rule={rule}
-              onUpdateCustomPrompt={(prompt) =>
-                updateZoneRule({
-                  ...rule,
-                  customLogic: { mode: "naturalLanguage", prompt },
-                })
-              }
-            />
+                <CustomLogicSection
+                  isOpen={openSections.custom ?? true}
+                  onToggle={() => toggleSection("custom")}
+                  rule={rule}
+                  onUpdateCustomPrompt={(prompt) =>
+                    updateZoneRule({
+                      ...rule,
+                      customLogic: { mode: "naturalLanguage", prompt },
+                    })
+                  }
+                />
 
-            <MiddlewareCodePreviewSection
-              isOpen={openSections.preview ?? true}
-              onToggle={() => toggleSection("preview")}
-              currentZone={currentZone}
-              rule={rule}
-              leaves={leaves}
-            />
-          </>
-        )}
+                <MiddlewareCodePreviewSection
+                  isOpen={openSections.preview ?? true}
+                  onToggle={() => toggleSection("preview")}
+                  currentZone={currentZone}
+                  rule={rule}
+                  leaves={leaves}
+                />
+              </>
+            )}
 
-        {protectionMode === "server-guard" && (
-          <>
-            <ServerGuardSection
-              isOpen={openSections.serverGuard ?? true}
-              onToggle={() => toggleSection("serverGuard")}
-              guard={currentZone.serverGuard}
-              allNodes={nodes}
-              onUpdateGuard={handleUpdateServerGuard}
-            />
+            {protectionMode === "server-guard" && (
+              <>
+                <ServerGuardSection
+                  isOpen={openSections.serverGuard ?? true}
+                  onToggle={() => toggleSection("serverGuard")}
+                  guard={currentZone.serverGuard}
+                  allNodes={nodes}
+                  onUpdateGuard={handleUpdateServerGuard}
+                />
 
-            <ServerGuardCodePreview
-              isOpen={openSections.serverGuardPreview ?? true}
-              onToggle={() => toggleSection("serverGuardPreview")}
-              guard={currentZone.serverGuard}
-              zoneName={currentZone.name}
-              appSlug={node?.data?.appSlug}
-            />
-          </>
-        )}
-      </div>
+                <ServerGuardCodePreview
+                  isOpen={openSections.serverGuardPreview ?? true}
+                  onToggle={() => toggleSection("serverGuardPreview")}
+                  guard={currentZone.serverGuard}
+                  zoneName={currentZone.name}
+                  appSlug={node?.data?.appSlug}
+                />
+              </>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Tab 2: UX */}
+        <TabsContent value="ux" className="flex flex-col gap-6 mt-4 outline-none">
+          <ZoneLayoutSection
+            isOpen={openSections.layout ?? true}
+            onToggle={() => toggleSection("layout")}
+            currentZone={currentZone}
+            webAppNodeId={nodeId}
+            onUpdateZone={handleUpdateZone}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
