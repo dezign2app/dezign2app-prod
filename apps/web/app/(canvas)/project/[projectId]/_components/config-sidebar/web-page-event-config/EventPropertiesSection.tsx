@@ -18,12 +18,10 @@ import { Sparkles } from "lucide-react";
 interface EventPropertiesSectionProps {
   eventName: string;
   eventType: string;
-  customEvent: string;
   eventOptions: readonly string[];
   isNavigateToPage: boolean;
   setEventName: (val: string) => void;
   setEventType: (val: string) => void;
-  setCustomEvent: (val: string) => void;
   handleUpdateEvent: (
     name: string,
     finalEvent: string,
@@ -33,11 +31,9 @@ interface EventPropertiesSectionProps {
 export const EventPropertiesSection: React.FC<EventPropertiesSectionProps> = ({
   eventName,
   eventType,
-  customEvent,
   eventOptions,
   setEventName,
   setEventType,
-  setCustomEvent,
   handleUpdateEvent,
 }) => {
   return (
@@ -62,12 +58,7 @@ export const EventPropertiesSection: React.FC<EventPropertiesSectionProps> = ({
                 className="h-8 text-xs bg-background"
                 value={eventName}
                 onChange={(e) => setEventName(e.target.value)}
-                onBlur={() =>
-                  handleUpdateEvent(
-                    eventName,
-                    eventType === "other" ? customEvent : eventType,
-                  )
-                }
+                onBlur={() => handleUpdateEvent(eventName, eventType)}
                 placeholder="e.g. submitOrder, fetchUserProfile"
               />
             </div>
@@ -81,10 +72,7 @@ export const EventPropertiesSection: React.FC<EventPropertiesSectionProps> = ({
                   value={eventType}
                   onValueChange={(v) => {
                     setEventType(v);
-                    handleUpdateEvent(
-                      eventName,
-                      v === "other" ? customEvent : v,
-                    );
+                    handleUpdateEvent(eventName, v);
                   }}
                 >
                   <SelectTrigger className="h-8 text-xs w-full bg-background focus:ring-1 focus:ring-ring focus:ring-offset-0">
@@ -98,21 +86,6 @@ export const EventPropertiesSection: React.FC<EventPropertiesSectionProps> = ({
                     ))}
                   </SelectContent>
                 </Select>
-
-                {eventType === "other" && (
-                  <Input
-                    value={customEvent}
-                    onChange={(e) => setCustomEvent(e.target.value)}
-                    onBlur={() =>
-                      handleUpdateEvent(
-                        eventName,
-                        customEvent,
-                      )
-                    }
-                    placeholder="Custom event"
-                    className="h-8 text-xs w-full"
-                  />
-                )}
               </div>
             </div>
           </div>

@@ -23,7 +23,6 @@ interface EventNavigationSectionProps {
   nodeId: string;
   eventName: string;
   eventType: string;
-  customEvent: string;
   item: UIEventItem;
   handleUpdateEvent: (
     name: string,
@@ -37,7 +36,6 @@ export const EventNavigationSection: React.FC<EventNavigationSectionProps> = ({
   nodeId,
   eventName,
   eventType,
-  customEvent,
   item,
   handleUpdateEvent,
 }) => {
@@ -109,7 +107,7 @@ export const EventNavigationSection: React.FC<EventNavigationSectionProps> = ({
     // Update event data
     handleUpdateEvent(
       eventName,
-      eventType === "other" ? customEvent : eventType,
+      eventType,
       {
         targetPageId: selectedP ? pageId : undefined,
         targetRoute: path,

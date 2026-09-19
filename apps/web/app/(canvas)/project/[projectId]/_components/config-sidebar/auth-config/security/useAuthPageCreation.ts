@@ -122,7 +122,7 @@ export function useAuthPageCreation({
             {
               id: `act-${Date.now()}-login`,
               name: "Sign In",
-              event: "signInWithEmail",
+              event: "submit",
             },
           ],
         },
@@ -140,7 +140,7 @@ export function useAuthPageCreation({
             {
               id: `act-${Date.now()}-reg`,
               name: "Sign Up",
-              event: "signUpWithEmail",
+              event: "submit",
             },
           ],
         },
@@ -346,7 +346,7 @@ export function useAuthPageCreation({
               {
                 id: `act-${Date.now()}-login`,
                 name: "Sign In",
-                event: "signInWithEmail",
+                event: "submit",
               },
             ],
           },
@@ -366,7 +366,7 @@ export function useAuthPageCreation({
               {
                 id: `act-${Date.now()}-reg`,
                 name: "Sign Up",
-                event: "signUpWithEmail",
+                event: "submit",
               },
             ],
           },

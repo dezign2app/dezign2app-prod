@@ -73,7 +73,7 @@ describe("AuthConfig On-Demand WebPage Creation & Route Linking", () => {
               {
                 id: "act-login-1",
                 name: "Sign In",
-                event: "signInWithEmail",
+                event: "submit",
               },
             ],
           },

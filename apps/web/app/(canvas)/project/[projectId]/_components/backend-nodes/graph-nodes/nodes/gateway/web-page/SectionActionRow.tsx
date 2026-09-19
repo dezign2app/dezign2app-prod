@@ -57,7 +57,6 @@ export const SectionActionRow = ({
 
   const [editName, setEditName] = useState(action.name || "");
   const [editEvent, setEditEvent] = useState(action.event || "click");
-  const [customEvent, setCustomEvent] = useState("");
   const [isSelectOpen, setIsSelectOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -67,8 +66,7 @@ export const SectionActionRow = ({
       setEditName(action.name || "");
       const evt = action.event || "click";
       const isStandard = (EVENT_OPTIONS as readonly string[]).includes(evt);
-      setEditEvent(isStandard ? evt : evt ? "other" : "click");
-      setCustomEvent(isStandard ? "" : evt);
+      setEditEvent(isStandard ? evt : "click");
 
       const focus = () => {
         if (inputRef.current) {
@@ -174,7 +172,7 @@ export const SectionActionRow = ({
       return;
     }
 
-    const finalEvent = editEvent === "other" ? customEvent.trim() : editEvent.trim();
+    const finalEvent = editEvent.trim() || "click";
     handleUpdate(trimmedName, finalEvent);
     setIsEditing(false);
 
@@ -304,25 +302,6 @@ export const SectionActionRow = ({
                 ))}
               </SelectContent>
             </Select>
-
-            {editEvent === "other" && (
-              <Input
-                value={customEvent}
-                onChange={(e) => setCustomEvent(e.target.value)}
-                placeholder="Custom event"
-                className="h-6 text-xs w-full"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleSaveOrDiscard();
-                  }
-                  if (e.key === "Escape") {
-                    e.preventDefault();
-                    handleCancel();
-                  }
-                }}
-              />
-            )}
           </div>
         </div>
       ) : (
@@ -333,8 +312,7 @@ export const SectionActionRow = ({
             setEditName(action.name || "");
             const evt = action.event || "click";
             const isStandard = (EVENT_OPTIONS as readonly string[]).includes(evt);
-            setEditEvent(isStandard ? evt : evt ? "other" : "click");
-            setCustomEvent(isStandard ? "" : evt);
+            setEditEvent(isStandard ? evt : "click");
           }}
         >
           <div className="flex flex-col gap-0.5 overflow-hidden">
