@@ -24,6 +24,7 @@ import { useCanvasHandlers } from "../hooks/useCanvasHandlers";
 import { useGraphAutoLayout } from "../hooks/useAutoLayout";
 import { TopToolbarPanel } from "./TopToolbarPanel";
 import { TestCaseDialogs } from "./TestCaseDialogs";
+import { sortZonePages } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/nodes/gateway/web-page";
 
 const edgeTypes = {
   "foreign-key": ForeignKeyEdge,
@@ -204,12 +205,70 @@ export function GraphView({ projectId }: GraphViewProps) {
 
 
   const sortedGraphNodes = React.useMemo(() => {
-    return [...graphNodes].sort((a, b) => {
+    // 1. Build map of stacked hand info for all WebPage nodes per WebApp zone
+    const webAppNodes = graphNodes.filter((n) => n.type === "webApp");
+    const pageHandMap = new Map<string, { cardIndex: number; totalCards: number; isStacked: boolean }>();
+
+    webAppNodes.forEach((webApp) => {
+      const defaultZones = [
+        { id: "zone-public", handleId: "public-in" },
+        { id: "zone-private", handleId: "private-in" },
+      ];
+      const zones = Array.isArray(webApp.data?.zones) && webApp.data.zones.length > 0
+        ? webApp.data.zones
+        : defaultZones;
+      const expandedZones = Array.isArray(webApp.data?.expandedZones)
+        ? webApp.data.expandedZones
+        : [];
+
+      zones.forEach((zone: any) => {
+        const isFannedOut = expandedZones.includes(zone.id);
+        const handleId = zone.handleId;
+        const zoneEdges = graphEdges.filter(
+          (e) =>
+            (e.source === webApp.id && e.sourceHandle === handleId) ||
+            (e.target === webApp.id && e.targetHandle === handleId),
+        );
+        const pageIds = new Set(
+          zoneEdges.map((e) => (e.source === webApp.id ? e.target : e.source)),
+        );
+        const zonePages = graphNodes.filter((n) => n.type === "webPage" && pageIds.has(n.id));
+
+        if (zonePages.length > 1) {
+          const sorted = sortZonePages(zonePages);
+          sorted.forEach((page, idx) => {
+            pageHandMap.set(page.id, {
+              cardIndex: idx,
+              totalCards: sorted.length,
+              isStacked: !isFannedOut,
+            });
+          });
+        }
+      });
+    });
+
+    const nodesWithZ = graphNodes.map((node) => {
+      const handInfo = pageHandMap.get(node.id);
+      let z = node.type === "webAppGroup" ? -1 : 1;
+      if (handInfo && handInfo.isStacked) {
+        z = node.selected ? 100 : 10 + handInfo.cardIndex;
+      } else if (node.selected) {
+        z = 100;
+      }
+      return {
+        ...node,
+        zIndex: z,
+      };
+    });
+
+    return nodesWithZ.sort((a, b) => {
       if (a.type === "webAppGroup") return -1;
       if (b.type === "webAppGroup") return 1;
-      return 0;
+      const zA = a.zIndex ?? 0;
+      const zB = b.zIndex ?? 0;
+      return zA - zB;
     });
-  }, [graphNodes]);
+  }, [graphNodes, graphEdges]);
 
   const visualGraphNodes = React.useMemo(() => {
     const hasRun = simulation.status !== "idle";

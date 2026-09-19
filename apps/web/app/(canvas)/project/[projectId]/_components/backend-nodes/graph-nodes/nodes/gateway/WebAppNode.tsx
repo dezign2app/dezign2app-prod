@@ -10,6 +10,7 @@ import {
   LayoutTemplate,
   CornerDownRight,
   CreditCard,
+  Layers,
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { WebAppZone } from "@workspace/canvas/types";
@@ -28,6 +29,7 @@ import {
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader } from "../../common";
 import { NodeEnvVarsSection } from "../ai-security/ExternalEnvVarsDrawer";
+import { toggleZoneHandLayout } from "./web-page";
 
 const DEFAULT_REDIRECTS = {
   "no-auth": "/login",
@@ -486,6 +488,51 @@ export const WebAppNode = ({
                       />
                     </span>
                   </button>
+
+                  {/* Hand of Cards Toggle for zones with multiple pages */}
+                  {connectedPages.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const thisNode =
+                          nodes.find((n) => n.id === id) ||
+                          ({ id, data, type: "webApp" } as BackendNode);
+                        toggleZoneHandLayout({
+                          webAppNode: thisNode,
+                          zoneId: zone.id,
+                          allNodes: nodes,
+                          allEdges: edges,
+                          updateNode,
+                        });
+                      }}
+                      className={cn(
+                        "flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium transition-all duration-200 cursor-pointer select-none",
+                        (() => {
+                          const isExp = Array.isArray(data.expandedZones) && data.expandedZones.includes(zone.id);
+                          return !isExp
+                            ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/25"
+                            : "bg-muted/40 text-muted-foreground hover:text-foreground border border-border/40";
+                        })(),
+                      )}
+                      title={
+                        (() => {
+                          const isExp = Array.isArray(data.expandedZones) && data.expandedZones.includes(zone.id);
+                          return !isExp
+                            ? `Pages are stacked on Z-axis (${connectedPages.length}). Click to fan out`
+                            : "Pages are fanned out. Click to stack into hand of cards";
+                        })()
+                      }
+                    >
+                      <Layers className="w-3 h-3 text-indigo-400" />
+                      <span className="font-mono leading-none">
+                        {(() => {
+                          const isExp = Array.isArray(data.expandedZones) && data.expandedZones.includes(zone.id);
+                          return !isExp ? `Hand (${connectedPages.length})` : "Fanned";
+                        })()}
+                      </span>
+                    </button>
+                  )}
 
                   <button
                     onClick={() =>

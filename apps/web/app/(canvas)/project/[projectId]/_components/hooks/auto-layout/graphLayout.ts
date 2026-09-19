@@ -20,6 +20,10 @@ import {
 import { layoutPaymentsPluginNodes } from "./paymentsPluginLayout";
 import { layoutTypesNodes } from "./typesNodeLayout";
 import type { EndpointWithNode, EventWithNode } from "@workspace/canvas";
+import {
+  CARD_HEADER_OFFSET_X,
+  CARD_HEADER_OFFSET_Y,
+} from "../../backend-nodes/graph-nodes/nodes/gateway/web-page/useZoneHandLayout";
 
 export interface PerformGraphLayoutOptions {
   nodes: LayoutNode[];
@@ -306,6 +310,53 @@ export function performGraphLayout({
     paymentsPluginEdges,
     paymentsPluginNodes,
     isHorizontal,
+  });
+
+  // 6.68. Stack WebPage nodes that are in hand-of-cards mode per WebApp zone
+  const webAppNodes = graphNodes.filter((n) => n.type === "webApp");
+  webAppNodes.forEach((webApp) => {
+    const zones = Array.isArray(webApp.data?.zones) ? webApp.data.zones : [];
+    const expandedZones = Array.isArray(webApp.data?.expandedZones) ? webApp.data.expandedZones : [];
+
+    zones.forEach((zone: any) => {
+      if (expandedZones.includes(zone.id)) return; // Fanned out
+
+      const handleId = zone.handleId;
+      const zoneEdges = graphEdges.filter(
+        (e) =>
+          (e.source === webApp.id && e.sourceHandle === handleId) ||
+          (e.target === webApp.id && e.targetHandle === handleId),
+      );
+      const pageIds = new Set(
+        zoneEdges.map((e) => (e.source === webApp.id ? e.target : e.source)),
+      );
+      const zonePages = graphNodes.filter((n) => n.type === "webPage" && pageIds.has(n.id));
+
+      if (zonePages.length > 1) {
+        const sorted = [...zonePages].sort((a, b) => {
+          const lA = (a.data?.label || "").trim().toLowerCase();
+          const lB = (b.data?.label || "").trim().toLowerCase();
+          if (lA === "/" || a.data?.isRoot) return -1;
+          if (lB === "/" || b.data?.isRoot) return 1;
+          if (lA === "/not-found") return -1;
+          if (lB === "/not-found") return 1;
+          return lA.localeCompare(lB);
+        });
+
+        const leadPage = sorted[0];
+        if (leadPage) {
+          const leadPos = positionsMap.get(leadPage.id);
+          if (leadPos) {
+            sorted.forEach((page, idx) => {
+              positionsMap.set(page.id, {
+                x: leadPos.x + idx * CARD_HEADER_OFFSET_X,
+                y: leadPos.y + idx * CARD_HEADER_OFFSET_Y,
+              });
+            });
+          }
+        }
+      }
+    });
   });
 
   // 6.7. Enforce positive canvas origin margin (minX >= 60, minY >= 60)

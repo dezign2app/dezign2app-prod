@@ -141,6 +141,7 @@ export interface CanvasWebAppNodeData {
   customDependencies?: NodeDependencyItem[];
   envVars?: Array<{ id: string; name: string; description?: string }>;
   globalStores?: GlobalStoreDefinition[];
+  expandedZones?: string[];
 }
 
 /** Web Page node fields (canvas type). */
