@@ -4,6 +4,7 @@ import {
   Background,
   Controls,
   MiniMap,
+  Panel,
   Connection,
   useReactFlow,
 } from "@xyflow/react";
@@ -19,6 +20,8 @@ import {
   isValidConnection,
 } from "@workspace/canvas";
 import { useCanvasHandlers } from "./hooks/useCanvasHandlers";
+import { useSchemaAutoLayout } from "./hooks/useAutoLayout";
+import { LayoutTemplate } from "lucide-react";
 
 const edgeTypes = {
   "foreign-key": ForeignKeyEdge,
@@ -46,6 +49,7 @@ export function SchemaView({ projectId }: SchemaViewProps) {
     handleMoveEnd,
   } = useCanvasHandlers(projectId, "schema");
   const { fitView } = useReactFlow();
+  const { handleLayout } = useSchemaAutoLayout();
   const schemaNodes = React.useMemo(
     () =>
       nodes.filter(
@@ -132,6 +136,19 @@ export function SchemaView({ projectId }: SchemaViewProps) {
         <Background gap={12} size={1} />
         <Controls fitViewOptions={{ padding: 0.35, maxZoom: 0.65 }} />
         <MiniMap />
+
+        {/* Auto Layout floating button on canvas */}
+        <Panel position="top-left" className="mt-2 ml-2">
+          <button
+            type="button"
+            onClick={() => handleLayout("LR")}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-background/90 backdrop-blur-sm border border-border/60 shadow-md text-xs font-medium text-foreground hover:bg-accent hover:border-border transition-all select-none"
+            title="Auto Layout"
+          >
+            <LayoutTemplate className="w-3.5 h-3.5 text-primary" />
+            Auto Layout
+          </button>
+        </Panel>
       </ReactFlow>
     </div>
   );
