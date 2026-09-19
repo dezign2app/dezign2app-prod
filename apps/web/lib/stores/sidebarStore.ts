@@ -33,6 +33,10 @@ export interface SidebarState {
   setTerminalOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   toggleTerminal: () => void;
   setTerminalHeight: (height: number | ((prev: number) => number)) => void;
+
+  // Project Folder Selection Modal
+  projectFolderModalOpen: boolean;
+  setProjectFolderModalOpen: (open: boolean) => void;
 }
 
 export const useSidebarStore = create<SidebarState>()(
@@ -117,10 +121,23 @@ export const useSidebarStore = create<SidebarState>()(
           const val = typeof height === "function" ? height(state.terminalHeight) : height;
           return { terminalHeight: Math.max(140, Math.min(800, val)) };
         }),
+
+      // Project Folder Selection Modal defaults
+      projectFolderModalOpen: false,
+      setProjectFolderModalOpen: (open) => set({ projectFolderModalOpen: open }),
     }),
     {
       name: "dezign2app_sidebar_layout_state_v1",
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        paletteOpen: state.paletteOpen,
+        paletteWidth: state.paletteWidth,
+        aiPanelOpen: state.aiPanelOpen,
+        aiPanelWidth: state.aiPanelWidth,
+        configSidebarWidth: state.configSidebarWidth,
+        terminalOpen: state.terminalOpen,
+        terminalHeight: state.terminalHeight,
+      }),
     },
   ),
 );

@@ -66,15 +66,13 @@ export function updateEnvString(
  * Retrieves the currently active project output directory from localStorage.
  */
 export function getActiveProjectOutputDir(projectId?: string): string {
-  if (typeof window === "undefined") return "";
+  if (typeof window === "undefined" || !projectId) return "";
   try {
-    if (projectId) {
-      const saved =
-        localStorage.getItem(`workspace_dir_${projectId}`) ||
-        localStorage.getItem(`docker_dir_${projectId}`);
-      if (saved) return saved;
-    }
-    return localStorage.getItem("dezign2app_workspace_dir") || "";
+    return (
+      localStorage.getItem(`workspace_dir_${projectId}`) ||
+      localStorage.getItem(`docker_dir_${projectId}`) ||
+      ""
+    );
   } catch {
     return "";
   }

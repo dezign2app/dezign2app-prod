@@ -3,67 +3,111 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { getElectronAPI } from "@/lib/electron";
+import {
+  getProjectWorkspaceDir,
+  setProjectWorkspaceDir,
+  findProjectFolderConflict,
+  FolderConflict,
+} from "./projectWorkspaceUtils";
 
-export function useTerminalWorkspace(projectId: string) {
-  // Target directory for local output with persistent multi-level fallback
+export function useTerminalWorkspace(projectId: string, projectName?: string) {
+  // Target directory strictly scoped to current project
   const [outputDir, setOutputDir] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        return (
-          localStorage.getItem(`workspace_dir_${projectId}`) ||
-          localStorage.getItem(`docker_dir_${projectId}`) ||
-          localStorage.getItem("dezign2app_workspace_dir") ||
-          ""
-        );
-      } catch (e) {
-        return "";
-      }
-    }
-    return "";
+    return getProjectWorkspaceDir(projectId);
   });
 
-  // Re-sync outputDir if projectId mounts or changes
+  // Re-sync outputDir whenever projectId changes
   useEffect(() => {
-    if (!projectId || typeof window === "undefined") return;
-    try {
-      const saved =
-        localStorage.getItem(`workspace_dir_${projectId}`) ||
-        localStorage.getItem(`docker_dir_${projectId}`) ||
-        localStorage.getItem("dezign2app_workspace_dir") ||
-        "";
-      if (saved && saved !== outputDir) {
-        setOutputDir(saved);
-      }
-    } catch (e) {}
-  }, [projectId, outputDir]);
+    if (!projectId || typeof window === "undefined") {
+      setOutputDir("");
+      return;
+    }
+    const saved = getProjectWorkspaceDir(projectId);
+    setOutputDir(saved);
+  }, [projectId]);
 
   const saveWorkspaceDir = useCallback(
-    (dir: string) => {
-      setOutputDir(dir);
-      if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem(`workspace_dir_${projectId}`, dir);
-          localStorage.setItem(`docker_dir_${projectId}`, dir);
-          localStorage.setItem("dezign2app_workspace_dir", dir);
-        } catch (e) {}
+    (dir: string): boolean => {
+      if (!projectId) return false;
+
+      // Ensure uniqueness: check if another project is already using this directory
+      if (dir) {
+        const conflict = findProjectFolderConflict(projectId, dir);
+        if (conflict) {
+          toast.error(
+            `This folder is already assigned to "${conflict.projectName}". Each project must have a unique local folder.`
+          );
+          return false;
+        }
       }
+
+      setProjectWorkspaceDir(projectId, dir, projectName);
+      setOutputDir(dir);
+      return true;
     },
-    [projectId],
+    [projectId, projectName],
   );
 
-  const handlePickDirectory = useCallback(async () => {
+  const handlePickDirectory = useCallback(async (): Promise<string | null> => {
+    // 1. Desktop native Electron folder picker
     const api = getElectronAPI();
-    if (!api?.fs?.pickDirectory) return;
-    try {
-      const selected = await api.fs.pickDirectory();
-      if (selected) {
-        saveWorkspaceDir(selected);
-        toast.success(`Target folder: ${selected}`);
+    if (api?.fs?.pickDirectory) {
+      try {
+        const selected = await api.fs.pickDirectory();
+        if (selected) {
+          const ok = saveWorkspaceDir(selected);
+          if (ok) {
+            toast.success(`Target folder: ${selected}`);
+            return selected;
+          }
+        }
+      } catch (err) {
+        toast.error("Failed to select directory");
       }
-    } catch (err) {
-      toast.error("Failed to select directory");
+      return null;
     }
-  }, [saveWorkspaceDir]);
+
+    // 2. Browser File System Access API
+    if (
+      typeof window !== "undefined" &&
+      "showDirectoryPicker" in window &&
+      window.showDirectoryPicker
+    ) {
+      try {
+        const handle = await window.showDirectoryPicker();
+        if (handle && handle.name) {
+          const ok = saveWorkspaceDir(handle.name);
+          if (ok) {
+            toast.success(`Connected to local folder: ${handle.name}`);
+            return handle.name;
+          }
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name !== "AbortError") {
+          toast.error("Failed to select folder");
+        }
+      }
+      return null;
+    }
+
+    // 3. Fallback prompt if no native API is supported
+    if (typeof window !== "undefined") {
+      const input = window.prompt(
+        "Enter the local folder path for this project:",
+        outputDir || ""
+      );
+      if (input && input.trim()) {
+        const trimmed = input.trim();
+        const ok = saveWorkspaceDir(trimmed);
+        if (ok) {
+          toast.success(`Target folder set to: ${trimmed}`);
+          return trimmed;
+        }
+      }
+    }
+
+    return null;
+  }, [saveWorkspaceDir, outputDir]);
 
   return {
     outputDir,
@@ -72,3 +116,4 @@ export function useTerminalWorkspace(projectId: string) {
     handlePickDirectory,
   };
 }
+

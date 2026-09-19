@@ -310,14 +310,13 @@ export function useDynamicTerminalSessions({
         else resolvedShell = isWin ? "powershell.exe" : "bash";
       }
 
-      // Resolve workspace target directory with multi-level fallback
+      // Resolve workspace target directory strictly for this project
       let targetDir = outputDir;
       if (!targetDir && typeof window !== "undefined") {
         try {
           targetDir =
             localStorage.getItem(`workspace_dir_${projectId}`) ||
             localStorage.getItem(`docker_dir_${projectId}`) ||
-            localStorage.getItem("dezign2app_workspace_dir") ||
             "";
         } catch (e) {}
       }
