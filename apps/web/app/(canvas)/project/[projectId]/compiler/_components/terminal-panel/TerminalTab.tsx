@@ -16,6 +16,7 @@ interface TerminalTabProps {
   onCreateSession: (type?: TerminalType, shell?: string, title?: string) => void;
   onSelectSession?: (sessionId: string) => void;
   onCloseSession?: (sessionId: string) => void;
+  onReplayMissedLogs?: (sessionId: string, fullReset?: boolean) => void;
   formattedLogs: string[];
 }
 
@@ -30,6 +31,7 @@ export function TerminalTab({
   onCreateSession,
   onSelectSession,
   onCloseSession,
+  onReplayMissedLogs,
   formattedLogs,
 }: TerminalTabProps) {
   return (
@@ -46,6 +48,7 @@ export function TerminalTab({
           onNewTab={onCreateSession}
           onSelectSession={onSelectSession}
           onCloseSession={onCloseSession}
+          onReplayMissedLogs={onReplayMissedLogs}
         />
       ) : (
         <WTermTerminal

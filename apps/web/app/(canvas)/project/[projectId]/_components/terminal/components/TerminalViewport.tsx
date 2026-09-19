@@ -34,6 +34,7 @@ interface TerminalViewportProps {
   onNewTab: (type?: TerminalType, shell?: string, title?: string) => void;
   onSelectSession?: (sessionId: string) => void;
   onCloseSession?: (sessionId: string) => void;
+  onReplayMissedLogs?: (sessionId: string, fullReset?: boolean) => void;
 }
 
 export function TerminalViewport({
@@ -47,12 +48,39 @@ export function TerminalViewport({
   onNewTab,
   onSelectSession,
   onCloseSession,
+  onReplayMissedLogs,
 }: TerminalViewportProps) {
   const inElectron = isElectron();
   const isWin =
     typeof navigator !== "undefined" &&
     (navigator.platform?.includes("Win") ||
       navigator.userAgent?.includes("Windows"));
+
+  // Auto-focus the active terminal session whenever the active session ID changes & replay any missed logs
+  React.useEffect(() => {
+    if (!activeSessionId) return;
+    const timer = setTimeout(() => {
+      const handle = terminalRefs.current.get(activeSessionId);
+      handle?.focus?.();
+      onReplayMissedLogs?.(activeSessionId);
+    }, 40);
+    return () => clearTimeout(timer);
+  }, [activeSessionId, terminalRefs, onReplayMissedLogs]);
+
+  // Re-focus active terminal session when the browser tab / desktop window regains focus
+  React.useEffect(() => {
+    const handleFocus = () => {
+      if (activeSessionId) {
+        terminalRefs.current.get(activeSessionId)?.focus();
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
+  }, [activeSessionId, terminalRefs]);
 
   // Empty State: No active terminals open
   if (sessions.length === 0) {
@@ -150,14 +178,17 @@ export function TerminalViewport({
                   }
                 }}
                 onReady={() => {
-                  if (!inElectron) {
-                    const handle = terminalRefs.current.get(session.id);
+                  const handle = terminalRefs.current.get(session.id);
+                  if (inElectron) {
+                    onReplayMissedLogs?.(session.id, true);
+                  } else {
                     const targetDir = outputDir || `/workspace/${projectId || "dezign2app"}`;
                     const prompt = getShellPrompt(session.shell, targetDir);
                     handle?.write(
                       `\x1b[36mDezign2App Monorepo Terminal: ${session.title || "Main Terminal"} [Web Preview]\x1b[0m\r\n\x1b[90mWorkspace: ${targetDir}\x1b[0m\r\n\x1b[90mType commands like "help", "pnpm dev", "pnpm build", "docker compose", "clear".\x1b[0m\r\n\r\n${prompt}`,
                     );
                   }
+                  handle?.focus?.();
                 }}
                 rawStream={true}
                 interactive={true}
@@ -271,7 +302,13 @@ export function TerminalViewport({
             return (
               <div
                 key={s.id}
-                onClick={() => onSelectSession?.(s.id)}
+                onClick={() => {
+                  onSelectSession?.(s.id);
+                  onReplayMissedLogs?.(s.id);
+                  setTimeout(() => {
+                    terminalRefs.current.get(s.id)?.focus();
+                  }, 40);
+                }}
                 className={`group flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer text-xs transition-all ${
                   isActive
                     ? "bg-slate-800 text-white font-medium shadow-sm border border-slate-700/60"

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Terminal as TerminalIcon, ChevronUp } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 interface TerminalDockButtonProps {
   isOpen: boolean;
@@ -18,7 +19,10 @@ export function TerminalDockButton({
   hasRunningSession,
   outputDir,
 }: TerminalDockButtonProps) {
-  if (isOpen) return null;
+  const pathname = usePathname();
+  const isCompiler = pathname?.includes("/compiler");
+
+  if (isOpen || isCompiler) return null;
 
   return (
     <div className="h-8 bg-sidebar/95 backdrop-blur-md border-t border-sidebar-border w-full px-4 flex items-center justify-between text-xs font-mono text-sidebar-foreground select-none shadow-md z-30 shrink-0 pointer-events-auto">

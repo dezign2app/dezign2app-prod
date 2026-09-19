@@ -153,8 +153,13 @@ export const useTerminalSessionStore = create<TerminalStoreState>((set, get) => 
               mergedPorts = [...mergedPorts, ...additions];
             }
 
+            // Append log chunks while capping to recent 500 entries to bound memory usage
+            const prevLogs = s.logs || [];
+            const updatedLogs = [...prevLogs, logChunk].slice(-500);
+
             return {
               ...s,
+              logs: updatedLogs,
               detectedPorts: mergedPorts,
               status: "running",
             };

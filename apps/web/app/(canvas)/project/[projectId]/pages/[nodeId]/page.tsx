@@ -12,7 +12,6 @@ import Link from "next/link";
 import { Button } from "@workspace/ui/components/button";
 import { toast } from "sonner";
 
-import { Terminal } from "../../_components/terminal";
 import { PageEditorHeader, PageViewMode } from "./_components/PageEditorHeader";
 import { PageFileExplorer } from "./_components/PageFileExplorer";
 import { PageCodeEditor } from "./_components/PageCodeEditor";
@@ -411,7 +410,7 @@ export default function PageEditorPage({
   }
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-background text-foreground select-none flex flex-col font-sans">
+    <div className="relative w-full h-full flex-1 min-h-0 overflow-hidden bg-background text-foreground select-none flex flex-col font-sans">
       {/* Top Header */}
       <PageEditorHeader
         projectId={projectId}
@@ -542,14 +541,6 @@ export default function PageEditorPage({
               </div>
             )}
           </div>
-
-          {/* Bottom Docked Terminal Panel */}
-          <Terminal
-            projectId={projectId}
-            projectName={projectName}
-            isOpen={terminalOpen}
-            onToggleOpen={() => setTerminalOpen((prev) => !prev)}
-          />
         </div>
 
         {/* Right: AI Assistant & Code Agent Sidebar */}

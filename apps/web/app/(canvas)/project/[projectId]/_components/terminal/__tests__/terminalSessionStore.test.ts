@@ -110,4 +110,21 @@ describe("terminalSessionStore", () => {
     expect(updated.getSessions(projectId)).toHaveLength(1);
     expect(updated.getActiveSessionId(projectId)).toBe("term-1");
   });
+
+  it("retains output buffer in session.logs across multiple appendLog calls", () => {
+    const store = useTerminalSessionStore.getState();
+    store.addSession(projectId, {
+      id: "term-buf",
+      title: "Buffer Terminal",
+      type: "shell",
+      status: "running",
+      createdAt: Date.now(),
+    });
+
+    store.appendLog(projectId, "term-buf", "chunk 1\r\n");
+    store.appendLog(projectId, "term-buf", "chunk 2\r\n");
+
+    const active = store.getActiveSession(projectId);
+    expect(active?.logs).toEqual(["chunk 1\r\n", "chunk 2\r\n"]);
+  });
 });

@@ -97,6 +97,7 @@ export function Terminal({
     writeToSession,
     resizeSession,
     allDetectedPorts,
+    replayMissedLogs,
   } = useDynamicTerminalSessions({
     projectId,
     outputDir,
@@ -225,6 +226,22 @@ export function Terminal({
     }
   };
 
+  // Auto-focus active terminal when dock opens or user switches back to "terminal" tab
+  useEffect(() => {
+    if (isOpen && selectedTab === "terminal") {
+      const activeRef = activeSessionId
+        ? terminalRefs.current.get(activeSessionId)
+        : terminalRefs.current.values().next().value;
+      const timer = setTimeout(() => {
+        activeRef?.focus?.();
+        if (activeSessionId) {
+          replayMissedLogs(activeSessionId);
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, selectedTab, activeSessionId, replayMissedLogs]);
+
   const hasRunningSession = sessions.some((s) => s.status === "running");
 
   return (
@@ -280,9 +297,13 @@ export function Terminal({
                 onForceSync={forceSyncNow}
               />
 
-              {/* Tab View Content */}
+              {/* Tab View Content - Preserved in DOM to retain active process & terminal buffer */}
               <div className="w-full h-full flex flex-col flex-1 min-h-0 bg-[#090d13] relative overflow-hidden font-mono text-xs">
-                {selectedTab === "terminal" && (
+                <div
+                  className={`w-full h-full flex flex-col flex-1 min-h-0 ${
+                    selectedTab === "terminal" ? "flex" : "hidden"
+                  }`}
+                >
                   <TerminalTab
                     projectId={projectId}
                     outputDir={outputDir}
@@ -296,17 +317,34 @@ export function Terminal({
                     onCreateSession={(type?: TerminalType, shell?: string, title?: string) =>
                       createTerminal({ type, shell, title })
                     }
+                    onReplayMissedLogs={replayMissedLogs}
                     formattedLogs={[]}
                   />
-                )}
+                </div>
 
-                {selectedTab === "output" && <OutputTab outputLogs={outputLogs} />}
+                <div
+                  className={`w-full h-full flex flex-col flex-1 min-h-0 ${
+                    selectedTab === "output" ? "flex" : "hidden"
+                  }`}
+                >
+                  <OutputTab outputLogs={outputLogs} />
+                </div>
 
-                {selectedTab === "problems" && <ProblemsTab />}
+                <div
+                  className={`w-full h-full flex flex-col flex-1 min-h-0 ${
+                    selectedTab === "problems" ? "flex" : "hidden"
+                  }`}
+                >
+                  <ProblemsTab />
+                </div>
 
-                {selectedTab === "ports" && (
+                <div
+                  className={`w-full h-full flex flex-col flex-1 min-h-0 ${
+                    selectedTab === "ports" ? "flex" : "hidden"
+                  }`}
+                >
                   <PortsTab ports={monitoredPorts} onRefresh={refreshPorts} />
-                )}
+                </div>
               </div>
             </Resizable>
           </motion.div>
