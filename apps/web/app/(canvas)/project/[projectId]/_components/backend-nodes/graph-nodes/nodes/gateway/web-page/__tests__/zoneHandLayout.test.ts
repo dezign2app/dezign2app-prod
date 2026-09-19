@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
+import { renderHook, act } from "@testing-library/react";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import {
   sortZonePages,
   toggleZoneHandLayout,
+  useZoneHandLayout,
   CARD_HEADER_OFFSET_X,
   CARD_HEADER_OFFSET_Y,
   CARD_EXPANDED_GAP_Y,
@@ -87,7 +89,7 @@ describe("Zone Hand Layout (Deck of Cards on Z-axis)", () => {
       },
     });
 
-    // Should fan out pages vertically
+    // Should Spread pages vertically
     expect(updateNode).toHaveBeenCalledWith("p0", {
       position: { x: 400, y: 100 },
     });
@@ -211,6 +213,67 @@ describe("Zone Hand Layout (Deck of Cards on Z-axis)", () => {
     });
     expect(updateNode).toHaveBeenCalledWith("p2", {
       position: { x: 400 + 2 * CARD_HEADER_OFFSET_X, y: 100 + 2 * CARD_HEADER_OFFSET_Y },
+    });
+  });
+
+  it("sorts pages by custom stackOrder when present", () => {
+    const pages: BackendNode[] = [
+      { id: "p0", type: "webPage", position: { x: 0, y: 0 }, fractionalIndex: "a0", data: { label: "/", stackOrder: 2 } },
+      { id: "p1", type: "webPage", position: { x: 0, y: 0 }, fractionalIndex: "a1", data: { label: "/not-found", stackOrder: 0 } },
+      { id: "p2", type: "webPage", position: { x: 0, y: 0 }, fractionalIndex: "a2", data: { label: "/about", stackOrder: 1 } },
+    ];
+    const sorted = sortZonePages(pages);
+    expect(sorted.map((p) => p.data?.label)).toEqual([
+      "/not-found",
+      "/about",
+      "/",
+    ]);
+  });
+
+  it("reorders cards and updates their positions and stackOrder when moveCard is called", () => {
+    const updateNode = vi.fn();
+
+    const webAppNode: BackendNode = {
+      id: "web-1",
+      type: "webApp",
+      position: { x: 100, y: 100 },
+      fractionalIndex: "a0",
+      data: {
+        label: "web",
+        zones: [
+          { id: "zone-public", handleId: "public-in", name: "Public Section", accessType: "public" },
+        ],
+      },
+    };
+
+    const p0: BackendNode = { id: "p0", type: "webPage", position: { x: 400, y: 100 }, fractionalIndex: "a1", data: { label: "/", stackOrder: 0 } };
+    const p1: BackendNode = { id: "p1", type: "webPage", position: { x: 392, y: 144 }, fractionalIndex: "a2", data: { label: "/not-found", stackOrder: 1 } };
+    const p2: BackendNode = { id: "p2", type: "webPage", position: { x: 384, y: 188 }, fractionalIndex: "a3", data: { label: "/register", stackOrder: 2 } };
+
+    const edges: BackendEdge[] = [
+      { id: "e0", source: "web-1", sourceHandle: "public-in", target: "p0", targetHandle: "page-in", type: "connection", fractionalIndex: "a0" },
+      { id: "e1", source: "web-1", sourceHandle: "public-in", target: "p1", targetHandle: "page-in", type: "connection", fractionalIndex: "a1" },
+      { id: "e2", source: "web-1", sourceHandle: "public-in", target: "p2", targetHandle: "page-in", type: "connection", fractionalIndex: "a2" },
+    ];
+
+    const { result } = renderHook(() =>
+      useZoneHandLayout("p2", [webAppNode, p0, p1, p2], edges, updateNode)
+    );
+
+    // Call moveCard("up") on p2 (which is at index 2)
+    act(() => {
+      result.current.moveCard("up");
+    });
+
+    // p2 and p1 should be swapped:
+    // p1 gets index 2, p2 gets index 1
+    expect(updateNode).toHaveBeenCalledWith("p2", {
+      position: { x: 400 + CARD_HEADER_OFFSET_X, y: 100 + CARD_HEADER_OFFSET_Y },
+      data: { ...p2.data, stackOrder: 1 },
+    });
+    expect(updateNode).toHaveBeenCalledWith("p1", {
+      position: { x: 400 + 2 * CARD_HEADER_OFFSET_X, y: 100 + 2 * CARD_HEADER_OFFSET_Y },
+      data: { ...p1.data, stackOrder: 2 },
     });
   });
 });

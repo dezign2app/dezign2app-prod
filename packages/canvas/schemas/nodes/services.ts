@@ -324,6 +324,7 @@ export const webPageDataSchema = simpleDataSchema.extend({
   uiPrompt: z.string().optional().describe("Page-level AI prompt"),
   renderMode: z.enum(["server", "client"]).optional().describe("Page-level render mode"),
   customDependencies: z.array(nodeDependencyItemSchema).optional(),
+  stackOrder: z.number().optional().describe("User-defined stack order index in hand-of-cards mode"),
 });
 
 export const webPageDataInputSchema = baseNodeDataSchema.extend({
@@ -357,6 +358,7 @@ export const webPageDataInputSchema = baseNodeDataSchema.extend({
   uiPrompt: z.string().optional(),
   renderMode: z.enum(["server", "client"]).optional(),
   customDependencies: z.array(nodeDependencyItemInputSchema).optional(),
+  stackOrder: z.number().optional(),
 });
 
 // --- WebApp Node ---

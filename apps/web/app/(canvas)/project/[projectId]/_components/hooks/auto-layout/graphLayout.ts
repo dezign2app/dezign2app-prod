@@ -23,6 +23,7 @@ import type { EndpointWithNode, EventWithNode } from "@workspace/canvas";
 import {
   CARD_HEADER_OFFSET_X,
   CARD_HEADER_OFFSET_Y,
+  sortZonePages,
 } from "../../backend-nodes/graph-nodes/nodes/gateway/web-page/useZoneHandLayout";
 
 export interface PerformGraphLayoutOptions {
@@ -199,6 +200,86 @@ export function performGraphLayout({
     paymentsPluginNodeIdSet.has(n.id),
   );
 
+  // 3.5. Identify stacked WebPage zones attached to WebApp nodes
+  const webAppNodes = graphNodes.filter((n) => n.type === "webApp");
+  const stackedSecondaryNodeIdSet = new Set<string>();
+  const stackedSecondaryEdgeIdSet = new Set<string>();
+  const dimensionOverrides = new Map<string, { width: number; height: number }>();
+  const stackHandleRatios = new Map<string, number>();
+  const stackedZonesList: Array<{
+    leadPage: LayoutNode;
+    sortedPages: LayoutNode[];
+  }> = [];
+
+  webAppNodes.forEach((webApp) => {
+    const zones =
+      webApp.data &&
+      typeof webApp.data === "object" &&
+      "zones" in webApp.data &&
+      Array.isArray(webApp.data.zones) &&
+      webApp.data.zones.length > 0
+        ? webApp.data.zones
+        : [
+            { id: "zone-public", handleId: "public-in", name: "Public Section", accessType: "public" },
+            { id: "zone-private", handleId: "private-in", name: "Private Section", accessType: "protected" },
+          ];
+
+    const expandedZones =
+      webApp.data &&
+      typeof webApp.data === "object" &&
+      "expandedZones" in webApp.data &&
+      Array.isArray(webApp.data.expandedZones)
+        ? webApp.data.expandedZones
+        : [];
+
+    zones.forEach((zone: any) => {
+      if (expandedZones.includes(zone.id)) return; // Zone is expanded / fanned out
+
+      const handleId = zone.handleId;
+      const zoneEdges = graphEdges.filter(
+        (e) =>
+          (e.source === webApp.id && e.sourceHandle === handleId) ||
+          (e.target === webApp.id && e.targetHandle === handleId),
+      );
+      const pageIds = new Set(
+        zoneEdges.map((e) => (e.source === webApp.id ? e.target : e.source)),
+      );
+      const zonePages = graphNodes.filter((n) => n.type === "webPage" && pageIds.has(n.id));
+
+      if (zonePages.length > 1) {
+        const sortedPages = sortZonePages(zonePages as any) as LayoutNode[];
+        const leadPage = sortedPages[0];
+        if (!leadPage) return;
+
+        const count = sortedPages.length;
+        const leadDim = getNodeDimensions(leadPage);
+        const stackWidth = leadDim.width + (count - 1) * Math.abs(CARD_HEADER_OFFSET_X);
+        const stackHeight = leadDim.height + (count - 1) * CARD_HEADER_OFFSET_Y;
+
+        dimensionOverrides.set(leadPage.id, { width: stackWidth, height: stackHeight });
+
+        // Handle center ratio for the stack:
+        const handleCenterY = 18 + ((count - 1) * CARD_HEADER_OFFSET_Y) / 2;
+        stackHandleRatios.set(leadPage.id, Math.min(0.95, Math.max(0.02, handleCenterY / stackHeight)));
+
+        // Exclude secondary pages and their edges from Dagre & mainGraphNodes
+        const secondaryPages = sortedPages.slice(1);
+        secondaryPages.forEach((p) => {
+          stackedSecondaryNodeIdSet.add(p.id);
+        });
+
+        zoneEdges.forEach((e) => {
+          const otherId = e.source === webApp.id ? e.target : e.source;
+          if (stackedSecondaryNodeIdSet.has(otherId)) {
+            stackedSecondaryEdgeIdSet.add(e.id);
+          }
+        });
+
+        stackedZonesList.push({ leadPage, sortedPages });
+      }
+    });
+  });
+
   const flowEdges: LayoutEdge[] = graphEdges.filter(
     (e: LayoutEdge) =>
       !isHeadConnectionEdge(e) &&
@@ -208,7 +289,10 @@ export function performGraphLayout({
       !hangingRefNodeIdSet.has(e.source) &&
       !hangingRefNodeIdSet.has(e.target) &&
       !paymentsPluginNodeIdSet.has(e.source) &&
-      !paymentsPluginNodeIdSet.has(e.target),
+      !paymentsPluginNodeIdSet.has(e.target) &&
+      !stackedSecondaryEdgeIdSet.has(e.id) &&
+      !stackedSecondaryNodeIdSet.has(e.source) &&
+      !stackedSecondaryNodeIdSet.has(e.target),
   );
 
   const mainGraphNodes: LayoutNode[] = graphNodes.filter(
@@ -216,7 +300,8 @@ export function performGraphLayout({
       !attachedHeadNodeIdSet.has(n.id) &&
       !hangingTransformerNodeIdSet.has(n.id) &&
       !hangingRefNodeIdSet.has(n.id) &&
-      !paymentsPluginNodeIdSet.has(n.id),
+      !paymentsPluginNodeIdSet.has(n.id) &&
+      !stackedSecondaryNodeIdSet.has(n.id),
   );
 
   // 4. Run Dagre layout for mainGraphNodes and flowEdges
@@ -230,7 +315,8 @@ export function performGraphLayout({
   });
 
   mainGraphNodes.forEach((node: LayoutNode) => {
-    const { width, height } = getNodeDimensions(node);
+    const override = dimensionOverrides.get(node.id);
+    const { width, height } = override ?? getNodeDimensions(node);
     dagreGraph.setNode(node.id, { width, height });
   });
 
@@ -246,7 +332,8 @@ export function performGraphLayout({
   const positionsMap = new Map<string, { x: number; y: number }>();
   mainGraphNodes.forEach((node: LayoutNode) => {
     const nodeWithPosition = dagreGraph.node(node.id);
-    const { width, height } = getNodeDimensions(node);
+    const override = dimensionOverrides.get(node.id);
+    const { width, height } = override ?? getNodeDimensions(node);
     if (nodeWithPosition) {
       positionsMap.set(node.id, {
         x: nodeWithPosition.x - width / 2,
@@ -270,6 +357,8 @@ export function performGraphLayout({
     hangingRefEdges,
     hangingRefNodes,
     paymentsPluginEdges,
+    dimensionOverrides,
+    stackHandleRatios,
   });
 
   // 6. Layout attached head nodes grouped by category columns above each target node
@@ -313,49 +402,22 @@ export function performGraphLayout({
   });
 
   // 6.68. Stack WebPage nodes that are in hand-of-cards mode per WebApp zone
-  const webAppNodes = graphNodes.filter((n) => n.type === "webApp");
-  webAppNodes.forEach((webApp) => {
-    const zones = Array.isArray(webApp.data?.zones) ? webApp.data.zones : [];
-    const expandedZones = Array.isArray(webApp.data?.expandedZones) ? webApp.data.expandedZones : [];
+  stackedZonesList.forEach(({ leadPage, sortedPages }) => {
+    const leadPos = positionsMap.get(leadPage.id);
+    if (!leadPos) return;
 
-    zones.forEach((zone: any) => {
-      if (expandedZones.includes(zone.id)) return; // Fanned out
+    // Card 0 is placed at baseX = leadPos.x + (count - 1) * Math.abs(CARD_HEADER_OFFSET_X).
+    // Card idx is placed at baseX + idx * CARD_HEADER_OFFSET_X.
+    // This guarantees the front/leftmost card (idx = count - 1) starts at leadPos.x,
+    // and the entire stack fits within the reserved stackWidth without intruding towards the WebApp node.
+    const baseX = leadPos.x + (sortedPages.length - 1) * Math.abs(CARD_HEADER_OFFSET_X);
+    const baseY = leadPos.y;
 
-      const handleId = zone.handleId;
-      const zoneEdges = graphEdges.filter(
-        (e) =>
-          (e.source === webApp.id && e.sourceHandle === handleId) ||
-          (e.target === webApp.id && e.targetHandle === handleId),
-      );
-      const pageIds = new Set(
-        zoneEdges.map((e) => (e.source === webApp.id ? e.target : e.source)),
-      );
-      const zonePages = graphNodes.filter((n) => n.type === "webPage" && pageIds.has(n.id));
-
-      if (zonePages.length > 1) {
-        const sorted = [...zonePages].sort((a, b) => {
-          const lA = (a.data?.label || "").trim().toLowerCase();
-          const lB = (b.data?.label || "").trim().toLowerCase();
-          if (lA === "/" || a.data?.isRoot) return -1;
-          if (lB === "/" || b.data?.isRoot) return 1;
-          if (lA === "/not-found") return -1;
-          if (lB === "/not-found") return 1;
-          return lA.localeCompare(lB);
-        });
-
-        const leadPage = sorted[0];
-        if (leadPage) {
-          const leadPos = positionsMap.get(leadPage.id);
-          if (leadPos) {
-            sorted.forEach((page, idx) => {
-              positionsMap.set(page.id, {
-                x: leadPos.x + idx * CARD_HEADER_OFFSET_X,
-                y: leadPos.y + idx * CARD_HEADER_OFFSET_Y,
-              });
-            });
-          }
-        }
-      }
+    sortedPages.forEach((page, idx) => {
+      positionsMap.set(page.id, {
+        x: baseX + idx * CARD_HEADER_OFFSET_X,
+        y: baseY + idx * CARD_HEADER_OFFSET_Y,
+      });
     });
   });
 

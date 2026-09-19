@@ -1,0 +1,179 @@
+import { describe, it, expect, vi } from "vitest";
+import { performGraphLayout } from "../graphLayout";
+import type { LayoutNode, LayoutEdge, PositionNodeChange } from "../types";
+import {
+  CARD_HEADER_OFFSET_X,
+  CARD_HEADER_OFFSET_Y,
+} from "../../../backend-nodes/graph-nodes/nodes/gateway/web-page/useZoneHandLayout";
+
+describe("zoneHandAutoLayout - Auto-Layout for Stacked WebPage Cards", () => {
+  it("compactly layouts stacked WebPage cards with balanced WebApp alignment and no massive voids", () => {
+    const nodes: LayoutNode[] = [
+      {
+        id: "payments-1",
+        type: "payments",
+        position: { x: 0, y: 0 },
+        data: { label: "Creem Payments", provider: "creem" },
+      },
+      {
+        id: "auth-1",
+        type: "auth",
+        position: { x: 0, y: 0 },
+        data: { label: "better auth" },
+      },
+      {
+        id: "web-1",
+        type: "webApp",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "web",
+          zones: [
+            { id: "zone-public", handleId: "public-in", name: "Public Section", accessType: "public" },
+            { id: "zone-private", handleId: "private-in", name: "Private Section", accessType: "protected" },
+          ],
+          expandedZones: [], // Both zones stacked
+        },
+      },
+      // Public Section pages (4 pages)
+      { id: "page-root", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/" } },
+      { id: "page-not-found", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/not-found" } },
+      { id: "page-login", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/login" } },
+      { id: "page-register", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/register" } },
+
+      // Private Section pages (3 pages)
+      { id: "page-dashboard", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/dashboard" } },
+      { id: "page-onboarding", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/onboarding" } },
+      { id: "page-conversations", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/conversations" } },
+    ];
+
+    const edges: LayoutEdge[] = [
+      {
+        id: "e-payments-auth",
+        source: "payments-1",
+        target: "auth-1",
+        sourceHandle: "injects-plugin-out",
+        targetHandle: "payments-plugin-in",
+        type: "connection",
+      },
+      {
+        id: "e-auth-web",
+        source: "auth-1",
+        target: "web-1",
+        sourceHandle: "auth-out",
+        targetHandle: "auth-in",
+        type: "connection",
+      },
+      // Public edges
+      { id: "e-pub-0", source: "web-1", sourceHandle: "public-in", target: "page-root", targetHandle: "page-in", type: "connection" },
+      { id: "e-pub-1", source: "web-1", sourceHandle: "public-in", target: "page-not-found", targetHandle: "page-in", type: "connection" },
+      { id: "e-pub-2", source: "web-1", sourceHandle: "public-in", target: "page-login", targetHandle: "page-in", type: "connection" },
+      { id: "e-pub-3", source: "web-1", sourceHandle: "public-in", target: "page-register", targetHandle: "page-in", type: "connection" },
+      // Private edges
+      { id: "e-priv-0", source: "web-1", sourceHandle: "private-in", target: "page-dashboard", targetHandle: "page-in", type: "connection" },
+      { id: "e-priv-1", source: "web-1", sourceHandle: "private-in", target: "page-onboarding", targetHandle: "page-in", type: "connection" },
+      { id: "e-priv-2", source: "web-1", sourceHandle: "private-in", target: "page-conversations", targetHandle: "page-in", type: "connection" },
+    ];
+
+    let appliedChanges: PositionNodeChange[] = [];
+    performGraphLayout({
+      nodes,
+      edges,
+      onNodesChange: (c) => {
+        appliedChanges = c;
+      },
+      fitView: vi.fn(),
+      direction: "LR",
+    });
+
+    expect(appliedChanges.length).toBe(10);
+    const posMap = new Map(appliedChanges.map((c) => [c.id, c.position]));
+
+    const pRoot = posMap.get("page-root")!;
+    const pNotFound = posMap.get("page-not-found")!;
+    const pLogin = posMap.get("page-login")!;
+    const pRegister = posMap.get("page-register")!;
+
+    const pDash = posMap.get("page-dashboard")!;
+    const pOnboard = posMap.get("page-onboarding")!;
+    const pConvs = posMap.get("page-conversations")!;
+
+    const webPos = posMap.get("web-1")!;
+    const authPos = posMap.get("auth-1")!;
+
+    // 1. Stack 1 pages are stacked with correct offsets
+    expect(pNotFound.y - pRoot.y).toBeCloseTo(CARD_HEADER_OFFSET_Y, 0);
+    expect(pLogin.y - pNotFound.y).toBeCloseTo(CARD_HEADER_OFFSET_Y, 0);
+    expect(pRegister.y - pLogin.y).toBeCloseTo(CARD_HEADER_OFFSET_Y, 0);
+
+    expect(pNotFound.x - pRoot.x).toBeCloseTo(CARD_HEADER_OFFSET_X, 0);
+    expect(pLogin.x - pNotFound.x).toBeCloseTo(CARD_HEADER_OFFSET_X, 0);
+    expect(pRegister.x - pLogin.x).toBeCloseTo(CARD_HEADER_OFFSET_X, 0);
+
+    // 2. Stack 2 pages are sorted alphabetically (/conversations, /dashboard, /onboarding) and stacked with correct offsets
+    expect(pDash.y - pConvs.y).toBeCloseTo(CARD_HEADER_OFFSET_Y, 0);
+    expect(pOnboard.y - pDash.y).toBeCloseTo(CARD_HEADER_OFFSET_Y, 0);
+
+    expect(pDash.x - pConvs.x).toBeCloseTo(CARD_HEADER_OFFSET_X, 0);
+    expect(pOnboard.x - pDash.x).toBeCloseTo(CARD_HEADER_OFFSET_X, 0);
+
+    // 3. The vertical gap between Stack 1 and Stack 2:
+    // Stack 1 lead is pRoot, last card is pRegister (pRoot.y + 3 * 44 = pRoot.y + 132).
+    // Stack 2 top is pDash.y.
+    // pDash.y must be greater than pRegister.y, but NOT 2,000px away!
+    expect(pDash.y).toBeGreaterThan(pRegister.y);
+    const stackGap = pDash.y - (pRoot.y + 132 + 260); // assuming min height 260
+    // Stack gap must be reasonable and tight (less than 500px, not 2,000px+)
+    expect(pDash.y - pRoot.y).toBeLessThan(700);
+
+    // 4. WebApp node is vertically balanced between the stacks (not pushed 2,000px away)
+    // webPos.y should sit within the vertical span of the two stacks
+    expect(webPos.y).toBeGreaterThan(pRoot.y - 100);
+    expect(webPos.y).toBeLessThan(pDash.y + 300);
+
+    // 5. Horizontal rank ordering: Auth -> Web -> Pages
+    expect(authPos.x).toBeLessThan(webPos.x);
+    expect(webPos.x).toBeLessThan(pRegister.x);
+  });
+
+  it("fans out pages vertically when a zone is expanded", () => {
+    const nodes: LayoutNode[] = [
+      {
+        id: "web-1",
+        type: "webApp",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "web",
+          zones: [
+            { id: "zone-public", handleId: "public-in", name: "Public Section", accessType: "public" },
+          ],
+          expandedZones: ["zone-public"], // Expanded!
+        },
+      },
+      { id: "page-0", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/" } },
+      { id: "page-1", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/not-found" } },
+    ];
+
+    const edges: LayoutEdge[] = [
+      { id: "e-0", source: "web-1", sourceHandle: "public-in", target: "page-0", targetHandle: "page-in", type: "connection" },
+      { id: "e-1", source: "web-1", sourceHandle: "public-in", target: "page-1", targetHandle: "page-in", type: "connection" },
+    ];
+
+    let appliedChanges: PositionNodeChange[] = [];
+    performGraphLayout({
+      nodes,
+      edges,
+      onNodesChange: (c) => {
+        appliedChanges = c;
+      },
+      fitView: vi.fn(),
+      direction: "LR",
+    });
+
+    const posMap = new Map(appliedChanges.map((c) => [c.id, c.position]));
+    const p0 = posMap.get("page-0")!;
+    const p1 = posMap.get("page-1")!;
+
+    // When fanned out, each card is full-height and separated by nodeGap (not 44px stacked offset)
+    expect(Math.abs(p1.y - p0.y)).toBeGreaterThan(200);
+  });
+});

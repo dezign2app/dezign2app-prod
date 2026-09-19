@@ -176,6 +176,7 @@ export interface CanvasWebPageNodeData {
   realtimeConnections?: RealtimeConnection[];
   customDependencies?: NodeDependencyItem[];
   pageStores?: GlobalStoreDefinition[];
+  stackOrder?: number;
 }
 
 /** Payments node fields (canvas type). */

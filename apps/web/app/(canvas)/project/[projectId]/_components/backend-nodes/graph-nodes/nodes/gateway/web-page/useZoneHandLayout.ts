@@ -19,16 +19,28 @@ export interface ZoneHandLayoutInfo {
   isZoneExpanded: boolean;
   toggleZoneHand: () => void;
   selectCard: (targetIndex: number) => void;
+  moveCard: (direction: "up" | "down") => void;
 }
 
 /**
  * Sorts web page nodes in a stable, logical order:
+ * If custom stackOrder is present, respect that order.
+ * Otherwise default to:
  * 1. Root page "/"
  * 2. "/not-found"
  * 3. Alphabetical by route / label
  */
 export function sortZonePages(pages: BackendNode[]): BackendNode[] {
   return [...pages].sort((a, b) => {
+    const orderA = typeof a.data?.stackOrder === "number" ? a.data.stackOrder : undefined;
+    const orderB = typeof b.data?.stackOrder === "number" ? b.data.stackOrder : undefined;
+
+    if (orderA !== undefined && orderB !== undefined && orderA !== orderB) {
+      return orderA - orderB;
+    }
+    if (orderA !== undefined && orderB === undefined) return -1;
+    if (orderB !== undefined && orderA === undefined) return 1;
+
     const labelA = (a.data?.label || "").trim().toLowerCase();
     const labelB = (b.data?.label || "").trim().toLowerCase();
 
@@ -131,7 +143,7 @@ export function toggleZoneHandLayout({
       },
     });
 
-    // Fan out pages vertically so each has plenty of room
+    // Spread pages vertically so each has plenty of room
     pages.forEach((page, index) => {
       updateNode(page.id, {
         position: {
@@ -277,6 +289,55 @@ export function useZoneHandLayout(
     [siblingPages, nodes],
   );
 
+  const moveCard = useCallback(
+    (direction: "up" | "down") => {
+      if (siblingPages.length <= 1) return;
+      const currentIndex = siblingPages.findIndex((p) => p.id === pageId);
+      if (currentIndex === -1) return;
+
+      const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex < 0 || targetIndex >= siblingPages.length) return;
+
+      // Swap pages in the sibling array
+      const nextPages = [...siblingPages];
+      const currentCard = nextPages[currentIndex]!;
+      const targetCard = nextPages[targetIndex]!;
+      nextPages[currentIndex] = targetCard;
+      nextPages[targetIndex] = currentCard;
+
+      // Determine base position from the first card in the existing stack
+      const baseX = siblingPages[0]?.position?.x ?? 0;
+      const baseY = siblingPages[0]?.position?.y ?? 0;
+
+      // Update positions and stackOrder for all pages in the zone
+      nextPages.forEach((page, idx) => {
+        updateNode(page.id, {
+          position: {
+            x: baseX + idx * CARD_HEADER_OFFSET_X,
+            y: baseY + idx * CARD_HEADER_OFFSET_Y,
+          },
+          data: {
+            ...page.data,
+            stackOrder: idx,
+          },
+        });
+      });
+
+      // Keep the current page selected
+      const store = useBackendCanvasStore.getState();
+      store.onNodesChange(
+        nodes
+          .filter((n) => n.type === "webPage")
+          .map((p) => ({
+            type: "select" as const,
+            id: p.id,
+            selected: p.id === pageId,
+          })),
+      );
+    },
+    [siblingPages, pageId, updateNode, nodes],
+  );
+
   const toggleZoneHand = useCallback(() => {
     if (!connectedWebAppNode || !connectedZone) return;
     toggleZoneHandLayout({
@@ -300,5 +361,6 @@ export function useZoneHandLayout(
     isZoneExpanded,
     toggleZoneHand,
     selectCard,
+    moveCard,
   };
 }
