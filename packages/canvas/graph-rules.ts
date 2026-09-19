@@ -226,5 +226,4 @@ export const WEB_PAGE_EVENTS = [
   "mouseenter",
   "mouseleave",
   "navigateToPage",
-  "other",
 ] as const;

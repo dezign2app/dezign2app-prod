@@ -18,7 +18,6 @@ import { RequestBodyMode } from "./RequestBodyEditor";
 import { generateId } from "../backend-nodes/graph-nodes/common";
 import { Label } from "@workspace/ui/components/label";
 import { Input } from "@workspace/ui/components/input";
-import { Textarea } from "@workspace/ui/components/textarea";
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import {
   Select,
@@ -27,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Sparkles, Radio, Wifi, Video, RefreshCw, Database } from "lucide-react";
+import { Radio, Wifi, Video, RefreshCw, Database } from "lucide-react";
 
 const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
 
@@ -92,10 +91,7 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
 
   const [eventName, setEventName] = useState(item?.name || "");
   const [eventType, setEventType] = useState(
-    isStandard ? initialEvent : initialEvent ? "other" : "click",
-  );
-  const [customEvent, setCustomEvent] = useState(
-    isStandard ? "" : initialEvent,
+    isStandard ? initialEvent : "click",
   );
   const [navType, setNavType] = useState<"link" | "router">(
     item?.navigationType || "link",
@@ -104,9 +100,6 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
     "direct" | "on_success" | "on_condition" | "on_error"
   >(item?.navigationCondition || "direct");
   const [condCode, setCondCode] = useState(item?.conditionCode || "");
-
-  const [description, setDescription] = useState(item?.description || "");
-  const [uiPrompt, setUiPrompt] = useState(item?.uiPrompt || "");
 
   const [sseConfig, setSseConfig] = useState(item?.sseConfig || {});
   const [wsConfig, setWsConfig] = useState(item?.wsConfig || {});
@@ -118,13 +111,10 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
       setEventName(item.name || "");
       const evt = item.event || "click";
       const isStd = EVENT_OPTIONS.some((opt) => opt === evt);
-      setEventType(isStd ? evt : evt ? "other" : "click");
-      setCustomEvent(isStd ? "" : evt);
+      setEventType(isStd ? evt : "click");
       setNavType(item.navigationType || "link");
       setNavCond(item.navigationCondition || "direct");
       setCondCode(item.conditionCode || "");
-      setDescription(item.description || "");
-      setUiPrompt(item.uiPrompt || "");
       setSseConfig(item.sseConfig || {});
       setWsConfig(item.wsConfig || {});
       setWebRtcConfig(item.webRtcConfig || {});
@@ -332,30 +322,12 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
         <EventPropertiesSection
           eventName={eventName}
           eventType={eventType}
-          customEvent={customEvent}
           eventOptions={EVENT_OPTIONS}
           isNavigateToPage={isNavigateToPage}
           setEventName={setEventName}
           setEventType={setEventType}
-          setCustomEvent={setCustomEvent}
           handleUpdateEvent={handleUpdateEvent}
         />
-
-        <AccordionItem value="ai_context" className="border rounded-lg bg-card overflow-hidden">
-          <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between">
-            <span className="flex items-center gap-2"><Sparkles size={14} className="text-indigo-400" /> AI Action Prompts</span>
-          </AccordionTrigger>
-          <AccordionContent className="px-4 pb-4 pt-1 space-y-3">
-            <div className="space-y-1">
-              <Label className="text-xs font-medium">Action Description</Label>
-              <Textarea value={description} onChange={(e) => { setDescription(e.target.value); updateEventFields({ description: e.target.value }); }} placeholder="Describe what this action does..." className="min-h-[70px] text-xs resize-none" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-medium">Trigger UI Prompt</Label>
-              <Textarea value={uiPrompt} onChange={(e) => { setUiPrompt(e.target.value); updateEventFields({ uiPrompt: e.target.value }); }} placeholder="Describe how the trigger UI should look..." className="min-h-[70px] text-xs resize-none" />
-            </div>
-          </AccordionContent>
-        </AccordionItem>
 
         {isSse && (
           <AccordionItem value="sse_config" className="border border-amber-500/30 rounded-lg bg-amber-500/5 overflow-hidden">
@@ -530,7 +502,6 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
             nodeId={nodeId}
             eventName={eventName}
             eventType={eventType}
-            customEvent={customEvent}
             item={item}
             handleUpdateEvent={handleUpdateEvent}
           />
