@@ -19,6 +19,10 @@ export interface TestDbOperationPayload {
   connection?: {
     host?: string;
     port?: number | string;
+    database?: string;
+    user?: string;
+    username?: string;
+    password?: string;
     connectionString?: string;
     connectionStringEnv?: string;
     dbFilePath?: string;
@@ -65,6 +69,10 @@ export interface CheckDbConnectionPayload {
   connection?: {
     host?: string;
     port?: number | string;
+    database?: string;
+    user?: string;
+    username?: string;
+    password?: string;
     connectionString?: string;
     connectionStringEnv?: string;
     dbFilePath?: string;

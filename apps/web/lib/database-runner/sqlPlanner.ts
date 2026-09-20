@@ -92,6 +92,13 @@ export function planSqlCommand(
   if (isFindAll) {
     const limit = args.limit !== undefined ? Number(args.limit) : 20;
     const offset = args.offset !== undefined ? Number(args.offset) : 0;
+    if (_engine === "postgres") {
+      return {
+        rawSql: `SELECT * FROM "${tableName}" ORDER BY "id" LIMIT ${limit} OFFSET ${offset};`,
+        tableName,
+        kind: "findAll",
+      };
+    }
     return {
       rawSql: `SELECT * FROM ${tableName} LIMIT ${limit} OFFSET ${offset};`,
       tableName,
@@ -100,6 +107,13 @@ export function planSqlCommand(
   }
 
   if (isFindById) {
+    if (_engine === "postgres") {
+      return {
+        rawSql: `SELECT * FROM "${tableName}" WHERE "id" = '${idVal}' LIMIT 1;`,
+        tableName,
+        kind: "findById",
+      };
+    }
     return {
       rawSql: `SELECT * FROM ${tableName} WHERE id = '${idVal}' LIMIT 1;`,
       tableName,
@@ -108,12 +122,42 @@ export function planSqlCommand(
   }
 
   if (isCreate) {
-    const dataObj: JsonObject = isJsonObject(args.data)
-      ? args.data
-      : isJsonObject(args)
-        ? args
-        : {};
-    const keys = Object.keys(dataObj).filter((k) => k !== "id");
+    let rawPayload: unknown = args.data;
+    if (!rawPayload) {
+      const destructuredKey = Object.keys(args).find((k) => k.startsWith("{"));
+      if (destructuredKey) rawPayload = args[destructuredKey];
+    }
+    if (!rawPayload) {
+      rawPayload = args.record || args.item || args;
+    }
+
+    const dataObj: JsonObject = isJsonObject(rawPayload)
+      ? (rawPayload as JsonObject)
+      : {};
+
+    // Keep all valid column keys (do NOT filter out "id" if id is provided in payload!)
+    const keys = Object.keys(dataObj).filter(
+      (k) => !k.startsWith("{") && k !== "data" && k !== "record" && dataObj[k] !== undefined,
+    );
+
+    if (_engine === "postgres") {
+      if (keys.length > 0) {
+        const cols = keys.map((k) => `"${k}"`).join(", ");
+        const vals = keys.map((k) => JSON.stringify(dataObj[k])).join(", ");
+        return {
+          rawSql: `INSERT INTO "${tableName}" (${cols}) VALUES (${vals}) RETURNING *;`,
+          tableName,
+          kind: "create",
+        };
+      }
+      // Never send DEFAULT VALUES on Postgres if id is not nullable without default — supply an explicit id
+      const fallbackId = `${tableName}_${Date.now().toString(36)}`;
+      return {
+        rawSql: `INSERT INTO "${tableName}" ("id") VALUES ('${fallbackId}') RETURNING *;`,
+        tableName,
+        kind: "create",
+      };
+    }
     if (keys.length > 0) {
       const cols = keys.join(", ");
       const vals = keys.map((k) => JSON.stringify(dataObj[k])).join(", ");
@@ -123,19 +167,38 @@ export function planSqlCommand(
         kind: "create",
       };
     }
+    const fallbackId = `${tableName}_${Date.now().toString(36)}`;
     return {
-      rawSql: `INSERT INTO ${tableName} DEFAULT VALUES RETURNING *;`,
+      rawSql: `INSERT INTO ${tableName} (id) VALUES ('${fallbackId}') RETURNING *;`,
       tableName,
       kind: "create",
     };
   }
 
   if (isUpdate) {
-    const dataObj: JsonObject = isJsonObject(args.data)
-      ? args.data
-      : isJsonObject(args)
-        ? args
-        : {};
+    let rawPayload: unknown = args.data;
+    if (!rawPayload) {
+      const destructuredKey = Object.keys(args).find((k) => k.startsWith("{"));
+      if (destructuredKey) rawPayload = args[destructuredKey];
+    }
+    if (!rawPayload) {
+      rawPayload = args.record || args.item || args;
+    }
+    const dataObj: JsonObject = isJsonObject(rawPayload)
+      ? (rawPayload as JsonObject)
+      : {};
+    if (_engine === "postgres") {
+      const sets = Object.entries(dataObj)
+        .filter(([k]) => k !== "id" && !k.startsWith("{") && k !== "data" && k !== "record")
+        .map(([k, v]) => `"${k}" = ${JSON.stringify(v)}`);
+      const setClause =
+        sets.length > 0 ? sets.join(", ") : `"updated_at" = NOW()`;
+      return {
+        rawSql: `UPDATE "${tableName}" SET ${setClause} WHERE "id" = '${idVal}' RETURNING *;`,
+        tableName,
+        kind: "update",
+      };
+    }
     const sets = Object.entries(dataObj)
       .filter(([k]) => k !== "id")
       .map(([k, v]) => `${k} = ${JSON.stringify(v)}`);
@@ -149,6 +212,13 @@ export function planSqlCommand(
   }
 
   if (isDelete) {
+    if (_engine === "postgres") {
+      return {
+        rawSql: `DELETE FROM "${tableName}" WHERE "id" = '${idVal}';`,
+        tableName,
+        kind: "delete",
+      };
+    }
     return {
       rawSql: `DELETE FROM ${tableName} WHERE id = '${idVal}';`,
       tableName,

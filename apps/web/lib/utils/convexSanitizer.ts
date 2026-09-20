@@ -4,10 +4,6 @@ export type ConvexRecord = { [key: string]: ConvexValue };
 
 export type ConvexValue =
   | ConvexPrimitive
-  | Date
-  | RegExp
-  | Uint8Array
-  | ArrayBuffer
   | ConvexValue[]
   | ConvexRecord;
 
@@ -28,18 +24,32 @@ function isPlainObject(val: object): val is Record<string, ConvexValue> {
  * 1. Field names cannot start with '$' or '_' (reserved for query operators and system fields).
  * 2. Field names cannot be empty or contain null characters.
  * 3. Field values cannot contain explicit `undefined` inside objects.
+ * 4. Date objects are not supported by Convex — converted to ISO 8601 strings.
  *
  * This utility:
+ * - Converts JavaScript Date objects into ISO 8601 string timestamps.
  * - Unwraps RedisJSON-style envelopes where a single root key is a JSONPath starting with '$' (e.g. { "$[-20:]": [...] } -> [...]).
  * - Renames any remaining field name starting with '$' or '_' to 'val_$1' (e.g. "$[-20:]" -> "val_$[-20:]", "_custom" -> "val__custom").
  * - Replaces empty keys with 'empty_key'.
  * - Omits fields with `undefined` values.
- * - Recursively processes arrays and nested objects while preserving Dates, RegExps, TypedArrays.
+ * - Recursively processes arrays and nested objects.
  */
 export function sanitizeForConvex<T>(value: T): T;
 export function sanitizeForConvex(value: ConvexValue): ConvexValue {
   if (value === null || value === undefined) {
     return value;
+  }
+
+  if (value instanceof Date) {
+    return (Number.isNaN(value.getTime()) ? null : value.toISOString()) as unknown as ConvexValue;
+  }
+
+  if (typeof value === "bigint") {
+    return Number(value) as unknown as ConvexValue;
+  }
+
+  if (typeof value === "number") {
+    return (Number.isNaN(value) || !Number.isFinite(value) ? null : value) as unknown as ConvexValue;
   }
 
   if (typeof value !== "object") {
@@ -49,12 +59,20 @@ export function sanitizeForConvex(value: ConvexValue): ConvexValue {
   if (Array.isArray(value)) {
     const list: ConvexValue[] = [];
     for (const item of value) {
-      list.push(sanitizeForConvex(item));
+      const sanitized = sanitizeForConvex(item);
+      list.push(sanitized === undefined ? null : sanitized);
     }
     return list;
   }
 
+  if (value instanceof RegExp) {
+    return value.toString() as unknown as ConvexValue;
+  }
+
   if (!isPlainObject(value)) {
+    if (typeof (value as { toJSON?: () => unknown }).toJSON === "function") {
+      return sanitizeForConvex((value as { toJSON: () => unknown }).toJSON() as ConvexValue);
+    }
     return value;
   }
 

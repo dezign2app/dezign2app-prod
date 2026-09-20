@@ -50,11 +50,17 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
   const port: number | string = parentDb?.data?.port ?? (isRedis ? 6379 : isSqlite ? 0 : 5432);
   const dbFilePath = parentDb?.data?.dbFilePath || "dev.db";
   const dbFilePathEnv = parentDb?.data?.dbFilePathEnv || "DB_FILE_PATH";
+  const database = parentDb?.data?.database;
+  const user = parentDb?.data?.user || parentDb?.data?.username;
+  const password = parentDb?.data?.password;
+  const isPostgres = engine === "postgres";
   const connUri = isRedis
     ? `redis://${host}:${port}`
     : isSqlite
       ? `sqlite:${dbFilePath}`
-      : `${host}:${port}`;
+      : isPostgres
+        ? `postgresql://${user || "postgres"}:${password ? "••••" : ""}@${host}:${port}/${database || "postgres"}`
+        : `${host}:${port}`;
   const isParentConnected = parentDb?.data?.lastConnectionStatus?.connected === true;
   const isParentFailed = parentDb?.data?.lastConnectionStatus?.connected === false;
   const connectionError = parentDb?.data?.lastConnectionStatus?.error;
@@ -73,36 +79,15 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
       {
         id: "case-1",
         name: "Standard Case",
-        params: generateDefaultParams(selectedOp, label, isRedis),
+        params: generateDefaultParams(selectedOp, label, isRedis, columns),
       },
     ];
-  }, [selectedOp.testCases, selectedOp.params, label, isRedis]);
+  }, [selectedOp.testCases, selectedOp.params, label, isRedis, columns]);
 
   const [testCases, setTestCases] = useState<DbOperationTestCase[]>(initialCases);
   const [activeCaseId, setActiveCaseId] = useState<string>(initialCases[0]?.id || "case-1");
   const latestTestCasesRef = useRef(testCases);
   latestTestCasesRef.current = testCases;
-
-  // Sync test cases when switching operation
-  const prevOpIdRef = useRef(selectedOp.id);
-  useEffect(() => {
-    if (selectedOp.id !== prevOpIdRef.current) {
-      prevOpIdRef.current = selectedOp.id;
-      const cases =
-        selectedOp.testCases && selectedOp.testCases.length > 0
-          ? sanitizeForConvex(selectedOp.testCases)
-          : [
-              {
-                id: "case-1",
-                name: "Standard Case",
-                params: generateDefaultParams(selectedOp, label, isRedis),
-              },
-            ];
-      setTestCases(cases);
-      latestTestCasesRef.current = cases;
-      setActiveCaseId(cases[0]?.id || "case-1");
-    }
-  }, [selectedOp.id, selectedOp.testCases, selectedOp.params, label, isRedis]);
 
   // Debounced persistence to parent canvas store
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -123,6 +108,99 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
     [updateSelectedOp],
   );
 
+  // Sync test cases when switching operation or when parameters/columns change
+  const prevOpIdRef = useRef(selectedOp.id);
+  const prevParamsSignatureRef = useRef<string>(
+    JSON.stringify((selectedOp.params || []).map((p) => `${p.name}:${p.type}`)),
+  );
+  const prevColumnsSignatureRef = useRef<string>(
+    JSON.stringify((columns || []).map((c) => `${c.name}:${c.type}`)),
+  );
+
+  useEffect(() => {
+    const currentParamsSig = JSON.stringify(
+      (selectedOp.params || []).map((p) => `${p.name}:${p.type}`),
+    );
+    const currentColumnsSig = JSON.stringify(
+      (columns || []).map((c) => `${c.name}:${c.type}`),
+    );
+
+    const isOpSwitch = selectedOp.id !== prevOpIdRef.current;
+    const isParamsChanged = currentParamsSig !== prevParamsSignatureRef.current;
+    const isColumnsChanged = currentColumnsSig !== prevColumnsSignatureRef.current;
+
+    if (isOpSwitch) {
+      prevOpIdRef.current = selectedOp.id;
+      prevParamsSignatureRef.current = currentParamsSig;
+      prevColumnsSignatureRef.current = currentColumnsSig;
+
+      const cases =
+        selectedOp.testCases && selectedOp.testCases.length > 0
+          ? sanitizeForConvex(selectedOp.testCases)
+          : [
+              {
+                id: "case-1",
+                name: "Standard Case",
+                params: generateDefaultParams(selectedOp, label, isRedis, columns),
+              },
+            ];
+      setTestCases(cases);
+      latestTestCasesRef.current = cases;
+      setActiveCaseId(cases[0]?.id || "case-1");
+      return;
+    }
+
+    if (isParamsChanged || isColumnsChanged) {
+      prevParamsSignatureRef.current = currentParamsSig;
+      prevColumnsSignatureRef.current = currentColumnsSig;
+
+      // Reconcile missing/stale parameters across existing test cases
+      const defaultParamValues = generateDefaultParams(selectedOp, label, isRedis, columns);
+      setTestCases((prevCases) => {
+        const updated = prevCases.map((tc) => {
+          const newParams: Record<string, unknown> = {};
+          (selectedOp.params || []).forEach((p) => {
+            const existingVal = tc.params?.[p.name];
+            if (existingVal !== undefined) {
+              // If existingVal is an object payload for data/item, heal stale dummy fields if they don't match any actual columns
+              if (
+                typeof existingVal === "object" &&
+                existingVal !== null &&
+                !Array.isArray(existingVal) &&
+                (p.name === "data" || p.name === "item") &&
+                columns &&
+                columns.length > 0
+              ) {
+                const existingKeys = Object.keys(existingVal);
+                const tableColNames = new Set(columns.map((c) => c.name));
+                const hasValidColKey = existingKeys.some((k) => tableColNames.has(k));
+                if (!hasValidColKey) {
+                  newParams[p.name] = defaultParamValues[p.name];
+                  return;
+                }
+              }
+              newParams[p.name] = existingVal;
+            } else {
+              newParams[p.name] = defaultParamValues[p.name];
+            }
+          });
+          return { ...tc, params: newParams };
+        });
+        latestTestCasesRef.current = updated;
+        persistTestCases(updated, true);
+        return updated;
+      });
+    }
+  }, [
+    selectedOp.id,
+    selectedOp.testCases,
+    selectedOp.params,
+    label,
+    isRedis,
+    columns,
+    persistTestCases,
+  ]);
+
   // Flush pending updates when unmounting
   useEffect(() => {
     return () => {
@@ -140,7 +218,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
     testCases[0] || {
       id: "case-1",
       name: "Standard Case",
-      params: generateDefaultParams(selectedOp, label, isRedis),
+      params: generateDefaultParams(selectedOp, label, isRedis, columns),
     };
 
   // Add Test Case
@@ -149,7 +227,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
     const newCase: DbOperationTestCase = {
       id: newCaseId,
       name: `Test Case ${testCases.length + 1}`,
-      params: generateDefaultParams(selectedOp, label, isRedis),
+      params: generateDefaultParams(selectedOp, label, isRedis, columns),
     };
     const updated = [...testCases, newCase];
     setTestCases(updated);
@@ -217,6 +295,10 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
         connection: {
           host,
           port,
+          database,
+          user,
+          password,
+          connectionString: parentDb.data?.connectionString,
           connectionStringEnv: parentDb.data?.connectionStringEnv,
           dbFilePath,
           dbFilePathEnv,
@@ -267,6 +349,11 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
         connection: {
           host,
           port,
+          database,
+          user,
+          password,
+          connectionString: parentDb?.data?.connectionString,
+          connectionStringEnv: parentDb?.data?.connectionStringEnv,
           dbFilePath,
           dbFilePathEnv,
         },
@@ -384,6 +471,15 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeCase, testMode]);
 
+  const handleResetParamsToDefaults = useCallback(() => {
+    const defaultParamValues = generateDefaultParams(selectedOp, label, isRedis, columns);
+    const updated = testCases.map((tc) =>
+      tc.id === activeCase.id ? { ...tc, params: defaultParamValues } : tc,
+    );
+    setTestCases(updated);
+    persistTestCases(updated, true);
+  }, [selectedOp, label, isRedis, columns, testCases, activeCase.id, persistTestCases]);
+
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-card p-4 shadow-sm">
       {/* 1. Header: Target Connection & Execution Mode Switcher */}
@@ -430,6 +526,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
         label={label}
         isRedis={isRedis}
         onParamChange={handleParamChange}
+        onResetToDefaults={handleResetParamsToDefaults}
       />
 
       {/* 4. Action Trigger Bar */}

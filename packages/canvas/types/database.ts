@@ -182,6 +182,7 @@ export interface CanvasDatabaseNodeData {
   dbCategory?: "sql" | "nosql" | "vector" | "key-value";
   provider?: string;
   dbConnectionType?: "env_var" | "connection_string";
+  connectionString?: string;
   connectionStringEnv?: string;
   dbFilePath?: string;
   dbFilePathEnv?: string;
@@ -189,6 +190,10 @@ export interface CanvasDatabaseNodeData {
   portEnv?: string;
   host?: string;
   port?: string | number;
+  database?: string;
+  user?: string;
+  username?: string;
+  password?: string;
   databaseNameEnv?: string;
   usernameEnv?: string;
   passwordEnv?: string;

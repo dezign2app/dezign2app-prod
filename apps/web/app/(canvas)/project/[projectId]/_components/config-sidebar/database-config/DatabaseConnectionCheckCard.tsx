@@ -29,6 +29,9 @@ interface DatabaseConnectionCheckCardProps {
   engine: string;
   host: string;
   port: string | number;
+  database?: string;
+  user?: string;
+  password?: string;
   connectionString?: string;
   connectionStringEnv?: string;
   dbFilePath?: string;
@@ -42,6 +45,9 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
   engine,
   host,
   port,
+  database,
+  user,
+  password,
   connectionString,
   connectionStringEnv,
   dbFilePath,
@@ -54,6 +60,7 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
 
   const isRedis = engine === "redis";
   const isSqlite = engine === "sqlite";
+  const isPostgres = engine === "postgres" || engine === "postgresql" || engine === "pg";
   const status = localStatus || lastStatus;
   const isConnected = status?.connected === true;
   const isFailed = status?.connected === false;
@@ -64,7 +71,9 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
     ? `redis://${currentHost}:${currentPort}`
     : isSqlite
       ? `sqlite:${dbFilePath || "dev.db"}`
-      : `${currentHost}:${currentPort}`;
+      : isPostgres
+        ? `postgresql://${user || "postgres"}:${password ? "••••" : ""}@${currentHost}:${currentPort}/${database || "postgres"}`
+        : `${currentHost}:${currentPort}`;
 
   const handleCheckConnection = async () => {
     setChecking(true);
@@ -74,6 +83,9 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
         connection: {
           host: currentHost,
           port: currentPort,
+          database,
+          user,
+          password,
           connectionString,
           connectionStringEnv,
           dbFilePath,

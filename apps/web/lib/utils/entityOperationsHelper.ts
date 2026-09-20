@@ -855,13 +855,215 @@ export function generateRedisOperations(
 }
 
 /**
+ * Generates default DB operation functions for a specific database engine.
+ *
+ * For "postgres": generates async functions with $1, $2 parameterized queries and RETURNING *.
+ * For all other engines (default): delegates to generateDefaultDbOperations (SQLite prepared statements).
+ *
+ * This function is additive — the original generateDefaultDbOperations and all SQLite paths are
+ * completely unchanged.
+ */
+export function generateDefaultDbOperationsForEngine(
+  label: string,
+  rawColumns: RawTableColumn[] = [],
+  indexes: { name: string; columns: string; isUnique?: boolean }[] = [],
+  allNodes: BackendNode[] = [],
+  engine = "sqlite",
+): DbOperationFunction[] {
+  if (engine !== "postgres") {
+    return generateDefaultDbOperations(label, rawColumns, indexes, allNodes);
+  }
+
+  // ── PostgreSQL-flavored async default operations ──────────────────────────
+  const tableName = toTableName(label || "table");
+  const pascal = toPascal(tableName);
+  const pascalSingular = toSingular(pascal);
+  const pascalPlural = toPlural(pascal);
+
+  const columns = rawColumns.map((c) => ({
+    ...c,
+    name: toSqlIdentifier(c.name || "col", "col"),
+  }));
+
+  const pkCol: RawTableColumn =
+    columns.find((c) => c.isPrimaryKey) ||
+    columns[0] || { name: "id", type: "string", isPrimaryKey: true };
+  const pkColName = pkCol.name || "id";
+  const pkVarName = toVarName(pkColName);
+  const pkType = sqlColumnToTsType(pkCol.type);
+  const isStringPk = pkType === "string";
+  const writableCols = columns.filter((c) => !c.isPrimaryKey);
+
+  // Build param lists
+  const insertColList = isStringPk ? [pkCol, ...writableCols] : writableCols;
+  const insertColNames = insertColList.map((c) => `"${c.name}"`).join(", ");
+  const insertParams = insertColList.map((_, i) => `$${i + 1}`).join(", ");
+  const insertArgVals = insertColList
+    .map((c) => (c.isPrimaryKey ? "_id" : `${toVarName(c.name)} ?? null`))
+    .join(", ");
+
+  const destructuredFields = insertColList.map((c) => toVarName(c.name)).join(", ") || "id";
+  const createDestructuredParam = `{ ${destructuredFields} }`;
+
+  const setClauses = writableCols.map((c, i) => `"${c.name}" = $${i + 2}`).join(", ");
+  const updateDestructured = writableCols.map((c) => toVarName(c.name)).join(", ");
+  const updateArgVals = writableCols.map((c) => `${toVarName(c.name)} ?? null`).join(", ");
+
+  const createCode = isStringPk
+    ? `export async function create${pascalSingular}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}Row> {\n  const _id = ${pkVarName} || randomUUID();\n  const res = await query<${pascal}Row>(\n    'INSERT INTO "${tableName}" (${insertColNames}) VALUES (${insertParams}) RETURNING *',\n    [${insertArgVals}]\n  );\n  return res.rows[0];\n}`
+    : `export async function create${pascalSingular}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}Row> {\n  const res = await query<${pascal}Row>(\n    'INSERT INTO "${tableName}" (${insertColNames}) VALUES (${insertParams}) RETURNING *',\n    [${insertArgVals}]\n  );\n  return res.rows[0];\n}`;
+
+  const updateCode = writableCols.length > 0
+    ? `export async function update${pascalSingular}(${pkVarName}: ${pkType}, { ${updateDestructured} }: Update${pascal}Data): Promise<${pascal}Row | null> {\n  const res = await query<${pascal}Row>(\n    'UPDATE "${tableName}" SET ${setClauses} WHERE "${pkColName}" = $1 RETURNING *',\n    [${pkVarName}, ${updateArgVals}]\n  );\n  return res.rows[0] || null;\n}`
+    : `export async function update${pascalSingular}(${pkVarName}: ${pkType}): Promise<${pascal}Row | null> {\n  const res = await query<${pascal}Row>('SELECT * FROM "${tableName}" WHERE "${pkColName}" = $1 LIMIT 1', [${pkVarName}]);\n  return res.rows[0] || null;\n}`;
+
+  const deleteCode = `export async function delete${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<{ success: boolean; message: string }> {\n  await query('DELETE FROM "${tableName}" WHERE "${pkColName}" = $1', [${pkVarName}]);\n  return { success: true, message: "${pascalSingular} deleted successfully" };\n}`;
+
+  const ops: DbOperationFunction[] = [
+    {
+      id: `auto-find-all-${tableName}`,
+      name: `findAll${pascalPlural}`,
+      kind: "findAll",
+      description: `Retrieve all rows from ${tableName}`,
+      signature: `findAll${pascalPlural}(limit?: number, offset?: number): Promise<${pascal}Row[]>`,
+      params: [
+        { name: "limit", type: "number", required: false, defaultValue: "20" },
+        { name: "offset", type: "number", required: false, defaultValue: "0" },
+      ],
+      returnType: `Promise<${pascal}Row[]>`,
+      pagination: { enabled: true, defaultLimit: 20, maxLimit: 100, mode: "offset" },
+      logicMode: "natural_language",
+      prompt: `Retrieve all records from the ${tableName} table using parameterized PostgreSQL query with limit and offset.`,
+      code: `export async function findAll${pascalPlural}(limit = 20, offset = 0): Promise<${pascal}Row[]> {\n  const res = await query<${pascal}Row>('SELECT * FROM "${tableName}" ORDER BY "${pkColName}" LIMIT $1 OFFSET $2', [limit, offset]);\n  return res.rows;\n}`,
+      enabled: true,
+      isAutoGenerated: true,
+    },
+    {
+      id: `auto-find-by-id-${tableName}`,
+      name: `find${pascalSingular}ById`,
+      kind: "findById",
+      description: `Find a ${tableName} record by ${pkColName}`,
+      signature: `find${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<${pascal}Row | null>`,
+      params: [{ name: pkVarName, type: pkType, required: true }],
+      returnType: `Promise<${pascal}Row | null>`,
+      logicMode: "natural_language",
+      prompt: `Find a single record from the ${tableName} table by primary key (${pkColName}).`,
+      code: `export async function find${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<${pascal}Row | null> {\n  const res = await query<${pascal}Row>('SELECT * FROM "${tableName}" WHERE "${pkColName}" = $1 LIMIT 1', [${pkVarName}]);\n  return res.rows[0] || null;\n}`,
+      enabled: true,
+      isAutoGenerated: true,
+    },
+    {
+      id: `auto-create-${tableName}`,
+      name: `create${pascalSingular}`,
+      kind: "create",
+      description: `Create a new record in ${tableName}`,
+      signature: `create${pascalSingular}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}Row>`,
+      params: [{ name: createDestructuredParam, type: `Create${pascal}Data`, required: true }],
+      returnType: `Promise<${pascal}Row>`,
+      logicMode: "natural_language",
+      prompt: `Insert a new record into the ${tableName} table and return the created row.`,
+      code: createCode,
+      enabled: true,
+      isAutoGenerated: true,
+    },
+    {
+      id: `auto-update-${tableName}`,
+      name: `update${pascalSingular}`,
+      kind: "update",
+      description: `Update a ${tableName} record by ${pkColName}`,
+      signature: writableCols.length > 0
+        ? `update${pascalSingular}(${pkVarName}: ${pkType}, { ${updateDestructured} }: Update${pascal}Data): Promise<${pascal}Row | null>`
+        : `update${pascalSingular}(${pkVarName}: ${pkType}): Promise<${pascal}Row | null>`,
+      params: [
+        { name: pkVarName, type: pkType, required: true },
+        {
+          name: writableCols.length > 0 ? `{ ${updateDestructured} }` : "data",
+          type: `Update${pascal}Data`,
+          required: true,
+        },
+      ],
+      returnType: `Promise<${pascal}Row | null>`,
+      logicMode: "natural_language",
+      prompt: `Update an existing record in the ${tableName} table by primary key.`,
+      code: updateCode,
+      enabled: true,
+      isAutoGenerated: true,
+    },
+    {
+      id: `auto-delete-${tableName}`,
+      name: `delete${pascalSingular}ById`,
+      kind: "delete",
+      description: `Delete a ${tableName} record by ${pkColName}`,
+      signature: `delete${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<{ success: boolean; message: string }>`,
+      params: [{ name: pkVarName, type: pkType, required: true }],
+      returnType: `Promise<{ success: boolean; message: string }>`,
+      logicMode: "natural_language",
+      prompt: `Delete a record from the ${tableName} table by primary key.`,
+      code: deleteCode,
+      enabled: true,
+      isAutoGenerated: true,
+    },
+  ];
+
+  // Index-based fetch operations (PostgreSQL async version)
+  const seenIndexCols = new Set<string>();
+  const effectiveIndexes: { name: string; columns: string; isUnique?: boolean }[] = [];
+  indexes.forEach((idx) => {
+    const norm = (idx.columns || "").toLowerCase().replace(/\s+/g, "");
+    if (norm && !seenIndexCols.has(norm)) {
+      seenIndexCols.add(norm);
+      effectiveIndexes.push(idx);
+    }
+  });
+
+  effectiveIndexes.forEach((idx) => {
+    const colList = (idx.columns || "").split(",").map((c) => c.trim()).filter(Boolean);
+    if (colList.length === 0) return;
+    const isUnique = Boolean(idx.isUnique);
+    const fnName = isUnique
+      ? `find${pascalSingular}By${colList.map((c) => toPascal(toVarName(c))).join("And")}`
+      : `findAll${pascalPlural}By${colList.map((c) => toPascal(toVarName(c))).join("And")}`;
+    const opId = `auto-fetch-by-${colList.join("-")}-${tableName}`;
+    if (ops.some((o) => o.id === opId)) return;
+
+    const paramList = colList.map((c) => ({ name: toVarName(c), type: "string", required: true }));
+    const returnType = isUnique ? `Promise<${pascal}Row | null>` : `Promise<${pascal}Row[]>`;
+    const where = colList.map((c, i) => `"${toSqlIdentifier(c, "col")}" = $${i + 1}`).join(" AND ");
+    const args = colList.map((c) => toVarName(c)).join(", ");
+    const paramSig = colList.map((c) => `${toVarName(c)}: string`).join(", ");
+
+    const indexCode = isUnique
+      ? `export async function ${fnName}(${paramSig}): ${returnType} {\n  const res = await query<${pascal}Row>('SELECT * FROM "${tableName}" WHERE ${where} LIMIT 1', [${args}]);\n  return res.rows[0] || null;\n}`
+      : `export async function ${fnName}(${paramSig}, limit = 20, offset = 0): ${returnType} {\n  const res = await query<${pascal}Row>('SELECT * FROM "${tableName}" WHERE ${where} LIMIT $${colList.length + 1} OFFSET $${colList.length + 2}', [${args}, limit, offset]);\n  return res.rows;\n}`;
+
+    ops.push({
+      id: opId,
+      name: fnName,
+      kind: "fetchByIndex",
+      description: `Find ${tableName} records by ${colList.join(", ")}`,
+      signature: `${fnName}(${paramList.map((p) => `${p.name}: ${p.type}`).join(", ")}): ${returnType}`,
+      params: paramList,
+      returnType,
+      code: indexCode,
+      enabled: true,
+      isAutoGenerated: true,
+    });
+  });
+
+  return ops;
+}
+
+/**
  * Helper function to retrieve the active list of DB operation functions for an entity node.
  * If entityNode has dbOperations configured on its data, returns that.
  * Otherwise generates default CRUD, index-based, relational JOIN, or Redis operations.
+ *
+ * Pass `engine` to get engine-specific default operations (e.g. "postgres" for async SQL).
  */
 export function getEntityDbOperations(
   entityNode?: { type?: string; data?: BackendNode["data"] } | null,
-  allNodes: BackendNode[] = []
+  allNodes: BackendNode[] = [],
+  engine = "sqlite",
 ): DbOperationFunction[] {
   if (!entityNode || !entityNode.data) return [];
   const label = entityNode.data.label || "table";
@@ -970,10 +1172,72 @@ export function getEntityDbOperations(
     return generateRedisOperations(label, entityNode.data);
   }
 
+  if (engine === "postgres") {
+    if (entityNode.data.dbOperations && entityNode.data.dbOperations.length > 0) {
+      const hasStalePgOrSqliteOps = entityNode.data.dbOperations.some(
+        (op) =>
+          op.isAutoGenerated &&
+          op.code &&
+          (op.code.includes("stmtInsert") ||
+            op.code.includes("stmtFindAll") ||
+            op.code.includes("stmtFindById") ||
+            op.code.includes("stmtDelete") ||
+            op.code.includes("as unknown as") ||
+            op.code.includes("as any") ||
+            op.code.includes(" as ") ||
+            (op.kind === "create" && !op.code.includes("{"))),
+      );
+      if (hasStalePgOrSqliteOps) {
+        const customOps = entityNode.data.dbOperations.filter(
+          (op) =>
+            !op.isAutoGenerated &&
+            op.code &&
+            !op.code.includes("stmtInsert") &&
+            !op.code.includes("stmtFindAll") &&
+            !op.code.includes("stmtFindById") &&
+            !op.code.includes("stmtDelete"),
+        );
+        const pgDefaults = generateDefaultDbOperationsForEngine(
+          label,
+          columns,
+          indexes,
+          allNodes,
+          "postgres",
+        );
+        const upgradedOps = [...pgDefaults, ...customOps];
+        entityNode.data.dbOperations = upgradedOps;
+        return upgradedOps;
+      }
+    }
+  }
+
+  if (engine === "sqlite") {
+    if (entityNode.data.dbOperations && entityNode.data.dbOperations.length > 0) {
+      const hasPgOps = entityNode.data.dbOperations.some(
+        (op) => op.isAutoGenerated && op.code && op.code.includes("await query"),
+      );
+      if (hasPgOps) {
+        const customOps = entityNode.data.dbOperations.filter(
+          (op) => !op.isAutoGenerated && op.code && !op.code.includes("await query"),
+        );
+        const sqliteDefaults = generateDefaultDbOperationsForEngine(
+          label,
+          columns,
+          indexes,
+          allNodes,
+          "sqlite",
+        );
+        const upgradedOps = [...sqliteDefaults, ...customOps];
+        entityNode.data.dbOperations = upgradedOps;
+        return upgradedOps;
+      }
+    }
+  }
+
   const rawOps =
     entityNode.data.dbOperations && entityNode.data.dbOperations.length > 0
       ? entityNode.data.dbOperations
-      : generateDefaultDbOperations(label, columns, indexes, allNodes);
+      : generateDefaultDbOperationsForEngine(label, columns, indexes, allNodes, engine);
 
   // Deduplicate operations by id and non-empty name
   const seenIds = new Set<string>();
@@ -1045,6 +1309,81 @@ export function deriveDbFunctionSignature(
   const retStr = returnType.startsWith("Promise<") ? returnType : `Promise<${returnType}>`;
   return `${cleanName}(${paramStr}): ${retStr}`;
 }
+
+/**
+ * Extracts function parameters from outer `function name(...) { ... }` boilerplate if present.
+ */
+export function extractDbOperationParams(
+  code: string,
+): Array<{ name: string; type: string; required?: boolean }> | null {
+  const trimmed = (code || "").trim();
+  if (!trimmed) return null;
+  const regex = /^(?:export\s+)?(?:async\s+)?function\s*(?:[a-zA-Z0-9_$]+)?\s*\(([^)]*)\)/m;
+  const match = trimmed.match(regex);
+  if (!match || match[1] === undefined) return null;
+
+  const rawParams = match[1].trim();
+  if (!rawParams) return [];
+
+  // Parse comma-separated params, handling nested generics/types like Record<string, any>
+  const paramList: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (let i = 0; i < rawParams.length; i++) {
+    const char = rawParams[i];
+    if (char === "<" || char === "{" || char === "(" || char === "[") depth++;
+    else if (char === ">" || char === "}" || char === ")" || char === "]") depth--;
+
+    if (char === "," && depth === 0) {
+      if (current.trim()) paramList.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  if (current.trim()) paramList.push(current.trim());
+
+  return paramList.map((pStr) => {
+    let namePart = pStr;
+    let typePart = "string";
+    let isOptional = false;
+
+    if (pStr.includes(":")) {
+      const colonIdx = pStr.indexOf(":");
+      namePart = pStr.slice(0, colonIdx).trim();
+      typePart = pStr.slice(colonIdx + 1).trim();
+    } else if (pStr.includes("=")) {
+      const eqIdx = pStr.indexOf("=");
+      namePart = pStr.slice(0, eqIdx).trim();
+      const val = pStr.slice(eqIdx + 1).trim();
+      if (val === "true" || val === "false") {
+        typePart = "boolean";
+      } else if (!isNaN(Number(val)) && val !== "") {
+        typePart = "number";
+      } else {
+        typePart = "string";
+      }
+      isOptional = true;
+    }
+
+    if (namePart.endsWith("?")) {
+      isOptional = true;
+      namePart = namePart.slice(0, -1).trim();
+    }
+
+    if (typePart.includes("=")) {
+      typePart = typePart.slice(0, typePart.indexOf("=")).trim();
+      isOptional = true;
+    }
+
+    return {
+      name: namePart.replace(/[^a-zA-Z0-9_$]/g, "") || "param",
+      type: typePart || "string",
+      required: !isOptional,
+    };
+  });
+}
+
 
 
 

@@ -119,6 +119,10 @@ export interface ElectronTestDbOperationPayload {
   connection?: {
     host?: string;
     port?: number | string;
+    database?: string;
+    user?: string;
+    username?: string;
+    password?: string;
     connectionString?: string;
     connectionStringEnv?: string;
     dbFilePath?: string;
@@ -174,6 +178,10 @@ export interface ElectronCheckDbConnectionPayload {
   connection?: {
     host?: string;
     port?: number | string;
+    database?: string;
+    user?: string;
+    username?: string;
+    password?: string;
     connectionString?: string;
     connectionStringEnv?: string;
     dbFilePath?: string;
