@@ -434,11 +434,24 @@ async function run() {
   // 5. Stage Web Runtime
   stageWebResources();
 
+  if (args.includes("--stage-only")) {
+    console.log("\n✓ Assets and web resources staged successfully (--stage-only specified).");
+    return;
+  }
+
   // 6. Package for each requested target
   console.log("\n==> [3/3] Packaging desktop executables...");
   for (const target of targets) {
     const flag = target === "dir" ? "--dir" : `--${target}`;
     const builderArgs = [flag, ...archFlags];
+
+    // Forward publish flag if provided (e.g. --publish always, --publish never)
+    const publishIndex = args.indexOf("--publish");
+    if (publishIndex !== -1 && args[publishIndex + 1] && !args[publishIndex + 1].startsWith("-")) {
+      builderArgs.push("--publish", args[publishIndex + 1]);
+    } else if (args.includes("--publish")) {
+      builderArgs.push("--publish", "always");
+    }
 
     if (targetEnv === "development") {
       builderArgs.push(
