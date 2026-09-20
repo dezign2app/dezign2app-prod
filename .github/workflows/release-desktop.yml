@@ -2,19 +2,35 @@ name: Build & Release Desktop App
 
 on:
   push:
+    branches:
+      - main         # Builds automatically as soon as a PR is merged into main
     tags:
-      - "v*.*.*"   # Triggers on version tags: v1.0.0, v1.2.3, etc.
+      - "v*.*.*"     # Builds & publishes to GitHub Releases on version tags
+  workflow_dispatch: # Allows manual trigger from GitHub Actions UI
+    inputs:
+      publish:
+        description: "Publish to GitHub Releases?"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
-  contents: write  # Needed to create GitHub Releases
+  contents: write    # Grants permission to create and upload to GitHub Releases
 
 jobs:
   build:
-    strategy:
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-
+    name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target_flag: --win
+          - os: macos-latest
+            target_flag: --mac
+          - os: ubuntu-latest
+            target_flag: --linux
 
     steps:
       # ── 1. Checkout ────────────────────────────────────────────────────
@@ -27,40 +43,36 @@ jobs:
         with:
           version: 10
 
-      # ── 3. Setup Node ──────────────────────────────────────────────────
+      # ── 3. Setup Node.js ───────────────────────────────────────────────
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: "pnpm"
 
-      # ── 4. Install all workspace deps ──────────────────────────────────
+      # ── 4. Install all workspace dependencies ──────────────────────────
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # ── 5. Build Next.js web app ───────────────────────────────────────
-      - name: Build web app
-        run: pnpm --filter web build
+      # ── 5. Build, Stage & Package Desktop App ──────────────────────────
+      - name: Build & Package Desktop App
+        working-directory: apps/desktop
+        run: node scripts/build.js --prod ${{ matrix.target_flag }} ${{ (startsWith(github.ref, 'refs/tags/') || inputs.publish == true) && '--publish always' || '--publish never' }}
         env:
-          # Pass your secrets as env vars so Next.js build succeeds
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-          NEXT_PUBLIC_CONVEX_URL: ${{ secrets.NEXT_PUBLIC_CONVEX_URL }}
-          CONVEX_DEPLOYMENT: ${{ secrets.CONVEX_DEPLOYMENT }}
+          # Automatically provided by GitHub Actions for publishing releases
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Prevent macOS build failure if no Apple Developer Certificate is configured
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # Production Web Environment Variables
+          NEXT_PUBLIC_CONVEX_URL: ${{ secrets.NEXT_PUBLIC_CONVEX_URL || 'https://gregarious-quail-82.convex.cloud' }}
+          NEXT_PUBLIC_CONVEX_SITE_URL: ${{ secrets.NEXT_PUBLIC_CONVEX_SITE_URL || 'https://gregarious-quail-82.convex.site' }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET || 'dezign2app-ci-stage-placeholder-secret-32chars' }}
+          BETTER_AUTH_URL: ${{ secrets.BETTER_AUTH_URL || 'https://www.dezign2app.com' }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL || 'https://www.dezign2app.com' }}
+          NEXT_PUBLIC_DESKTOP_AUTH_URL: ${{ secrets.NEXT_PUBLIC_DESKTOP_AUTH_URL || 'https://www.dezign2app.com' }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
 
-      # ── 6. Compile Electron TypeScript ─────────────────────────────────
-      - name: Compile Electron main process
-        run: pnpm --filter desktop exec tsc -p tsconfig.electron.json
-
-      # ── 7. Package into installer ──────────────────────────────────────
-      - name: Package Electron app
-        run: pnpm --filter desktop exec electron-builder --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Used by electron-builder to upload to GitHub Releases
-
-      # ── 8. Upload artifacts (optional — also accessible in Actions tab) ─
+      # ── 6. Upload release artifacts ────────────────────────────────────
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -68,6 +80,9 @@ jobs:
           path: |
             apps/desktop/release/*.exe
             apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
             apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/*.tar.gz
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 14
