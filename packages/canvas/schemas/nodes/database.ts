@@ -48,6 +48,11 @@ export const databaseDataSchema = baseNodeDataSchema.extend({
   usernameEnv: z.string().optional(),
   passwordEnv: z.string().optional(),
   apiKeyEnv: z.string().optional(),
+  connectionString: z.string().optional(),
+  database: z.string().optional(),
+  user: z.string().optional(),
+  username: z.string().optional(),
+  password: z.string().optional(),
   isDefault: z.boolean().optional(),
   // Redis instance-wide server configurations
   maxmemoryPolicy: z

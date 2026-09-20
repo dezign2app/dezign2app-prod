@@ -14,6 +14,7 @@ import {
 import { toEnvVarName } from "../utils";
 import { isServiceConnectedToKafka } from "../kafka";
 import { compileRedisNodes, isServiceConnectedToRedis } from "../compileRedisNodes";
+import { compileDatabaseNodes } from "../compileDatabaseNodes";
 import {
   INTER_SERVICE_PROTOCOL_GRPC,
   GRPC_DEFAULT_PORT,
@@ -611,8 +612,21 @@ export function generateConfigFiles(
 
   const { hasWs } = resolveServiceRealtimeCapabilities(node, endpoints, events, allNodes, allEdges);
 
+  const dbDeps: Record<string, string> = {};
+  if (hasDb) {
+    dbDeps["@workspace/db"] = "workspace:*";
+    const compiledDb = compileDatabaseNodes(allNodes, allEdges);
+    if (compiledDb.packages && compiledDb.packages.length > 0) {
+      compiledDb.packages.forEach((p) => {
+        if (p.packageName && p.packageName !== "@workspace/db") {
+          dbDeps[p.packageName] = "workspace:*";
+        }
+      });
+    }
+  }
+
   const dependencies: Record<string, string> = {
-    ...(hasDb ? { "@workspace/db": "workspace:*" } : {}),
+    ...dbDeps,
     ...(hasKafka ? { [kafkaPackageName]: "workspace:*" } : {}),
     ...redisDeps,
     "@workspace/logger": "workspace:*",

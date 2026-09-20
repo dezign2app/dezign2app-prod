@@ -128,8 +128,12 @@ export function compileMonorepo(
 
   const dbPackagePaths =
     compiledDb.packages && compiledDb.packages.length > 0
-      ? compiledDb.packages.map((p) =>
-          p.packageFolder ? `packages/db/${p.packageFolder}` : "packages/db",
+      ? Array.from(
+          new Set(
+            compiledDb.packages.map((p) =>
+              p.packageFolder ? `packages/db/${p.packageFolder}` : "packages/db",
+            ),
+          ),
         )
       : compiledDb.files.length > 0
         ? ["packages/db"]
