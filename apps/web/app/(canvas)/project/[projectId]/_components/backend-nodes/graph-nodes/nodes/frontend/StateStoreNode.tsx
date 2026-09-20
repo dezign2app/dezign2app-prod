@@ -122,34 +122,6 @@ export const StateStoreNode = ({
       )}
       onDoubleClick={handleOpenConfig}
     >
-      {/* Lifecycle Inbound Handles on the Left */}
-      {/* 1. Page Load / Populate */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="populate-in"
-        style={{ top: "28%" }}
-        className="w-2.5 h-2.5 !bg-emerald-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform"
-        title="populate-in: Wire from a pageLoad action to hydrate state"
-      />
-      {/* 2. Runtime Mutations */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="mutate-in"
-        style={{ top: "50%" }}
-        className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform"
-        title="mutate-in: Wire from user actions (click, submit, change) to mutate state"
-      />
-      {/* 3. Reset / Unmount Teardown */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="reset-in"
-        style={{ top: "72%" }}
-        className="w-2.5 h-2.5 !bg-rose-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform"
-        title="reset-in: Wire from an unmount action or reset event to reset state"
-      />
       {/* Fallback generic handle for legacy edges */}
       <Handle
         type="target"
@@ -269,28 +241,130 @@ export const StateStoreNode = ({
         <span className="text-[8px] text-indigo-500/80 font-bold uppercase tracking-wide">Zustand</span>
       </div>
 
-      {/* Lifecycle legend */}
-      <div className="flex items-center gap-2 pt-1 border-t border-border/40 text-[8px] text-muted-foreground/80 font-mono">
-        <span className="flex items-center gap-0.5" title="populate-in: Wire from pageLoad">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-          <span>load</span>
-        </span>
-        <span className="flex items-center gap-0.5" title="mutate-in: Wire from actions">
-          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
-          <span>mutate</span>
-        </span>
-        <span className="flex items-center gap-0.5" title="reset-in: Wire from unmount">
-          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-          <span>reset</span>
-        </span>
+      {/* Actions list with handles aligned on the right edge */}
+      <div className="flex flex-col gap-1 pt-1.5 border-t border-border/40 text-[9px] font-mono">
+        {/* 1. Load / Populate Action */}
+        <div className="relative flex items-center justify-between px-1.5 py-0.5 rounded bg-muted/20 hover:bg-muted/40 transition-colors group/row">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+            <span className="font-semibold text-foreground/90">load</span>
+            <span className="text-[8px] text-muted-foreground/60">(populate)</span>
+          </div>
+          {/* Inbound target handle */}
+          <Handle
+            type="target"
+            position={Position.Right}
+            id="populate-in"
+            className="w-2.5 h-2.5 !bg-emerald-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-3 z-10"
+            style={{ top: "50%" }}
+            title="load: Wire to/from pageLoad action"
+          />
+          {/* Outbound source handle */}
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="populate-out"
+            className="w-2.5 h-2.5 !bg-emerald-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-3 z-10 opacity-0 hover:opacity-100"
+            style={{ top: "50%" }}
+            title="load: Wire to/from pageLoad action"
+          />
+        </div>
+
+        {/* 2. Mutate Action */}
+        <div className="relative flex items-center justify-between px-1.5 py-0.5 rounded bg-muted/20 hover:bg-muted/40 transition-colors group/row">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+            <span className="font-semibold text-foreground/90">mutate</span>
+            <span className="text-[8px] text-muted-foreground/60">(actions)</span>
+          </div>
+          {/* Inbound target handle */}
+          <Handle
+            type="target"
+            position={Position.Right}
+            id="mutate-in"
+            className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-3 z-10"
+            style={{ top: "50%" }}
+            title="mutate: Wire to/from button or user interaction action"
+          />
+          {/* Outbound source handle */}
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="mutate-out"
+            className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-3 z-10 opacity-0 hover:opacity-100"
+            style={{ top: "50%" }}
+            title="mutate: Wire to/from button or user interaction action"
+          />
+        </div>
+
+        {/* 3. Reset Action */}
+        <div className="relative flex items-center justify-between px-1.5 py-0.5 rounded bg-muted/20 hover:bg-muted/40 transition-colors group/row">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+            <span className="font-semibold text-foreground/90">reset</span>
+            <span className="text-[8px] text-muted-foreground/60">(unmount)</span>
+          </div>
+          {/* Inbound target handle */}
+          <Handle
+            type="target"
+            position={Position.Right}
+            id="reset-in"
+            className="w-2.5 h-2.5 !bg-rose-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-3 z-10"
+            style={{ top: "50%" }}
+            title="reset: Wire to/from unmount or reset event"
+          />
+          {/* Outbound source handle */}
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="reset-out"
+            className="w-2.5 h-2.5 !bg-rose-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-3 z-10 opacity-0 hover:opacity-100"
+            style={{ top: "50%" }}
+            title="reset: Wire to/from unmount or reset event"
+          />
+        </div>
+
+        {/* Custom Actions if defined */}
+        {data.actions && data.actions.length > 0 && (
+          <div className="flex flex-col gap-1 pt-1 border-t border-border/30">
+            {data.actions.map((act) => (
+              <div
+                key={act.id}
+                className="relative flex items-center justify-between px-1.5 py-0.5 rounded bg-muted/15 hover:bg-muted/30 transition-colors group/row text-[8px]"
+              >
+                <div className="flex items-center gap-1 truncate max-w-[170px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                  <span className="font-medium text-foreground truncate">{act.name}</span>
+                  <span className="text-[7px] text-muted-foreground/60 uppercase shrink-0">({act.actionType})</span>
+                </div>
+                <Handle
+                  type="target"
+                  position={Position.Right}
+                  id={`store-action-in-${act.id}`}
+                  className="w-2 h-2 !bg-indigo-400 border border-background cursor-pointer hover:scale-125 transition-transform -right-3 z-10"
+                  style={{ top: "50%" }}
+                  title={`${act.name}: Wire to/from page action`}
+                />
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={`store-action-out-${act.id}`}
+                  className="w-2 h-2 !bg-indigo-400 border border-background cursor-pointer hover:scale-125 transition-transform -right-3 z-10 opacity-0 hover:opacity-100"
+                  style={{ top: "50%" }}
+                  title={`${act.name}: Wire to/from page action`}
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Outgoing handle on the right (source) */}
+      {/* Fallback hidden store-out handle for legacy edges */}
       <Handle
         type="source"
         position={Position.Right}
         id="store-out"
-        className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background"
+        style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
       />
     </div>
   );

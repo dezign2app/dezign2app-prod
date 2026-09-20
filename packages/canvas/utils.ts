@@ -173,6 +173,8 @@ export function classifyHandle(
   )
     return "endpoint-out";
   if (id.startsWith("events-")) return "event-source";
+  if (id.startsWith("event-in-") || id.startsWith("action-in-"))
+    return "action-target";
   if (id.startsWith("pageload-in-")) return "pageload-in";
   if (id.startsWith("sse-in-")) return "sse-in";
   if (id.startsWith("websocket-in-") || id.startsWith("ws-in-"))
@@ -282,7 +284,8 @@ export function classifyHandle(
     id === "mutate-in" ||
     id.startsWith("mutate-in") ||
     id === "reset-in" ||
-    id.startsWith("reset-in")
+    id.startsWith("reset-in") ||
+    id.startsWith("store-action-in")
   ) {
     return "store-in";
   }
@@ -290,7 +293,14 @@ export function classifyHandle(
     id === "store-out" ||
     id.startsWith("store-out") ||
     id === "state-out" ||
-    id.startsWith("state-out")
+    id.startsWith("state-out") ||
+    id === "populate-out" ||
+    id.startsWith("populate-out") ||
+    id === "mutate-out" ||
+    id.startsWith("mutate-out") ||
+    id === "reset-out" ||
+    id.startsWith("reset-out") ||
+    id.startsWith("store-action-out")
   ) {
     return "store-out";
   }
