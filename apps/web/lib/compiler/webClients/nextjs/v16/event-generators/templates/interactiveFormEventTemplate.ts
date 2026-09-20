@@ -27,6 +27,7 @@ export function generateInteractiveFormEventTemplate({
   typeDefs,
   params,
   libraries = [],
+  storeActionBinding,
 }: {
   componentName: string;
   eventName: string;
@@ -37,6 +38,13 @@ export function generateInteractiveFormEventTemplate({
   typeDefs: string[];
   params: ResolvedEventParameters;
   libraries?: string[];
+  storeActionBinding?: {
+    storeNodeId?: string;
+    storeName?: string;
+    actionId?: string;
+    actionName?: string;
+    actionType?: string;
+  };
 }): string {
   const {
     mergedPathParams,
@@ -56,11 +64,23 @@ export function generateInteractiveFormEventTemplate({
   } = params;
 
   const libImports = resolveActionLibImports(libraries);
+  const rawStoreName = storeActionBinding?.storeName?.replace(/Store$/i, "");
+  const storeHookName = rawStoreName
+    ? `use${rawStoreName.charAt(0).toUpperCase() + rawStoreName.slice(1)}Store`
+    : "";
+  const storeActionName =
+    storeActionBinding?.actionName ||
+    (storeActionBinding?.actionType === "reset"
+      ? "reset"
+      : storeActionBinding?.actionType === "populate"
+      ? "populate"
+      : "set");
+  const storeImport = storeHookName ? `import { ${storeHookName} } from "@/lib/stores";\n` : "";
 
   return `"use client";
 
 import React, { useState, useEffect } from "react";
-import { Button } from "@workspace/ui/components/button";
+${storeImport}import { Button } from "@workspace/ui/components/button";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@workspace/ui/components/card";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -133,7 +153,7 @@ ${hasBodyFields || hasRawJson ? `      let payloadBody: ${componentName}RequestB
           return;
         }
       }
-` : ""}      await onTrigger?.(
+` : ""}${storeHookName ? `      ${storeHookName}.getState().${storeActionName}(${hasBodyFields || hasRawJson ? "payloadBody" : ""});\n` : ""}      await onTrigger?.(
         "${eventName}",
         "${eventType}",
         finalUrl,

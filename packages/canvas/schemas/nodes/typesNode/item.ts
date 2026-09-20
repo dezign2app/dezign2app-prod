@@ -8,12 +8,13 @@ import { customTypeFieldSchema } from "./field";
 export const customTypeItemSchema = z.object({
   id: z.string(),
   name: z.string(),
-  kind: z.enum(["interface", "type", "enum"]).default("interface"),
+  kind: z.enum(["interface", "type", "enum", "function"]).default("interface"),
   description: z.string().optional(),
   fields: z.array(customTypeFieldSchema).optional(),
   enumValues: z.array(z.string()).optional(),
   // Raw source for type aliases or pre-extracted package types
   typeAliasValue: z.string().optional(),
+  returnType: z.string().optional(),
   rawCode: z.string().optional(),
   // Package origin metadata
   packageSource: z.string().optional(),

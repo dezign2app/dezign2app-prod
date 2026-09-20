@@ -454,6 +454,9 @@ export const webPageEventConvexValidator = v.object({
           v.literal("append"),
           v.literal("remove"),
           v.literal("toggle"),
+          v.literal("increment"),
+          v.literal("reset"),
+          v.literal("populate"),
           v.literal("custom"),
         ),
       ),
@@ -476,13 +479,7 @@ export const pageSectionConvexValidator = v.object({
       v.object({
         id: v.string(),
         name: v.string(),
-        type: v.union(
-          v.literal("string"),
-          v.literal("number"),
-          v.literal("boolean"),
-          v.literal("array"),
-          v.literal("object"),
-        ),
+        type: v.string(),
         defaultValue: v.optional(
           v.union(v.string(), v.number(), v.boolean(), v.null()),
         ),
@@ -677,13 +674,7 @@ export const stateStoreConvexDataValidator = v.object({
       v.object({
         id: v.string(),
         name: v.string(),
-        type: v.union(
-          v.literal("string"),
-          v.literal("number"),
-          v.literal("boolean"),
-          v.literal("array"),
-          v.literal("object"),
-        ),
+        type: v.string(),
         defaultValue: v.optional(
           v.union(v.string(), v.number(), v.boolean(), v.null()),
         ),
@@ -702,6 +693,9 @@ export const stateStoreConvexDataValidator = v.object({
           v.literal("append"),
           v.literal("remove"),
           v.literal("toggle"),
+          v.literal("increment"),
+          v.literal("reset"),
+          v.literal("populate"),
           v.literal("custom"),
         ),
       }),

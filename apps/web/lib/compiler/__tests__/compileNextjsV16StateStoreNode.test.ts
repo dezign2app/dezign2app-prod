@@ -294,4 +294,190 @@ describe("compileNextjsV16StateStoreNode", () => {
     const leakedStoreFile = resultB.files.find((f) => f.filename.includes("StoreA"));
     expect(leakedStoreFile).toBeUndefined();
   });
+
+  it("compiles lifecycle pageLoad population, mutation triggers, and unmount reset cleanup", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-shop",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "ShopApp",
+        appSlug: "shop-app",
+      },
+    };
+
+    const stateStoreNode: BackendNode = {
+      id: "node-store-cart",
+      type: "state_store",
+      position: { x: 200, y: -100 },
+      fractionalIndex: "a1",
+      data: {
+        label: "CartStore",
+        storeName: "Cart",
+        scope: "global",
+        storage: "memory",
+        targetWebAppId: "node-webapp-shop",
+        fields: [
+          { id: "f1", name: "items", type: "array", defaultValue: [] },
+          { id: "f2", name: "total", type: "number", defaultValue: 0 },
+        ],
+        actions: [
+          { id: "act1", name: "addItem", targetFieldId: "f1", actionType: "append" },
+          { id: "act2", name: "reset", actionType: "reset" },
+        ],
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-checkout",
+      type: "webPage",
+      position: { x: 400, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "/checkout",
+        appSlug: "shop-app",
+        sections: [
+          {
+            id: "sec-cart",
+            name: "Cart Section",
+            actions: [
+              {
+                id: "act-load",
+                name: "pageLoad",
+                event: "pageLoad",
+                storeActionBinding: {
+                  storeNodeId: "node-store-cart",
+                  storeName: "Cart",
+                  actionName: "populate",
+                  actionType: "populate",
+                },
+              },
+              {
+                id: "act-add",
+                name: "AddItem",
+                event: "click",
+                storeActionBinding: {
+                  storeNodeId: "node-store-cart",
+                  storeName: "Cart",
+                  actionName: "addItem",
+                  actionType: "append",
+                },
+              },
+              {
+                id: "act-exit",
+                name: "onExit",
+                event: "unmount",
+                storeActionBinding: {
+                  storeNodeId: "node-store-cart",
+                  storeName: "Cart",
+                  actionName: "reset",
+                  actionType: "reset",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const allNodes = [webAppNode, webPageNode, stateStoreNode];
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      [],
+      [],
+      allNodes,
+      [],
+      "ShopApp",
+      [],
+      "shop-app",
+      webAppNode
+    );
+
+    // 1. Store file has populate and reset
+    const storeFile = result.files.find((f) => f.filename === "lib/stores/useCartStore.ts");
+    expect(storeFile).toBeDefined();
+    expect(storeFile!.content).toContain("populate: (data: unknown) => void;");
+    expect(storeFile!.content).toContain("reset: () => void;");
+
+    // 2. Page file imports the store and wires load & unmount reset
+    const pageFile = result.files.find((f) => f.filename === "app/(public)/checkout/page.tsx");
+    expect(pageFile).toBeDefined();
+    expect(pageFile!.content).toContain('import { useCartStore } from "@/lib/stores";');
+    expect(pageFile!.content).toContain("useCartStore.getState().populate(");
+    expect(pageFile!.content).toContain("useCartStore.getState().reset();");
+
+    // 3. Action button calls store action
+    const buttonFile = result.files.find((f) => f.filename.toLowerCase().includes("additem"));
+    expect(buttonFile).toBeDefined();
+    expect(buttonFile!.content).toContain('import { useCartStore } from "@/lib/stores";');
+    expect(buttonFile!.content).toContain("useCartStore.getState().addItem();");
+  });
+
+  it("compiles a StateStoreNode using custom types from TypesNode and imports them from @workspace/types", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-types",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "TypedApp",
+        appSlug: "typed-app",
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-home",
+      type: "webPage",
+      position: { x: 400, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "/home",
+        appSlug: "typed-app",
+        sections: [],
+      },
+    };
+
+    const stateStoreNode: BackendNode = {
+      id: "node-store-user-profile",
+      type: "state_store",
+      position: { x: 200, y: -100 },
+      fractionalIndex: "a2",
+      data: {
+        label: "UserProfileStore",
+        storeName: "UserProfile",
+        scope: "global",
+        storage: "memory",
+        targetWebAppId: "node-webapp-types",
+        fields: [
+          { id: "f1", name: "currentUser", type: "UserProfile", defaultValue: null },
+          { id: "f2", name: "cartItems", type: "CartItem[]", defaultValue: [] },
+          { id: "f3", name: "theme", type: "string", defaultValue: "dark" },
+        ],
+      },
+    };
+
+    const allNodes = [webAppNode, webPageNode, stateStoreNode];
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      [],
+      [],
+      allNodes,
+      [],
+      "TypedApp",
+      [],
+      "typed-app",
+      webAppNode
+    );
+
+    const storeFile = result.files.find((f) => f.filename === "lib/stores/useUserProfileStore.ts");
+    expect(storeFile).toBeDefined();
+    expect(storeFile!.content).toContain('import type { CartItem, UserProfile } from "@workspace/types";');
+    expect(storeFile!.content).toContain("currentUser: UserProfile;");
+    expect(storeFile!.content).toContain("cartItems: CartItem[];");
+    expect(storeFile!.content).toContain("theme: string;");
+    expect(storeFile!.content).toContain("setCurrentUser: (value: UserProfile) => void;");
+    expect(storeFile!.content).toContain("setCartItems: (value: CartItem[]) => void;");
+  });
 });
+

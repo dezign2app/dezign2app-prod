@@ -22,7 +22,7 @@ function toCamelCase(str: string): string {
   return clean.charAt(0).toLowerCase() + clean.slice(1);
 }
 
-function mapFieldTypeToTs(type: StateVariableType): string {
+function mapFieldTypeToTs(type: StateVariableType | string): string {
   switch (type) {
     case "string":
       return "string";
@@ -34,8 +34,12 @@ function mapFieldTypeToTs(type: StateVariableType): string {
       return "unknown[]";
     case "object":
       return "Record<string, unknown>";
-    default:
+    case "any":
+      return "any";
+    case "unknown":
       return "unknown";
+    default:
+      return type || "unknown";
   }
 }
 
@@ -136,6 +140,18 @@ export function generateZustandStore(
         customActionSignatures.push(`  ${actName}: () => void;`);
         customActionImpls.push(`  ${actName}: () => set((s) => ({ ${targetName}: !s.${targetName} })),`);
         break;
+      case "increment":
+        customActionSignatures.push(`  ${actName}: (amount?: number) => void;`);
+        customActionImpls.push(`  ${actName}: (amount = 1) => set((s) => ({ ${targetName}: typeof s.${targetName} === "number" ? s.${targetName} + amount : amount })),`);
+        break;
+      case "reset":
+        customActionSignatures.push(`  ${actName}: () => void;`);
+        customActionImpls.push(`  ${actName}: () => set(initialState),`);
+        break;
+      case "populate":
+        customActionSignatures.push(`  ${actName}: (data: unknown) => void;`);
+        customActionImpls.push(`  ${actName}: (data) => set((s) => ({ ...s, ...(typeof data === "object" && data !== null ? data : {}) })),`);
+        break;
       case "custom":
       default:
         customActionSignatures.push(`  ${actName}: (payload?: unknown) => void;`);
@@ -170,13 +186,29 @@ export function generateZustandStore(
     ? `import { create } from "zustand";\nimport { persist, createJSONStorage } from "zustand/middleware";`
     : `import { create } from "zustand";`;
 
+  const hasPopulate = (store.actions || []).some((a) => a.actionType === "populate" || a.name === "populate");
+  const hasReset = (store.actions || []).some((a) => a.actionType === "reset" || a.name === "reset");
+
+  const builtInSignatures: string[] = [];
+  const builtInImpls: string[] = [];
+
+  if (!hasPopulate) {
+    builtInSignatures.push("  populate: (data: unknown) => void;");
+    builtInImpls.push("      populate: (data: unknown) => set((s) => ({ ...s, ...(typeof data === \"object\" && data !== null ? data : {}) })),");
+  }
+
+  if (!hasReset) {
+    builtInSignatures.push("  reset: () => void;");
+    builtInImpls.push("      reset: () => set(initialState),");
+  }
+
   const storeCreation = isPersisted
     ? `export const ${hookName} = create<${interfaceName}>()(
   persist(
     (set) => ({
       ...initialState,
 ${setterImpls.map((l) => `    ${l}`).join("\n")}
-${customActionImpls.length > 0 ? `${customActionImpls.map((l) => `    ${l}`).join("\n")}\n` : ""}      reset: () => set(initialState),
+${customActionImpls.length > 0 ? `${customActionImpls.map((l) => `    ${l}`).join("\n")}\n` : ""}${builtInImpls.join("\n")}
     }),
     {
       name: "${storageKey}",
@@ -187,17 +219,50 @@ ${customActionImpls.length > 0 ? `${customActionImpls.map((l) => `    ${l}`).joi
     : `export const ${hookName} = create<${interfaceName}>((set) => ({
   ...initialState,
 ${setterImpls.join("\n")}
-${customActionImpls.length > 0 ? `${customActionImpls.join("\n")}\n` : ""}  reset: () => set(initialState),
+${customActionImpls.length > 0 ? `${customActionImpls.join("\n")}\n` : ""}${builtInImpls.join("\n")}
 }));`;
+
+  const STANDARD_TS_TYPES = new Set([
+    "string",
+    "number",
+    "boolean",
+    "unknown",
+    "any",
+    "void",
+    "null",
+    "undefined",
+    "never",
+    "Date",
+    "object",
+    "array",
+    "unknown[]",
+    "any[]",
+    "Record<string, unknown>",
+    "Record<string, any>",
+  ]);
+
+  const customImports = new Set<string>();
+  fields.forEach((f) => {
+    const rawType = (f.type || "string").trim();
+    const baseType = rawType.replace(/\[\]$/, "").trim();
+    if (baseType && !STANDARD_TS_TYPES.has(baseType) && !STANDARD_TS_TYPES.has(rawType)) {
+      customImports.add(baseType);
+    }
+  });
+
+  const typesImportStmt =
+    customImports.size > 0
+      ? `\nimport type { ${Array.from(customImports).sort().join(", ")} } from "@workspace/types";`
+      : "";
 
   const content = `"use client";
 
-${imports}
+${imports}${typesImportStmt}
 
 ${descriptionComment}export interface ${interfaceName} {
 ${fieldTypeLines.join("\n")}
 ${setterLines.join("\n")}
-${customActionSignatures.length > 0 ? `${customActionSignatures.join("\n")}\n` : ""}  reset: () => void;
+${customActionSignatures.length > 0 ? `${customActionSignatures.join("\n")}\n` : ""}${builtInSignatures.join("\n")}
 }
 
 const initialState = {

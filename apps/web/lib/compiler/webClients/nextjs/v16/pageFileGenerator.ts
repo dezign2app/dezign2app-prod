@@ -276,12 +276,24 @@ export function generatePageAndComponentFiles({
         }
       });
 
+      const storePopulationLines = pageLoadEvents
+        .filter((e) => e.storeActionBinding?.storeName)
+        .map((e) => {
+          const clean = e.storeActionBinding!.storeName!.replace(/Store$/i, "");
+          const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
+          const actionMethod = e.storeActionBinding?.actionName || "populate";
+          const resKey = e.name || "pageLoad";
+          return `${hookName}.getState().${actionMethod}(results["${resKey}"]);`;
+        })
+        .join("\n        ");
+
       pageLoadFetchStatements = `setPageLoadLoading(true);
       setPageLoadError(null);
       try {
         const results: Record<string, JSONValue> = {};
         ${statements.join("\n")}
         setPageLoadData((${pageLoadEvents.length === 1} ? results["${pageLoadEvents[0]?.name || "pageLoad"}"] : results) as unknown as ${pageLoadDataType});
+        ${storePopulationLines ? `${storePopulationLines}` : ""}
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to load page data";
         setPageLoadError(message);
@@ -289,6 +301,38 @@ export function generatePageAndComponentFiles({
         setPageLoadLoading(false);
       }`;
     }
+
+    const unmountActions = allActions.filter((a) => a.event === "unmount");
+    const unmountCleanupsList: string[] = [];
+    unmountActions.forEach((act) => {
+      const b = act.storeActionBinding;
+      if (b?.storeName) {
+        const clean = b.storeName.replace(/Store$/i, "");
+        const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
+        const method = b.actionName || (b.actionType === "reset" ? "reset" : "reset");
+        unmountCleanupsList.push(`${hookName}.getState().${method}();`);
+      }
+    });
+
+    const pageStoreNames = new Set<string>();
+    pageLoadEvents.forEach((evt) => {
+      if (evt.storeActionBinding?.storeName) {
+        pageStoreNames.add(evt.storeActionBinding.storeName);
+      }
+    });
+    unmountActions.forEach((evt) => {
+      if (evt.storeActionBinding?.storeName) {
+        pageStoreNames.add(evt.storeActionBinding.storeName);
+      }
+    });
+
+    const pageStoreImports = Array.from(pageStoreNames)
+      .map((sName) => {
+        const clean = sName.replace(/Store$/i, "");
+        const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
+        return `import { ${hookName} } from "@/lib/stores";`;
+      })
+      .join("\n");
 
     const groupFolder = pageMeta.routeGroupPath || (pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)");
     const baseComponentsDir = pageMeta.isRoot
@@ -433,6 +477,8 @@ export function generatePageAndComponentFiles({
       effectiveAuthNode?.data,
       pageLoadDataType,
       pageLoadDataTypeDecl,
+      unmountCleanupsList.join("\n      "),
+      pageStoreImports,
     );
 
     const targetFilePath = pageMeta.isRoot

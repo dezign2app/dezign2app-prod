@@ -18,6 +18,7 @@ export const TypeRow = React.memo(function TypeRow({
 }: TypeRowProps) {
   const fieldCount = React.useMemo(() => {
     if (item.kind === "enum") return `${item.enumValues?.length ?? 0} vals`;
+    if (item.kind === "function") return `${item.fields?.length ?? 0} params`;
     if (item.fields && item.fields.length > 0) return `${item.fields.length} props`;
     const src = item.rawCode || item.typeAliasValue || "";
     const bodyStart = src.indexOf("{");
@@ -79,10 +80,12 @@ export const TypeRow = React.memo(function TypeRow({
               ? "bg-purple-500/15 text-purple-400"
               : isPackageNode
                 ? "bg-emerald-500/15 text-emerald-500 dark:text-emerald-400"
-                : "bg-indigo-500/15 text-indigo-500 dark:text-indigo-400",
+                : item.kind === "function"
+                  ? "bg-cyan-500/15 text-cyan-500 dark:text-cyan-400"
+                  : "bg-indigo-500/15 text-indigo-500 dark:text-indigo-400",
           )}
         >
-          {item.kind === "interface" ? "intf" : item.kind === "enum" ? "enum" : "type"}
+          {item.kind === "interface" ? "intf" : item.kind === "enum" ? "enum" : item.kind === "function" ? "fn" : "type"}
         </span>
         <span className="font-mono text-[11px] text-foreground font-semibold truncate">
           {item.name}

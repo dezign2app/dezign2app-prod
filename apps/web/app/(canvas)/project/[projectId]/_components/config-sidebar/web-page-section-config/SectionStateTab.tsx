@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Plus, Trash2, Sliders, Sparkles, Check, HelpCircle } from "lucide-react";
 import { SectionStateVariable, StateVariableType } from "@workspace/canvas/types";
+import { TypeCombobox } from "../TypeCombobox";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
@@ -173,21 +174,11 @@ export const SectionStateTab: React.FC<SectionStateTabProps> = ({
                       placeholder="variableName"
                       className="h-7 text-xs font-mono font-medium bg-background"
                     />
-                    <Select
+                    <TypeCombobox
                       value={st.type}
-                      onValueChange={(val) => handleUpdateField(st.id, { type: val as StateVariableType })}
-                    >
-                      <SelectTrigger className="h-7 w-28 text-[11px] font-mono shrink-0 bg-background">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="string">string</SelectItem>
-                        <SelectItem value="number">number</SelectItem>
-                        <SelectItem value="boolean">boolean</SelectItem>
-                        <SelectItem value="array">array</SelectItem>
-                        <SelectItem value="object">object</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      onValueChange={(val) => handleUpdateField(st.id, { type: val })}
+                      className="h-7 w-28 text-[11px] font-mono"
+                    />
                   </div>
 
                   <Button
@@ -249,21 +240,11 @@ export const SectionStateTab: React.FC<SectionStateTabProps> = ({
               }
             }}
           />
-          <Select
+          <TypeCombobox
             value={newVarType}
-            onValueChange={(val) => setNewVarType(val as StateVariableType)}
-          >
-            <SelectTrigger className="h-7 text-xs font-mono bg-background">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="string">string</SelectItem>
-              <SelectItem value="number">number</SelectItem>
-              <SelectItem value="boolean">boolean</SelectItem>
-              <SelectItem value="array">array</SelectItem>
-              <SelectItem value="object">object</SelectItem>
-            </SelectContent>
-          </Select>
+            onValueChange={(val) => setNewVarType(val)}
+            className="h-7 text-xs font-mono"
+          />
         </div>
 
         <div className="flex items-center gap-2">

@@ -273,6 +273,31 @@ export function classifyHandle(
     return "component-out";
   }
 
+  // --- State Store ---
+  if (
+    id === "store-in" ||
+    id.startsWith("store-in") ||
+    id === "populate-in" ||
+    id.startsWith("populate-in") ||
+    id === "mutate-in" ||
+    id.startsWith("mutate-in") ||
+    id === "reset-in" ||
+    id.startsWith("reset-in")
+  ) {
+    return "store-in";
+  }
+  if (
+    id === "store-out" ||
+    id.startsWith("store-out") ||
+    id === "state-out" ||
+    id.startsWith("state-out")
+  ) {
+    return "store-out";
+  }
+  if (nodeType === "state_store") {
+    return handleDirection === "target" ? "store-in" : "store-out";
+  }
+
   if (
     id.endsWith("-in") ||
     id.startsWith("public-in") ||

@@ -8,6 +8,7 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
     "websocket-in",
     "webrtc-in",
     "page-ref-in",
+    "store-in",
   ],
   "endpoint-in": [],
   "pageload-in": [],
@@ -200,6 +201,7 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   "type-out→type-in": "type-reference",
   "type-out→page-section-in": "type-reference",
   // State Store wiring edges
+  "event-source→store-in": "connection",
   "page-out→store-in": "connection",
   "store-out→page-in": "connection",
   "store-out→page-section-in": "connection",
@@ -214,6 +216,7 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
 export const WEB_PAGE_EVENTS = [
   "pageLoad",
   "click",
+  "unmount",
   "hover",
   "drag",
   "dblclick",

@@ -56,7 +56,7 @@ export type HookRefData = z.infer<typeof hookRefDataSchema>;
 export const globalStoreFieldSchema = z.object({
   id: z.string(),
   name: z.string(),
-  type: z.enum(["string", "number", "boolean", "array", "object"]),
+  type: z.string(),
   defaultValue: z
     .union([z.string(), z.number(), z.boolean(), z.null()])
     .optional(),
@@ -69,7 +69,16 @@ export const globalStoreActionSchema = z.object({
   id: z.string(),
   name: z.string(),
   targetFieldId: z.string().optional(),
-  actionType: z.enum(["set", "append", "remove", "toggle", "custom"]),
+  actionType: z.enum([
+    "set",
+    "append",
+    "remove",
+    "toggle",
+    "increment",
+    "reset",
+    "populate",
+    "custom",
+  ]),
 });
 
 export type GlobalStoreActionSchemaType = z.infer<typeof globalStoreActionSchema>;

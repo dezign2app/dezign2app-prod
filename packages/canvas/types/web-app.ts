@@ -99,7 +99,7 @@ export interface GlobalStoreAction {
   id: string;
   name: string;
   targetFieldId?: string;
-  actionType: "set" | "append" | "remove" | "toggle" | "custom";
+  actionType: "set" | "append" | "remove" | "toggle" | "increment" | "reset" | "populate" | "custom";
 }
 
 export interface GlobalStoreDefinition {

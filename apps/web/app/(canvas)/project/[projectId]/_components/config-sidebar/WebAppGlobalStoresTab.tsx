@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Plus, Trash2, Database, Sparkles, Check, ChevronDown, ChevronRight, Layers } from "lucide-react";
 import { GlobalStoreDefinition, GlobalStoreField, GlobalStoreAction, StateVariableType, JsonValue } from "@workspace/canvas/types";
+import { TypeCombobox } from "./TypeCombobox";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
@@ -24,7 +25,7 @@ const STORE_PRESETS: {
   name: string;
   description: string;
   fields: { name: string; type: StateVariableType; defaultValue: JsonValue }[];
-  actions: { name: string; actionType: "set" | "append" | "remove" | "toggle" | "custom"; targetFieldName: string }[];
+  actions: { name: string; actionType: GlobalStoreAction["actionType"]; targetFieldName: string }[];
 }[] = [
   {
     name: "cart",
@@ -277,23 +278,13 @@ export const WebAppGlobalStoresTab: React.FC<WebAppGlobalStoresTabProps> = ({
                                 placeholder="fieldName"
                                 className="h-7 text-xs font-mono bg-background flex-1"
                               />
-                              <Select
+                              <TypeCombobox
                                 value={field.type}
                                 onValueChange={(val) =>
-                                  handleUpdateField(st.id, field.id, { type: val as StateVariableType })
+                                  handleUpdateField(st.id, field.id, { type: val })
                                 }
-                              >
-                                <SelectTrigger className="h-7 w-28 text-[11px] font-mono shrink-0 bg-background">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="string">string</SelectItem>
-                                  <SelectItem value="number">number</SelectItem>
-                                  <SelectItem value="boolean">boolean</SelectItem>
-                                  <SelectItem value="array">array</SelectItem>
-                                  <SelectItem value="object">object</SelectItem>
-                                </SelectContent>
-                              </Select>
+                                className="h-7 w-28 text-[11px] font-mono"
+                              />
                               <Button
                                 variant="ghost"
                                 size="sm"
