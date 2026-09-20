@@ -29,6 +29,7 @@ import {
   GlobalStoreAction,
   StateVariableType,
 } from "@workspace/canvas/types";
+import { TypeCombobox } from "./TypeCombobox";
 import { cn } from "@workspace/ui/lib/utils";
 
 export interface StateStoreConfigProps {
@@ -47,7 +48,7 @@ interface StorePreset {
   }>;
   actions: Array<{
     name: string;
-    actionType: "set" | "append" | "remove" | "toggle" | "custom";
+    actionType: "set" | "append" | "remove" | "toggle" | "increment" | "reset" | "populate" | "custom";
     targetFieldName: string;
   }>;
 }
@@ -484,23 +485,11 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
                     placeholder="Field name (e.g. count)"
                     className="h-7 text-xs font-mono flex-1"
                   />
-                  <Select
+                  <TypeCombobox
                     value={f.type}
-                    onValueChange={(val: StateVariableType) =>
-                      handleUpdateField(f.id, { type: val })
-                    }
-                  >
-                    <SelectTrigger className="h-7 text-xs w-28">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="string">string</SelectItem>
-                      <SelectItem value="number">number</SelectItem>
-                      <SelectItem value="boolean">boolean</SelectItem>
-                      <SelectItem value="array">array</SelectItem>
-                      <SelectItem value="object">object</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    onValueChange={(val) => handleUpdateField(f.id, { type: val })}
+                    className="h-7 w-28 text-xs font-mono"
+                  />
                   <Button
                     type="button"
                     variant="ghost"
@@ -590,6 +579,9 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
                     <SelectItem value="append">append</SelectItem>
                     <SelectItem value="remove">remove</SelectItem>
                     <SelectItem value="toggle">toggle</SelectItem>
+                    <SelectItem value="increment">increment</SelectItem>
+                    <SelectItem value="populate">populate</SelectItem>
+                    <SelectItem value="reset">reset</SelectItem>
                     <SelectItem value="custom">custom</SelectItem>
                   </SelectContent>
                 </Select>

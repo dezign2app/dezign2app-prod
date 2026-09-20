@@ -5,7 +5,7 @@ import type { CustomTypeItem } from "@workspace/canvas/types";
 
 export interface AvailableTypeItem {
   name: string;
-  kind: "primitive" | "interface" | "type" | "enum" | "database";
+  kind: "primitive" | "interface" | "type" | "enum" | "function" | "database";
   category: "primitive" | "custom" | "package" | "database";
   packageSource?: string;
   sourceLabel?: string;
@@ -33,6 +33,8 @@ export const PRIMITIVE_TYPE_ITEMS: AvailableTypeItem[] = [
   { name: "unknown", kind: "primitive", category: "primitive", description: "Type-safe unknown value" },
   { name: "enum", kind: "enum", category: "primitive", description: "Inline fixed values" },
   { name: "array", kind: "primitive", category: "primitive", description: "Generic list / array" },
+  { name: "() => void", kind: "function", category: "primitive", description: "Void callback function" },
+  { name: "Function", kind: "function", category: "primitive", description: "Generic function type" },
 ];
 
 /**

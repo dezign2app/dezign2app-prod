@@ -235,7 +235,7 @@ export const clientEventInputSchema = z.object({
       storeName: z.string().optional(),
       actionName: z.string().optional(),
       actionType: z
-        .enum(["set", "append", "remove", "toggle", "custom"])
+        .enum(["set", "append", "remove", "toggle", "increment", "reset", "populate", "custom"])
         .optional(),
       payloadExpr: z.string().optional(),
     })
@@ -255,7 +255,7 @@ export const pageSectionSchema = z.object({
       z.object({
         id: z.string(),
         name: z.string(),
-        type: z.enum(["string", "number", "boolean", "array", "object"]),
+        type: z.string(),
         defaultValue: z
           .union([z.string(), z.number(), z.boolean(), z.null()])
           .optional(),

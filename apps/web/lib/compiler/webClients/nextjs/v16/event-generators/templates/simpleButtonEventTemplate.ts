@@ -19,6 +19,7 @@ export function generateSimpleButtonEventTemplate({
   requireAuth = true,
   typeDefs,
   libraries = [],
+  storeActionBinding,
 }: {
   componentName: string;
   eventName: string;
@@ -28,14 +29,33 @@ export function generateSimpleButtonEventTemplate({
   requireAuth?: boolean;
   typeDefs: string[];
   libraries?: string[];
+  storeActionBinding?: {
+    storeNodeId?: string;
+    storeName?: string;
+    actionId?: string;
+    actionName?: string;
+    actionType?: string;
+  };
 }): string {
   const libImports = resolveActionLibImports(libraries);
+  const rawStoreName = storeActionBinding?.storeName?.replace(/Store$/i, "");
+  const storeHookName = rawStoreName
+    ? `use${rawStoreName.charAt(0).toUpperCase() + rawStoreName.slice(1)}Store`
+    : "";
+  const storeActionName =
+    storeActionBinding?.actionName ||
+    (storeActionBinding?.actionType === "reset"
+      ? "reset"
+      : storeActionBinding?.actionType === "populate"
+      ? "populate"
+      : "set");
+  const storeImport = storeHookName ? `import { ${storeHookName} } from "@/lib/stores";\n` : "";
 
   return `"use client";
 
 import React, { useState } from "react";
 import { Button } from "@workspace/ui/components/button";
-${libImports}
+${storeImport}${libImports}
 ${typeDefs.join("\n\n")}
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
@@ -45,7 +65,7 @@ export function ${componentName}({ onTrigger }: ${componentName}Props) {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await onTrigger?.(
+${storeHookName ? `      ${storeHookName}.getState().${storeActionName}();\n` : ""}      await onTrigger?.(
         "${eventName}",
         "${eventType}",
         "${url}",

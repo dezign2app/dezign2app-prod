@@ -35,7 +35,13 @@ export type ParameterType = z.infer<typeof parameterTypeEnum>;
 
 
 // UI Specific Types
-export type StateVariableType = "string" | "number" | "boolean" | "array" | "object";
+export type StateVariableType =
+  | "string"
+  | "number"
+  | "boolean"
+  | "array"
+  | "object"
+  | (string & {});
 
 export interface SectionStateVariable {
   id: string;
@@ -86,7 +92,7 @@ export type UIEventItem = {
     storeName?: string;
     actionId?: string;
     actionName?: string;
-    actionType?: "set" | "append" | "remove" | "toggle" | "custom";
+    actionType?: "set" | "append" | "remove" | "toggle" | "increment" | "reset" | "populate" | "custom";
   };
   // SSE config (when event === "sse")
   sseConfig?: {

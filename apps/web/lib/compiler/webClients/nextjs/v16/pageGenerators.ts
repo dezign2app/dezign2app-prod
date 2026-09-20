@@ -28,6 +28,10 @@ export function generatePageCode(
   pageLoadDataType: string = "JSONValue",
   /** Optional interface declaration to emit for the above type (empty string if using JSONValue) */
   pageLoadDataTypeDecl: string = "",
+  /** Optional unmount cleanup statements (e.g. useCartStore.getState().reset()) */
+  unmountCleanups: string = "",
+  /** Optional store imports (e.g. import { useCartStore } from "@/lib/stores") */
+  storeImports: string = "",
 ): string {
   const isAuth = isAuthPage(pageMeta, authNodeData);
 
@@ -102,10 +106,14 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
   const mediaCaps = resolveWebRtcMediaCapabilities(webrtcConnections);
   const hasRealtime = hasSse || hasWs || hasWebRtc;
   const hasLogsSection = hasApiActions || hasRealtime;
+  const hasUnmount = Boolean(unmountCleanups && unmountCleanups.trim());
 
   const hooksList: string[] = [];
-  if (hasPageLoad || hasRealtime) {
-    hooksList.push("useState", "useEffect");
+  if (hasPageLoad || hasRealtime || hasUnmount) {
+    if (hasPageLoad || hasRealtime) {
+      hooksList.push("useState");
+    }
+    hooksList.push("useEffect");
   } else if (hasLogsSection) {
     hooksList.push("useState");
   }
@@ -117,9 +125,14 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
     ? `import React, { ${hooksList.join(", ")} } from "react";`
     : `import React from "react";`;
 
-  // Page Load Data
+  // Page Load Data & Lifecycle
   const pageLoadStateJsx = generatePageLoadState(hasPageLoad, pageLoadDataType);
-  const pageLoadEffectJsx = generatePageLoadEffect(hasPageLoad, pageMeta, pageLoadFetchStatements);
+  const pageLoadEffectJsx = generatePageLoadEffect(
+    hasPageLoad,
+    pageMeta,
+    pageLoadFetchStatements,
+    unmountCleanups,
+  );
   const pageLoadSectionJsx = generatePageLoadSection(hasPageLoad);
   const jsonValueTypeDecl = generateJsonValueTypeDecl(hasPageLoad);
 
@@ -167,7 +180,7 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
   return `"use client";
 
 ${reactImport}
-${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
+${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${storeImports ? `${storeImports}\n` : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
 ${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
     <main className="min-h-screen bg-background text-foreground p-6 md:p-10 font-sans">
       <div className="max-w-5xl mx-auto space-y-8">

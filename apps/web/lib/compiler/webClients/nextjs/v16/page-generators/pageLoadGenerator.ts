@@ -13,12 +13,13 @@ export function generatePageLoadEffect(
   hasPageLoad: boolean,
   pageMeta: PageInfo,
   pageLoadFetchStatements: string,
+  unmountCleanups: string = "",
 ): string {
-  if (!hasPageLoad) return "";
-  return `  // Auto-fetch data on page load for ${pageMeta.label}
-  useEffect(() => {
-    let isMounted = true;
-    async function loadPageData() {
+  const hasUnmount = Boolean(unmountCleanups && unmountCleanups.trim());
+  if (!hasPageLoad && !hasUnmount) return "";
+
+  const loadDataBlock = hasPageLoad
+    ? `    async function loadPageData() {
       setPageLoadLoading(true);
       setPageLoadError(null);
       try {
@@ -33,9 +34,19 @@ export function generatePageLoadEffect(
         }
       }
     }
-    loadPageData();
-    return () => {
-      isMounted = false;
+    loadPageData();`
+    : "";
+
+  const cleanupBlock = [
+    "      isMounted = false;",
+    unmountCleanups ? `      ${unmountCleanups.trim()}` : "",
+  ].filter(Boolean).join("\n");
+
+  return `  // Page lifecycle (load & unmount cleanup) for ${pageMeta.label}
+  useEffect(() => {
+    let isMounted = true;
+${loadDataBlock ? `${loadDataBlock}\n` : ""}    return () => {
+${cleanupBlock}
     };
   }, []);
 

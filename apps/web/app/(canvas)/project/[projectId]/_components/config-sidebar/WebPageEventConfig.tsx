@@ -440,6 +440,28 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
                     <Select
                       value={storeBinding.actionId || "none"}
                       onValueChange={(actId) => {
+                        if (actId === "builtin-populate") {
+                          updateActionInParent({
+                            storeActionBinding: {
+                              ...storeBinding,
+                              actionId: "builtin-populate",
+                              actionName: "populate",
+                              actionType: "populate",
+                            },
+                          });
+                          return;
+                        }
+                        if (actId === "builtin-reset") {
+                          updateActionInParent({
+                            storeActionBinding: {
+                              ...storeBinding,
+                              actionId: "builtin-reset",
+                              actionName: "reset",
+                              actionType: "reset",
+                            },
+                          });
+                          return;
+                        }
                         const sn = stateStoreNodes.find((s) => s.id === storeBinding.storeNodeId);
                         const storeActions = sn?.data?.actions || [];
                         const action = storeActions.find((a) => a.id === actId);
@@ -462,10 +484,15 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
                         {(() => {
                           const sn = stateStoreNodes.find((s) => s.id === storeBinding.storeNodeId);
                           const storeActions = sn?.data?.actions || [];
-                          if (storeActions.length === 0) {
-                            return <SelectItem value="none" disabled>No actions defined on store</SelectItem>;
-                          }
-                          return storeActions.map((act) => (
+                          const builtInActions = [
+                            { id: "builtin-populate", name: "populate", actionType: "populate" },
+                            { id: "builtin-reset", name: "reset", actionType: "reset" },
+                          ];
+                          const combined = [
+                            ...storeActions,
+                            ...builtInActions.filter((b) => !storeActions.some((a) => a.name === b.name)),
+                          ];
+                          return combined.map((act) => (
                             <SelectItem key={act.id} value={act.id}>
                               {act.name}() [{act.actionType}]
                             </SelectItem>

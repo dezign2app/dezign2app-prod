@@ -4,6 +4,7 @@ import { Play, Settings, Trash } from "lucide-react";
 import { BackendNode, Endpoint, UIEventItem, PageSection } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { Input } from "@workspace/ui/components/input";
+import { cn } from "@workspace/ui/lib/utils";
 import {
   Select,
   SelectContent,
@@ -221,10 +222,32 @@ export const SectionActionRow = ({
   };
 
   const getEventBadge = () => {
+    const evt = action.event || action.name || "click";
+    const isUnmount = evt === "unmount";
+    const isPageLoad = evt === "pageLoad";
     return (
-      <span className="text-[8px] text-muted-foreground font-mono truncate">
-        {action.event || action.name || "click"}
-      </span>
+      <div className="flex items-center gap-1">
+        <span
+          className={cn(
+            "text-[8px] font-mono truncate px-1 rounded",
+            isUnmount
+              ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 font-semibold"
+              : isPageLoad
+              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-semibold"
+              : "text-muted-foreground",
+          )}
+        >
+          {evt}
+        </span>
+        {action.storeActionBinding && (
+          <span
+            className="text-[7px] font-mono px-0.5 rounded bg-indigo-500/15 text-indigo-500 border border-indigo-500/30 font-semibold"
+            title={`Bound to store: ${action.storeActionBinding.storeName || "Store"}.${action.storeActionBinding.actionName || action.storeActionBinding.actionType || "action"}()`}
+          >
+            ⚡store
+          </span>
+        )}
+      </div>
     );
   };
 

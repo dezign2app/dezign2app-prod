@@ -66,6 +66,7 @@ export function generateEventComponent(
       requireAuth,
       typeDefs,
       libraries: eventItem?.libraries || [],
+      storeActionBinding: eventItem?.storeActionBinding,
     });
   }
 
@@ -80,5 +81,6 @@ export function generateEventComponent(
     typeDefs,
     params,
     libraries: eventItem?.libraries || [],
+    storeActionBinding: eventItem?.storeActionBinding,
   });
 }

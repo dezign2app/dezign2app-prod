@@ -1,4 +1,4 @@
-export type CustomTypeKind = "interface" | "type" | "enum";
+export type CustomTypeKind = "interface" | "type" | "enum" | "function";
 
 export interface CustomTypeField {
   id: string;
@@ -19,6 +19,7 @@ export interface CustomTypeItem {
   fields?: CustomTypeField[];
   enumValues?: string[];
   typeAliasValue?: string;
+  returnType?: string;
   rawCode?: string;
   packageSource?: string;
   isReadOnly?: boolean;

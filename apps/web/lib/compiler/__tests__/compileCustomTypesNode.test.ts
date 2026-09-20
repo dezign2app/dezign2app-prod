@@ -126,5 +126,46 @@ describe("compileCustomTypesNode - generateTypesPackage", () => {
     expect(customFile?.content).toContain("// @ts-nocheck");
     expect(customFile?.content).not.toContain("type ReactMouseEvent<T = any> = any;");
   });
+
+  it("compiles function types with parameters and return type into export type Name = (...) => ReturnType", () => {
+    const typesNode: BackendNode = {
+      id: "types-node-fn",
+      type: "types",
+      position: { x: 100, y: 100 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Function Types",
+        definitionMode: "visual",
+        types: [
+          {
+            id: "t-fn-1",
+            name: "CalculateTotal",
+            kind: "function",
+            description: "Calculates cart total with optional discount",
+            fields: [
+              { id: "p1", name: "items", type: "string[]", required: true },
+              { id: "p2", name: "discount", type: "number", required: false },
+            ],
+            returnType: "number",
+          },
+          {
+            id: "t-fn-2",
+            name: "FetchUserCallback",
+            kind: "function",
+            fields: [
+              { id: "p1", name: "userId", type: "string", required: true },
+            ],
+            returnType: "Promise<UserProfile>",
+          },
+        ],
+      },
+    };
+
+    const files = generateTypesPackage([typesNode], [], [], []);
+    const customFile = files.find((f) => f.filename === "src/custom.ts");
+    expect(customFile).toBeDefined();
+    expect(customFile?.content).toContain("export type CalculateTotal = (items: string[], discount?: number) => number;");
+    expect(customFile?.content).toContain("export type FetchUserCallback = (userId: string) => Promise<UserProfile>;");
+  });
 });
 

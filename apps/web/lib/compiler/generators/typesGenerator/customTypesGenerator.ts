@@ -72,6 +72,18 @@ export function generateCustomTypesModule(
               .join("\n");
             customTypesCode += `export type ${item.name || "MyType"} = {\n${fieldLines}\n};\n\n`;
           }
+        } else if (item.kind === "function") {
+          const params = (item.fields || [])
+            .map((f) => {
+              const isArr = Boolean(f.isArray || f.type?.endsWith("[]"));
+              const base = sanitizeCustomTypeString((f.type || "unknown").replace(/\[\]$/, ""));
+              const finalType = isArr ? `${base}[]` : base;
+              const opt = f.required === false ? "?" : "";
+              return `${f.name || "arg"}${opt}: ${finalType}`;
+            })
+            .join(", ");
+          const ret = sanitizeCustomTypeString(item.returnType || item.typeAliasValue || "void");
+          customTypesCode += `export type ${item.name || "MyFunction"} = (${params}) => ${ret};\n\n`;
         } else {
           // interface
           const fields = item.fields || [];

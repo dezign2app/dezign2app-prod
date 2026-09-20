@@ -122,12 +122,40 @@ export const StateStoreNode = ({
       )}
       onDoubleClick={handleOpenConfig}
     >
-      {/* Incoming handle on the left (target) */}
+      {/* Lifecycle Inbound Handles on the Left */}
+      {/* 1. Page Load / Populate */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="populate-in"
+        style={{ top: "28%" }}
+        className="w-2.5 h-2.5 !bg-emerald-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform"
+        title="populate-in: Wire from a pageLoad action to hydrate state"
+      />
+      {/* 2. Runtime Mutations */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="mutate-in"
+        style={{ top: "50%" }}
+        className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform"
+        title="mutate-in: Wire from user actions (click, submit, change) to mutate state"
+      />
+      {/* 3. Reset / Unmount Teardown */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="reset-in"
+        style={{ top: "72%" }}
+        className="w-2.5 h-2.5 !bg-rose-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform"
+        title="reset-in: Wire from an unmount action or reset event to reset state"
+      />
+      {/* Fallback generic handle for legacy edges */}
       <Handle
         type="target"
         position={Position.Left}
         id="store-in"
-        className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background"
+        style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
       />
 
       <div className="flex items-center justify-between gap-3 w-full">
@@ -229,13 +257,32 @@ export const StateStoreNode = ({
       </div>
 
       {/* Info footer: fields and actions count */}
-      <div className="flex items-center gap-2 pt-0.5 text-[10px] text-muted-foreground font-mono">
-        <span className="flex items-center gap-1">
-          <Layers size={10} className="text-indigo-400/80" />
-          {fieldCount} {fieldCount === 1 ? "field" : "fields"}
+      <div className="flex items-center justify-between pt-0.5 text-[10px] text-muted-foreground font-mono">
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1">
+            <Layers size={10} className="text-indigo-400/80" />
+            {fieldCount} {fieldCount === 1 ? "field" : "fields"}
+          </span>
+          <span>•</span>
+          <span>{actionCount} {actionCount === 1 ? "action" : "actions"}</span>
+        </div>
+        <span className="text-[8px] text-indigo-500/80 font-bold uppercase tracking-wide">Zustand</span>
+      </div>
+
+      {/* Lifecycle legend */}
+      <div className="flex items-center gap-2 pt-1 border-t border-border/40 text-[8px] text-muted-foreground/80 font-mono">
+        <span className="flex items-center gap-0.5" title="populate-in: Wire from pageLoad">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+          <span>load</span>
         </span>
-        <span>•</span>
-        <span>{actionCount} {actionCount === 1 ? "action" : "actions"}</span>
+        <span className="flex items-center gap-0.5" title="mutate-in: Wire from actions">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+          <span>mutate</span>
+        </span>
+        <span className="flex items-center gap-0.5" title="reset-in: Wire from unmount">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+          <span>reset</span>
+        </span>
       </div>
 
       {/* Outgoing handle on the right (source) */}
