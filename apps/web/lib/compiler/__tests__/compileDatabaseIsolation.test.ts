@@ -123,31 +123,39 @@ describe("Database Isolation & Multi-Engine Architecture under packages/db/*", (
 
     const compiledDb = compileDatabaseNodes(nodes, edges);
 
-    // Verify 3 isolated packages were returned
+    // Verify isolated packages plus central @workspace/db package were returned
     expect(compiledDb.packages).toBeDefined();
-    expect(compiledDb.packages?.length).toBe(3);
+    expect(compiledDb.packages?.length).toBe(4);
 
-    const ordersPkg = compiledDb.packages?.find((p) => p.dbEngine === "postgres");
+    const rootPkg = compiledDb.packages?.find((p) => p.packageName === "@workspace/db");
+    expect(rootPkg).toBeDefined();
+    expect(rootPkg?.packageFolder).toBe("");
+
+    const ordersPkg = compiledDb.packages?.find((p) => p.dbEngine === "postgres" && p.packageFolder === "orders");
     expect(ordersPkg).toBeDefined();
     expect(ordersPkg?.packageName).toBe("@workspace/db-orders");
     expect(ordersPkg?.files.some((f) => f.filename === "connection.ts")).toBe(true);
     expect(ordersPkg?.files.some((f) => f.filename === "helpers/order.ts")).toBe(true);
 
-    const convexPkg = compiledDb.packages?.find((p) => p.dbEngine === "convex");
+    const convexPkg = compiledDb.packages?.find((p) => p.dbEngine === "convex" && p.packageFolder === "chat-sync");
     expect(convexPkg).toBeDefined();
     expect(convexPkg?.packageName).toBe("@workspace/db-chat-sync");
     expect(convexPkg?.files.some((f) => f.filename === "convex/schema.ts")).toBe(true);
 
-    const authPkg = compiledDb.packages?.find((p) => p.dbEngine === "sqlite");
+    const authPkg = compiledDb.packages?.find((p) => p.dbEngine === "sqlite" && p.packageFolder === "auth");
     expect(authPkg).toBeDefined();
     expect(authPkg?.packageName).toBe("@workspace/db-auth");
     expect(authPkg?.files.some((f) => f.filename === "connection.ts")).toBe(true);
 
-    // Verify monorepo compilation organizes packages into packages/db/<folder>
+    // Verify monorepo compilation organizes packages into packages/db/<folder> and central packages/db
     const monorepo = compileMonorepo(nodes, [], [], edges, [], "MultiDbApp");
 
     const pnpmWorkspace = monorepo.files.find((f) => f.filename === "pnpm-workspace.yaml");
     expect(pnpmWorkspace?.content).toContain('- "packages/db/*"');
+
+    // Check central packages/db files in monorepo
+    expect(monorepo.files.some((f) => f.filename === "packages/db/package.json")).toBe(true);
+    expect(monorepo.files.some((f) => f.filename === "packages/db/connection.ts")).toBe(true);
 
     // Check Postgres package files in monorepo
     expect(monorepo.files.some((f) => f.filename === "packages/db/orders/package.json")).toBe(true);

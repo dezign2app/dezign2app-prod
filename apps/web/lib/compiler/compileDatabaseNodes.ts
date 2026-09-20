@@ -44,11 +44,19 @@ function normalizeEngine(engine?: string): string {
  * Resolves a unique, clean folder name for a database package under packages/db/.
  */
 function resolveDbFolderName(dbNode: BackendNode, existingFolders: Set<string>): string {
+  const engine = normalizeEngine(
+    dbNode.data?.dbEngine ||
+    dbNode.data?.provider ||
+    dbNode.data?.dbType,
+  );
   const label = dbNode.data?.label || dbNode.data?.dbEngine || dbNode.id || "db";
   let base = label
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "db";
+  if (base === "db") {
+    base = `${engine}-db`;
+  }
   let folder = base || "db";
   let counter = 1;
   while (existingFolders.has(folder)) {
@@ -455,6 +463,140 @@ export function compileDatabaseNodes(
 
     mergedReusableFunctions.push(...pkgResult.reusableFunctions);
   });
+
+  // If multiple database nodes exist, generate the unified central @workspace/db package
+  // so that all microservices and web clients can seamlessly depend on @workspace/db
+  if (dbNodes.length > 1 && packages.length > 0) {
+    const primaryFolder =
+      packages.find((p) => p.databaseNodeId === primaryDbNode.id)?.packageFolder ||
+      packages[0]!.packageFolder;
+
+    const childPackageDeps: Record<string, string> = {};
+    packages.forEach((pkg) => {
+      if (pkg.packageName && pkg.packageName !== "@workspace/db") {
+        childPackageDeps[pkg.packageName] = "workspace:*";
+      }
+    });
+
+    const rootPackageJson = JSON.stringify(
+      {
+        name: "@workspace/db",
+        version: "0.0.0",
+        private: true,
+        description:
+          "Central database access package re-exporting primary database and microservice table helpers",
+        main: "index.ts",
+        types: "index.ts",
+        exports: {
+          ".": "./index.ts",
+          "./connection": "./connection.ts",
+          "./helpers": "./helpers/index.ts",
+          "./helpers/*": "./helpers/*.ts",
+        },
+        scripts: {
+          build: "tsc",
+          "check-types": "tsc --noEmit",
+        },
+        dependencies: {
+          "@workspace/logger": "workspace:*",
+          ...childPackageDeps,
+        },
+        devDependencies: {
+          "@workspace/typescript-config": "workspace:*",
+          "@types/node": "^20.11.0",
+          typescript: "^5.3.3",
+        },
+      },
+      null,
+      2,
+    );
+
+    const rootTsConfig = JSON.stringify(
+      {
+        extends: "@workspace/typescript-config/base.json",
+        compilerOptions: { outDir: "dist" },
+        include: ["index.ts", "connection.ts", "helpers/**/*"],
+      },
+      null,
+      2,
+    );
+
+    const rootIndex = [
+      "/**",
+      " * @workspace/db — Central database access package.",
+      " * Re-exports primary database connection, clients, and table helpers.",
+      " */",
+      `export * from "./${primaryFolder}";`,
+      "",
+      ...packages.map(
+        (p) =>
+          `export * as ${toVarName(p.packageFolder)} from "./${p.packageFolder}";`,
+      ),
+    ].join("\n");
+
+    const rootConnection = [
+      "/**",
+      " * @workspace/db/connection — Central database connection pool & runner.",
+      " * Re-exports connection from primary database.",
+      " */",
+      `export * from "./${primaryFolder}/connection";`,
+    ].join("\n");
+
+    const rootHelpersIndex = [
+      "/**",
+      " * Barrel export for all database table helpers across isolated databases.",
+      " */",
+      ...packages.map((p) => `export * from "../${p.packageFolder}/helpers";`),
+    ].join("\n");
+
+    const centralFiles: CompiledFile[] = [
+      { filename: "package.json", language: "json", content: rootPackageJson },
+      { filename: "tsconfig.json", language: "json", content: rootTsConfig },
+      { filename: "index.ts", language: "typescript", content: rootIndex },
+      { filename: "connection.ts", language: "typescript", content: rootConnection },
+      { filename: "helpers/index.ts", language: "typescript", content: rootHelpersIndex },
+    ];
+
+    // Helper forwarders for every helper file in child packages
+    const seenHelperFiles = new Set<string>();
+    packages.forEach((p) => {
+      p.files.forEach((f) => {
+        if (f.filename.startsWith("helpers/") && f.filename !== "helpers/index.ts") {
+          const helperSubPath = f.filename.slice("helpers/".length);
+          const helperBase = helperSubPath.replace(/\.ts$/, "");
+          if (!seenHelperFiles.has(helperBase)) {
+            seenHelperFiles.add(helperBase);
+            centralFiles.push({
+              filename: `helpers/${helperSubPath}`,
+              language: "typescript",
+              content: `export * from "../${p.packageFolder}/helpers/${helperBase}";\n`,
+            });
+          }
+        }
+      });
+    });
+
+    // Add central files to mergedFiles
+    centralFiles.forEach((f) => {
+      mergedFiles.push({
+        filename: `packages/db/${f.filename}`,
+        language: f.language,
+        content: f.content,
+      });
+    });
+
+    const rootDbPkg: CompiledDatabasePackage = {
+      packageName: "@workspace/db",
+      packageFolder: "",
+      dbEngine: primaryDbNode.data?.dbEngine || "sqlite",
+      databaseNodeId: primaryDbNode.id,
+      databaseLabel: "db",
+      files: centralFiles,
+      reusableFunctions: mergedReusableFunctions,
+    };
+
+    packages.unshift(rootDbPkg);
+  }
 
   return {
     files: mergedFiles,

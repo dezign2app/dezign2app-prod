@@ -93,6 +93,15 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
     return instPort === currentPort && instHost === currentHost;
   });
 
+  // Check if another database or redis node has the same label
+  const duplicateNameConflict = nodes.find(
+    (n) =>
+      n.id !== nodeId &&
+      (n.type === "database" || n.type === "redis_instance") &&
+      (n.data?.label || "").trim().toLowerCase() === label.trim().toLowerCase() &&
+      label.trim() !== "",
+  );
+
   const attachedEntities = nodes.filter(
     (n) =>
       (n.type === "redis_schema" || n.type === "entity") &&
@@ -216,8 +225,14 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
             value={label}
             onChange={(e) => handleUpdateField("label", e.target.value)}
             placeholder="e.g. Primary Redis Cache"
-            className="h-8 text-xs"
+            className={cn("h-8 text-xs", duplicateNameConflict && "border-destructive focus-visible:ring-destructive")}
           />
+          {duplicateNameConflict && (
+            <p className="text-[11px] text-destructive font-medium flex items-center gap-1 mt-1">
+              <AlertTriangle size={12} className="shrink-0" />
+              Another database or Redis instance already uses &quot;{label}&quot;. Database names must be unique.
+            </p>
+          )}
         </div>
 
         <div className="space-y-1.5">

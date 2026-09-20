@@ -169,17 +169,27 @@ export const NodeHeader = ({
         }
       }
     } else {
+      const isStorage = nodeType === "database" || nodeType === "redis_instance";
       isDuplicate = allNodes.some(
         (n) =>
           n.id !== id &&
-          (n.type === nodeType || (nodeType === "service" && n.type === "service")) &&
+          (isStorage
+            ? n.type === "database" || n.type === "redis_instance"
+            : n.type === nodeType || (nodeType === "service" && n.type === "service")) &&
           (n.data?.label || "").trim().toLowerCase() === finalLabel.toLowerCase(),
       );
     }
 
     if (isDuplicate) {
-      const typeLabel = nodeType === "service" ? "Service" : nodeType === "webPage" ? "Web Page" : title || "Node";
-      toast.error(`${typeLabel} route/name "${finalLabel}" is already used!`);
+      const typeLabel =
+        nodeType === "service"
+          ? "Service"
+          : nodeType === "webPage"
+            ? "Web Page"
+            : nodeType === "database" || nodeType === "redis_instance"
+              ? "Database"
+              : title || "Node";
+      toast.error(`${typeLabel} name "${finalLabel}" is already used!`);
       if (data.label && data.label.trim()) {
         setName(data.label);
         setIsEditing(false);

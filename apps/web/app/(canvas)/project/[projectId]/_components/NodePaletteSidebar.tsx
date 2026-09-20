@@ -439,12 +439,17 @@ function SchemaViewBody({ nodes, addNode, getCenterPosition }: SchemaViewBodyPro
 
   const handleAddDatabase = () => {
     const { x, y } = getCenterPosition(200, 80);
+    const uniqueDbLabel = getUniqueNodeLabel(
+      nodes,
+      DEFAULT_DATABASE_NODE_LABEL,
+      "database",
+    );
     addNode({
       id: crypto.randomUUID(),
       type: "database",
       position: { x, y },
       data: {
-        label: "",
+        label: uniqueDbLabel,
         dbEngine: DEFAULT_DATABASE_ENGINE,
         dbType: "relational",
         dbCategory: "sql",
@@ -576,13 +581,18 @@ function SchemaViewBody({ nodes, addNode, getCenterPosition }: SchemaViewBodyPro
     );
     const assignedPort = String(6379 + redisInstances.length);
     const connEnv = redisInstances.length === 0 ? "REDIS_URL" : `REDIS_${redisInstances.length + 1}_URL`;
+    const uniqueRedisLabel = getUniqueNodeLabel(
+      nodes,
+      "Primary Redis Cache",
+      "redis_instance",
+    );
 
     addNode({
       id: crypto.randomUUID(),
       type: "redis_instance",
       position: { x, y },
       data: {
-        label: "",
+        label: uniqueRedisLabel,
         dbEngine: "redis",
         dbType: "key-value",
         dbCategory: "nosql",

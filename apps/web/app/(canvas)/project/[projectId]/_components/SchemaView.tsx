@@ -21,7 +21,7 @@ import {
 } from "@workspace/canvas";
 import { useCanvasHandlers } from "./hooks/useCanvasHandlers";
 import { useSchemaAutoLayout } from "./hooks/useAutoLayout";
-import { LayoutTemplate } from "lucide-react";
+import { LayoutTemplate, AlertTriangle } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 
@@ -85,6 +85,22 @@ export function SchemaView({ projectId }: SchemaViewProps) {
       ),
     [edges, schemaNodeIds],
   );
+
+  const duplicateDbNames = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    const storageNodes = schemaNodes.filter(
+      (n) => n.type === "database" || n.type === "redis_instance",
+    );
+    storageNodes.forEach((n) => {
+      const name = (n.data?.label || "").trim().toLowerCase();
+      if (name) {
+        counts.set(name, (counts.get(name) || 0) + 1);
+      }
+    });
+    return Array.from(counts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([name]) => name);
+  }, [schemaNodes]);
 
   const hasFitted = useRef(false);
   useEffect(() => {
@@ -182,6 +198,23 @@ export function SchemaView({ projectId }: SchemaViewProps) {
             </Button>
           </div>
         </Panel>
+
+        {/* Floating Duplicate Database Name Warning Banner */}
+        {duplicateDbNames.length > 0 && (
+          <Panel
+            position="top-center"
+            className="pointer-events-auto select-none transition-all duration-300 z-20"
+            style={{ top: "16px" }}
+          >
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-destructive/15 text-destructive border border-destructive/30 backdrop-blur-md shadow-lg text-xs font-medium">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-destructive" />
+              <span>
+                Duplicate database name{duplicateDbNames.length > 1 ? "s" : ""} detected:{" "}
+                <strong>{duplicateDbNames.map((n) => `"${n}"`).join(", ")}</strong>. Each database and Redis instance must have a unique name.
+              </span>
+            </div>
+          </Panel>
+        )}
       </ReactFlow>
     </div>
   );

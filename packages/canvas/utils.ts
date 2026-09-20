@@ -65,9 +65,15 @@ export function getUniqueNodeLabel(
   baseLabel: string,
   type: string = "entity",
 ): string {
+  const isStorage = type === "database" || type === "redis_instance";
   const existingLabels = new Set(
     existingNodes
-      .filter((n) => n.type === type && n.data?.label)
+      .filter(
+        (n) =>
+          (isStorage
+            ? n.type === "database" || n.type === "redis_instance"
+            : n.type === type) && n.data?.label,
+      )
       .map((n) => n.data!.label!.toLowerCase()),
   );
 
