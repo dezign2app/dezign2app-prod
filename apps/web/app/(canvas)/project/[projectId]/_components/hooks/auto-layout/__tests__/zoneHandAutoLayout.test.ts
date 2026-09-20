@@ -176,4 +176,189 @@ describe("zoneHandAutoLayout - Auto-Layout for Stacked WebPage Cards", () => {
     // When fanned out, each card is full-height and separated by nodeGap (not 44px stacked offset)
     expect(Math.abs(p1.y - p0.y)).toBeGreaterThan(200);
   });
+
+  it("does not move a serviceNode connected to a stacked secondary WebPage behind the WebAppNode (service -> webPage)", () => {
+    const nodes: LayoutNode[] = [
+      {
+        id: "payments-1",
+        type: "payments",
+        position: { x: 0, y: 0 },
+        data: { label: "Creem Payments", provider: "creem" },
+      },
+      {
+        id: "auth-1",
+        type: "auth",
+        position: { x: 0, y: 0 },
+        data: { label: "better auth" },
+      },
+      {
+        id: "web-1",
+        type: "webApp",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "web",
+          zones: [
+            { id: "zone-public", handleId: "public-in", name: "Public Section", accessType: "public" },
+            { id: "zone-private", handleId: "private-in", name: "Private Section", accessType: "protected" },
+          ],
+          expandedZones: [], // Both zones stacked
+        },
+      },
+      // Public Section pages (4 pages)
+      { id: "page-root", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/" } },
+      { id: "page-not-found", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/not-found" } },
+      { id: "page-login", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/login" } },
+      { id: "page-register", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/register" } },
+
+      // Private Section pages (4 pages, with page-conversations as secondary card)
+      { id: "page-layout", type: "webPage", position: { x: 0, y: 0 }, data: { label: "layout", isLayout: true } },
+      { id: "page-dashboard", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/dashboard" } },
+      { id: "page-onboarding", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/onboarding" } },
+      { id: "page-conversations", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/conversations" } },
+
+      // Service / API Node
+      {
+        id: "srv-test",
+        type: "service",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "test",
+          techStack: "express",
+          endpoints: [{ id: "ep-health", name: "/health", type: "GET" }],
+        },
+      },
+    ];
+
+    const edges: LayoutEdge[] = [
+      {
+        id: "e-payments-auth",
+        source: "payments-1",
+        target: "auth-1",
+        sourceHandle: "injects-plugin-out",
+        targetHandle: "payments-plugin-in",
+        type: "connection",
+      },
+      {
+        id: "e-auth-web",
+        source: "auth-1",
+        target: "web-1",
+        sourceHandle: "auth-out",
+        targetHandle: "auth-in",
+        type: "connection",
+      },
+      // Public edges
+      { id: "e-pub-0", source: "web-1", sourceHandle: "public-in", target: "page-root", targetHandle: "page-in", type: "connection" },
+      { id: "e-pub-1", source: "web-1", sourceHandle: "public-in", target: "page-not-found", targetHandle: "page-in", type: "connection" },
+      { id: "e-pub-2", source: "web-1", sourceHandle: "public-in", target: "page-login", targetHandle: "page-in", type: "connection" },
+      { id: "e-pub-3", source: "web-1", sourceHandle: "public-in", target: "page-register", targetHandle: "page-in", type: "connection" },
+      // Private edges
+      { id: "e-priv-0", source: "web-1", sourceHandle: "private-in", target: "page-layout", targetHandle: "page-in", type: "connection" },
+      { id: "e-priv-1", source: "web-1", sourceHandle: "private-in", target: "page-dashboard", targetHandle: "page-in", type: "connection" },
+      { id: "e-priv-2", source: "web-1", sourceHandle: "private-in", target: "page-onboarding", targetHandle: "page-in", type: "connection" },
+      { id: "e-priv-3", source: "web-1", sourceHandle: "private-in", target: "page-conversations", targetHandle: "page-in", type: "connection" },
+
+      // Service connected to page-conversations (endpoint-out -> pageload-in)
+      {
+        id: "e-srv-page",
+        source: "srv-test",
+        sourceHandle: "endpoint-out-ep-health",
+        target: "page-conversations",
+        targetHandle: "pageload-in-act-1",
+        type: "connection",
+      },
+    ];
+
+    let appliedChanges: PositionNodeChange[] = [];
+    performGraphLayout({
+      nodes,
+      edges,
+      onNodesChange: (c) => {
+        appliedChanges = c;
+      },
+      fitView: vi.fn(),
+      direction: "LR",
+    });
+
+    const posMap = new Map(appliedChanges.map((c) => [c.id, c.position]));
+    const webPos = posMap.get("web-1")!;
+    const authPos = posMap.get("auth-1")!;
+    const srvPos = posMap.get("srv-test")!;
+    const pConvs = posMap.get("page-conversations")!;
+
+    // 1. Crucial check: srv-test is NOT placed behind web-1
+    // srvPos.x must NOT be in the column behind web-1 (i.e. srvPos.x must be >= webPos.x - 50)
+    expect(srvPos.x).toBeGreaterThanOrEqual(webPos.x - 50);
+    // Specifically, srv-test should NOT be placed at the auth column
+    expect(srvPos.x).toBeGreaterThan(authPos.x);
+
+    // 2. Vertically, srvPos is positioned near the bottom private stack rather than overlapping web-1
+    expect(srvPos.y).toBeGreaterThan(webPos.y);
+
+    // 3. WebPages are placed to the right of web and service
+    expect(pConvs.x).toBeGreaterThan(srvPos.x);
+  });
+
+  it("places serviceNode downstream (to the right) when WebPage action connects to service endpoint (webPage -> service)", () => {
+    const nodes: LayoutNode[] = [
+      {
+        id: "web-1",
+        type: "webApp",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "web",
+          zones: [
+            { id: "zone-private", handleId: "private-in", name: "Private Section", accessType: "protected" },
+          ],
+          expandedZones: [],
+        },
+      },
+      { id: "page-layout", type: "webPage", position: { x: 0, y: 0 }, data: { label: "layout", isLayout: true } },
+      { id: "page-conversations", type: "webPage", position: { x: 0, y: 0 }, data: { label: "/conversations" } },
+      {
+        id: "srv-test",
+        type: "service",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "test",
+          techStack: "express",
+          endpoints: [{ id: "ep-send", name: "/send", type: "POST" }],
+        },
+      },
+    ];
+
+    const edges: LayoutEdge[] = [
+      { id: "e-priv-0", source: "web-1", sourceHandle: "private-in", target: "page-layout", targetHandle: "page-in", type: "connection" },
+      { id: "e-priv-1", source: "web-1", sourceHandle: "private-in", target: "page-conversations", targetHandle: "page-in", type: "connection" },
+      // Outgoing action from secondary card to service
+      {
+        id: "e-act-srv",
+        source: "page-conversations",
+        sourceHandle: "events-act-submit",
+        target: "srv-test",
+        targetHandle: "endpoint-in-ep-send",
+        type: "connection",
+      },
+    ];
+
+    let appliedChanges: PositionNodeChange[] = [];
+    performGraphLayout({
+      nodes,
+      edges,
+      onNodesChange: (c) => {
+        appliedChanges = c;
+      },
+      fitView: vi.fn(),
+      direction: "LR",
+    });
+
+    const posMap = new Map(appliedChanges.map((c) => [c.id, c.position]));
+    const webPos = posMap.get("web-1")!;
+    const pConvs = posMap.get("page-conversations")!;
+    const srvPos = posMap.get("srv-test")!;
+
+    // In outgoing flow: Web -> Page -> Service
+    expect(pConvs.x).toBeGreaterThan(webPos.x);
+    expect(srvPos.x).toBeGreaterThan(pConvs.x);
+  });
 });
+
