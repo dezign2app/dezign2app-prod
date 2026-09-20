@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from "react";
+import type { NodeChange } from "@xyflow/react";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { WebAppZone } from "@workspace/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -20,6 +21,7 @@ export interface ZoneHandLayoutInfo {
   toggleZoneHand: () => void;
   selectCard: (targetIndex: number) => void;
   moveCard: (direction: "up" | "down") => void;
+  bringCardToFront: () => void;
 }
 
 /**
@@ -276,15 +278,14 @@ export function useZoneHandLayout(
       if (!targetPage) return;
 
       const store = useBackendCanvasStore.getState();
-      store.onNodesChange(
-        nodes
-          .filter((n) => n.type === "webPage")
-          .map((p) => ({
-            type: "select" as const,
-            id: p.id,
-            selected: p.id === targetPage.id,
-          })),
-      );
+      const selectChanges: NodeChange[] = nodes
+        .filter((n) => n.type === "webPage")
+        .map((p) => ({
+          type: "select",
+          id: p.id,
+          selected: p.id === targetPage.id,
+        }));
+      store.onNodesChange(selectChanges);
     },
     [siblingPages, nodes],
   );
@@ -300,8 +301,10 @@ export function useZoneHandLayout(
 
       // Swap pages in the sibling array
       const nextPages = [...siblingPages];
-      const currentCard = nextPages[currentIndex]!;
-      const targetCard = nextPages[targetIndex]!;
+      const currentCard = nextPages[currentIndex];
+      const targetCard = nextPages[targetIndex];
+      if (!currentCard || !targetCard) return;
+
       nextPages[currentIndex] = targetCard;
       nextPages[targetIndex] = currentCard;
 
@@ -325,18 +328,60 @@ export function useZoneHandLayout(
 
       // Keep the current page selected
       const store = useBackendCanvasStore.getState();
-      store.onNodesChange(
-        nodes
-          .filter((n) => n.type === "webPage")
-          .map((p) => ({
-            type: "select" as const,
-            id: p.id,
-            selected: p.id === pageId,
-          })),
-      );
+      const selectChanges: NodeChange[] = nodes
+        .filter((n) => n.type === "webPage")
+        .map((p) => ({
+          type: "select",
+          id: p.id,
+          selected: p.id === pageId,
+        }));
+      store.onNodesChange(selectChanges);
     },
     [siblingPages, pageId, updateNode, nodes],
   );
+
+  const bringCardToFront = useCallback(() => {
+    if (siblingPages.length <= 1) return;
+    const currentIndex = siblingPages.findIndex((p) => p.id === pageId);
+    if (currentIndex === -1) return;
+
+    if (currentIndex === siblingPages.length - 1) {
+      selectCard(currentIndex);
+      return;
+    }
+
+    // Move target card to end of sibling array so it expands at the bottom without covering prior headers
+    const nextPages = siblingPages.filter((p) => p.id !== pageId);
+    const thisCard = siblingPages[currentIndex];
+    if (!thisCard) return;
+    nextPages.push(thisCard);
+
+    const baseX = siblingPages[0]?.position?.x ?? 0;
+    const baseY = siblingPages[0]?.position?.y ?? 0;
+
+    nextPages.forEach((page, idx) => {
+      updateNode(page.id, {
+        position: {
+          x: baseX + idx * CARD_HEADER_OFFSET_X,
+          y: baseY + idx * CARD_HEADER_OFFSET_Y,
+        },
+        data: {
+          ...page.data,
+          stackOrder: idx,
+        },
+      });
+    });
+
+    const store = useBackendCanvasStore.getState();
+    const selectChanges: NodeChange[] = nodes
+      .filter((n) => n.type === "webPage")
+      .map((p) => ({
+        type: "select",
+        id: p.id,
+        selected: p.id === pageId,
+      }));
+    store.onNodesChange(selectChanges);
+  }, [siblingPages, pageId, updateNode, nodes, selectCard]);
 
   const toggleZoneHand = useCallback(() => {
     if (!connectedWebAppNode || !connectedZone) return;
@@ -362,5 +407,6 @@ export function useZoneHandLayout(
     toggleZoneHand,
     selectCard,
     moveCard,
+    bringCardToFront,
   };
 }

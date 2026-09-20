@@ -276,4 +276,54 @@ describe("Zone Hand Layout (Deck of Cards on Z-axis)", () => {
       data: { ...p1.data, stackOrder: 2 },
     });
   });
+
+  it("brings selected card to front when bringCardToFront is called", () => {
+    const updateNode = vi.fn();
+
+    const webAppNode: BackendNode = {
+      id: "web-1",
+      type: "webApp",
+      position: { x: 100, y: 100 },
+      fractionalIndex: "a0",
+      data: {
+        label: "web",
+        zones: [
+          { id: "zone-public", handleId: "public-in", name: "Public Section", accessType: "public" },
+        ],
+      },
+    };
+
+    const p0: BackendNode = { id: "p0", type: "webPage", position: { x: 400, y: 100 }, fractionalIndex: "a1", data: { label: "/", stackOrder: 0 } };
+    const p1: BackendNode = { id: "p1", type: "webPage", position: { x: 392, y: 144 }, fractionalIndex: "a2", data: { label: "/not-found", stackOrder: 1 } };
+    const p2: BackendNode = { id: "p2", type: "webPage", position: { x: 384, y: 188 }, fractionalIndex: "a3", data: { label: "/register", stackOrder: 2 } };
+
+    const edges: BackendEdge[] = [
+      { id: "e0", source: "web-1", sourceHandle: "public-in", target: "p0", targetHandle: "page-in", type: "connection", fractionalIndex: "a0" },
+      { id: "e1", source: "web-1", sourceHandle: "public-in", target: "p1", targetHandle: "page-in", type: "connection", fractionalIndex: "a1" },
+      { id: "e2", source: "web-1", sourceHandle: "public-in", target: "p2", targetHandle: "page-in", type: "connection", fractionalIndex: "a2" },
+    ];
+
+    // Card p0 is at index 0 (top/back). Calling bringCardToFront() should move it to the end (index 2)
+    const { result } = renderHook(() =>
+      useZoneHandLayout("p0", [webAppNode, p0, p1, p2], edges, updateNode)
+    );
+
+    act(() => {
+      result.current.bringCardToFront();
+    });
+
+    // p1 becomes index 0, p2 becomes index 1, p0 becomes index 2
+    expect(updateNode).toHaveBeenCalledWith("p1", {
+      position: { x: 400, y: 100 },
+      data: { ...p1.data, stackOrder: 0 },
+    });
+    expect(updateNode).toHaveBeenCalledWith("p2", {
+      position: { x: 400 + CARD_HEADER_OFFSET_X, y: 100 + CARD_HEADER_OFFSET_Y },
+      data: { ...p2.data, stackOrder: 1 },
+    });
+    expect(updateNode).toHaveBeenCalledWith("p0", {
+      position: { x: 400 + 2 * CARD_HEADER_OFFSET_X, y: 100 + 2 * CARD_HEADER_OFFSET_Y },
+      data: { ...p0.data, stackOrder: 2 },
+    });
+  });
 });
