@@ -187,6 +187,23 @@ export function GraphView({ projectId }: GraphViewProps) {
     });
   }, [edges, graphNodeIds, validEndpointKeys, validEventKeys]);
 
+  const visualGraphEdges = React.useMemo(() => {
+    return graphEdges.map((e) => {
+      const sourceNode = nodes.find((n) => n.id === e.source);
+      const targetNode = nodes.find((n) => n.id === e.target);
+      const isTargetPage = targetNode?.type === "webPage";
+      const isSourcePage = sourceNode?.type === "webPage";
+
+      if (isTargetPage || isSourcePage) {
+        return {
+          ...e,
+          zIndex: 50,
+        };
+      }
+      return e;
+    });
+  }, [graphEdges, nodes]);
+
   const { handleLayout } = useGraphAutoLayout({
     nodes: graphNodes,
     edges: graphEdges,
@@ -394,7 +411,7 @@ export function GraphView({ projectId }: GraphViewProps) {
     <div className="w-full h-full bg-muted/20">
       <ReactFlow
         nodes={visualGraphNodes}
-        edges={graphEdges}
+        edges={visualGraphEdges}
         fitView
         fitViewOptions={{ padding: 0.35, maxZoom: 0.65 }}
         elevateEdgesOnSelect={true}

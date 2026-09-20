@@ -60,6 +60,7 @@ export const WebPageNode = ({
     toggleZoneHand,
     selectCard,
     moveCard,
+    bringCardToFront,
   } = useZoneHandLayout(id, nodes, edges, updateNode);
 
   // Find incoming WebApp edge connecting to this page
@@ -346,6 +347,12 @@ export const WebPageNode = ({
 
   return (
     <div
+      onClick={(e) => {
+        if (isStacked) {
+          e.stopPropagation();
+          bringCardToFront();
+        }
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
@@ -515,135 +522,135 @@ export const WebPageNode = ({
       />
 
       {/* Disconnected error banner */}
-      {isDisconnected && (
-        <div className="px-3 py-1.5 bg-destructive/10 border-b border-destructive/25 flex items-center gap-1.5 text-[10px] text-destructive font-medium leading-tight nodrag">
-          <AlertCircle size={12} className="shrink-0 text-destructive animate-pulse" />
-          <span>Connect to a WebApp node to build</span>
-        </div>
-      )}
-
-      {/* Duplicate layout warning banner */}
-      {isDuplicateLayout && (
-        <div className="px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/25 flex items-center gap-1.5 text-[10px] text-amber-500 font-medium leading-tight nodrag">
-          <AlertCircle size={12} className="shrink-0 text-amber-500 animate-pulse" />
-          <span>Duplicate layout: Section already has layout.tsx</span>
-        </div>
-      )}
-
-      {/* Duplicate route warning banner */}
-      {isDuplicateRoute && (
-        <div className="px-3 py-1.5 bg-destructive/10 border-b border-destructive/25 flex items-center gap-1.5 text-[10px] text-destructive font-medium leading-tight nodrag">
-          <AlertCircle size={12} className="shrink-0 text-destructive animate-pulse" />
-          <span>Duplicate route: Route "{currentNormalizedRoute}" conflicts with "{duplicateRoutePage?.data?.label || "Page"}"</span>
-        </div>
-      )}
-
-      {/* Edit UI & Page settings button strip */}
-      <div className="px-3 py-1.5 border-b bg-muted/30 flex items-center justify-between nodrag">
-        <span
-          className="text-[10px] text-muted-foreground font-mono truncate"
-          title={`Route: ${displayRoute}`}
-        >
-          {displayRoute}
-        </span>
-        <div className="flex items-center gap-1 shrink-0">
-          {/* Page config / settings gear */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveConfigItem({ type: "webPage", id, nodeId: id });
-            }}
-            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
-            title="Page settings & configuration"
-          >
-            <Settings size={12} />
-          </button>
-
-          {/* Edit UI (visual page editor) */}
-          <button
-            type="button"
-            disabled={isLocked}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (projectId) router.push(`/project/${projectId}/pages/${id}`);
-            }}
-            className={cn(
-              "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-all",
-              isLocked
-                ? "bg-muted text-muted-foreground border border-border cursor-not-allowed opacity-60"
-                : "bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 border border-indigo-500/20 cursor-pointer",
-            )}
-            title={isLocked ? "Locked: AI is actively editing this page" : "Open visual page editor"}
-          >
-            {isLocked ? <Lock size={10} /> : <Pencil size={10} />}
-            {isLocked ? "Locked" : "Edit UI"}
-          </button>
-        </div>
-      </div>
-
-      {/* Description */}
-      <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
-        <Textarea
-          className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50 disabled:opacity-60"
-          placeholder="description"
-          disabled={isLocked}
-          value={data.description || ""}
-          onChange={(e) =>
-            updateNode(id, { data: { ...data, description: e.target.value } })
-          }
-        />
-      </div>
-
-      {/* Parameters Strip */}
-      {(Boolean(data.headers?.length) ||
-        Boolean(data.queryParams?.length) ||
-        Boolean(data.pathParams?.length) ||
-        Boolean(data.requestBody?.rawJson || data.requestBody?.fields?.length)) && (
-        <div className="px-3 py-1 bg-secondary/15 border-b flex flex-wrap items-center gap-1.5 nodrag text-[9px]">
-          {Boolean(data.headers?.length) && (
-            <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-mono font-medium border border-blue-500/20">
-              {data.headers!.length} {data.headers!.length === 1 ? "header" : "headers"}
-            </span>
+          {isDisconnected && (
+            <div className="px-3 py-1.5 bg-destructive/10 border-b border-destructive/25 flex items-center gap-1.5 text-[10px] text-destructive font-medium leading-tight nodrag">
+              <AlertCircle size={12} className="shrink-0 text-destructive animate-pulse" />
+              <span>Connect to a WebApp node to build</span>
+            </div>
           )}
-          {Boolean(data.queryParams?.length) && (
-            <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono font-medium border border-indigo-500/20">
-              {data.queryParams!.length} {data.queryParams!.length === 1 ? "query param" : "query params"}
-            </span>
-          )}
-          {Boolean(data.requestBody?.rawJson || data.requestBody?.fields?.length) && (
-            <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono font-medium border border-emerald-500/20">
-              Body Schema
-            </span>
-          )}
-        </div>
-      )}
 
-      {/* Sections & Actions */}
-      <SectionList
-        nodeId={id}
-        sections={data.sections}
-        updateNode={updateNode}
-        data={data}
-        onTriggerEvent={(triggerInfo) =>
-          useBackendCanvasStore.getState().setActiveConfigItem({
-            type: "eventTesting",
-            id: triggerInfo.event.id,
-            nodeId: id,
-            targetNodeId: triggerInfo.targetNode.id,
-            endpointId: triggerInfo.endpoint.id,
-            initialTab: "trigger",
-          })
-        }
-      />
+          {/* Duplicate layout warning banner */}
+          {isDuplicateLayout && (
+            <div className="px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/25 flex items-center gap-1.5 text-[10px] text-amber-500 font-medium leading-tight nodrag">
+              <AlertCircle size={12} className="shrink-0 text-amber-500 animate-pulse" />
+              <span>Duplicate layout: Section already has layout.tsx</span>
+            </div>
+          )}
 
-      {/* Real-Time Connections (SSE, WebSocket, WebRTC, Polling) */}
-      <RealtimeConnectionList
-        nodeId={id}
-        connections={data.realtimeConnections}
-        updateNode={updateNode}
-        data={data}
-      />
+          {/* Duplicate route warning banner */}
+          {isDuplicateRoute && (
+            <div className="px-3 py-1.5 bg-destructive/10 border-b border-destructive/25 flex items-center gap-1.5 text-[10px] text-destructive font-medium leading-tight nodrag">
+              <AlertCircle size={12} className="shrink-0 text-destructive animate-pulse" />
+              <span>Duplicate route: Route "{currentNormalizedRoute}" conflicts with "{duplicateRoutePage?.data?.label || "Page"}"</span>
+            </div>
+          )}
+
+          {/* Edit UI & Page settings button strip */}
+          <div className="px-3 py-1.5 border-b bg-muted/30 flex items-center justify-between nodrag">
+            <span
+              className="text-[10px] text-muted-foreground font-mono truncate"
+              title={`Route: ${displayRoute}`}
+            >
+              {displayRoute}
+            </span>
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Page config / settings gear */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveConfigItem({ type: "webPage", id, nodeId: id });
+                }}
+                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+                title="Page settings & configuration"
+              >
+                <Settings size={12} />
+              </button>
+
+              {/* Edit UI (visual page editor) */}
+              <button
+                type="button"
+                disabled={isLocked}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (projectId) router.push(`/project/${projectId}/pages/${id}`);
+                }}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-all",
+                  isLocked
+                    ? "bg-muted text-muted-foreground border border-border cursor-not-allowed opacity-60"
+                    : "bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 border border-indigo-500/20 cursor-pointer",
+                )}
+                title={isLocked ? "Locked: AI is actively editing this page" : "Open visual page editor"}
+              >
+                {isLocked ? <Lock size={10} /> : <Pencil size={10} />}
+                {isLocked ? "Locked" : "Edit UI"}
+              </button>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
+            <Textarea
+              className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50 disabled:opacity-60"
+              placeholder="description"
+              disabled={isLocked}
+              value={data.description || ""}
+              onChange={(e) =>
+                updateNode(id, { data: { ...data, description: e.target.value } })
+              }
+            />
+          </div>
+
+          {/* Parameters Strip */}
+          {(Boolean(data.headers?.length) ||
+            Boolean(data.queryParams?.length) ||
+            Boolean(data.pathParams?.length) ||
+            Boolean(data.requestBody?.rawJson || data.requestBody?.fields?.length)) && (
+            <div className="px-3 py-1 bg-secondary/15 border-b flex flex-wrap items-center gap-1.5 nodrag text-[9px]">
+              {Boolean(data.headers?.length) && (
+                <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-mono font-medium border border-blue-500/20">
+                  {data.headers!.length} {data.headers!.length === 1 ? "header" : "headers"}
+                </span>
+              )}
+              {Boolean(data.queryParams?.length) && (
+                <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono font-medium border border-indigo-500/20">
+                  {data.queryParams!.length} {data.queryParams!.length === 1 ? "query param" : "query params"}
+                </span>
+              )}
+              {Boolean(data.requestBody?.rawJson || data.requestBody?.fields?.length) && (
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono font-medium border border-emerald-500/20">
+                  Body Schema
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Sections & Actions */}
+          <SectionList
+            nodeId={id}
+            sections={data.sections}
+            updateNode={updateNode}
+            data={data}
+            onTriggerEvent={(triggerInfo) =>
+              useBackendCanvasStore.getState().setActiveConfigItem({
+                type: "eventTesting",
+                id: triggerInfo.event.id,
+                nodeId: id,
+                targetNodeId: triggerInfo.targetNode.id,
+                endpointId: triggerInfo.endpoint.id,
+                initialTab: "trigger",
+              })
+            }
+          />
+
+          {/* Real-Time Connections (SSE, WebSocket, WebRTC, Polling) */}
+          <RealtimeConnectionList
+            nodeId={id}
+            connections={data.realtimeConnections}
+            updateNode={updateNode}
+            data={data}
+          />
 
       {/* Page Rename / File Deletion Confirmation Dialog */}
       {pendingRename && (
