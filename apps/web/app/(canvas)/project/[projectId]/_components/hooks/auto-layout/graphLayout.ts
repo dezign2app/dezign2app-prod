@@ -204,6 +204,7 @@ export function performGraphLayout({
   const webAppNodes = graphNodes.filter((n) => n.type === "webApp");
   const stackedSecondaryNodeIdSet = new Set<string>();
   const stackedSecondaryEdgeIdSet = new Set<string>();
+  const secondaryToLeadPageMap = new Map<string, string>();
   const dimensionOverrides = new Map<string, { width: number; height: number }>();
   const stackHandleRatios = new Map<string, number>();
   const stackedZonesList: Array<{
@@ -266,6 +267,7 @@ export function performGraphLayout({
         const secondaryPages = sortedPages.slice(1);
         secondaryPages.forEach((p) => {
           stackedSecondaryNodeIdSet.add(p.id);
+          secondaryToLeadPageMap.set(p.id, leadPage.id);
         });
 
         zoneEdges.forEach((e) => {
@@ -280,7 +282,7 @@ export function performGraphLayout({
     });
   });
 
-  const flowEdges: LayoutEdge[] = graphEdges.filter(
+  const baseFlowEdges: LayoutEdge[] = graphEdges.filter(
     (e: LayoutEdge) =>
       !isHeadConnectionEdge(e) &&
       !isHangingTransformerEdge(e) &&
@@ -290,10 +292,39 @@ export function performGraphLayout({
       !hangingRefNodeIdSet.has(e.target) &&
       !paymentsPluginNodeIdSet.has(e.source) &&
       !paymentsPluginNodeIdSet.has(e.target) &&
-      !stackedSecondaryEdgeIdSet.has(e.id) &&
-      !stackedSecondaryNodeIdSet.has(e.source) &&
-      !stackedSecondaryNodeIdSet.has(e.target),
+      !stackedSecondaryEdgeIdSet.has(e.id),
   );
+
+  // Remap external edges connected to secondary stacked pages to their stack's leadPage
+  // so connected services and external nodes maintain DAG hierarchy and do not get orphaned/misplaced
+  const flowEdges: LayoutEdge[] = [];
+  const seenFlowEdgeKeys = new Set<string>();
+
+  baseFlowEdges.forEach((e) => {
+    const remappedSource = secondaryToLeadPageMap.get(e.source) ?? e.source;
+    const remappedTarget = secondaryToLeadPageMap.get(e.target) ?? e.target;
+
+    // Discard intra-stack edges (between pages of the same stack) to avoid self-loops in Dagre
+    if (remappedSource === remappedTarget) return;
+
+    // Skip if either endpoint is still an unmapped secondary page
+    if (
+      stackedSecondaryNodeIdSet.has(remappedSource) ||
+      stackedSecondaryNodeIdSet.has(remappedTarget)
+    ) {
+      return;
+    }
+
+    const key = `${remappedSource}:${e.sourceHandle ?? ""}->${remappedTarget}:${e.targetHandle ?? ""}`;
+    if (seenFlowEdgeKeys.has(key)) return;
+    seenFlowEdgeKeys.add(key);
+
+    flowEdges.push(
+      remappedSource !== e.source || remappedTarget !== e.target
+        ? { ...e, source: remappedSource, target: remappedTarget }
+        : e,
+    );
+  });
 
   const mainGraphNodes: LayoutNode[] = graphNodes.filter(
     (n: LayoutNode) =>
