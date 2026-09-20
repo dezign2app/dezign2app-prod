@@ -23,13 +23,14 @@ interface LogicInputSectionProps {
   returnSchema?: Array<{ name: string; type: string; required?: boolean }>;
   onResetContext?: () => void;
   contextType?: "endpoint" | "db_operation" | "transformer" | "langgraph";
+  dbType?: string;
   connectedDatabases?: ConnectedDbItem[];
 }
 
 function formatInterfaceFields(
   fields?: Array<{ name: string; type: string; required?: boolean }>,
 ): string {
-  if (!fields || fields.length === 0) return "  [key: string]: unknown;";
+  if (!fields || fields.length === 0) return "";
   return fields
     .map(
       (f) =>
@@ -55,6 +56,7 @@ export const LogicInputSection = React.memo(function LogicInputSection({
   returnSchema,
   onResetContext,
   contextType,
+  dbType,
   connectedDatabases = [],
 }: LogicInputSectionProps) {
   const [viewMode, setViewMode] = useState<"framed" | "preview">("framed");
@@ -121,12 +123,16 @@ export const LogicInputSection = React.memo(function LogicInputSection({
         ? trimmedCode
         : `export ${asyncKw}function ${safeFunctionName || functionName}(${dbParamSig}): ${returnTypeAnnotation} {\n${bodyFormatted}\n}`;
 
+      const isPostgres = dbType === "postgres" || dbType === "postgresql";
       const otherDbImports = (connectedDatabases || [])
         .map((cd) => `import { ${cd.varName} } from "${cd.importPath}";`)
         .join("\n");
+      const defaultImport = isPostgres
+        ? `import { query, pool } from "@/lib/db";`
+        : `import { db } from "@/lib/db";`;
       const importsStr = otherDbImports
-        ? `import { db } from "@/lib/db";\n${otherDbImports}\n\n`
-        : `import { db } from "@/lib/db";\n\n`;
+        ? `${defaultImport}\n${otherDbImports}\n\n`
+        : `${defaultImport}\n\n`;
 
       return `${importsStr}${fnContent}\n`;
     }
@@ -155,6 +161,7 @@ export const LogicInputSection = React.memo(function LogicInputSection({
     inputSchema,
     returnSchema,
     isDbOp,
+    dbType,
     connectedDatabases,
   ]);
 
@@ -296,7 +303,17 @@ export const LogicInputSection = React.memo(function LogicInputSection({
                   inputSchema.map((param, idx) => (
                     <React.Fragment key={param.name || idx}>
                       {idx > 0 && <span className="text-muted-foreground">, </span>}
-                      <span className="text-emerald-400 font-medium">{param.name}</span>
+                      {param.name.startsWith("{") && param.name.endsWith("}") ? (
+                        <>
+                          <span className="text-muted-foreground">&#123; </span>
+                          <span className="text-emerald-400 font-medium">
+                            {param.name.slice(1, -1).trim()}
+                          </span>
+                          <span className="text-muted-foreground"> &#125;</span>
+                        </>
+                      ) : (
+                        <span className="text-emerald-400 font-medium">{param.name}</span>
+                      )}
                       {param.required === false && <span className="text-amber-400">?</span>}
                       <span className="text-muted-foreground">: </span>
                       <span className="text-cyan-400 font-medium">{param.type || "string"}</span>
@@ -368,25 +385,52 @@ export const LogicInputSection = React.memo(function LogicInputSection({
           <span>
             {isDbOp ? (
               <>
-                Database clients available: <code className="text-emerald-400 font-semibold">db</code> (primary)
-                {connectedDatabases && connectedDatabases.length > 0 && (
+                {dbType === "postgres" || dbType === "postgresql" ? (
                   <>
-                    {connectedDatabases.map((cd) => (
-                      <React.Fragment key={cd.id}>
-                        {", "}
-                        <code className={cd.isRedis ? "text-amber-400 font-semibold" : "text-blue-400 font-semibold"}>
-                          {cd.varName}
-                        </code>
-                        <span className="text-[9px] text-muted-foreground"> ({cd.label})</span>
-                      </React.Fragment>
-                    ))}
+                    Database clients available: <code className="text-emerald-400 font-semibold">query</code>,{" "}
+                    <code className="text-emerald-400 font-semibold">withTransaction</code>,{" "}
+                    <code className="text-emerald-400 font-semibold">pool</code> (primary)
+                    {connectedDatabases && connectedDatabases.length > 0 && (
+                      <>
+                        {connectedDatabases.map((cd) => (
+                          <React.Fragment key={cd.id}>
+                            {", "}
+                            <code className={cd.isRedis ? "text-amber-400 font-semibold" : "text-blue-400 font-semibold"}>
+                              {cd.varName}
+                            </code>
+                            <span className="text-[9px] text-muted-foreground"> ({cd.label})</span>
+                          </React.Fragment>
+                        ))}
+                      </>
+                    )}
+                    {". "}
+                    Helper queries use <code className="text-emerald-400 font-semibold">$1, $2</code> placeholders with{" "}
+                    <code className="text-emerald-400 font-semibold">RETURNING *</code>. Return type:{" "}
+                    <code className="text-cyan-400 font-semibold">{returnTypeAnnotation}</code>.
+                  </>
+                ) : (
+                  <>
+                    Database clients available: <code className="text-emerald-400 font-semibold">db</code> (primary)
+                    {connectedDatabases && connectedDatabases.length > 0 && (
+                      <>
+                        {connectedDatabases.map((cd) => (
+                          <React.Fragment key={cd.id}>
+                            {", "}
+                            <code className={cd.isRedis ? "text-amber-400 font-semibold" : "text-blue-400 font-semibold"}>
+                              {cd.varName}
+                            </code>
+                            <span className="text-[9px] text-muted-foreground"> ({cd.label})</span>
+                          </React.Fragment>
+                        ))}
+                      </>
+                    )}
+                    {". "}
+                    Helper statements: <code className="text-emerald-400 font-semibold">stmtFindAll</code>,{" "}
+                    <code className="text-emerald-400 font-semibold">stmtFindById</code>,{" "}
+                    <code className="text-emerald-400 font-semibold">stmtDelete</code>. Return type:{" "}
+                    <code className="text-cyan-400 font-semibold">{returnTypeAnnotation}</code>.
                   </>
                 )}
-                {". "}
-                Helper statements: <code className="text-emerald-400 font-semibold">stmtFindAll</code>,{" "}
-                <code className="text-emerald-400 font-semibold">stmtFindById</code>,{" "}
-                <code className="text-emerald-400 font-semibold">stmtDelete</code>. Return type:{" "}
-                <code className="text-cyan-400 font-semibold">{returnTypeAnnotation}</code>.
               </>
             ) : (
               <>

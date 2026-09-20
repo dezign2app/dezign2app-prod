@@ -1,6 +1,7 @@
 import React, { useCallback } from "react";
-import { Code2 } from "lucide-react";
+import { Code2, RefreshCw } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
+import { Button } from "@workspace/ui/components/button";
 import { DbOperationFunction, DbOperationTestCase } from "@workspace/canvas/types";
 import { ParamFieldEditor } from "./ParamFieldEditor";
 
@@ -10,6 +11,7 @@ export interface TestParamsFormProps {
   label: string;
   isRedis?: boolean;
   onParamChange: (paramName: string, value: unknown) => void;
+  onResetToDefaults?: () => void;
 }
 
 interface ParamFieldRowProps {
@@ -46,6 +48,7 @@ export const TestParamsForm: React.FC<TestParamsFormProps> = React.memo(({
   label,
   isRedis = false,
   onParamChange,
+  onResetToDefaults,
 }) => {
   const paramDefs =
     selectedOp.params && selectedOp.params.length > 0
@@ -80,9 +83,23 @@ export const TestParamsForm: React.FC<TestParamsFormProps> = React.memo(({
           <Code2 size={13} />
           Input Parameters ({paramDefs.length})
         </Label>
-        <span className="text-[10px] text-muted-foreground">
-          Values passed to <code>{selectedOp.name}()</code>
-        </span>
+        <div className="flex items-center gap-2">
+          {onResetToDefaults && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onResetToDefaults}
+              className="h-5 px-1.5 text-[10px] gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
+              title="Reset test inputs to match current table schema and function parameters"
+            >
+              <RefreshCw size={10} /> Reset to Defaults
+            </Button>
+          )}
+          <span className="text-[10px] text-muted-foreground">
+            Values passed to <code>{selectedOp.name}()</code>
+          </span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3">
@@ -90,7 +107,7 @@ export const TestParamsForm: React.FC<TestParamsFormProps> = React.memo(({
           <ParamFieldRow
             key={`${activeCase.id}-${p.name}`}
             param={p}
-            value={activeCase.params[p.name]}
+            value={activeCase.params?.[p.name]}
             label={label}
             onParamChange={onParamChange}
           />

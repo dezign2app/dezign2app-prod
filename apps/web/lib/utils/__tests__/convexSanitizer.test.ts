@@ -82,4 +82,48 @@ describe("sanitizeForConvex", () => {
       empty_key: "empty-val",
     });
   });
+
+  it("converts Date objects into ISO 8601 strings for Convex compatibility", () => {
+    const testDate = new Date("2026-09-20T09:55:59.585Z");
+    const nodeData = {
+      label: "Test",
+      dbOperations: [
+        {
+          id: "findAll",
+        },
+        {
+          id: "findById",
+        },
+        {
+          id: "createTest",
+          testCases: [
+            {
+              id: "case-1",
+              lastResult: {
+                success: true,
+                output: {
+                  id: "test_1",
+                  created_at: testDate,
+                },
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const sanitized = sanitizeForConvex(nodeData);
+    expect(
+      sanitized.dbOperations?.[2]?.testCases?.[0]?.lastResult?.output?.created_at,
+    ).toBe("2026-09-20T09:55:59.585Z");
+    expect(
+      typeof sanitized.dbOperations?.[2]?.testCases?.[0]?.lastResult?.output?.created_at,
+    ).toBe("string");
+  });
+
+  it("converts invalid Date objects to null", () => {
+    const invalidDate = new Date("invalid date string");
+    const output = sanitizeForConvex({ date: invalidDate });
+    expect(output).toEqual({ date: null });
+  });
 });

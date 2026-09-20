@@ -10,6 +10,7 @@ import {
   inferDbOperationReturnType,
   cleanInnerFunctionBody,
   deriveDbFunctionSignature,
+  extractDbOperationParams,
 } from "@/lib/utils/entityOperationsHelper";
 import { ConnectedDatabaseInfo } from "../ConnectedDatabasesSection";
 import { toVarName } from "@/lib/compiler/utils";
@@ -82,9 +83,14 @@ export function useFunctionEditorState({
         pascalLabel,
         tableName: label,
       });
+      const parsedParams = extractDbOperationParams(currentCode);
+      const effectiveParams =
+        parsedParams && parsedParams.length > 0
+          ? parsedParams
+          : latestDraftOpRef.current.params;
       const derivedSig = deriveDbFunctionSignature(
         currentName,
-        latestDraftOpRef.current.params,
+        effectiveParams,
         inferredReturnType || latestDraftOpRef.current.returnType,
       );
       if (inferredReturnType && inferredReturnType !== latestDraftOpRef.current.returnType) {
@@ -94,6 +100,14 @@ export function useFunctionEditorState({
       if (derivedSig && derivedSig !== latestDraftOpRef.current.signature) {
         pendingChangesRef.current.signature = derivedSig;
         latestDraftOpRef.current.signature = derivedSig;
+      }
+      if (
+        parsedParams &&
+        parsedParams.length > 0 &&
+        JSON.stringify(parsedParams) !== JSON.stringify(latestDraftOpRef.current.params || [])
+      ) {
+        pendingChangesRef.current.params = parsedParams;
+        latestDraftOpRef.current.params = parsedParams;
       }
     }
     if (debouncedSaveTimerRef.current) {
@@ -553,15 +567,25 @@ export function useFunctionEditorState({
         pascalLabel,
         tableName: label,
       });
+      const parsedParams = extractDbOperationParams(draftOp.code);
+      const effectiveParams =
+        parsedParams && parsedParams.length > 0 ? parsedParams : draftOp.params;
       const derivedSig = deriveDbFunctionSignature(
         draftOp.name,
-        draftOp.params,
+        effectiveParams,
         inferred || draftOp.returnType,
       );
       const updates: Partial<DbOperationFunction> = {};
       if (cleaned !== draftOp.code) updates.code = cleaned;
       if (inferred && inferred !== draftOp.returnType) updates.returnType = inferred;
       if (derivedSig && derivedSig !== draftOp.signature) updates.signature = derivedSig;
+      if (
+        parsedParams &&
+        parsedParams.length > 0 &&
+        JSON.stringify(parsedParams) !== JSON.stringify(draftOp.params || [])
+      ) {
+        updates.params = parsedParams;
+      }
       if (Object.keys(updates).length > 0) {
         handleUpdateOp(updates, true);
       }
@@ -604,9 +628,14 @@ export function useFunctionEditorState({
           pascalLabel,
           tableName: label,
         });
+        const parsedParams = extractDbOperationParams(currentCode);
+        const effectiveParams =
+          parsedParams && parsedParams.length > 0
+            ? parsedParams
+            : latestDraftOpRef.current.params;
         const derivedSig = deriveDbFunctionSignature(
           currentName,
-          latestDraftOpRef.current.params,
+          effectiveParams,
           inferredReturnType || latestDraftOpRef.current.returnType,
         );
 
@@ -616,6 +645,13 @@ export function useFunctionEditorState({
         }
         if (derivedSig && derivedSig !== latestDraftOpRef.current.signature) {
           updates.signature = derivedSig;
+        }
+        if (
+          parsedParams &&
+          parsedParams.length > 0 &&
+          JSON.stringify(parsedParams) !== JSON.stringify(latestDraftOpRef.current.params || [])
+        ) {
+          updates.params = parsedParams;
         }
         if (Object.keys(updates).length > 0) {
           setDraftOp((prev) => ({ ...prev, ...updates }));

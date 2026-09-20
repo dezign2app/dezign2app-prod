@@ -3,6 +3,10 @@
 import { sanitizeForConvex } from "@/lib/utils/convexSanitizer";
 import { executeSqliteLiveOperation, checkSqliteConnection } from "@/lib/utils/sqliteRunner";
 import {
+  executePostgresLiveOperation,
+  checkPostgresConnection,
+} from "@/lib/utils/postgresRunner";
+import {
   type TestDbOperationPayload,
   type TestDbOperationResult,
   type CheckDbConnectionPayload,
@@ -162,7 +166,52 @@ export async function testDbOperationAction(
       };
     }
 
-    // 4. LIVE CLIENT-SERVER TCP ENGINES (postgres, mysql, etc.)
+    // 4. LIVE POSTGRES EXECUTION
+    if (engine === "postgres" || engine === "postgresql" || engine === "pg" || engine === "cockroachdb") {
+      const pgResult = await executePostgresLiveOperation({
+        connection: {
+          host,
+          port,
+          connectionString: connection.connectionString,
+          connectionStringEnv: connection.connectionStringEnv,
+          database: connection.database,
+          user: connection.user || connection.username,
+          password: connection.password,
+        },
+        entity: {
+          name: entity?.name || extractTableName(operation),
+          columns: entity?.columns,
+        },
+        operation,
+        args,
+        mode: "live",
+      });
+
+      if (!pgResult.serverActive && !pgResult.success) {
+        return {
+          success: false,
+          serverActive: false,
+          error: pgResult.error || `Server not found or inactive: Could not reach PostgreSQL database server at ${host}:${port}.`,
+          rawCommand: pgResult.rawSql || operation.query || `${operation.name}(${Object.keys(args).join(", ")})`,
+          durationMs: pgResult.durationMs || 0,
+          mode: "live",
+          tip: `Ensure your local PostgreSQL server is running on port ${port}, or switch to 'Simulation Sandbox' mode.`,
+        };
+      }
+
+      return {
+        success: pgResult.success,
+        serverActive: pgResult.serverActive ?? true,
+        output: sanitizeForConvex(pgResult.output),
+        durationMs: pgResult.durationMs,
+        rawCommand: pgResult.rawSql,
+        mode: "live",
+        connection: `${host}:${port}`,
+        error: pgResult.error,
+      };
+    }
+
+    // 5. LIVE CLIENT-SERVER TCP ENGINES (mysql, etc.)
     if (mode === "live") {
       const tcpResult = await checkTcpSocket(host, port, 2500);
       if (!tcpResult.reachable) {
@@ -268,7 +317,20 @@ export async function checkDbConnectionAction(
       };
     }
 
-    // 3. RELATIONAL / TCP ENGINES (postgres, mysql, etc.)
+    // 3. POSTGRES ENGINE — full credential check
+    if (engine === "postgres" || engine === "postgresql" || engine === "pg" || engine === "cockroachdb") {
+      return await checkPostgresConnection({
+        host,
+        port,
+        connectionString,
+        connectionStringEnv: connection.connectionStringEnv,
+        database: connection.database,
+        user: connection.user || connection.username,
+        password: connection.password,
+      });
+    }
+
+    // 4. RELATIONAL / TCP ENGINES (mysql, etc.)
     const tcpResult = await checkTcpSocket(host, port);
     if (tcpResult.reachable) {
       return {

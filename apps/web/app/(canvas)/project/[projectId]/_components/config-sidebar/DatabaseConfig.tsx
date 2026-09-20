@@ -1,5 +1,5 @@
-import React from "react";
-import { Database, Key, Server, Plus, Table2, Trash, CheckCircle2, DatabaseZap, HardDrive, Radio, AlertTriangle } from "lucide-react";
+import React, { useState } from "react";
+import { Database, Key, Server, Plus, Table2, Trash, CheckCircle2, DatabaseZap, HardDrive, Radio, AlertTriangle, Eye, EyeOff, Lock } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
@@ -71,8 +71,12 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
   const connStringEnv = data.connectionStringEnv || (engine === "redis" ? "REDIS_URL" : DEFAULT_DATABASE_ENV_VARS.connectionStringEnv);
   const dbFilePathEnv = data.dbFilePathEnv || DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv;
 
+  const [showPassword, setShowPassword] = useState(false);
+
   const isRedis = dbNode.type === "redis_instance" || engine === "redis";
   const isSqlite = engine === "sqlite";
+  const isPostgres = engine === "postgres";
+  const isRelational = isSqlite || isPostgres || engine === "mysql";
   const dbFilePath = data.dbFilePath || "dev.db";
 
   // Check for other Redis instances on the canvas to identify port conflicts
@@ -222,9 +226,28 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
             value={engine}
             onValueChange={(val) => {
               if (isDatabaseEngine(val)) {
-                handleUpdateField("dbEngine", val);
-                if (val === "redis" && !data.connectionStringEnv) {
-                  handleUpdateField("connectionStringEnv", "REDIS_URL");
+                if (val === "redis") {
+                  updateNode(nodeId, {
+                    data: {
+                      ...data,
+                      dbEngine: val,
+                      connectionStringEnv: data.connectionStringEnv || "REDIS_URL",
+                      port: data.port || "6379",
+                    },
+                  });
+                } else if (val === "postgres") {
+                  updateNode(nodeId, {
+                    data: {
+                      ...data,
+                      dbEngine: val,
+                      connectionStringEnv: data.connectionStringEnv || "DATABASE_URL",
+                      port: data.port || "5432",
+                      database: data.database || "postgres",
+                      user: data.user || data.username || "postgres",
+                    },
+                  });
+                } else {
+                  handleUpdateField("dbEngine", val);
                 }
               }
             }}
@@ -417,48 +440,110 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-3">
-            {/* Host */}
-            <div className="col-span-2 space-y-1.5">
-              <Label className="text-xs font-semibold">Host / Hostname</Label>
-              <Input
-                value={data.host || "localhost"}
-                onChange={(e) => handleUpdateField("host", e.target.value)}
-                placeholder="localhost or 127.0.0.1"
-                className="h-8 text-xs font-mono"
-              />
-              <p className="text-[10px] text-muted-foreground">
-                {isRedis ? "Redis daemon binding host (local or remote)." : "Database host address."}
-              </p>
+          <div className="space-y-3">
+            {/* Host & Port */}
+            <div className="grid grid-cols-3 gap-3">
+              {/* Host */}
+              <div className="col-span-2 space-y-1.5">
+                <Label className="text-xs font-semibold">Host / Hostname</Label>
+                <Input
+                  value={data.host || "localhost"}
+                  onChange={(e) => handleUpdateField("host", e.target.value)}
+                  placeholder="localhost or 127.0.0.1"
+                  className="h-8 text-xs font-mono"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  {isRedis ? "Redis daemon binding host (local or remote)." : "Database host address."}
+                </p>
+              </div>
+
+              {/* Port */}
+              <div className="col-span-1 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">Port</Label>
+                  {portConflict && (
+                    <span title={`Conflict with ${portConflict.data?.label || "another instance"}`}>
+                      <AlertTriangle size={12} className="text-amber-500" />
+                    </span>
+                  )}
+                </div>
+                <Input
+                  type="number"
+                  value={data.port ?? (isRedis ? "6379" : "5432")}
+                  onChange={(e) => {
+                    const val = e.target.value ? e.target.value : undefined;
+                    handleUpdateField("port", val);
+                  }}
+                  placeholder={isRedis ? "6379" : "5432"}
+                  className={cn(
+                    "h-8 text-xs font-mono",
+                    portConflict && "border-amber-500/70 focus-visible:ring-amber-500/50"
+                  )}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  {isRedis ? "Default: 6379" : "Port"}
+                </p>
+              </div>
             </div>
 
-            {/* Port */}
-            <div className="col-span-1 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold">Port</Label>
-                {portConflict && (
-                  <span title={`Conflict with ${portConflict.data?.label || "another instance"}`}>
-                    <AlertTriangle size={12} className="text-amber-500" />
-                  </span>
-                )}
+            {/* Relational / PostgreSQL Credentials: Database Name, Username, Password */}
+            {isRelational && !isSqlite && (
+              <div className="space-y-3 pt-2 border-t border-border/40">
+                {/* Database Name */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Database Name</Label>
+                  <Input
+                    value={data.database ?? (isPostgres ? "postgres" : "")}
+                    onChange={(e) => handleUpdateField("database", e.target.value)}
+                    placeholder={isPostgres ? "postgres" : "my_database"}
+                    className="h-8 text-xs font-mono"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Target database on the server (default: {isPostgres ? "postgres" : "database"}).
+                  </p>
+                </div>
+
+                {/* Username & Password */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Username</Label>
+                    <Input
+                      value={data.user ?? data.username ?? (isPostgres ? "postgres" : "root")}
+                      onChange={(e) => handleUpdateField("user", e.target.value)}
+                      placeholder={isPostgres ? "postgres" : "root"}
+                      className="h-8 text-xs font-mono"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      User role with read/write access.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Password</Label>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        value={data.password || ""}
+                        onChange={(e) => handleUpdateField("password", e.target.value)}
+                        placeholder="••••••••"
+                        className="h-8 text-xs font-mono pr-8"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      User password (leave empty if none).
+                    </p>
+                  </div>
+                </div>
               </div>
-              <Input
-                type="number"
-                value={data.port ?? (isRedis ? "6379" : "5432")}
-                onChange={(e) => {
-                  const val = e.target.value ? e.target.value : undefined;
-                  handleUpdateField("port", val);
-                }}
-                placeholder={isRedis ? "6379" : "5432"}
-                className={cn(
-                  "h-8 text-xs font-mono",
-                  portConflict && "border-amber-500/70 focus-visible:ring-amber-500/50"
-                )}
-              />
-              <p className="text-[10px] text-muted-foreground">
-                {isRedis ? "Default: 6379" : "Port"}
-              </p>
-            </div>
+            )}
           </div>
         )}
 
@@ -472,12 +557,25 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
           </div>
         )}
 
-        {/* Connection URL Live Preview */}
+        {/* Connection URL Live Preview for Redis */}
         {isRedis && (
           <div className="p-2.5 rounded-lg bg-secondary/30 border border-border/40 flex items-center justify-between text-xs font-mono">
             <span className="text-muted-foreground text-[10px] uppercase font-sans font-bold">URI Preview:</span>
             <code className="text-red-600 dark:text-red-400 text-xs font-bold truncate">
               redis://{currentHost}:{currentPort}
+            </code>
+          </div>
+        )}
+
+        {/* Connection URL Live Preview for PostgreSQL */}
+        {isPostgres && (
+          <div className="p-2.5 rounded-lg bg-secondary/30 border border-border/40 flex items-center justify-between text-xs font-mono">
+            <span className="text-muted-foreground text-[10px] uppercase font-sans font-bold">URI Preview:</span>
+            <code
+              className="text-blue-600 dark:text-blue-400 text-xs font-bold truncate"
+              title={`postgresql://${data.user || data.username || "postgres"}:${data.password ? "••••••••" : ""}@${currentHost}:${currentPort}/${data.database || "postgres"}`}
+            >
+              postgresql://{data.user || data.username || "postgres"}:{data.password ? "••••••••" : ""}@{currentHost}:{currentPort}/{data.database || "postgres"}
             </code>
           </div>
         )}
@@ -488,6 +586,9 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
           engine={engine}
           host={currentHost}
           port={currentPort}
+          database={data.database}
+          user={data.user || data.username}
+          password={data.password}
           connectionStringEnv={connStringEnv}
           dbFilePath={dbFilePath}
           dbFilePathEnv={dbFilePathEnv}

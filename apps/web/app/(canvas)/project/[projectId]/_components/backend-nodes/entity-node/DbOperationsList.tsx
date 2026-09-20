@@ -23,7 +23,9 @@ export const DbOperationsList: React.FC<DbOperationsListProps> = ({
   const indexes = data.indexes || [];
 
   // Fallback to auto-generated operations if not explicitly initialized
-  const dbOps: DbOperationFunction[] = getEntityDbOperations({ data }, allNodes);
+  const parentDb = allNodes.find((n) => n.id === data.databaseId);
+  const engine = parentDb?.data?.dbEngine || "sqlite";
+  const dbOps: DbOperationFunction[] = getEntityDbOperations({ data }, allNodes, engine);
 
   const activeOps = dbOps.filter((op) => op.enabled !== false);
 

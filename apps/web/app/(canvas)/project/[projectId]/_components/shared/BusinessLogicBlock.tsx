@@ -45,6 +45,7 @@ export const BusinessLogicBlock = React.memo(function BusinessLogicBlock({
   returnSchema,
   onResetContext,
   contextType,
+  dbType,
   connectedDatabases,
 }: BusinessLogicBlockProps) {
   const [internalMode, setInternalMode] = useState<LogicMode>(mode);
@@ -107,6 +108,7 @@ export const BusinessLogicBlock = React.memo(function BusinessLogicBlock({
         returnSchema={returnSchema}
         onResetContext={onResetContext}
         contextType={contextType}
+        dbType={dbType}
         connectedDatabases={connectedDatabases}
       />
 
