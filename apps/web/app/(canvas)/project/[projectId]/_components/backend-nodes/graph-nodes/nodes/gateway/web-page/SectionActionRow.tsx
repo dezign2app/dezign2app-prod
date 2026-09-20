@@ -17,6 +17,10 @@ import { NodeDeletionDialog } from "../../../../../node-deletion-dialog";
 
 const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
 
+const isStandardWebPageEvent = (event: string): boolean => {
+  return EVENT_OPTIONS.some((opt) => opt === event);
+};
+
 export interface SectionActionRowProps {
   nodeId: string;
   sectionId: string;
@@ -66,7 +70,7 @@ export const SectionActionRow = ({
     if (isEditing) {
       setEditName(action.name || "");
       const evt = action.event || "click";
-      const isStandard = (EVENT_OPTIONS as readonly string[]).includes(evt);
+      const isStandard = isStandardWebPageEvent(evt);
       setEditEvent(isStandard ? evt : "click");
 
       const focus = () => {
@@ -93,8 +97,17 @@ export const SectionActionRow = ({
 
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
-  const evtStr = (action.event as string) || "";
+  const evtStr = action.event || "";
+  const evtLower = evtStr.toLowerCase();
   const isPageLoad = evtStr === "pageLoad";
+  const isSse = evtStr === "sse" || evtStr === "sseMessage" || evtLower === "sse";
+  const isWebsocket =
+    evtStr === "websocket" ||
+    evtStr === "ws" ||
+    evtStr === "websocketMessage" ||
+    evtLower === "websocket" ||
+    evtLower === "ws";
+  const isWebrtc = evtStr === "webrtc" || evtLower === "webrtc";
 
   const link = getLinkedEndpoint(action.id);
 
@@ -262,14 +275,51 @@ export const SectionActionRow = ({
         style={{ top: "50%" }}
       />
 
-      {/* Inbound PageLoad handle */}
-      {isPageLoad && (
+      {/* Inbound Left handles for ALL actions */}
+      {isPageLoad ? (
         <Handle
           type="target"
           position={Position.Left}
           id={`pageload-in-${action.id}`}
           className="w-2 h-2 -left-1 !bg-emerald-500"
           style={{ top: "50%" }}
+          title="pageLoad (in): Wire from State Store or API endpoint"
+        />
+      ) : isSse ? (
+        <Handle
+          type="target"
+          position={Position.Left}
+          id={`sse-in-${action.id}`}
+          className="w-2 h-2 -left-1 !bg-amber-500"
+          style={{ top: "50%" }}
+          title="sse (in): Wire from Realtime SSE connection"
+        />
+      ) : isWebsocket ? (
+        <Handle
+          type="target"
+          position={Position.Left}
+          id={`websocket-in-${action.id}`}
+          className="w-2 h-2 -left-1 !bg-cyan-500"
+          style={{ top: "50%" }}
+          title="websocket (in): Wire from WebSocket connection"
+        />
+      ) : isWebrtc ? (
+        <Handle
+          type="target"
+          position={Position.Left}
+          id={`webrtc-in-${action.id}`}
+          className="w-2 h-2 -left-1 !bg-purple-500"
+          style={{ top: "50%" }}
+          title="webrtc (in): Wire from WebRTC connection"
+        />
+      ) : (
+        <Handle
+          type="target"
+          position={Position.Left}
+          id={`event-in-${action.id}`}
+          className="w-2 h-2 -left-1 !bg-indigo-500"
+          style={{ top: "50%" }}
+          title={`${action.name || action.event || "action"} (in): Wire from State Store action or API trigger`}
         />
       )}
 
@@ -278,7 +328,8 @@ export const SectionActionRow = ({
           className="flex flex-col gap-1.5 w-full"
           onBlur={(e) => {
             if (isSelectOpen) return;
-            const related = e.relatedTarget as HTMLElement | null;
+            const related =
+              e.relatedTarget instanceof HTMLElement ? e.relatedTarget : null;
             if (related?.closest('[role="combobox"]')) return;
             if (related?.closest('[role="listbox"]')) return;
             if (related?.closest('[role="option"]')) return;
@@ -334,7 +385,7 @@ export const SectionActionRow = ({
             setIsEditing(true);
             setEditName(action.name || "");
             const evt = action.event || "click";
-            const isStandard = (EVENT_OPTIONS as readonly string[]).includes(evt);
+            const isStandard = isStandardWebPageEvent(evt);
             setEditEvent(isStandard ? evt : "click");
           }}
         >

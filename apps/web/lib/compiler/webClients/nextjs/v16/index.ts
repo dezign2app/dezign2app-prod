@@ -29,9 +29,15 @@ import { resolveAppProviders } from "./providerGenerators";
 import { isServiceAssociatedWithWebApp } from "./serviceResolver";
 import { generateNextjsRoutes } from "../../../services/nextjs/v16/routeGenerator";
 import { GlobalStoreDefinition, NodeDependencyItem } from "@workspace/canvas/types";
+import { resolveStoreActionBindings } from "./storeActionResolver";
 
 export type { LinkedEndpointInfo, LinkedPageRefInfo };
-export { getServicePort, resolveLinkedEndpoint, resolvePageRefLink };
+export {
+  getServicePort,
+  resolveLinkedEndpoint,
+  resolvePageRefLink,
+  resolveStoreActionBindings,
+};
 
 /**
  * Compiles WebClient nodes into Next.js App Router (v16.x) project structure
@@ -52,26 +58,34 @@ export function compileNextjsV16WebClient(
 ): CompiledWebPageResult {
   const files: CompiledFile[] = [];
 
+  // Enrich webClientNodes with storeActionBinding inferred from canvas edges between
+  // StateStoreNode handles (populate, mutate, reset, store-action-*) and WebPageNode action handles
+  const enrichedWebClientNodes = resolveStoreActionBindings(
+    webClientNodes,
+    allNodes,
+    allEdges,
+  );
+
   const effectiveAppSlug =
     appSlug ||
     webAppNode?.data?.appSlug ||
     (webAppNode?.data?.label
       ? webAppNode.data.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
       : undefined) ||
-    webClientNodes[0]?.data.appSlug ||
+    enrichedWebClientNodes[0]?.data.appSlug ||
     "web-app";
 
   // 0. Resolve the specific AuthNode connected to THIS WebApp (or its pages)
   const authNode = resolveConnectedAuthNode(
     webAppNode,
-    webClientNodes,
+    enrichedWebClientNodes,
     allNodes,
     allEdges,
   );
 
   // 1. Resolve Page Metadata and Routes
   const pagesInfo = resolvePagesInfo(
-    webClientNodes,
+    enrichedWebClientNodes,
     allNodes,
     allEdges,
     effectiveAppSlug,
@@ -94,10 +108,10 @@ export function compileNextjsV16WebClient(
 
   // 2.5 Resolve State Store Nodes, Global Stores (Zustand) & App Providers (Context)
   const appGlobalStores: GlobalStoreDefinition[] = webAppNode?.data?.globalStores || [];
-  const pageStores: GlobalStoreDefinition[] = webClientNodes.flatMap((p) => p.data?.pageStores || []);
+  const pageStores: GlobalStoreDefinition[] = enrichedWebClientNodes.flatMap((p) => p.data?.pageStores || []);
 
   // Gather state_store nodes associated with this webApp
-  const webClientNodeIds = new Set(webClientNodes.map((p) => p.id));
+  const webClientNodeIds = new Set(enrichedWebClientNodes.map((p) => p.id));
   const associatedStateStoreNodes = (allNodes || []).filter((n) => {
     if (n.type !== "state_store") return false;
 
@@ -122,6 +136,15 @@ export function compileNextjsV16WebClient(
     );
     if (hasPageEdge) return true;
 
+    // 3.5 Action has storeActionBinding referencing this store
+    const hasActionBinding = enrichedWebClientNodes.some((p) =>
+      (p.data?.sections || []).some((s) =>
+        (s.actions || []).some((a) => a.storeActionBinding?.storeNodeId === n.id)
+      ) ||
+      (p.data?.events || []).some((a) => a.storeActionBinding?.storeNodeId === n.id)
+    );
+    if (hasActionBinding) return true;
+
     // 4. Fallback: If only 1 webApp in graph, include unassigned stores
     const allWebApps = (allNodes || []).filter((node) => node.type === "webApp");
     if (allWebApps.length <= 1) return true;
@@ -137,7 +160,7 @@ export function compileNextjsV16WebClient(
     const storage = d.storage || "memory";
 
     // If local store, attempt to map to connected or target page
-    let targetPage = webClientNodes.find((p) => p.id === d.targetPageId);
+    let targetPage = enrichedWebClientNodes.find((p) => p.id === d.targetPageId);
     if (!targetPage) {
       const connectedPageEdge = (allEdges || []).find(
         (e) =>
@@ -148,7 +171,7 @@ export function compileNextjsV16WebClient(
         const pageId = webClientNodeIds.has(connectedPageEdge.source)
           ? connectedPageEdge.source
           : connectedPageEdge.target;
-        targetPage = webClientNodes.find((p) => p.id === pageId);
+        targetPage = enrichedWebClientNodes.find((p) => p.id === pageId);
       }
     }
 
@@ -178,7 +201,7 @@ export function compileNextjsV16WebClient(
   }
 
   // 3. Project Configuration Files
-  const sectionAndActionLibs = webClientNodes.flatMap((p) =>
+  const sectionAndActionLibs = enrichedWebClientNodes.flatMap((p) =>
     (p.data?.sections || []).flatMap((s) => [
       ...(s.libraries || []),
       ...(s.actions || []).flatMap((a) => a.libraries || []),
@@ -198,7 +221,7 @@ export function compileNextjsV16WebClient(
   const resolvedProviders = resolveAppProviders([
     ...sectionAndActionLibs,
     ...(webAppNode?.data?.customDependencies || []).map((d: NodeDependencyItem) => d.name),
-    ...webClientNodes.flatMap((p) => (p.data?.customDependencies || []).map((d: NodeDependencyItem) => d.name)),
+    ...enrichedWebClientNodes.flatMap((p) => (p.data?.customDependencies || []).map((d: NodeDependencyItem) => d.name)),
   ]);
 
   if (resolvedProviders.hasProviders && resolvedProviders.file) {
@@ -214,12 +237,12 @@ export function compileNextjsV16WebClient(
 
   // Gather Service nodes with techStack: "nextjs" associated with this webApp
   const associatedNextjsServiceNodes = (allNodes || []).filter((n) =>
-    isServiceAssociatedWithWebApp(n, webAppNode, allNodes, allEdges, webClientNodes),
+    isServiceAssociatedWithWebApp(n, webAppNode, allNodes, allEdges, enrichedWebClientNodes),
   );
 
   const allWebCustomDeps = [
     ...(webAppNode?.data?.customDependencies || []),
-    ...webClientNodes.flatMap((p) => p.data?.customDependencies || []),
+    ...enrichedWebClientNodes.flatMap((p) => p.data?.customDependencies || []),
     ...associatedNextjsServiceNodes.flatMap((s) => s.data?.customDependencies || []),
     ...extraDepsFromSectionsAndActions,
     ...storeDeps,
@@ -259,7 +282,7 @@ export function compileNextjsV16WebClient(
   // 4. Auth Server, Client SDK, Authorization Helpers & Dependencies (only if authNode connected)
   generateAuthFilesAndDependencies({
     files,
-    webClientNodes,
+    webClientNodes: enrichedWebClientNodes,
     pagesInfo,
     authNode,
     endpoints,
@@ -310,7 +333,7 @@ export function compileNextjsV16WebClient(
 
   // 7. Pages, Action Event Components, Page Headers & Auth Components
   const { pageFiles } = generatePageAndComponentFiles({
-    webClientNodes,
+    webClientNodes: enrichedWebClientNodes,
     pagesInfo,
     endpoints,
     allNodes,
@@ -345,7 +368,7 @@ export function compileNextjsV16WebClient(
   // 9. Web page E2E Tests
   files.push(
     ...generateWebClientE2ETests(
-      webClientNodes,
+      enrichedWebClientNodes,
       endpoints,
       events,
       allNodes,
@@ -355,11 +378,13 @@ export function compileNextjsV16WebClient(
   );
 
   const webPageName =
-    webClientNodes.length === 1
-      ? webClientNodes[0]?.data.label || "web-client"
+    enrichedWebClientNodes.length === 1
+      ? enrichedWebClientNodes[0]?.data.label || "web-client"
       : "web-client";
   const webPageId =
-    webClientNodes.length === 1 ? webClientNodes[0]!.id : "web-client";
+    enrichedWebClientNodes.length === 1 && enrichedWebClientNodes[0]
+      ? enrichedWebClientNodes[0].id
+      : "web-client";
 
   return {
     webPageId,

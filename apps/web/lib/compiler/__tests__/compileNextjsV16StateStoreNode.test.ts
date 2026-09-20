@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BackendNode } from "@/types/canvas";
+import { BackendNode, BackendEdge } from "@/types/canvas";
 import { compileNextjsV16WebClient } from "../webClients/nextjs/v16";
 
 describe("compileNextjsV16StateStoreNode", () => {
@@ -479,5 +479,136 @@ describe("compileNextjsV16StateStoreNode", () => {
     expect(storeFile!.content).toContain("setCurrentUser: (value: UserProfile) => void;");
     expect(storeFile!.content).toContain("setCartItems: (value: CartItem[]) => void;");
   });
+
+  it("automatically infers storeActionBinding from canvas edges between StateStoreNode handles and WebPageNode action handles without manual sidebar metadata", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-shop",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "ShopApp",
+        appSlug: "shop-app",
+      },
+    };
+
+    const stateStoreNode: BackendNode = {
+      id: "node-store-cart",
+      type: "state_store",
+      position: { x: 200, y: -100 },
+      fractionalIndex: "a2",
+      data: {
+        label: "CartStore",
+        storeName: "Cart",
+        scope: "global",
+        storage: "memory",
+        targetWebAppId: "node-webapp-shop",
+        fields: [
+          { id: "f-items", name: "items", type: "array", defaultValue: [] },
+          { id: "f-total", name: "total", type: "number", defaultValue: 0 },
+        ],
+        actions: [
+          { id: "act-add-item", name: "addItem", targetFieldId: "f-items", actionType: "append" },
+        ],
+      },
+    };
+
+    // Notice: webPageNode actions have NO storeActionBinding defined in data!
+    const webPageNode: BackendNode = {
+      id: "node-page-checkout",
+      type: "webPage",
+      position: { x: 400, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "/checkout",
+        appSlug: "shop-app",
+        sections: [
+          {
+            id: "sec-cart",
+            name: "Cart Section",
+            renderMode: "client",
+            actions: [
+              {
+                id: "act-load",
+                name: "onLoad",
+                event: "pageLoad",
+              },
+              {
+                id: "act-btn-add",
+                name: "AddProduct",
+                event: "click",
+              },
+              {
+                id: "act-leave",
+                name: "onLeave",
+                event: "unmount",
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    // Edges directly connecting StateStore handles and WebPage handles:
+    const edges: BackendEdge[] = [
+      // 1. populate-out -> pageload-in-act-load
+      {
+        id: "edge-load",
+        type: "connection",
+        fractionalIndex: "a0",
+        source: "node-store-cart",
+        sourceHandle: "populate-out",
+        target: "node-page-checkout",
+        targetHandle: "pageload-in-act-load",
+      },
+      // 2. events-act-btn-add -> store-action-in-act-add-item
+      {
+        id: "edge-add",
+        type: "connection",
+        fractionalIndex: "a1",
+        source: "node-page-checkout",
+        sourceHandle: "events-act-btn-add",
+        target: "node-store-cart",
+        targetHandle: "store-action-in-act-add-item",
+      },
+      // 3. reset-out -> event-in-act-leave
+      {
+        id: "edge-leave",
+        type: "connection",
+        fractionalIndex: "a2",
+        source: "node-store-cart",
+        sourceHandle: "reset-out",
+        target: "node-page-checkout",
+        targetHandle: "event-in-act-leave",
+      },
+    ];
+
+    const allNodes = [webAppNode, webPageNode, stateStoreNode];
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      [],
+      [],
+      allNodes,
+      edges,
+      "ShopApp",
+      [],
+      "shop-app",
+      webAppNode,
+    );
+
+    // 1. Page file should import useCartStore and wire populate and reset
+    const pageFile = result.files.find((f) => f.filename === "app/(public)/checkout/page.tsx");
+    expect(pageFile).toBeDefined();
+    expect(pageFile?.content).toContain('import { useCartStore } from "@/lib/stores";');
+    expect(pageFile?.content).toContain("useCartStore.getState().populate(");
+    expect(pageFile?.content).toContain("useCartStore.getState().reset();");
+
+    // 2. Button component should call addItem
+    const buttonFile = result.files.find((f) => f.filename.toLowerCase().includes("addproduct"));
+    expect(buttonFile).toBeDefined();
+    expect(buttonFile?.content).toContain('import { useCartStore } from "@/lib/stores";');
+    expect(buttonFile?.content).toContain("useCartStore.getState().addItem();");
+  });
 });
+
 

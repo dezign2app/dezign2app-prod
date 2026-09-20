@@ -228,7 +228,7 @@ export const SectionBlock = ({
         {!isOpen && (
           <>
             {section.actions.map((act) => {
-              const evtStr = (act.event as string) || "";
+              const evtStr = act.event || "";
               const evtLower = evtStr.toLowerCase();
               const isPageLoad = evtStr === "pageLoad";
               const isSse =
@@ -286,6 +286,15 @@ export const SectionBlock = ({
                       position={Position.Left}
                       id={`webrtc-in-${act.id}`}
                       className="w-2 h-2 -left-1 !bg-purple-500"
+                      style={{ top: "50%" }}
+                    />
+                  )}
+                  {!isPageLoad && !isSse && !isWebsocket && !isWebrtc && (
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={`event-in-${act.id}`}
+                      className="w-2 h-2 -left-1 !bg-indigo-500"
                       style={{ top: "50%" }}
                     />
                   )}

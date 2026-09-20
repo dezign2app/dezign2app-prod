@@ -4,10 +4,11 @@ import {
   compileNextjsV16WebClient,
   resolveLinkedEndpoint,
   getServicePort,
+  resolveStoreActionBindings,
   LinkedEndpointInfo,
 } from "./webClients/nextjs/v16";
 
-export { resolveLinkedEndpoint, getServicePort };
+export { resolveLinkedEndpoint, getServicePort, resolveStoreActionBindings };
 export type { LinkedEndpointInfo };
 
 /**
