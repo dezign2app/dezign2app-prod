@@ -200,6 +200,7 @@ export function NodePaletteSidebar({
                   <ShieldCheck className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                   Auth Node
                 </Button>
+                {/* Temporarily hidden: Creem Payments
                 <Button
                   variant="outline"
                   size="sm"
@@ -209,6 +210,7 @@ export function NodePaletteSidebar({
                   <CreditCard className="w-3.5 h-3.5 mr-2 text-emerald-500 shrink-0" />
                   Creem Payments
                 </Button>
+                */}
                 <Button
                   variant="outline"
                   size="sm"
@@ -320,6 +322,7 @@ export function NodePaletteSidebar({
                 <Waves className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Kafka
               </Button>
+              {/* Temporarily hidden: Redis Streams
               <Button
                 variant="outline"
                 size="sm"
@@ -331,6 +334,7 @@ export function NodePaletteSidebar({
                 <Waves className="w-3.5 h-3.5 mr-2 text-muted-foreground shrink-0" />
                 Redis Streams
               </Button>
+              */}
 
               {/* STORAGE */}
               <div className="text-[9px] uppercase font-bold text-muted-foreground px-1 pt-2 pb-0.5 border-t border-sidebar-border mt-1">
