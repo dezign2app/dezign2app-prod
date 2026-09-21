@@ -77,7 +77,7 @@ export function EarlyBelieverCard() {
             const webBaseUrl =
               process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL ||
               process.env.NEXT_PUBLIC_APP_URL ||
-              "http://localhost:46500";
+              (typeof window !== "undefined" ? window.location.origin : "");
             const pricingUrl = `${webBaseUrl}/#pricing`;
             const api = getElectronAPI();
             if (api?.auth) {
@@ -249,7 +249,7 @@ export function EarlyBelieverCard() {
               const webBaseUrl =
                 process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL ||
                 process.env.NEXT_PUBLIC_APP_URL ||
-                "http://localhost:46500";
+                (typeof window !== "undefined" ? window.location.origin : "");
               const pricingUrl = `${webBaseUrl}/#pricing`;
               const api = getElectronAPI();
               if (api?.auth) {

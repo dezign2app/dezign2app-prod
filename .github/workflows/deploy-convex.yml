@@ -30,4 +30,6 @@ jobs:
         working-directory: packages/backend
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          CONVEX_SITE_URL: ${{ secrets.CONVEX_SITE_URL || vars.CONVEX_SITE_URL }}
+          CONVEX_URL: ${{ secrets.CONVEX_URL || vars.CONVEX_URL }}
         run: pnpm exec convex deploy

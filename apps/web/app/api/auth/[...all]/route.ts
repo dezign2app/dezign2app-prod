@@ -11,6 +11,14 @@ const convexSiteUrl =
   (convexUrl ? convexUrl.replace(".convex.cloud", ".convex.site") : "");
 
 async function handleProxy(req: NextRequest) {
+  if (!convexSiteUrl) {
+    console.error("[auth proxy] Missing NEXT_PUBLIC_CONVEX_SITE_URL or NEXT_PUBLIC_CONVEX_URL");
+    return NextResponse.json(
+      { error: "Backend auth service is not configured (missing CONVEX_SITE_URL)" },
+      { status: 503 },
+    );
+  }
+
   const requestUrl = new URL(req.url);
   const nextUrl = `${convexSiteUrl}${requestUrl.pathname}${requestUrl.search}`;
   const headers = new Headers(req.headers);

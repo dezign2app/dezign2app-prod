@@ -67,9 +67,12 @@ export async function getServerSession(
         }
       }
 
-      const publicHost = process.env.NEXT_PUBLIC_APP_URL
-        ? new URL(process.env.NEXT_PUBLIC_APP_URL).host
-        : "www.dezign2app.com";
+      const publicHost =
+        headersList.get("x-forwarded-host") ||
+        headersList.get("host") ||
+        (process.env.NEXT_PUBLIC_APP_URL
+          ? new URL(process.env.NEXT_PUBLIC_APP_URL).host
+          : "");
 
       const fetchHeaders: Record<string, string> = {
         cookie,

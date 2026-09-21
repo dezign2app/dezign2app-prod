@@ -8,8 +8,12 @@ export interface DesktopTicket {
 }
 
 const getSecret = () => {
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (!secret && process.env.NODE_ENV === "production") {
+    console.error("[desktop-auth] CRITICAL: BETTER_AUTH_SECRET is not set in production!");
+  }
   return (
-    process.env.BETTER_AUTH_SECRET ||
+    secret ||
     "development-secret-key-at-least-32-chars-long-dezign2app-2026"
   );
 };

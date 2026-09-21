@@ -16,7 +16,13 @@ import { Badge } from "@workspace/ui/components/badge";
 export function McpConfigCard() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const mcpUrl = "https://backend.dezign2app.com/mcp";
+  const mcpUrl =
+    process.env.NEXT_PUBLIC_MCP_URL ||
+    (process.env.NEXT_PUBLIC_SYSTEM_DESIGN_ENGINE_URL
+      ? `${process.env.NEXT_PUBLIC_SYSTEM_DESIGN_ENGINE_URL.replace(/\/+$/, "")}/mcp`
+      : typeof window !== "undefined"
+        ? `${window.location.origin}/mcp`
+        : "/mcp");
   const authHeaderKey = "Authorization";
   const authHeaderValue = "Bearer <your api key>";
 

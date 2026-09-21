@@ -38,46 +38,21 @@ function loadEnvFile(envPath) {
 
 if (targetEnv === "development") {
   loadEnvFile(path.join(desktopDir, "../web/.env"));
-
-  process.env.NEXT_PUBLIC_CONVEX_URL =
-    process.env.NEXT_PUBLIC_CONVEX_URL || "https://neighborly-setter-541.convex.cloud";
-  process.env.NEXT_PUBLIC_CONVEX_SITE_URL =
-    process.env.NEXT_PUBLIC_CONVEX_SITE_URL || "https://neighborly-setter-541.convex.site";
-  process.env.CONVEX_URL =
-    process.env.CONVEX_URL || process.env.NEXT_PUBLIC_CONVEX_URL;
-  process.env.CONVEX_SITE_URL =
-    process.env.CONVEX_SITE_URL || process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
-  process.env.BETTER_AUTH_URL =
-    process.env.BETTER_AUTH_URL || "http://localhost:46500";
-  process.env.NEXT_PUBLIC_APP_URL =
-    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500";
-  process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL =
-    process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL || "http://localhost:46500";
-  process.env.BETTER_AUTH_TRUSTED_ORIGINS =
-    process.env.BETTER_AUTH_TRUSTED_ORIGINS ||
-    "http://localhost:46500,http://localhost:3000,dezign2app://";
 } else {
   loadEnvFile(path.join(desktopDir, "../web/.env.production"));
   loadEnvFile(path.join(desktopDir, "../web/.env"));
-
-  process.env.NEXT_PUBLIC_CONVEX_URL =
-    process.env.NEXT_PUBLIC_CONVEX_URL || "https://gregarious-quail-82.convex.cloud";
-  process.env.NEXT_PUBLIC_CONVEX_SITE_URL =
-    process.env.NEXT_PUBLIC_CONVEX_SITE_URL || "https://gregarious-quail-82.convex.site";
-  process.env.CONVEX_URL =
-    process.env.CONVEX_URL || process.env.NEXT_PUBLIC_CONVEX_URL;
-  process.env.CONVEX_SITE_URL =
-    process.env.CONVEX_SITE_URL || process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
-  process.env.BETTER_AUTH_URL =
-    process.env.BETTER_AUTH_URL || "https://www.dezign2app.com";
-  process.env.NEXT_PUBLIC_APP_URL =
-    process.env.NEXT_PUBLIC_APP_URL || "https://www.dezign2app.com";
-  process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL =
-    process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL || "https://www.dezign2app.com";
-  process.env.BETTER_AUTH_TRUSTED_ORIGINS =
-    process.env.BETTER_AUTH_TRUSTED_ORIGINS ||
-    "https://dezign2app.com,https://www.dezign2app.com,dezign2app://";
 }
+
+// Auto-derive site URL from cloud URL if not explicitly provided
+if (process.env.NEXT_PUBLIC_CONVEX_URL && !process.env.NEXT_PUBLIC_CONVEX_SITE_URL) {
+  process.env.NEXT_PUBLIC_CONVEX_SITE_URL = process.env.NEXT_PUBLIC_CONVEX_URL.replace(".convex.cloud", ".convex.site");
+}
+if (process.env.CONVEX_URL && !process.env.CONVEX_SITE_URL) {
+  process.env.CONVEX_SITE_URL = process.env.CONVEX_URL.replace(".convex.cloud", ".convex.site");
+}
+
+process.env.CONVEX_URL = process.env.CONVEX_URL || process.env.NEXT_PUBLIC_CONVEX_URL;
+process.env.CONVEX_SITE_URL = process.env.CONVEX_SITE_URL || process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
 
 process.env.BUILD_ENV = targetEnv;
 process.env.APP_ENV = targetEnv;
