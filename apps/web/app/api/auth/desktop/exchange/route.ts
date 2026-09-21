@@ -41,9 +41,21 @@ export async function POST(req: NextRequest) {
     // Optional proxy fallback if running inside local desktop shell and remote auth URL is set in env
     if (!ticketData) {
       const remoteAuthUrl = process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL;
-      console.log("[Desktop Auth Exchange:route] Local consume failed. Checking remoteAuthUrl:", remoteAuthUrl);
+      const requestHost = req.headers.get("host") || "";
+      const isCurrentHost =
+        Boolean(remoteAuthUrl) &&
+        (req.nextUrl.origin.includes(remoteAuthUrl as string) ||
+          (Boolean(requestHost) && (remoteAuthUrl as string).includes(requestHost)));
+
+      console.log("[Desktop Auth Exchange:route] Local consume failed. Checking remoteAuthUrl:", {
+        remoteAuthUrl,
+        requestHost,
+        isCurrentHost,
+      });
+
       if (
         remoteAuthUrl &&
+        !isCurrentHost &&
         !remoteAuthUrl.includes("localhost") &&
         !remoteAuthUrl.includes("127.0.0.1")
       ) {
