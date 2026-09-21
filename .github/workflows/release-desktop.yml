@@ -13,6 +13,11 @@ on:
         required: false
         default: true
         type: boolean
+      tag_name:
+        description: "Release Tag to attach to (e.g. v0.0.1)"
+        required: false
+        default: "v0.0.1"
+        type: string
 
 permissions:
   contents: write    # Grants permission to create and upload to GitHub Releases
@@ -71,8 +76,8 @@ jobs:
           NEXT_PUBLIC_DESKTOP_AUTH_URL: ${{ secrets.NEXT_PUBLIC_DESKTOP_AUTH_URL }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
 
-      # ── 6. Upload release artifacts ────────────────────────────────────
-      - name: Upload release artifacts
+      # ── 6. Upload CI artifacts ─────────────────────────────────────────
+      - name: Upload CI artifacts
         uses: actions/upload-artifact@v6
         with:
           name: desktop-${{ matrix.os }}
@@ -83,3 +88,19 @@ jobs:
             apps/desktop/release/*.deb
           if-no-files-found: ignore
           retention-days: 14
+
+      # ── 7. Attach installers to GitHub Release ──────────────────────────
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || inputs.publish == true
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.tag_name || (startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.0.1') }}
+          files: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/*.yml
+            apps/desktop/release/*.blockmap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
