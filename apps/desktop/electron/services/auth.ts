@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import { PROTOCOL_SCHEME, IS_DEV } from "../constants";
 import { getMainWindow, getCurrentAppUrl } from "../window";
+import { log } from "../logger";
 
 /**
  * Registers custom protocol client (dezign2app://) for browser OAuth redirect.
@@ -36,20 +37,20 @@ export function handleAuthUrl(urlStr: string): void {
     console.warn("[auth-service] handleAuthUrl called with empty urlStr");
     return;
   }
-  console.log("[auth-service] handleAuthUrl received input:", urlStr);
+  log("[auth-service] handleAuthUrl received input:", urlStr);
   const match = urlStr.match(/dezign2app:\/\/[^\s"']+/i);
   if (!match) {
     console.warn("[auth-service] URL did not match dezign2app:// pattern:", urlStr);
     return;
   }
   const cleanUrl = match[0].replace(/\/$/, "");
-  console.log("[auth-service] Clean auth deep link:", cleanUrl);
+  log("[auth-service] Clean auth deep link:", cleanUrl);
 
   try {
     const urlObj = new URL(cleanUrl);
     const token = urlObj.searchParams.get("token") || undefined;
     const ticket = urlObj.searchParams.get("ticket") || undefined;
-    console.log("[auth-service] Parsed deep link params:", {
+    log("[auth-service] Parsed deep link params:", {
       hasToken: !!token,
       hasTicket: !!ticket,
       ticketPreview: ticket ? `${ticket.substring(0, 15)}...` : undefined,
@@ -61,7 +62,7 @@ export function handleAuthUrl(urlStr: string): void {
       return;
     }
 
-    console.log("[auth-service] Sending auth:callback event to renderer...");
+    log("[auth-service] Sending auth:callback event to renderer...");
     mainWindow.webContents.send("auth:callback", {
       token,
       ticket,
@@ -100,10 +101,10 @@ export async function openBrowserLogin(customUrl?: string): Promise<{ success: b
       `${authUrl}/auth/desktop`
     )}`;
 
-  console.log("[auth-service] Opening external browser for authentication:", loginUrl);
+  log("[auth-service] Opening external browser for authentication:", loginUrl);
   try {
     await shell.openExternal(loginUrl);
-    console.log("[auth-service] shell.openExternal succeeded");
+    log("[auth-service] shell.openExternal succeeded");
     return { success: true };
   } catch (err) {
     console.error("[auth-service] Failed to open external browser:", err);

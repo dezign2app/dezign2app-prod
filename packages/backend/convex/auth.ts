@@ -11,7 +11,8 @@ import { convex } from "@convex-dev/better-auth/plugins";
 import { organization, bearer } from "better-auth/plugins";
 import type { GenericDataModel } from "convex/server";
 
-import { mutation, query } from "./_generated/server";
+import { mutation } from "./_generated/server";
+import { log } from "./logger";
 
 export const betterAuthComponentClient = createClient<
   GenericDataModel,
@@ -74,7 +75,7 @@ export const createAuthOptions = (
   ].filter(Boolean) as string[];
 
   const finalTrustedOrigins = Array.from(new Set(trustedOrigins));
-  console.log("[convex:auth] createAuth invoked. baseURL:", baseURL, "trustedOrigins:", finalTrustedOrigins);
+  log("[convex:auth] createAuth invoked. baseURL:", baseURL, "trustedOrigins:", finalTrustedOrigins);
 
   return {
     appName: "Dezign2App",
@@ -211,7 +212,7 @@ export const createAuthOptions = (
             }
           }
 
-          console.log(
+          log(
             `\n========================================\n[AUTH DEV] Org invitation for ${data.email} to ${data.organization.name}:\n${inviteUrl}\n========================================\n`,
           );
         },

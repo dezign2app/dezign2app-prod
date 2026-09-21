@@ -3,6 +3,7 @@ import { organization, bearer } from "better-auth/plugins";
 import { convex } from "@convex-dev/better-auth/plugins";
 import authConfig from "@workspace/backend/auth.config";
 import { Resend } from "resend";
+import { log } from "@/lib/logger";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -27,13 +28,13 @@ const trustedOrigins = [
 ].filter(Boolean) as string[];
 
 // ── auth.ts init debug ──────────────────────────────────────────────────────
-console.log("[auth.ts] ── Better Auth initialization ──────────────────────────");
-console.log("[auth.ts]  appUrl (baseURL)     :", appUrl ?? "(unset)");
-console.log("[auth.ts]  BETTER_AUTH_URL      :", process.env.BETTER_AUTH_URL ?? "(unset)");
-console.log("[auth.ts]  NEXT_PUBLIC_APP_URL  :", process.env.NEXT_PUBLIC_APP_URL ?? "(unset)");
-console.log("[auth.ts]  BETTER_AUTH_SECRET   :", process.env.BETTER_AUTH_SECRET ? "SET" : "NOT SET (dev fallback)");
-console.log("[auth.ts]  trustedOrigins       :", Array.from(new Set(trustedOrigins)));
-console.log("[auth.ts] ────────────────────────────────────────────────────────");
+log("[auth.ts] ── Better Auth initialization ──────────────────────────");
+log("[auth.ts]  appUrl (baseURL)     :", appUrl ?? "(unset)");
+log("[auth.ts]  BETTER_AUTH_URL      :", process.env.BETTER_AUTH_URL ?? "(unset)");
+log("[auth.ts]  NEXT_PUBLIC_APP_URL  :", process.env.NEXT_PUBLIC_APP_URL ?? "(unset)");
+log("[auth.ts]  BETTER_AUTH_SECRET   :", process.env.BETTER_AUTH_SECRET ? "SET" : "NOT SET (dev fallback)");
+log("[auth.ts]  trustedOrigins       :", Array.from(new Set(trustedOrigins)));
+log("[auth.ts] ────────────────────────────────────────────────────────");
 
 export const auth = betterAuth({
   appName: "Dezign2App",
@@ -66,7 +67,7 @@ export const auth = betterAuth({
           console.error("[Auth] Failed to send reset password email via Resend:", err);
         }
       }
-      console.log(
+      log(
         `\n========================================\n[AUTH DEV] Password reset link for ${data.user.email}:\n${data.url}\n========================================\n`,
       );
     },
@@ -116,7 +117,7 @@ export const auth = betterAuth({
             );
           }
         }
-        console.log(
+        log(
           `\n========================================\n[AUTH DEV] Org invitation for ${data.email} to ${data.organization.name}:\n${inviteUrl}\n========================================\n`,
         );
       },

@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs";
 import { pathToFileURL } from "url";
+import { log } from "./logger";
 
 // ─────────────────────────────────────────────
 //  Next.js Server Runner (utilityProcess)
@@ -42,8 +43,8 @@ async function start() {
     process.env.NEXT_WEB_DIR || path.join(process.resourcesPath || __dirname, "web");
   const port = process.env.PORT || "46500";
 
-  console.log("[server-runner] Working directory:", webDir);
-  console.log("[server-runner] Target port:", port);
+  log("[server-runner] Working directory:", webDir);
+  log("[server-runner] Target port:", port);
 
   try {
     process.env.PORT = String(port);
@@ -70,19 +71,19 @@ async function start() {
     }
 
     // ── Auth env debug ────────────────────────────────────────────────────────
-    console.log("[server-runner] ── Resolved auth env vars ──────────────────");
-    console.log("[server-runner]  BETTER_AUTH_URL            :", process.env.BETTER_AUTH_URL ?? "(unset)");
-    console.log("[server-runner]  NEXT_PUBLIC_APP_URL        :", process.env.NEXT_PUBLIC_APP_URL ?? "(unset)");
-    console.log("[server-runner]  NEXT_PUBLIC_DESKTOP_AUTH_URL:", process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL ?? "(unset)");
-    console.log("[server-runner]  BETTER_AUTH_TRUSTED_ORIGINS:", process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "(unset)");
-    console.log("[server-runner]  NEXT_PUBLIC_CONVEX_URL     :", process.env.NEXT_PUBLIC_CONVEX_URL ?? "(unset)");
-    console.log("[server-runner]  NEXT_PUBLIC_CONVEX_SITE_URL:", process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "(unset)");
-    console.log("[server-runner]  CONVEX_URL                 :", process.env.CONVEX_URL ?? "(unset)");
-    console.log("[server-runner]  CONVEX_SITE_URL            :", process.env.CONVEX_SITE_URL ?? "(unset)");
-    console.log("[server-runner]  BETTER_AUTH_SECRET set?    :", process.env.BETTER_AUTH_SECRET ? "YES" : "NO (using dev fallback)");
-    console.log("[server-runner]  NODE_ENV                   :", process.env.NODE_ENV ?? "(unset)");
-    console.log("[server-runner]  PORT / HOSTNAME            :", `${process.env.PORT} / ${process.env.HOSTNAME}`);
-    console.log("[server-runner] ─────────────────────────────────────────────");
+    log("[server-runner] ── Resolved auth env vars ──────────────────");
+    log("[server-runner]  BETTER_AUTH_URL            :", process.env.BETTER_AUTH_URL ?? "(unset)");
+    log("[server-runner]  NEXT_PUBLIC_APP_URL        :", process.env.NEXT_PUBLIC_APP_URL ?? "(unset)");
+    log("[server-runner]  NEXT_PUBLIC_DESKTOP_AUTH_URL:", process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL ?? "(unset)");
+    log("[server-runner]  BETTER_AUTH_TRUSTED_ORIGINS:", process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "(unset)");
+    log("[server-runner]  NEXT_PUBLIC_CONVEX_URL     :", process.env.NEXT_PUBLIC_CONVEX_URL ?? "(unset)");
+    log("[server-runner]  NEXT_PUBLIC_CONVEX_SITE_URL:", process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "(unset)");
+    log("[server-runner]  CONVEX_URL                 :", process.env.CONVEX_URL ?? "(unset)");
+    log("[server-runner]  CONVEX_SITE_URL            :", process.env.CONVEX_SITE_URL ?? "(unset)");
+    log("[server-runner]  BETTER_AUTH_SECRET set?    :", process.env.BETTER_AUTH_SECRET ? "YES" : "NO (using dev fallback)");
+    log("[server-runner]  NODE_ENV                   :", process.env.NODE_ENV ?? "(unset)");
+    log("[server-runner]  PORT / HOSTNAME            :", `${process.env.PORT} / ${process.env.HOSTNAME}`);
+    log("[server-runner] ─────────────────────────────────────────────");
 
     // Check for Next.js standalone server entry points
     const candidateServerPaths = [
@@ -101,7 +102,7 @@ async function start() {
     }
 
     if (standaloneServerPath) {
-      console.log(
+      log(
         "[server-runner] Starting standalone Next.js server from:",
         standaloneServerPath
       );
@@ -125,7 +126,7 @@ async function start() {
         "bin",
         "next"
       );
-      console.log(
+      log(
         "[server-runner] Starting Next.js via next CLI binary:",
         nextBin
       );

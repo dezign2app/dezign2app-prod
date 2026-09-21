@@ -6,6 +6,7 @@ import {
   useActiveOrganization,
   organization as orgActions,
 } from "@/lib/auth-client";
+import { log } from "@/lib/logger";
 import {
   Card,
   CardHeader,
@@ -66,13 +67,13 @@ export const OrgSelectionView = () => {
         .replace(/^-+|-+$/g, "");
 
       const slug = `${baseSlug || "org"}-${Date.now().toString(36)}`;
-      console.log("[handleCreateOrg] Creating organization:", { name: newOrgName.trim(), slug });
+      log("[handleCreateOrg] Creating organization:", { name: newOrgName.trim(), slug });
 
       const created = await orgActions.create({
         name: newOrgName.trim(),
         slug,
       });
-      console.log("[handleCreateOrg] Created organization response:", created);
+      log("[handleCreateOrg] Created organization response:", created);
 
       if (created?.error) {
         toast.error(created.error.message || "Failed to create organization");

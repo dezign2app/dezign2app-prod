@@ -2,6 +2,7 @@ import { app } from "electron";
 import path from "path";
 import fs from "fs";
 import net from "net";
+import { log } from "./logger";
 
 // ─────────────────────────────────────────────
 //  App Identity & Constants (3 Environments: local, dev, prod)
@@ -74,7 +75,7 @@ export async function getAvailablePort(
   for (let port = startPort; port < startPort + maxAttempts; port++) {
     const free = await isPortFree(port);
     if (free) {
-      console.log(`[constants] Next available port determined: ${port}`);
+      log(`[constants] Next available port determined: ${port}`);
       return port;
     }
   }

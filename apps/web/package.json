@@ -33,6 +33,7 @@
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "@workspace/canvas": "workspace:*",
+    "@workspace/logger": "workspace:*",
     "@workspace/ui": "workspace:*",
     "@wterm/dom": "^0.3.4",
     "@wterm/react": "^0.3.4",

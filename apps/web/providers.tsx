@@ -13,6 +13,7 @@ import { ConvexBetterAuthProvider } from "@/providers/convex-auth-provider";
 import { authClient, useSession } from "@/lib/auth-client";
 import { api } from "@workspace/backend/_generated/api";
 import "@/lib/utils/patchResizeObserver";
+import { log } from "@/lib/logger";
 import { Toaster } from "@workspace/ui/components/sonner";
 
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
@@ -112,7 +113,7 @@ export const AuthenticatedProvider = ({
   const router = useRouter();
 
   React.useEffect(() => {
-    console.log("[AuthenticatedProvider] Auth guard evaluation:", {
+    log("[AuthenticatedProvider] Auth guard evaluation:", {
       isPending,
       hasSession: !!session,
       hasUser: !!session?.user,
