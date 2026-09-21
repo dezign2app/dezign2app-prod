@@ -29,7 +29,12 @@
         "CREEM_API_KEY",
         "CREEM_SUBSCRIPTION_WEBHOOK_SECRET",
         "UPSTASH_REDIS_REST_URL",
-        "UPSTASH_REDIS_REST_TOKEN"
+        "UPSTASH_REDIS_REST_TOKEN",
+        "TEST_MODE",
+        "CLERK_SECRET_KEY",
+        "CONVEX_DEPLOY_KEY",
+        "GROQ_LLM_MODEL",
+        "CONVEX_SITE_URL"
       ]
     },
     "lint": {
