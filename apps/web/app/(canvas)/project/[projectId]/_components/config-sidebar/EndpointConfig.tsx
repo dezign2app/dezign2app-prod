@@ -1,6 +1,6 @@
 import React from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { Parameter } from "@/types/canvas";
+import { Parameter, PageSection, UIEventItem } from "@/types/canvas";
 import {
   ParameterEditor,
 } from "../backend-nodes/graph-nodes/Editors";
@@ -42,6 +42,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
   const [responseSchemaTab, setResponseSchemaTab] = React.useState<"success" | "error">("success");
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const updateEndpoint = useBackendCanvasStore((s) => s.updateEndpoint);
+  const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const item = endpoints.find((e) => e.id === id);
   const targetNodeId = item?.nodeId || nodeId;
   const node = useBackendCanvasStore((s) =>
@@ -58,6 +59,97 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
   const isAuthEnabled =
     !isExternal &&
     (item?.requireAuth !== undefined ? item.requireAuth : isProtected);
+
+  // Clean stale auth headers from any WebPage nodes or action events calling this endpoint
+  const cleanConnectedWebPageNodes = React.useCallback(() => {
+    if (!item) return;
+    const currentNodes = useBackendCanvasStore.getState().nodes;
+    const currentEdges = useBackendCanvasStore.getState().edges;
+
+    currentNodes.forEach((n) => {
+      if (n.type !== "webPage") return;
+
+      const isDirectlyConnected = currentEdges.some((e) => {
+        const matches =
+          (e.target === targetNodeId && e.source === n.id) ||
+          (e.source === targetNodeId && e.target === n.id);
+        if (!matches) return false;
+        const handle = e.target === targetNodeId ? e.targetHandle : e.sourceHandle;
+        return !handle || handle.includes(item.id);
+      });
+
+      if (!isDirectlyConnected) return;
+
+      let changed = false;
+      const nextData = { ...n.data };
+
+      // 1. Clean node.data.headers
+      if (nextData.headers && nextData.headers.length > 0) {
+        const filteredHeaders = nextData.headers.filter(
+          (h: Parameter) =>
+            h.name?.toLowerCase() !== "authorization" &&
+            h.id !== "auth-bearer-header" &&
+            !h.id?.startsWith("auth-"),
+        );
+        if (filteredHeaders.length !== nextData.headers.length) {
+          nextData.headers = filteredHeaders;
+          changed = true;
+        }
+      }
+
+      // 2. Clean action headers in nextData.sections
+      if (nextData.sections && nextData.sections.length > 0) {
+        const updatedSections = nextData.sections.map((sec: PageSection) => {
+          let secChanged = false;
+          const updatedActions = (sec.actions || []).map((act: UIEventItem) => {
+            const isActionConnected = currentEdges.some(
+              (e) =>
+                ((e.source === n.id && e.sourceHandle === `events-${act.id}`) ||
+                  (e.target === n.id && e.targetHandle === `events-${act.id}`)) &&
+                ((e.target === targetNodeId && e.targetHandle?.includes(item.id)) ||
+                  (e.source === targetNodeId && e.sourceHandle?.includes(item.id))),
+            );
+
+            if (isActionConnected || isDirectlyConnected) {
+              const hasAuth = act.headers?.some(
+                (h: Parameter) =>
+                  h.name?.toLowerCase() === "authorization" ||
+                  h.id === "auth-bearer-header" ||
+                  h.id?.startsWith("auth-"),
+              );
+              if (hasAuth) {
+                secChanged = true;
+                return {
+                  ...act,
+                  headers: (act.headers || []).filter(
+                    (h: Parameter) =>
+                      h.name?.toLowerCase() !== "authorization" &&
+                      h.id !== "auth-bearer-header" &&
+                      !h.id?.startsWith("auth-"),
+                  ),
+                };
+              }
+            }
+            return act;
+          });
+
+          if (secChanged) {
+            changed = true;
+            return { ...sec, actions: updatedActions };
+          }
+          return sec;
+        });
+
+        if (changed) {
+          nextData.sections = updatedSections;
+        }
+      }
+
+      if (changed) {
+        updateNode(n.id, { data: nextData });
+      }
+    });
+  }, [item, targetNodeId, updateNode]);
 
   // Auto-clean any legacy or accidental auth headers/params on external endpoints or when auth is disabled
   React.useEffect(() => {
@@ -93,6 +185,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         });
       }
     } else if (!isAuthEnabled && item) {
+      cleanConnectedWebPageNodes();
       const hasStaleAuthHeaders = item.headers?.some(
         (x: Parameter) =>
           x.id === "auth-bearer-header" ||
@@ -112,7 +205,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         });
       }
     }
-  }, [isExternal, isAuthEnabled, item?.id, item?.headers, item?.queryParams, updateEndpoint]);
+  }, [isExternal, isAuthEnabled, item?.id, item?.headers, item?.queryParams, updateEndpoint, cleanConnectedWebPageNodes]);
 
   const nameBuffer = useBufferedInput(
     formatEndpointRoute(item?.name || ""),
@@ -280,6 +373,9 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
                   !h.id?.startsWith("auth-"),
               );
             }
+            if (!requireAuth) {
+              cleanConnectedWebPageNodes();
+            }
             updateEndpoint(item.id, { requireAuth, headers: updatedHeaders });
           }}
         />
@@ -433,6 +529,9 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
                   !x.id?.startsWith("auth-"),
               );
           updateEndpoint(item.id, { headers: sanitized });
+          if (!isAuthEnabled) {
+            cleanConnectedWebPageNodes();
+          }
         }}
       />
       <ParameterEditor

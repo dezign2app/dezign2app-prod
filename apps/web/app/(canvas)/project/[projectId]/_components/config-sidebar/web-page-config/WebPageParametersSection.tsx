@@ -31,6 +31,17 @@ export function WebPageParametersSection({
   onUpdateRequestBody,
   onUpdateRequestBodyMode,
 }: WebPageParametersSectionProps) {
+  const sanitizedHeaders = React.useMemo(
+    () =>
+      (effectiveHeaders || []).filter(
+        (h: Parameter) =>
+          h.name?.toLowerCase() !== "authorization" &&
+          h.id !== "auth-bearer-header" &&
+          !h.id?.startsWith("auth-"),
+      ),
+    [effectiveHeaders],
+  );
+
   return (
     <>
       {connectedEndpoint && (
@@ -49,8 +60,17 @@ export function WebPageParametersSection({
 
       <ParameterEditor
         title="Headers"
-        parameters={effectiveHeaders}
-        onChange={onUpdateHeaders}
+        parameters={sanitizedHeaders}
+        onChange={(updated) =>
+          onUpdateHeaders(
+            updated.filter(
+              (h: Parameter) =>
+                h.name?.toLowerCase() !== "authorization" &&
+                h.id !== "auth-bearer-header" &&
+                !h.id?.startsWith("auth-"),
+            ),
+          )
+        }
       />
       <ParameterEditor
         title="Path Params"

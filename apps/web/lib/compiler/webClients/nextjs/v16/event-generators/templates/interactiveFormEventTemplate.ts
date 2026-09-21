@@ -85,29 +85,12 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@workspace
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Textarea } from "@workspace/ui/components/textarea";
-${libImports}${requireAuth ? `import { getAuthBearerToken } from "@/lib/auth-token";\n` : ""}
-${typeDefs.join("\n\n")}
+${libImports}${typeDefs.join("\n\n")}
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 ${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, any>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
-${requireAuth && hasHeaders && mergedHeaders.some((h) => h.name.toLowerCase() === "authorization") ? `  useEffect(() => {
-    async function autoFetchToken() {
-      try {
-        const token = await getAuthBearerToken();
-        if (token) {
-          setCustomHeaders((prev) => {
-            if (!prev["Authorization"] || prev["Authorization"] === "Bearer <token>") {
-              return { ...prev, Authorization: token };
-            }
-            return prev;
-          });
-        }
-      } catch (_err) {}
-    }
-    autoFetchToken();
-  }, []);
-` : ""}
+
   const computeFinalUrl = (): string => {
     let currentUrl = "${url}";
     let origin = "";
@@ -229,53 +212,20 @@ ${mergedQueryParams.filter((q) => Boolean(q && q.name && q.name.trim())).map((q)
               Headers
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-${mergedHeaders.filter((h) => Boolean(h && h.name && h.name.trim())).map((h) => {
-  if (h.name.toLowerCase() === "authorization" && requireAuth) {
-    return `              <div key="${h.name}" className="space-y-1 sm:col-span-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-[11px] font-mono text-muted-foreground flex items-center gap-1.5">
-                    <span>${h.name}</span>
-                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                      Bearer Token
-                    </span>
-                  </Label>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const token = await getAuthBearerToken();
-                      if (token) {
-                        setCustomHeaders((prev) => ({ ...prev, Authorization: token }));
-                      }
-                    }}
-                    className="text-[10px] text-primary hover:underline cursor-pointer font-mono"
-                  >
-                    Refresh from session
-                  </button>
-                </div>
-                <Input
-                  className="h-8 text-xs bg-background font-mono"
-                  placeholder="Bearer token"
-                  value={customHeaders["${h.name}"] ?? ""}
-                  onChange={(e) =>
-                    setCustomHeaders((prev) => ({ ...prev, "${h.name}": e.target.value }))
-                  }
-                />
-              </div>`;
-  }
-  return `              <div key="${h.name}" className="space-y-1">
+${mergedHeaders.filter((h) => Boolean(h && h.name && h.name.trim())).map((h) => `              <div key="${h.name}" className="space-y-1">
                 <Label className="text-[11px] font-mono text-muted-foreground">
-                  ${h.name}
+                  ${h.name}${h.required ? ` <span className="text-destructive font-sans">*</span>` : ""}
                 </Label>
                 <Input
                   className="h-8 text-xs bg-background font-mono"
                   placeholder="${escapeJsxAttr(h.description || h.defaultValue || h.name)}"
                   value={customHeaders["${h.name}"] ?? ""}
+                  required={${Boolean(h.required)}}
                   onChange={(e) =>
                     setCustomHeaders((prev) => ({ ...prev, "${h.name}": e.target.value }))
                   }
                 />
-              </div>`;
-}).join("\n")}
+              </div>`).join("\n")}
             </div>
           </div>
 ` : ""}${hasBodyFields ? `          {/* Request Body Fields */}

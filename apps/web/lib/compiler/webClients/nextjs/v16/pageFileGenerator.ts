@@ -1,4 +1,4 @@
-import { BackendNode, BackendEdge } from "@/types/canvas";
+import { BackendNode, BackendEdge, Parameter } from "@/types/canvas";
 import { Endpoint, UIEventItem, PageSection, CompiledFile, JSONValue } from "@workspace/canvas/types";
 import { PageInfo } from "./types";
 import { resolveLinkedEndpoint, resolvePageRefLink } from "./endpointResolver";
@@ -70,13 +70,20 @@ export function generatePageAndComponentFiles({
         : undefined);
 
     const nodeHeaders: Record<string, string> = {};
-    (node.data?.headers || []).forEach((h) => {
-      const hKey = h.key || h.name;
-      const hVal = h.value || h.defaultValue || "";
-      if (hKey) {
-        nodeHeaders[hKey] = hVal;
-      }
-    });
+    (node.data?.headers || [])
+      .filter(
+        (h: Parameter) =>
+          h.name?.toLowerCase() !== "authorization" &&
+          h.id !== "auth-bearer-header" &&
+          !h.id?.startsWith("auth-"),
+      )
+      .forEach((h: Parameter) => {
+        const hKey = h.key || h.name;
+        const hVal = h.value || h.defaultValue || "";
+        if (hKey) {
+          nodeHeaders[hKey] = hVal;
+        }
+      });
 
     const nodeQueryParams: Record<string, string> = {};
     (node.data?.queryParams || []).forEach((p) => {

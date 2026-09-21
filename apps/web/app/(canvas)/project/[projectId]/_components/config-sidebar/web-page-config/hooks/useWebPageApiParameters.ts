@@ -52,48 +52,31 @@ export function useWebPageApiParameters({
   }, [hasCustomPageRequestBody, data.requestBody, resolvedPageEndpointRequestBody]);
 
   const isAuthEnabled =
-    data.requireAuth !== undefined ? data.requireAuth : isProtected;
+    connectedEndpoint
+      ? connectedEndpoint.requireAuth !== undefined
+        ? connectedEndpoint.requireAuth
+        : data.requireAuth !== undefined
+        ? data.requireAuth
+        : isProtected
+      : data.requireAuth !== undefined
+      ? data.requireAuth
+      : isProtected;
 
   const effectiveHeaders: Parameter[] = useMemo(() => {
-    let baseHeaders =
+    const baseHeaders =
       data.headers && data.headers.length > 0
         ? [...data.headers]
         : connectedEndpoint?.headers
         ? [...connectedEndpoint.headers]
         : [];
 
-    if (isAuthEnabled) {
-      if (
-        !baseHeaders.some(
-          (h: Parameter) =>
-            h.name?.toLowerCase() === "authorization" ||
-            h.id === "auth-bearer-header",
-        )
-      ) {
-        baseHeaders = [
-          {
-            id: "auth-bearer-header",
-            name: "Authorization",
-            type: "string",
-            required: true,
-            description: "Bearer <token>",
-            defaultValue: "Bearer <token>",
-            key: "Authorization",
-            value: "Bearer <token>",
-          },
-          ...baseHeaders,
-        ];
-      }
-    } else {
-      baseHeaders = baseHeaders.filter(
-        (h: Parameter) =>
-          h.name?.toLowerCase() !== "authorization" &&
-          h.id !== "auth-bearer-header" &&
-          !h.id?.startsWith("auth-"),
-      );
-    }
-    return baseHeaders;
-  }, [data.headers, connectedEndpoint?.headers, isAuthEnabled]);
+    return baseHeaders.filter(
+      (h: Parameter) =>
+        h.name?.toLowerCase() !== "authorization" &&
+        h.id !== "auth-bearer-header" &&
+        !h.id?.startsWith("auth-"),
+    );
+  }, [data.headers, connectedEndpoint?.headers]);
 
   const effectivePathParams: Parameter[] = useMemo(() => {
     return data.pathParams && data.pathParams.length > 0

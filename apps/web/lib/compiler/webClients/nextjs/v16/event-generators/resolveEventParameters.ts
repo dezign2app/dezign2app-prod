@@ -72,28 +72,18 @@ export function resolveEventParameters({
     });
   }
 
-  // Headers (include Authorization if requireAuth !== false)
+  // Headers (from configured eventItem, endpoint, or customHeaders - never inject default Authorization)
   const configuredHeaders: Parameter[] = (
     eventItem?.headers?.length ? eventItem.headers : endpoint?.headers || []
   ).filter((h) => Boolean(h && typeof h.name === "string" && h.name.trim().length > 0));
 
-  const mergedHeaders: Parameter[] = configuredHeaders.filter(
-    (h) => h.name.toLowerCase() !== "content-type",
+  let mergedHeaders: Parameter[] = configuredHeaders.filter(
+    (h) =>
+      h.name.toLowerCase() !== "content-type" &&
+      h.name.toLowerCase() !== "authorization" &&
+      h.id !== "auth-bearer-header" &&
+      !h.id?.startsWith("auth-"),
   );
-
-  if (
-    requireAuth !== false &&
-    !mergedHeaders.some((h) => h.name.toLowerCase() === "authorization")
-  ) {
-    mergedHeaders.unshift({
-      id: "auth-header",
-      name: "Authorization",
-      type: "string",
-      required: true,
-      defaultValue: "",
-      description: "Bearer authentication token",
-    });
-  }
 
   if (customHeaders) {
     Object.entries(customHeaders).forEach(([k, v]) => {

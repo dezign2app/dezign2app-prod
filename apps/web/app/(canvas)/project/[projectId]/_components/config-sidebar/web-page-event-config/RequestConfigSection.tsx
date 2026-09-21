@@ -37,6 +37,17 @@ export const RequestConfigSection: React.FC<RequestConfigSectionProps> = ({
   onRequestBodyChange,
   onRequestBodyModeChange,
 }) => {
+  const sanitizedHeaders = React.useMemo(
+    () =>
+      (headers || []).filter(
+        (h: Parameter) =>
+          h.name?.toLowerCase() !== "authorization" &&
+          h.id !== "auth-bearer-header" &&
+          !h.id?.startsWith("auth-"),
+      ),
+    [headers],
+  );
+
   return (
     <AccordionItem
       value="request_config"
@@ -69,8 +80,17 @@ export const RequestConfigSection: React.FC<RequestConfigSectionProps> = ({
           {/* 1. Headers */}
           <ParameterEditor
             title="Headers"
-            parameters={headers}
-            onChange={onHeadersChange}
+            parameters={sanitizedHeaders}
+            onChange={(updated) =>
+              onHeadersChange(
+                updated.filter(
+                  (h: Parameter) =>
+                    h.name?.toLowerCase() !== "authorization" &&
+                    h.id !== "auth-bearer-header" &&
+                    !h.id?.startsWith("auth-"),
+                ),
+              )
+            }
           />
 
           {/* 2. Path Params */}

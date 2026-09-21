@@ -616,6 +616,7 @@ export const webPageConvexDataValidator = v.object({
   renderMode: v.optional(v.union(v.literal("server"), v.literal("client"))),
   protectionOverride: v.optional(protectionRuleConvexValidator),
   customDependencies: v.optional(v.array(nodeDependencyItemConvexValidator)),
+  stackOrder: v.optional(v.number()),
 });
 
 export const backendWebPageDataValidator = webPageConvexDataValidator;
@@ -780,6 +781,7 @@ export const backendNodeDataValidator = v.union(
     isInstalled: v.optional(v.boolean()),
     installError: v.optional(v.string()),
     isReadOnly: v.optional(v.boolean()),
+    stackOrder: v.optional(v.number()),
   }),
 );
 

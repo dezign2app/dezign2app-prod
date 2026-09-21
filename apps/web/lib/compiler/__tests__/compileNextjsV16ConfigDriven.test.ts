@@ -1214,6 +1214,67 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     expect(proxyFile?.content).toContain('requiredPlans: ["active"]');
     expect(proxyFile?.content).toContain('allowedOrgRoles: ["admin"]');
   });
+
+  it("renders red asterisk and HTML5 required attribute for required headers in interactive form", () => {
+    const pageNode: BackendNode = {
+      id: "page-with-headers",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "/api-tester",
+        sections: [
+          {
+            id: "sec-test",
+            name: "Test Section",
+            actions: [
+              {
+                id: "act-reset",
+                name: "reset",
+                event: "click",
+                headers: [
+                  {
+                    id: "h-demo",
+                    name: "demo",
+                    type: "string",
+                    required: false,
+                  },
+                  {
+                    id: "h-test",
+                    name: "test",
+                    type: "string",
+                    required: true,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      fractionalIndex: "a0",
+    };
+
+    const result = compileNextjsV16WebClient(
+      [pageNode],
+      [],
+      [],
+      [pageNode],
+      [],
+      "TestApp",
+    );
+
+    const actionFile = result.files.find((f: CompiledFile) => f.filename.endsWith("ResetAction.tsx"));
+    expect(actionFile).toBeDefined();
+    const content = actionFile?.content || "";
+
+    // Required header 'test' should display red asterisk and required prop
+    expect(content).toContain('test <span className="text-destructive font-sans">*</span>');
+    expect(content).toContain("required={true}");
+
+    // Optional header 'demo' should not have asterisk
+    expect(content).toContain("demo");
+    expect(content).not.toContain('demo <span className="text-destructive font-sans">*</span>');
+    expect(content).toContain("required={false}");
+  });
 });
 
 
