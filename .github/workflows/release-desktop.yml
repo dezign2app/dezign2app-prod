@@ -62,12 +62,13 @@ jobs:
           # Prevent macOS build failure if no Apple Developer Certificate is configured
           CSC_IDENTITY_AUTO_DISCOVERY: false
           # Production Web Environment Variables
-          NEXT_PUBLIC_CONVEX_URL: ${{ secrets.NEXT_PUBLIC_CONVEX_URL || 'https://gregarious-quail-82.convex.cloud' }}
-          NEXT_PUBLIC_CONVEX_SITE_URL: ${{ secrets.NEXT_PUBLIC_CONVEX_SITE_URL || 'https://gregarious-quail-82.convex.site' }}
-          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET || 'dezign2app-ci-stage-placeholder-secret-32chars' }}
-          BETTER_AUTH_URL: ${{ secrets.BETTER_AUTH_URL || 'https://www.dezign2app.com' }}
-          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL || 'https://www.dezign2app.com' }}
-          NEXT_PUBLIC_DESKTOP_AUTH_URL: ${{ secrets.NEXT_PUBLIC_DESKTOP_AUTH_URL || 'https://www.dezign2app.com' }}
+          NEXT_PUBLIC_CONVEX_URL: ${{ secrets.NEXT_PUBLIC_CONVEX_URL }}
+          NEXT_PUBLIC_CONVEX_SITE_URL: ${{ secrets.NEXT_PUBLIC_CONVEX_SITE_URL }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_URL: ${{ secrets.BETTER_AUTH_URL }}
+          BETTER_AUTH_TRUSTED_ORIGINS: ${{ secrets.BETTER_AUTH_TRUSTED_ORIGINS }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          NEXT_PUBLIC_DESKTOP_AUTH_URL: ${{ secrets.NEXT_PUBLIC_DESKTOP_AUTH_URL }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
 
       # ── 6. Upload release artifacts ────────────────────────────────────
