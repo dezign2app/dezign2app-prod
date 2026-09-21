@@ -78,12 +78,6 @@
       "output": "release"
     },
     "compression": "maximum",
-    "extraResources": [
-      {
-        "from": "build-web",
-        "to": "web"
-      }
-    ],
     "files": [
       "dist-electron/**/*",
       "public/**/*"

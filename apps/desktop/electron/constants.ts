@@ -37,6 +37,10 @@ export const PROTOCOL_SCHEME = "dezign2app";
 
 export const DEV_SERVER_URL =
   process.env.ELECTRON_DEV_URL || "http://127.0.0.1:46500";
+export const PROD_SERVER_URL =
+  process.env.ELECTRON_PROD_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  "https://www.dezign2app.com";
 export const IS_LOCAL = APP_ENV === "local";
 export const IS_DEV = APP_ENV === "dev" || IS_LOCAL;
 export const IS_PROD = APP_ENV === "prod";

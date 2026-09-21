@@ -184,8 +184,13 @@ export const SignInView = () => {
 
       if (res.ok && data.token) {
         console.log("[desktop-auth:view] Exchange succeeded! Setting session cookies in document.cookie...");
-        document.cookie = `better-auth.session_token=${data.token}; path=/; max-age=2592000; SameSite=Lax`;
-        document.cookie = `is_electron=1; path=/; max-age=2592000; SameSite=Lax`;
+        const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+        const secureFlag = isHttps ? "; Secure" : "";
+        document.cookie = `better-auth.session_token=${data.token}; path=/; max-age=2592000; SameSite=Lax${secureFlag}`;
+        if (isHttps) {
+          document.cookie = `__Secure-better-auth.session_token=${data.token}; path=/; max-age=2592000; SameSite=Lax; Secure`;
+        }
+        document.cookie = `is_electron=1; path=/; max-age=2592000; SameSite=Lax${secureFlag}`;
         console.log("[desktop-auth:view] Cookies after setting:", document.cookie);
         setWaitingForAuth(false);
         toast.success("Desktop session connected!");
