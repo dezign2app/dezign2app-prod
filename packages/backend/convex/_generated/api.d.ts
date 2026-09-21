@@ -24,6 +24,7 @@ import type * as canvas_versions from "../canvas/versions.js";
 import type * as http from "../http.js";
 import type * as kanban from "../kanban.js";
 import type * as langgraph from "../langgraph.js";
+import type * as logger from "../logger.js";
 import type * as project_chat from "../project_chat.js";
 import type * as projects from "../projects.js";
 import type * as requirements from "../requirements.js";
@@ -65,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   kanban: typeof kanban;
   langgraph: typeof langgraph;
+  logger: typeof logger;
   project_chat: typeof project_chat;
   projects: typeof projects;
   requirements: typeof requirements;

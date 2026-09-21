@@ -397,7 +397,7 @@ describe("compileNextjsV16StateStoreNode", () => {
     // 1. Store file has populate and reset
     const storeFile = result.files.find((f) => f.filename === "lib/stores/useCartStore.ts");
     expect(storeFile).toBeDefined();
-    expect(storeFile!.content).toContain("populate: (data: unknown) => void;");
+    expect(storeFile!.content).toContain("populate: (data: Partial<CartStoreState>) => void;");
     expect(storeFile!.content).toContain("reset: () => void;");
 
     // 2. Page file imports the store and wires load & unmount reset

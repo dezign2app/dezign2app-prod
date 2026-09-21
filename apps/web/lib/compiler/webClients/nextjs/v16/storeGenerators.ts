@@ -128,13 +128,25 @@ export function generateZustandStore(
         customActionSignatures.push(`  ${actName}: (value: ${tsType}) => void;`);
         customActionImpls.push(`  ${actName}: (value) => set({ ${targetName}: value }),`);
         break;
-      case "append":
-        customActionSignatures.push(`  ${actName}: (item: unknown) => void;`);
+      case "append": {
+        const itemTsType = targetField.type === "string"
+          ? "string"
+          : targetField.type === "number"
+          ? "number"
+          : targetField.type === "boolean"
+          ? "boolean"
+          : targetField.type.endsWith("[]")
+          ? targetField.type.slice(0, -2)
+          : targetField.type === "array"
+          ? "Record<string, unknown> | string | number"
+          : mapFieldTypeToTs(targetField.type);
+        customActionSignatures.push(`  ${actName}: (item: ${itemTsType}) => void;`);
         customActionImpls.push(`  ${actName}: (item) => set((s) => ({ ${targetName}: Array.isArray(s.${targetName}) ? [...s.${targetName}, item] : [item] })),`);
         break;
+      }
       case "remove":
-        customActionSignatures.push(`  ${actName}: (indexOrId: unknown) => void;`);
-        customActionImpls.push(`  ${actName}: (indexOrId) => set((s) => ({ ${targetName}: Array.isArray(s.${targetName}) ? s.${targetName}.filter((it, idx) => idx !== indexOrId && (it as { id?: unknown })?.id !== indexOrId) : [] })),`);
+        customActionSignatures.push(`  ${actName}: (indexOrId: string | number) => void;`);
+        customActionImpls.push(`  ${actName}: (indexOrId) => set((s) => ({ ${targetName}: Array.isArray(s.${targetName}) ? s.${targetName}.filter((it, idx) => idx !== indexOrId && !(typeof it === "object" && it !== null && "id" in it && it.id === indexOrId)) : [] })),`);
         break;
       case "toggle":
         customActionSignatures.push(`  ${actName}: () => void;`);
@@ -149,14 +161,33 @@ export function generateZustandStore(
         customActionImpls.push(`  ${actName}: () => set(initialState),`);
         break;
       case "populate":
-        customActionSignatures.push(`  ${actName}: (data: unknown) => void;`);
-        customActionImpls.push(`  ${actName}: (data) => set((s) => ({ ...s, ...(typeof data === "object" && data !== null ? data : {}) })),`);
+        customActionSignatures.push(`  ${actName}: (data: Partial<${interfaceName}>) => void;`);
+        customActionImpls.push(`  ${actName}: (data) => set((s) => ({ ...s, ...data })),`);
         break;
       case "custom":
-      default:
-        customActionSignatures.push(`  ${actName}: (payload?: unknown) => void;`);
-        customActionImpls.push(`  ${actName}: (payload) => set((s) => ({ ...s, ${targetName}: payload !== undefined ? payload : s.${targetName} })),`);
+      default: {
+        const hasParams = Array.isArray(act.parameters) && act.parameters.length > 0;
+        const fallbackPayloadType = targetField ? mapFieldTypeToTs(targetField.type) : "Record<string, unknown>";
+        const paramSigs = hasParams
+          ? act.parameters!
+              .map((p) => `${toCamelCase(p.name)}: ${mapFieldTypeToTs(p.type)}${p.required === false ? " | undefined" : ""}`)
+              .join(", ")
+          : `payload?: ${fallbackPayloadType}`;
+        const paramArgs = hasParams
+          ? act.parameters!.map((p) => toCamelCase(p.name)).join(", ")
+          : "payload";
+
+        customActionSignatures.push(`  ${actName}: (${paramSigs}) => void;`);
+
+        if (act.code && act.code.trim()) {
+          const rawCode = act.code.trim();
+          const bodyLines = rawCode.split("\n").map((line) => `    ${line}`).join("\n");
+          customActionImpls.push(`  ${actName}: (${paramArgs}) => {\n${bodyLines}\n  },`);
+        } else {
+          customActionImpls.push(`  ${actName}: (${paramArgs}) => set((s) => ({ ...s, ${targetName}: ${paramArgs} !== undefined ? ${paramArgs} : s.${targetName} })),`);
+        }
         break;
+      }
     }
   });
 
@@ -193,8 +224,8 @@ export function generateZustandStore(
   const builtInImpls: string[] = [];
 
   if (!hasPopulate) {
-    builtInSignatures.push("  populate: (data: unknown) => void;");
-    builtInImpls.push("      populate: (data: unknown) => set((s) => ({ ...s, ...(typeof data === \"object\" && data !== null ? data : {}) })),");
+    builtInSignatures.push(`  populate: (data: Partial<${interfaceName}>) => void;`);
+    builtInImpls.push("      populate: (data) => set((s) => ({ ...s, ...data })),");
   }
 
   if (!hasReset) {
@@ -205,7 +236,7 @@ export function generateZustandStore(
   const storeCreation = isPersisted
     ? `export const ${hookName} = create<${interfaceName}>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...initialState,
 ${setterImpls.map((l) => `    ${l}`).join("\n")}
 ${customActionImpls.length > 0 ? `${customActionImpls.map((l) => `    ${l}`).join("\n")}\n` : ""}${builtInImpls.join("\n")}
@@ -216,7 +247,7 @@ ${customActionImpls.length > 0 ? `${customActionImpls.map((l) => `    ${l}`).joi
     }
   )
 );`
-    : `export const ${hookName} = create<${interfaceName}>((set) => ({
+    : `export const ${hookName} = create<${interfaceName}>((set, get) => ({
   ...initialState,
 ${setterImpls.join("\n")}
 ${customActionImpls.length > 0 ? `${customActionImpls.join("\n")}\n` : ""}${builtInImpls.join("\n")}

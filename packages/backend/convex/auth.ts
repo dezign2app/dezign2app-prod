@@ -11,7 +11,7 @@ import { convex } from "@convex-dev/better-auth/plugins";
 import { organization, bearer } from "better-auth/plugins";
 import type { GenericDataModel } from "convex/server";
 
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { log } from "./logger";
 
 export const betterAuthComponentClient = createClient<
