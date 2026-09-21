@@ -57,9 +57,7 @@ export const globalStoreFieldSchema = z.object({
   id: z.string(),
   name: z.string(),
   type: z.string(),
-  defaultValue: z
-    .union([z.string(), z.number(), z.boolean(), z.null()])
-    .optional(),
+  defaultValue: z.any().optional(),
   description: z.string().optional(),
 });
 
@@ -79,9 +77,29 @@ export const globalStoreActionSchema = z.object({
     "populate",
     "custom",
   ]),
+  code: z.string().optional(),
+  parameters: z.array(parameterSchema).optional(),
+  connectedEndpointId: z.string().optional(),
+  responseMappingMode: z.enum(["replace", "merge", "custom"]).optional(),
+  description: z.string().optional(),
+  prompt: z.string().optional(),
 });
 
 export type GlobalStoreActionSchemaType = z.infer<typeof globalStoreActionSchema>;
+
+export const stateStoreTestCaseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  manipulatorName: z.string(),
+  payload: z.any().optional(),
+  expectedField: z.string().optional(),
+  expectedValue: z.any().optional(),
+  status: z.enum(["passed", "failed", "idle"]).optional(),
+  lastRunAt: z.string().optional(),
+  error: z.string().optional(),
+});
+
+export type StateStoreTestCaseSchemaType = z.infer<typeof stateStoreTestCaseSchema>;
 
 export const stateStoreNodeDataSchema = baseNodeDataSchema
   .extend({
@@ -95,6 +113,7 @@ export const stateStoreNodeDataSchema = baseNodeDataSchema
       .default("memory"),
     fields: z.array(globalStoreFieldSchema).optional(),
     actions: z.array(globalStoreActionSchema).optional(),
+    testCases: z.array(stateStoreTestCaseSchema).optional(),
     description: z.string().optional(),
   })
   .passthrough();

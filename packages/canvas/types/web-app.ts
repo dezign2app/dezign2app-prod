@@ -100,6 +100,24 @@ export interface GlobalStoreAction {
   name: string;
   targetFieldId?: string;
   actionType: "set" | "append" | "remove" | "toggle" | "increment" | "reset" | "populate" | "custom";
+  code?: string;
+  parameters?: Parameter[];
+  connectedEndpointId?: string;
+  responseMappingMode?: "replace" | "merge" | "custom";
+  description?: string;
+  prompt?: string;
+}
+
+export interface StateStoreTestCase {
+  id: string;
+  name: string;
+  manipulatorName: string;
+  payload?: JsonValue;
+  expectedField?: string;
+  expectedValue?: JsonValue;
+  status?: "passed" | "failed" | "idle";
+  lastRunAt?: string;
+  error?: string;
 }
 
 export interface GlobalStoreDefinition {
@@ -108,6 +126,7 @@ export interface GlobalStoreDefinition {
   description?: string;
   fields: GlobalStoreField[];
   actions?: GlobalStoreAction[];
+  testCases?: StateStoreTestCase[];
   storage?: "memory" | "localStorage" | "sessionStorage";
   scope?: "global" | "local";
   targetPageId?: string;
@@ -224,10 +243,12 @@ export interface CanvasHookRefNodeData {
 /** State Store node fields for canvas graph view (modeled after TransformerNode). */
 export interface CanvasStateStoreNodeData {
   storeName?: string;
+  description?: string;
   scope?: "global" | "local";
   storage?: "memory" | "localStorage" | "sessionStorage";
   targetWebAppId?: string;
   targetPageId?: string;
   fields?: GlobalStoreField[];
   actions?: GlobalStoreAction[];
+  testCases?: StateStoreTestCase[];
 }
