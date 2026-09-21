@@ -86,6 +86,9 @@ function copyDirPlain(src, dest) {
   if (!fs.existsSync(src)) return;
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src)) {
+    if (entry === "__tests__" || entry === ".git" || entry.endsWith(".map") || entry.endsWith(".test.ts") || entry.endsWith(".test.tsx")) {
+      continue;
+    }
     const srcPath = path.join(src, entry);
     const destPath = path.join(dest, entry);
     const stat = fs.lstatSync(srcPath);
@@ -149,11 +152,22 @@ function stageWebResources() {
   if (fs.existsSync(standaloneDir)) {
     console.log("   ✓ Staging Next.js standalone bundle (clean flat node_modules)...");
 
-    // 1. Copy standalone apps/web (skip node_modules inside it which are pnpm symlinks)
+    // 1. Copy standalone apps/web (skip node_modules inside it which are pnpm symlinks, and skip dev configs)
     const standaloneWeb = path.join(standaloneDir, "apps", "web");
+    const skipWebFiles = new Set([
+      "node_modules",
+      "playwright.config.ts",
+      "vitest.config.ts",
+      "vitest.setup.ts",
+      "tsconfig.json",
+      "eslint.config.js",
+      "postcss.config.mjs",
+      "components.json",
+    ]);
+
     if (fs.existsSync(standaloneWeb)) {
       for (const item of fs.readdirSync(standaloneWeb)) {
-        if (item === "node_modules") continue;
+        if (skipWebFiles.has(item) || item.endsWith(".test.ts") || item.endsWith(".test.tsx")) continue;
         const sPath = path.join(standaloneWeb, item);
         const dPath = path.join(buildWebDir, "apps", "web", item);
         const stat = fs.lstatSync(sPath);
@@ -168,14 +182,19 @@ function stageWebResources() {
       copyDirPlain(standaloneDir, buildWebDir);
     }
 
-    // 2. Copy static files & public assets, and generate public-only safe .env
+    // 2. Copy static files & public assets to the primary runtime directory (without duplicating at root)
     const nextStaticSrc = path.join(webDir, ".next", "static");
     const publicSrc = path.join(webDir, "public");
+    const primaryWebDir = fs.existsSync(path.join(buildWebDir, "apps", "web"))
+      ? path.join(buildWebDir, "apps", "web")
+      : buildWebDir;
 
-    const candidateTargets = [
-      buildWebDir,
-      path.join(buildWebDir, "apps", "web"),
-    ].filter((dir) => fs.existsSync(dir));
+    if (fs.existsSync(nextStaticSrc)) {
+      copyDirPlain(nextStaticSrc, path.join(primaryWebDir, ".next", "static"));
+    }
+    if (fs.existsSync(publicSrc)) {
+      copyDirPlain(publicSrc, path.join(primaryWebDir, "public"));
+    }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
     const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL || process.env.CONVEX_URL || "";
@@ -203,13 +222,12 @@ function stageWebResources() {
       `APP_ENV=${targetEnv}`,
     ].filter(Boolean).join("\n") + "\n";
 
+    const candidateTargets = [
+      buildWebDir,
+      path.join(buildWebDir, "apps", "web"),
+    ].filter((dir) => fs.existsSync(dir));
+
     for (const target of candidateTargets) {
-      if (fs.existsSync(nextStaticSrc)) {
-        copyDirPlain(nextStaticSrc, path.join(target, ".next", "static"));
-      }
-      if (fs.existsSync(publicSrc)) {
-        copyDirPlain(publicSrc, path.join(target, "public"));
-      }
       fs.writeFileSync(path.join(target, ".env"), publicSafeEnv, "utf8");
     }
 
