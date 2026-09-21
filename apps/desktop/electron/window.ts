@@ -3,12 +3,11 @@ import path from "path";
 import {
   APP_NAME,
   DEV_SERVER_URL,
+  PROD_SERVER_URL,
   IS_DEV,
   DEFAULT_PORT,
   getAppIcon,
-  getAvailablePort,
 } from "./constants";
-import { startNextServer } from "./services/nextServer";
 
 let mainWindow: BrowserWindow | null = null;
 let currentServerPort: number = DEFAULT_PORT;
@@ -369,15 +368,15 @@ export async function createMainWindow(): Promise<BrowserWindow> {
             <body>
               <div class="icon">⚠️</div>
               <h2>Development Server Not Running</h2>
-              <p>Waiting for Next.js dev server on port ${DEFAULT_PORT}... Please ensure <code>pnpm dev</code> or <code>pnpm desktop:dev</code> is running.</p>
+              <p>Waiting for Next.js dev server at <code>${DEV_SERVER_URL}</code>... Please ensure <code>pnpm dev</code> or <code>pnpm desktop:dev</code> is running.</p>
               <button class="retry-btn" onclick="window.location.reload()">Retry Connection</button>
               <div class="status-msg">Auto-reconnecting every 2 seconds...</div>
               <script>
                 async function pollServer() {
                   try {
-                    const res = await fetch('http://127.0.0.1:${DEFAULT_PORT}/robots.txt');
+                    const res = await fetch('${DEV_SERVER_URL}/robots.txt');
                     if (res.ok) {
-                      window.location.href = 'http://127.0.0.1:${DEFAULT_PORT}/projects';
+                      window.location.href = '${DEV_SERVER_URL}/projects';
                     }
                   } catch (e) {}
                 }
@@ -397,34 +396,11 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     loadDevServerWithDiscovery(60, 1500);
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    showSplashScreen("Initializing workspace...");
-
-    let targetPort = await getAvailablePort(DEFAULT_PORT);
-    let started = false;
-
-    for (let attempt = 0; attempt < 5; attempt++) {
-      try {
-        const port = await startNextServer(targetPort, updateStatus);
-        currentServerPort = port;
-        currentAppUrl = `http://127.0.0.1:${port}`;
-        await loadWithRetry(`http://127.0.0.1:${port}/projects`, 20, 1000);
-        started = true;
-        break;
-      } catch (err: any) {
-        console.warn(
-          `[window] Failed to start server on port ${targetPort}:`,
-          err?.message || err
-        );
-        targetPort = await getAvailablePort(targetPort + 1);
-      }
-    }
-
-    if (!started) {
-      dialog.showErrorBox(
-        "Dezign2App Startup Error",
-        "Unable to start internal server after multiple port attempts. Please check available system ports."
-      );
-    }
+    showSplashScreen("Connecting to Dezign2App...");
+    currentAppUrl = PROD_SERVER_URL;
+    const targetUrl = `${PROD_SERVER_URL}/projects`;
+    console.log(`[window] Production mode: connecting directly to ${targetUrl}`);
+    await loadWithRetry(targetUrl, 20, 1500);
   }
 
   // Open external links in the system browser, not inside Electron

@@ -103,8 +103,16 @@ function copyDirPlain(src, dest) {
 }
 
 function stageWebResources() {
-  const webDir = path.join(desktopDir, "../web");
   const buildWebDir = path.join(desktopDir, "build-web");
+  if (targetEnv === "production" && !args.includes("--embed-server")) {
+    console.log("\n==> [Build] Production desktop connects directly to remote app; skipping local web runtime staging.");
+    if (fs.existsSync(buildWebDir)) {
+      fs.rmSync(buildWebDir, { recursive: true, force: true });
+    }
+    return;
+  }
+
+  const webDir = path.join(desktopDir, "../web");
   const standaloneDir = path.join(webDir, ".next", "standalone");
   const standaloneServer = path.join(standaloneDir, "apps", "web", "server.js");
 
