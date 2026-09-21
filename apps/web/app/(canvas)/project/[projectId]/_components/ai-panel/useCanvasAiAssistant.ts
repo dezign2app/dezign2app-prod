@@ -7,6 +7,7 @@ import { Id, Doc } from "@workspace/backend/_generated/dataModel";
 import { toast } from "sonner";
 import { BackendCanvasView } from "@/types/canvas";
 import { Message, SerializedNodeData } from "./types";
+import { log } from "@/lib/logger";
 
 interface UseCanvasAiAssistantOptions {
   projectId: string;
@@ -278,7 +279,7 @@ export function useCanvasAiAssistant({
         }
       } catch (error) {
         if ((error instanceof Error && error.name === "AbortError") || abortController.signal.aborted) {
-          console.log("[useCanvasAiAssistant] Generation cancelled by user.");
+          log("[useCanvasAiAssistant] Generation cancelled by user.");
           return;
         }
         console.error("[useCanvasAiAssistant] Submission error:", error);

@@ -1,6 +1,7 @@
 import { v, ConvexError } from "convex/values";
 import { mutation } from "../_generated/server";
 import { backendNodeDataValidator } from "../schema/canvasValidators";
+import { log } from "../logger";
 
 export const upsertBackendNode = mutation({
   args: {
@@ -16,7 +17,7 @@ export const upsertBackendNode = mutation({
       "label" in args.data && typeof args.data.label === "string"
         ? args.data.label
         : undefined;
-    console.log("upsertBackendNode called with args:", {
+    log("upsertBackendNode called with args:", {
       nodeId: args.nodeId,
       type: args.type,
       label: labelToLog,

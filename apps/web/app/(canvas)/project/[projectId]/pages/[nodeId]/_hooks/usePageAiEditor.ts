@@ -14,6 +14,7 @@ import {
 } from "@workspace/canvas";
 import { Message } from "../_components/PageAiPanel";
 import { ResolvedCodeResult } from "./usePageCodeSync";
+import { log } from "@/lib/logger";
 
 interface UsePageAiEditorOptions {
   projectId: string;
@@ -62,11 +63,11 @@ export function usePageAiEditor({
   const engineBaseUrl = process.env.NEXT_PUBLIC_SYSTEM_DESIGN_ENGINE_URL;
 
   const handleStop = useCallback(async () => {
-    console.log(`[PageEditor] ⏹️ User clicked STOP button for node: "${nodeId}"`);
+    log(`[PageEditor] ⏹️ User clicked STOP button for node: "${nodeId}"`);
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
-      console.log(`[PageEditor] ⏹️ Aborted browser stream fetch reader.`);
+      log(`[PageEditor] ⏹️ Aborted browser stream fetch reader.`);
     }
 
     // Explicitly notify the backend engine to terminate the LangGraph pipeline
@@ -78,10 +79,10 @@ export function usePageAiEditor({
       })
         .then((res) => res.json())
         .then((data) => {
-          console.log(`[PageEditor] ⏹️ Server response from /page-editor/stop:`, data);
+          log(`[PageEditor] ⏹️ Server response from /page-editor/stop:`, data);
         })
         .catch((err) => {
-          console.warn("[PageEditor] Non-blocking /stop notify error:", err);
+          log.warn("[PageEditor] Non-blocking /stop notify error:", err);
         });
     }
 
@@ -179,7 +180,7 @@ export function usePageAiEditor({
       }
 
       const engineUrl = `${engineBaseUrl}/page-editor`;
-      console.log("[PageEditor] Sending request to engine:", {
+      log("[PageEditor] Sending request to engine:", {
         nodeId,
         projectId,
         pageName,
@@ -263,7 +264,7 @@ export function usePageAiEditor({
       }
 
       if (abortController.signal.aborted) {
-        console.log("[PageEditor] Aborted stream read.");
+        log("[PageEditor] Aborted stream read.");
         return;
       }
 
@@ -271,7 +272,7 @@ export function usePageAiEditor({
         throw new Error("UI generation finished without producing code. Please check system-design-engine terminal logs.");
       }
 
-      console.log(`[PageEditor] UI generation finished successfully! Code length: ${finalCode.length} chars`);
+      log(`[PageEditor] UI generation finished successfully! Code length: ${finalCode.length} chars`);
 
       // Update local store immediately
       if (node) {
@@ -295,7 +296,7 @@ export function usePageAiEditor({
           },
         });
       } catch (convexErr) {
-        console.warn("[PageEditor] Failed to sync generated code to Convex:", convexErr);
+        log.warn("[PageEditor] Failed to sync generated code to Convex:", convexErr);
       }
 
       // Write to local disk via Electron bridge for HMR
@@ -307,11 +308,11 @@ export function usePageAiEditor({
       }
     } catch (err) {
       if ((err instanceof Error && err.name === "AbortError") || abortController.signal.aborted) {
-        console.log("[PageEditor] Generation cancelled by user.");
+        log("[PageEditor] Generation cancelled by user.");
         return;
       }
       const errorMessage = err instanceof Error ? err.message : "AI request failed";
-      console.error("[PageEditor] handleSend error:", err);
+      log.error("[PageEditor] handleSend error:", err);
       toast.error(errorMessage);
       if (node) {
         updateNode(nodeId, { data: { ...node.data, aiEditing: false } });

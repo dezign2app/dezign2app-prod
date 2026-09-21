@@ -29,6 +29,7 @@ import {
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { log } from "@/lib/logger";
 
 export const SignInView = () => {
   const [mounted, setMounted] = useState(false);
@@ -54,7 +55,7 @@ export const SignInView = () => {
 
   // If already signed in (and not explicitly signed out), ensure user record exists and go directly to /projects or redirectUrl
   useEffect(() => {
-    console.log("[desktop-auth:view] Session state:", {
+    log("[desktop-auth:view] Session state:", {
       isSessionLoading,
       hasSession: !!session,
       hasUser: !!session?.user,
@@ -73,7 +74,7 @@ export const SignInView = () => {
     }
 
     if (session?.user) {
-      console.log("[desktop-auth:view] Valid session user detected! Redirecting to:", redirectUrl);
+      log("[desktop-auth:view] Valid session user detected! Redirecting to:", redirectUrl);
       if (session.user.email) {
         const userEmail = session.user.email;
         ensureUser({
@@ -104,7 +105,7 @@ export const SignInView = () => {
       return;
     }
     const cleanTicket = ticket.trim();
-    console.log("[desktop-auth:view] exchangeTicket started with ticket:", {
+    log("[desktop-auth:view] exchangeTicket started with ticket:", {
       preview: `${cleanTicket.substring(0, 15)}...`,
       length: cleanTicket.length,
     });
@@ -122,7 +123,7 @@ export const SignInView = () => {
         ? `${authBaseUrl}/api/auth/desktop/exchange`
         : "/api/auth/desktop/exchange";
 
-      console.log("[desktop-auth:view] Calling primary exchange endpoint:", primaryUrl, {
+      log("[desktop-auth:view] Calling primary exchange endpoint:", primaryUrl, {
         isRemote,
         authBaseUrl,
       });
@@ -133,14 +134,14 @@ export const SignInView = () => {
         body: JSON.stringify({ ticket: cleanTicket }),
       });
 
-      console.log("[desktop-auth:view] Primary exchange response status:", res.status, res.statusText);
+      log("[desktop-auth:view] Primary exchange response status:", res.status, res.statusText);
 
       let data = await res.json().catch((err) => {
         console.error("[desktop-auth:view] Failed to parse primary exchange JSON:", err);
         return {};
       });
 
-      console.log("[desktop-auth:view] Primary exchange response body:", {
+      log("[desktop-auth:view] Primary exchange response body:", {
         hasToken: !!data.token,
         tokenPreview: data.token ? `${data.token.substring(0, 10)}...` : undefined,
         userId: data.userId,
@@ -164,10 +165,10 @@ export const SignInView = () => {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ ticket: cleanTicket }),
             });
-            console.log("[desktop-auth:view] Fallback response status:", fallbackRes.status);
+            log("[desktop-auth:view] Fallback response status:", fallbackRes.status);
             if (fallbackRes.ok) {
               const fallbackData = await fallbackRes.json();
-              console.log("[desktop-auth:view] Fallback response data:", {
+              log("[desktop-auth:view] Fallback response data:", {
                 hasToken: !!fallbackData?.token,
                 error: fallbackData?.error,
               });
@@ -183,7 +184,7 @@ export const SignInView = () => {
       }
 
       if (res.ok && data.token) {
-        console.log("[desktop-auth:view] Exchange succeeded! Setting session cookies in document.cookie...");
+        log("[desktop-auth:view] Exchange succeeded! Setting session cookies in document.cookie...");
         const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
         const secureFlag = isHttps ? "; Secure" : "";
         document.cookie = `better-auth.session_token=${data.token}; path=/; max-age=2592000; SameSite=Lax${secureFlag}`;
@@ -191,10 +192,10 @@ export const SignInView = () => {
           document.cookie = `__Secure-better-auth.session_token=${data.token}; path=/; max-age=2592000; SameSite=Lax; Secure`;
         }
         document.cookie = `is_electron=1; path=/; max-age=2592000; SameSite=Lax${secureFlag}`;
-        console.log("[desktop-auth:view] Cookies after setting:", document.cookie);
+        log("[desktop-auth:view] Cookies after setting:", document.cookie);
         setWaitingForAuth(false);
         toast.success("Desktop session connected!");
-        console.log("[desktop-auth:view] Calling window.location.href = '/projects'...");
+        log("[desktop-auth:view] Calling window.location.href = '/projects'...");
         window.location.href = "/projects";
       } else {
         console.error("[desktop-auth:view] Ticket exchange failed with error:", data.error);
@@ -212,20 +213,20 @@ export const SignInView = () => {
     const inElectronMode = isElectron();
     setMounted(true);
     setInDesktop(inElectronMode);
-    console.log("[desktop-auth:view] Component mounted. inDesktop:", inElectronMode);
+    log("[desktop-auth:view] Component mounted. inDesktop:", inElectronMode);
 
     const api = getElectronAPI();
     if (api?.auth) {
-      console.log("[desktop-auth:view] Registering api.auth.onAuthCallback listener...");
+      log("[desktop-auth:view] Registering api.auth.onAuthCallback listener...");
       const cleanup = api.auth.onAuthCallback(async (data) => {
-        console.log("[desktop-auth:view] onAuthCallback received data:", {
+        log("[desktop-auth:view] onAuthCallback received data:", {
           hasToken: !!data.token,
           hasTicket: !!data.ticket,
           rawUrl: data.rawUrl,
         });
         const ticketToUse = data.ticket || data.token;
         if (ticketToUse) {
-          console.log("[desktop-auth:view] Exchanging ticket from deep link callback...");
+          log("[desktop-auth:view] Exchanging ticket from deep link callback...");
           await exchangeTicket(ticketToUse);
         } else {
           console.warn("[desktop-auth:view] onAuthCallback received event without ticket or token!");
@@ -233,11 +234,11 @@ export const SignInView = () => {
       });
 
       return () => {
-        console.log("[desktop-auth:view] Cleaning up onAuthCallback listener");
+        log("[desktop-auth:view] Cleaning up onAuthCallback listener");
         cleanup();
       };
     } else {
-      console.log("[desktop-auth:view] Electron API auth not available (running in normal browser mode)");
+      log("[desktop-auth:view] Electron API auth not available (running in normal browser mode)");
     }
   }, []);
 
@@ -245,20 +246,20 @@ export const SignInView = () => {
     setWaitingForAuth(true);
     setError(null);
     const api = getElectronAPI();
-    console.log("[desktop-auth:view] handleBrowserLogin clicked. Electron API available?", !!api?.auth);
+    log("[desktop-auth:view] handleBrowserLogin clicked. Electron API available?", !!api?.auth);
     if (api?.auth) {
       const authBaseUrl = getAuthBaseUrl();
       const loginUrl = `${authBaseUrl}/sign-in?redirect_url=${encodeURIComponent(
         `${authBaseUrl}/auth/desktop`,
       )}`;
-      console.log("[desktop-auth:view] Requesting openBrowserLogin with:", loginUrl);
+      log("[desktop-auth:view] Requesting openBrowserLogin with:", loginUrl);
       await api.auth.openBrowserLogin(loginUrl);
     }
   };
 
   const handleManualSubmit = (e: React.SubmitEvent) => {
     e.preventDefault();
-    console.log("[desktop-auth:view] Manual ticket submitted:", manualTicket);
+    log("[desktop-auth:view] Manual ticket submitted:", manualTicket);
     if (manualTicket.trim()) {
       exchangeTicket(manualTicket.trim());
     }

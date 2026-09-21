@@ -3,6 +3,7 @@ import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import { Doc } from "./_generated/dataModel";
 import { components } from "./_generated/api";
+import { log } from "./logger";
 
 // Helper to verify if a user belongs to an organization
 async function isUserAuthorizedForOrg(
@@ -37,7 +38,7 @@ export const createProject = mutation({
   },
   async handler(ctx, args) {
     const identity = await ctx.auth.getUserIdentity();
-    console.log("[createProject] identity:", JSON.stringify({
+    log("[createProject] identity:", JSON.stringify({
       resolved: !!identity,
       subject: identity?.subject,
       email: identity?.email,

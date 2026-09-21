@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { Button } from "@workspace/ui/components/button";
+import { log } from "@/lib/logger";
 import {
   Cancel01Icon,
   SentIcon,
@@ -161,7 +162,7 @@ export const ChatFooter = ({ conversationId }: ChatFooterProps) => {
           errorMsg = data.message || data.error || errorMsg;
         } catch (e) {}
 
-        console.log("Failed to fetch AI response:", errorMsg);
+        log("Failed to fetch AI response:", errorMsg);
         resetStreamingState();
         setStreamingText(`⚠️ ${errorMsg}`);
 

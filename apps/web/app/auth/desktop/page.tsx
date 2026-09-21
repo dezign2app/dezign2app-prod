@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useSession } from "@/lib/auth-client";
 import { createDesktopSignInToken } from "@/app/(auth)/_components/actions";
+import { log } from "@/lib/logger";
 import {
   Card,
   CardHeader,
@@ -27,7 +28,7 @@ export default function DesktopAuthSuccessPage() {
   useEffect(() => {
     async function generateTicket() {
       try {
-        console.log("[DesktopAuthSuccessPage] Starting createDesktopSignInToken call... Session:", {
+        log("[DesktopAuthSuccessPage] Starting createDesktopSignInToken call... Session:", {
           isSignedIn,
           isLoaded,
           userId: session?.user?.id,
@@ -35,7 +36,7 @@ export default function DesktopAuthSuccessPage() {
         });
         setLoading(true);
         const res = await createDesktopSignInToken();
-        console.log("[DesktopAuthSuccessPage] createDesktopSignInToken response:", {
+        log("[DesktopAuthSuccessPage] createDesktopSignInToken response:", {
           hasToken: !!res?.token,
           tokenPreview: res?.token ? `${res.token.substring(0, 15)}...` : undefined,
         });
@@ -45,11 +46,11 @@ export default function DesktopAuthSuccessPage() {
             res.token
           )}`;
           setDeepLink(targetUrl);
-          console.log("[DesktopAuthSuccessPage] Deep link generated:", targetUrl);
+          log("[DesktopAuthSuccessPage] Deep link generated:", targetUrl);
 
           // Automatically open desktop app
           try {
-            console.log("[DesktopAuthSuccessPage] Attempting automatic redirect to deep link...");
+            log("[DesktopAuthSuccessPage] Attempting automatic redirect to deep link...");
             window.location.href = targetUrl;
           } catch (e) {
             console.warn("[DesktopAuthSuccessPage] Automatic window.location.href redirect error:", e);
@@ -65,10 +66,10 @@ export default function DesktopAuthSuccessPage() {
     }
 
     if (isLoaded) {
-      console.log("[DesktopAuthSuccessPage] Session loaded, calling generateTicket()");
+      log("[DesktopAuthSuccessPage] Session loaded, calling generateTicket()");
       generateTicket();
     } else {
-      console.log("[DesktopAuthSuccessPage] Waiting for session to finish loading...");
+      log("[DesktopAuthSuccessPage] Waiting for session to finish loading...");
     }
   }, [isLoaded]);
 

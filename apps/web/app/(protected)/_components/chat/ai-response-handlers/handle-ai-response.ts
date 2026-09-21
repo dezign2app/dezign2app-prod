@@ -1,3 +1,5 @@
+import { log } from "@/lib/logger";
+
 // This file is now a placeholder after Tiptap/SmartBlocks removal.
 
 export const handleAIResponse = async (response: Response) => {
@@ -6,7 +8,7 @@ export const handleAIResponse = async (response: Response) => {
     return;
   }
 
-  console.log("🤖 handleAIResponse: Starting to read stream...");
+  log("🤖 handleAIResponse: Starting to read stream...");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -18,13 +20,13 @@ export const handleAIResponse = async (response: Response) => {
     const { done, value } = await reader.read();
 
     if (done) {
-      console.log(
+      log(
         "🤖 handleAIResponse: Stream complete. Final buffer length:",
         buffer.length,
       );
 
       if (buffer.trim()) {
-        console.log(
+        log(
           "🤖 handleAIResponse: Processing final buffer:",
           JSON.stringify(buffer).substring(0, 100),
           "...",
@@ -53,16 +55,16 @@ export const handleAIResponse = async (response: Response) => {
 
           if (json.type === "intent") {
             currentIntent = json.intent;
-            console.log("🤖 Intent detected:", currentIntent);
+            log("🤖 Intent detected:", currentIntent);
           } else if (json.type === "doc_token" || json.type === "token") {
-            console.log("Token:", json.content);
+            log("Token:", json.content);
             hasStartedStreaming = true;
           } else {
             processResponse(json, currentIntent, hasStartedStreaming);
           }
         } catch (e) {
           // ignore partials
-          console.log("🤖 handleAIResponse: Ignoring Partial JSON", line);
+          log("🤖 handleAIResponse: Ignoring Partial JSON", line);
         }
       }
     }
@@ -83,11 +85,11 @@ const processResponse = (
   hasStartedStreaming: boolean,
 ) => {
   if (response.type === "response" && response.response?.operations) {
-    console.log(
+    log(
       `🤖 processResponse: Processing operations. Streaming active: ${hasStartedStreaming}`,
     );
     response.response.operations.forEach((op) => {
-      console.log(`🤖 Operation: ${op.type} (Skipped due to removal)`);
+      log(`🤖 Operation: ${op.type} (Skipped due to removal)`);
     });
     return;
   }

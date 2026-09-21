@@ -2,6 +2,7 @@ import { httpRouter } from "convex/server";
 import { httpAction, ActionCtx } from "./_generated/server";
 import { api } from "./_generated/api";
 import { betterAuthComponentClient, createAuth } from "./auth";
+import { log } from "./logger";
 
 const http = httpRouter();
 
@@ -9,7 +10,7 @@ betterAuthComponentClient.registerRoutes(http, createAuth);
 
 const createCreemWebhookHandler =
   (secretEnvKey: string) => async (ctx: ActionCtx, request: Request) => {
-    console.log(`----- Incoming Webhook Request (${secretEnvKey}) -----`);
+    log(`----- Incoming Webhook Request (${secretEnvKey}) -----`);
     const headerObj: Record<string, string> = {};
     request.headers.forEach((value, key) => {
       headerObj[key] = value;
@@ -68,7 +69,7 @@ const createCreemWebhookHandler =
     try {
       switch (eventType) {
         case "checkout.completed":
-          console.log("Payment successful!", {
+          log("Payment successful!", {
             checkoutId: event.object?.id,
             customerId: event.object?.customer?.id,
             productId: event.object?.product?.id,
@@ -82,7 +83,7 @@ const createCreemWebhookHandler =
         case "subscription.past_due":
         case "subscription.paid":
         case "subscription.update":
-          console.log(`Subscription updated (${eventType}):`, event.object?.id);
+          log(`Subscription updated (${eventType}):`, event.object?.id);
           await ctx.runMutation(api.billing.handleSubscriptionEvent, {
             type: eventType,
             data: event.object,
@@ -90,7 +91,7 @@ const createCreemWebhookHandler =
           });
           break;
         case "subscription.canceled":
-          console.log("Subscription canceled:", event.object?.id);
+          log("Subscription canceled:", event.object?.id);
           await ctx.runMutation(api.billing.handleSubscriptionEvent, {
             type: eventType,
             data: event.object,
@@ -98,14 +99,14 @@ const createCreemWebhookHandler =
           });
           break;
         case "subscription.expired":
-          console.log("Subscription expired:", event.object?.id);
+          log("Subscription expired:", event.object?.id);
           await ctx.runMutation(api.billing.handleSubscriptionExpired, {
             data: event.object,
             secret: webhookSecret,
           });
           break;
         default:
-          console.log(`Unhandled event type: ${eventType}`);
+          log(`Unhandled event type: ${eventType}`);
       }
     } catch (e) {
       console.error("Error processing webhook:", e);

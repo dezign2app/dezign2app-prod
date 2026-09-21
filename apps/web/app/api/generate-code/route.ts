@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Groq from "groq-sdk";
+import { log } from "@/lib/logger";
 import {
   generateSyncedEndpointCode,
   generateSyncedDbOperationCode,
@@ -43,7 +44,7 @@ async function generateCodeWithGroq(body: GenerateCodeRequestBody): Promise<stri
   const publishedEvents = body.publishedEvents || [];
   const tableNodes = body.availableTableNodes || [];
 
-  console.log(`[GENERATE_CODE_API] Starting direct Groq generation with ${apiKeys.length} key(s). Target method=${method}, path=${path}, model=${model}`);
+  log(`[GENERATE_CODE_API] Starting direct Groq generation with ${apiKeys.length} key(s). Target method=${method}, path=${path}, model=${model}`);
 
   const tableNames = crudList.map((c) => {
     const tableObj = tableNodes.find((t) => t.id === c.tableNodeId);
@@ -112,7 +113,7 @@ Strict Rules for Output:
     const maskedKey = `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}`;
     for (const m of [model, ...fallbackModels.filter((fm) => fm !== model)]) {
       try {
-        console.log(`[GENERATE_CODE_API] Invoking Groq SDK with key index ${keyIdx} (${maskedKey}) on model=${m}`);
+        log(`[GENERATE_CODE_API] Invoking Groq SDK with key index ${keyIdx} (${maskedKey}) on model=${m}`);
         const groq = new Groq({ apiKey });
         const completion = await groq.chat.completions.create({
           messages: [
@@ -131,7 +132,7 @@ Strict Rules for Output:
             .replace(/```$/g, "")
             .trim();
           if (cleaned) {
-            console.log(`[GENERATE_CODE_API] Successfully generated code via Groq model=${m} (length=${cleaned.length} chars)`);
+            log(`[GENERATE_CODE_API] Successfully generated code via Groq model=${m} (length=${cleaned.length} chars)`);
             return cleaned;
           }
         }
@@ -354,7 +355,7 @@ ${promptText || `Implement standard ${opKind} query for table ${tableName}`}
     const maskedKey = `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}`;
     for (const m of [model, ...fallbackModels.filter((fm) => fm !== model)]) {
       try {
-        console.log(`[GENERATE_CODE_API] Invoking Groq SDK for DB operation with key index ${keyIdx} (${maskedKey}) on model=${m}`);
+        log(`[GENERATE_CODE_API] Invoking Groq SDK for DB operation with key index ${keyIdx} (${maskedKey}) on model=${m}`);
         const groq = new Groq({ apiKey });
         const completion = await groq.chat.completions.create({
           messages: [
@@ -380,7 +381,7 @@ ${promptText || `Implement standard ${opKind} query for table ${tableName}`}
             .replace(/```$/g, "")
             .trim();
           if (cleaned) {
-            console.log(`[GENERATE_CODE_API] Successfully generated DB operation code via Groq model=${m} (length=${cleaned.length} chars)`);
+            log(`[GENERATE_CODE_API] Successfully generated DB operation code via Groq model=${m} (length=${cleaned.length} chars)`);
             return cleaned;
           }
         }
@@ -396,7 +397,7 @@ ${promptText || `Implement standard ${opKind} query for table ${tableName}`}
 }
 
 export async function POST(req: NextRequest) {
-  console.log(`[GENERATE_CODE_API] Incoming POST request to /api/generate-code`);
+  log(`[GENERATE_CODE_API] Incoming POST request to /api/generate-code`);
   try {
     const body: GenerateCodeRequestBody = await req.json();
     const isDbOperation =
@@ -405,21 +406,21 @@ export async function POST(req: NextRequest) {
       Boolean(body.tableSchema) ||
       Boolean(body.operation);
 
-    console.log(
+    log(
       `[GENERATE_CODE_API] Request payload parsed. isDbOperation=${isDbOperation}, contextType=${body.contextType}, promptLength=${body.prompt?.length || 0}`,
     );
 
     // Branch 1: Database operation code generation (DO NOT forward to microservice engine)
     if (isDbOperation) {
-      console.log(`[GENERATE_CODE_API] Processing database operation code generation...`);
+      log(`[GENERATE_CODE_API] Processing database operation code generation...`);
       const dbCode = await generateDbOperationCodeWithGroq(body);
       if (dbCode) {
         return NextResponse.json({ code: dbCode, source: "groq-db" });
       }
 
-      console.log(`[GENERATE_CODE_API] Falling back to deterministic DB code generator...`);
+      log(`[GENERATE_CODE_API] Falling back to deterministic DB code generator...`);
       const fallbackDbCode = generateSyncedDbOperationCode(body);
-      console.log(`[GENERATE_CODE_API] Deterministic DB code generated (length=${fallbackDbCode.length} chars)`);
+      log(`[GENERATE_CODE_API] Deterministic DB code generated (length=${fallbackDbCode.length} chars)`);
       return NextResponse.json({ code: fallbackDbCode, source: "fallback-db" });
     }
 
@@ -429,7 +430,7 @@ export async function POST(req: NextRequest) {
       process.env.SYSTEM_DESIGN_ENGINE_URL;
 
     if (systemDesignEngineUrl) {
-      console.log(`[GENERATE_CODE_API] Attempting backend engine fetch at: ${systemDesignEngineUrl}/generate-code`);
+      log(`[GENERATE_CODE_API] Attempting backend engine fetch at: ${systemDesignEngineUrl}/generate-code`);
       try {
         const response = await fetch(`${systemDesignEngineUrl}/generate-code`, {
           method: "POST",
@@ -440,11 +441,11 @@ export async function POST(req: NextRequest) {
           signal: AbortSignal.timeout(5000),
         });
 
-        console.log(`[GENERATE_CODE_API] Engine response status: ${response.status} ${response.statusText}`);
+        log(`[GENERATE_CODE_API] Engine response status: ${response.status} ${response.statusText}`);
         if (response.ok) {
           const data = await response.json();
           if (data && data.code) {
-            console.log(`[GENERATE_CODE_API] Successfully received code from engine (length=${data.code.length} chars)`);
+            log(`[GENERATE_CODE_API] Successfully received code from engine (length=${data.code.length} chars)`);
             return NextResponse.json(data);
           } else {
             console.warn(`[GENERATE_CODE_API] Engine responded 200 but missing data.code payload.`);
@@ -458,27 +459,27 @@ export async function POST(req: NextRequest) {
         console.warn(`[GENERATE_CODE_API] Backend engine fetch failed/timed out: ${msg}`);
       }
     } else {
-      console.log(`[GENERATE_CODE_API] No system design engine URL configured in env.`);
+      log(`[GENERATE_CODE_API] No system design engine URL configured in env.`);
     }
 
     // Branch 2: Standard microservice endpoint code generation
-    console.log(`[GENERATE_CODE_API] Attempting direct Groq endpoint generation in Next.js route handler...`);
+    log(`[GENERATE_CODE_API] Attempting direct Groq endpoint generation in Next.js route handler...`);
     const aiCode = await generateCodeWithGroq(body);
     if (aiCode) {
       return NextResponse.json({ code: aiCode, source: "groq" });
     }
 
     // Fallback to deterministic code generator
-    console.log(`[GENERATE_CODE_API] Falling back to deterministic endpoint code generator...`);
+    log(`[GENERATE_CODE_API] Falling back to deterministic endpoint code generator...`);
     const fallbackCode = generateSyncedEndpointCode(body);
-    console.log(`[GENERATE_CODE_API] Deterministic endpoint code generated (length=${fallbackCode.length} chars)`);
+    log(`[GENERATE_CODE_API] Deterministic endpoint code generated (length=${fallbackCode.length} chars)`);
     return NextResponse.json({ code: fallbackCode, source: "fallback" });
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : "Internal Server Error";
     console.error("[GENERATE_CODE_API] Unexpected error in /api/generate-code handler:", error);
     try {
       const fallbackCode = generateSyncedEndpointCode({});
-      console.log(`[GENERATE_CODE_API] Emergency deterministic fallback executed after error.`);
+      log(`[GENERATE_CODE_API] Emergency deterministic fallback executed after error.`);
       return NextResponse.json({ code: fallbackCode, source: "emergency-fallback" });
     } catch (emergencyErr) {
       console.error("[GENERATE_CODE_API] Emergency fallback also failed:", emergencyErr);

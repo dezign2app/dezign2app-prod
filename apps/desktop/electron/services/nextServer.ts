@@ -1,6 +1,7 @@
 import { app, utilityProcess, UtilityProcess } from "electron";
 import path from "path";
 import fs from "fs";
+import { log } from "../logger";
 
 // ─────────────────────────────────────────────
 //  Production Next.js Server Runner (utilityProcess)
@@ -18,9 +19,9 @@ export async function startNextServer(
   const runnerPath = path.join(__dirname, "../server-runner.js");
 
   onStatus?.("Starting internal application engine...");
-  console.log("[main] Target webAppPath:", webAppPath);
-  console.log("[main] Runner path:", runnerPath);
-  console.log("[main] Target dynamic port:", port);
+  log("[main] Target webAppPath:", webAppPath);
+  log("[main] Runner path:", runnerPath);
+  log("[main] Target dynamic port:", port);
 
   if (!fs.existsSync(webAppPath)) {
     const err = new Error(
@@ -58,7 +59,7 @@ export async function startNextServer(
 
       const onData = (data: Buffer) => {
         const msg = data.toString();
-        console.log("[next-server]", msg);
+        log("[next-server]", msg);
         if (
           !resolved &&
           (msg.includes("Ready") ||
@@ -84,7 +85,7 @@ export async function startNextServer(
       nextUtilityProcess.stderr?.on("data", onErrorData);
 
       nextUtilityProcess.on("exit", (code) => {
-        console.log("[next-server] Process exited with code:", code);
+        log("[next-server] Process exited with code:", code);
         if (!resolved) {
           resolved = true;
           if (fallbackTimer) clearTimeout(fallbackTimer);
