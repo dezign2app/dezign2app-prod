@@ -72,8 +72,12 @@ export function useWebPageAiGeneration({
     toast.info("Generating UI code with AI...");
 
     try {
-      const engineBaseUrl =
-        process.env.NEXT_PUBLIC_SYSTEM_DESIGN_ENGINE_URL || "http://localhost:3002";
+      const engineBaseUrl = process.env.NEXT_PUBLIC_SYSTEM_DESIGN_ENGINE_URL;
+      if (!engineBaseUrl) {
+        toast.error("System Design Engine is not configured (missing NEXT_PUBLIC_SYSTEM_DESIGN_ENGINE_URL)");
+        setIsGeneratingAi(false);
+        return;
+      }
       const convexUrl =
         typeof window !== "undefined"
           ? window.__convexUrl ||

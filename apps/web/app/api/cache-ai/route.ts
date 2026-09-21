@@ -12,9 +12,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let systemDesignEngineUrl =
+    const systemDesignEngineUrl =
       process.env.NEXT_PUBLIC_SYSTEM_DESIGN_ENGINE_URL ||
-      "http://localhost:3002";
+      process.env.SYSTEM_DESIGN_ENGINE_URL;
+
+    if (!systemDesignEngineUrl) {
+      return NextResponse.json(
+        { error: "System Design Engine service is not configured (missing NEXT_PUBLIC_SYSTEM_DESIGN_ENGINE_URL)" },
+        { status: 503 },
+      );
+    }
 
     const response = await fetch(
       `${systemDesignEngineUrl}/generate-cache-config`,

@@ -59,7 +59,7 @@ export function usePageAiEditor({
   const insertMessageMutation = useMutation(api.ai.messages.insertMessage);
 
   const isAiEditing = Boolean(node?.data?.aiEditing);
-  const engineBaseUrl = process.env.NEXT_PUBLIC_SYSTEM_DESIGN_ENGINE_URL || "http://localhost:3002";
+  const engineBaseUrl = process.env.NEXT_PUBLIC_SYSTEM_DESIGN_ENGINE_URL;
 
   const handleStop = useCallback(async () => {
     console.log(`[PageEditor] ⏹️ User clicked STOP button for node: "${nodeId}"`);
@@ -70,18 +70,20 @@ export function usePageAiEditor({
     }
 
     // Explicitly notify the backend engine to terminate the LangGraph pipeline
-    fetch(`${engineBaseUrl}/page-editor/stop`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nodeId, projectId }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        console.log(`[PageEditor] ⏹️ Server response from /page-editor/stop:`, data);
+    if (engineBaseUrl) {
+      fetch(`${engineBaseUrl}/page-editor/stop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nodeId, projectId }),
       })
-      .catch((err) => {
-        console.warn("[PageEditor] Non-blocking /stop notify error:", err);
-      });
+        .then((res) => res.json())
+        .then((data) => {
+          console.log(`[PageEditor] ⏹️ Server response from /page-editor/stop:`, data);
+        })
+        .catch((err) => {
+          console.warn("[PageEditor] Non-blocking /stop notify error:", err);
+        });
+    }
 
     setStreaming(false);
     setStreamingContent("");
@@ -169,6 +171,12 @@ export function usePageAiEditor({
         role: m.role,
         content: m.content,
       }));
+
+      if (!engineBaseUrl) {
+        toast.error("System Design Engine is not configured (missing NEXT_PUBLIC_SYSTEM_DESIGN_ENGINE_URL)");
+        setStreaming(false);
+        return;
+      }
 
       const engineUrl = `${engineBaseUrl}/page-editor`;
       console.log("[PageEditor] Sending request to engine:", {

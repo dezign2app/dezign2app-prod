@@ -34,7 +34,13 @@ const ibmPlexMono = IBM_Plex_Mono({
   weight: ["400", "500"],
 });
 
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://dezign2app.com";
+const baseUrl =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "https://www.dezign2app.com");
 
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),

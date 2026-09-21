@@ -36,7 +36,8 @@ export async function POST(request: NextRequest) {
     const totalAmountUSD = pricePerSeatUSD * seats;
     const totalAmountInCents = totalAmountUSD * 100;
 
-    const successUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500"}/projects?seats_purchased=true`;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    const successUrl = `${baseUrl}/projects?seats_purchased=true`;
 
     const product = await creem.products.create({
       name: `Team Seat Add-on (${seats} ${seats === 1 ? "Seat" : "Seats"})`,

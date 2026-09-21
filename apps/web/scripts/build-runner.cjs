@@ -45,52 +45,33 @@ function parseEnvFile(envPath) {
 const baseEnv = parseEnvFile(path.join(webDir, ".env"));
 const prodEnv = parseEnvFile(path.join(webDir, ".env.production"));
 
-const resolvedEnv = { ...process.env };
+// Real process.env takes highest precedence over .env files
+const resolvedEnv = isDev
+  ? { ...prodEnv, ...baseEnv, ...process.env }
+  : { ...baseEnv, ...prodEnv, ...process.env };
 
-if (targetEnv === "development") {
-  // Development precedence: base .env overrides anything prod
-  Object.assign(resolvedEnv, baseEnv);
+// Auto-derive site URL from cloud URL if not explicitly specified
+if (resolvedEnv.NEXT_PUBLIC_CONVEX_URL && !resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL) {
+  resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL = resolvedEnv.NEXT_PUBLIC_CONVEX_URL.replace(".convex.cloud", ".convex.site");
+}
+if (resolvedEnv.CONVEX_URL && !resolvedEnv.CONVEX_SITE_URL) {
+  resolvedEnv.CONVEX_SITE_URL = resolvedEnv.CONVEX_URL.replace(".convex.cloud", ".convex.site");
+}
 
-  // Default fallbacks for DEV
-  resolvedEnv.NEXT_PUBLIC_CONVEX_URL =
-    resolvedEnv.NEXT_PUBLIC_CONVEX_URL || "https://neighborly-setter-541.convex.cloud";
-  resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL =
-    resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL || "https://neighborly-setter-541.convex.site";
-  resolvedEnv.CONVEX_URL =
-    resolvedEnv.CONVEX_URL || resolvedEnv.NEXT_PUBLIC_CONVEX_URL;
-  resolvedEnv.CONVEX_SITE_URL =
-    resolvedEnv.CONVEX_SITE_URL || resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL;
-  resolvedEnv.BETTER_AUTH_URL =
-    resolvedEnv.BETTER_AUTH_URL || "http://localhost:46500";
-  resolvedEnv.NEXT_PUBLIC_APP_URL =
-    resolvedEnv.NEXT_PUBLIC_APP_URL || "http://localhost:46500";
-  resolvedEnv.NEXT_PUBLIC_DESKTOP_AUTH_URL =
-    resolvedEnv.NEXT_PUBLIC_DESKTOP_AUTH_URL || "http://localhost:46500";
-  resolvedEnv.BETTER_AUTH_TRUSTED_ORIGINS =
-    resolvedEnv.BETTER_AUTH_TRUSTED_ORIGINS ||
-    "http://localhost:46500,http://localhost:3000,dezign2app://";
-} else {
-  // Production precedence: .env.production overrides base .env
-  Object.assign(resolvedEnv, baseEnv, prodEnv);
+resolvedEnv.CONVEX_URL = resolvedEnv.CONVEX_URL || resolvedEnv.NEXT_PUBLIC_CONVEX_URL;
+resolvedEnv.CONVEX_SITE_URL = resolvedEnv.CONVEX_SITE_URL || resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL;
 
-  // Default fallbacks for PROD
-  resolvedEnv.NEXT_PUBLIC_CONVEX_URL =
-    resolvedEnv.NEXT_PUBLIC_CONVEX_URL || "https://gregarious-quail-82.convex.cloud";
-  resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL =
-    resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL || "https://gregarious-quail-82.convex.site";
-  resolvedEnv.CONVEX_URL =
-    resolvedEnv.CONVEX_URL || resolvedEnv.NEXT_PUBLIC_CONVEX_URL;
-  resolvedEnv.CONVEX_SITE_URL =
-    resolvedEnv.CONVEX_SITE_URL || resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL;
-  resolvedEnv.BETTER_AUTH_URL =
-    resolvedEnv.BETTER_AUTH_URL || "https://www.dezign2app.com";
-  resolvedEnv.NEXT_PUBLIC_APP_URL =
-    resolvedEnv.NEXT_PUBLIC_APP_URL || "https://www.dezign2app.com";
-  resolvedEnv.NEXT_PUBLIC_DESKTOP_AUTH_URL =
-    resolvedEnv.NEXT_PUBLIC_DESKTOP_AUTH_URL || "https://www.dezign2app.com";
-  resolvedEnv.BETTER_AUTH_TRUSTED_ORIGINS =
-    resolvedEnv.BETTER_AUTH_TRUSTED_ORIGINS ||
-    "https://dezign2app.com,https://www.dezign2app.com,dezign2app://";
+// Fail fast if required Convex configuration is missing
+if (!resolvedEnv.NEXT_PUBLIC_CONVEX_URL) {
+  console.error(`\n❌ Error: Missing NEXT_PUBLIC_CONVEX_URL for ${targetEnv.toUpperCase()} build.`);
+  console.error(`Please provide NEXT_PUBLIC_CONVEX_URL in your environment or ${isDev ? ".env" : ".env.production"}.\n`);
+  process.exit(1);
+}
+
+if (!resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL) {
+  console.error(`\n❌ Error: Missing NEXT_PUBLIC_CONVEX_SITE_URL for ${targetEnv.toUpperCase()} build.`);
+  console.error(`Please provide NEXT_PUBLIC_CONVEX_SITE_URL in your environment or ${isDev ? ".env" : ".env.production"}.\n`);
+  process.exit(1);
 }
 
 resolvedEnv.NODE_ENV = "production"; // Next.js requires NODE_ENV=production during `next build`
