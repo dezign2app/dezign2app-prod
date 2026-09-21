@@ -13,6 +13,7 @@ import { stopNextServer } from "./services/nextServer";
 import { cleanupAllTerminals } from "./services/terminal";
 import { stopDockerProcess } from "./services/docker";
 import { stopDevProcess } from "./services/devRunner";
+import { log } from "./logger";
 import { initAutoUpdater } from "./services/updater";
 
 // ─────────────────────────────────────────────
@@ -93,7 +94,7 @@ if (IS_LOCAL) {
       app.getPath("temp"),
       `d2a-local-${process.pid}`
     );
-    console.log(
+    log(
       `[main] Active primary local instance detected (PID: ${runningPrimaryPid || process.env.D2A_PARENT_PID}). Starting secondary instance with isolated storage: ${isolatedUserData}`
     );
     try {
@@ -160,7 +161,7 @@ process.on("unhandledRejection", (reason) => {
 registerProtocolClient();
 
 app.on("second-instance", (_event, commandLine) => {
-  console.log("[main] App received second-instance event with args:", commandLine);
+  log("[main] App received second-instance event with args:", commandLine);
   const mainWindow = getMainWindow();
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -170,7 +171,7 @@ app.on("second-instance", (_event, commandLine) => {
     arg.toLowerCase().includes("dezign2app://")
   );
   if (deepLink) {
-    console.log("[main] Found deepLink in second-instance args:", deepLink);
+    log("[main] Found deepLink in second-instance args:", deepLink);
     handleAuthUrl(deepLink);
   } else {
     console.warn("[main] second-instance fired but no dezign2app:// URL found in args:", commandLine);
@@ -179,7 +180,7 @@ app.on("second-instance", (_event, commandLine) => {
 
 app.on("open-url", (event, url) => {
   event.preventDefault();
-  console.log("[main] App received open-url event with URL:", url);
+  log("[main] App received open-url event with URL:", url);
   handleAuthUrl(url);
 });
 

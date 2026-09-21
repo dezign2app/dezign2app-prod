@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalAction, internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { CronExpressionParser } from "cron-parser";
+import { log } from "../logger";
 
 /**
  * Calculates the next execution time for a cron expression
@@ -65,7 +66,7 @@ export const tickCron = internalMutation({
       !workflow.publishedVersionId ||
       !workflow.activeVersionId
     ) {
-      console.log(
+      log(
         `[Cron Scheduler] Terminating cycle for workflow ${args.workflowId} (inactive or archived)`,
       );
       return;

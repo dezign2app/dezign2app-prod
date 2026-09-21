@@ -34,13 +34,21 @@
         "CLERK_SECRET_KEY",
         "CONVEX_DEPLOY_KEY",
         "GROQ_LLM_MODEL",
-        "CONVEX_SITE_URL"
+        "CONVEX_SITE_URL",
+        "LOG",
+        "LOG_LEVEL",
+        "NEXT_PUBLIC_LOG",
+        "NEXT_PUBLIC_LOG_LEVEL"
       ]
     },
     "lint": {
       "dependsOn": ["^lint"]
     },
     "@workspace/canvas#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@workspace/logger#build": {
       "dependsOn": ["^build"],
       "outputs": []
     },

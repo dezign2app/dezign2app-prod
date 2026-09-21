@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { api } from "@workspace/backend/_generated/api";
 import type { Id } from "@workspace/backend/_generated/dataModel";
 import { useSubscriptionAccess } from "@/providers/subscription-access-context";
+import { log } from "@/lib/logger";
 import { useHistory } from "../use-history";
 import type {
   WorkflowBottomTab,
@@ -119,7 +120,7 @@ export const useWorkflowEditor = (workflowId: string) => {
     }
 
     if (serverSignature !== lastPersistedGraphSignatureRef.current) {
-      console.log("🔄 Remote change detected, syncing canvas...");
+      log("🔄 Remote change detected, syncing canvas...");
       lastPersistedGraphSignatureRef.current = serverSignature;
 
       setNodes(nextNodes);

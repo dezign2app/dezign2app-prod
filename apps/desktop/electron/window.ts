@@ -8,6 +8,7 @@ import {
   DEFAULT_PORT,
   getAppIcon,
 } from "./constants";
+import { log } from "./logger";
 
 let mainWindow: BrowserWindow | null = null;
 let currentServerPort: number = DEFAULT_PORT;
@@ -46,7 +47,7 @@ export async function detectDevServerUrl(
         });
         clearTimeout(timeout);
         if (res.status >= 200 && res.status < 500) {
-          console.log(`[window] Detected active Next.js dev server on port ${port} (${host})`);
+          log(`[window] Detected active Next.js dev server on port ${port} (${host})`);
           return `http://127.0.0.1:${port}`;
         }
       } catch {
@@ -90,7 +91,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
   // Forward renderer console logs to main process stdout
   mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
     const levelNames = ["VERBOSE", "INFO", "WARN", "ERROR"];
-    console.log(`[renderer:${levelNames[level] || level}] ${message} (${sourceId}:${line})`);
+    log(`[renderer:${levelNames[level] || level}] ${message} (${sourceId}:${line})`);
   });
 
   // Handle load failures gracefully (e.g. while dev server or Turbopack is compiling)
@@ -223,7 +224,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       if (!mainWindow || mainWindow.isDestroyed()) return;
       try {
-        console.log(`[window] Loading ${targetUrl} (attempt ${attempt}/${maxRetries})...`);
+        log(`[window] Loading ${targetUrl} (attempt ${attempt}/${maxRetries})...`);
         if (attempt > 1) {
           updateStatus(`Connecting to workspace engine (attempt ${attempt}/${maxRetries})...`);
         }
@@ -311,7 +312,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
         if (portMatch?.[1]) currentServerPort = parseInt(portMatch[1], 10);
 
         try {
-          console.log(`[window] Connecting to dev server at ${discoveredUrl}/projects...`);
+          log(`[window] Connecting to dev server at ${discoveredUrl}/projects...`);
           updateStatus(`Connecting to ${discoveredUrl}...`);
           await mainWindow.loadURL(`${discoveredUrl}/projects`);
           return;
@@ -399,7 +400,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     showSplashScreen("Connecting to Dezign2App...");
     currentAppUrl = PROD_SERVER_URL;
     const targetUrl = `${PROD_SERVER_URL}/projects`;
-    console.log(`[window] Production mode: connecting directly to ${targetUrl}`);
+    log(`[window] Production mode: connecting directly to ${targetUrl}`);
     await loadWithRetry(targetUrl, 20, 1500);
   }
 

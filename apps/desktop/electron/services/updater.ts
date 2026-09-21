@@ -1,6 +1,7 @@
 import { app, dialog } from "electron";
 import { autoUpdater } from "electron-updater";
 import { getMainWindow } from "../window";
+import { log } from "../logger";
 
 let isInitialized = false;
 
@@ -22,17 +23,17 @@ export function initAutoUpdater(): void {
 
   // Log updater activities
   autoUpdater.on("checking-for-update", () => {
-    console.log("[updater] Checking for updates on GitHub Releases...");
+    log("[updater] Checking for updates on GitHub Releases...");
     sendUpdaterStatus("checking");
   });
 
   autoUpdater.on("update-available", (info) => {
-    console.log(`[updater] Update found: v${info.version} (current: v${app.getVersion()})`);
+    log(`[updater] Update found: v${info.version} (current: v${app.getVersion()})`);
     sendUpdaterStatus("available", { version: info.version });
   });
 
   autoUpdater.on("update-not-available", () => {
-    console.log("[updater] App is up to date.");
+    log("[updater] App is up to date.");
     sendUpdaterStatus("not-available");
   });
 
@@ -44,12 +45,12 @@ export function initAutoUpdater(): void {
 
   autoUpdater.on("download-progress", (progress) => {
     const percent = Math.round(progress.percent);
-    console.log(`[updater] Downloading update: ${percent}%`);
+    log(`[updater] Downloading update: ${percent}%`);
     sendUpdaterStatus("downloading", { percent });
   });
 
   autoUpdater.on("update-downloaded", async (info) => {
-    console.log(`[updater] Update v${info.version} downloaded successfully!`);
+    log(`[updater] Update v${info.version} downloaded successfully!`);
     sendUpdaterStatus("downloaded", { version: info.version });
 
     const mainWindow = getMainWindow();

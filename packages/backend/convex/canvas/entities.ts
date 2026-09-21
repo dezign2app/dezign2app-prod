@@ -5,6 +5,7 @@ import {
   backendIdentityProviderDataValidator,
   backendEventDataValidator,
 } from "../schema/canvasValidators";
+import { log } from "../logger";
 
 export const upsertBackendEndpoint = mutation({
   args: {
@@ -17,7 +18,7 @@ export const upsertBackendEndpoint = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 
-    console.log(
+    log(
       "upsertBackendEndpoint called with:",
       args.endpointId,
       "businessLogic:",

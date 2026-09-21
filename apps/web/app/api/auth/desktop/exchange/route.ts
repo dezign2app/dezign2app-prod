@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { consumeTicket } from "@/lib/desktop-auth";
+import { log } from "@/lib/logger";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
   try {
     const { ticket } = await req.json();
 
-    console.log("[Desktop Auth Exchange:route] Received exchange request. Ticket preview:", {
+    log("[Desktop Auth Exchange:route] Received exchange request. Ticket preview:", {
       hasTicket: !!ticket,
       preview: ticket ? `${String(ticket).substring(0, 15)}...` : null,
     });
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
     }
 
     let ticketData = consumeTicket(ticket.trim());
-    console.log("[Desktop Auth Exchange:route] consumeTicket local attempt result:", {
+    log("[Desktop Auth Exchange:route] consumeTicket local attempt result:", {
       success: !!ticketData,
       userId: ticketData?.userId,
       hasToken: !!ticketData?.token,
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
         (req.nextUrl.origin.includes(remoteAuthUrl as string) ||
           (Boolean(requestHost) && (remoteAuthUrl as string).includes(requestHost)));
 
-      console.log("[Desktop Auth Exchange:route] Local consume failed. Checking remoteAuthUrl:", {
+      log("[Desktop Auth Exchange:route] Local consume failed. Checking remoteAuthUrl:", {
         remoteAuthUrl,
         requestHost,
         isCurrentHost,
@@ -60,16 +61,16 @@ export async function POST(req: NextRequest) {
         !remoteAuthUrl.includes("127.0.0.1")
       ) {
         try {
-          console.log("[Desktop Auth Exchange:route] Forwarding to remote exchange endpoint:", `${remoteAuthUrl}/api/auth/desktop/exchange`);
+          log("[Desktop Auth Exchange:route] Forwarding to remote exchange endpoint:", `${remoteAuthUrl}/api/auth/desktop/exchange`);
           const remoteRes = await fetch(`${remoteAuthUrl}/api/auth/desktop/exchange`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ticket: ticket.trim() }),
           });
-          console.log("[Desktop Auth Exchange:route] Remote exchange status:", remoteRes.status);
+          log("[Desktop Auth Exchange:route] Remote exchange status:", remoteRes.status);
           if (remoteRes.ok) {
             const remoteData = await remoteRes.json();
-            console.log("[Desktop Auth Exchange:route] Remote exchange data received:", {
+            log("[Desktop Auth Exchange:route] Remote exchange data received:", {
               hasToken: !!remoteData?.token,
               userId: remoteData?.userId,
             });
@@ -95,7 +96,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log("[Desktop Auth Exchange:route] Exchange successful! Returning token for userId:", ticketData.userId);
+    log("[Desktop Auth Exchange:route] Exchange successful! Returning token for userId:", ticketData.userId);
 
     const response = NextResponse.json(
       {

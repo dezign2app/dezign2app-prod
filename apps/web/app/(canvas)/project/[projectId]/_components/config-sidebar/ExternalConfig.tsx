@@ -17,6 +17,7 @@ import {
 import { ExternalEnvVarsDrawer } from "../backend-nodes/graph-nodes/nodes/ai-security/ExternalEnvVarsDrawer";
 import { toVarName } from "@/lib/compiler/utils";
 import { getLocalEnvVariable, fetchLocalEnvVariable } from "@/lib/utils/localEnvSync";
+import { log } from "@/lib/logger";
 
 import {
   HttpMethod,
@@ -377,15 +378,17 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({ id: _id, nodeId 
       dispatchedBody = requestBody;
 
       // Prominently log the exact API parameters to browser console
-      console.group(`🚀 [EXTERNAL API TEST DISPATCH] ${method} ${resolvedUrl}`);
-      console.log("Target URL:", resolvedUrl);
-      console.log("HTTP Method:", method);
-      console.table(requestHeaders);
-      console.log("Dispatched Headers Object:", requestHeaders);
-      if (requestBody !== undefined) {
-        console.log("Dispatched Body:", requestBody);
+      if (log.isLevelEnabled("debug")) {
+        console.group(`🚀 [EXTERNAL API TEST DISPATCH] ${method} ${resolvedUrl}`);
+        log("Target URL:", resolvedUrl);
+        log("HTTP Method:", method);
+        console.table(requestHeaders);
+        log("Dispatched Headers Object:", requestHeaders);
+        if (requestBody !== undefined) {
+          log("Dispatched Body:", requestBody);
+        }
+        console.groupEnd();
       }
-      console.groupEnd();
 
       const startTime = performance.now();
       const controller = new AbortController();
@@ -425,7 +428,7 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({ id: _id, nodeId 
         responseData = await response.text();
       }
 
-      console.log("[External API Call Direct Response]", {
+      log("[External API Call Direct Response]", {
         status: response.status,
         statusText: response.statusText,
         timeMs,

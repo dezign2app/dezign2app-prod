@@ -4,6 +4,7 @@ import { useCallback, useMemo } from "react";
 import { isElectron, getElectronAPI } from "@/lib/electron";
 import { toast } from "sonner";
 import type { BackendNode } from "@workspace/canvas";
+import { log } from "@/lib/logger";
 
 interface UsePageCodeSyncOptions {
   connectedWebAppNode: BackendNode | null | undefined;
@@ -90,7 +91,7 @@ export function usePageCodeSync({
           try {
             const res = await electronApi.fs.readFile(outputDir, relPath);
             if (res?.success && typeof res.content === "string" && res.content.trim().length > 0) {
-              console.log(`[PageEditor] Loaded live code from disk (${res.path}): ${res.content.length} chars`);
+              log(`[PageEditor] Loaded live code from disk (${res.path}): ${res.content.length} chars`);
               return { code: res.content, source: "disk", filePath: relPath };
             }
           } catch {}
@@ -100,7 +101,7 @@ export function usePageCodeSync({
 
     // 2. Try Convex stored pageSourceCode
     if (node?.data?.pageSourceCode && typeof node.data.pageSourceCode === "string" && node.data.pageSourceCode.trim().length > 0) {
-      console.log(`[PageEditor] Loaded code from Convex node data: ${node.data.pageSourceCode.length} chars`);
+      log(`[PageEditor] Loaded code from Convex node data: ${node.data.pageSourceCode.length} chars`);
       return { code: node.data.pageSourceCode, source: "convex", filePath: defaultFilePath };
     }
 

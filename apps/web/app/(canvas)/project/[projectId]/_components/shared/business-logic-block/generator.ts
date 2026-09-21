@@ -6,6 +6,7 @@ import {
 } from "./types";
 import { toVarName, toPascalCase, toTopicKey } from "./utils";
 import { CanvasEntityColumn } from "@workspace/canvas/types";
+import { log } from "@/lib/logger";
 
 export interface GenerateEndpointCodeParams {
   prompt?: string;
@@ -344,7 +345,7 @@ export function generateSyncedEndpointCode({
 }
 
 export async function generateCodeWithAI(params: GenerateEndpointCodeParams): Promise<string> {
-  console.log("[generateCodeWithAI] Requesting code generation with params:", {
+  log("[generateCodeWithAI] Requesting code generation with params:", {
     contextType: params.contextType,
     dbType: params.dbType,
     tableName: params.tableName,
@@ -363,20 +364,20 @@ export async function generateCodeWithAI(params: GenerateEndpointCodeParams): Pr
       body: JSON.stringify(params),
     });
 
-    console.log("[generateCodeWithAI] API Response status:", res.status, res.statusText);
+    log("[generateCodeWithAI] API Response status:", res.status, res.statusText);
 
     if (res.ok) {
       const data = await res.json();
-      console.log("[generateCodeWithAI] Received JSON response source:", data.source || "unknown");
+      log("[generateCodeWithAI] Received JSON response source:", data.source || "unknown");
       if (data.code && typeof data.code === "string" && data.code.trim()) {
         return data.code.trim();
       }
     } else {
       const errText = await res.text();
-      console.error("[generateCodeWithAI] API route returned error:", res.status, errText);
+      log.error("[generateCodeWithAI] API route returned error:", res.status, errText);
     }
   } catch (err) {
-    console.warn("[generateCodeWithAI] Request failed with exception, falling back to deterministic generator:", err);
+    log.warn("[generateCodeWithAI] Request failed with exception, falling back to deterministic generator:", err);
   }
 
   // Fallback to deterministic code generator
@@ -386,11 +387,11 @@ export async function generateCodeWithAI(params: GenerateEndpointCodeParams): Pr
     params.tableSchema ||
     params.operation
   ) {
-    console.log("[generateCodeWithAI] Executing client-side deterministic fallback for database operation");
+    log("[generateCodeWithAI] Executing client-side deterministic fallback for database operation");
     return generateSyncedDbOperationCode(params);
   }
 
-  console.log("[generateCodeWithAI] Executing client-side deterministic fallback generator for endpoint");
+  log("[generateCodeWithAI] Executing client-side deterministic fallback generator for endpoint");
   return generateSyncedEndpointCode(params);
 }
 
