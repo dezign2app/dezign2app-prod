@@ -3,19 +3,23 @@ name: Build & Release Desktop App
 on:
   push:
     branches:
-      - main         # Builds automatically as soon as a PR is merged into main
+      - main         # Build only (artifacts, no release) on every merge
     tags:
-      - "v*.*.*"     # Builds & publishes to GitHub Releases on version tags
-  workflow_dispatch: # Allows manual trigger from GitHub Actions UI
+      - "v*.*.*"     # Build AND publish a GitHub Release on version tags
+  workflow_dispatch: # Manual trigger from the Actions UI
     inputs:
       publish:
         description: "Publish to GitHub Releases?"
         required: false
         default: true
         type: boolean
+      tag:
+        description: "Release tag (e.g. v0.1.0). Leave blank to use version in apps/desktop/package.json"
+        required: false
+        type: string
 
 permissions:
-  contents: write    # Grants permission to create and upload to GitHub Releases
+  contents: write # Needed to create the release and upload assets
 
 jobs:
   build:
@@ -53,12 +57,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # ── 5. Build, Stage & Package Desktop App ──────────────────────────
+      # Always build with --publish never. The dedicated release job below handles the publishing.
       - name: Build & Package Desktop App
         working-directory: apps/desktop
-        run: node scripts/build.js --prod ${{ matrix.target_flag }} ${{ (startsWith(github.ref, 'refs/tags/') || inputs.publish == true) && '--publish always' || '--publish never' }}
+        run: node scripts/build.js --prod ${{ matrix.target_flag }} --publish never
         env:
-          # Automatically provided by GitHub Actions for publishing releases
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Prevent macOS build failure if no Apple Developer Certificate is configured
           CSC_IDENTITY_AUTO_DISCOVERY: false
           # Production Web Environment Variables
@@ -71,15 +74,75 @@ jobs:
           NEXT_PUBLIC_DESKTOP_AUTH_URL: ${{ secrets.NEXT_PUBLIC_DESKTOP_AUTH_URL }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
 
-      # ── 6. Upload release artifacts ────────────────────────────────────
-      - name: Upload release artifacts
+      # ── 6. List build output ───────────────────────────────────────────
+      - name: List build output
+        shell: bash
+        run: ls -la apps/desktop/release || true
+
+      # ── 7. Upload CI build artifacts ───────────────────────────────────
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v6
         with:
           name: desktop-${{ matrix.os }}
           path: |
             apps/desktop/release/*.exe
             apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
             apps/desktop/release/*.AppImage
             apps/desktop/release/*.deb
-          if-no-files-found: ignore
+            apps/desktop/release/*.blockmap
+            apps/desktop/release/latest*.yml
+          if-no-files-found: error
           retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    # Only publish for version tags, or manual runs where "publish" is checked
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish)
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="$GITHUB_REF_NAME"
+          elif [[ -n "$INPUT_TAG" ]]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="v$(node -p "require('./apps/desktop/package.json').version")"
+          fi
+          echo "Releasing as $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v6
+        with:
+          pattern: desktop-*
+          path: dist
+          merge-multiple: true
+
+      - name: List files to release
+        run: ls -la dist
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.tag.outputs.tag }}
+          generate_release_notes: true
+          draft: false
+          fail_on_unmatched_files: true
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
