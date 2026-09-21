@@ -25,7 +25,7 @@ import {
 } from "../../common";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { parsePageRoute, normalizePageRoute, arePageRoutesEqual, WebAppZone } from "@workspace/canvas";
-import { RealtimeConnection, ClientDeliveryProtocol } from "@workspace/canvas/types";
+import { RealtimeConnection, ClientDeliveryProtocol, Endpoint } from "@workspace/canvas/types";
 import { SectionList, RealtimeConnectionList, useZoneHandLayout } from "./web-page";
 import { NodeDeletionDialog } from "@/app/(canvas)/project/[projectId]/_components/NodeDeletionDialog";
 
@@ -38,6 +38,7 @@ export const WebPageNode = ({
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
+  const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const simulation = useSimulationNodeState(id);
   const borderClass = getSimulationNodeBorderClass(
     simulation,
@@ -281,6 +282,75 @@ export const WebPageNode = ({
           ...data,
           sections: nextSections,
           realtimeConnections: migrated,
+        },
+      });
+    }
+  }, [id, data, updateNode]);
+
+  // Auto-clean any default or stale auth headers from page and action events
+  React.useEffect(() => {
+    let nodeChanged = false;
+    let nextHeaders = data.headers;
+    let nextSections = data.sections;
+
+    // 1. Clean data.headers unconditionally
+    if (nextHeaders && nextHeaders.length > 0) {
+      const filtered = nextHeaders.filter(
+        (h) =>
+          h.name?.toLowerCase() !== "authorization" &&
+          h.id !== "auth-bearer-header" &&
+          !h.id?.startsWith("auth-"),
+      );
+      if (filtered.length !== nextHeaders.length) {
+        nextHeaders = filtered;
+        nodeChanged = true;
+      }
+    }
+
+    // 2. Clean all actions in sections unconditionally
+    if (nextSections && nextSections.length > 0) {
+      const updatedSections = nextSections.map((sec) => {
+        let secChanged = false;
+        const updatedActions = (sec.actions || []).map((act) => {
+          if (!act.headers || act.headers.length === 0) return act;
+          const hasAuth = act.headers.some(
+            (h) =>
+              h.name?.toLowerCase() === "authorization" ||
+              h.id === "auth-bearer-header" ||
+              h.id?.startsWith("auth-"),
+          );
+          if (!hasAuth) return act;
+
+          secChanged = true;
+          return {
+            ...act,
+            headers: act.headers.filter(
+              (h) =>
+                h.name?.toLowerCase() !== "authorization" &&
+                h.id !== "auth-bearer-header" &&
+                !h.id?.startsWith("auth-"),
+            ),
+          };
+        });
+
+        if (secChanged) {
+          nodeChanged = true;
+          return { ...sec, actions: updatedActions };
+        }
+        return sec;
+      });
+
+      if (nodeChanged) {
+        nextSections = updatedSections;
+      }
+    }
+
+    if (nodeChanged) {
+      updateNode(id, {
+        data: {
+          ...data,
+          headers: nextHeaders,
+          sections: nextSections,
         },
       });
     }

@@ -6,7 +6,7 @@ import { useMutation } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { BackendNode, PageSection } from "@/types/canvas";
+import { BackendNode, PageSection, Parameter } from "@/types/canvas";
 import { Tabs } from "@workspace/ui/components/tabs";
 import { useTerminalWorkspace } from "../terminal/hooks/useTerminalWorkspace";
 import { useWebPageCodeMismatch } from "./useWebPageCodeMismatch";
@@ -130,6 +130,27 @@ export const WebPageConfig = ({
     isProtected,
   });
 
+  // Auto-clean any default or stale auth headers stored on page data
+  React.useEffect(() => {
+    if (data.headers && data.headers.length > 0) {
+      const hasAuth = data.headers.some(
+        (h: Parameter) =>
+          h.name?.toLowerCase() === "authorization" ||
+          h.id === "auth-bearer-header" ||
+          h.id?.startsWith("auth-"),
+      );
+      if (hasAuth) {
+        const cleaned = data.headers.filter(
+          (h: Parameter) =>
+            h.name?.toLowerCase() !== "authorization" &&
+            h.id !== "auth-bearer-header" &&
+            !h.id?.startsWith("auth-"),
+        );
+        updateData({ headers: cleaned });
+      }
+    }
+  }, [data.headers]);
+
   // 4. AI Code Generation
   const { isGeneratingAi, handleGenerateAiCode } = useWebPageAiGeneration({
     nodeId,
@@ -216,7 +237,16 @@ export const WebPageConfig = ({
           effectiveQueryParams={effectiveQueryParams}
           effectiveRequestBody={effectiveRequestBody}
           effectiveRequestBodyMode={effectiveRequestBodyMode}
-          onUpdateHeaders={(headers) => updateData({ headers })}
+          onUpdateHeaders={(headers) =>
+            updateData({
+              headers: headers.filter(
+                (h: Parameter) =>
+                  h.name?.toLowerCase() !== "authorization" &&
+                  h.id !== "auth-bearer-header" &&
+                  !h.id?.startsWith("auth-"),
+              ),
+            })
+          }
           onUpdatePathParams={(pathParams) => updateData({ pathParams })}
           onUpdateQueryParams={(queryParams) => updateData({ queryParams })}
           onUpdateRequestBody={(requestBody) => updateData({ requestBody })}

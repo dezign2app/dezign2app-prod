@@ -284,15 +284,85 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   const isWebrtc = eventType === "webrtc";
   const isPolling = eventType === "polling";
 
-  const isAuthRequired = Boolean(endpoint ? endpoint.requireAuth !== false : parentNode?.data?.requireAuth !== false);
+  const isParentProtected = React.useMemo(() => {
+    if (!parentNode) return false;
+    const pData = parentNode.data;
+    if (pData?.useZoneDefault === false && pData?.protectionOverride) {
+      return pData.protectionOverride.accessType === "protected";
+    }
+    if (pData?.accessType && pData.accessType !== "public") {
+      return true;
+    }
+    const webAppEdge = edges.find((e) => {
+      const isTarget = e.target === parentNode.id;
+      const isSource = e.source === parentNode.id;
+      if (!isTarget && !isSource) return false;
+      const otherId = isSource ? e.target : e.source;
+      const otherNode = nodes.find((n) => n.id === otherId);
+      return otherNode?.type === "webApp";
+    });
+    if (webAppEdge) {
+      const handleId =
+        webAppEdge.source === parentNode.id
+          ? webAppEdge.targetHandle
+          : webAppEdge.sourceHandle;
+      if (
+        handleId === "private-in" ||
+        handleId?.includes("private") ||
+        handleId?.includes("protect")
+      ) {
+        return true;
+      }
+    }
+    return Boolean(pData?.requireAuth);
+  }, [parentNode, edges, nodes]);
+
+  const isExternalTarget = linkedTargetNode?.type === "external";
+  const isAuthRequired = Boolean(
+    !isExternalTarget &&
+      (endpoint
+        ? endpoint.requireAuth !== undefined
+          ? endpoint.requireAuth
+          : isParentProtected
+        : parentNode?.data?.requireAuth !== undefined
+        ? parentNode.data.requireAuth
+        : isParentProtected),
+  );
 
   const headers: Parameter[] = React.useMemo(() => {
-    let baseHeaders = endpoint?.headers?.length ? [...endpoint.headers] : item?.headers?.length ? [...item.headers] : [];
-    if (isAuthRequired && !baseHeaders.some((h) => h.name.toLowerCase() === "authorization")) {
-      baseHeaders = [{ id: "auth-bearer-header", name: "Authorization", type: "string", required: true, value: "Bearer <token>" }, ...baseHeaders];
+    const baseHeaders = endpoint?.headers?.length
+      ? [...endpoint.headers]
+      : item?.headers?.length
+      ? [...item.headers]
+      : [];
+    return baseHeaders.filter(
+      (h) =>
+        h.name?.toLowerCase() !== "authorization" &&
+        h.id !== "auth-bearer-header" &&
+        !h.id?.startsWith("auth-"),
+    );
+  }, [endpoint?.headers, item?.headers]);
+
+  // Auto-clean any default/stale auth headers from the action's headers
+  React.useEffect(() => {
+    if (item?.headers && item.headers.length > 0) {
+      const hasAuth = item.headers.some(
+        (h) =>
+          h.name?.toLowerCase() === "authorization" ||
+          h.id === "auth-bearer-header" ||
+          h.id?.startsWith("auth-"),
+      );
+      if (hasAuth) {
+        const cleaned = item.headers.filter(
+          (h) =>
+            h.name?.toLowerCase() !== "authorization" &&
+            h.id !== "auth-bearer-header" &&
+            !h.id?.startsWith("auth-"),
+        );
+        updateActionInParent({ headers: cleaned });
+      }
     }
-    return baseHeaders;
-  }, [endpoint?.headers, item?.headers, isAuthRequired]);
+  }, [item?.headers]);
 
   const pathParams: Parameter[] = React.useMemo(() => (endpoint?.pathParams?.length ? endpoint.pathParams : item?.pathParams || []), [endpoint?.pathParams, item?.pathParams]);
   const queryParams: Parameter[] = React.useMemo(() => (endpoint?.queryParams?.length ? endpoint.queryParams : item?.queryParams || []), [endpoint?.queryParams, item?.queryParams]);
@@ -515,7 +585,16 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
             requestBody={requestBody}
             requestBodyMode={requestBodyMode}
             connectedEndpoint={endpoint}
-            onHeadersChange={(h) => updateEventFields({ headers: h })}
+            onHeadersChange={(h) =>
+              updateEventFields({
+                headers: h.filter(
+                  (x) =>
+                    x.name?.toLowerCase() !== "authorization" &&
+                    x.id !== "auth-bearer-header" &&
+                    !x.id?.startsWith("auth-"),
+                ),
+              })
+            }
             onPathParamsChange={(p) => updateEventFields({ pathParams: p })}
             onQueryParamsChange={(q) => updateEventFields({ queryParams: q })}
             onRequestBodyChange={(r) => updateEventFields({ requestBody: r })}
