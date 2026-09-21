@@ -11,6 +11,20 @@ const convexSiteUrl =
   (convexUrl ? convexUrl.replace(".convex.cloud", ".convex.site") : "");
 
 async function handleProxy(req: NextRequest) {
+  const requestUrl = new URL(req.url);
+  const path = `${requestUrl.pathname}${requestUrl.search}`;
+
+  // ── proxy init debug (logged once per cold start) ──────────────────────────
+  console.log("[auth proxy] ── request ──────────────────────────────────────────");
+  console.log("[auth proxy]  path              :", path);
+  console.log("[auth proxy]  method            :", req.method);
+  console.log("[auth proxy]  convexSiteUrl     :", convexSiteUrl || "(EMPTY - MISSING ENV VAR)");
+  console.log("[auth proxy]  NEXT_PUBLIC_APP_URL:", process.env.NEXT_PUBLIC_APP_URL ?? "(unset)");
+  console.log("[auth proxy]  x-electron-app    :", req.headers.get("x-electron-app") ?? "not set");
+  console.log("[auth proxy]  origin header     :", req.headers.get("origin") ?? "not set");
+  console.log("[auth proxy]  host header       :", req.headers.get("host") ?? "not set");
+  console.log("[auth proxy]  request hostname  :", requestUrl.hostname);
+
   if (!convexSiteUrl) {
     console.error("[auth proxy] Missing NEXT_PUBLIC_CONVEX_SITE_URL or NEXT_PUBLIC_CONVEX_URL");
     return NextResponse.json(
@@ -19,8 +33,7 @@ async function handleProxy(req: NextRequest) {
     );
   }
 
-  const requestUrl = new URL(req.url);
-  const nextUrl = `${convexSiteUrl}${requestUrl.pathname}${requestUrl.search}`;
+  const nextUrl = `${convexSiteUrl}${path}`;
   const headers = new Headers(req.headers);
 
   // Strip hop-by-hop headers
@@ -36,6 +49,9 @@ async function handleProxy(req: NextRequest) {
     /(?:^|;\s*)(?:__Secure-)?better-auth\.session_token=([^;]+)/,
   );
   const sessionToken = tokenMatch ? tokenMatch[1] : null;
+
+  console.log("[auth proxy]  cookie present?   :", rawCookie ? "YES" : "NO");
+  console.log("[auth proxy]  session token?    :", sessionToken ? `YES (${sessionToken.substring(0, 12)}...)` : "NO - this will cause 401/500");
 
   if (sessionToken) {
     let normalizedCookie = rawCookie;
@@ -58,6 +74,8 @@ async function handleProxy(req: NextRequest) {
     requestUrl.hostname === "localhost" ||
     req.headers.get("x-electron-app") === "1";
 
+  console.log("[auth proxy]  isLoopback?       :", isLoopback);
+
   if (isLoopback && process.env.NEXT_PUBLIC_APP_URL) {
     try {
       const publicHost = new URL(process.env.NEXT_PUBLIC_APP_URL).host;
@@ -65,18 +83,23 @@ async function handleProxy(req: NextRequest) {
       headers.set("x-forwarded-proto", "https");
       headers.set("x-better-auth-forwarded-host", publicHost);
       headers.set("x-better-auth-forwarded-proto", "https");
+      console.log("[auth proxy]  x-forwarded-host  :", publicHost, "(from NEXT_PUBLIC_APP_URL)");
     } catch {
       headers.set("x-forwarded-host", requestUrl.host);
       headers.set("x-forwarded-proto", requestUrl.protocol.replace(/:$/, ""));
       headers.set("x-better-auth-forwarded-host", requestUrl.host);
       headers.set("x-better-auth-forwarded-proto", requestUrl.protocol.replace(/:$/, ""));
+      console.log("[auth proxy]  x-forwarded-host  :", requestUrl.host, "(fallback - NEXT_PUBLIC_APP_URL parse failed)");
     }
   } else {
     headers.set("x-forwarded-host", requestUrl.host);
     headers.set("x-forwarded-proto", requestUrl.protocol.replace(/:$/, ""));
     headers.set("x-better-auth-forwarded-host", requestUrl.host);
     headers.set("x-better-auth-forwarded-proto", requestUrl.protocol.replace(/:$/, ""));
+    console.log("[auth proxy]  x-forwarded-host  :", requestUrl.host, "(not loopback or no APP_URL)");
   }
+
+  console.log("[auth proxy]  → proxying to    :", nextUrl);
 
   const init: RequestInit = {
     headers,
@@ -92,6 +115,15 @@ async function handleProxy(req: NextRequest) {
   }
 
   const res = await fetch(nextUrl, init);
+
+  console.log("[auth proxy]  ← upstream status :", res.status, res.statusText);
+  if (res.status >= 400) {
+    try {
+      const errBody = await res.clone().text();
+      console.error("[auth proxy]  ← upstream error body:", errBody.substring(0, 500));
+    } catch { /* ignore */ }
+  }
+  console.log("[auth proxy] ─────────────────────────────────────────────────────");
 
   // Clone response headers so we can duplicate un-prefixed cookies for non-HTTPS desktop clients
   const responseHeaders = new Headers(res.headers);

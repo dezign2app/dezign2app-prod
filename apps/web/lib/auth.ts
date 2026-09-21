@@ -20,7 +20,20 @@ const trustedOrigins = [
   process.env.BETTER_AUTH_URL,
   ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",").map((s) => s.trim()) || []),
   "dezign2app://",
+  // Electron prod: Next.js runs on 127.0.0.1 but cookies/requests may come
+  // from either 127.0.0.1 or localhost — whitelist both variants.
+  "http://127.0.0.1:46500",
+  "http://localhost:46500",
 ].filter(Boolean) as string[];
+
+// ── auth.ts init debug ──────────────────────────────────────────────────────
+console.log("[auth.ts] ── Better Auth initialization ──────────────────────────");
+console.log("[auth.ts]  appUrl (baseURL)     :", appUrl ?? "(unset)");
+console.log("[auth.ts]  BETTER_AUTH_URL      :", process.env.BETTER_AUTH_URL ?? "(unset)");
+console.log("[auth.ts]  NEXT_PUBLIC_APP_URL  :", process.env.NEXT_PUBLIC_APP_URL ?? "(unset)");
+console.log("[auth.ts]  BETTER_AUTH_SECRET   :", process.env.BETTER_AUTH_SECRET ? "SET" : "NOT SET (dev fallback)");
+console.log("[auth.ts]  trustedOrigins       :", Array.from(new Set(trustedOrigins)));
+console.log("[auth.ts] ────────────────────────────────────────────────────────");
 
 export const auth = betterAuth({
   appName: "Dezign2App",

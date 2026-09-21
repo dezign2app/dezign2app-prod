@@ -37,6 +37,13 @@ export const createProject = mutation({
   },
   async handler(ctx, args) {
     const identity = await ctx.auth.getUserIdentity();
+    console.log("[createProject] identity:", JSON.stringify({
+      resolved: !!identity,
+      subject: identity?.subject,
+      email: identity?.email,
+      org_id: identity?.org_id,
+      tokenIdentifier: identity?.tokenIdentifier,
+    }));
     if (!identity) {
       throw new ConvexError({
         code: "UNAUTHORIZED",
