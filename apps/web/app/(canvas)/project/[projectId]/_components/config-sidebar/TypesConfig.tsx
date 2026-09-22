@@ -45,10 +45,17 @@ export const TypesConfig: React.FC<TypesConfigProps> = ({
   useEffect(() => {
     if (selectedTypeId) {
       setActiveTypeId(selectedTypeId);
-    } else if (!activeTypeId && types.length > 0) {
-      setActiveTypeId(types[0]?.id);
     }
-  }, [selectedTypeId, types, activeTypeId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTypeId]);
+
+  // Seed to first type on initial mount or when all types are replaced
+  useEffect(() => {
+    setActiveTypeId((prev) => {
+      if (prev && types.some((t) => t.id === prev)) return prev;
+      return types[0]?.id;
+    });
+  }, [types]);
 
   const currentType = useMemo(() => {
     return types.find((t) => t.id === activeTypeId) || types[0];

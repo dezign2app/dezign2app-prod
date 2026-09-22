@@ -91,6 +91,8 @@ export interface GlobalStoreField {
   id: string;
   name: string;
   type: StateVariableType;
+  isArray?: boolean;
+  required?: boolean;
   defaultValue?: JsonValue;
   description?: string;
 }

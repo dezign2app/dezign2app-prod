@@ -36,12 +36,26 @@ const StoreFieldRow = React.memo(function StoreFieldRow({
     [field.id, onUpdateField],
   );
 
+  // Resolve isArray and baseType (strip trailing [] if present)
+  const isArray = Boolean(field.isArray || field.type?.endsWith("[]"));
+  const baseType = (field.type || "string").replace(/\[\]$/, "");
+
   const handleTypeChange = useCallback(
-    (val: GlobalStoreField["type"]) => {
-      onUpdateField(field.id, { type: val });
+    (selectedBase: string) => {
+      const cleanBase = selectedBase.replace(/\[\]$/, "");
+      const newType = isArray ? `${cleanBase}[]` : cleanBase;
+      onUpdateField(field.id, { type: newType, isArray });
     },
-    [field.id, onUpdateField],
+    [field.id, isArray, onUpdateField],
   );
+
+  const handleToggleArray = useCallback(() => {
+    if (isArray) {
+      onUpdateField(field.id, { type: baseType, isArray: false, defaultValue: undefined });
+    } else {
+      onUpdateField(field.id, { type: `${baseType}[]`, isArray: true, defaultValue: [] });
+    }
+  }, [field.id, isArray, baseType, onUpdateField]);
 
   const handleRemove = useCallback(() => {
     onRemoveField(field.id);
@@ -67,44 +81,46 @@ const StoreFieldRow = React.memo(function StoreFieldRow({
       let val: JsonValue | undefined = raw;
       if (raw === "") {
         val = undefined;
-      } else if (field.type === "number") {
+      } else if (isArray || baseType === "object") {
+        // Arrays and objects: try to parse as JSON
+        try {
+          val = JSON.parse(raw);
+        } catch {
+          val = raw;
+        }
+      } else if (baseType === "number") {
         if (raw.trim() === "" || raw === "-") {
           val = undefined;
         } else {
           const num = Number(raw);
           val = isNaN(num) ? raw : num;
         }
-      } else if (field.type === "boolean") {
+      } else if (baseType === "boolean") {
         const lower = raw.trim().toLowerCase();
         if (lower === "true") val = true;
         else if (lower === "false") val = false;
         else val = raw;
-      } else if (field.type === "object" || field.type === "array") {
-        try {
-          val = JSON.parse(raw);
-        } catch {
-          val = raw;
-        }
       }
       onUpdateField(field.id, { defaultValue: val });
     },
-    [field.id, field.type, onUpdateField],
+    [field.id, isArray, baseType, onUpdateField],
   );
 
   const placeholder = useMemo(() => {
-    switch (field.type) {
+    if (isArray) return `e.g. [{...}]`;
+    switch (baseType) {
       case "number":
         return "e.g. 0";
       case "boolean":
         return "e.g. false";
       case "string":
         return 'e.g. "default text"';
-      case "array":
-        return "e.g. []";
+      case "object":
+        return "e.g. {}";
       default:
-        return "e.g. null or {}";
+        return "e.g. null";
     }
-  }, [field.type]);
+  }, [isArray, baseType]);
 
   return (
     <div
@@ -125,10 +141,42 @@ const StoreFieldRow = React.memo(function StoreFieldRow({
           )}
         />
         <TypeCombobox
-          value={field.type}
+          value={baseType}
           onValueChange={handleTypeChange}
           className="h-7 w-28 text-xs font-mono"
         />
+        {/* Array [] toggle — same UX as TypesConfig TypePropertyRow */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          title={isArray ? "Array type active (click to make single)" : "Single value (click to make array [])"}
+          className={cn(
+            "h-7 px-2 font-mono text-xs font-bold shrink-0 rounded-full transition-all cursor-pointer",
+            isArray
+              ? "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 ring-1 ring-primary/30"
+              : "bg-secondary/60 text-muted-foreground/80 hover:bg-secondary hover:text-foreground border border-border/40",
+          )}
+          onClick={handleToggleArray}
+        >
+          []
+        </Button>
+        {/* Optional ? toggle — same UX as TypesConfig TypePropertyRow */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          title={field.required === false ? "Optional (?) active — click to make required" : "Required — click to make optional (?)"}
+          className={cn(
+            "h-7 px-2.5 font-mono text-xs font-bold shrink-0 rounded-full transition-all cursor-pointer",
+            field.required === false
+              ? "bg-amber-500/20 text-amber-500 border border-amber-500/40 shadow-xs"
+              : "bg-secondary/60 text-muted-foreground/80 hover:bg-secondary hover:text-foreground border border-border/40",
+          )}
+          onClick={() => onUpdateField(field.id, { required: field.required === false ? true : false })}
+        >
+          ?
+        </Button>
         <Button
           type="button"
           variant="ghost"
