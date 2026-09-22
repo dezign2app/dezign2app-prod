@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { components } from "./_generated/api";
+import { isOrgSubscriptionActive } from "./auth_guards";
 
 export const handleCheckoutCompleted = mutation({
   args: {
@@ -250,6 +251,22 @@ export const handleSubscriptionEvent = mutation({
         creemSubscriptionId: data.id,
       });
     }
+
+    // Sync owned organizations that rely on this owner's personal subscription
+    const ownedOrgBillings = await ctx.db
+      .query("organization_billing")
+      .withIndex("by_owner", (q) => q.eq("ownerUserId", user._id))
+      .collect();
+
+    for (const ob of ownedOrgBillings) {
+      if (!ob.creemSubscriptionId) {
+        await ctx.db.patch(ob._id, {
+          status: newStatus === "active" || newStatus === "trialing" ? "active" : "canceled",
+          updatedAt: Date.now(),
+        });
+      }
+    }
+
     return { success: true };
   },
 });
@@ -298,6 +315,22 @@ export const handleSubscriptionExpired = mutation({
         creemSubscriptionId: data.id,
       });
     }
+
+    // Sync owned organizations to inactive/expired
+    const ownedOrgBillings = await ctx.db
+      .query("organization_billing")
+      .withIndex("by_owner", (q) => q.eq("ownerUserId", user._id))
+      .collect();
+
+    for (const ob of ownedOrgBillings) {
+      if (!ob.creemSubscriptionId) {
+        await ctx.db.patch(ob._id, {
+          status: "expired",
+          updatedAt: Date.now(),
+        });
+      }
+    }
+
     return { success: true };
   },
 });
@@ -341,13 +374,24 @@ export const ensureOrgBilling = mutation({
     const totalSeats = Math.max(1, ebSeats);
     const extraSeats = Math.max(0, totalSeats - 1);
 
+    // Check if owner has active subscription or early believer status
+    const userSubs = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    const hasActiveSub = userSubs.some(
+      (s) => s.status === "active" || s.status === "trialing",
+    );
+    const hasActiveEb = ebPurchases.some((eb) => eb.status === "active");
+    const isOwnerActive = user.isSystemAdmin || hasActiveSub || hasActiveEb;
+
     const billingId = await ctx.db.insert("organization_billing", {
       organizationId: args.organizationId,
       ownerUserId: user._id,
       baseSeats: 1,
       extraSeats,
       totalSeats,
-      status: "active",
+      status: isOwnerActive ? "active" : "canceled",
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -447,7 +491,12 @@ export const getOrgSeatStatus = query({
     if (orgBilling) {
       totalSeats = orgBilling.totalSeats;
       extraSeats = orgBilling.extraSeats;
-      status = orgBilling.status;
+      if (orgBilling.creemSubscriptionId) {
+        status = orgBilling.status;
+      } else {
+        const isSubActive = await isOrgSubscriptionActive(ctx, args.organizationId);
+        status = isSubActive ? "active" : "inactive";
+      }
     } else {
       // Fallback: Check if owner has early believer seats
       const user = await ctx.db
@@ -470,6 +519,8 @@ export const getOrgSeatStatus = query({
           extraSeats = ebSeats - 1;
         }
       }
+      const isSubActive = await isOrgSubscriptionActive(ctx, args.organizationId);
+      status = isSubActive ? "active" : "inactive";
     }
 
     const usedSeats = memberCount + pendingInviteCount;
@@ -488,6 +539,104 @@ export const getOrgSeatStatus = query({
       isOwner,
       status,
     };
+  },
+});
+
+export const getUserOrganizationsSummary = query({
+  args: {
+    organizationIds: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+
+    const authUserId = identity.subject;
+    const summaries = [];
+
+    for (const orgId of args.organizationIds) {
+      let role = "member";
+      let isOwner = false;
+      try {
+        const member = await ctx.runQuery(
+          components.betterAuth.adapter.findOne,
+          {
+            model: "member",
+            where: [
+              { field: "organizationId", value: orgId },
+              { field: "userId", value: authUserId },
+            ],
+          },
+        );
+        if (!member) continue;
+        role = member.role;
+        isOwner = role === "owner";
+      } catch (e) {
+        continue;
+      }
+
+      let memberCount = 1;
+      let pendingInviteCount = 0;
+      try {
+        const membersRes = await ctx.runQuery(
+          components.betterAuth.adapter.findMany,
+          {
+            model: "member",
+            where: [{ field: "organizationId", value: orgId }],
+            paginationOpts: { cursor: null, numItems: 100 },
+          },
+        );
+        memberCount = membersRes?.page?.length || 1;
+
+        const invitesRes = await ctx.runQuery(
+          components.betterAuth.adapter.findMany,
+          {
+            model: "invitation",
+            where: [
+              { field: "organizationId", value: orgId },
+              { field: "status", value: "pending" },
+            ],
+            paginationOpts: { cursor: null, numItems: 100 },
+          },
+        );
+        pendingInviteCount = invitesRes?.page?.length || 0;
+      } catch (e) {}
+
+      const orgBilling = await ctx.db
+        .query("organization_billing")
+        .withIndex("by_organization", (q) => q.eq("organizationId", orgId))
+        .first();
+
+      let totalSeats = orgBilling?.totalSeats ?? 1;
+      let extraSeats = orgBilling?.extraSeats ?? 0;
+      let baseSeats = orgBilling?.baseSeats ?? 1;
+
+      let isSubActive = false;
+      if (orgBilling?.creemSubscriptionId) {
+        isSubActive =
+          orgBilling.status === "active" || orgBilling.status === "trialing";
+      } else {
+        isSubActive = await isOrgSubscriptionActive(ctx, orgId);
+      }
+
+      const usedSeats = memberCount + pendingInviteCount;
+      const availableSeats = Math.max(0, totalSeats - usedSeats);
+
+      summaries.push({
+        organizationId: orgId,
+        role,
+        isOwner,
+        memberCount,
+        pendingInviteCount,
+        usedSeats,
+        totalSeats,
+        baseSeats,
+        extraSeats,
+        availableSeats,
+        status: isSubActive ? "active" : "inactive",
+      });
+    }
+
+    return summaries;
   },
 });
 

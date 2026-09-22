@@ -33,7 +33,8 @@ export async function isUserAuthorizedForOrg(
 
 /**
  * Checks whether an organization has an active subscription, either via
- * organization_billing or through the organization owner's personal subscription.
+ * organization_billing (with dedicated creemSubscriptionId) or through
+ * the organization owner's personal subscription / early believer status.
  */
 export async function isOrgSubscriptionActive(
   ctx: QueryCtx | MutationCtx,
@@ -44,14 +45,12 @@ export async function isOrgSubscriptionActive(
     .withIndex("by_organization", (q) => q.eq("organizationId", organizationId))
     .first();
 
-  if (
-    orgBilling &&
-    (orgBilling.status === "active" || orgBilling.status === "trialing")
-  ) {
-    return true;
+  // If the organization has a dedicated Creem subscription ID, trust its billing status
+  if (orgBilling?.creemSubscriptionId) {
+    return orgBilling.status === "active" || orgBilling.status === "trialing";
   }
 
-  // Fallback: check if the organization owner has an active subscription
+  // Fallback: check if the organization owner has an active subscription or early believer status
   try {
     const ownerMember = await ctx.runQuery(
       components.betterAuth.adapter.findOne,
@@ -78,9 +77,17 @@ export async function isOrgSubscriptionActive(
           .withIndex("by_user", (q) => q.eq("userId", ownerUser._id))
           .collect();
 
-        return ownerSubs.some(
+        const hasActiveSub = ownerSubs.some(
           (s) => s.status === "active" || s.status === "trialing",
         );
+        if (hasActiveSub) return true;
+
+        const ownerEb = await ctx.db
+          .query("early_believers")
+          .withIndex("by_user", (q) => q.eq("userId", ownerUser._id))
+          .first();
+
+        if (ownerEb && ownerEb.status === "active") return true;
       }
     }
   } catch (e) {
@@ -91,7 +98,7 @@ export async function isOrgSubscriptionActive(
 }
 
 /**
- * Checks whether a user has an active personal subscription or system admin rights.
+ * Checks whether a user has an active personal subscription, early believer status, or system admin rights.
  */
 export async function isUserSubscriptionActive(
   ctx: QueryCtx | MutationCtx,
@@ -106,9 +113,17 @@ export async function isUserSubscriptionActive(
     .withIndex("by_user", (q) => q.eq("userId", user._id))
     .collect();
 
-  return subscriptions.some(
+  const hasActiveSub = subscriptions.some(
     (sub) => sub.status === "active" || sub.status === "trialing",
   );
+  if (hasActiveSub) return true;
+
+  const eb = await ctx.db
+    .query("early_believers")
+    .withIndex("by_user", (q) => q.eq("userId", user._id))
+    .first();
+
+  return !!(eb && eb.status === "active");
 }
 
 /**
