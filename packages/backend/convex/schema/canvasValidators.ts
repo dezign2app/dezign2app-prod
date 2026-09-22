@@ -313,7 +313,57 @@ export const backendTestCaseDataValidator = zodToConvex(
 );
 
 // Edge Data Validator
-export const backendEdgeDataValidator = zodToConvex(edgeDataSchema);
+export const backendEdgeDataValidator = v.object({
+  label: v.optional(v.string()),
+  sequenceOrder: v.optional(v.number()),
+  sourceCardinality: v.optional(v.union(v.literal("1"), v.literal("N"))),
+  targetCardinality: v.optional(v.union(v.literal("1"), v.literal("N"))),
+  resourceKind: v.optional(v.string()),
+  // --- Type Reference Fields ---
+  isTypeReference: v.optional(v.boolean()),
+  isExtensionEdge: v.optional(v.boolean()),
+  baseTypeName: v.optional(v.string()),
+  extendedTypeName: v.optional(v.string()),
+  packageName: v.optional(v.string()),
+  // --- State Store Subscription Fields ---
+  isStateSubscription: v.optional(v.boolean()),
+  storeName: v.optional(v.string()),
+  fieldName: v.optional(v.string()),
+  storeId: v.optional(v.string()),
+  fieldId: v.optional(v.string()),
+  sectionId: v.optional(v.string()),
+  stateObjectId: v.optional(v.string()),
+  // --- Identity Connection Fields ---
+  protocol: v.optional(v.string()),
+  grantType: v.optional(v.string()),
+  clientId: v.optional(v.string()),
+  clientSecret: v.optional(v.string()),
+  redirectUris: v.optional(v.array(v.string())),
+  pkce: v.optional(v.boolean()),
+  scopes: v.optional(v.array(v.string())),
+  responseType: v.optional(v.string()),
+  responseMode: v.optional(v.string()),
+  notes: v.optional(v.string()),
+  // --- LangGraph Route Invocation ---
+  payloadMapping: v.optional(v.record(v.string(), v.string())),
+  preInvokeLogicMode: v.optional(
+    v.union(v.literal("natural_language"), v.literal("code")),
+  ),
+  preInvokePrompt: v.optional(v.string()),
+  preInvokeCode: v.optional(v.string()),
+  responseExecutionMode: v.optional(
+    v.union(v.literal("sync"), v.literal("stream"), v.literal("async_ack")),
+  ),
+  responseOutputMode: v.optional(
+    v.union(v.literal("full"), v.literal("selected")),
+  ),
+  responseFields: v.optional(v.array(v.string())),
+  postInvokeLogicMode: v.optional(
+    v.union(v.literal("natural_language"), v.literal("code")),
+  ),
+  postInvokePrompt: v.optional(v.string()),
+  postInvokeCode: v.optional(v.string()),
+});
 
 // Parameter Validator (Headers, Query Params, Path Params, Field Builder)
 export const backendParameterValidator = v.object({
@@ -694,6 +744,8 @@ export const stateStoreConvexDataValidator = v.object({
         id: v.string(),
         name: v.string(),
         type: v.string(),
+        isArray: v.optional(v.boolean()),
+        required: v.optional(v.boolean()),
         defaultValue: v.optional(v.any()),
         description: v.optional(v.string()),
       }),

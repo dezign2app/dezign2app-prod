@@ -19,6 +19,8 @@ export const StateStoreNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const allNodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
+  const addEdge = useBackendCanvasStore((s) => s.addEdge);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
@@ -152,6 +154,51 @@ export const StateStoreNode = ({
   const fieldCount = data.fields?.length || 0;
   const actionCount = data.actions?.length || 0;
 
+  // Auto-sync type reference edges between TypesNode and store fields
+  React.useEffect(() => {
+    if (!data.fields || data.fields.length === 0) return;
+    data.fields.forEach((f) => {
+      if (!f.type) return;
+      const baseTypeName = f.type.replace(/\[\]$/, "").trim();
+      if (!baseTypeName || ["string", "number", "boolean", "array", "object", "any"].includes(baseTypeName.toLowerCase())) {
+        return;
+      }
+      const typesNode = allNodes.find(
+        (n) => n.type === "types" && (n.data?.types || []).some((t: any) => t.name === baseTypeName),
+      );
+      if (!typesNode) return;
+      const typeItem = (typesNode.data?.types || []).find((t: any) => t.name === baseTypeName);
+      if (!typeItem) return;
+
+      const expectedSourceHandle = `type-out-${typeItem.id}`;
+      const expectedTargetHandle = `store-field-in-${f.id}`;
+
+      const edgeExists = edges.some(
+        (e) =>
+          e.source === typesNode.id &&
+          e.target === id &&
+          e.sourceHandle === expectedSourceHandle &&
+          e.targetHandle === expectedTargetHandle,
+      );
+
+      if (!edgeExists) {
+        addEdge({
+          id: `edge-type-${typesNode.id}-${typeItem.id}-${id}-${f.id}`,
+          source: typesNode.id,
+          target: id,
+          sourceHandle: expectedSourceHandle,
+          targetHandle: expectedTargetHandle,
+          type: "type-reference",
+          data: {
+            label: typeItem.name,
+            isTypeReference: true,
+            baseTypeName: typeItem.name,
+          },
+        });
+      }
+    });
+  }, [data.fields, id, allNodes, edges, addEdge]);
+
   return (
     <div
       className={cn(
@@ -167,12 +214,14 @@ export const StateStoreNode = ({
       )}
       onDoubleClick={handleOpenConfig}
     >
-      {/* Fallback generic handle for legacy edges */}
+      {/* Node-level target handle for TypesNode / Action connections */}
       <Handle
         type="target"
         position={Position.Left}
         id="store-in"
-        style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+        className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background -left-1.5"
+        style={{ top: "28px" }}
+        title="Connect from TypesNode, Page, or Action"
       />
 
       {/* Header Container */}
@@ -338,6 +387,13 @@ export const StateStoreNode = ({
         {data.fields && data.fields.length > 0 ? (
           data.fields.map((f) => {
             const isDupe = duplicateFieldIds.has(f.id);
+            const isOutputConnected = edges.some(
+              (e) => e.source === id && e.sourceHandle === `store-field-out-${f.id}`,
+            );
+            const isInputConnected = edges.some(
+              (e) => e.target === id && e.targetHandle === `store-field-in-${f.id}`,
+            );
+
             return (
               <div
                 key={f.id}
@@ -348,6 +404,21 @@ export const StateStoreNode = ({
                     : "bg-muted/5 hover:bg-muted/20",
                 )}
               >
+                {/* Left target handle for custom type contract from TypesNode */}
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id={`store-field-in-${f.id}`}
+                  className={cn(
+                    "w-2 h-2 border border-background -left-1 z-10 transition-all",
+                    isInputConnected
+                      ? "!bg-purple-400 ring-2 ring-purple-500/40 opacity-100"
+                      : "!bg-indigo-400 opacity-0 group-hover/field:opacity-100 hover:scale-125",
+                  )}
+                  style={{ top: "50%" }}
+                  title={`${f.name}: Connect custom type contract from TypesNode`}
+                />
+
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   {isDupe ? (
                     <span title={`Duplicate field name "${f.name}". Field names must be unique.`}>
@@ -373,9 +444,14 @@ export const StateStoreNode = ({
                   type="source"
                   position={Position.Right}
                   id={`store-field-out-${f.id}`}
-                  className="w-2 h-2 !bg-cyan-500 border border-background cursor-pointer hover:scale-125 transition-transform -right-1 z-10"
+                  className={cn(
+                    "w-2 h-2 border border-background cursor-pointer hover:scale-125 transition-all -right-1 z-10",
+                    isOutputConnected
+                      ? "!bg-cyan-400 ring-2 ring-cyan-500/40 scale-110"
+                      : "!bg-cyan-500 hover:!bg-cyan-400",
+                  )}
                   style={{ top: "50%" }}
-                  title={`${f.name}: Drag to WebPage to render state`}
+                  title={`${f.name}: Drag to WebPage to render state${isOutputConnected ? " (connected)" : ""}`}
                 />
               </div>
             );

@@ -130,6 +130,7 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
     "page-in",
     "type-in",
     "page-section-in",
+    "store-in",
   ],
   "store-in": [],
   "store-out": [
@@ -217,6 +218,7 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   "type-out→page-in": "reference",
   "type-out→type-in": "type-reference",
   "type-out→page-section-in": "type-reference",
+  "type-out→store-in": "type-reference",
   // State Store wiring edges
   "event-source→store-in": "connection",
   "event-source→action-target": "connection",

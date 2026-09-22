@@ -53,13 +53,17 @@ declare module "@xyflow/react" {
     id: string;
     source: string;
     target: string;
+    sourceHandle?: string | null;
+    targetHandle?: string | null;
+    sourceHandleId?: string | null;
+    targetHandleId?: string | null;
     sourceX: number;
     sourceY: number;
     targetX: number;
     targetY: number;
     sourcePosition: string;
     targetPosition: string;
-    data?: Record<string, unknown>;
+    data?: TEdge extends { data?: infer TData } ? TData : never;
     markerEnd?: string;
     markerStart?: string;
     style?: React.CSSProperties;

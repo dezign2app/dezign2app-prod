@@ -285,6 +285,7 @@ export function classifyHandle(
   if (
     id === "store-in" ||
     id.startsWith("store-in") ||
+    id.startsWith("store-field-in") ||
     id === "populate-in" ||
     id.startsWith("populate-in") ||
     id === "mutate-in" ||
@@ -298,6 +299,7 @@ export function classifyHandle(
   if (
     id === "store-out" ||
     id.startsWith("store-out") ||
+    id.startsWith("store-field-out") ||
     id === "state-out" ||
     id.startsWith("state-out") ||
     id === "populate-out" ||
@@ -312,6 +314,15 @@ export function classifyHandle(
   }
   if (nodeType === "state_store") {
     return handleDirection === "target" ? "store-in" : "store-out";
+  }
+
+  // --- WebPage Section State Subscriptions ---
+  if (
+    id.startsWith("section-state-in-") ||
+    id.startsWith("store-state-in") ||
+    id.startsWith("state-in-")
+  ) {
+    return handleDirection === "source" ? "store-out" : "page-section-in";
   }
 
   if (
