@@ -107,7 +107,7 @@ export const WebPageSectionConfig: React.FC<WebPageSectionConfigProps> = ({ id, 
         <SectionTabsNav
           packagesCount={libraries.length}
           actionsCount={currentActions.length}
-          statesCount={(section.stateObjects?.length || 0) + (states.length || 0)}
+          statesCount={section.stateObjects?.length || 0}
         />
 
         {/* 1. General Tab */}
@@ -190,14 +190,7 @@ export const WebPageSectionConfig: React.FC<WebPageSectionConfigProps> = ({ id, 
             nodeId={nodeId}
             section={section}
             sections={parentNode.data?.sections || []}
-            states={states}
-            renderMode={renderMode}
-            onUpdateStates={handleUpdateStates}
             onUpdateSection={handleUpdate}
-            onUpdateRenderMode={(val) => {
-              setRenderMode(val);
-              handleUpdate({ renderMode: val });
-            }}
           />
         </TabsContent>
 
