@@ -106,11 +106,23 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
   // Also include all state_store nodes in workspace so user can select any store
   const allStateStoreNodes = nodes.filter((n) => n.type === "state_store");
 
-  // Associated stores (prioritizing connected, then all available)
-  let associatedStores = allStateStoreNodes.filter((n) => connectedStoreIds.has(n.id));
-  if (associatedStores.length === 0) {
-    associatedStores = allStateStoreNodes;
-  }
+  // All state stores in the workspace are available for selection!
+  // Sort so stores with selected fields or connections appear first.
+  const associatedStores = [...allStateStoreNodes].sort((a, b) => {
+    const aCount = configuredStates.filter(
+      (s) => s.storeId === a.id || s.storeName === (a.data?.label || a.data?.storeName),
+    ).length;
+    const bCount = configuredStates.filter(
+      (s) => s.storeId === b.id || s.storeName === (b.data?.label || b.data?.storeName),
+    ).length;
+    if (aCount !== bCount) return bCount - aCount;
+    const aConn = connectedStoreIds.has(a.id) ? 1 : 0;
+    const bConn = connectedStoreIds.has(b.id) ? 1 : 0;
+    if (aConn !== bConn) return bConn - aConn;
+    const aName = a.data?.label || a.data?.storeName || "";
+    const bName = b.data?.label || b.data?.storeName || "";
+    return aName.localeCompare(bName);
+  });
 
   // Active store in dialog
   const activeStoreId = selectedStoreId || associatedStores[0]?.id || "";
@@ -479,7 +491,7 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
               <span>Select Store State Fields</span>
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Select an App Store first, then choose which state fields to render on this page.
+              A page can render state fields from multiple stores. Switch between stores below to select fields from each.
             </DialogDescription>
           </DialogHeader>
 
@@ -487,10 +499,54 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
             {/* Step 1: Store Selector */}
             {associatedStores.length > 0 ? (
               <div className="flex flex-col gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-foreground">
-                    1. Select App Store
-                  </Label>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-foreground">
+                      1. Select App Store to Browse
+                    </Label>
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      {associatedStores.length} {associatedStores.length === 1 ? "store" : "stores"} available
+                    </span>
+                  </div>
+
+                  {/* Store Pills for quick 1-click switching */}
+                  {associatedStores.length > 1 && (
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                      {associatedStores.map((store) => {
+                        const name = store.data?.label || store.data?.storeName || "Store";
+                        const selCount = configuredStates.filter(
+                          (s) => s.storeId === store.id || s.storeName === name,
+                        ).length;
+                        const isCurrent = store.id === activeStoreId;
+
+                        return (
+                          <button
+                            key={store.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedStoreId(store.id);
+                              setFieldSearch("");
+                            }}
+                            className={cn(
+                              "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all shrink-0 cursor-pointer",
+                              isCurrent
+                                ? "bg-cyan-500/15 border-cyan-500/50 text-cyan-600 dark:text-cyan-300 font-semibold shadow-sm"
+                                : "bg-muted/30 border-border/60 hover:bg-muted/60 text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            <Database size={11} className={isCurrent ? "text-cyan-500" : "text-muted-foreground"} />
+                            <span className="truncate max-w-[130px]">{name}</span>
+                            {selCount > 0 && (
+                              <span className="px-1.5 py-0.2 text-[9px] rounded-full bg-cyan-500 text-white font-bold leading-none">
+                                {selCount}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   <Select
                     value={activeStoreId}
                     onValueChange={(val) => {
@@ -506,6 +562,9 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
                         const name = store.data?.label || store.data?.storeName || "Store";
                         const fCount = store.data?.fields?.length || 0;
                         const scope = store.data?.scope || "global";
+                        const selCount = configuredStates.filter(
+                          (s) => s.storeId === store.id || s.storeName === name,
+                        ).length;
 
                         return (
                           <SelectItem key={store.id} value={store.id} className="text-xs font-medium">
@@ -517,6 +576,11 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
                               <span className="text-[10px] font-mono text-cyan-500">
                                 • {fCount} {fCount === 1 ? "field" : "fields"}
                               </span>
+                              {selCount > 0 && (
+                                <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25">
+                                  {selCount} selected
+                                </span>
+                              )}
                             </div>
                           </SelectItem>
                         );
@@ -559,13 +623,15 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
                           onClick={() => {
                             setIsPickerOpen(false);
                             setActiveConfigItem({
-                              id: currentStore.id,
-                              nodeId: currentStore.id,
-                              type: "state_store",
+                              id: nodeId,
+                              nodeId: nodeId,
+                              type: "webPage",
+                              initialTab: "state",
+                              selectedStoreId: currentStore.id,
                             });
                           }}
-                          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors ml-1"
-                          title="Configure this store in sidebar"
+                          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors ml-1 cursor-pointer"
+                          title="Configure this store in WebPage State tab"
                         >
                           <Settings size={12} />
                         </button>
@@ -665,14 +731,36 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
             )}
           </div>
 
-          <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
-            <span className="text-xs text-muted-foreground font-mono">
-              {configuredStates.length} {configuredStates.length === 1 ? "field" : "fields"} selected for this page
-            </span>
+          <DialogFooter className="flex flex-col sm:flex-row items-center justify-between gap-2 w-full border-t border-border/40 pt-3">
+            <div className="flex flex-col gap-1 text-xs">
+              <span className="font-semibold text-foreground font-mono">
+                {configuredStates.length} {configuredStates.length === 1 ? "field" : "fields"} selected for this page
+              </span>
+              {configuredStates.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground font-mono">
+                  <span>Stores:</span>
+                  {Array.from(
+                    new Set(configuredStates.map((s) => s.storeName || "Store")),
+                  ).map((sName) => {
+                    const count = configuredStates.filter(
+                      (s) => (s.storeName || "Store") === sName,
+                    ).length;
+                    return (
+                      <span
+                        key={sName}
+                        className="px-1.5 py-0.2 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 font-medium"
+                      >
+                        {sName}: {count}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <Button
               type="button"
               onClick={() => setIsPickerOpen(false)}
-              className="h-8 text-xs"
+              className="h-8 text-xs px-4"
             >
               Done
             </Button>

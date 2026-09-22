@@ -465,6 +465,19 @@ export const webPageEventConvexValidator = v.object({
   ),
 });
 
+// Page State Object Validator
+export const pageStateObjectConvexValidator = v.object({
+  id: v.string(),
+  name: v.string(),
+  type: v.string(),
+  defaultValue: v.optional(v.any()),
+  storeId: v.optional(v.string()),
+  storeNodeId: v.optional(v.string()),
+  storeName: v.optional(v.string()),
+  fieldId: v.optional(v.string()),
+  description: v.optional(v.string()),
+});
+
 // Page Section Validator
 export const pageSectionConvexValidator = v.object({
   id: v.string(),
@@ -487,9 +500,12 @@ export const pageSectionConvexValidator = v.object({
       }),
     ),
   ),
+  stateObjects: v.optional(v.array(pageStateObjectConvexValidator)),
   description: v.optional(v.string()),
   uiPrompt: v.optional(v.string()),
   libraries: v.optional(v.array(v.string())),
+  images: v.optional(v.array(v.string())),
+  primaryImageUrl: v.optional(v.string()),
 });
 
 // Protection Rule Validator
@@ -611,6 +627,8 @@ export const webPageConvexDataValidator = v.object({
   ),
   events: v.optional(v.array(webPageEventConvexValidator)),
   sections: v.optional(v.array(pageSectionConvexValidator)),
+  stateObjects: v.optional(v.array(pageStateObjectConvexValidator)),
+  pageStores: v.optional(v.array(v.any())),
   realtimeConnections: v.optional(v.array(realtimeConnectionConvexValidator)),
   uiPrompt: v.optional(v.string()),
   renderMode: v.optional(v.union(v.literal("server"), v.literal("client"))),

@@ -23,7 +23,16 @@ export interface WebPageSectionConfigProps {
 
 export const WebPageSectionConfig: React.FC<WebPageSectionConfigProps> = ({ id, nodeId }) => {
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
-  const [activeTab, setActiveTab] = useState("general");
+  const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
+  const initialTab = (activeConfigItem?.initialTab as string) || "general";
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  React.useEffect(() => {
+    const nextTab = activeConfigItem?.initialTab as string;
+    if (nextTab) {
+      setActiveTab(nextTab);
+    }
+  }, [activeConfigItem?.initialTab]);
 
   const {
     parentNode,
@@ -98,7 +107,7 @@ export const WebPageSectionConfig: React.FC<WebPageSectionConfigProps> = ({ id, 
         <SectionTabsNav
           packagesCount={libraries.length}
           actionsCount={currentActions.length}
-          statesCount={states.length}
+          statesCount={(section.stateObjects?.length || 0) + (states.length || 0)}
         />
 
         {/* 1. General Tab */}
@@ -178,9 +187,13 @@ export const WebPageSectionConfig: React.FC<WebPageSectionConfigProps> = ({ id, 
         {/* 4. State Tab */}
         <TabsContent value="state" className="flex-1 overflow-hidden p-0 m-0 outline-none flex flex-col">
           <SectionStateTab
+            nodeId={nodeId}
+            section={section}
+            sections={parentNode.data?.sections || []}
             states={states}
             renderMode={renderMode}
             onUpdateStates={handleUpdateStates}
+            onUpdateSection={handleUpdate}
             onUpdateRenderMode={(val) => {
               setRenderMode(val);
               handleUpdate({ renderMode: val });

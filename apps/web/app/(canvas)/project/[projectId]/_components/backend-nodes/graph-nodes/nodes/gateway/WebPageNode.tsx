@@ -1,6 +1,7 @@
 import React from "react";
 import { NodeProps, Position, Handle } from "@xyflow/react";
 import {
+  Database,
   Globe,
   Lock,
   Pencil,
@@ -662,6 +663,19 @@ export const WebPageNode = ({
               {displayRoute}
             </span>
             <div className="flex items-center gap-1 shrink-0">
+              {/* Page State Store shortcut */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveConfigItem({ type: "webPage", id, nodeId: id, initialTab: "state" });
+                }}
+                className="p-1 rounded text-muted-foreground hover:text-cyan-500 hover:bg-cyan-500/10 transition-colors cursor-pointer"
+                title="Page State & Zustand stores"
+              >
+                <Database size={12} />
+              </button>
+
               {/* Page config / settings gear */}
               <button
                 type="button"

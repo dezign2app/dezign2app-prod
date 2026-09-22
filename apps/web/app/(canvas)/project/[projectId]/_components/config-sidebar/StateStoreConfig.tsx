@@ -24,11 +24,13 @@ import {
 export interface StateStoreConfigProps {
   id: string;
   nodeId: string;
+  className?: string;
 }
 
 export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
   id,
   nodeId,
+  className,
 }) => {
   const targetNodeId = nodeId || id;
   const node = useBackendCanvasStore((s) =>
@@ -241,7 +243,12 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
   }, [fields]);
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto hide-scrollbar p-4 text-xs gap-4 select-none">
+    <div
+      className={cn(
+        "flex flex-col h-full overflow-y-auto hide-scrollbar p-4 text-xs gap-4 select-none",
+        className,
+      )}
+    >
       {/* Header */}
       <div className="flex items-center justify-between pb-3 border-b border-border/60">
         <div className="flex items-center gap-2">
