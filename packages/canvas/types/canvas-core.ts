@@ -164,7 +164,8 @@ export interface ActiveConfigItem {
   sourceId?: string;
   targetNodeId?: string;
   endpointId?: string;
-  initialTab?: "trigger" | "test-cases" | "sse" | "ws" | "webrtc" | "polling";
+  initialTab?: "trigger" | "test-cases" | "sse" | "ws" | "webrtc" | "polling" | "state" | (string & {});
+  selectedStoreId?: string;
 }
 
 export type EndpointWithNode = Endpoint & { nodeId: string };

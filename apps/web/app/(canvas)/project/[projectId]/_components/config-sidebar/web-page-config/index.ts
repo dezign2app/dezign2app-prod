@@ -14,6 +14,7 @@ export * from "./hooks/useWebPageRename";
 
 export * from "./tabs/WebPageTabsNav";
 export * from "./tabs/WebPageSectionsTab";
+export * from "./tabs/WebPageStateTab";
 export * from "./tabs/WebPageApiTab";
 export * from "./tabs/WebPageCodeSyncTab";
 export * from "./tabs/WebPageProtectionTab";

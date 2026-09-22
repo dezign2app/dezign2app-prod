@@ -429,6 +429,47 @@ describe("Convex canvasValidators exact schema", () => {
     const parsed = safePipelineStepSchema.safeParse(dbStep);
     expect(parsed.success).toBe(true);
   });
+
+  it("validates webPage data with section-level stateObjects and page-level stateObjects", async () => {
+    const { webPageDataSchema } = await import("@workspace/canvas/schemas");
+    const { webPageConvexDataValidator, pageSectionConvexValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    const webPageData = {
+      label: "/",
+      appSlug: "web-app-1",
+      description: "Default landing page",
+      isRoot: true,
+      sections: [
+        {
+          id: "sec-1",
+          name: "Hero",
+          actions: [
+            { id: "act-1", name: "click", event: "click" },
+          ],
+          stateObjects: [
+            {
+              id: "st-1",
+              name: "items",
+              type: "array",
+              defaultValue: [],
+              storeName: "Cart",
+            },
+          ],
+        },
+      ],
+      stateObjects: [],
+    };
+
+    const zodParsed = webPageDataSchema.safeParse(webPageData);
+    expect(zodParsed.success).toBe(true);
+
+    // Convex validator structure check
+    expect(webPageConvexDataValidator.fields.stateObjects).toBeDefined();
+    expect(webPageConvexDataValidator.fields.sections).toBeDefined();
+    expect(pageSectionConvexValidator.fields.stateObjects).toBeDefined();
+  });
 });
 
 

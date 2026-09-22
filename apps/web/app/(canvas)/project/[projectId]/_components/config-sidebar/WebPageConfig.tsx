@@ -14,6 +14,7 @@ import {
   WebPageHeaderSection,
   WebPageTabsNav,
   WebPageSectionsTab,
+  WebPageStateTab,
   WebPageApiTab,
   WebPageCodeSyncTab,
   WebPageProtectionTab,
@@ -41,9 +42,20 @@ export const WebPageConfig = ({
   const allEdges = useBackendCanvasStore((s) => s.edges);
   const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
   const patchNodeData = useMutation(api.canvas.patchNodeData);
 
-  const [activeTab, setActiveTab] = useState("sections");
+  const initialTab =
+    (activeConfigItem?.initialTab as string) ||
+    "sections";
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  React.useEffect(() => {
+    const nextTab = activeConfigItem?.initialTab as string;
+    if (nextTab) {
+      setActiveTab(nextTab);
+    }
+  }, [activeConfigItem?.initialTab]);
 
   const resolvedProjectId: string =
     id ||
@@ -183,6 +195,8 @@ export const WebPageConfig = ({
   });
 
   const sectionsCount = (data.sections || []).length;
+  const stateStoreNodes = allNodes.filter((n) => n.type === "state_store");
+  const storeCount = stateStoreNodes.length;
 
   return (
     <div className="flex flex-col h-full font-sans text-foreground">
@@ -204,7 +218,7 @@ export const WebPageConfig = ({
         onValueChange={setActiveTab}
         className="flex-1 flex flex-col overflow-hidden mt-4"
       >
-        <WebPageTabsNav sectionsCount={sectionsCount} />
+        <WebPageTabsNav sectionsCount={sectionsCount} storeCount={storeCount} />
 
         {/* Tab 1: Sections & Membership */}
         <WebPageSectionsTab
@@ -227,6 +241,13 @@ export const WebPageConfig = ({
           }}
           onRequestRename={handleRequestRename}
           onUpdateAppSlug={(slug) => updateData({ appSlug: slug })}
+        />
+
+        {/* Tab 2: State Store Configuration */}
+        <WebPageStateTab
+          nodeId={nodeId}
+          data={data}
+          initialSelectedStoreId={activeConfigItem?.selectedStoreId as string}
         />
 
         {/* Tab 2: API Parameters & Request Body */}

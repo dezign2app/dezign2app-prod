@@ -6,19 +6,21 @@ import {
   Shield,
   FileCode,
   Settings,
+  Database,
 } from "lucide-react";
 
 interface WebPageTabsNavProps {
   sectionsCount: number;
+  storeCount?: number;
 }
 
-export function WebPageTabsNav({ sectionsCount }: WebPageTabsNavProps) {
+export function WebPageTabsNav({ sectionsCount, storeCount = 0 }: WebPageTabsNavProps) {
   return (
     <div className="border-b border-border/50 pb-2 bg-background">
-      <TabsList className="grid w-full grid-cols-5 h-8 p-0.5 bg-secondary/50 border border-border/40 rounded-lg">
+      <TabsList className="grid w-full grid-cols-6 h-8 p-0.5 bg-secondary/50 border border-border/40 rounded-lg">
         <TabsTrigger
           value="sections"
-          className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1"
+          className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1 cursor-pointer"
         >
           <Layers size={12} className="shrink-0" />
           <span className="truncate">Sections</span>
@@ -30,8 +32,21 @@ export function WebPageTabsNav({ sectionsCount }: WebPageTabsNavProps) {
         </TabsTrigger>
 
         <TabsTrigger
+          value="state"
+          className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1 cursor-pointer"
+        >
+          <Database size={12} className="shrink-0 text-cyan-500" />
+          <span className="truncate">State</span>
+          {storeCount > 0 && (
+            <span className="px-1 py-0.2 rounded-full text-[9px] bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 font-mono font-medium">
+              {storeCount}
+            </span>
+          )}
+        </TabsTrigger>
+
+        <TabsTrigger
           value="api"
-          className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1"
+          className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1 cursor-pointer"
         >
           <Settings size={12} className="shrink-0" />
           <span className="truncate">API</span>
@@ -39,7 +54,7 @@ export function WebPageTabsNav({ sectionsCount }: WebPageTabsNavProps) {
 
         <TabsTrigger
           value="code"
-          className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1"
+          className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1 cursor-pointer"
         >
           <FileCode size={12} className="shrink-0" />
           <span className="truncate">Sync</span>
@@ -47,7 +62,7 @@ export function WebPageTabsNav({ sectionsCount }: WebPageTabsNavProps) {
 
         <TabsTrigger
           value="protection"
-          className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1"
+          className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1 cursor-pointer"
         >
           <Shield size={12} className="shrink-0" />
           <span className="truncate">Auth</span>
@@ -55,7 +70,7 @@ export function WebPageTabsNav({ sectionsCount }: WebPageTabsNavProps) {
 
         <TabsTrigger
           value="ai"
-          className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1"
+          className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1 cursor-pointer"
         >
           <Sparkles size={12} className="shrink-0" />
           <span className="truncate">AI</span>

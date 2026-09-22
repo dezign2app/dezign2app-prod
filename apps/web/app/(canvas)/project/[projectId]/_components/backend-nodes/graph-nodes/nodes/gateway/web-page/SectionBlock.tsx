@@ -400,22 +400,42 @@ export const SectionBlock = ({
 
           {/* Store States Count Badge */}
           {Boolean(section.stateObjects?.length) && (
-            <span
-              className="text-[8px] font-mono px-1 py-0.2 rounded border bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30 font-medium cursor-default"
-              title={`${section.stateObjects!.length} Zustand store field${section.stateObjects!.length === 1 ? "" : "s"} rendered (${section.stateObjects!.map((s) => s.name).join(", ")})`}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveConfigItem({
+                  type: "pageSection",
+                  id: section.id,
+                  nodeId,
+                  initialTab: "state",
+                });
+              }}
+              className="text-[8px] font-mono px-1 py-0.2 rounded border bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border-cyan-500/30 font-medium cursor-pointer transition-colors"
+              title={`${section.stateObjects!.length} Zustand store field${section.stateObjects!.length === 1 ? "" : "s"} rendered (Click to configure state)`}
             >
               {section.stateObjects!.length} {section.stateObjects!.length === 1 ? "state" : "states"}
-            </span>
+            </button>
           )}
 
           {/* Local useState Count Badge */}
           {Boolean(section.states?.length) && (
-            <span
-              className="text-[8px] font-mono px-1 py-0.2 rounded border bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30 font-medium cursor-default"
-              title={`${section.states!.length} state variable${section.states!.length === 1 ? "" : "s"} defined (${section.states!.map((s) => s.name).join(", ")})`}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveConfigItem({
+                  type: "pageSection",
+                  id: section.id,
+                  nodeId,
+                  initialTab: "state",
+                });
+              }}
+              className="text-[8px] font-mono px-1 py-0.2 rounded border bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-500/30 font-medium cursor-pointer transition-colors"
+              title={`${section.states!.length} state variable${section.states!.length === 1 ? "" : "s"} defined (Click to configure state)`}
             >
               {section.states!.length} {section.states!.length === 1 ? "local state" : "local states"}
-            </span>
+            </button>
           )}
 
           {/* Add Action to section */}

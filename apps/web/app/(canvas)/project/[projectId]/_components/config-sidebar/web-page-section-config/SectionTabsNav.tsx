@@ -2,7 +2,7 @@
 
 import React from "react";
 import { TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
-import { Box, Package, Zap, Palette, Sliders } from "lucide-react";
+import { Box, Package, Zap, Palette, Database } from "lucide-react";
 
 export interface SectionTabsNavProps {
   packagesCount?: number;
@@ -56,10 +56,10 @@ export const SectionTabsNav: React.FC<SectionTabsNavProps> = ({
           value="state"
           className="text-[11px] flex items-center justify-center gap-1 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground transition-all font-medium px-1"
         >
-          <Sliders size={11} className="shrink-0" />
+          <Database size={11} className="shrink-0 text-cyan-500" />
           <span>State</span>
           {statesCount > 0 && (
-            <span className="ml-0.5 px-1 py-0.2 rounded-full text-[8px] bg-indigo-500/20 text-indigo-500 font-mono font-semibold">
+            <span className="ml-0.5 px-1 py-0.2 rounded-full text-[8px] bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 font-mono font-semibold">
               {statesCount}
             </span>
           )}
