@@ -76,6 +76,17 @@ const EdgeMarkers = () => (
       >
         <path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b" />
       </marker>
+      <marker
+        id="arrow-cyan"
+        viewBox="0 0 10 10"
+        refX="6"
+        refY="5"
+        markerWidth="6"
+        markerHeight="6"
+        orient="auto-start-reverse"
+      >
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#06b6d4" />
+      </marker>
     </defs>
   </svg>
 );
@@ -198,7 +209,7 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
     style,
   } = props;
 
-  const [edgePath] = getBezierPath({
+  const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -206,6 +217,18 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
     targetY,
     targetPosition,
   });
+
+  const isStateSubscription = Boolean(
+    props.data?.isStateSubscription ||
+      sourceNode?.type === "state_store" ||
+      props.sourceHandle?.startsWith("store-field-out-") ||
+      props.targetHandle?.startsWith("section-state-in-"),
+  );
+
+  const edgeColor = isStateSubscription ? "#06b6d4" : "#0ea5e9";
+  const markerId = isStateSubscription ? "arrow-cyan" : "arrow-blue";
+  const flowColor = isStateSubscription ? "#cffafe" : "#e0f2fe";
+  const glowColor = isStateSubscription ? "rgba(6, 182, 212, 0.2)" : "rgba(14, 165, 233, 0.15)";
 
   return (
     <>
@@ -218,7 +241,7 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
         style={{
           ...style,
           strokeWidth: 3,
-          stroke: "rgba(14, 165, 233, 0.15)",
+          stroke: glowColor,
           opacity: simulation.hasRun && !simulation.isVisited ? 0.05 : 1,
         }}
       />
@@ -226,14 +249,14 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
       {/* Main coloured edge */}
       <BaseEdge
         path={edgePath}
-        markerEnd="url(#arrow-blue)"
+        markerEnd={`url(#${markerId})`}
         style={{
           ...style,
           strokeWidth: 1.5,
-          stroke: "#0ea5e9", // sky-500
+          stroke: edgeColor,
           opacity: simulation.hasRun && !simulation.isVisited ? 0.08 : 1,
           filter: simulation.isCurrent
-            ? "drop-shadow(0 0 5px #0ea5e9)"
+            ? `drop-shadow(0 0 5px ${edgeColor})`
             : undefined,
         }}
       />
@@ -248,11 +271,27 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
           }
           style={{
             strokeWidth: 1.5,
-            stroke: "#e0f2fe", // sky-100 overlay
+            stroke: flowColor,
             pointerEvents: "none",
             opacity: simulation.hasRun && !simulation.isCurrent ? 0.35 : 1,
           }}
         />
+      )}
+
+      {/* Edge label badge (never shown for state subscriptions) */}
+      {props.data?.label && !isStateSubscription && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: "absolute",
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: "all",
+            }}
+            className="px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold bg-background/95 border border-blue-500/40 text-blue-500 shadow-xs"
+          >
+            {props.data.label}
+          </div>
+        </EdgeLabelRenderer>
       )}
     </>
   );
@@ -469,9 +508,7 @@ export const TransformerReferenceEdge = (props: EdgeProps<BackendEdge>) => {
   );
 };
 
-export type TypeReferenceEdgeProps = EdgeProps & {
-  data?: BackendEdge["data"];
-};
+export type TypeReferenceEdgeProps = EdgeProps<BackendEdge>;
 
 // 5. Type Reference Edge (Indigo dashed, conditionally visible when either connected node is selected, or always visible if extending a type)
 export const TypeReferenceEdge = (props: TypeReferenceEdgeProps) => {
@@ -559,8 +596,8 @@ export const TypeReferenceEdge = (props: TypeReferenceEdgeProps) => {
         }}
       />
 
-      {/* Pill label if label is present (e.g. "extends") */}
-      {data?.label && (
+      {/* Pill label only if extending a type */}
+      {isExtensionEdge && data?.label && (
         <EdgeLabelRenderer>
           <div
             style={{
@@ -568,11 +605,7 @@ export const TypeReferenceEdge = (props: TypeReferenceEdgeProps) => {
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
               pointerEvents: "all",
             }}
-            className={
-              isExtensionEdge
-                ? "px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold bg-background/95 border border-purple-500/50 text-purple-400 shadow-xs ring-1 ring-purple-500/20"
-                : "px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold bg-background/95 border border-indigo-500/40 text-indigo-400 shadow-xs"
-            }
+            className="px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold bg-background/95 border border-purple-500/50 text-purple-400 shadow-xs ring-1 ring-purple-500/20"
           >
             {data.label}
           </div>

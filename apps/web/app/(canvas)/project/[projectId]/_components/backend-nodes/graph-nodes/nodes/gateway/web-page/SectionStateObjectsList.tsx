@@ -54,6 +54,8 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
 }) => {
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
+  const addEdge = useBackendCanvasStore((s) => s.addEdge);
+  const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -67,6 +69,99 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
   const [editDefault, setEditDefault] = useState("");
 
   const configuredStates: PageStateObject[] = section.stateObjects || [];
+
+  // Auto-sync edges for configured state objects (ensures edges are drawn between state store fields and rendered section state)
+  React.useEffect(() => {
+    if (!configuredStates || configuredStates.length === 0) return;
+
+    configuredStates.forEach((st) => {
+      let storeNode = nodes.find((n) => n.id === st.storeId && n.type === "state_store");
+      if (!storeNode && st.storeName) {
+        storeNode = nodes.find(
+          (n) => n.type === "state_store" && (n.data?.label === st.storeName || n.data?.storeName === st.storeName),
+        );
+      }
+      if (!storeNode) return;
+
+      const fields: GlobalStoreField[] = storeNode.data?.fields || [];
+      const field = fields.find((f) => f.id === st.fieldId || f.name === st.name);
+      if (!field) return;
+
+      const expectedSourceHandle = `store-field-out-${field.id}`;
+      const expectedTargetHandle = `section-state-in-${section.id}-${st.id}`;
+
+      const edgeExists = edges.some(
+        (e) =>
+          e.source === storeNode!.id &&
+          e.target === nodeId &&
+          e.sourceHandle === expectedSourceHandle &&
+          e.targetHandle === expectedTargetHandle,
+      );
+
+      if (!edgeExists) {
+        addEdge({
+          id: `edge-state-${storeNode.id}-${field.id}-${nodeId}-${section.id}-${st.id}`,
+          source: storeNode.id,
+          target: nodeId,
+          sourceHandle: expectedSourceHandle,
+          targetHandle: expectedTargetHandle,
+          type: "connection",
+          data: {
+            isStateSubscription: true,
+            storeName: storeNode.data?.label || storeNode.data?.storeName || st.storeName,
+            fieldName: st.name,
+          },
+        });
+      }
+    });
+  }, [configuredStates, section.id, nodeId, nodes, edges, addEdge]);
+
+  // Auto-sync type reference edges between TypesNode and section state objects
+  React.useEffect(() => {
+    if (!configuredStates || configuredStates.length === 0) return;
+
+    configuredStates.forEach((st) => {
+      if (!st.type) return;
+      const baseTypeName = st.type.replace(/\[\]$/, "").trim();
+      if (!baseTypeName || ["string", "number", "boolean", "array", "object", "any"].includes(baseTypeName.toLowerCase())) {
+        return;
+      }
+
+      const typesNode = nodes.find(
+        (n) => n.type === "types" && (n.data?.types || []).some((t: any) => t.name === baseTypeName),
+      );
+      if (!typesNode) return;
+
+      const typeItem = (typesNode.data?.types || []).find((t: any) => t.name === baseTypeName);
+      if (!typeItem) return;
+
+      const expectedSourceHandle = `type-out-${typeItem.id}`;
+      const expectedTargetHandle = `section-state-in-${section.id}-${st.id}`;
+
+      const edgeExists = edges.some(
+        (e) =>
+          e.source === typesNode.id &&
+          e.target === nodeId &&
+          e.sourceHandle === expectedSourceHandle &&
+          e.targetHandle === expectedTargetHandle,
+      );
+
+      if (!edgeExists) {
+        addEdge({
+          id: `edge-type-${typesNode.id}-${typeItem.id}-${nodeId}-${section.id}-${st.id}`,
+          source: typesNode.id,
+          target: nodeId,
+          sourceHandle: expectedSourceHandle,
+          targetHandle: expectedTargetHandle,
+          type: "type-reference",
+          data: {
+            isTypeReference: true,
+            baseTypeName: typeItem.name,
+          },
+        });
+      }
+    });
+  }, [configuredStates, section.id, nodeId, nodes, edges, addEdge]);
 
   // 1. Discover all StateStore nodes for this WebPage
   const connectedStoreIds = new Set<string>();
@@ -102,8 +197,6 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
 
   const allStateStoreNodes = nodes.filter((n) => n.type === "state_store");
 
-  // All state stores in the workspace are available for selection!
-  // Sort so stores with selected fields or connections appear first.
   const associatedStores = [...allStateStoreNodes].sort((a, b) => {
     const aCount = configuredStates.filter(
       (s) => s.storeId === a.id || s.storeName === (a.data?.label || a.data?.storeName),
@@ -139,6 +232,15 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
 
     let nextStates: PageStateObject[];
     if (isAlreadySelected) {
+      const removed = configuredStates.filter(
+        (s) => s.fieldId === field.id || (s.storeId === store.id && s.name === field.name),
+      );
+      removed.forEach((st) => {
+        const targetHandle = `section-state-in-${section.id}-${st.id}`;
+        edges
+          .filter((e) => e.target === nodeId && e.targetHandle === targetHandle)
+          .forEach((e) => deleteEdge(e.id));
+      });
       nextStates = configuredStates.filter(
         (s) => !(s.fieldId === field.id || (s.storeId === store.id && s.name === field.name)),
       );
@@ -153,6 +255,21 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
         fieldId: field.id,
       };
       nextStates = [...configuredStates, newObj];
+
+      // Add edge immediately
+      addEdge({
+        id: `edge-state-${store.id}-${field.id}-${nodeId}-${section.id}-${newObj.id}`,
+        source: store.id,
+        target: nodeId,
+        sourceHandle: `store-field-out-${field.id}`,
+        targetHandle: `section-state-in-${section.id}-${newObj.id}`,
+        type: "connection",
+        data: {
+          isStateSubscription: true,
+          storeName,
+          fieldName: field.name,
+        },
+      });
     }
 
     updateSectionStates(nextStates);
@@ -165,21 +282,44 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
 
     const toAdd: PageStateObject[] = fields
       .filter((f) => !existingFieldIds.has(f.id))
-      .map((f) => ({
-        id: `state-${Date.now()}-${Math.random().toString(36).substr(2, 4)}-${f.id}`,
-        name: f.name,
-        type: f.type,
-        defaultValue: f.defaultValue,
-        storeId: store.id,
-        storeName,
-        fieldId: f.id,
-      }));
+      .map((f) => {
+        const stateId = `state-${Date.now()}-${Math.random().toString(36).substr(2, 4)}-${f.id}`;
+        addEdge({
+          id: `edge-state-${store.id}-${f.id}-${nodeId}-${section.id}-${stateId}`,
+          source: store.id,
+          target: nodeId,
+          sourceHandle: `store-field-out-${f.id}`,
+          targetHandle: `section-state-in-${section.id}-${stateId}`,
+          type: "connection",
+          data: {
+            isStateSubscription: true,
+            storeName,
+            fieldName: f.name,
+          },
+        });
+        return {
+          id: stateId,
+          name: f.name,
+          type: f.type,
+          defaultValue: f.defaultValue,
+          storeId: store.id,
+          storeName,
+          fieldId: f.id,
+        };
+      });
 
     updateSectionStates([...configuredStates, ...toAdd]);
   };
 
   // Deselect all fields of current store
   const handleDeselectAllCurrentStore = (store: BackendNode) => {
+    const removed = configuredStates.filter((s) => s.storeId === store.id);
+    removed.forEach((st) => {
+      const targetHandle = `section-state-in-${section.id}-${st.id}`;
+      edges
+        .filter((e) => e.target === nodeId && e.targetHandle === targetHandle)
+        .forEach((e) => deleteEdge(e.id));
+    });
     const nextStates = configuredStates.filter((s) => s.storeId !== store.id);
     updateSectionStates(nextStates);
   };
@@ -188,6 +328,10 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
   const handleDeleteState = (stateId: string) => {
     const nextStates = configuredStates.filter((s) => s.id !== stateId);
     updateSectionStates(nextStates);
+    const targetHandle = `section-state-in-${section.id}-${stateId}`;
+    edges
+      .filter((e) => e.target === nodeId && e.targetHandle === targetHandle)
+      .forEach((e) => deleteEdge(e.id));
   };
 
   // Start inline edit
@@ -360,6 +504,12 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
                 );
               }
 
+              const isConnected = edges.some(
+                (e) =>
+                  e.target === nodeId &&
+                  e.targetHandle === `section-state-in-${section.id}-${st.id}`,
+              );
+
               return (
                 <div
                   key={st.id}
@@ -370,9 +520,14 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
                     type="target"
                     position={Position.Left}
                     id={`section-state-in-${section.id}-${st.id}`}
-                    className="w-2 h-2 !bg-purple-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -left-1 z-10"
+                    className={cn(
+                      "w-2 h-2 border-2 border-background cursor-pointer hover:scale-125 transition-all -left-1 z-10",
+                      isConnected
+                        ? "!bg-purple-400 ring-2 ring-purple-500/40"
+                        : "!bg-purple-500 hover:!bg-purple-400",
+                    )}
                     style={{ top: "50%" }}
-                    title={`State subscription: ${st.name} from store ${st.storeName || ""}`}
+                    title={`State subscription: ${st.name} from store ${st.storeName || ""}${isConnected ? " (connected)" : ""}`}
                   />
 
                   <div className="flex items-center gap-1.5 min-w-0 flex-1 pl-1">

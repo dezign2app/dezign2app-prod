@@ -127,5 +127,208 @@ export function handleFrontendConnect({
     });
   }
 
+  // Case 3: StateStore -> WebPage (binds store field to rendered state in section)
+  if (sourceNode.type === "state_store" && targetNode.type === "webPage") {
+    const sourceHandle = connection.sourceHandle ?? "";
+    const targetHandle = connection.targetHandle ?? "";
+    const storeName = sourceNode.data?.label || sourceNode.data?.storeName || "Store";
+    const storeFields = sourceNode.data?.fields || [];
+
+    if (sourceHandle.startsWith("store-field-out-")) {
+      const fieldId = sourceHandle.replace("store-field-out-", "");
+      const field = storeFields.find((f: any) => f.id === fieldId);
+      if (field) {
+        const sections: any[] = targetNode.data?.sections || [];
+
+        // Scenario A: Target is a specific section-state-in handle
+        if (targetHandle.startsWith("section-state-in-")) {
+          let matchedSec: any = undefined;
+          let matchedStateId: string | undefined = undefined;
+
+          for (const sec of sections) {
+            for (const st of sec.stateObjects || []) {
+              if (targetHandle === `section-state-in-${sec.id}-${st.id}`) {
+                matchedSec = sec;
+                matchedStateId = st.id;
+                break;
+              }
+            }
+            if (matchedSec) break;
+          }
+
+          if (matchedSec && matchedStateId) {
+            const updatedSections = sections.map((sec) => {
+              if (sec.id !== matchedSec!.id) return sec;
+              const nextStateObjects = (sec.stateObjects || []).map((st: any) => {
+                if (st.id === matchedStateId) {
+                  return {
+                    ...st,
+                    name: field.name,
+                    type: field.type,
+                    defaultValue: field.defaultValue,
+                    storeId: sourceNode.id,
+                    storeName,
+                    fieldId: field.id,
+                  };
+                }
+                return st;
+              });
+              return { ...sec, stateObjects: nextStateObjects };
+            });
+
+            get().updateNode(targetNode.id, {
+              data: {
+                ...targetNode.data,
+                sections: updatedSections,
+              },
+            });
+          }
+        } else {
+          // Scenario B: Dropped on page-in or general page target
+          let targetSec = sections[0];
+          let updatedSections: any[];
+
+          if (!targetSec) {
+            targetSec = {
+              id: `sec-${Date.now()}`,
+              name: "Main",
+              renderMode: "client",
+              actions: [],
+              stateObjects: [],
+            };
+            sections.push(targetSec);
+          }
+
+          const existingSt = (targetSec.stateObjects || []).find(
+            (s: any) => s.fieldId === field.id || (s.storeId === sourceNode.id && s.name === field.name),
+          );
+
+          let stateId = existingSt?.id;
+
+          if (!existingSt) {
+            stateId = `state-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+            const newObj = {
+              id: stateId,
+              name: field.name,
+              type: field.type,
+              defaultValue: field.defaultValue,
+              storeId: sourceNode.id,
+              storeName,
+              fieldId: field.id,
+            };
+
+            updatedSections = sections.map((sec) =>
+              sec.id === targetSec!.id
+                ? { ...sec, stateObjects: [...(sec.stateObjects || []), newObj] }
+                : sec,
+            );
+
+            get().updateNode(targetNode.id, {
+              data: {
+                ...targetNode.data,
+                sections: updatedSections,
+              },
+            });
+          }
+
+          // Retarget edge to specific section-state-in handle
+          if (stateId) {
+            const specificTargetHandle = `section-state-in-${targetSec.id}-${stateId}`;
+            const currentEdges = get().edges;
+            const updatedEdges = currentEdges.map((e) =>
+              e.id === newEdge.id
+                ? {
+                    ...e,
+                    targetHandle: specificTargetHandle,
+                    data: {
+                      ...e.data,
+                      isStateSubscription: true,
+                      storeName,
+                      fieldName: field.name,
+                    },
+                  }
+                : e,
+            );
+            set({ edges: updatedEdges });
+          }
+        }
+
+        // Enrich newEdge data
+        const currentEdges = get().edges;
+        const updatedEdges = currentEdges.map((e) =>
+          e.id === newEdge.id
+            ? {
+                ...e,
+                data: {
+                  ...e.data,
+                  isStateSubscription: true,
+                  storeName,
+                  fieldName: field.name,
+                },
+              }
+            : e,
+        );
+        set({ edges: updatedEdges });
+      }
+    }
+  }
+
+  // Case 4: TypesNode -> WebPage / StateStore (data contract wiring)
+  if (sourceNode.type === "types") {
+    const sourceHandle = connection.sourceHandle ?? "";
+    const targetHandle = connection.targetHandle ?? "";
+    const typeId = sourceHandle.replace(/^type-out-/, "");
+    const typesList = sourceNode.data?.types || [];
+    const typeItem = typesList.find((t: any) => t.id === typeId);
+
+    if (typeItem) {
+      // Subcase 4A: TypesNode -> WebPage (binding type to a section state object)
+      if (targetNode.type === "webPage" && targetHandle.startsWith("section-state-in-")) {
+        const sections: any[] = targetNode.data?.sections || [];
+        const updatedSections = sections.map((sec) => ({
+          ...sec,
+          stateObjects: (sec.stateObjects || []).map((st: any) => {
+            if (targetHandle === `section-state-in-${sec.id}-${st.id}`) {
+              const isArray = Boolean(st.type?.endsWith("[]"));
+              return {
+                ...st,
+                type: isArray ? `${typeItem.name}[]` : typeItem.name,
+              };
+            }
+            return st;
+          }),
+        }));
+        get().updateNode(targetNode.id, {
+          data: {
+            ...targetNode.data,
+            sections: updatedSections,
+          },
+        });
+      }
+
+      // Subcase 4B: TypesNode -> StateStore (binding custom type to a store field)
+      if (targetNode.type === "state_store" && targetHandle.startsWith("store-field-in-")) {
+        const fieldId = targetHandle.replace("store-field-in-", "");
+        const fields = targetNode.data?.fields || [];
+        const updatedFields = fields.map((f: any) => {
+          if (f.id === fieldId) {
+            const isArray = Boolean(f.isArray || f.type?.endsWith("[]"));
+            return {
+              ...f,
+              type: isArray ? `${typeItem.name}[]` : typeItem.name,
+            };
+          }
+          return f;
+        });
+        get().updateNode(targetNode.id, {
+          data: {
+            ...targetNode.data,
+            fields: updatedFields,
+          },
+        });
+      }
+    }
+  }
+
   return false;
 }

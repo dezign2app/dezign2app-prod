@@ -12,6 +12,14 @@ export const edgeDataSchema = z.object({
   baseTypeName: z.string().optional(),
   extendedTypeName: z.string().optional(),
   packageName: z.string().optional(),
+  // --- State Store Subscription Fields ---
+  isStateSubscription: z.boolean().optional(),
+  storeName: z.string().optional(),
+  fieldName: z.string().optional(),
+  storeId: z.string().optional(),
+  fieldId: z.string().optional(),
+  sectionId: z.string().optional(),
+  stateObjectId: z.string().optional(),
   // --- Identity Connection Fields ---
   protocol: z.string().optional(),
   grantType: z.string().optional(),

@@ -102,6 +102,25 @@ export function cleanupDeletedNodesState(
         }
       }
 
+      // Clean up stateObjects if referenced state_store was deleted
+      if (node.type === "webPage" && node.data?.sections) {
+        let changed = false;
+        const newSections = node.data.sections.map((section) => {
+          if (!section.stateObjects || !Array.isArray(section.stateObjects)) return section;
+          const remainingStates = section.stateObjects.filter(
+            (st) => !st.storeId || !allIdsSet.has(st.storeId),
+          );
+          if (remainingStates.length !== section.stateObjects.length) {
+            changed = true;
+            return { ...section, stateObjects: remainingStates };
+          }
+          return section;
+        });
+        if (changed) {
+          return { ...node, data: { ...node.data, sections: newSections } };
+        }
+      }
+
       return node;
     });
 
@@ -347,10 +366,10 @@ export function cleanupDeletedNodesState(
     });
 
   // 4. Identity Providers to remove
-  const providersToDelete = currentState.identityProviders.filter((p) =>
+  const providersToDelete = (currentState.identityProviders || []).filter((p) =>
     allIdsSet.has(p.nodeId),
   );
-  const nextProviders = currentState.identityProviders.filter(
+  const nextProviders = (currentState.identityProviders || []).filter(
     (p) => !allIdsSet.has(p.nodeId),
   );
 
@@ -450,7 +469,7 @@ export function cleanupDeletedNodesState(
       ...eventsToDelete.map((ev) => ({ nodeId: ev.nodeId, eventId: ev.id })),
     ],
     pendingIdentityProviderRemovals: [
-      ...currentState.pendingIdentityProviderRemovals,
+      ...(currentState.pendingIdentityProviderRemovals || []),
       ...providersToDelete.map((p) => ({
         nodeId: p.nodeId,
         providerId: p.id,
@@ -1272,6 +1291,87 @@ export function cleanupDeletedEdgesState(
             }
             return ev;
           });
+        }
+      }
+    }
+
+    // 7. State Store <-> WebPage Section State Subscription cleanup
+    if (edge.targetHandle?.startsWith("section-state-in-")) {
+      const isTypeEdge =
+        edge.type === "type-reference" ||
+        edge.sourceHandle?.startsWith("type-out-") ||
+        Boolean(edge.data?.isTypeReference);
+
+      const pageNode = nextNodes.find((n) => n.id === edge.target);
+      if (pageNode?.data?.sections && Array.isArray(pageNode.data.sections)) {
+        let pageChanged = false;
+        const newSections = pageNode.data.sections.map((section) => {
+          const prefix = `section-state-in-${section.id}-`;
+          if (!edge.targetHandle?.startsWith(prefix)) return section;
+
+          const stateId = edge.targetHandle.slice(prefix.length);
+          if (!section.stateObjects || !Array.isArray(section.stateObjects)) return section;
+
+          if (isTypeEdge) {
+            // Disconnected custom type from state object - reset type to primitive/any so auto-sync doesn't re-add edge
+            const updatedStates = section.stateObjects.map((st) => {
+              if (st.id === stateId) {
+                const isArray = st.type?.endsWith("[]");
+                return { ...st, type: isArray ? "any[]" : "any" };
+              }
+              return st;
+            });
+            pageChanged = true;
+            return { ...section, stateObjects: updatedStates };
+          } else {
+            // Disconnected store state subscription edge - remove the state object from section
+            const remainingStates = section.stateObjects.filter((st) => st.id !== stateId);
+            if (remainingStates.length !== section.stateObjects.length) {
+              pageChanged = true;
+              return { ...section, stateObjects: remainingStates };
+            }
+          }
+          return section;
+        });
+
+        if (pageChanged) {
+          nodesChanged = true;
+          const updatedPage = {
+            ...pageNode,
+            data: { ...pageNode.data, sections: newSections },
+          };
+          nextNodes = nextNodes.map((n) => (n.id === pageNode.id ? updatedPage : n));
+          pendingNodeUpserts.push(updatedPage);
+        }
+      }
+    }
+
+    // 8. Types Node -> State Store Field Type Reference cleanup
+    if (edge.targetHandle?.startsWith("store-field-in-")) {
+      const fieldId = edge.targetHandle.replace("store-field-in-", "");
+      const storeNode = nextNodes.find((n) => n.id === edge.target);
+      if (storeNode?.data?.fields && Array.isArray(storeNode.data.fields)) {
+        let storeChanged = false;
+        const newFields = storeNode.data.fields.map((f) => {
+          if (f.id === fieldId) {
+            storeChanged = true;
+            const isArray = f.isArray || f.type?.endsWith("[]");
+            return {
+              ...f,
+              type: isArray ? "any[]" : "any",
+            };
+          }
+          return f;
+        });
+
+        if (storeChanged) {
+          nodesChanged = true;
+          const updatedStore = {
+            ...storeNode,
+            data: { ...storeNode.data, fields: newFields },
+          };
+          nextNodes = nextNodes.map((n) => (n.id === storeNode.id ? updatedStore : n));
+          pendingNodeUpserts.push(updatedStore);
         }
       }
     }

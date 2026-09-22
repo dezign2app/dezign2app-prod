@@ -6,7 +6,16 @@ import {
   backendNodeDataValidator,
   backendDatabaseDataValidator,
   backendEntityDataValidator,
+  backendEdgeDataValidator,
+  stateStoreConvexDataValidator,
+  pageSectionConvexValidator,
+  webPageConvexDataValidator,
 } from "../../../../../packages/backend/convex/schema/canvasValidators";
+import {
+  webPageDataSchema,
+  edgeDataSchema,
+  stateStoreNodeDataSchema,
+} from "@workspace/canvas/schemas";
 
 describe("Convex canvasValidators exact schema", () => {
   it("successfully parses leaf steps (transform, db_operation, kafka_publish, etc.)", () => {
@@ -469,6 +478,44 @@ describe("Convex canvasValidators exact schema", () => {
     expect(webPageConvexDataValidator.fields.stateObjects).toBeDefined();
     expect(webPageConvexDataValidator.fields.sections).toBeDefined();
     expect(pageSectionConvexValidator.fields.stateObjects).toBeDefined();
+  });
+
+  it("successfully validates edgeDataSchema and stateStoreConvexDataValidator for state subscriptions", () => {
+    const edgeData = {
+      label: "chats",
+      isStateSubscription: true,
+      storeName: "conversations",
+      fieldName: "chats",
+      storeId: "store-1",
+      fieldId: "f1",
+      sectionId: "sec-1",
+      stateObjectId: "st-1",
+    };
+
+    const edgeParsed = edgeDataSchema.safeParse(edgeData);
+    expect(edgeParsed.success).toBe(true);
+    expect(backendEdgeDataValidator).toBeDefined();
+
+    const storeData = {
+      label: "conversations",
+      storeName: "conversations",
+      scope: "global" as const,
+      storage: "memory" as const,
+      fields: [
+        {
+          id: "f1",
+          name: "chats",
+          type: "Chat[]",
+          isArray: true,
+          required: false,
+          defaultValue: [],
+        },
+      ],
+    };
+
+    const storeParsed = stateStoreNodeDataSchema.safeParse(storeData);
+    expect(storeParsed.success).toBe(true);
+    expect(stateStoreConvexDataValidator.fields.fields).toBeDefined();
   });
 });
 
