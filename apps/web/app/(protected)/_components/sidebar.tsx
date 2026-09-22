@@ -12,6 +12,7 @@ import {
   ShoppingCart,
   Sun,
   Moon,
+  CreditCard,
 } from "lucide-react";
 import {
   Sidebar,
@@ -61,6 +62,11 @@ const configurationItems: SidebarItem[] = [
     title: "Organization",
     url: "/organization",
     icon: Building2,
+  },
+  {
+    title: "Billing",
+    url: "/organization/billing",
+    icon: CreditCard,
   },
   {
     title: "API Keys",

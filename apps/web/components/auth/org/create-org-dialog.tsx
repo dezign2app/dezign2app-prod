@@ -21,14 +21,14 @@ import { toast } from "sonner";
 interface CreateOrgDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  existingOrgsCount: number;
+  existingOrgsCount?: number;
   onCreated: (org: { id: string; name: string }) => void;
 }
 
 export function CreateOrgDialog({
   open,
   onOpenChange,
-  existingOrgsCount,
+  existingOrgsCount = 0,
   onCreated,
 }: CreateOrgDialogProps) {
   const [orgName, setOrgName] = useState("");
@@ -38,13 +38,6 @@ export function CreateOrgDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!orgName.trim()) return;
-
-    if (existingOrgsCount >= 1) {
-      toast.error(
-        "Your plan includes 1 Organization workspace. Multiple organizations require an enterprise plan.",
-      );
-      return;
-    }
 
     setSubmitting(true);
     try {

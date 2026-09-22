@@ -61,7 +61,6 @@ export const getSubscriptionStatus = query({
       }
 
       if (isMember) {
-        // Check organization_billing record
         const orgBilling = await ctx.db
           .query("organization_billing")
           .withIndex("by_organization", (q) =>
@@ -69,8 +68,9 @@ export const getSubscriptionStatus = query({
           )
           .first();
 
+        // If the organization has a dedicated Creem subscription ID, trust its billing status
         if (
-          orgBilling &&
+          orgBilling?.creemSubscriptionId &&
           (orgBilling.status === "active" || orgBilling.status === "trialing")
         ) {
           return {
@@ -104,6 +104,16 @@ export const getSubscriptionStatus = query({
               .first();
 
             if (ownerUser) {
+              if (ownerUser.isSystemAdmin) {
+                return {
+                  status: "active",
+                  isOrgSeat: true,
+                  organizationId: args.organizationId,
+                  role: memberRole,
+                  hasPriorSubscription: true,
+                };
+              }
+
               const ownerSubs = await ctx.db
                 .query("subscriptions")
                 .withIndex("by_user", (q) => q.eq("userId", ownerUser._id))
@@ -113,7 +123,12 @@ export const getSubscriptionStatus = query({
                 (s) => s.status === "active" || s.status === "trialing",
               );
 
-              if (activeOwnerSub) {
+              const ownerEb = await ctx.db
+                .query("early_believers")
+                .withIndex("by_user", (q) => q.eq("userId", ownerUser._id))
+                .first();
+
+              if (activeOwnerSub || (ownerEb && ownerEb.status === "active")) {
                 return {
                   status: "active",
                   isOrgSeat: true,
@@ -170,8 +185,16 @@ export const getSubscriptionStatus = query({
       } catch (e) {}
     }
 
-    // If no subscriptions found at all, user is "new" to payments
-    if (subscriptions.length === 0) {
+    // Check early believer status
+    const eb = await ctx.db
+      .query("early_believers")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .first();
+
+    const isEbActive = eb && eb.status === "active";
+
+    // If no subscriptions found at all and not early believer, user is "new" to payments
+    if (subscriptions.length === 0 && !isEbActive) {
       return {
         status: "no_subscription",
         isOrgSeat: false,
@@ -185,13 +208,13 @@ export const getSubscriptionStatus = query({
       (sub) => sub.status === "active" || sub.status === "trialing",
     );
 
-    if (activeSub) {
+    if (activeSub || isEbActive) {
       return {
         status: "active",
         isOrgSeat: false,
         hasPriorSubscription: true,
-        creemSubscriptionId: activeSub.creemSubscriptionId,
-        planId: activeSub.planId,
+        creemSubscriptionId: activeSub?.creemSubscriptionId,
+        planId: activeSub?.planId || (eb ? `early_believer_${eb.tier}` : undefined),
         hasOrganizations: userOrgCount > 0,
       };
     }

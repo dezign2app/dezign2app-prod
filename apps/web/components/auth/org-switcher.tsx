@@ -17,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
+import { useRouter } from "next/navigation";
 import {
   Building2,
   Check,
@@ -27,6 +28,7 @@ import {
   Loader2,
   CreditCard,
   Users,
+  LayoutGrid,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { OrgItem } from "./org/types";
@@ -36,6 +38,7 @@ import { TeamManagementDialog } from "./org/team-management-dialog";
 import { BuySeatsDialog } from "./org/buy-seats-dialog";
 
 export function OrgSwitcher() {
+  const router = useRouter();
   const { data: serverActiveOrg } = useActiveOrganization();
   const { data: serverOrganizations, isPending: isListPending, refetch: refetchOrgs } =
     useListOrganizations();
@@ -271,25 +274,26 @@ export function OrgSwitcher() {
           )}
 
           <DropdownMenuItem
-            onClick={() => {
-              if (organizations.length >= 1) {
-                toast.info("Your plan includes 1 Organization workspace.");
-                return;
-              }
-              setCreateDialogOpen(true);
-            }}
-            disabled={organizations.length >= 1}
+            onClick={() => router.push("/organization?view=all")}
+            className="cursor-pointer text-xs justify-between"
+          >
+            <div className="flex items-center gap-2">
+              <LayoutGrid className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span>All Organizations</span>
+            </div>
+            <span className="text-[10px] text-muted-foreground font-mono">
+              {organizations.length}
+            </span>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            onClick={() => setCreateDialogOpen(true)}
             className="cursor-pointer text-xs justify-between"
           >
             <div className="flex items-center gap-2">
               <PlusCircle className="h-4 w-4 text-muted-foreground shrink-0" />
               <span>Create Organization</span>
             </div>
-            {organizations.length >= 1 && (
-              <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                1 Org Limit
-              </span>
-            )}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
