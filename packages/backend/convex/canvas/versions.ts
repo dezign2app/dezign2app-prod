@@ -16,6 +16,7 @@ import type {
   IdentityProvider,
 } from "@workspace/canvas/types";
 import type { SimulationTestCase } from "@workspace/canvas/types";
+import { assertActiveSubscriptionForProject } from "../auth_guards";
 
 export type { VersionChangeSummary, VersionListItem };
 
@@ -141,11 +142,14 @@ export const createProjectVersion = mutation({
     isAutoSave: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<Id<"project_versions">> => {
-    const identity = await ctx.auth.getUserIdentity();
-    const authorId = identity?.subject ?? "anonymous";
+    const { identity } = await assertActiveSubscriptionForProject(
+      ctx,
+      args.projectId,
+    );
+    const authorId = identity.subject;
     const authorName =
-      identity?.name ?? identity?.nickname ?? identity?.email ?? "Collaborator";
-    const authorAvatar = identity?.pictureUrl;
+      identity.name ?? identity.nickname ?? identity.email ?? "Collaborator";
+    const authorAvatar = identity.pictureUrl;
 
     // Collect current live state for project
     const rawNodes = await ctx.db
@@ -340,16 +344,20 @@ export const restoreProjectVersion = mutation({
     ctx,
     args,
   ): Promise<{ restoredVersionNumber: number; newVersionId: Id<"project_versions"> }> => {
+    const { identity } = await assertActiveSubscriptionForProject(
+      ctx,
+      args.projectId,
+    );
+
     const versionToRestore = await ctx.db.get(args.versionId);
     if (!versionToRestore || versionToRestore.projectId !== args.projectId) {
       throw new Error("Version not found or does not belong to project.");
     }
 
-    const identity = await ctx.auth.getUserIdentity();
-    const authorId = identity?.subject ?? "anonymous";
+    const authorId = identity.subject;
     const authorName =
-      identity?.name ?? identity?.nickname ?? identity?.email ?? "Collaborator";
-    const authorAvatar = identity?.pictureUrl;
+      identity.name ?? identity.nickname ?? identity.email ?? "Collaborator";
+    const authorAvatar = identity.pictureUrl;
 
     // 1. Delete all current elements for this project
     const currentNodes = await ctx.db

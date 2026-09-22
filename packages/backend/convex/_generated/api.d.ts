@@ -12,6 +12,7 @@ import type * as ai_conversations from "../ai/conversations.js";
 import type * as ai_messages from "../ai/messages.js";
 import type * as api_keys from "../api_keys.js";
 import type * as auth from "../auth.js";
+import type * as auth_guards from "../auth_guards.js";
 import type * as billing from "../billing.js";
 import type * as canvas from "../canvas.js";
 import type * as canvas_edges from "../canvas/edges.js";
@@ -54,6 +55,7 @@ declare const fullApi: ApiFromModules<{
   "ai/messages": typeof ai_messages;
   api_keys: typeof api_keys;
   auth: typeof auth;
+  auth_guards: typeof auth_guards;
   billing: typeof billing;
   canvas: typeof canvas;
   "canvas/edges": typeof canvas_edges;

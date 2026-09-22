@@ -19,6 +19,13 @@ vi.mock("@/lib/auth-client", () => ({
     data: { user: { id: "user_123", email: "user@example.com" } },
     isPending: false,
   })),
+  useActiveOrganization: vi.fn(() => ({ data: null })),
+  useListOrganizations: vi.fn(() => ({ data: [] })),
+  authClient: {
+    organization: {
+      setActive: vi.fn(),
+    },
+  },
 }));
 
 describe("PaywallModal", () => {
@@ -67,6 +74,7 @@ describe("PaywallModal", () => {
       screen.getByText("Active Subscription Required"),
     ).toBeInTheDocument();
     expect(screen.getByText("View Plans & Upgrade")).toBeInTheDocument();
+    expect(screen.queryByTestId("child")).not.toBeInTheDocument();
   });
 
   it("shows non-dismissible modal when subscription is inactive on a required route", () => {
@@ -85,6 +93,7 @@ describe("PaywallModal", () => {
       screen.queryByText("Continue in View-Only Mode"),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Return to Workspace")).toBeInTheDocument();
+    expect(screen.queryByTestId("child")).not.toBeInTheDocument();
   });
 
   it("renders children immediately on a free route like /admin", () => {

@@ -4,6 +4,7 @@ import { isValidConnection } from "@workspace/canvas/validators";
 import { isBackendNode } from "@workspace/canvas/utils";
 import { RULES_VERSION } from "@workspace/canvas/constants";
 import { backendEdgeDataValidator } from "../schema/canvasValidators";
+import { assertActiveSubscriptionForProject } from "../auth_guards";
 
 // Validates and upserts canvas backend edges with strict connection taxonomy
 
@@ -20,8 +21,7 @@ export const upsertBackendEdge = mutation({
     fractionalIndex: v.string(),
   },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     // --- Edge Validation (Primary Enforcement) ---
     // Look up source & target nodes to get their types
@@ -136,8 +136,7 @@ export const upsertBackendEdge = mutation({
 export const removeBackendEdge = mutation({
   args: { projectId: v.id("projects"), edgeId: v.string() },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
       .query("canvas_backend_edges")

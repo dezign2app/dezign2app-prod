@@ -243,10 +243,16 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
       }}
     >
       <div className="relative flex flex-1 flex-col min-h-screen">
-        {isReadOnly &&
-          hasDismissedInitialModal &&
-          currentAccess === "premium-limited" && <ReadOnlyBanner />}
-        {children}
+        {isPaywallActive && currentAccess === "premium-only" ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none" />
+        ) : (
+          <>
+            {isReadOnly &&
+              hasDismissedInitialModal &&
+              currentAccess === "premium-limited" && <ReadOnlyBanner />}
+            {children}
+          </>
+        )}
       </div>
 
       {isPaywallActive && (

@@ -1,5 +1,6 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { assertActiveSubscriptionForProject } from "./auth_guards";
 
 export const getChats = query({
   args: { projectId: v.id("projects") },
@@ -18,6 +19,7 @@ export const createChat = mutation({
     title: v.string(),
   },
   handler: async (ctx, args) => {
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
     return await ctx.db.insert("project_chats", {
       projectId: args.projectId,
       title: args.title,
@@ -44,6 +46,10 @@ export const addMessage = mutation({
     content: v.string(),
   },
   handler: async (ctx, args) => {
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat) throw new ConvexError("Chat not found");
+    await assertActiveSubscriptionForProject(ctx, chat.projectId);
+
     await ctx.db.insert("project_chat_messages", {
       chatId: args.chatId,
       role: args.role,
@@ -59,6 +65,10 @@ export const updateChatTitle = mutation({
     title: v.string(),
   },
   handler: async (ctx, args) => {
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat) throw new ConvexError("Chat not found");
+    await assertActiveSubscriptionForProject(ctx, chat.projectId);
+
     await ctx.db.patch(args.chatId, {
       title: args.title,
     });
@@ -70,6 +80,10 @@ export const clearChatMessages = mutation({
     chatId: v.id("project_chats"),
   },
   handler: async (ctx, args) => {
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat) throw new ConvexError("Chat not found");
+    await assertActiveSubscriptionForProject(ctx, chat.projectId);
+
     const messages = await ctx.db
       .query("project_chat_messages")
       .withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
@@ -83,6 +97,10 @@ export const deleteChat = mutation({
     chatId: v.id("project_chats"),
   },
   handler: async (ctx, args) => {
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat) throw new ConvexError("Chat not found");
+    await assertActiveSubscriptionForProject(ctx, chat.projectId);
+
     const messages = await ctx.db
       .query("project_chat_messages")
       .withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
