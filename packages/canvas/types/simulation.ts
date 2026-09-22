@@ -51,6 +51,18 @@ export interface SectionStateVariable {
   description?: string;
 }
 
+export interface PageStateObject {
+  id: string;
+  name: string;
+  type: string;
+  defaultValue?: JSONValue;
+  storeId?: string;
+  storeNodeId?: string;
+  storeName?: string;
+  fieldId?: string;
+  description?: string;
+}
+
 export type PageSection = {
   id: string;
   name: string;
@@ -58,6 +70,7 @@ export type PageSection = {
   loadStrategy?: "eager" | "dynamic" | "dynamic-no-ssr";
   actions: UIEventItem[];
   states?: SectionStateVariable[];
+  stateObjects?: PageStateObject[];
   description?: string;
   uiPrompt?: string;
   libraries?: string[];

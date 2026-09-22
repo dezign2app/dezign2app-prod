@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Settings, Trash, Layers } from "lucide-react";
+import { Database, Settings, Trash, Layers, AlertCircle, AlertTriangle } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { toast } from "sonner";
 import { LocalInput } from "../../common/LocalInput";
 import {
   useSimulationNodeState,
@@ -17,6 +18,7 @@ export const StateStoreNode = ({
   data,
   selected,
 }: NodeProps<BackendNode>) => {
+  const allNodes = useBackendCanvasStore((s) => s.nodes);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
@@ -33,6 +35,36 @@ export const StateStoreNode = ({
   const [isEditing, setIsEditing] = useState(!data.label && !data.storeName);
   const [name, setName] = useState(data.label || data.storeName || "");
   const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const currentStoreName = (data.storeName || data.label || "").trim();
+  const isDuplicateStoreName = useMemo(() => {
+    if (!currentStoreName) return false;
+    const key = currentStoreName.toLowerCase();
+    return allNodes.some(
+      (n) =>
+        n.id !== id &&
+        n.type === "state_store" &&
+        (n.data?.storeName || n.data?.label || "").trim().toLowerCase() === key,
+    );
+  }, [allNodes, id, currentStoreName]);
+
+  const duplicateFieldIds = useMemo(() => {
+    const counts = new Map<string, number>();
+    (data.fields || []).forEach((f) => {
+      const key = f.name?.trim().toLowerCase();
+      if (key) counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    const dupes = new Set<string>();
+    (data.fields || []).forEach((f) => {
+      const key = f.name?.trim().toLowerCase();
+      if (key && (counts.get(key) || 0) > 1) {
+        dupes.add(f.id);
+      }
+    });
+    return dupes;
+  }, [data.fields]);
+
+  const hasErrors = isDuplicateStoreName || duplicateFieldIds.size > 0;
 
   React.useEffect(() => {
     setName(data.label || data.storeName || "");
@@ -68,6 +100,15 @@ export const StateStoreNode = ({
       setName(data.label || data.storeName || "");
       setIsEditing(false);
       return;
+    }
+    const isColliding = allNodes.some(
+      (n) =>
+        n.id !== id &&
+        n.type === "state_store" &&
+        (n.data?.storeName || n.data?.label || "").trim().toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (isColliding) {
+      toast.error(`An App Store named "${trimmed}" already exists. Store names must be unique.`);
     }
     updateNode(id, {
       data: {
@@ -116,8 +157,12 @@ export const StateStoreNode = ({
       className={cn(
         "group relative flex flex-col gap-1.5 px-3 py-2.5 rounded-xl bg-card/95 backdrop-blur border-2 min-w-[220px] max-w-[280px] shadow-md transition-all duration-150 cursor-pointer select-none",
         selected
-          ? "border-indigo-500 shadow-indigo-500/15 ring-1 ring-indigo-500/20"
-          : "border-border/80 hover:border-indigo-500/50 hover:shadow-lg",
+          ? hasErrors
+            ? "border-destructive shadow-destructive/20 ring-1 ring-destructive/40"
+            : "border-indigo-500 shadow-indigo-500/15 ring-1 ring-indigo-500/20"
+          : hasErrors
+            ? "border-destructive/80 hover:border-destructive shadow-md shadow-destructive/10"
+            : "border-border/80 hover:border-indigo-500/50 hover:shadow-lg",
         borderClass,
       )}
       onDoubleClick={handleOpenConfig}
@@ -138,10 +183,28 @@ export const StateStoreNode = ({
           </div>
 
           <div className="flex flex-col min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[8px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400">
                 State Store
               </span>
+              {isDuplicateStoreName && (
+                <span
+                  className="flex items-center gap-0.5 text-[7px] font-mono px-1 py-0.2 rounded font-bold bg-destructive/15 text-destructive border border-destructive/30 uppercase tracking-wide"
+                  title={`Duplicate App Store name "${currentStoreName}"! Each App Store must have a unique name.`}
+                >
+                  <AlertTriangle size={8} />
+                  <span>DUP STORE</span>
+                </span>
+              )}
+              {duplicateFieldIds.size > 0 && (
+                <span
+                  className="flex items-center gap-0.5 text-[7px] font-mono px-1 py-0.2 rounded font-bold bg-destructive/15 text-destructive border border-destructive/30 uppercase tracking-wide"
+                  title="Duplicate field names detected in this store!"
+                >
+                  <AlertTriangle size={8} />
+                  <span>DUP FIELDS</span>
+                </span>
+              )}
               <button
                 type="button"
                 onClick={handleToggleScope}
@@ -241,8 +304,84 @@ export const StateStoreNode = ({
         <span className="text-[8px] text-indigo-500/80 font-bold uppercase tracking-wide">Zustand</span>
       </div>
 
+      {/* Dynamic State Objects (Fields) list */}
+      <div className="flex flex-col gap-1 pt-1.5 border-t border-border/40 text-[9px] font-mono">
+        <div className="flex items-center justify-between text-[8px] font-bold uppercase tracking-wider text-muted-foreground/80 px-1">
+          <div className="flex items-center gap-1">
+            <span className={cn("font-bold", duplicateFieldIds.size > 0 ? "text-destructive" : "text-cyan-500")}>•</span>
+            <span>State Objects</span>
+          </div>
+          {duplicateFieldIds.size > 0 ? (
+            <span className="text-[7px] text-destructive font-bold bg-destructive/15 px-1 rounded border border-destructive/30 flex items-center gap-0.5">
+              <AlertTriangle size={8} />
+              <span>Duplicate Fields</span>
+            </span>
+          ) : (
+            <span className="text-[7px] text-cyan-600 dark:text-cyan-400 font-semibold">{fieldCount} {fieldCount === 1 ? "field" : "fields"}</span>
+          )}
+        </div>
+        {data.fields && data.fields.length > 0 ? (
+          data.fields.map((f) => {
+            const isDupe = duplicateFieldIds.has(f.id);
+            return (
+              <div
+                key={f.id}
+                className={cn(
+                  "relative flex items-center justify-between px-1.5 py-0.5 rounded transition-colors group/field",
+                  isDupe
+                    ? "bg-destructive/15 text-destructive border border-destructive/40"
+                    : "bg-muted/15 hover:bg-muted/30",
+                )}
+              >
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  {isDupe ? (
+                    <span title={`Duplicate field name "${f.name}". Field names must be unique.`}>
+                      <AlertTriangle size={8} className="text-destructive shrink-0" />
+                    </span>
+                  ) : (
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0" />
+                  )}
+                  <span className={cn("font-semibold truncate", isDupe ? "text-destructive font-bold" : "text-foreground/90")}>{f.name}</span>
+                  <span className={cn(
+                    "text-[7px] px-1 py-0.2 rounded border shrink-0",
+                    isDupe ? "bg-destructive/20 border-destructive/40 text-destructive" : "bg-secondary text-muted-foreground border-border/40"
+                  )}>
+                    {f.type}
+                  </span>
+                  {f.defaultValue !== undefined && f.defaultValue !== "" && (
+                    <span className="text-[7px] text-muted-foreground/60 truncate font-mono">
+                      = {typeof f.defaultValue === "object" ? JSON.stringify(f.defaultValue) : String(f.defaultValue)}
+                    </span>
+                  )}
+                </div>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={`store-field-out-${f.id}`}
+                  className="w-2 h-2 !bg-cyan-500 border border-background cursor-pointer hover:scale-125 transition-transform -right-3 z-10"
+                  style={{ top: "50%" }}
+                  title={`${f.name}: Drag to WebPage to render state`}
+                />
+              </div>
+            );
+          })
+        ) : (
+          <div className="px-1.5 py-0.5 text-[8px] text-muted-foreground/50 italic">
+            No fields defined yet
+          </div>
+        )}
+      </div>
+
       {/* Actions list with handles aligned on the right edge */}
       <div className="flex flex-col gap-1 pt-1.5 border-t border-border/40 text-[9px] font-mono">
+        <div className="flex items-center justify-between text-[8px] font-bold uppercase tracking-wider text-muted-foreground/80 px-1">
+          <div className="flex items-center gap-1">
+            <span className="text-indigo-500 font-bold">•</span>
+            <span>Manipulators</span>
+          </div>
+          <span className="text-[7px] text-indigo-500 font-semibold">{actionCount} {actionCount === 1 ? "action" : "actions"}</span>
+        </div>
+
         {/* 1. Load / Populate Action */}
         <div className="relative flex items-center justify-between px-1.5 py-0.5 rounded bg-muted/20 hover:bg-muted/40 transition-colors group/row">
           <div className="flex items-center gap-1.5">
@@ -359,12 +498,14 @@ export const StateStoreNode = ({
         )}
       </div>
 
-      {/* Fallback hidden store-out handle for legacy edges */}
+      {/* Main store-out handle to connect state store to WebPage */}
       <Handle
         type="source"
         position={Position.Right}
         id="store-out"
-        style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+        className="w-2.5 h-2.5 !bg-cyan-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-3 z-10"
+        style={{ top: "35px" }}
+        title="Connect State Store to WebPage to render dynamic data"
       />
     </div>
   );

@@ -24,6 +24,9 @@ const NON_ACTION_HANDLES: readonly string[] = [
   "page-out",
   "store-in",
   "store-out",
+  "store-state-in",
+  "store-state-out",
+  "section-state-in",
   "populate-in",
   "populate-out",
   "mutate-in",
@@ -68,6 +71,13 @@ function extractActionIdFromHandle(handleId: string | null | undefined): string 
     return null;
   }
   if (NON_ACTION_HANDLES.includes(handleId)) {
+    return null;
+  }
+  if (
+    handleId.startsWith("section-state-in-") ||
+    handleId.startsWith("state-in-") ||
+    handleId.startsWith("store-state-")
+  ) {
     return null;
   }
   if (handleId.startsWith("pageload-in-")) {

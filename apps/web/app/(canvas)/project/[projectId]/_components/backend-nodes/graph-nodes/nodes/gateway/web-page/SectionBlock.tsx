@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Position, Handle, useUpdateNodeInternals } from "@xyflow/react";
-import { ChevronDown, ChevronRight, Settings, Trash, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Settings, Trash, Plus, Zap } from "lucide-react";
 import { BackendNode, Endpoint, UIEventItem, PageSection } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { generateId } from "../../../common";
 import { Input } from "@workspace/ui/components/input";
 import { SectionActionRow } from "./SectionActionRow";
+import { SectionStateObjectsList } from "./SectionStateObjectsList";
 
 import { useSectionCollapseStore } from "@/lib/stores/sectionCollapseStore";
 import { NodeDeletionDialog } from "../../../../../node-deletion-dialog";
@@ -101,7 +102,7 @@ export const SectionBlock = ({
     if (typeof updateNodeInternals === "function") {
       updateNodeInternals(nodeId);
     }
-  }, [isOpen, section.actions, nodeId, updateNodeInternals]);
+  }, [isOpen, section.actions, section.stateObjects, nodeId, updateNodeInternals]);
 
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
@@ -301,6 +302,19 @@ export const SectionBlock = ({
                 </React.Fragment>
               );
             })}
+
+            {/* Collapsed State Handles: keep store state edges anchored when collapsed */}
+            {section.stateObjects?.map((st) => (
+              <Handle
+                key={`collapsed-state-${st.id}`}
+                type="target"
+                position={Position.Left}
+                id={`section-state-in-${section.id}-${st.id}`}
+                className="w-2 h-2 -left-1 !bg-purple-500"
+                style={{ top: "50%" }}
+                title={`State subscription: ${st.name} from store ${st.storeName || ""}`}
+              />
+            ))}
           </>
         )}
 
@@ -384,13 +398,23 @@ export const SectionBlock = ({
             {loadStrategy === "dynamic-no-ssr" ? "no-ssr" : loadStrategy}
           </button>
 
-          {/* States Count Badge */}
+          {/* Store States Count Badge */}
+          {Boolean(section.stateObjects?.length) && (
+            <span
+              className="text-[8px] font-mono px-1 py-0.2 rounded border bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30 font-medium cursor-default"
+              title={`${section.stateObjects!.length} Zustand store field${section.stateObjects!.length === 1 ? "" : "s"} rendered (${section.stateObjects!.map((s) => s.name).join(", ")})`}
+            >
+              {section.stateObjects!.length} {section.stateObjects!.length === 1 ? "state" : "states"}
+            </span>
+          )}
+
+          {/* Local useState Count Badge */}
           {Boolean(section.states?.length) && (
             <span
               className="text-[8px] font-mono px-1 py-0.2 rounded border bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30 font-medium cursor-default"
               title={`${section.states!.length} state variable${section.states!.length === 1 ? "" : "s"} defined (${section.states!.map((s) => s.name).join(", ")})`}
             >
-              {section.states!.length} {section.states!.length === 1 ? "state" : "states"}
+              {section.states!.length} {section.states!.length === 1 ? "local state" : "local states"}
             </span>
           )}
 
@@ -435,7 +459,7 @@ export const SectionBlock = ({
         </div>
       </div>
 
-      {/* Section Actions Body */}
+      {/* Section Body: Subsections for Rendered State & Actions */}
       {isOpen && (
         <div
           className={cn(
@@ -443,40 +467,88 @@ export const SectionBlock = ({
             isLastSection && "rounded-b-[10px]",
           )}
         >
-          {section.actions.map((act) => (
-            <SectionActionRow
-              key={act.id}
-              nodeId={nodeId}
-              sectionId={section.id}
-              action={act}
-              sections={sections}
-              updateSections={updateSections}
-              getLinkedEndpoint={getLinkedEndpoint}
-              onTriggerEvent={onTriggerEvent}
-              isEditing={editingActionId === act.id}
-              onStartEdit={() => setEditingActionId(act.id)}
-              onFinishEdit={() => {
-                if (editingActionId === act.id) {
-                  setEditingActionId(null);
-                }
-              }}
-            />
-          ))}
+          {/* Subsection 1: Rendered Store State (Zustand) */}
+          <SectionStateObjectsList
+            nodeId={nodeId}
+            section={section}
+            sections={sections}
+            updateSections={updateSections}
+          />
 
-          {/* Add Action inside section */}
-          <button
-            type="button"
-            onClick={handleAddAction}
-            className={cn(
-              "flex items-center justify-center gap-1 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors cursor-pointer nodrag",
-              section.actions.length === 0
-                ? "border-t border-dashed border-border/40"
-                : "border-t-0",
-              isLastSection && "rounded-b-[10px]",
+          {/* Subsection 2: Actions & Triggers */}
+          <div className="flex flex-col">
+            <div className="px-2.5 py-1 bg-amber-500/[0.04] border-b border-border/30 flex items-center justify-between text-[9px] select-none">
+              <div className="flex items-center gap-1.5 font-semibold text-foreground/80">
+                <Zap size={11} className="text-amber-500 shrink-0" />
+                <span className="uppercase tracking-wider text-[8px] font-bold">
+                  Actions & Triggers
+                </span>
+                {Boolean(section.actions.length) && (
+                  <span className="text-[8px] font-mono text-muted-foreground">
+                    ({section.actions.length})
+                  </span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAddAction}
+                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[8px] font-semibold transition-colors cursor-pointer"
+                title="Add action to this section"
+              >
+                <Plus size={9} />
+                <span>Add Action</span>
+              </button>
+            </div>
+
+            {/* Action Rows */}
+            {section.actions.length === 0 ? (
+              <div className="py-1.5 px-2 flex items-center justify-between rounded bg-muted/10 border border-dashed border-border/50 text-[9px] text-muted-foreground/70 mx-2.5 my-1.5">
+                <span>No actions defined for this section.</span>
+                <button
+                  type="button"
+                  onClick={handleAddAction}
+                  className="text-amber-600 dark:text-amber-400 hover:underline cursor-pointer font-medium"
+                >
+                  + Add action
+                </button>
+              </div>
+            ) : (
+              section.actions.map((act) => (
+                <SectionActionRow
+                  key={act.id}
+                  nodeId={nodeId}
+                  sectionId={section.id}
+                  action={act}
+                  sections={sections}
+                  updateSections={updateSections}
+                  getLinkedEndpoint={getLinkedEndpoint}
+                  onTriggerEvent={onTriggerEvent}
+                  isEditing={editingActionId === act.id}
+                  onStartEdit={() => setEditingActionId(act.id)}
+                  onFinishEdit={() => {
+                    if (editingActionId === act.id) {
+                      setEditingActionId(null);
+                    }
+                  }}
+                />
+              ))
             )}
-          >
-            <Plus size={10} /> Add action
-          </button>
+
+            {/* Add Action button at bottom */}
+            {section.actions.length > 0 && (
+              <button
+                type="button"
+                onClick={handleAddAction}
+                className={cn(
+                  "flex items-center justify-center gap-1 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors cursor-pointer nodrag",
+                  isLastSection && "rounded-b-[10px]",
+                )}
+              >
+                <Plus size={10} /> Add action
+              </button>
+            )}
+          </div>
         </div>
       )}
 

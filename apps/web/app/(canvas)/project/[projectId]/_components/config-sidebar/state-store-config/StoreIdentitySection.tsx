@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../backend-nodes/graph-nodes/shared";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
@@ -12,9 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Sparkles, Link as LinkIcon } from "lucide-react";
+import { Sparkles, Link as LinkIcon, AlertCircle } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { StorePreset, STORE_PRESETS } from "./types";
+import { cn } from "@workspace/ui/lib/utils";
 
 export interface StoreIdentitySectionProps {
   storeName: string;
@@ -22,6 +23,8 @@ export interface StoreIdentitySectionProps {
   scope: "global" | "local";
   storage: "memory" | "localStorage" | "sessionStorage";
   connectedPages: BackendNode[];
+  isDuplicateStoreName?: boolean;
+  duplicateStoreMessage?: string;
   onApplyPreset: (preset: StorePreset) => void;
   onUpdateStoreName: (name: string) => void;
   onUpdateDescription: (description: string) => void;
@@ -35,6 +38,8 @@ export const StoreIdentitySection: React.FC<StoreIdentitySectionProps> = ({
   scope,
   storage,
   connectedPages,
+  isDuplicateStoreName = false,
+  duplicateStoreMessage,
   onApplyPreset,
   onUpdateStoreName,
   onUpdateDescription,
@@ -68,20 +73,40 @@ export const StoreIdentitySection: React.FC<StoreIdentitySectionProps> = ({
       {/* Store Identity */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1.5">
-          <Label className="text-[11px] font-semibold text-muted-foreground">Store Name</Label>
-          <Input
+          <Label className="text-[11px] font-semibold text-muted-foreground flex items-center justify-between">
+            <span>Store Name</span>
+            {isDuplicateStoreName && (
+              <span className="text-[10px] text-destructive font-semibold">
+                Name already exists
+              </span>
+            )}
+          </Label>
+          <LocalInput
             value={storeName}
             onChange={(e) => onUpdateStoreName(e.target.value)}
+            debounceMs={150}
             placeholder="e.g. Cart, UserPreferences"
-            className="h-8 text-xs font-medium"
+            className={cn(
+              "h-8 text-xs font-medium",
+              isDuplicateStoreName && "border-destructive text-destructive focus-visible:ring-destructive",
+            )}
           />
+          {isDuplicateStoreName && (
+            <div className="flex items-center gap-1.5 text-[11px] text-destructive font-medium mt-0.5">
+              <AlertCircle size={12} className="shrink-0" />
+              <span>
+                {duplicateStoreMessage || `An App Store named "${storeName}" already exists. Store names must be unique.`}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-[11px] font-semibold text-muted-foreground">Description</Label>
-          <Input
+          <LocalInput
             value={description}
             onChange={(e) => onUpdateDescription(e.target.value)}
+            debounceMs={150}
             placeholder="Brief purpose of this store..."
             className="h-8 text-xs"
           />

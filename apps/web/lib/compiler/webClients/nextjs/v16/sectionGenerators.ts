@@ -113,19 +113,30 @@ export function generateSectionComponent(
 ): string {
   const { libraryImports, requiresClient: libRequiresClient } = resolveLibraryImports(section.libraries);
   const hasStates = Array.isArray(section.states) && section.states.length > 0;
+  const hasStateObjects = Array.isArray(section.stateObjects) && section.stateObjects.length > 0;
 
   const boundStores = (section.actions || [])
     .map((a) => a.storeActionBinding)
     .filter((b): b is NonNullable<typeof b> => Boolean(b && b.storeName));
   const hasStoreBindings = boundStores.length > 0;
 
-  const isClient = section.renderMode === "client" || libRequiresClient || hasStates || hasStoreBindings;
+  const isClient =
+    section.renderMode === "client" ||
+    libRequiresClient ||
+    hasStates ||
+    hasStateObjects ||
+    hasStoreBindings;
 
   const actionImports = eventComponents
     .map((c) => `import { ${c.componentName} } from "./${c.componentName}";`)
     .join("\n");
 
-  const uniqueStoreNames = Array.from(new Set(boundStores.map((b) => b.storeName!)));
+  const actionStoreNames = boundStores.map((b) => b.storeName!);
+  const stateStoreNames = (section.stateObjects || [])
+    .map((s) => s.storeName)
+    .filter((n): n is string => Boolean(n));
+  const uniqueStoreNames = Array.from(new Set([...actionStoreNames, ...stateStoreNames]));
+
   const storeImports = uniqueStoreNames
     .map((sName) => {
       const clean = sName.replace(/Store$/i, "");
@@ -134,17 +145,31 @@ export function generateSectionComponent(
     })
     .join("\n");
 
-  const storeHookCalls = uniqueStoreNames
-    .map((sName) => {
-      const clean = sName.replace(/Store$/i, "");
+  const actionStoreHookCalls = Array.from(new Set(actionStoreNames)).map((sName) => {
+    const clean = sName.replace(/Store$/i, "");
+    const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
+    return `  const ${toCamelCase(clean)}Store = ${hookName}();`;
+  });
+
+  const stateObjectHookCalls = (section.stateObjects || []).map((st) => {
+    const varName = toCamelCase(st.name || "state");
+    if (st.storeName) {
+      const clean = st.storeName.replace(/Store$/i, "");
       const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
-      return `  const ${toCamelCase(clean)}Store = ${hookName}();`;
-    })
-    .join("\n");
+      return `  const ${varName} = ${hookName}((s) => s.${st.name});`;
+    }
+    const tsType = mapStateTypeToTs(st.type || "string");
+    const defaultVal = formatStateDefaultValue(st.type || "string", st.defaultValue);
+    return `  const [${varName}] = useState<${tsType}>(${defaultVal});`;
+  });
 
   const hasActions = eventComponents.length > 0;
   const isNavOnly =
-    hasActions && eventComponents.every((c) => c.eventType === "navigateToPage") && !hasStates && !hasStoreBindings;
+    hasActions &&
+    eventComponents.every((c) => c.eventType === "navigateToPage") &&
+    !hasStates &&
+    !hasStateObjects &&
+    !hasStoreBindings;
 
   const reactImport = hasStates
     ? `import React, { useState } from "react";`
@@ -165,7 +190,8 @@ export function generateSectionComponent(
 
   const combinedSetupLines = [
     stateDeclarations,
-    storeHookCalls,
+    ...stateObjectHookCalls,
+    ...actionStoreHookCalls,
   ].filter(Boolean).join("\n");
 
   if (isNavOnly) {
@@ -201,14 +227,23 @@ export default ${sectionCompName};
     ? `\n        <CardDescription className="text-xs text-muted-foreground">${section.description}</CardDescription>`
     : "";
 
-  const contentJsx = hasActions
-    ? `\n      <CardContent>\n        <div className="flex flex-wrap gap-3">\n${eventComponents
+  const stateObjectsJsx = hasStateObjects
+    ? `\n        <div className="flex flex-wrap gap-2 mb-3">\n${(section.stateObjects || [])
+        .map((st) => {
+          const varName = toCamelCase(st.name || "state");
+          return `          <div key="${st.id}" className="text-xs px-2.5 py-1 rounded bg-secondary/50 border border-border text-foreground font-mono"><span className="text-muted-foreground">${st.name}: </span>{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</div>`;
+        })
+        .join("\n")}\n        </div>`
+    : "";
+
+  const contentJsx = (hasActions || hasStateObjects)
+    ? `\n      <CardContent>${stateObjectsJsx}${hasActions ? `\n        <div className="flex flex-wrap gap-3">\n${eventComponents
         .map((c) => `          <${c.componentName} onTrigger={onTrigger} />`)
-        .join("\n")}\n        </div>\n      </CardContent>`
+        .join("\n")}\n        </div>` : ""}\n      </CardContent>`
     : "";
 
   return `${isClient ? `"use client";\n\n` : ""}${reactImport}
-import { Card, CardHeader, CardTitle${section.description ? ", CardDescription" : ""}${hasActions ? ", CardContent" : ""} } from "@workspace/ui/components/card";
+import { Card, CardHeader, CardTitle${section.description ? ", CardDescription" : ""}${hasActions || hasStateObjects ? ", CardContent" : ""} } from "@workspace/ui/components/card";
 ${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${actionImports}\n` : ""}export interface ${sectionCompName}Props {
   onTrigger?: (
     eventName: string,

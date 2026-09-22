@@ -244,6 +244,17 @@ export const clientEventInputSchema = z.object({
 
 export const webPageEventSchema = clientEventInputSchema;
 
+export const pageStateObjectSchema = z.object({
+  id: z.string().describe("Unique state object ID"),
+  name: z.string().describe("State variable / field name"),
+  type: z.string().describe("State variable type (e.g. string, number, array, object)"),
+  defaultValue: z.any().optional().describe("Default initial value"),
+  storeId: z.string().optional().describe("Source Zustand StateStoreNode ID"),
+  storeName: z.string().optional().describe("Source Zustand StateStore name"),
+  fieldId: z.string().optional().describe("Source field ID within store"),
+  description: z.string().optional().describe("Description of state object"),
+});
+
 export const pageSectionSchema = z.object({
   id: z.string().describe("Unique identifier for this page section / component"),
   name: z.string().describe("Component name / section title"),
@@ -264,6 +275,10 @@ export const pageSectionSchema = z.object({
     )
     .optional()
     .describe("Local useState variables inside this section"),
+  stateObjects: z
+    .array(pageStateObjectSchema)
+    .optional()
+    .describe("Dynamic Zustand store state objects rendered in this section"),
   description: z.string().optional().describe("Functional description of what this section does"),
   uiPrompt: z.string().optional().describe("Visual styling and theme prompt for this section"),
   libraries: z.array(z.string()).optional().describe("Third-party libraries used in this section"),
@@ -320,6 +335,7 @@ export const webPageDataSchema = simpleDataSchema.extend({
   aiEditing: z.boolean().optional().describe("Whether AI agent is actively streaming page edit"),
   events: z.array(clientEventInputSchema).optional(),
   sections: z.array(pageSectionSchema).optional().describe("Sections hierarchy containing actions"),
+  stateObjects: z.array(pageStateObjectSchema).optional().describe("Dynamic state objects configured on this page"),
   realtimeConnections: z.array(realtimeConnectionSchema).optional().describe("Real-time push streams"),
   uiPrompt: z.string().optional().describe("Page-level AI prompt"),
   renderMode: z.enum(["server", "client"]).optional().describe("Page-level render mode"),

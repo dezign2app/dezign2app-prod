@@ -154,5 +154,62 @@ describe("compileNextjsV16SectionState", () => {
     expect(code).toContain('import { useCartStore } from "@/lib/stores";');
     expect(code).toContain("const cartStore = useCartStore();");
   });
+
+  it("imports and binds Zustand store fields when section.stateObjects are configured", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-catalog",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/catalog",
+        appSlug: "shop-app",
+        sections: [
+          {
+            id: "sec-cart-display",
+            name: "Cart Widget",
+            renderMode: "server",
+            actions: [],
+            stateObjects: [
+              {
+                id: "st-items",
+                name: "items",
+                type: "array",
+                storeName: "Cart",
+                defaultValue: [],
+              },
+              {
+                id: "st-total",
+                name: "totalPrice",
+                type: "number",
+                storeName: "Cart",
+                defaultValue: 0,
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const cartWidgetFile = result.files.find((f) =>
+      f.filename.includes("CartWidgetSection.tsx"),
+    );
+
+    expect(cartWidgetFile).toBeDefined();
+    const code = cartWidgetFile!.content;
+
+    // Forces client component because of Zustand store subscription
+    expect(code).toContain('"use client";');
+    // Store hook import
+    expect(code).toContain('import { useCartStore } from "@/lib/stores";');
+    // Specific field selectors
+    expect(code).toContain("const items = useCartStore((s) => s.items);");
+    expect(code).toContain("const totalPrice = useCartStore((s) => s.totalPrice);");
+    // State rendered in CardContent
+    expect(code).toContain("<CardContent>");
+    expect(code).toContain("items:");
+    expect(code).toContain("totalPrice:");
+  });
 });
 
