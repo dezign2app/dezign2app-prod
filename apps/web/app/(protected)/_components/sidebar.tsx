@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
 import {
   type LucideIcon,
   BookOpenText,
@@ -13,6 +13,9 @@ import {
   Sun,
   Moon,
   CreditCard,
+  ChevronsUpDown,
+  Loader2,
+  KeyIcon,
 } from "lucide-react";
 import {
   Sidebar,
@@ -26,14 +29,31 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from "@workspace/ui/components/sidebar";
 import { usePathname, useRouter } from "next/navigation";
 import { Separator } from "@workspace/ui/components/separator";
 import { useTheme } from "next-themes";
 import { OrgSwitcher } from "@/components/auth/org-switcher";
-import { signOut } from "@/lib/auth-client";
+import { signOut, useSession, useActiveOrganization } from "@/lib/auth-client";
 import { logoutUser } from "@/app/(auth)/_components/actions";
-import { KeyIcon } from "lucide-react";
+import { useQuery } from "convex/react";
+import { api } from "@workspace/backend/_generated/api";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@workspace/ui/components/avatar";
+import { Badge } from "@workspace/ui/components/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu";
 import Link from "next/link";
 import { cn } from "@workspace/ui/lib/utils";
 
@@ -75,10 +95,56 @@ const configurationItems: SidebarItem[] = [
   },
 ];
 
+const getInitials = (name?: string | null, email?: string | null) => {
+  if (name && name.trim()) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  }
+  if (email) {
+    return email.slice(0, 2).toUpperCase();
+  }
+  return "U";
+};
+
 const ProtectedSidebar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+  const { isMobile } = useSidebar();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const { data: session } = useSession();
+  const { data: activeOrg } = useActiveOrganization();
+
+  const user = session?.user;
+  const userEmail = user?.email ?? "";
+  const userName = user?.name || (userEmail ? userEmail.split("@")[0] : "User");
+  const initials = getInitials(user?.name, user?.email);
+
+  const subscriptionStatus = useQuery(
+    api.users.getSubscriptionStatus,
+    userEmail
+      ? {
+          email: userEmail,
+          organizationId: activeOrg?.id ?? null,
+        }
+      : "skip",
+  );
+
+  const isAdmin = subscriptionStatus?.isSystemAdmin;
+  const isOrgSeat = subscriptionStatus?.isOrgSeat;
+  const isPro = subscriptionStatus?.status === "active";
+
+  const planLabel = isAdmin
+    ? "Admin"
+    : isOrgSeat
+      ? "Team"
+      : isPro
+        ? "Pro"
+        : "Free";
 
   const isActive = (url: string) => {
     if (url === "/") return pathname === "/";
@@ -86,6 +152,7 @@ const ProtectedSidebar = () => {
   };
 
   const handleSignOut = async () => {
+    setIsSigningOut(true);
     try {
       // 1. Better Auth client sign out
       await signOut().catch(() => {});
@@ -247,16 +314,106 @@ const ProtectedSidebar = () => {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={handleSignOut}
-              tooltip={"Signout"}
-              size="sm"
-              className="cursor-pointer"
-            >
-              <div className="flex items-center justify-center gap-2">
-                <LogOut className="size-4" /> Sign Out
-              </div>
-            </SidebarMenuButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground cursor-pointer transition-colors hover:bg-sidebar-accent group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center"
+                >
+                  <Avatar className="size-8 rounded-lg shrink-0">
+                    {user?.image ? (
+                      <AvatarImage src={user.image} alt={userName} />
+                    ) : null}
+                    <AvatarFallback className="rounded-lg text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                    <span className="truncate font-medium text-xs text-foreground">
+                      {userName}
+                    </span>
+                    <span className="truncate text-[10px] text-muted-foreground">
+                      {userEmail}
+                    </span>
+                  </div>
+                  <ChevronsUpDown className="ml-auto size-4 text-muted-foreground group-data-[collapsible=icon]:hidden" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-64 rounded-xl p-1.5 shadow-lg"
+                side={isMobile ? "bottom" : "right"}
+                align="end"
+                sideOffset={8}
+              >
+                <DropdownMenuLabel className="p-0 font-normal">
+                  <div className="flex items-center gap-2.5 p-2 bg-muted/40 rounded-lg border border-border/50">
+                    <Avatar className="size-9 rounded-lg shrink-0">
+                      {user?.image ? (
+                        <AvatarImage src={user.image} alt={userName} />
+                      ) : null}
+                      <AvatarFallback className="rounded-lg text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="grid flex-1 min-w-0 text-left leading-tight">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="truncate font-semibold text-xs text-foreground">
+                          {userName}
+                        </span>
+                        <Badge
+                          variant={isPro || isAdmin ? "default" : "secondary"}
+                          className={cn(
+                            "text-[9px] px-1.5 py-0 h-4 font-semibold uppercase tracking-wider shrink-0",
+                            isAdmin && "bg-purple-600 text-white hover:bg-purple-600",
+                            !isAdmin && isPro && "bg-amber-500 hover:bg-amber-500 text-white",
+                            !isAdmin && !isPro && "text-muted-foreground",
+                          )}
+                        >
+                          {planLabel}
+                        </Badge>
+                      </div>
+                      <span className="truncate text-[10px] text-muted-foreground mt-0.5">
+                        {userEmail}
+                      </span>
+                    </div>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem asChild className="cursor-pointer text-xs">
+                    <Link href="/organization" className="flex items-center gap-2">
+                      <Building2 className="size-4 text-muted-foreground" />
+                      <span>Organization</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="cursor-pointer text-xs">
+                    <Link href="/organization/billing" className="flex items-center gap-2">
+                      <CreditCard className="size-4 text-muted-foreground" />
+                      <span>Billing & Plans</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="cursor-pointer text-xs">
+                    <Link href="/api-keys" className="flex items-center gap-2">
+                      <KeyIcon className="size-4 text-muted-foreground" />
+                      <span>API Keys</span>
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleSignOut}
+                  disabled={isSigningOut}
+                  className="cursor-pointer text-xs text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center gap-2"
+                >
+                  {isSigningOut ? (
+                    <Loader2 className="size-4 animate-spin text-destructive" />
+                  ) : (
+                    <LogOut className="size-4" />
+                  )}
+                  <span>{isSigningOut ? "Signing out..." : "Sign Out"}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
