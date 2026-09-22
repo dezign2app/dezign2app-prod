@@ -57,6 +57,8 @@ export const globalStoreFieldSchema = z.object({
   id: z.string(),
   name: z.string(),
   type: z.string(),
+  isArray: z.boolean().optional(),
+  required: z.boolean().optional(),
   defaultValue: z.any().optional(),
   description: z.string().optional(),
 });
