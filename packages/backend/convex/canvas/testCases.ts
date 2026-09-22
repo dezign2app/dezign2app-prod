@@ -1,6 +1,7 @@
-import { v, ConvexError } from "convex/values";
+import { v } from "convex/values";
 import { mutation } from "../_generated/server";
 import { backendTestCaseDataValidator } from "../schema/canvasValidators";
+import { assertActiveSubscriptionForProject } from "../auth_guards";
 
 export const upsertBackendTestCase = mutation({
   args: {
@@ -9,8 +10,7 @@ export const upsertBackendTestCase = mutation({
     data: backendTestCaseDataValidator, // uses simulationTestCaseSchema
   },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
       .query("canvas_backend_test_cases")
@@ -34,8 +34,7 @@ export const upsertBackendTestCase = mutation({
 export const removeBackendTestCase = mutation({
   args: { projectId: v.id("projects"), testCaseId: v.string() },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
       .query("canvas_backend_test_cases")

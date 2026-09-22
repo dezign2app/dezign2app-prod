@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
+import { assertActiveSubscriptionForProject } from "./auth_guards";
 
 export const get = query({
   args: { projectId: v.string() },
@@ -20,6 +22,11 @@ export const upsert = mutation({
     status: v.union(v.literal("pending"), v.literal("confirmed")),
   },
   handler: async (ctx, args) => {
+    await assertActiveSubscriptionForProject(
+      ctx,
+      args.projectId as Id<"projects">,
+    );
+
     const existing = await ctx.db
       .query("projectRequirements")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
@@ -60,6 +67,11 @@ export const upsertPlan = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    await assertActiveSubscriptionForProject(
+      ctx,
+      args.projectId as Id<"projects">,
+    );
+
     const existing = await ctx.db
       .query("projectPlans")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))

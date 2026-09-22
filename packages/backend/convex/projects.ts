@@ -1,34 +1,13 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import { Doc } from "./_generated/dataModel";
-import { components } from "./_generated/api";
 import { log } from "./logger";
-
-// Helper to verify if a user belongs to an organization
-async function isUserAuthorizedForOrg(
-  ctx: QueryCtx | MutationCtx,
-  userId: string,
-  targetOrgId: string,
-  tokenOrgId?: string,
-): Promise<boolean> {
-  if (tokenOrgId && tokenOrgId === targetOrgId) {
-    return true;
-  }
-  try {
-    const member = await ctx.runQuery(components.betterAuth.adapter.findOne, {
-      model: "member",
-      where: [
-        { field: "organizationId", value: targetOrgId },
-        { field: "userId", value: userId },
-      ],
-    });
-    return !!member;
-  } catch (err) {
-    console.error("[projects] Error checking org membership:", err);
-    return false;
-  }
-}
+import {
+  isUserAuthorizedForOrg,
+  assertCanCreateProject,
+  assertActiveSubscriptionForProject,
+} from "./auth_guards";
 
 export const createProject = mutation({
   args: {
@@ -66,20 +45,8 @@ export const createProject = mutation({
       targetOrgId = tokenOrgId;
     }
 
-    if (targetOrgId) {
-      const authorized = await isUserAuthorizedForOrg(
-        ctx,
-        userId,
-        targetOrgId,
-        tokenOrgId,
-      );
-      if (!authorized) {
-        throw new ConvexError({
-          code: "UNAUTHORIZED",
-          message: "Not authorized to create project in this organization",
-        });
-      }
-    }
+    // Server-side subscription check: require active subscription to create projects
+    await assertCanCreateProject(ctx, targetOrgId);
 
     const projectId = await ctx.db.insert("projects", {
       name: args.name,
@@ -218,17 +185,11 @@ export const assignProjectOrganization = mutation({
     organizationId: v.optional(v.union(v.string(), v.null())),
   },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Not authenticated");
-    }
-    const project = await ctx.db.get(args.projectId);
-    if (!project) {
-      throw new ConvexError("Project not found");
-    }
-    if (project.createdBy !== identity.subject) {
-      throw new ConvexError("Unauthorized");
-    }
+    const { identity } = await assertActiveSubscriptionForProject(
+      ctx,
+      args.projectId,
+    );
+
     const targetOrgId =
       args.organizationId && args.organizationId !== "personal"
         ? args.organizationId
@@ -260,19 +221,7 @@ export const updateProject = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Not authenticated");
-    }
-
-    const project = await ctx.db.get(args.projectId);
-    if (!project) {
-      throw new ConvexError("Project not found");
-    }
-
-    if (project.createdBy !== identity.subject) {
-      throw new ConvexError("Unauthorized");
-    }
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const patches: Partial<Doc<"projects">> = {
       updatedAt: Date.now(),
@@ -449,19 +398,11 @@ export const duplicateProject = mutation({
     projectId: v.id("projects"),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Not authenticated");
-    }
-
-    const project = await ctx.db.get(args.projectId);
-    if (!project) {
-      throw new ConvexError("Project not found");
-    }
-
-    if (project.createdBy !== identity.subject) {
-      throw new ConvexError("Unauthorized");
-    }
+    const { project } = await assertActiveSubscriptionForProject(
+      ctx,
+      args.projectId,
+    );
+    await assertCanCreateProject(ctx, project.organizationId);
 
     const { _id, _creationTime, ...projectRest } = project;
     const newProjectId = await ctx.db.insert("projects", {

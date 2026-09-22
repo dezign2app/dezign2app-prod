@@ -6,6 +6,7 @@ import {
   backendEventDataValidator,
 } from "../schema/canvasValidators";
 import { log } from "../logger";
+import { assertActiveSubscriptionForProject } from "../auth_guards";
 
 export const upsertBackendEndpoint = mutation({
   args: {
@@ -15,8 +16,7 @@ export const upsertBackendEndpoint = mutation({
     data: backendEndpointDataValidator,
   },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     log(
       "upsertBackendEndpoint called with:",
@@ -52,8 +52,7 @@ export const removeBackendEndpoint = mutation({
     endpointId: v.string(),
   },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
       .query("canvas_backend_endpoints")
@@ -76,8 +75,7 @@ export const upsertBackendIdentityProvider = mutation({
     data: backendIdentityProviderDataValidator,
   },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
       .query("canvas_backend_identity_providers")
@@ -106,8 +104,7 @@ export const removeBackendIdentityProvider = mutation({
     providerId: v.string(),
   },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
       .query("canvas_backend_identity_providers")
@@ -131,8 +128,7 @@ export const upsertBackendEvent = mutation({
     data: backendEventDataValidator,
   },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
       .query("canvas_backend_events")
@@ -165,8 +161,7 @@ export const removeBackendEvent = mutation({
     eventId: v.string(),
   },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
       .query("canvas_backend_events")

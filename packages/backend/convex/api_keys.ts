@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { ConvexError } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { Id } from "./_generated/dataModel";
+import { assertCanManageApiKeys } from "./auth_guards";
 
 // Helper to hash an API key
 async function hashKey(key: string) {
@@ -29,10 +30,10 @@ export const generate = mutation({
     projectId: v.optional(v.string()),
   },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Unauthorized");
-    }
+    const { identity } = await assertCanManageApiKeys(
+      ctx,
+      ctx.auth ? (await ctx.auth.getUserIdentity())?.org_id?.toString() : undefined,
+    );
 
     const rawKey = generateRawKey();
     const keyHash = await hashKey(rawKey);

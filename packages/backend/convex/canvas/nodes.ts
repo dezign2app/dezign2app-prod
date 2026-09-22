@@ -2,6 +2,7 @@ import { v, ConvexError } from "convex/values";
 import { mutation } from "../_generated/server";
 import { backendNodeDataValidator } from "../schema/canvasValidators";
 import { log } from "../logger";
+import { assertActiveSubscriptionForProject } from "../auth_guards";
 
 export const upsertBackendNode = mutation({
   args: {
@@ -22,8 +23,7 @@ export const upsertBackendNode = mutation({
       type: args.type,
       label: labelToLog,
     });
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     if (args.type === "auth" && typeof args.data === "object" && args.data !== null) {
       if ("dbNodeId" in args.data) {
@@ -119,8 +119,7 @@ export const upsertBackendNode = mutation({
 export const removeBackendNode = mutation({
   args: { projectId: v.id("projects"), nodeId: v.string() },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
       .query("canvas_backend_nodes")
@@ -159,8 +158,7 @@ export const patchNodeData = mutation({
     patch: v.any(),
   },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
       .query("canvas_backend_nodes")
@@ -170,7 +168,9 @@ export const patchNodeData = mutation({
       .unique();
 
     if (!existing) {
-      throw new ConvexError(`Node ${args.nodeId} not found in project ${args.projectId}`);
+      throw new ConvexError(
+        `Node ${args.nodeId} not found in project ${args.projectId}`,
+      );
     }
 
     const mergedData = { ...existing.data, ...args.patch };

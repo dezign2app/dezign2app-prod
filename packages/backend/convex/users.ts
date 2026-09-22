@@ -23,6 +23,15 @@ export const getSubscriptionStatus = query({
       return { status: "no_subscription", hasPriorSubscription: false };
     }
 
+    if (user.isSystemAdmin) {
+      return {
+        status: "active",
+        isOrgSeat: false,
+        hasPriorSubscription: true,
+        isSystemAdmin: true,
+      };
+    }
+
     const authUserId = identity?.subject || user.authId;
 
     // 1. If in an Organization workspace: check organization membership & org billing
