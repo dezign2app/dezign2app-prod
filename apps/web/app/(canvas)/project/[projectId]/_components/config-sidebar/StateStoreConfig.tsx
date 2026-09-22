@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { Badge } from "@workspace/ui/components/badge";
 import {
@@ -9,7 +9,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@workspace/ui/components/tabs";
-import { Database, Sliders, Zap } from "lucide-react";
+import { Database, Sliders, Zap, AlertCircle, AlertTriangle } from "lucide-react";
 import { GlobalStoreField, GlobalStoreAction, StateStoreTestCase } from "@workspace/canvas/types";
 import { cn } from "@workspace/ui/lib/utils";
 import { toast } from "sonner";
@@ -30,8 +30,9 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
   id,
   nodeId,
 }) => {
+  const targetNodeId = nodeId || id;
   const node = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === (nodeId || id)),
+    s.nodes.find((n) => n.id === targetNodeId),
   );
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const allNodes = useBackendCanvasStore((s) => s.nodes);
@@ -43,26 +44,18 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
   const actions: GlobalStoreAction[] = useMemo(() => node?.data?.actions || [], [node?.data?.actions]);
   const savedTestCases: StateStoreTestCase[] = useMemo(() => node?.data?.testCases || [], [node?.data?.testCases]);
 
-  if (!node) return null;
+  const connectedPages = useMemo(() => {
+    if (!targetNodeId) return [];
+    const connectedPageIds = new Set(
+      allEdges
+        .filter((e) => e.source === targetNodeId || e.target === targetNodeId)
+        .map((e) => (e.source === targetNodeId ? e.target : e.source))
+    );
+    return allNodes.filter((n) => n.type === "webPage" && connectedPageIds.has(n.id));
+  }, [allNodes, allEdges, targetNodeId]);
 
-  const data = node.data;
-  const webPageNodes = allNodes.filter((n) => n.type === "webPage");
-
-  const storeName = data.storeName || data.label || "App";
-  const scope = data.scope || "global";
-  const storage = data.storage || "memory";
-
-  const rawBase = storeName.trim().replace(/[^a-zA-Z0-9_$]/g, "");
-  const baseName = rawBase.charAt(0).toUpperCase() + rawBase.slice(1);
-  const hookName = baseName.endsWith("Store") ? `use${baseName}` : `use${baseName}Store`;
-
-  // Connected pages via graph edges
-  const connectedPageIds = allEdges
-    .filter((e) => e.source === node.id || e.target === node.id)
-    .map((e) => (e.source === node.id ? e.target : e.source));
-  const connectedPages = webPageNodes.filter((p) => connectedPageIds.includes(p.id));
-
-  const handleApplyPreset = (preset: StorePreset) => {
+  const handleApplyPreset = useCallback((preset: StorePreset) => {
+    if (!node) return;
     const newFields: GlobalStoreField[] = preset.fields.map((f, idx) => ({
       id: `f-${Date.now()}-${idx}`,
       name: f.name,
@@ -84,7 +77,7 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
 
     updateNode(node.id, {
       data: {
-        ...data,
+        ...node.data,
         label: `${preset.name}Store`,
         storeName: preset.name,
         description: preset.description,
@@ -94,46 +87,55 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
       },
     });
     toast.success(`Applied ${preset.name} preset!`);
-  };
+  }, [node, updateNode]);
 
-  const handleAddField = () => {
+  const handleAddField = useCallback(() => {
+    if (!node) return;
+    const existingNames = new Set(fields.map((f) => f.name.trim().toLowerCase()));
+    let nextNum = fields.length + 1;
+    while (existingNames.has(`field${nextNum}`.toLowerCase())) {
+      nextNum++;
+    }
     const newField: GlobalStoreField = {
       id: `f-${Date.now()}`,
-      name: `field${fields.length + 1}`,
+      name: `field${nextNum}`,
       type: "string",
       defaultValue: "",
     };
     updateNode(node.id, {
       data: {
-        ...data,
+        ...node.data,
         fields: [...fields, newField],
       },
     });
-  };
+  }, [node, fields, updateNode]);
 
-  const handleUpdateField = (fieldId: string, patch: Partial<GlobalStoreField>) => {
+  const handleUpdateField = useCallback((fieldId: string, patch: Partial<GlobalStoreField>) => {
+    if (!node) return;
     const updated = fields.map((f) => (f.id === fieldId ? { ...f, ...patch } : f));
     updateNode(node.id, {
       data: {
-        ...data,
+        ...node.data,
         fields: updated,
       },
     });
-  };
+  }, [node, fields, updateNode]);
 
-  const handleRemoveField = (fieldId: string) => {
+  const handleRemoveField = useCallback((fieldId: string) => {
+    if (!node) return;
     const updatedFields = fields.filter((f) => f.id !== fieldId);
     const updatedActions = actions.filter((a) => a.targetFieldId !== fieldId);
     updateNode(node.id, {
       data: {
-        ...data,
+        ...node.data,
         fields: updatedFields,
         actions: updatedActions,
       },
     });
-  };
+  }, [node, fields, actions, updateNode]);
 
-  const handleAddAction = () => {
+  const handleAddAction = useCallback(() => {
+    if (!node) return;
     const newAction: GlobalStoreAction = {
       id: `act-${Date.now()}`,
       name: `update${fields[0]?.name ? fields[0].name.charAt(0).toUpperCase() + fields[0].name.slice(1) : "State"}`,
@@ -142,39 +144,101 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
     };
     updateNode(node.id, {
       data: {
-        ...data,
+        ...node.data,
         actions: [...actions, newAction],
       },
     });
-  };
+  }, [node, fields, actions, updateNode]);
 
-  const handleUpdateAction = (actionId: string, patch: Partial<GlobalStoreAction>) => {
+  const handleUpdateAction = useCallback((actionId: string, patch: Partial<GlobalStoreAction>) => {
+    if (!node) return;
     const updated = actions.map((a) => (a.id === actionId ? { ...a, ...patch } : a));
     updateNode(node.id, {
       data: {
-        ...data,
+        ...node.data,
         actions: updated,
       },
     });
-  };
+  }, [node, actions, updateNode]);
 
-  const handleRemoveAction = (actionId: string) => {
+  const handleRemoveAction = useCallback((actionId: string) => {
+    if (!node) return;
     updateNode(node.id, {
       data: {
-        ...data,
+        ...node.data,
         actions: actions.filter((a) => a.id !== actionId),
       },
     });
-  };
+  }, [node, actions, updateNode]);
 
-  const handleSaveTestCases = (tc: StateStoreTestCase[]) => {
+  const handleSaveTestCases = useCallback((tc: StateStoreTestCase[]) => {
+    if (!node) return;
     updateNode(node.id, {
       data: {
-        ...data,
+        ...node.data,
         testCases: tc,
       },
     });
-  };
+  }, [node, updateNode]);
+
+  const handleUpdateStoreName = useCallback((name: string) => {
+    if (!node) return;
+    updateNode(node.id, { data: { ...node.data, storeName: name, label: name } });
+  }, [node, updateNode]);
+
+  const handleUpdateDescription = useCallback((desc: string) => {
+    if (!node) return;
+    updateNode(node.id, { data: { ...node.data, description: desc } });
+  }, [node, updateNode]);
+
+  const handleUpdateScope = useCallback((val: "global" | "local") => {
+    if (!node) return;
+    updateNode(node.id, { data: { ...node.data, scope: val } });
+  }, [node, updateNode]);
+
+  const handleUpdateStorage = useCallback((val: "memory" | "localStorage" | "sessionStorage") => {
+    if (!node) return;
+    updateNode(node.id, { data: { ...node.data, storage: val } });
+  }, [node, updateNode]);
+
+  if (!node) return null;
+
+  const data = node.data;
+  const storeName = data.storeName || data.label || "App";
+  const scope = data.scope || "global";
+  const storage = data.storage || "memory";
+
+  const rawBase = storeName.trim().replace(/[^a-zA-Z0-9_$]/g, "");
+  const baseName = rawBase.charAt(0).toUpperCase() + rawBase.slice(1);
+  const hookName = baseName.endsWith("Store") ? `use${baseName}` : `use${baseName}Store`;
+
+  const currentStoreName = storeName.trim();
+  const duplicateStoreNodes = useMemo(() => {
+    const key = currentStoreName.toLowerCase();
+    if (!key) return [];
+    return allNodes.filter(
+      (n) =>
+        n.id !== node.id &&
+        n.type === "state_store" &&
+        (n.data?.storeName || n.data?.label || "App").trim().toLowerCase() === key,
+    );
+  }, [allNodes, node.id, currentStoreName]);
+  const isDuplicateStoreName = duplicateStoreNodes.length > 0;
+
+  const duplicateFieldNames = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const f of fields) {
+      const key = f.name?.trim().toLowerCase();
+      if (key) {
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+    }
+    const duplicates = new Set<string>();
+    for (const [key, count] of counts.entries()) {
+      if (count > 1) duplicates.add(key);
+    }
+    return duplicates;
+  }, [fields]);
 
   return (
     <div className="flex flex-col h-full overflow-y-auto hide-scrollbar p-4 text-xs gap-4 select-none">
@@ -205,6 +269,31 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Validation Warnings / Error Alerts */}
+      {isDuplicateStoreName && (
+        <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-destructive/15 border border-destructive/40 text-destructive text-xs">
+          <AlertCircle size={15} className="shrink-0 mt-0.5" />
+          <div className="flex flex-col gap-0.5">
+            <span className="font-semibold text-xs">Duplicate App Store Name</span>
+            <span className="text-[11px] text-destructive/90">
+              Another App Store on this canvas is already named &quot;{storeName}&quot; (Node: {duplicateStoreNodes[0]?.data?.label || duplicateStoreNodes[0]?.id}). Each App Store must have a unique name.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {duplicateFieldNames.size > 0 && (
+        <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-destructive/15 border border-destructive/40 text-destructive text-xs">
+          <AlertCircle size={15} className="shrink-0 mt-0.5" />
+          <div className="flex flex-col gap-0.5">
+            <span className="font-semibold text-xs">Duplicate State Field Names</span>
+            <span className="text-[11px] text-destructive/90">
+              {duplicateFieldNames.size} duplicate field {duplicateFieldNames.size === 1 ? "name" : "names"} detected ({Array.from(duplicateFieldNames).join(", ")}). Field names must be unique within this store.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Main Tabs: Store & Logic vs. Live Test Area */}
       <Tabs
@@ -237,11 +326,17 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
             scope={scope}
             storage={storage}
             connectedPages={connectedPages}
+            isDuplicateStoreName={isDuplicateStoreName}
+            duplicateStoreMessage={
+              isDuplicateStoreName
+                ? `Another App Store is already named "${storeName}" (${duplicateStoreNodes[0]?.data?.label || duplicateStoreNodes[0]?.id}). Store names must be unique.`
+                : undefined
+            }
             onApplyPreset={handleApplyPreset}
-            onUpdateStoreName={(name) => updateNode(node.id, { data: { ...data, storeName: name, label: name } })}
-            onUpdateDescription={(desc) => updateNode(node.id, { data: { ...data, description: desc } })}
-            onUpdateScope={(val) => updateNode(node.id, { data: { ...data, scope: val } })}
-            onUpdateStorage={(val) => updateNode(node.id, { data: { ...data, storage: val } })}
+            onUpdateStoreName={handleUpdateStoreName}
+            onUpdateDescription={handleUpdateDescription}
+            onUpdateScope={handleUpdateScope}
+            onUpdateStorage={handleUpdateStorage}
           />
 
           <StoreFieldsSection

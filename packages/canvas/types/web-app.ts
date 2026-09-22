@@ -1,4 +1,4 @@
-import type { UIEventItem, PageSection, Parameter, Schema, StateVariableType } from "./simulation";
+import type { UIEventItem, PageSection, Parameter, Schema, StateVariableType, PageStateObject } from "./simulation";
 import type { WebAppZone, ProtectionRule, PaymentsPlanConfig } from "./auth";
 import type { ClientDeliveryProtocol } from "./messaging";
 import type { RealtimeProtocol, JsonValue } from "./realtime";
@@ -163,6 +163,8 @@ export interface CanvasWebAppNodeData {
   expandedZones?: string[];
 }
 
+export type { PageStateObject };
+
 /** Web Page node fields (canvas type). */
 export interface CanvasWebPageNodeData {
   appName?: string;
@@ -182,6 +184,7 @@ export interface CanvasWebPageNodeData {
   protectionOverride?: ProtectionRule;
   events?: UIEventItem[];
   sections?: PageSection[];
+  stateObjects?: PageStateObject[];
   uiPrompt?: string;
   renderMode?: "server" | "client";
   headers?: Parameter[];

@@ -25,7 +25,7 @@ import {
 } from "../../common";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { parsePageRoute, normalizePageRoute, arePageRoutesEqual, WebAppZone } from "@workspace/canvas";
-import { RealtimeConnection, ClientDeliveryProtocol, Endpoint } from "@workspace/canvas/types";
+import { RealtimeConnection, ClientDeliveryProtocol, Endpoint, PageStateObject, PageSection } from "@workspace/canvas/types";
 import { SectionList, RealtimeConnectionList, useZoneHandLayout } from "./web-page";
 import { NodeDeletionDialog } from "@/app/(canvas)/project/[projectId]/_components/NodeDeletionDialog";
 
@@ -52,6 +52,44 @@ export const WebPageNode = ({
   const [renameDialogOpen, setRenameDialogOpen] = React.useState(false);
   const [pendingRename, setPendingRename] = React.useState<{ oldLabel: string; newLabel: string } | null>(null);
   const [isHovered, setIsHovered] = React.useState(false);
+
+  // Auto-migrate legacy page-level data.stateObjects into sections[0].stateObjects
+  React.useEffect(() => {
+    if (data?.stateObjects && data.stateObjects.length > 0) {
+      const currentSections = data.sections || [];
+      const firstSec = currentSections[0];
+      if (firstSec) {
+        const existingFieldIds = new Set((firstSec.stateObjects || []).map((s) => s.id));
+        const toMigrate = data.stateObjects.filter((s: PageStateObject) => !existingFieldIds.has(s.id));
+        const updatedFirst: PageSection = {
+          ...firstSec,
+          stateObjects: [...(firstSec.stateObjects || []), ...toMigrate],
+        };
+        updateNode(id, {
+          data: {
+            ...data,
+            sections: [updatedFirst, ...currentSections.slice(1)],
+            stateObjects: [],
+          },
+        });
+      } else {
+        const defaultSec: PageSection = {
+          id: `sec-${Date.now()}`,
+          name: "Main",
+          renderMode: "client",
+          actions: [],
+          stateObjects: data.stateObjects,
+        };
+        updateNode(id, {
+          data: {
+            ...data,
+            sections: [defaultSec],
+            stateObjects: [],
+          },
+        });
+      }
+    }
+  }, [data?.stateObjects, data?.sections, id, updateNode]);
 
   const {
     cardIndex,
@@ -696,7 +734,7 @@ export const WebPageNode = ({
             </div>
           )}
 
-          {/* Sections & Actions */}
+          {/* Sections & Actions (Each section contains Rendered State & Actions) */}
           <SectionList
             nodeId={id}
             sections={data.sections}

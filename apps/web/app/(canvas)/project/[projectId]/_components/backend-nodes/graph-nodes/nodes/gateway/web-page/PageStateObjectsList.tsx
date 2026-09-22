@@ -1,0 +1,684 @@
+import React, { useState } from "react";
+import { Handle, Position } from "@xyflow/react";
+import {
+  Database,
+  Settings,
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  Trash2,
+  Pencil,
+  Check,
+  X,
+  Search,
+} from "lucide-react";
+import { BackendNode, PageStateObject, GlobalStoreField } from "@/types/canvas";
+import { cn } from "@workspace/ui/lib/utils";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@workspace/ui/components/dialog";
+import { Input } from "@workspace/ui/components/input";
+import { Button } from "@workspace/ui/components/button";
+import { Label } from "@workspace/ui/components/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select";
+
+interface PageStateObjectsListProps {
+  nodeId: string;
+  data: BackendNode["data"];
+}
+
+const FIELD_TYPES = ["string", "number", "boolean", "array", "object"];
+
+export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
+  nodeId,
+  data,
+}) => {
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
+  const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
+
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+
+  // Store selector state in picker modal
+  const [selectedStoreId, setSelectedStoreId] = useState<string>("");
+  const [fieldSearch, setFieldSearch] = useState<string>("");
+
+  // Inline edit state
+  const [editingStateId, setEditingStateId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editType, setEditType] = useState("string");
+  const [editDefault, setEditDefault] = useState("");
+
+  // Configured state objects on this page (user-decided)
+  const configuredStates: PageStateObject[] = data?.stateObjects || [];
+
+  // 1. Discover all StateStore nodes for this WebPage
+  const connectedStoreIds = new Set<string>();
+
+  // A. Direct edges between this page and a state_store node
+  edges.forEach((e) => {
+    const isSource = e.source === nodeId;
+    const isTarget = e.target === nodeId;
+    if (!isSource && !isTarget) return;
+
+    const otherId = isSource ? e.target : e.source;
+    const otherNode = nodes.find((n) => n.id === otherId);
+    if (otherNode?.type === "state_store") {
+      connectedStoreIds.add(otherNode.id);
+    }
+  });
+
+  // B. Stores with targetPageId pointing directly to this page
+  nodes.forEach((n) => {
+    if (n.type === "state_store" && n.data?.targetPageId === nodeId) {
+      connectedStoreIds.add(n.id);
+    }
+  });
+
+  // C. Action store bindings defined in page sections or events
+  (data?.sections || []).forEach((s) => {
+    (s.actions || []).forEach((a) => {
+      if (a.storeActionBinding?.storeNodeId) {
+        connectedStoreIds.add(a.storeActionBinding.storeNodeId);
+      }
+    });
+  });
+  (data?.events || []).forEach((a) => {
+    if (a.storeActionBinding?.storeNodeId) {
+      connectedStoreIds.add(a.storeActionBinding.storeNodeId);
+    }
+  });
+
+  // Also include all state_store nodes in workspace so user can select any store
+  const allStateStoreNodes = nodes.filter((n) => n.type === "state_store");
+
+  // Associated stores (prioritizing connected, then all available)
+  let associatedStores = allStateStoreNodes.filter((n) => connectedStoreIds.has(n.id));
+  if (associatedStores.length === 0) {
+    associatedStores = allStateStoreNodes;
+  }
+
+  // Active store in dialog
+  const activeStoreId = selectedStoreId || associatedStores[0]?.id || "";
+  const currentStore = associatedStores.find((s) => s.id === activeStoreId) || associatedStores[0];
+
+  // Toggle a field from the selected store
+  const handleToggleStoreField = (store: BackendNode, field: GlobalStoreField) => {
+    const storeName = store.data?.label || store.data?.storeName || "Store";
+    const isAlreadySelected = configuredStates.some(
+      (s) => s.fieldId === field.id || (s.storeId === store.id && s.name === field.name),
+    );
+
+    let nextStates: PageStateObject[];
+    if (isAlreadySelected) {
+      // Remove from page
+      nextStates = configuredStates.filter(
+        (s) => !(s.fieldId === field.id || (s.storeId === store.id && s.name === field.name)),
+      );
+    } else {
+      // Add to page
+      const newObj: PageStateObject = {
+        id: `state-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        name: field.name,
+        type: field.type,
+        defaultValue: field.defaultValue,
+        storeId: store.id,
+        storeName,
+        fieldId: field.id,
+      };
+      nextStates = [...configuredStates, newObj];
+    }
+
+    updateNode(nodeId, {
+      data: {
+        ...data,
+        stateObjects: nextStates,
+      },
+    });
+  };
+
+  // Select all visible fields of current store
+  const handleSelectAllVisible = (store: BackendNode, fields: GlobalStoreField[]) => {
+    const storeName = store.data?.label || store.data?.storeName || "Store";
+    const existingFieldIds = new Set(configuredStates.map((s) => s.fieldId));
+
+    const toAdd: PageStateObject[] = fields
+      .filter((f) => !existingFieldIds.has(f.id))
+      .map((f) => ({
+        id: `state-${Date.now()}-${Math.random().toString(36).substr(2, 4)}-${f.id}`,
+        name: f.name,
+        type: f.type,
+        defaultValue: f.defaultValue,
+        storeId: store.id,
+        storeName,
+        fieldId: f.id,
+      }));
+
+    updateNode(nodeId, {
+      data: {
+        ...data,
+        stateObjects: [...configuredStates, ...toAdd],
+      },
+    });
+  };
+
+  // Deselect all fields of current store
+  const handleDeselectAllCurrentStore = (store: BackendNode) => {
+    const nextStates = configuredStates.filter((s) => s.storeId !== store.id);
+    updateNode(nodeId, {
+      data: {
+        ...data,
+        stateObjects: nextStates,
+      },
+    });
+  };
+
+  // Delete a state object from the page
+  const handleDeleteState = (stateId: string) => {
+    const nextStates = configuredStates.filter((s) => s.id !== stateId);
+    updateNode(nodeId, {
+      data: {
+        ...data,
+        stateObjects: nextStates,
+      },
+    });
+  };
+
+  // Start inline edit
+  const handleStartEdit = (st: PageStateObject) => {
+    setEditingStateId(st.id);
+    setEditName(st.name);
+    setEditType(st.type);
+    setEditDefault(
+      typeof st.defaultValue === "object"
+        ? JSON.stringify(st.defaultValue)
+        : String(st.defaultValue ?? ""),
+    );
+  };
+
+  // Save inline edit
+  const handleSaveEdit = (stateId: string) => {
+    const trimmed = editName.trim().replace(/[^a-zA-Z0-9_$]/g, "");
+    if (!trimmed) {
+      setEditingStateId(null);
+      return;
+    }
+
+    let defVal: any = editDefault;
+    if (editType === "number") defVal = Number(editDefault) || 0;
+    if (editType === "boolean") defVal = editDefault === "true";
+    if (editType === "array") {
+      try {
+        defVal = editDefault ? JSON.parse(editDefault) : [];
+      } catch {
+        defVal = [];
+      }
+    }
+    if (editType === "object") {
+      try {
+        defVal = editDefault ? JSON.parse(editDefault) : {};
+      } catch {
+        defVal = {};
+      }
+    }
+
+    const nextStates = configuredStates.map((s) =>
+      s.id === stateId
+        ? {
+            ...s,
+            name: trimmed,
+            type: editType,
+            defaultValue: defVal,
+          }
+        : s,
+    );
+
+    updateNode(nodeId, {
+      data: {
+        ...data,
+        stateObjects: nextStates,
+      },
+    });
+
+    setEditingStateId(null);
+  };
+
+  // Filter fields in current store by search
+  const currentStoreFields: GlobalStoreField[] = currentStore?.data?.fields || [];
+  const filteredFields = currentStoreFields.filter((f) =>
+    f.name.toLowerCase().includes(fieldSearch.toLowerCase().trim()),
+  );
+
+  return (
+    <div className="relative flex flex-col border-b border-border/40 bg-cyan-500/[0.03] nodrag">
+      {/* Target handle for wiring StateStoreNode directly to this page */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="store-in"
+        className="w-2.5 h-2.5 !bg-cyan-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -left-1.5 z-10"
+        style={{ top: "18px" }}
+        title="Connect a State Store to render dynamic state on this page"
+      />
+
+      {/* Header bar */}
+      <div className="px-3 py-1.5 flex items-center justify-between text-[10px] font-semibold transition-colors select-none">
+        <div
+          className="flex items-center gap-1.5 min-w-0 cursor-pointer hover:opacity-80"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          <span className="text-muted-foreground/80">
+            {isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+          </span>
+          <Database size={12} className="text-cyan-500 shrink-0" />
+          <span className="font-bold text-foreground/90 uppercase tracking-wider text-[9px]">
+            Dynamic State
+          </span>
+          <span className="text-[8px] font-mono font-medium px-1 py-0.2 rounded bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25">
+            Zustand
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-[9px] font-mono text-muted-foreground">
+            {configuredStates.length} {configuredStates.length === 1 ? "field" : "fields"}
+          </span>
+
+          {/* Add / Configure button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsPickerOpen(true);
+            }}
+            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 text-[9px] font-semibold transition-colors cursor-pointer"
+            title="Select dynamic state fields to render"
+          >
+            <Plus size={10} />
+            <span>Config</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Configured State Fields List */}
+      {isExpanded && (
+        <div className="flex flex-col gap-1 px-3 pb-2 pt-0.5">
+          {configuredStates.length === 0 ? (
+            /* Empty state: No fields configured yet */
+            <div className="px-3 py-2 flex flex-col gap-1.5 items-center justify-center text-center bg-muted/10 rounded-md border border-dashed border-border/60">
+              <span className="text-[9px] text-muted-foreground/80">
+                No dynamic state fields configured
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsPickerOpen(true)}
+                className="flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 text-[9px] font-semibold cursor-pointer transition-colors"
+              >
+                <Plus size={10} />
+                <span>Select Fields to Render</span>
+              </button>
+            </div>
+          ) : (
+            /* Render only user-selected / configured state fields */
+            <div className="flex flex-col gap-1">
+              {configuredStates.map((st) => {
+                const isEditing = editingStateId === st.id;
+
+                if (isEditing) {
+                  return (
+                    <div
+                      key={st.id}
+                      className="flex flex-col gap-1 p-1.5 rounded-md bg-background border border-cyan-500/50 shadow-sm"
+                    >
+                      <div className="flex items-center gap-1">
+                        <Input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          placeholder="Field name"
+                          className="h-5 text-[9px] font-mono px-1 py-0 flex-1"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveEdit(st.id);
+                            if (e.key === "Escape") setEditingStateId(null);
+                          }}
+                        />
+                        <Select value={editType} onValueChange={setEditType}>
+                          <SelectTrigger className="h-5 text-[9px] font-mono w-[65px] px-1 py-0">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {FIELD_TYPES.map((t) => (
+                              <SelectItem key={t} value={t} className="text-xs">
+                                {t}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <Input
+                          value={editDefault}
+                          onChange={(e) => setEditDefault(e.target.value)}
+                          placeholder="Default value"
+                          className="h-5 text-[9px] font-mono px-1 py-0 flex-1"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveEdit(st.id);
+                            if (e.key === "Escape") setEditingStateId(null);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEdit(st.id)}
+                          className="p-1 rounded bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30 transition-colors"
+                          title="Save"
+                        >
+                          <Check size={11} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingStateId(null)}
+                          className="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
+                          title="Cancel"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={st.id}
+                    className="group/row relative flex items-center justify-between px-2 py-1 rounded bg-background/60 border border-border/50 text-[9px] hover:bg-muted/30 transition-colors font-mono"
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0" />
+                      <span
+                        className="font-medium text-foreground/90 truncate cursor-pointer hover:text-cyan-400 transition-colors"
+                        onClick={() => handleStartEdit(st)}
+                        title="Click to edit field name"
+                      >
+                        {st.name}
+                      </span>
+                      <span className="text-[7px] px-1 py-0.2 rounded bg-secondary text-muted-foreground/80 border border-border/40 shrink-0">
+                        {st.type}
+                      </span>
+                      {st.storeName && (
+                        <span className="text-[7px] px-1 py-0.2 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 shrink-0 truncate max-w-[65px]">
+                          {st.storeName}
+                        </span>
+                      )}
+                      {st.defaultValue !== undefined && st.defaultValue !== "" && (
+                        <span
+                          className="text-[7px] text-muted-foreground/60 truncate max-w-[50px]"
+                          title={String(st.defaultValue)}
+                        >
+                          = {typeof st.defaultValue === "object" ? JSON.stringify(st.defaultValue) : String(st.defaultValue)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Action buttons on hover */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0 ml-1">
+                      <button
+                        type="button"
+                        onClick={() => handleStartEdit(st)}
+                        className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                        title="Edit state object"
+                      >
+                        <Pencil size={10} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteState(st.id)}
+                        className="p-0.5 rounded hover:bg-destructive/15 text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
+                        title="Remove from page"
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Bottom "+ Add / Select" button */}
+              <button
+                type="button"
+                onClick={() => setIsPickerOpen(true)}
+                className="flex items-center justify-center gap-1 py-1 text-[9px] text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 rounded transition-colors cursor-pointer"
+              >
+                <Plus size={10} /> Add / Select State
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Field Picker / Configuration Dialog */}
+      <Dialog open={isPickerOpen} onOpenChange={setIsPickerOpen}>
+        <DialogContent className="sm:max-w-[480px] p-5 font-sans">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base text-foreground">
+              <Database size={16} className="text-cyan-500" />
+              <span>Select Store State Fields</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Select an App Store first, then choose which state fields to render on this page.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4 py-3 max-h-[60vh] overflow-y-auto">
+            {/* Step 1: Store Selector */}
+            {associatedStores.length > 0 ? (
+              <div className="flex flex-col gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-foreground">
+                    1. Select App Store
+                  </Label>
+                  <Select
+                    value={activeStoreId}
+                    onValueChange={(val) => {
+                      setSelectedStoreId(val);
+                      setFieldSearch("");
+                    }}
+                  >
+                    <SelectTrigger className="h-9 text-xs bg-background">
+                      <SelectValue placeholder="Select a store..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {associatedStores.map((store) => {
+                        const name = store.data?.label || store.data?.storeName || "Store";
+                        const fCount = store.data?.fields?.length || 0;
+                        const scope = store.data?.scope || "global";
+
+                        return (
+                          <SelectItem key={store.id} value={store.id} className="text-xs font-medium">
+                            <div className="flex items-center gap-2">
+                              <span>{name}</span>
+                              <span className="text-[10px] text-muted-foreground uppercase font-mono">
+                                ({scope})
+                              </span>
+                              <span className="text-[10px] font-mono text-cyan-500">
+                                • {fCount} {fCount === 1 ? "field" : "fields"}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Step 2: Store Fields Checklist */}
+                {currentStore && (
+                  <div className="flex flex-col gap-2 pt-1 border-t border-border/50">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold text-foreground">
+                        2. Select Fields to Render
+                      </Label>
+
+                      <div className="flex items-center gap-2">
+                        {currentStoreFields.length > 0 && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleSelectAllVisible(currentStore, filteredFields)}
+                              className="text-[10px] text-cyan-600 dark:text-cyan-400 hover:underline cursor-pointer"
+                            >
+                              Select All
+                            </button>
+                            <span className="text-muted-foreground/40">•</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeselectAllCurrentStore(currentStore)}
+                              className="text-[10px] text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
+                            >
+                              Deselect All
+                            </button>
+                          </>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsPickerOpen(false);
+                            setActiveConfigItem({
+                              id: currentStore.id,
+                              nodeId: currentStore.id,
+                              type: "state_store",
+                            });
+                          }}
+                          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors ml-1"
+                          title="Configure this store in sidebar"
+                        >
+                          <Settings size={12} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Search input for stores with many fields */}
+                    {currentStoreFields.length > 4 && (
+                      <div className="relative">
+                        <Search size={12} className="absolute left-2.5 top-2.5 text-muted-foreground" />
+                        <Input
+                          value={fieldSearch}
+                          onChange={(e) => setFieldSearch(e.target.value)}
+                          placeholder={`Search ${currentStoreFields.length} fields in ${currentStore.data?.label || "store"}...`}
+                          className="h-8 pl-7 text-xs font-mono bg-background"
+                        />
+                      </div>
+                    )}
+
+                    {/* Field checklist */}
+                    {currentStoreFields.length === 0 ? (
+                      <div className="p-4 rounded-lg bg-muted/20 border border-dashed border-border text-center text-xs text-muted-foreground">
+                        No fields defined in this store yet.{" "}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsPickerOpen(false);
+                            setActiveConfigItem({
+                              id: currentStore.id,
+                              nodeId: currentStore.id,
+                              type: "state_store",
+                            });
+                          }}
+                          className="text-cyan-500 hover:underline font-medium inline"
+                        >
+                          Add fields in store settings
+                        </button>
+                      </div>
+                    ) : filteredFields.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-muted-foreground italic">
+                        No fields match "{fieldSearch}"
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-1 max-h-[35vh] overflow-y-auto pr-1">
+                        {filteredFields.map((f) => {
+                          const isSelected = configuredStates.some(
+                            (s) =>
+                              s.fieldId === f.id ||
+                              (s.storeId === currentStore.id && s.name === f.name),
+                          );
+
+                          return (
+                            <div
+                              key={f.id}
+                              onClick={() => handleToggleStoreField(currentStore, f)}
+                              className={cn(
+                                "flex items-center justify-between px-2.5 py-1.5 rounded-md border text-xs cursor-pointer transition-all select-none",
+                                isSelected
+                                  ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-700 dark:text-cyan-300 font-medium"
+                                  : "bg-background/80 border-border/60 hover:bg-muted/40 text-foreground",
+                              )}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className={cn(
+                                    "w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors shrink-0",
+                                    isSelected
+                                      ? "bg-cyan-500 border-cyan-500 text-white"
+                                      : "border-muted-foreground/40 bg-background",
+                                  )}
+                                >
+                                  {isSelected && <Check size={10} strokeWidth={3} />}
+                                </div>
+                                <span className="font-mono text-xs">{f.name}</span>
+                                <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-secondary text-muted-foreground border border-border/40 shrink-0">
+                                  {f.type}
+                                </span>
+                              </div>
+
+                              {f.defaultValue !== undefined && f.defaultValue !== "" && (
+                                <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[120px]">
+                                  = {typeof f.defaultValue === "object" ? JSON.stringify(f.defaultValue) : String(f.defaultValue)}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-4 rounded-lg bg-muted/20 border border-dashed border-border text-center text-xs text-muted-foreground">
+                No State Store nodes exist yet. Add a StateStoreNode from the palette to define dynamic state.
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
+            <span className="text-xs text-muted-foreground font-mono">
+              {configuredStates.length} {configuredStates.length === 1 ? "field" : "fields"} selected for this page
+            </span>
+            <Button
+              type="button"
+              onClick={() => setIsPickerOpen(false)}
+              className="h-8 text-xs"
+            >
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};

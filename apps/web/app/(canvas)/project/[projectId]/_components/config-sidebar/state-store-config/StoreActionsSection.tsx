@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput, LocalTextarea } from "../../backend-nodes/graph-nodes/shared";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
-import { Textarea } from "@workspace/ui/components/textarea";
 import {
   Select,
   SelectContent,
@@ -125,9 +124,10 @@ export const StoreActionsSection: React.FC<StoreActionsSectionProps> = ({
                   >
                     {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                   </button>
-                  <Input
+                  <LocalInput
                     value={act.name}
                     onChange={(e) => onUpdateAction(act.id, { name: e.target.value })}
+                    debounceMs={150}
                     placeholder="Action name"
                     className="h-7 text-xs font-mono flex-1"
                   />
@@ -217,13 +217,14 @@ export const StoreActionsSection: React.FC<StoreActionsSectionProps> = ({
                         <div className="space-y-1.5">
                           {act.parameters.map((param) => (
                             <div key={param.id} className="flex items-center gap-1.5">
-                              <Input
+                              <LocalInput
                                 value={param.name}
                                 onChange={(e) =>
                                   handleUpdateActionParameter(act.id, param.id, {
                                     name: e.target.value,
                                   })
                                 }
+                                debounceMs={150}
                                 placeholder="argName"
                                 className="h-6 text-[11px] font-mono flex-1 bg-background"
                               />
@@ -298,9 +299,10 @@ export const StoreActionsSection: React.FC<StoreActionsSectionProps> = ({
                         </Button>
                       </div>
 
-                      <Textarea
+                      <LocalTextarea
                         value={act.code || ""}
                         onChange={(e) => onUpdateAction(act.id, { code: e.target.value })}
+                        debounceMs={200}
                         placeholder={`// Access state with get(), update with set({ ... })\nconst current = get();\nset({ ${fields[0]?.name || "state"}: payload });`}
                         className="min-h-[100px] font-mono text-[11px] bg-background/80 resize-y p-2 leading-relaxed border-border/80"
                       />
@@ -315,9 +317,10 @@ export const StoreActionsSection: React.FC<StoreActionsSectionProps> = ({
                         <Sparkles size={11} className="text-amber-400" />
                         <span>AI Prompt / Natural Language Instruction</span>
                       </Label>
-                      <Input
+                      <LocalInput
                         value={act.prompt || ""}
                         onChange={(e) => onUpdateAction(act.id, { prompt: e.target.value })}
+                        debounceMs={150}
                         placeholder="e.g. Add product to cart and recalculate subtotal and total"
                         className="h-7 text-xs bg-background"
                       />
