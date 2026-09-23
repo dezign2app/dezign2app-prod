@@ -30,7 +30,14 @@ export function generateTypesPackage(
   // 1. package.json & tsconfig.json - Zero internal workspace dependencies to prevent cyclic dependencies
   files.push(...generateTypesPackageConfigs());
 
-  // 2. Scan all endpoints to discover all referenced entities before generating entities module
+  // 2. Custom Reusable Types (defined on canvas via Types nodes)
+  const customTypes = generateCustomTypesModule(nodes);
+  const allCustomTypeNames = new Set<string>([
+    ...(customTypes.exportedTypes || []),
+    ...(customTypes.exportedValues || []),
+  ]);
+
+  // 3. Scan all endpoints to discover all referenced entities before generating entities module
   const referencedEntities = new Set<string>();
   const endpointNodes = nodes.filter(
     (n) =>
@@ -60,8 +67,14 @@ export function generateTypesPackage(
     });
   });
 
-  // 2.5 Entities & Schemas: src/entities/index.ts
-  const entitiesModuleCode = generateEntitiesModule(nodes, referencedEntities);
+  // 3.5 Entities & Schemas: src/entities/index.ts
+  const entitiesExportedNames = new Set<string>();
+  const entitiesModuleCode = generateEntitiesModule(
+    nodes,
+    referencedEntities,
+    allCustomTypeNames,
+    entitiesExportedNames,
+  );
   files.push({
     filename: "src/entities/index.ts",
     language: "typescript",
@@ -69,21 +82,47 @@ export function generateTypesPackage(
   });
   barrelExports.push(`export * from "./entities";`);
 
-  // 3. Service Folders: src/<serviceFolderName>/<routeFileName>.ts
+  // 4. Service Folders: src/<serviceFolderName>/<routeFileName>.ts
   const serviceRoutes = generateServiceRouteTypes(nodes, endpoints, servicesInfo);
   files.push(...serviceRoutes.files);
   barrelExports.push(...serviceRoutes.barrelExports);
 
-  // 4. Events Types: src/events/index.ts
+  // 5. Events Types: src/events/index.ts
   const eventsModule = generateEventsModule(nodes, events);
   files.push(eventsModule.file);
   barrelExports.push(eventsModule.exportStatement);
 
-  // 4.9 Custom Reusable Types (defined on canvas via Types nodes)
-  const customTypes = generateCustomTypesModule(nodes);
+  // 6. Custom Reusable Types File & Disambiguated Barrel Exports
   if (customTypes.file && customTypes.exportStatement) {
     files.push(customTypes.file);
     barrelExports.push(customTypes.exportStatement);
+
+    // Disambiguate duplicate exports between custom types and entity modules (TS2308)
+    const conflictingTypes: string[] = [];
+    const conflictingValues: string[] = [];
+
+    customTypes.exportedTypes?.forEach((typeName) => {
+      if (entitiesExportedNames.has(typeName)) {
+        conflictingTypes.push(typeName);
+      }
+    });
+
+    customTypes.exportedValues?.forEach((valName) => {
+      if (entitiesExportedNames.has(valName)) {
+        conflictingValues.push(valName);
+      }
+    });
+
+    if (conflictingTypes.length > 0) {
+      barrelExports.push(
+        `export type { ${conflictingTypes.sort().join(", ")} } from "./custom";`,
+      );
+    }
+    if (conflictingValues.length > 0) {
+      barrelExports.push(
+        `export { ${conflictingValues.sort().join(", ")} } from "./custom";`,
+      );
+    }
   }
 
   // 5. Root Index barrel: src/index.ts

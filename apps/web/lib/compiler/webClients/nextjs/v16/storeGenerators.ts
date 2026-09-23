@@ -1,4 +1,5 @@
 import { CompiledFile, GlobalStoreDefinition, GlobalStoreField, StateVariableType } from "@workspace/canvas/types";
+import { toSingular, toPlural } from "../../../utils";
 
 function toPascalCase(str: string): string {
   const clean = str.trim();
@@ -170,7 +171,7 @@ export function generateZustandStore(
           : targetField.type.endsWith("[]")
           ? targetField.type.slice(0, -2)
           : targetField.type === "array"
-          ? "Record<string, unknown> | string | number"
+          ? "unknown"
           : mapFieldTypeToTs(targetField.type);
         customActionSignatures.push(`  ${actName}: (item: ${itemTsType}) => void;`);
         customActionImpls.push(`  ${actName}: (item) => set((s) => ({ ${targetName}: Array.isArray(s.${targetName}) ? [...s.${targetName}, item] : [item] })),`);
@@ -215,7 +216,7 @@ export function generateZustandStore(
           ? act.parameters!
               .map((p) => `${toCamelCase(p.name)}: ${mapFieldTypeToTs(p.type)}${p.required === false ? " | undefined" : ""}`)
               .join(", ")
-          : `data: Partial<${interfaceName}>`;
+          : `data?: Partial<${interfaceName}>`;
         const paramArgs = hasParams
           ? act.parameters!.map((p) => toCamelCase(p.name)).join(", ")
           : "data";
@@ -226,7 +227,7 @@ export function generateZustandStore(
           const bodyLines = rawCode.split("\n").map((line) => `    ${line}`).join("\n");
           customActionImpls.push(`  ${actName}: (${paramArgs}) => {\n${bodyLines}\n  },`);
         } else {
-          customActionImpls.push(`  ${actName}: (${paramArgs}) => set((s) => ({ ...s, ...${paramArgs} })),`);
+          customActionImpls.push(`  ${actName}: (${paramArgs}) => set((s) => ({ ...s, ...(${paramArgs} || {}) })),`);
         }
         break;
       }
@@ -292,8 +293,8 @@ export function generateZustandStore(
   const builtInImpls: string[] = [];
 
   if (!hasPopulate && !isPopulateDisabled) {
-    builtInSignatures.push(`  populate: (data: Partial<${interfaceName}>) => void;`);
-    builtInImpls.push("      populate: (data) => set((s) => ({ ...s, ...data })),");
+    builtInSignatures.push(`  populate: (data?: Partial<${interfaceName}>) => void;`);
+    builtInImpls.push("      populate: (data) => set((s) => ({ ...s, ...(data || {}) })),");
   }
 
   if (!hasReset && !isResetDisabled) {
@@ -394,6 +395,8 @@ export function generateZustandStores(
   const files: CompiledFile[] = [];
   const globalExportStatements: string[] = [];
 
+  const seenExportedHookNames = new Set<string>();
+
   stores.forEach((st) => {
     const isLocal = st.scope === "local";
     const customPath = (isLocal && st.id && options?.localStorePaths?.[st.id])
@@ -407,7 +410,26 @@ export function generateZustandStores(
       const baseName = toPascalCase(st.name || "App");
       const storeCompName = baseName.endsWith("Store") ? baseName : `${baseName}Store`;
       const hookName = `use${storeCompName}`;
+      seenExportedHookNames.add(hookName);
       globalExportStatements.push(`export * from "./${hookName}";\nexport { default as ${hookName} } from "./${hookName}";`);
+
+      // Also export singular & plural alias variations so UI actions/components referencing
+      // either singular or plural (e.g. useConversationStore vs useConversationsStore) resolve cleanly
+      const rawBase = baseName.replace(/Store$/i, "");
+      const singularRaw = toPascalCase(toSingular(rawBase));
+      const pluralRaw = toPascalCase(toPlural(rawBase));
+
+      const singularHook = `use${singularRaw}Store`;
+      const pluralHook = `use${pluralRaw}Store`;
+
+      if (singularHook !== hookName && !seenExportedHookNames.has(singularHook)) {
+        seenExportedHookNames.add(singularHook);
+        globalExportStatements.push(`export { ${hookName} as ${singularHook} } from "./${hookName}";`);
+      }
+      if (pluralHook !== hookName && pluralHook !== singularHook && !seenExportedHookNames.has(pluralHook)) {
+        seenExportedHookNames.add(pluralHook);
+        globalExportStatements.push(`export { ${hookName} as ${pluralHook} } from "./${hookName}";`);
+      }
     }
   });
 

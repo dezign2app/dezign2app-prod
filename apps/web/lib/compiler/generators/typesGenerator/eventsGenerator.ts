@@ -40,7 +40,7 @@ export function generateEventsModule(
 
   let eventsCode = `import { z } from "zod";\n\n`;
   if (allEvents.length === 0) {
-    eventsCode += `// No messaging events configured\nexport type GenericEventPayload = Record<string, unknown>;\n`;
+    eventsCode += `// No messaging events configured\nexport type GenericEventPayload = Record<string, string | number | boolean | null>;\n`;
   } else {
     const processedEventNames = new Set<string>();
 
@@ -90,7 +90,7 @@ export function generateEventsModule(
       if (zodRes.hasContent) {
         eventsCode += zodRes.code + "\n";
       } else {
-        eventsCode += `export const ${schemaName} = z.record(z.unknown());\n`;
+        eventsCode += `export const ${schemaName} = z.record(z.union([z.string(), z.number(), z.boolean()]));\n`;
       }
     });
   }
