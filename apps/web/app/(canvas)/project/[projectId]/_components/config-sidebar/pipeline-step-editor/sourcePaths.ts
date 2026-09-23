@@ -15,6 +15,7 @@ import {
   inferReturnSchemaFromCode,
   InferredFieldDraft,
 } from "@/lib/utils/inferReturnSchema";
+import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   PipelineStepDraft,
@@ -504,8 +505,36 @@ export function getAvailableSources(
       }
     }
 
-    if (s.tableNodeId) {
-      const tableNode = allNodes.find((n) => n.id === s.tableNodeId);
+    if (s.tableNodeId || s.type === "db_operation") {
+      let tableNode = s.tableNodeId ? allNodes.find((n) => n.id === s.tableNodeId) : undefined;
+      if (tableNode?.type === "db_ref" && tableNode.data?.tableRef) {
+        const master = allNodes.find((n) => n.id === tableNode!.data!.tableRef);
+        if (master) tableNode = master;
+      }
+      if (!tableNode && s.databaseId) {
+        tableNode = allNodes.find(
+          (n) => n.id === s.databaseId && (n.type === "entity" || n.type === "db_ref"),
+        );
+        if (tableNode?.type === "db_ref" && tableNode.data?.tableRef) {
+          const master = allNodes.find((n) => n.id === tableNode!.data!.tableRef);
+          if (master) tableNode = master;
+        }
+      }
+      if (!tableNode && s.functionRef?.name) {
+        tableNode = allNodes.find((n) => {
+          if (n.type !== "entity" && n.type !== "db_ref") return false;
+          const target =
+            n.type === "db_ref" && n.data?.tableRef
+              ? allNodes.find((m) => m.id === n.data!.tableRef)
+              : n;
+          const ops = target ? getEntityDbOperations(target, allNodes) : [];
+          return ops.some((op) => op.name === s.functionRef?.name || op.id === s.operationId);
+        });
+        if (tableNode?.type === "db_ref" && tableNode.data?.tableRef) {
+          const master = allNodes.find((n) => n.id === tableNode!.data!.tableRef);
+          if (master) tableNode = master;
+        }
+      }
 
       // ── Redis step: derive paths based on operation kind ──────────────────
       const isRedisNode =
@@ -538,9 +567,9 @@ export function getAvailableSources(
             fnLower.startsWith("findall") ||
             fnLower.startsWith("getall") ||
             fnLower.startsWith("gettop") ||
-            fnLower.startsWith("get") && fnLower.endsWith("list") ||
+            (fnLower.startsWith("get") && fnLower.endsWith("list")) ||
             fnLower.startsWith("search") ||
-            fnLower.startsWith("read") && fnLower.endsWith("stream")
+            (fnLower.startsWith("read") && fnLower.endsWith("stream"))
           ) {
             opKind = "findAll";
           }
@@ -589,35 +618,124 @@ export function getAvailableSources(
             }
           });
         }
-      } else if (tableNode?.data?.columns) {
-        // Non-Redis node: keep existing flat column path behavior
-        tableNode.data.columns.forEach((col) => {
-          if (col.name && !stepPaths.some((p) => p.path === col.name)) {
-            stepPaths.push({ path: col.name, type: col.type });
+      } else {
+        // ── Relational Database step (SQLite, Postgres, MySQL) ──────────────
+        const ops = tableNode ? getEntityDbOperations(tableNode, allNodes) : [];
+        const selectedOp = ops.find(
+          (op) =>
+            (s.operationId && (op.id === s.operationId || op.name === s.operationId)) ||
+            (s.functionRef?.name && op.name === s.functionRef.name),
+        );
+
+        const fnLower = (
+          s.functionRef?.name ||
+          s.operationId ||
+          s.name ||
+          selectedOp?.name ||
+          ""
+        ).toLowerCase();
+        const opKind = selectedOp?.kind;
+        const returnTypeStr = selectedOp?.returnType || "";
+        const isArrayReturn =
+          s.functionRef?.returnIsArray === true ||
+          opKind === "findAll" ||
+          fnLower.startsWith("findall") ||
+          fnLower.startsWith("getall") ||
+          fnLower.startsWith("list") ||
+          returnTypeStr.includes("[]") ||
+          returnTypeStr.includes("Array<") ||
+          Boolean(selectedOp?.code && selectedOp.code.includes(".all("));
+
+        const isDeleteReturn =
+          opKind === "delete" ||
+          fnLower.startsWith("delete") ||
+          returnTypeStr.includes("{ success: boolean");
+
+        const isCreateReturn =
+          opKind === "create" ||
+          fnLower.startsWith("create") ||
+          fnLower.startsWith("insert");
+
+        // Remove any dummy placeholder 'result' if present
+        const dummyIdx = stepPaths.findIndex((p) => p.path === "result");
+        if (dummyIdx !== -1) {
+          stepPaths.splice(dummyIdx, 1);
+        }
+
+        if (isArrayReturn) {
+          // Array return: e.g. findAllConversations returns Promise<Conversations[]>
+          // The result itself is an array of objects. It has NO top-level `message` or `success`.
+          if (!stepPaths.some((p) => p.path === "length")) {
+            stepPaths.push({
+              path: "length",
+              type: "number",
+              description: "Number of items in the returned array",
+            });
           }
-        });
-      }
-    }
+          (tableNode?.data?.columns || []).forEach((col) => {
+            if (!col.name) return;
+            const hint = `[0].${col.name}`;
+            if (!stepPaths.some((p) => p.path === hint)) {
+              stepPaths.push({
+                path: hint,
+                type: col.type || "string",
+                description: `Field on first item in array`,
+              });
+            }
+          });
+        } else if (isDeleteReturn) {
+          if (!stepPaths.some((p) => p.path === "success")) {
+            stepPaths.push({
+              path: "success",
+              type: "boolean",
+              description: "Whether the operation succeeded",
+            });
+          }
+          if (!stepPaths.some((p) => p.path === "message")) {
+            stepPaths.push({
+              path: "message",
+              type: "string",
+              description: "Operation result message",
+            });
+          }
+        } else {
+          // Single record return (create, update, findById, etc.)
+          (tableNode?.data?.columns || []).forEach((col) => {
+            if (col.name && !stepPaths.some((p) => p.path === col.name)) {
+              stepPaths.push({ path: col.name, type: col.type || "string" });
+            }
+          });
 
-    // Ensure database operation results expose id, message, and success
-    if (s.type === "db_operation") {
-      if (!stepPaths.some((p) => p.path === "id")) {
-        stepPaths.unshift({ path: "id", type: "string" });
-      }
-      if (!stepPaths.some((p) => p.path === "message")) {
-        stepPaths.push({ path: "message", type: "string" });
-      }
-      if (!stepPaths.some((p) => p.path === "success")) {
-        stepPaths.push({ path: "success", type: "boolean" });
-      }
-    }
+          // Operational fields for create (matching compileSqlitePrimaryKeyAndMessage)
+          if (isCreateReturn) {
+            if (!stepPaths.some((p) => p.path === "message")) {
+              stepPaths.push({ path: "message", type: "string" });
+            }
+            if (!stepPaths.some((p) => p.path === "success")) {
+              stepPaths.push({ path: "success", type: "boolean" });
+            }
+          } else if (!tableNode && s.type === "db_operation") {
+            // Fallback for unconfigured db_operation without table node
+            if (!stepPaths.some((p) => p.path === "id")) {
+              stepPaths.unshift({ path: "id", type: "string" });
+            }
+            if (!stepPaths.some((p) => p.path === "message")) {
+              stepPaths.push({ path: "message", type: "string" });
+            }
+            if (!stepPaths.some((p) => p.path === "success")) {
+              stepPaths.push({ path: "success", type: "boolean" });
+            }
+          }
 
-    // Ensure 'id' column appears at the front of the list if present
-    const idIdx = stepPaths.findIndex((p) => p.path === "id");
-    if (idIdx > 0) {
-      const [idItem] = stepPaths.splice(idIdx, 1);
-      if (idItem) {
-        stepPaths.unshift(idItem);
+          // Ensure 'id' column appears at the front of the list if present
+          const idIdx = stepPaths.findIndex((p) => p.path === "id");
+          if (idIdx > 0) {
+            const [idItem] = stepPaths.splice(idIdx, 1);
+            if (idItem) {
+              stepPaths.unshift(idItem);
+            }
+          }
+        }
       }
     }
 
@@ -712,9 +830,20 @@ export function getAvailableSources(
       }
     }
 
+    const isGenericStepName =
+      !s.name ||
+      s.name.trim() === "" ||
+      s.name.toLowerCase() === varName.toLowerCase() ||
+      s.name.toLowerCase() === `step ${idx + 1}`.toLowerCase() ||
+      s.name.toLowerCase() === `step${idx + 1}`.toLowerCase();
+
+    const stepLabel = isGenericStepName
+      ? `Step ${idx + 1}: ${varName}`
+      : `Step ${idx + 1}: ${s.name} (${varName})`;
+
     sources.push({
       id: `step:${s.id}`,
-      label: `Step ${idx + 1}: ${varName} (const ${varName})`,
+      label: stepLabel,
       kind: "step_output",
       stepId: s.id,
       variableName: varName,

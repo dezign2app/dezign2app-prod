@@ -136,10 +136,13 @@ export const DbOperationStepSection = ({
     });
   }, [allEntityNodes, selectedDbId, allEdges]);
 
-  const selectedTableNode = useMemo(
-    () => allEntityNodes.find((n) => n.id === step.tableNodeId),
-    [allEntityNodes, step.tableNodeId],
-  );
+  const selectedTableNode = useMemo(() => {
+    const found = allEntityNodes.find((n) => n.id === step.tableNodeId);
+    if (found?.type === "db_ref" && found.data?.tableRef) {
+      return allNodes.find((n) => n.id === found.data!.tableRef) || found;
+    }
+    return found;
+  }, [allEntityNodes, allNodes, step.tableNodeId]);
 
   const availableDbOperations: DbOperationFunction[] = useMemo(() => {
     if (!selectedTableNode) return [];
@@ -181,7 +184,10 @@ export const DbOperationStepSection = ({
 
   const handleSelectTable = (tableId: string) => {
     const cleanTableId = tableId === "__none__" ? undefined : tableId;
-    const targetNode = allEntityNodes.find((n) => n.id === cleanTableId);
+    let targetNode = allEntityNodes.find((n) => n.id === cleanTableId);
+    if (targetNode?.type === "db_ref" && targetNode.data?.tableRef) {
+      targetNode = allNodes.find((n) => n.id === targetNode!.data!.tableRef) || targetNode;
+    }
     if (!targetNode) {
       onChange({
         ...step,
@@ -223,6 +229,26 @@ export const DbOperationStepSection = ({
         "any"
       : undefined;
 
+    const isArrayOp = Boolean(
+      defaultOp &&
+        (defaultOp.kind === "findAll" ||
+          (defaultOp.name || "").toLowerCase().includes("findall") ||
+          (returnTypeStr && (returnTypeStr.includes("[]") || returnTypeStr.includes("Array<")))),
+    );
+
+    const schemaFields = isArrayOp
+      ? []
+      : defaultOp?.kind === "delete"
+      ? [
+          { name: "success", type: "boolean", required: true },
+          { name: "message", type: "string", required: true },
+        ]
+      : (targetNode.data?.columns || []).map((c: any) => ({
+          name: c.name,
+          type: c.type || "string",
+          required: Boolean(c.isPrimaryKey || c.isNotNull),
+        }));
+
     onChange({
       ...step,
       tableNodeId: cleanTableId,
@@ -232,17 +258,10 @@ export const DbOperationStepSection = ({
             name: defaultOp.name,
             importPath: importPath,
             signature: liveSig,
+            returnIsArray: isArrayOp,
           }
         : step.functionRef,
-      outputSchema: returnTypeStr
-        ? [
-            {
-              name: "result",
-              type: returnTypeStr,
-              required: true,
-            },
-          ]
-        : step.outputSchema,
+      outputSchema: schemaFields,
       name: varName,
       outputVariable: varName,
       inputBindings: nextBindings,
@@ -276,6 +295,25 @@ export const DbOperationStepSection = ({
       op.returnType ||
       "any";
 
+    const isArrayOp =
+      op.kind === "findAll" ||
+      (op.name || "").toLowerCase().includes("findall") ||
+      returnTypeStr.includes("[]") ||
+      returnTypeStr.includes("Array<");
+
+    const schemaFields = isArrayOp
+      ? []
+      : op.kind === "delete"
+      ? [
+          { name: "success", type: "boolean", required: true },
+          { name: "message", type: "string", required: true },
+        ]
+      : (selectedTableNode.data?.columns || []).map((c: any) => ({
+          name: c.name,
+          type: c.type || "string",
+          required: Boolean(c.isPrimaryKey || c.isNotNull),
+        }));
+
     onChange({
       ...step,
       operationId: op.id,
@@ -283,14 +321,9 @@ export const DbOperationStepSection = ({
         name: op.name,
         importPath: importPath,
         signature: liveSig,
+        returnIsArray: isArrayOp,
       },
-      outputSchema: [
-        {
-          name: "result",
-          type: returnTypeStr,
-          required: true,
-        },
-      ],
+      outputSchema: schemaFields,
       name: varName,
       outputVariable: varName,
       inputBindings: nextBindings,

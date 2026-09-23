@@ -1,4 +1,4 @@
-import { BackendNode } from "@/types/canvas";
+import { BackendNode, BackendEdge } from "@/types/canvas";
 import { Endpoint, CompiledFile, ServiceInfo } from "@workspace/canvas/types";
 import {
   toVarName,
@@ -12,11 +12,13 @@ import {
   schemaToZodSchema,
 } from "../schemaToTypeScript";
 import { generateResponseInterface } from "./responseInference";
+import { classifyEndpointShape } from "../routeGenerator/endpointTypeClassifier";
 
 export function generateServiceRouteTypes(
   nodes: BackendNode[],
   endpoints: (Endpoint & { nodeId: string })[] = [],
   servicesInfo?: ServiceInfo[],
+  edges: BackendEdge[] = [],
 ): { files: CompiledFile[]; barrelExports: string[] } {
   const files: CompiledFile[] = [];
   const barrelExports: string[] = [];
@@ -103,6 +105,7 @@ export function generateServiceRouteTypes(
           nodes,
           ep,
           serviceNode,
+          edges,
         );
 
         const queryZodRes = parametersToZodSchema(
@@ -114,6 +117,12 @@ export function generateServiceRouteTypes(
           `${schemaVarPrefix}BodySchema`,
           ep.requestBody,
         );
+
+        const shape = ep ? classifyEndpointShape(ep, nodes, edges) : { kind: "unknown" as const };
+        if (!bodyTypeRes.hasContent && isBodyMethod && shape.kind === "entity") {
+          const entityBodyType = method === "post" ? `Create${shape.entity}Data` : `Update${shape.entity}Data`;
+          responseResInfo.entityImports.add(entityBodyType);
+        }
 
         const entityImportStatement =
           responseResInfo.entityImports.size > 0
@@ -128,7 +137,12 @@ export function generateServiceRouteTypes(
         if (bodyTypeRes.hasContent) {
           singleRouteCode += bodyTypeRes.code + "\n";
         } else if (isBodyMethod) {
-          singleRouteCode += `export type ${pascalName}Body = Record<string, string | number | boolean | null>;\n\n`;
+          if (shape.kind === "entity") {
+            const entityBodyType = method === "post" ? `Create${shape.entity}Data` : `Update${shape.entity}Data`;
+            singleRouteCode += `export type ${pascalName}Body = ${entityBodyType};\n\n`;
+          } else {
+            singleRouteCode += `export type ${pascalName}Body = Record<string, string | number | boolean | null>;\n\n`;
+          }
         } else {
           singleRouteCode += `export type ${pascalName}Body = never;\n\n`;
         }

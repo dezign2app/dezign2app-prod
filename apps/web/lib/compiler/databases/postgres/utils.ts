@@ -19,13 +19,22 @@ export function toPascal(str: string): string {
 /**
  * Extracts and normalizes column metadata from an entity node.
  */
-export function getColumns(tableNode: BackendNode): PgColumnMeta[] {
-  const cols = tableNode.data?.columns;
+export function getColumns(tableNode: BackendNode, allNodes: BackendNode[] = []): PgColumnMeta[] {
+  let targetNode = tableNode;
+  if (tableNode.type === "db_ref" && tableNode.data?.tableRef) {
+    const master = allNodes.find((n) => n.id === tableNode.data.tableRef);
+    if (master) targetNode = master;
+  }
+  const cols = targetNode.data?.columns || targetNode.data?.fields;
   if (cols && Array.isArray(cols) && cols.length > 0) {
     return cols.map((c) => ({
       ...c,
       name: toSqlIdentifier(c.name || "col", "col"),
-      isPrimaryKey: Boolean(c.isPrimaryKey || c.isPrimary || c.primaryKey),
+      isPrimaryKey: Boolean(
+        ("isPrimaryKey" in c && c.isPrimaryKey) ||
+        ("isPrimary" in c && c.isPrimary) ||
+        ("primaryKey" in c && c.primaryKey),
+      ),
     }));
   }
   return [

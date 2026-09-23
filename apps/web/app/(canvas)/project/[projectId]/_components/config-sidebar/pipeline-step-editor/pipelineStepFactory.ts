@@ -141,6 +141,26 @@ export function createDefaultStepDraft({
       functionName: defaultOp?.name,
     });
 
+    const isArrayOp = Boolean(
+      defaultOp &&
+        (defaultOp.kind === "findAll" ||
+          (defaultOp.name || "").toLowerCase().includes("findall") ||
+          (defaultOp.returnType && (defaultOp.returnType.includes("[]") || defaultOp.returnType.includes("Array<")))),
+    );
+
+    const schemaFields = isArrayOp
+      ? []
+      : defaultOp?.kind === "delete"
+      ? [
+          { name: "success", type: "boolean", required: true },
+          { name: "message", type: "string", required: true },
+        ]
+      : (firstEntity?.data?.columns || []).map((c: any) => ({
+          name: c.name,
+          type: c.type || "string",
+          required: Boolean(c.isPrimaryKey || c.isNotNull),
+        }));
+
     initialFields = {
       databaseId: targetDbId,
       tableNodeId: firstEntity?.id || connectionResult?.dbRefNodeId,
@@ -150,8 +170,10 @@ export function createDefaultStepDraft({
             name: defaultOp.name,
             importPath,
             signature: defaultOp.signature,
+            returnIsArray: isArrayOp,
           }
         : undefined,
+      outputSchema: schemaFields,
       name: varName,
       outputVariable: varName,
       inputBindings: initialBindings,

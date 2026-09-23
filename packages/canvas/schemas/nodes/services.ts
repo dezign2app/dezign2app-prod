@@ -235,7 +235,7 @@ export const clientEventInputSchema = z.object({
       storeName: z.string().optional(),
       actionName: z.string().optional(),
       actionType: z
-        .enum(["set", "append", "remove", "toggle", "increment", "reset", "populate", "custom"])
+        .enum(["set", "append", "remove", "toggle", "increment", "reset", "populate", "custom", "mutate"])
         .optional(),
       targetFieldId: z.string().optional(),
       targetFieldName: z.string().optional(),
@@ -327,7 +327,7 @@ export const realtimeConnectionSchema = z.object({
       storeName: z.string().optional(),
       actionName: z.string().optional(),
       actionType: z
-        .enum(["set", "append", "remove", "toggle", "increment", "reset", "populate", "custom"])
+        .enum(["set", "append", "remove", "toggle", "increment", "reset", "populate", "custom", "mutate"])
         .optional(),
       targetFieldId: z.string().optional(),
       targetFieldName: z.string().optional(),

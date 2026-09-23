@@ -120,8 +120,7 @@ export function emitLegacyDbRedisOperations(
           const cleanSqlName = toVarName(rawSqlName.toLowerCase().replace(/[^a-z0-9_]/g, "_"));
           const sqlPascal = toPascalCase(cleanSqlName);
           const sqlVarName = primarySql?.operationKind === "create" ? `created${sqlPascal || "Record"}` : cleanSqlName;
-          callExpr = callExpr.replaceAll(`((${payloadVar} as { id?: string })?.id || "default")`, `(${sqlVarName}?.id || (${payloadVar} as { id?: string })?.id || "default")`);
-          callExpr = callExpr.replaceAll(`${payloadVar}?.id`, `(${sqlVarName}?.id || (${payloadVar} as { id?: string })?.id || "default")`);
+          callExpr = callExpr.replaceAll(`${payloadVar}?.id || "default"`, `${sqlVarName}?.id || ${payloadVar}?.id || "default"`);
         }
         const varName = `${toVarName(op.fn.name)}Result`;
         code += `    const ${varName} = ${callExpr};\n\n`;

@@ -9,7 +9,8 @@ export type StoreActionType =
   | "increment"
   | "reset"
   | "populate"
-  | "custom";
+  | "custom"
+  | "mutate";
 
 export interface ResolvedStoreActionBinding {
   storeNodeId: string;
@@ -53,7 +54,8 @@ function isValidStoreActionType(val: string | undefined): val is StoreActionType
     val === "increment" ||
     val === "reset" ||
     val === "populate" ||
-    val === "custom"
+    val === "custom" ||
+    val === "mutate"
   );
 }
 

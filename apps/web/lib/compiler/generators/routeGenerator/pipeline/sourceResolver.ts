@@ -57,6 +57,9 @@ export function resolveSource(
         if (meta?.isArray) {
           return `${varName}[0]?.${field}`;
         }
+        if (field.startsWith("[")) {
+          return `${varName}${field}`;
+        }
         return `${varName}.${field}`;
       }
       return varName;

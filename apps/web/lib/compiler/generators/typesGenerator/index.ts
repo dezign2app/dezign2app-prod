@@ -1,4 +1,4 @@
-import { BackendNode } from "@/types/canvas";
+import { BackendNode, BackendEdge } from "@/types/canvas";
 import { Endpoint, AnyMessagingResource, CompiledFile, ServiceInfo } from "@workspace/canvas/types";
 import { generateTypesPackageConfigs } from "./packageConfigs";
 import { generateEntitiesModule } from "./entitiesGenerator";
@@ -23,6 +23,7 @@ export function generateTypesPackage(
     variant: "publish" | "consume";
   })[] = [],
   servicesInfo?: ServiceInfo[],
+  edges: BackendEdge[] = [],
 ): CompiledFile[] {
   const files: CompiledFile[] = [];
   const barrelExports: string[] = [];
@@ -62,7 +63,7 @@ export function generateTypesPackage(
       }));
     }
     nodeEndpoints.forEach((ep) => {
-      const res = generateResponseInterface("Temp", ep.responseFields, ep.responseBody, nodes, ep, serviceNode);
+      const res = generateResponseInterface("Temp", ep.responseFields, ep.responseBody, nodes, ep, serviceNode, edges);
       res.entityImports.forEach((ent) => referencedEntities.add(ent));
     });
   });
@@ -83,7 +84,7 @@ export function generateTypesPackage(
   barrelExports.push(`export * from "./entities";`);
 
   // 4. Service Folders: src/<serviceFolderName>/<routeFileName>.ts
-  const serviceRoutes = generateServiceRouteTypes(nodes, endpoints, servicesInfo);
+  const serviceRoutes = generateServiceRouteTypes(nodes, endpoints, servicesInfo, edges);
   files.push(...serviceRoutes.files);
   barrelExports.push(...serviceRoutes.barrelExports);
 

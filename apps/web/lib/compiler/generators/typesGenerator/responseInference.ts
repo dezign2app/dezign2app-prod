@@ -1,4 +1,4 @@
-import { BackendNode } from "@/types/canvas";
+import { BackendNode, BackendEdge } from "@/types/canvas";
 import { Endpoint } from "@workspace/canvas/types";
 import { toPascalCase } from "../../utils";
 import {
@@ -34,9 +34,13 @@ export function inferBindingType(
           (step as { databaseNodeId?: string; targetTableId?: string }).targetTableId ||
           ep.databaseNodeId ||
           (ep.databaseNodeIds && ep.databaseNodeIds[0]);
-        const dbNode = dbNodeId
+        let dbNode = dbNodeId
           ? nodes.find((n) => n.id === dbNodeId)
           : nodes.find((n) => n.type === "database" || n.type === "entity");
+        if (dbNode?.type === "db_ref" && dbNode.data?.tableRef) {
+          const master = nodes.find((n) => n.id === dbNode!.data!.tableRef);
+          if (master) dbNode = master;
+        }
         const rawTableName = dbNode?.data?.label || dbNode?.data?.tableRef || "Entity";
         const pascalEntity = toPascalCase(rawTableName);
         if (pascalEntity) {
@@ -50,9 +54,13 @@ export function inferBindingType(
             if (source.field === "success") {
               return "boolean | undefined";
             }
+            if (source.field === "length") {
+              return "number";
+            }
+            const cleanField = source.field.replace(/^\[\d+\]\./, "").replace(/^\[n\]\./, "");
             const col = dbNode?.data?.columns?.find(
               (c: { name?: string; type?: string; isNotNull?: boolean; isPrimaryKey?: boolean }) =>
-                c.name?.toLowerCase() === source.field?.toLowerCase(),
+                c.name?.toLowerCase() === cleanField.toLowerCase(),
             );
             if (col) {
               const colType = (col.type || "string").toLowerCase();
@@ -227,6 +235,7 @@ export function generateResponseInterface(
   nodes: BackendNode[] = [],
   ep?: Endpoint,
   serviceNode?: BackendNode,
+  edges: BackendEdge[] = [],
 ): ResponseInterfaceResult {
   const entityImports = new Set<string>();
 
@@ -359,7 +368,7 @@ export function generateResponseInterface(
     ) {
       const lastBraceIndex = legacy.code.lastIndexOf("}");
       if (lastBraceIndex !== -1) {
-        const entityShape = ep ? classifyEndpointShape(ep, nodes) : { kind: "unknown" as const };
+        const entityShape = ep ? classifyEndpointShape(ep, nodes, edges) : { kind: "unknown" as const };
         if (entityShape.kind === "entity") {
           entityImports.add(entityShape.entity);
           const dataType = entityShape.cardinality === "one" ? entityShape.entity : `${entityShape.entity}[]`;
@@ -386,9 +395,13 @@ export function generateResponseInterface(
         (lastStep as { databaseNodeId?: string; targetTableId?: string }).targetTableId ||
         ep.databaseNodeId ||
         (ep.databaseNodeIds && ep.databaseNodeIds[0]);
-      const dbNode = dbNodeId
+      let dbNode = dbNodeId
         ? nodes.find((n) => n.id === dbNodeId)
         : nodes.find((n) => n.type === "database" || n.type === "entity");
+      if (dbNode?.type === "db_ref" && dbNode.data?.tableRef) {
+        const master = nodes.find((n) => n.id === dbNode!.data!.tableRef);
+        if (master) dbNode = master;
+      }
       const rawTableName = dbNode?.data?.label || dbNode?.data?.tableRef || "Entity";
       const pascalEntity = toPascalCase(rawTableName);
       if (pascalEntity) {
@@ -477,7 +490,7 @@ export function generateResponseInterface(
   }
 
   // 6. Database linkage
-  const shape = ep ? classifyEndpointShape(ep, nodes) : { kind: "unknown" as const };
+  const shape = ep ? classifyEndpointShape(ep, nodes, edges) : { kind: "unknown" as const };
   if (shape.kind === "entity") {
     entityImports.add(shape.entity);
     const dataType =

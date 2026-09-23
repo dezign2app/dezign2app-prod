@@ -1,6 +1,6 @@
 import { Endpoint } from "@workspace/canvas/types";
-import { BackendNode } from "@/types/canvas";
-import { toPascalCase } from "../../utils";
+import { BackendNode, BackendEdge } from "@/types/canvas";
+import { toPascalCase, toVarName } from "../../utils";
 
 /**
  * Discriminated union representing the inferred response shape of an endpoint.
@@ -29,20 +29,37 @@ export type EndpointTypeShape =
 export function classifyEndpointShape(
   ep: Endpoint & { nodeId?: string },
   allNodes: BackendNode[] = [],
+  allEdges: BackendEdge[] = [],
 ): EndpointTypeShape {
   const method = (ep.type || "GET").toLowerCase();
   const name = (ep.name || "").trim();
   const summary = (ep.summary || "").trim().toLowerCase();
 
-  // ── 1. DB linkage ────────────────────────────────────────────────────────
-  // Check entity linkage first — an endpoint linked to a database table should drive entity types
-  const entityName = resolveEntityName(ep, allNodes);
+  // ── 1. Health Check (canonical health-check endpoints without explicit CRUD operations) ─
+  const isHealthName =
+    name === "/" ||
+    name === "/health" ||
+    name.endsWith("/health") ||
+    name === "health";
+  const isHealthSummary =
+    summary === "health check" ||
+    summary.includes("health") ||
+    summary === "test the health of the server";
+  const hasCrudOps = ep.crudOperations && Object.keys(ep.crudOperations).length > 0;
+
+  if (method === "get" && (isHealthName || isHealthSummary) && !hasCrudOps) {
+    return { kind: "health" };
+  }
+
+  // ── 2. DB linkage ────────────────────────────────────────────────────────
+  // Check entity linkage — only when explicitly linked to a database/entity node or pipeline step
+  const entityName = resolveEntityName(ep, allNodes, allEdges);
   if (entityName) {
     const cardinality = inferCardinality(ep, name);
     return { kind: "entity", entity: entityName, cardinality };
   }
 
-  // ── 2. Explicit Schema or Pipeline (responseFields / responseBody / pipelineSteps / output) ──
+  // ── 3. Explicit Schema or Pipeline (responseFields / responseBody / pipelineSteps / output) ──
   const hasResponseFields =
     Array.isArray(ep.responseFields) && ep.responseFields.length > 0;
   const hasLegacySchema =
@@ -55,21 +72,6 @@ export function classifyEndpointShape(
 
   if (hasResponseFields || hasLegacySchema || hasPipelineSteps || hasOutput) {
     return { kind: "schema" };
-  }
-
-  // ── 3. Health Check (only if no explicit schema, pipeline, or entity linkage) ─
-  const isHealthName =
-    name === "/" ||
-    name === "/health" ||
-    name.endsWith("/health") ||
-    name === "health";
-  const isHealthSummary =
-    summary === "health check" ||
-    summary.includes("health") ||
-    summary === "test the health of the server";
-
-  if (method === "get" && (isHealthName || isHealthSummary)) {
-    return { kind: "health" };
   }
 
   // ── 4. Void ───────────────────────────────────────────────────────────────
@@ -87,50 +89,118 @@ export function classifyEndpointShape(
 function resolveEntityName(
   ep: Endpoint & { nodeId?: string },
   allNodes: BackendNode[],
+  allEdges: BackendEdge[] = [],
 ): string | null {
+  const edgeDbNodeIds: string[] = [];
+  const epNodeId = ep.nodeId;
+
+  if (epNodeId && allEdges.length > 0 && allNodes.length > 0) {
+    allEdges.forEach((e) => {
+      let candidateId: string | null = null;
+      if (
+        e.source === epNodeId ||
+        e.source === ep.id ||
+        (e.sourceHandle && (e.sourceHandle.includes(ep.id) || e.sourceHandle.includes(epNodeId)))
+      ) {
+        candidateId = e.target;
+      } else if (
+        e.target === epNodeId ||
+        e.target === ep.id ||
+        (e.targetHandle && (e.targetHandle.includes(ep.id) || e.targetHandle.includes(epNodeId)))
+      ) {
+        candidateId = e.source;
+      }
+
+      if (candidateId) {
+        const candidateNode = allNodes.find((n) => n.id === candidateId);
+        if (
+          candidateNode &&
+          (candidateNode.type === "entity" ||
+            candidateNode.type === "db_ref" ||
+            candidateNode.type === "database")
+        ) {
+          edgeDbNodeIds.push(candidateId);
+        }
+      }
+    });
+  }
+
+  const pipelineDbNodeIds: string[] = [];
+  if (Array.isArray(ep.pipelineSteps)) {
+    for (const step of ep.pipelineSteps) {
+      if (step.type === "db_operation") {
+        const stepTarget =
+          step.tableNodeId ||
+          step.databaseId ||
+          (step as { databaseNodeId?: string }).databaseNodeId;
+        if (stepTarget) pipelineDbNodeIds.push(stepTarget);
+      }
+    }
+  }
+
   const targetIds = [
     ...(ep.databaseNodeIds || []),
     ...(ep.databaseNodeId && ep.databaseNodeId !== "none"
       ? [ep.databaseNodeId]
       : []),
     ...Object.keys(ep.crudOperations || {}),
+    ...edgeDbNodeIds,
+    ...pipelineDbNodeIds,
   ];
 
-  if (targetIds.length === 0) return null;
+  if (targetIds.length === 0) {
+    return null;
+  }
 
+  const candidateEntityNodes: BackendNode[] = [];
   for (const nodeId of targetIds) {
     const tableNode = allNodes.find((n) => n.id === nodeId);
     if (!tableNode) continue;
-
-    // db_ref: resolve via tableRef pointer
     const entityNode =
       tableNode.type === "db_ref" && tableNode.data?.tableRef
         ? allNodes.find((n) => n.id === tableNode.data?.tableRef)
         : tableNode;
+    if (entityNode && !candidateEntityNodes.some((c) => c.id === entityNode.id)) {
+      candidateEntityNodes.push(entityNode);
+    }
+  }
 
-    if (!entityNode) continue;
+  if (candidateEntityNodes.length === 0) {
+    return null;
+  }
 
-    // For database-type nodes, check sub-table matching
+  // Prioritize matching candidate entity against words in endpoint name or path
+  const epText = (ep.name || "").toLowerCase().replace(/[^a-z0-9]/g, " ");
+  const epWords = epText.split(/\s+/).filter(Boolean);
+
+  for (const entityNode of candidateEntityNodes) {
     if (entityNode.type === "database") {
-      const tables = entityNode.data?.tables;
-      if (tables && tables.length > 0) {
-        const matchedTable =
-          tables.find(
-            (t) =>
-              ep.crudOperations &&
-              (ep.crudOperations[t.id || ""] || ep.crudOperations[t.name || ""]),
-          ) || tables[0];
-        if (matchedTable?.name) {
-          return toPascalCase(matchedTable.name);
+      const tables = entityNode.data?.tables || [];
+      for (const t of tables) {
+        const tName = (t.name || t.label || "").toLowerCase();
+        if (tName && (epText.includes(tName) || epWords.some((w) => tName.includes(w) || w.includes(tName)))) {
+          return toPascalCase(t.name || t.label || "");
         }
       }
     }
-
-    const rawName =
-      entityNode.data?.label || entityNode.data?.tableRef || null;
-    if (rawName) {
+    const rawName = entityNode.data?.label || entityNode.data?.tableRef || "";
+    const cleanName = rawName.toLowerCase();
+    if (cleanName && (epText.includes(cleanName) || epWords.some((w) => cleanName.includes(w) || w.includes(cleanName)))) {
       return toPascalCase(rawName);
     }
+  }
+
+  // If no word match, use first candidate from targetIds (if any)
+  if (targetIds.length > 0 && candidateEntityNodes.length > 0) {
+    const first = candidateEntityNodes[0];
+    if (first && first.type === "database") {
+      const tables = first.data?.tables || [];
+      if (tables.length > 0 && tables[0]?.name) {
+        return toPascalCase(tables[0].name);
+      }
+    }
+    const rawName = first?.data?.label || first?.data?.tableRef;
+    if (rawName) return toPascalCase(rawName);
   }
 
   return null;

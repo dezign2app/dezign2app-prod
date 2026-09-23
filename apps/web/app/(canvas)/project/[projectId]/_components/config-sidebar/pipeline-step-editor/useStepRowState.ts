@@ -186,10 +186,13 @@ export function useStepRowState({
   );
 
   const selectedDbId = step.databaseId || "all";
-  const selectedTableNode = useMemo(
-    () => allEntityNodes.find((n) => n.id === step.tableNodeId),
-    [allEntityNodes, step.tableNodeId],
-  );
+  const selectedTableNode = useMemo(() => {
+    const found = allEntityNodes.find((n) => n.id === step.tableNodeId);
+    if (found?.type === "db_ref" && found.data?.tableRef) {
+      return allNodes.find((n) => n.id === found.data!.tableRef) || found;
+    }
+    return found;
+  }, [allEntityNodes, allNodes, step.tableNodeId]);
 
   // Expected arguments (for DB Operation, Redis, Transform, Kafka, Service Call)
   const expectedArgs = useMemo((): ExpectedArg[] => {

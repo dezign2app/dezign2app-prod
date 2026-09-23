@@ -1,4 +1,14 @@
-import { BackendNode } from "@/types/canvas";
+import {
+  BackendNode,
+  CustomTypeItem,
+  GlobalStoreAction,
+  GlobalStoreField,
+  PageSection,
+  PageStateObject,
+  RealtimeConnection,
+  StoreActionType,
+  UIEventItem,
+} from "@/types/canvas";
 import { generateKeyBetween } from "fractional-indexing";
 import { getLastIndex } from "../../utils";
 import { ConnectionContext } from "../types";
@@ -133,17 +143,17 @@ export function handleFrontendConnect({
     const sourceHandle = connection.sourceHandle ?? "";
     const targetHandle = connection.targetHandle ?? "";
     const storeName = sourceNode.data?.label || sourceNode.data?.storeName || "Store";
-    const storeFields = sourceNode.data?.fields || [];
+    const storeFields: GlobalStoreField[] = sourceNode.data?.fields || [];
 
     if (sourceHandle.startsWith("store-field-out-")) {
       const fieldId = sourceHandle.replace("store-field-out-", "");
-      const field = storeFields.find((f: any) => f.id === fieldId);
+      const field = storeFields.find((f: GlobalStoreField) => f.id === fieldId);
       if (field) {
-        const sections: any[] = targetNode.data?.sections || [];
+        const sections: PageSection[] = targetNode.data?.sections || [];
 
         // Scenario A: Target is a specific section-state-in handle
         if (targetHandle.startsWith("section-state-in-")) {
-          let matchedSec: any = undefined;
+          let matchedSec: PageSection | undefined = undefined;
           let matchedStateId: string | undefined = undefined;
 
           for (const sec of sections) {
@@ -158,10 +168,12 @@ export function handleFrontendConnect({
           }
 
           if (matchedSec && matchedStateId) {
-            const updatedSections = sections.map((sec) => {
-              if (sec.id !== matchedSec!.id) return sec;
-              const nextStateObjects = (sec.stateObjects || []).map((st: any) => {
-                if (st.id === matchedStateId) {
+            const targetSecId = matchedSec.id;
+            const targetStateId = matchedStateId;
+            const updatedSections: PageSection[] = sections.map((sec: PageSection): PageSection => {
+              if (sec.id !== targetSecId) return sec;
+              const nextStateObjects: PageStateObject[] = (sec.stateObjects || []).map((st: PageStateObject): PageStateObject => {
+                if (st.id === targetStateId) {
                   return {
                     ...st,
                     name: field.name,
@@ -187,7 +199,7 @@ export function handleFrontendConnect({
         } else {
           // Scenario B: Dropped on page-in or general page target
           let targetSec = sections[0];
-          let updatedSections: any[];
+          let updatedSections: PageSection[];
 
           if (!targetSec) {
             targetSec = {
@@ -201,14 +213,14 @@ export function handleFrontendConnect({
           }
 
           const existingSt = (targetSec.stateObjects || []).find(
-            (s: any) => s.fieldId === field.id || (s.storeId === sourceNode.id && s.name === field.name),
+            (s: PageStateObject) => s.fieldId === field.id || (s.storeId === sourceNode.id && s.name === field.name),
           );
 
           let stateId = existingSt?.id;
 
           if (!existingSt) {
-            stateId = `state-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-            const newObj = {
+            stateId = `state-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+            const newObj: PageStateObject = {
               id: stateId,
               name: field.name,
               type: field.type,
@@ -218,8 +230,9 @@ export function handleFrontendConnect({
               fieldId: field.id,
             };
 
-            updatedSections = sections.map((sec) =>
-              sec.id === targetSec!.id
+            const activeTargetSecId = targetSec.id;
+            updatedSections = sections.map((sec: PageSection): PageSection =>
+              sec.id === activeTargetSecId
                 ? { ...sec, stateObjects: [...(sec.stateObjects || []), newObj] }
                 : sec,
             );
@@ -279,16 +292,16 @@ export function handleFrontendConnect({
     const sourceHandle = connection.sourceHandle ?? "";
     const targetHandle = connection.targetHandle ?? "";
     const typeId = sourceHandle.replace(/^type-out-/, "");
-    const typesList = sourceNode.data?.types || [];
-    const typeItem = typesList.find((t: any) => t.id === typeId);
+    const typesList: CustomTypeItem[] = sourceNode.data?.types || [];
+    const typeItem = typesList.find((t: CustomTypeItem) => t.id === typeId);
 
     if (typeItem) {
       // Subcase 4A: TypesNode -> WebPage (binding type to a section state object)
       if (targetNode.type === "webPage" && targetHandle.startsWith("section-state-in-")) {
-        const sections: any[] = targetNode.data?.sections || [];
-        const updatedSections = sections.map((sec) => ({
+        const sections: PageSection[] = targetNode.data?.sections || [];
+        const updatedSections: PageSection[] = sections.map((sec: PageSection): PageSection => ({
           ...sec,
-          stateObjects: (sec.stateObjects || []).map((st: any) => {
+          stateObjects: (sec.stateObjects || []).map((st: PageStateObject): PageStateObject => {
             if (targetHandle === `section-state-in-${sec.id}-${st.id}`) {
               const isArray = Boolean(st.type?.endsWith("[]"));
               return {
@@ -310,8 +323,8 @@ export function handleFrontendConnect({
       // Subcase 4B: TypesNode -> StateStore (binding custom type to a store field)
       if (targetNode.type === "state_store" && targetHandle.startsWith("store-field-in-")) {
         const fieldId = targetHandle.replace("store-field-in-", "");
-        const fields = targetNode.data?.fields || [];
-        const updatedFields = fields.map((f: any) => {
+        const fields: GlobalStoreField[] = targetNode.data?.fields || [];
+        const updatedFields: GlobalStoreField[] = fields.map((f: GlobalStoreField): GlobalStoreField => {
           if (f.id === fieldId) {
             const isArray = Boolean(f.isArray || f.type?.endsWith("[]"));
             return {
@@ -357,11 +370,11 @@ export function handleFrontendConnect({
 
     if (isActionHandle || isRealtimeHandle) {
       const storeName = storeNode.data?.label || storeNode.data?.storeName || "Store";
-      const storeActions = storeNode.data?.actions || [];
-      const storeFields = storeNode.data?.fields || [];
+      const storeActions: GlobalStoreAction[] = storeNode.data?.actions || [];
+      const storeFields: GlobalStoreField[] = storeNode.data?.fields || [];
 
       // Determine action type and name
-      let actionType: "populate" | "mutate" | "reset" = "mutate";
+      let actionType: StoreActionType = "mutate";
       let actionName = "mutate";
       let actionId: string | undefined = undefined;
       let targetFieldId: string | undefined = undefined;
@@ -379,22 +392,22 @@ export function handleFrontendConnect({
         storeHandle.startsWith("store-action-out-")
       ) {
         const idPart = storeHandle.replace(/^store-action-(in-left-|in-|out-)/, "");
-        const matchedAction = storeActions.find((a: any) => a.id === idPart);
+        const matchedAction = storeActions.find((a: GlobalStoreAction) => a.id === idPart);
         if (matchedAction) {
           actionId = matchedAction.id;
           actionName = matchedAction.name;
-          actionType = (matchedAction.actionType as any) || "mutate";
+          actionType = matchedAction.actionType || "mutate";
           targetFieldId = matchedAction.targetFieldId;
           targetFieldName = matchedAction.targetFieldName;
         }
       } else if (storeHandle.startsWith("store-field-in-") || storeHandle.startsWith("store-field-out-")) {
         const fId = storeHandle.replace(/^store-field-(in-|out-)/, "");
-        const matchedField = storeFields.find((f: any) => f.id === fId);
+        const matchedField = storeFields.find((f: GlobalStoreField) => f.id === fId);
         if (matchedField) {
           targetFieldId = matchedField.id;
           targetFieldName = matchedField.name;
           actionName = `set${matchedField.name.charAt(0).toUpperCase()}${matchedField.name.slice(1)}`;
-          actionType = "mutate";
+          actionType = "set";
         }
       } else {
         actionType = "mutate";
@@ -403,12 +416,12 @@ export function handleFrontendConnect({
 
       if (isActionHandle) {
         const actionIdToBind = webHandle.replace(/^(events-|event-in-|pageload-in-|action-in-|sse-in-|websocket-in-|ws-in-|webrtc-in-)/, "");
-        const sections: any[] = webPageNode.data?.sections || [];
+        const sections: PageSection[] = webPageNode.data?.sections || [];
         let updatedActionName = "";
 
-        const updatedSections = sections.map((sec) => ({
+        const updatedSections: PageSection[] = sections.map((sec: PageSection): PageSection => ({
           ...sec,
-          actions: (sec.actions || []).map((act: any) => {
+          actions: (sec.actions || []).map((act: UIEventItem): UIEventItem => {
             if (act.id === actionIdToBind) {
               updatedActionName = act.name || "Action";
               return {
@@ -437,7 +450,7 @@ export function handleFrontendConnect({
         });
 
         // Normalize edge direction: always from StateStore (source) to WebPage action (target)
-        const targetAction = sections.flatMap((sec: any) => sec.actions || []).find((a: any) => a.id === actionIdToBind);
+        const targetAction = sections.flatMap((sec: PageSection) => sec.actions || []).find((a: UIEventItem) => a.id === actionIdToBind);
         const isPageLoad = targetAction?.event === "pageLoad" || targetAction?.name === "pageLoad";
         const normalizedTargetHandle = isPageLoad ? `pageload-in-${actionIdToBind}` : `event-in-${actionIdToBind}`;
         const normalizedSourceHandle =
@@ -476,10 +489,10 @@ export function handleFrontendConnect({
 
       if (isRealtimeHandle) {
         const connIdToBind = webHandle.replace(/^rtc-(out|in)-/, "");
-        const rtcList: any[] = webPageNode.data?.realtimeConnections || [];
+        const rtcList: RealtimeConnection[] = webPageNode.data?.realtimeConnections || [];
         let updatedConnName = "";
 
-        const updatedRtcList = rtcList.map((c: any) => {
+        const updatedRtcList: RealtimeConnection[] = rtcList.map((c: RealtimeConnection): RealtimeConnection => {
           if (c.id === connIdToBind) {
             updatedConnName = c.eventName || c.description || "Realtime connection";
             return {

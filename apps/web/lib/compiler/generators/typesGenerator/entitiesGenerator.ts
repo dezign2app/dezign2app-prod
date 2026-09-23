@@ -110,6 +110,71 @@ export function generateEntitiesModule(
       seenNames.add(pluralPascal);
       code += `export type ${pluralPascal} = ${pascal};\n`;
     }
+
+    const writableCols = cols.filter(
+      (c) =>
+        !(
+          c.isPrimaryKey ||
+          c.isPrimary ||
+          c.primaryKey ||
+          (c.name || "").toLowerCase() === "id"
+        ),
+    );
+    const writableLines = writableCols.map((c) => {
+      const fieldName = c.name || "field";
+      const isReq = c.isNotNull || c.required;
+      let tsType = "string";
+      switch (c.type?.toLowerCase()) {
+        case "integer":
+        case "int":
+        case "number":
+        case "float":
+        case "double":
+        case "real":
+          tsType = "number";
+          break;
+        case "boolean":
+        case "bool":
+          tsType = "boolean";
+          break;
+        case "json":
+        case "object":
+          tsType = "Record<string, string | number | boolean | null>";
+          break;
+        default:
+          tsType = "string";
+      }
+      return `  ${fieldName}${isReq ? "" : "?"}: ${tsType};`;
+    });
+
+    const createFields = [`  id?: string;`, ...writableLines].join("\n");
+    code += `\nexport type Create${pascal}Data = {\n${createFields}\n};\n\n`;
+    code += `export type Update${pascal}Data = Partial<Create${pascal}Data>;\n\n`;
+    seenNames.add(`Create${pascal}Data`);
+    seenNames.add(`Update${pascal}Data`);
+
+    if (
+      singularPascal &&
+      singularPascal !== pascal &&
+      !seenNames.has(`Create${singularPascal}Data`) &&
+      !customTypeNames?.has(`Create${singularPascal}Data`)
+    ) {
+      seenNames.add(`Create${singularPascal}Data`);
+      seenNames.add(`Update${singularPascal}Data`);
+      code += `export type Create${singularPascal}Data = Create${pascal}Data;\n`;
+      code += `export type Update${singularPascal}Data = Update${pascal}Data;\n`;
+    }
+    if (
+      pluralPascal &&
+      pluralPascal !== pascal &&
+      !seenNames.has(`Create${pluralPascal}Data`) &&
+      !customTypeNames?.has(`Create${pluralPascal}Data`)
+    ) {
+      seenNames.add(`Create${pluralPascal}Data`);
+      seenNames.add(`Update${pluralPascal}Data`);
+      code += `export type Create${pluralPascal}Data = Create${pascal}Data;\n`;
+      code += `export type Update${pluralPascal}Data = Update${pascal}Data;\n`;
+    }
     code += `\n`;
   }
 
@@ -119,12 +184,17 @@ export function generateEntitiesModule(
   );
 
   dbEntityNodes.forEach((node) => {
-    const rawName = node.data?.label || node.data?.tableRef || "Entity";
+    let targetNode = node;
+    if (node.type === "db_ref" && node.data?.tableRef) {
+      const master = nodes.find((n) => n.id === node.data.tableRef);
+      if (master) targetNode = master;
+    }
+    const rawName = targetNode.data?.label || targetNode.data?.tableRef || "Entity";
     const pascal = toPascalCase(rawName);
     if (!pascal || seenNames.has(pascal)) return;
     seenNames.add(pascal);
 
-    const cols = node.data?.columns || [];
+    const cols = targetNode.data?.columns || targetNode.data?.fields || [];
     renderEntityInterface(pascal, rawName, cols, false);
   });
 

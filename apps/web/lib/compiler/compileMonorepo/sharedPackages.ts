@@ -152,7 +152,7 @@ export function compileSharedPackages(
 
   // ── step 4.6 | @workspace/types ──────────────────────────────────────────
   // ✦ emits: packages/types/**
-  const compiledTypes = generateTypesPackage(nodes, endpoints, events, servicesInfo);
+  const compiledTypes = generateTypesPackage(nodes, endpoints, events, servicesInfo, edges);
   compiledTypes.forEach((f) => {
     files.push({
       filename: `packages/types/${f.filename}`,

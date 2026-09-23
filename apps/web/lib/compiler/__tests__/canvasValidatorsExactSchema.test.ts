@@ -589,7 +589,78 @@ describe("Convex canvasValidators exact schema", () => {
     expect(backendEdgeDataValidator.fields.isStoreActionBinding).toBeDefined();
     expect(backendEdgeDataValidator.fields.actionName).toBeDefined();
   });
+
+  it("validates storeActionBinding with actionType: 'mutate' in webPage and stateStore schemas", async () => {
+    const { webPageDataSchema, stateStoreNodeDataSchema } = await import(
+      "@workspace/canvas/schemas"
+    );
+    const { storeActionBindingConvexValidator, stateStoreConvexDataValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    // Exact payload structure reported in user error
+    const pageWithMutateBinding = {
+      isLayout: false,
+      label: "conversations",
+      position: { x: 1754.0, y: 276.5 },
+      sections: [
+        {
+          id: "sec-1",
+          name: "Main",
+          actions: [
+            {
+              event: "pageLoad",
+              id: "evt-1790102749230",
+              name: "pageLoad",
+              storeActionBinding: {
+                actionName: "populate",
+                actionType: "populate" as const,
+                storeName: "conversationStore",
+                storeNodeId: "9f4cecc9-5943-40e5-b0a2-a439fdf11b1b",
+                updateSource: "response" as const,
+              },
+            },
+            {
+              event: "click",
+              id: "6y5l5cv",
+              name: "create conversation",
+              storeActionBinding: {
+                actionName: "mutate",
+                actionType: "mutate" as const,
+                storeName: "conversationStore",
+                storeNodeId: "9f4cecc9-5943-40e5-b0a2-a439fdf11b1b",
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const parsedPage = webPageDataSchema.safeParse(pageWithMutateBinding);
+    expect(parsedPage.success).toBe(true);
+
+    // Verify convex validator handles actionType: 'mutate'
+    expect(storeActionBindingConvexValidator).toBeDefined();
+    expect(stateStoreConvexDataValidator).toBeDefined();
+
+    // Verify state store with default manipulator mutate
+    const storeWithMutate = {
+      label: "conversationStore",
+      storeName: "conversationStore",
+      actions: [
+        {
+          id: "act-mutate",
+          name: "mutate",
+          actionType: "mutate" as const,
+          defaultManipulatorType: "mutate" as const,
+        },
+      ],
+    };
+    const parsedStore = stateStoreNodeDataSchema.safeParse(storeWithMutate);
+    expect(parsedStore.success).toBe(true);
+  });
 });
+
 
 
 

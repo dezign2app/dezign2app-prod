@@ -269,12 +269,12 @@ export function EndpointLiveRunner({
             size="sm"
             onClick={handleSend}
             disabled={isLoading && !abortControllerRef.current}
-            variant="secondary"
+            variant="default"
             className={cn(
               "h-7 px-3 text-xs font-medium border border-border/60 shadow-none gap-1.5 shrink-0 transition-all",
               isLoading
                 ? "bg-destructive/15 text-destructive border-destructive/30 hover:bg-destructive/25"
-                : "bg-secondary hover:bg-secondary/80 text-foreground",
+                : "bg-primary hover:bg-primary/80 text-primary-foreground",
             )}
           >
             {isLoading ? (
@@ -284,7 +284,7 @@ export function EndpointLiveRunner({
               </>
             ) : (
               <>
-                <Send className="w-3.5 h-3.5 text-muted-foreground" />
+                <Send className="w-3.5 h-3.5" />
                 <span>Send Request</span>
               </>
             )}

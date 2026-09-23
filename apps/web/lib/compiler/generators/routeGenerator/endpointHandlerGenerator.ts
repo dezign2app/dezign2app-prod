@@ -104,7 +104,7 @@ export function generateEndpointRouteHandler(
       .replace(/^[a-z]/, (chr) => chr.toUpperCase());
   }
 
-  classifyEndpointShape(ep, allNodes);
+  classifyEndpointShape(ep, allNodes, allEdges);
 
   const parsedResSchema = parseSchemaJson(ep.responseBody?.rawJson);
   let responseData: string;
@@ -207,6 +207,7 @@ export function generateEndpointRouteHandler(
     schemaVarPrefix,
     hasValidatedBody,
     hasQueryParams: queryTypeRes.hasContent,
+    isBodyMethod,
   });
 
   // 4. AI Coding Agent Directive & Context
@@ -219,7 +220,7 @@ export function generateEndpointRouteHandler(
 
   // 5. Business Logic Section
   routeHandlerCode += `    // --- Business Logic ---\n`;
-  const payloadVar = hasValidatedBody ? "body" : "req.body";
+  const payloadVar = (hasValidatedBody || isBodyMethod) ? "body" : "req.body";
 
   // -----------------------------------------------------------------------
   // PIPELINE MODE: explicit configured pipeline steps
