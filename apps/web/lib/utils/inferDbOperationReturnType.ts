@@ -193,7 +193,7 @@ export function inferDbOperationReturnType(
 ): string {
   const {
     pascalLabel = "Entity",
-    fallback = `${pascalLabel}Row[]`,
+    fallback = `${pascalLabel}[]`,
   } = options;
 
   if (!code || !code.trim()) {
@@ -239,13 +239,13 @@ export function inferDbOperationReturnType(
       return "boolean";
     }
     if (/^\s*SELECT\b/i.test(rawCode)) {
-      return `${pascalLabel}Row[]`;
+      return `${pascalLabel}[]`;
     }
     if (/^\s*INSERT\b/i.test(rawCode)) {
-      return `${pascalLabel}Row`;
+      return `${pascalLabel}`;
     }
     if (/^\s*UPDATE\b/i.test(rawCode)) {
-      return `${pascalLabel}Row | undefined`;
+      return `${pascalLabel} | undefined`;
     }
     if (/^\s*DELETE\b/i.test(rawCode)) {
       return "{ success: boolean; message: string }";
@@ -378,7 +378,7 @@ export function inferDbOperationReturnType(
         inferredTypes.push("number[]");
         continue;
       }
-      inferredTypes.push(`${pascalLabel}Row[]`);
+      inferredTypes.push(`${pascalLabel}[]`);
       continue;
     }
 
@@ -406,11 +406,11 @@ export function inferDbOperationReturnType(
 
     // I. Prepared statement operations
     if (/\bstmt[a-zA-Z0-9_$]*\.all\b/.test(expr)) {
-      inferredTypes.push(`${pascalLabel}Row[]`);
+      inferredTypes.push(`${pascalLabel}[]`);
       continue;
     }
     if (/\bstmt[a-zA-Z0-9_$]*\.get\b/.test(expr)) {
-      inferredTypes.push(`${pascalLabel}Row | undefined`);
+      inferredTypes.push(`${pascalLabel} | undefined`);
       continue;
     }
     if (/\bstmt[a-zA-Z0-9_$]*\.run\b/.test(expr)) {
@@ -446,11 +446,11 @@ export function inferDbOperationReturnType(
     // K. Identifier / variable heuristics
     const lowerExpr = expr.toLowerCase();
     if (["rows", "records", "items", "results", "entries", "list"].includes(lowerExpr)) {
-      inferredTypes.push(`${pascalLabel}Row[]`);
+      inferredTypes.push(`${pascalLabel}[]`);
       continue;
     }
     if (["row", "record", "item", "fresh", "current", "entity", "result"].includes(lowerExpr)) {
-      inferredTypes.push(`${pascalLabel}Row | undefined`);
+      inferredTypes.push(`${pascalLabel} | undefined`);
       continue;
     }
     if (

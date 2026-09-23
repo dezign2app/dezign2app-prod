@@ -105,11 +105,11 @@ describe("Database Operations Prompt Context & Code Generator", () => {
         name: "getUserSession",
         kind: "custom",
         params: [{ name: "sessionId", type: "string", required: true }],
-        returnType: "UserSessionRow | null",
+        returnType: "UserSession | null",
       },
     });
 
-    expect(code).toContain("export async function getUserSession(sessionId: string): Promise<UserSessionRow | null>");
+    expect(code).toContain("export async function getUserSession(sessionId: string): Promise<UserSession | null>");
     expect(code).toContain("await getRedisClient()");
     expect(code).toContain("await redis.get(`user_session:${sessionId}`)");
     expect(code).not.toContain("res.status");

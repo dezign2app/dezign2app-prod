@@ -5,7 +5,7 @@ import { DbOperationFunction, CanvasEntityColumn } from "@workspace/canvas/types
 
 describe("extractDbOperationParams", () => {
   it("extracts parameters from async function code", () => {
-    const code = `export async function createTest(data: CreateTestData): Promise<TestRow> {
+    const code = `export async function createTest(data: CreateTestData): Promise<Test> {
       return await query('INSERT ...');
     }`;
     const params = extractDbOperationParams(code);
@@ -42,9 +42,9 @@ describe("generateDefaultParams", () => {
     id: "auto-create-test",
     name: "createTest",
     kind: "create",
-    signature: "createTest(data: CreateTestData): Promise<TestRow>",
+    signature: "createTest(data: CreateTestData): Promise<Test>",
     params: [{ name: "data", type: "CreateTestData", required: true }],
-    returnType: "Promise<TestRow>",
+    returnType: "Promise<Test>",
     logicMode: "code",
     code: "",
     enabled: true,
@@ -82,7 +82,7 @@ describe("generateDefaultParams", () => {
   it("handles destructured { id } parameters seamlessly", () => {
     const destructuredOp: DbOperationFunction = {
       ...mockOp,
-      signature: "createTest({ id }: CreateTestData): Promise<TestRow>",
+      signature: "createTest({ id }: CreateTestData): Promise<Test>",
       params: [{ name: "{ id }", type: "CreateTestData", required: true }],
     };
     const columns: CanvasEntityColumn[] = [
@@ -108,7 +108,7 @@ describe("PostgreSQL generated operations type safety", () => {
     for (const op of ops) {
       if (op.code) {
         expect(op.code).not.toContain("as unknown as");
-        expect(op.code).not.toContain("as TestRow");
+        expect(op.code).not.toContain("as Test");
         expect(op.code).not.toContain("as any");
         expect(op.code).not.toContain("unknown");
       }

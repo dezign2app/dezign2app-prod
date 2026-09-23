@@ -19,9 +19,9 @@ export const FunctionReturnTypeSection: React.FC<FunctionReturnTypeSectionProps>
   const returnTypeMode = selectedOp.returnTypeMode || "fixed";
 
   const presets = [
-    `${pascalLabel}Row[]`,
-    `${pascalLabel}Row | undefined`,
-    `${pascalLabel}Row`,
+    `${pascalLabel}[]`,
+    `${pascalLabel} | undefined`,
+    `${pascalLabel}`,
     "void",
     "boolean",
     "number",
@@ -101,7 +101,7 @@ export const FunctionReturnTypeSection: React.FC<FunctionReturnTypeSectionProps>
           </div>
 
           <Input
-            placeholder="e.g. UserRow[] or Promise<UserRow | undefined>"
+            placeholder="e.g. User[] or Promise<User | undefined>"
             value={selectedOp.returnType || ""}
             onChange={(e) => updateSelectedOp({ returnType: e.target.value })}
             className="h-8 text-xs font-mono bg-background"

@@ -152,7 +152,7 @@ export function emitAiDirective(params: EmitAiDirectiveParams): string {
           code += `    //   interface ${Pascal} { ${allColFields} }\n`;
         } else {
           code += `    // - Table: "${tableName}" (@workspace/db)\n`;
-          code += `    //   type ${Pascal}Row = { ${allColFields} };\n`;
+          code += `    //   interface ${Pascal} { ${allColFields} }\n`;
           code += `    //   type Create${Pascal}Data = { ${writableColFields} };\n`;
           code += `    //   type Update${Pascal}Data = Partial<Create${Pascal}Data>;\n`;
         }

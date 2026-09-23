@@ -101,8 +101,8 @@ describe("SQLite Primary Key Insertion and Message Field", () => {
     expect(helperFile).toBeDefined();
     const helperCode = helperFile?.content || "";
 
-    // 1. In ConversationsRow, message: string and success: boolean must only appear once
-    const rowTypeMatch = helperCode.match(/export type ConversationsRow = \{([\s\S]*?)\};/);
+    // 1. In Conversation interface, message: string and success: boolean must only appear once
+    const rowTypeMatch = helperCode.match(/export interface Conversations? \{([\s\S]*?)\};/);
     expect(rowTypeMatch).toBeTruthy();
     const rowTypeBody = rowTypeMatch![1];
 
@@ -122,7 +122,7 @@ describe("SQLite Primary Key Insertion and Message Field", () => {
 
     // 3. update function should preserve fresh.message and not clobber it with operational string
     expect(helperCode).not.toContain('message: "Conversation updated successfully"');
-    expect(helperCode).toContain("return fresh ? ({ ...fresh } as unknown as ConversationsRow) : undefined;");
+    expect(helperCode).toContain("return fresh ? ({ ...fresh } as unknown as Conversations) : undefined;");
 
     // 4. connection.ts should generate schema auto-migration for existing tables
     const connFile = result.files.find((f) => f.filename.includes("connection.ts"));

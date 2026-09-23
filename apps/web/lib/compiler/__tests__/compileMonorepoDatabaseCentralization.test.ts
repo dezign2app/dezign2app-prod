@@ -227,7 +227,7 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     const untitledHelper = result.files.find(
       (f) => f.filename === "packages/db/helpers/untitledTable.ts",
     );
-    expect(untitledHelper?.content).toContain('return { id: _rowId, message: "UntitledTable created successfully" } as unknown as UntitledTableRow;');
+    expect(untitledHelper?.content).toContain('return { id: _rowId, message: "UntitledTable created successfully" } as unknown as UntitledTable;');
   });
 
   it("should deduplicate duplicate operations and prepared statements in helper files", () => {
@@ -251,28 +251,28 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
             id: "op-1",
             name: "findAccountsByUserId",
             kind: "fetchByIndex",
-            code: `const stmtFindAccountsByUserId = db.prepare<[userId: string, limit?: number, offset?: number], AccountRow>(\n  "SELECT * FROM account WHERE userId = ? LIMIT ? OFFSET ?"\n);\n\nexport function findAccountsByUserId(userId: string, limit: number = 20, offset: number = 0): AccountRow[] {\n  return stmtFindAccountsByUserId.all(userId, limit, offset) as unknown as AccountRow[];\n}`,
+            code: `const stmtFindAccountsByUserId = db.prepare<[userId: string, limit?: number, offset?: number], Account>(\n  "SELECT * FROM account WHERE userId = ? LIMIT ? OFFSET ?"\n);\n\nexport function findAccountsByUserId(userId: string, limit: number = 20, offset: number = 0): Account[] {\n  return stmtFindAccountsByUserId.all(userId, limit, offset) as unknown as Account[];\n}`,
             enabled: true,
           },
           {
             id: "op-2",
             name: "findAccountsByUserId",
             kind: "fetchByIndex",
-            code: `const stmtFindAccountsByUserId = db.prepare<[userId: string, limit?: number, offset?: number], AccountRow>(\n  "SELECT * FROM account WHERE userId = ? LIMIT ? OFFSET ?"\n);\n\nexport function findAccountsByUserId(userId: string, limit: number = 20, offset: number = 0): AccountRow[] {\n  return stmtFindAccountsByUserId.all(userId, limit, offset) as unknown as AccountRow[];\n}`,
+            code: `const stmtFindAccountsByUserId = db.prepare<[userId: string, limit?: number, offset?: number], Account>(\n  "SELECT * FROM account WHERE userId = ? LIMIT ? OFFSET ?"\n);\n\nexport function findAccountsByUserId(userId: string, limit: number = 20, offset: number = 0): Account[] {\n  return stmtFindAccountsByUserId.all(userId, limit, offset) as unknown as Account[];\n}`,
             enabled: true,
           },
           {
             id: "op-3",
             name: "findAccountByIdWithUser",
             kind: "join",
-            code: `const stmtFindAccountByIdWithUser = db.prepare<[id: string]>(\n  "SELECT * FROM account WHERE id = ?"\n);\n\nexport function findAccountByIdWithUser(id: string): AccountWithUserRow | undefined {\n  return stmtFindAccountByIdWithUser.get(id) as unknown as AccountWithUserRow | undefined;\n}`,
+            code: `const stmtFindAccountByIdWithUser = db.prepare<[id: string]>(\n  "SELECT * FROM account WHERE id = ?"\n);\n\nexport function findAccountByIdWithUser(id: string): AccountWithUser | undefined {\n  return stmtFindAccountByIdWithUser.get(id) as unknown as AccountWithUser | undefined;\n}`,
             enabled: true,
           },
           {
             id: "op-4",
             name: "findAccountByIdWithUser",
             kind: "join",
-            code: `const stmtFindAccountByIdWithUser = db.prepare<[id: string]>(\n  "SELECT * FROM account WHERE id = ?"\n);\n\nexport function findAccountByIdWithUser(id: string): AccountWithUserRow | undefined {\n  return stmtFindAccountByIdWithUser.get(id) as unknown as AccountWithUserRow | undefined;\n}`,
+            code: `const stmtFindAccountByIdWithUser = db.prepare<[id: string]>(\n  "SELECT * FROM account WHERE id = ?"\n);\n\nexport function findAccountByIdWithUser(id: string): AccountWithUser | undefined {\n  return stmtFindAccountByIdWithUser.get(id) as unknown as AccountWithUser | undefined;\n}`,
             enabled: true,
           },
         ],
@@ -338,7 +338,7 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
             id: "legacy-create",
             name: "createLegacyTable",
             kind: "create",
-            code: `export function createLegacyTable(): LegacyTableRow {\n  const info = db.prepare("INSERT INTO legacy_table DEFAULT VALUES").run();\n  const _rowId = typeof info.lastInsertRowid === "bigint" ? info.lastInsertRowid.toString() : String(info.lastInsertRowid);\n  return { id: _rowId } as LegacyTableRow;\n}`,
+            code: `export function createLegacyTable(): LegacyTable {\n  const info = db.prepare("INSERT INTO legacy_table DEFAULT VALUES").run();\n  const _rowId = typeof info.lastInsertRowid === "bigint" ? info.lastInsertRowid.toString() : String(info.lastInsertRowid);\n  return { id: _rowId } as LegacyTable;\n}`,
             enabled: true,
           },
         ],
@@ -357,7 +357,7 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     const legacyHelper = result.files.find(
       (f) => f.filename === "packages/db/helpers/legacyTable.ts",
     );
-    expect(legacyHelper?.content).toContain('return { id: _rowId, message: "LegacyTable created successfully" } as unknown as LegacyTableRow;');
+    expect(legacyHelper?.content).toContain('return { id: _rowId, message: "LegacyTable created successfully" } as unknown as LegacyTable;');
   });
 
   it("should NOT compile packages/db or db helpers on an empty project", () => {

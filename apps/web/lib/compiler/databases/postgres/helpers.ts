@@ -41,8 +41,8 @@ export function generateInlinePostgresOp(
   switch (kind) {
     case "findAll":
       return (
-        `export async function ${effectiveName}(limit = 20, offset = 0): Promise<${pascal}Row[]> {\n` +
-        `  const res = await query<${pascal}Row>(\n` +
+        `export async function ${effectiveName}(limit = 20, offset = 0): Promise<${pascal}[]> {\n` +
+        `  const res = await query<${pascal}>(\n` +
         `    'SELECT * FROM "${tableName}" ORDER BY "${pkColName}" LIMIT $1 OFFSET $2',\n` +
         `    [limit, offset]\n` +
         `  );\n` +
@@ -51,8 +51,8 @@ export function generateInlinePostgresOp(
       );
     case "findById":
       return (
-        `export async function ${effectiveName}(${pkVarName}: ${pkTsType}): Promise<${pascal}Row | null> {\n` +
-        `  const res = await query<${pascal}Row>(\n` +
+        `export async function ${effectiveName}(${pkVarName}: ${pkTsType}): Promise<${pascal} | null> {\n` +
+        `  const res = await query<${pascal}>(\n` +
         `    'SELECT * FROM "${tableName}" WHERE "${pkColName}" = $1 LIMIT 1',\n` +
         `    [${pkVarName}]\n` +
         `  );\n` +
@@ -73,9 +73,9 @@ export function generateInlinePostgresOp(
         .join(", ");
       if (isStringPk) {
         return (
-          `export async function ${effectiveName}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}Row> {\n` +
+          `export async function ${effectiveName}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}> {\n` +
           `  const _id = ${pkVarName} || randomUUID();\n` +
-          `  const res = await query<${pascal}Row>(\n` +
+          `  const res = await query<${pascal}>(\n` +
           `    'INSERT INTO "${tableName}" ("${pkColName}"${insertCols ? `, ${insertCols}` : ""}) VALUES ($1${insertParams ? `, ${insertParams}` : ""}) RETURNING *',\n` +
           `    [_id${insertArgVals ? `, ${insertArgVals}` : ""}]\n` +
           `  );\n` +
@@ -84,8 +84,8 @@ export function generateInlinePostgresOp(
         );
       }
       return (
-        `export async function ${effectiveName}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}Row> {\n` +
-        `  const res = await query<${pascal}Row>(\n` +
+        `export async function ${effectiveName}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}> {\n` +
+        `  const res = await query<${pascal}>(\n` +
         `    'INSERT INTO "${tableName}" (${insertCols}) VALUES (${insertParams}) RETURNING *',\n` +
         `    [${insertArgVals}]\n` +
         `  );\n` +
@@ -103,8 +103,8 @@ export function generateInlinePostgresOp(
           .map((c) => `${toVarName(c.name)} ?? null`)
           .join(", ");
         return (
-          `export async function ${effectiveName}(${pkVarName}: ${pkTsType}, { ${updateDestructured} }: Update${pascal}Data): Promise<${pascal}Row | null> {\n` +
-          `  const res = await query<${pascal}Row>(\n` +
+          `export async function ${effectiveName}(${pkVarName}: ${pkTsType}, { ${updateDestructured} }: Update${pascal}Data): Promise<${pascal} | null> {\n` +
+          `  const res = await query<${pascal}>(\n` +
           `    'UPDATE "${tableName}" SET ${setClauses} WHERE "${pkColName}" = $1 RETURNING *',\n` +
           `    [${pkVarName}, ${setArgs}]\n` +
           `  );\n` +
@@ -113,8 +113,8 @@ export function generateInlinePostgresOp(
         );
       }
       return (
-        `export async function ${effectiveName}(${pkVarName}: ${pkTsType}): Promise<${pascal}Row | null> {\n` +
-        `  const res = await query<${pascal}Row>(\n` +
+        `export async function ${effectiveName}(${pkVarName}: ${pkTsType}): Promise<${pascal} | null> {\n` +
+        `  const res = await query<${pascal}>(\n` +
         `    'SELECT * FROM "${tableName}" WHERE "${pkColName}" = $1 LIMIT 1',\n` +
         `    [${pkVarName}]\n` +
         `  );\n` +
@@ -180,7 +180,7 @@ export function generatePostgresTableHelpers(
 
   // Type declarations
   code += `// ── Types ────────────────────────────────────────────────────────────────────\n\n`;
-  code += `export interface ${pascal}Row {\n`;
+  code += `export interface ${pascal} {\n`;
   cols.forEach((c) => {
     const tsType = toTsType(c.type);
     const opt = c.isPrimaryKey || c.isNotNull ? "" : "?";
@@ -208,29 +208,23 @@ export function generatePostgresTableHelpers(
   }
 
   code += `export type Update${pascal}Data = Partial<Create${pascal}Data>;\n\n`;
-  code += `export type ${pascal} = ${pascal}Row;\n`;
 
   const declaredTypes = new Set<string>([
-    `${pascal}Row`,
+    pascal,
     `Create${pascal}Data`,
     `Update${pascal}Data`,
-    pascal,
   ]);
 
   if (pascalSingular !== pascal) {
-    code += `export type ${pascalSingular}Row = ${pascal}Row;\n`;
-    code += `export type ${pascalSingular} = ${pascal}Row;\n`;
+    code += `export type ${pascalSingular} = ${pascal};\n`;
     code += `export type Create${pascalSingular}Data = Create${pascal}Data;\n`;
     code += `export type Update${pascalSingular}Data = Update${pascal}Data;\n`;
-    declaredTypes.add(`${pascalSingular}Row`);
     declaredTypes.add(pascalSingular);
     declaredTypes.add(`Create${pascalSingular}Data`);
     declaredTypes.add(`Update${pascalSingular}Data`);
   }
   if (pascalPlural !== pascal && pascalPlural !== pascalSingular) {
-    code += `export type ${pascalPlural}Row = ${pascal}Row;\n`;
-    code += `export type ${pascalPlural} = ${pascal}Row;\n`;
-    declaredTypes.add(`${pascalPlural}Row`);
+    code += `export type ${pascalPlural} = ${pascal};\n`;
     declaredTypes.add(pascalPlural);
   }
   code += `\n`;
@@ -294,8 +288,8 @@ export function generatePostgresTableHelpers(
 
     if (effectiveCode && effectiveCode.trim()) {
       effectiveCode = effectiveCode
-        .replace(/\s+as\s+unknown\s+as\s+[A-Za-z0-9_]+Row/g, "")
-        .replace(/\s+as\s+[A-Za-z0-9_]+Row/g, "")
+        .replace(/\s+as\s+unknown\s+as\s+[A-Za-z0-9_]+(?:Row)?/g, "")
+        .replace(/\s+as\s+[A-Za-z0-9_]+(?:Row)?/g, "")
         .replace(/\s+as\s+unknown\s+as\s+[A-Za-z0-9_]+/g, "")
         .replace(/\s+as\s+any/g, "");
 
