@@ -103,8 +103,23 @@ export function generateZustandStore(
     return `  ${fName}: ${tsType};`;
   });
 
-  // Default setters
-  const setterLines = fields.map((f) => {
+  const disabledManipulators = new Set([
+    ...(((store as any).disabledDefaultManipulators as string[]) || []),
+    ...(((store as any).deletedDefaultManipulators as string[]) || []),
+  ]);
+
+  const actionNames = new Set((store.actions || []).map((a) => toCamelCase(a.name)));
+  const activeSetterFields = fields.filter((f) => {
+    const fPascal = toPascalCase(f.name);
+    const setterName = `set${fPascal}`;
+    const isOverridden = actionNames.has(toCamelCase(setterName));
+    const isDisabled =
+      disabledManipulators.has(setterName) || disabledManipulators.has(`setter-${f.id}`);
+    return !isOverridden && !isDisabled;
+  });
+
+  // Default setters for fields not overridden or disabled
+  const setterLines = activeSetterFields.map((f) => {
     const fName = toCamelCase(f.name);
     const fPascal = toPascalCase(f.name);
     const tsType = mapFieldTypeToTs(f.type);
@@ -124,10 +139,27 @@ export function generateZustandStore(
     const tsType = mapFieldTypeToTs(targetField.type);
 
     switch (act.actionType) {
-      case "set":
-        customActionSignatures.push(`  ${actName}: (value: ${tsType}) => void;`);
-        customActionImpls.push(`  ${actName}: (value) => set({ ${targetName}: value }),`);
+      case "set": {
+        const hasParams = Array.isArray(act.parameters) && act.parameters.length > 0;
+        const paramSigs = hasParams
+          ? act.parameters!
+              .map((p) => `${toCamelCase(p.name)}: ${mapFieldTypeToTs(p.type)}${p.required === false ? " | undefined" : ""}`)
+              .join(", ")
+          : `value: ${tsType}`;
+        const paramArgs = hasParams
+          ? act.parameters!.map((p) => toCamelCase(p.name)).join(", ")
+          : "value";
+
+        customActionSignatures.push(`  ${actName}: (${paramSigs}) => void;`);
+        if (act.code && act.code.trim()) {
+          const rawCode = act.code.trim();
+          const bodyLines = rawCode.split("\n").map((line) => `    ${line}`).join("\n");
+          customActionImpls.push(`  ${actName}: (${paramArgs}) => {\n${bodyLines}\n  },`);
+        } else {
+          customActionImpls.push(`  ${actName}: (${paramArgs}) => set({ ${targetName}: ${paramArgs} }),`);
+        }
         break;
+      }
       case "append": {
         const itemTsType = targetField.type === "string"
           ? "string"
@@ -156,14 +188,48 @@ export function generateZustandStore(
         customActionSignatures.push(`  ${actName}: (amount?: number) => void;`);
         customActionImpls.push(`  ${actName}: (amount = 1) => set((s) => ({ ${targetName}: typeof s.${targetName} === "number" ? s.${targetName} + amount : amount })),`);
         break;
-      case "reset":
-        customActionSignatures.push(`  ${actName}: () => void;`);
-        customActionImpls.push(`  ${actName}: () => set(initialState),`);
+      case "reset": {
+        const hasParams = Array.isArray(act.parameters) && act.parameters.length > 0;
+        const paramSigs = hasParams
+          ? act.parameters!
+              .map((p) => `${toCamelCase(p.name)}: ${mapFieldTypeToTs(p.type)}${p.required === false ? " | undefined" : ""}`)
+              .join(", ")
+          : "";
+        const paramArgs = hasParams
+          ? act.parameters!.map((p) => toCamelCase(p.name)).join(", ")
+          : "";
+
+        customActionSignatures.push(`  ${actName}: (${paramSigs}) => void;`);
+        if (act.code && act.code.trim()) {
+          const rawCode = act.code.trim();
+          const bodyLines = rawCode.split("\n").map((line) => `    ${line}`).join("\n");
+          customActionImpls.push(`  ${actName}: (${paramArgs}) => {\n${bodyLines}\n  },`);
+        } else {
+          customActionImpls.push(`  ${actName}: () => set(initialState),`);
+        }
         break;
-      case "populate":
-        customActionSignatures.push(`  ${actName}: (data: Partial<${interfaceName}>) => void;`);
-        customActionImpls.push(`  ${actName}: (data) => set((s) => ({ ...s, ...data })),`);
+      }
+      case "populate": {
+        const hasParams = Array.isArray(act.parameters) && act.parameters.length > 0;
+        const paramSigs = hasParams
+          ? act.parameters!
+              .map((p) => `${toCamelCase(p.name)}: ${mapFieldTypeToTs(p.type)}${p.required === false ? " | undefined" : ""}`)
+              .join(", ")
+          : `data: Partial<${interfaceName}>`;
+        const paramArgs = hasParams
+          ? act.parameters!.map((p) => toCamelCase(p.name)).join(", ")
+          : "data";
+
+        customActionSignatures.push(`  ${actName}: (${paramSigs}) => void;`);
+        if (act.code && act.code.trim()) {
+          const rawCode = act.code.trim();
+          const bodyLines = rawCode.split("\n").map((line) => `    ${line}`).join("\n");
+          customActionImpls.push(`  ${actName}: (${paramArgs}) => {\n${bodyLines}\n  },`);
+        } else {
+          customActionImpls.push(`  ${actName}: (${paramArgs}) => set((s) => ({ ...s, ...${paramArgs} })),`);
+        }
         break;
+      }
       case "custom":
       default: {
         const hasParams = Array.isArray(act.parameters) && act.parameters.length > 0;
@@ -198,8 +264,8 @@ export function generateZustandStore(
     return `  ${fName}: ${val},`;
   });
 
-  // Default setter implementations
-  const setterImpls = fields.map((f) => {
+  // Default setter implementations for non-overridden fields
+  const setterImpls = activeSetterFields.map((f) => {
     const fName = toCamelCase(f.name);
     const fPascal = toPascalCase(f.name);
     return `  set${fPascal}: (value) => set({ ${fName}: value }),`;
@@ -219,16 +285,18 @@ export function generateZustandStore(
 
   const hasPopulate = (store.actions || []).some((a) => a.actionType === "populate" || a.name === "populate");
   const hasReset = (store.actions || []).some((a) => a.actionType === "reset" || a.name === "reset");
+  const isPopulateDisabled = disabledManipulators.has("populate") || disabledManipulators.has("load");
+  const isResetDisabled = disabledManipulators.has("reset");
 
   const builtInSignatures: string[] = [];
   const builtInImpls: string[] = [];
 
-  if (!hasPopulate) {
+  if (!hasPopulate && !isPopulateDisabled) {
     builtInSignatures.push(`  populate: (data: Partial<${interfaceName}>) => void;`);
     builtInImpls.push("      populate: (data) => set((s) => ({ ...s, ...data })),");
   }
 
-  if (!hasReset) {
+  if (!hasReset && !isResetDisabled) {
     builtInSignatures.push("  reset: () => void;");
     builtInImpls.push("      reset: () => set(initialState),");
   }

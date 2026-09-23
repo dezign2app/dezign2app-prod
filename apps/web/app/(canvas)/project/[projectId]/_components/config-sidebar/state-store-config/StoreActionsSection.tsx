@@ -74,12 +74,30 @@ export const StoreActionsSection: React.FC<StoreActionsSectionProps> = ({
     onUpdateAction(actionId, { parameters: updatedParams });
   };
 
+  const customActions = React.useMemo(() => {
+    return actions.filter((act) => {
+      if ((act as any).defaultManipulatorType) return false;
+      const isPopulateOverride =
+        act.actionType === "populate" ||
+        act.name.toLowerCase() === "populate" ||
+        act.name.toLowerCase() === "load";
+      const isResetOverride =
+        act.actionType === "reset" || act.name.toLowerCase() === "reset";
+      const isSetterOverride = fields.some(
+        (f) =>
+          act.targetFieldId === f.id &&
+          act.name.toLowerCase() === `set${f.name.toLowerCase()}`,
+      );
+      return !isPopulateOverride && !isResetOverride && !isSetterOverride;
+    });
+  }, [actions, fields]);
+
   return (
     <div className="flex flex-col gap-2.5 pt-2 border-t border-border/40">
       <div className="flex items-center justify-between">
         <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-          <FileCode size={13} />
-          <span>Store Actions & Custom Logic ({actions.length})</span>
+          <FileCode size={13} className="text-indigo-400" />
+          <span>Custom Store Actions &amp; Logic ({customActions.length})</span>
         </Label>
         <Button
           type="button"
@@ -91,17 +109,17 @@ export const StoreActionsSection: React.FC<StoreActionsSectionProps> = ({
           className="h-6 text-[10px] px-2 gap-1 text-indigo-500 hover:text-indigo-400 hover:bg-indigo-500/10 border-indigo-500/30 cursor-pointer"
         >
           <Plus size={11} />
-          <span>Add Action</span>
+          <span>Add Custom Action</span>
         </Button>
       </div>
 
-      {actions.length === 0 ? (
+      {customActions.length === 0 ? (
         <div className="p-3 text-center text-[11px] text-muted-foreground bg-muted/20 rounded-md border border-dashed border-border/60">
-          No custom actions. Click &quot;Add Action&quot; to define custom mutation logic.
+          No additional custom actions defined. Click &quot;Add Custom Action&quot; to add business logic.
         </div>
       ) : (
         <div className="space-y-2.5">
-          {actions.map((act) => {
+          {customActions.map((act) => {
             const isExpanded = expandedActionId === act.id;
             const isCustom = act.actionType === "custom";
 

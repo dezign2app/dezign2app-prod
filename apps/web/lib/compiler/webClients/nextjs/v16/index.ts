@@ -192,6 +192,8 @@ export function compileNextjsV16WebClient(
       storage,
       scope,
       targetPageId: targetPage?.id || d.targetPageId,
+      disabledDefaultManipulators: d.disabledDefaultManipulators,
+      deletedDefaultManipulators: d.deletedDefaultManipulators,
     };
   });
 

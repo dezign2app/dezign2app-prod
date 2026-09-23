@@ -464,143 +464,239 @@ export const StateStoreNode = ({
       </div>
 
       {/* Actions list with handles aligned on the right edge */}
-      <div className="flex flex-col border-t border-border/40 text-[9px] font-mono">
-        <div className="flex items-center justify-between text-[8px] font-bold uppercase tracking-wider text-muted-foreground/80 px-3 py-1 bg-muted/10">
-          <div className="flex items-center gap-1">
-            <span className="text-indigo-500 font-bold">•</span>
-            <span>Manipulators</span>
-          </div>
-          <span className="text-[7px] text-indigo-500 font-semibold">{actionCount} {actionCount === 1 ? "action" : "actions"}</span>
-        </div>
+      {(() => {
+        const disabledOrDeleted = new Set([
+          ...(data.disabledDefaultManipulators || []),
+          ...(data.deletedDefaultManipulators || []),
+        ]);
+        const populateOverride = (data.actions || []).find(
+          (a) =>
+            (a as any).defaultManipulatorType === "populate" ||
+            a.actionType === "populate" ||
+            a.name.toLowerCase() === "populate" ||
+            a.name.toLowerCase() === "load",
+        );
+        const resetOverride = (data.actions || []).find(
+          (a) =>
+            (a as any).defaultManipulatorType === "reset" ||
+            a.actionType === "reset" ||
+            a.name.toLowerCase() === "reset",
+        );
+        const customActions = (data.actions || []).filter((act) => {
+          if ((act as any).defaultManipulatorType) return false;
+          if (act === populateOverride || act === resetOverride) return false;
+          const isSetter = (data.fields || []).some(
+            (f) =>
+              act.targetFieldId === f.id &&
+              act.name.toLowerCase() === `set${f.name.toLowerCase()}`,
+          );
+          return !isSetter;
+        });
 
-        {/* 1. Load / Populate Action */}
-        <div className="relative flex items-center justify-between px-3 py-1 border-b border-border/20 bg-muted/5 hover:bg-muted/20 transition-colors group/row">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-            <span className="font-semibold text-foreground/90">load</span>
-            <span className="text-[8px] text-muted-foreground/60">(populate)</span>
-          </div>
-          {/* Inbound target handle */}
-          <Handle
-            type="target"
-            position={Position.Right}
-            id="populate-in"
-            className="w-2.5 h-2.5 !bg-emerald-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10"
-            style={{ top: "50%" }}
-            title="load: Wire to/from pageLoad action"
-          />
-          {/* Outbound source handle */}
-          <Handle
-            type="source"
-            position={Position.Right}
-            id="populate-out"
-            className="w-2.5 h-2.5 !bg-emerald-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10 opacity-0 hover:opacity-100"
-            style={{ top: "50%" }}
-            title="load: Wire to/from pageLoad action"
-          />
-        </div>
+        const isPopulateDisabled = disabledOrDeleted.has("populate") || disabledOrDeleted.has("load");
+        const isResetDisabled = disabledOrDeleted.has("reset");
 
-        {/* 2. Mutate Action */}
-        <div className="relative flex items-center justify-between px-3 py-1 border-b border-border/20 bg-muted/5 hover:bg-muted/20 transition-colors group/row">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
-            <span className="font-semibold text-foreground/90">mutate</span>
-            <span className="text-[8px] text-muted-foreground/60">(actions)</span>
-          </div>
-          {/* Inbound target handle */}
-          <Handle
-            type="target"
-            position={Position.Right}
-            id="mutate-in"
-            className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10"
-            style={{ top: "50%" }}
-            title="mutate: Wire to/from button or user interaction action"
-          />
-          {/* Outbound source handle */}
-          <Handle
-            type="source"
-            position={Position.Right}
-            id="mutate-out"
-            className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10 opacity-0 hover:opacity-100"
-            style={{ top: "50%" }}
-            title="mutate: Wire to/from button or user interaction action"
-          />
-        </div>
+        const hasActiveSetters =
+          (data.fields || []).some((f) => {
+            const cap = f.name.charAt(0).toUpperCase() + f.name.slice(1);
+            return !disabledOrDeleted.has(`setter-${f.id}`) && !disabledOrDeleted.has(`set${cap}`);
+          });
+        const isMutateDisabled =
+          disabledOrDeleted.has("mutate") ||
+          ((data.fields || []).length > 0 && !hasActiveSetters);
 
-        {/* 3. Reset Action */}
-        <div
-          className={cn(
-            "relative flex items-center justify-between px-3 py-1 bg-muted/5 hover:bg-muted/20 transition-colors group/row",
-            (!data.actions || data.actions.length === 0) && "rounded-b-[10px]",
-            data.actions && data.actions.length > 0 && "border-b border-border/20",
-          )}
-        >
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-            <span className="font-semibold text-foreground/90">reset</span>
-            <span className="text-[8px] text-muted-foreground/60">(unmount)</span>
-          </div>
-          {/* Inbound target handle */}
-          <Handle
-            type="target"
-            position={Position.Right}
-            id="reset-in"
-            className="w-2.5 h-2.5 !bg-rose-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10"
-            style={{ top: "50%" }}
-            title="reset: Wire to/from unmount or reset event"
-          />
-          {/* Outbound source handle */}
-          <Handle
-            type="source"
-            position={Position.Right}
-            id="reset-out"
-            className="w-2.5 h-2.5 !bg-rose-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10 opacity-0 hover:opacity-100"
-            style={{ top: "50%" }}
-            title="reset: Wire to/from unmount or reset event"
-          />
-        </div>
+        const visibleManipulatorCount =
+          (isPopulateDisabled ? 0 : 1) +
+          (isMutateDisabled ? 0 : 1) +
+          (isResetDisabled ? 0 : 1) +
+          customActions.length;
 
-        {/* Custom Actions if defined */}
-        {data.actions && data.actions.length > 0 && (
-          <div className="flex flex-col">
-            {data.actions.map((act, idx) => {
-              const isLast = idx === data.actions!.length - 1;
-              return (
-                <div
-                  key={act.id}
-                  className={cn(
-                    "relative flex items-center justify-between px-3 py-1 bg-muted/5 hover:bg-muted/20 transition-colors group/row text-[8px]",
-                    !isLast && "border-b border-border/20",
-                    isLast && "rounded-b-[10px]",
-                  )}
-                >
-                  <div className="flex items-center gap-1 truncate max-w-[170px]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
-                    <span className="font-medium text-foreground truncate">{act.name}</span>
-                    <span className="text-[7px] text-muted-foreground/60 uppercase shrink-0">({act.actionType})</span>
-                  </div>
-                  <Handle
-                    type="target"
-                    position={Position.Right}
-                    id={`store-action-in-${act.id}`}
-                    className="w-2 h-2 !bg-indigo-400 border border-background cursor-pointer hover:scale-125 transition-transform -right-1 z-10"
-                    style={{ top: "50%" }}
-                    title={`${act.name}: Wire to/from page action`}
-                  />
-                  <Handle
-                    type="source"
-                    position={Position.Right}
-                    id={`store-action-out-${act.id}`}
-                    className="w-2 h-2 !bg-indigo-400 border border-background cursor-pointer hover:scale-125 transition-transform -right-1 z-10 opacity-0 hover:opacity-100"
-                    style={{ top: "50%" }}
-                    title={`${act.name}: Wire to/from page action`}
-                  />
+        // Helper to check if a row is the last visible item in the node
+        const isLastItem = (type: "populate" | "mutate" | "reset") => {
+          if (customActions.length > 0) return false;
+          if (type === "populate") return isMutateDisabled && isResetDisabled;
+          if (type === "mutate") return isResetDisabled;
+          if (type === "reset") return true;
+          return false;
+        };
+
+        return (
+          <div className="flex flex-col border-t border-border/40 text-[9px] font-mono">
+            <div className="flex items-center justify-between text-[8px] font-bold uppercase tracking-wider text-muted-foreground/80 px-3 py-1 bg-muted/10">
+              <div className="flex items-center gap-1">
+                <span className="text-indigo-500 font-bold">•</span>
+                <span>Manipulators</span>
+              </div>
+              <span className="text-[7px] text-indigo-500 font-semibold">
+                {visibleManipulatorCount} {visibleManipulatorCount === 1 ? "manipulator" : "manipulators"}
+              </span>
+            </div>
+
+            {/* Empty state if all manipulators disabled */}
+            {visibleManipulatorCount === 0 && (
+              <div className="px-3 py-1.5 text-[8px] text-muted-foreground/50 italic rounded-b-[10px]">
+                No manipulators defined
+              </div>
+            )}
+
+            {/* 1. Populate Action (only if not disabled) */}
+            {!isPopulateDisabled && (
+              <div
+                className={cn(
+                  "relative flex items-center justify-between px-3 py-1 bg-muted/5 hover:bg-muted/20 transition-colors group/row",
+                  !isLastItem("populate") && "border-b border-border/20",
+                  isLastItem("populate") && "rounded-b-[10px]",
+                )}
+              >
+                <div className="flex items-center gap-1.5 truncate max-w-[170px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="font-semibold text-foreground/90 truncate">
+                    {populateOverride?.name || "populate"}
+                  </span>
+                  <span className="text-[8px] text-muted-foreground/60 shrink-0">
+                    {populateOverride ? "(custom)" : "(default)"}
+                  </span>
                 </div>
-              );
-            })}
+                {/* Inbound target handle */}
+                <Handle
+                  type="target"
+                  position={Position.Right}
+                  id="populate-in"
+                  className="w-2.5 h-2.5 !bg-emerald-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10"
+                  style={{ top: "50%" }}
+                  title={`${populateOverride?.name || "populate"}: Wire to/from pageLoad or API response action`}
+                />
+                {/* Outbound source handle */}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id="populate-out"
+                  className="w-2.5 h-2.5 !bg-emerald-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10 opacity-0 hover:opacity-100"
+                  style={{ top: "50%" }}
+                  title={`${populateOverride?.name || "populate"}: Wire to/from pageLoad or API response action`}
+                />
+              </div>
+            )}
+
+            {/* 2. Mutate Action (only if not disabled) */}
+            {!isMutateDisabled && (
+              <div
+                className={cn(
+                  "relative flex items-center justify-between px-3 py-1 bg-muted/5 hover:bg-muted/20 transition-colors group/row",
+                  !isLastItem("mutate") && "border-b border-border/20",
+                  isLastItem("mutate") && "rounded-b-[10px]",
+                )}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                  <span className="font-semibold text-foreground/90">mutate</span>
+                  <span className="text-[8px] text-muted-foreground/60">(actions)</span>
+                </div>
+                {/* Inbound target handle */}
+                <Handle
+                  type="target"
+                  position={Position.Right}
+                  id="mutate-in"
+                  className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10"
+                  style={{ top: "50%" }}
+                  title="mutate: Wire to/from button or user interaction action"
+                />
+                {/* Outbound source handle */}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id="mutate-out"
+                  className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10 opacity-0 hover:opacity-100"
+                  style={{ top: "50%" }}
+                  title="mutate: Wire to/from button or user interaction action"
+                />
+              </div>
+            )}
+
+            {/* 3. Reset Action (only if not disabled) */}
+            {!isResetDisabled && (
+              <div
+                className={cn(
+                  "relative flex items-center justify-between px-3 py-1 bg-muted/5 hover:bg-muted/20 transition-colors group/row",
+                  !isLastItem("reset") && "border-b border-border/20",
+                  isLastItem("reset") && "rounded-b-[10px]",
+                )}
+              >
+                <div className="flex items-center gap-1.5 truncate max-w-[170px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                  <span className="font-semibold text-foreground/90 truncate">
+                    {resetOverride?.name || "reset"}
+                  </span>
+                  <span className="text-[8px] text-muted-foreground/60 shrink-0">
+                    {resetOverride ? "(custom)" : "(unmount)"}
+                  </span>
+                </div>
+                {/* Inbound target handle */}
+                <Handle
+                  type="target"
+                  position={Position.Right}
+                  id="reset-in"
+                  className="w-2.5 h-2.5 !bg-rose-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10"
+                  style={{ top: "50%" }}
+                  title={`${resetOverride?.name || "reset"}: Wire to/from unmount or reset event`}
+                />
+                {/* Outbound source handle */}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id="reset-out"
+                  className="w-2.5 h-2.5 !bg-rose-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10 opacity-0 hover:opacity-100"
+                  style={{ top: "50%" }}
+                  title={`${resetOverride?.name || "reset"}: Wire to/from unmount or reset event`}
+                />
+              </div>
+            )}
+
+            {/* Custom Actions if defined */}
+            {customActions.length > 0 && (
+              <div className="flex flex-col">
+                {customActions.map((act, idx) => {
+                  const isLast = idx === customActions.length - 1;
+                  return (
+                    <div
+                      key={act.id}
+                      className={cn(
+                        "relative flex items-center justify-between px-3 py-1 bg-muted/5 hover:bg-muted/20 transition-colors group/row text-[8px]",
+                        !isLast && "border-b border-border/20",
+                        isLast && "rounded-b-[10px]",
+                      )}
+                    >
+                      <div className="flex items-center gap-1 truncate max-w-[170px]">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                        <span className="font-medium text-foreground truncate">{act.name}</span>
+                        <span className="text-[7px] text-muted-foreground/60 uppercase shrink-0">
+                          ({act.actionType})
+                        </span>
+                      </div>
+                      <Handle
+                        type="target"
+                        position={Position.Right}
+                        id={`store-action-in-${act.id}`}
+                        className="w-2 h-2 !bg-indigo-400 border border-background cursor-pointer hover:scale-125 transition-transform -right-1 z-10"
+                        style={{ top: "50%" }}
+                        title={`${act.name}: Wire to/from page action`}
+                      />
+                      <Handle
+                        type="source"
+                        position={Position.Right}
+                        id={`store-action-out-${act.id}`}
+                        className="w-2 h-2 !bg-indigo-400 border border-background cursor-pointer hover:scale-125 transition-transform -right-1 z-10 opacity-0 hover:opacity-100"
+                        style={{ top: "50%" }}
+                        title={`${act.name}: Wire to/from page action`}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        );
+      })()}
 
       {/* Fallback generic handle for legacy edges */}
       <Handle

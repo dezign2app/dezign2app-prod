@@ -29,6 +29,8 @@ export interface StoreLiveTestPlaygroundProps {
   actions: GlobalStoreAction[];
   savedTestCases?: StateStoreTestCase[];
   onSaveTestCases?: (testCases: StateStoreTestCase[]) => void;
+  disabledDefaultManipulators?: string[];
+  deletedDefaultManipulators?: string[];
 }
 
 export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = ({
@@ -36,12 +38,17 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
   actions,
   savedTestCases = [],
   onSaveTestCases,
+  disabledDefaultManipulators = [],
+  deletedDefaultManipulators = [],
 }) => {
   const [sandboxState, setSandboxState] = useState<StoreState>({});
   const [activePlaygroundTab, setActivePlaygroundTab] = useState<"manipulators" | "testcases">("manipulators");
 
   // All state manipulators available on the store (actions, setters, builtins)
-  const manipulators = useMemo(() => getStateManipulators(fields, actions), [fields, actions]);
+  const manipulators = useMemo(
+    () => getStateManipulators(fields, actions, disabledDefaultManipulators, deletedDefaultManipulators),
+    [fields, actions, disabledDefaultManipulators, deletedDefaultManipulators],
+  );
 
   const [selectedManipulatorId, setSelectedManipulatorId] = useState<string>("");
   const [payloadText, setPayloadText] = useState<string>("");

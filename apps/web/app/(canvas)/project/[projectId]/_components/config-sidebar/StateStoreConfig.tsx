@@ -17,6 +17,7 @@ import {
   StorePreset,
   StoreIdentitySection,
   StoreFieldsSection,
+  StoreDefaultManipulatorsSection,
   StoreActionsSection,
   StoreLiveTestPlayground,
 } from "./state-store-config";
@@ -39,12 +40,21 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const allEdges = useBackendCanvasStore((s) => s.edges);
+  const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
 
   const [activeTab, setActiveTab] = useState<"schema" | "playground">("schema");
 
   const fields: GlobalStoreField[] = useMemo(() => node?.data?.fields || [], [node?.data?.fields]);
   const actions: GlobalStoreAction[] = useMemo(() => node?.data?.actions || [], [node?.data?.actions]);
   const savedTestCases: StateStoreTestCase[] = useMemo(() => node?.data?.testCases || [], [node?.data?.testCases]);
+  const disabledDefaultManipulators: string[] = useMemo(
+    () => node?.data?.disabledDefaultManipulators || [],
+    [node?.data?.disabledDefaultManipulators],
+  );
+  const deletedDefaultManipulators: string[] = useMemo(
+    () => node?.data?.deletedDefaultManipulators || [],
+    [node?.data?.deletedDefaultManipulators],
+  );
 
   const connectedPages = useMemo(() => {
     if (!targetNodeId) return [];
@@ -172,6 +182,317 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
       },
     });
   }, [node, actions, updateNode]);
+
+  const handleModifyDefaultManipulator = useCallback(
+    (
+      manipulatorKey: "populate" | "reset" | `setter-${string}`,
+      patch: Partial<GlobalStoreAction>,
+    ) => {
+      if (!node) return;
+      const isPopulate = manipulatorKey === "populate";
+      const isReset = manipulatorKey === "reset";
+      const isSetter = manipulatorKey.startsWith("setter-");
+      const targetFieldId = isSetter ? manipulatorKey.slice("setter-".length) : patch.targetFieldId;
+
+      const existingIndex = actions.findIndex((a) => {
+        if ((a as any).defaultManipulatorType === manipulatorKey) return true;
+        if (isPopulate) {
+          return (
+            (a as any).defaultManipulatorType === "populate" ||
+            a.actionType === "populate" ||
+            a.name.toLowerCase() === "populate" ||
+            a.name.toLowerCase() === "load"
+          );
+        }
+        if (isReset) {
+          return (
+            (a as any).defaultManipulatorType === "reset" ||
+            a.actionType === "reset" ||
+            a.name.toLowerCase() === "reset"
+          );
+        }
+        if (isSetter) {
+          return (
+            ((a as any).defaultManipulatorType === "setter" && (a as any).targetFieldId === targetFieldId) ||
+            a.targetFieldId === targetFieldId ||
+            a.name.toLowerCase() === `set${fields.find((f) => f.id === targetFieldId)?.name.toLowerCase()}`
+          );
+        }
+        return false;
+      });
+
+      const manipulatorType = isPopulate ? "populate" : isReset ? "reset" : "setter";
+      let updatedActions: GlobalStoreAction[];
+
+      if (existingIndex >= 0) {
+        updatedActions = actions.map((a, idx) =>
+          idx === existingIndex
+            ? {
+                ...a,
+                ...patch,
+                defaultManipulatorType: manipulatorType,
+              }
+            : a,
+        );
+      } else {
+        const fieldName = fields.find((f) => f.id === targetFieldId)?.name;
+        const capitalizedField = fieldName ? fieldName.charAt(0).toUpperCase() + fieldName.slice(1) : "Field";
+        const newAction: GlobalStoreAction = {
+          id: `manipulator-${Date.now()}`,
+          name:
+            patch.name ||
+            (isPopulate
+              ? "populate"
+              : isReset
+              ? "reset"
+              : `set${capitalizedField}`),
+          actionType: patch.actionType || (isSetter ? "set" : isPopulate ? "populate" : "reset"),
+          targetFieldId,
+          code: patch.code,
+          parameters: patch.parameters,
+          prompt: patch.prompt,
+          description: patch.description,
+          ...patch,
+          ...({ defaultManipulatorType: manipulatorType } as any),
+        };
+        updatedActions = [...actions, newAction];
+      }
+
+      updateNode(node.id, {
+        data: {
+          ...node.data,
+          actions: updatedActions,
+        },
+      });
+      toast.success(`Updated ${patch.name || manipulatorKey} manipulator!`);
+    },
+    [node, actions, fields, updateNode],
+  );
+
+  const handleRevertDefaultManipulator = useCallback(
+    (manipulatorKey: "populate" | "reset" | `setter-${string}`) => {
+      if (!node) return;
+      const isPopulate = manipulatorKey === "populate";
+      const isReset = manipulatorKey === "reset";
+      const isSetter = manipulatorKey.startsWith("setter-");
+      const targetFieldId = isSetter ? manipulatorKey.slice("setter-".length) : undefined;
+
+      const filteredActions = actions.filter((a) => {
+        if ((a as any).defaultManipulatorType === manipulatorKey) return false;
+        if (isPopulate) {
+          return !(
+            (a as any).defaultManipulatorType === "populate" ||
+            a.actionType === "populate" ||
+            a.name.toLowerCase() === "populate" ||
+            a.name.toLowerCase() === "load"
+          );
+        }
+        if (isReset) {
+          return !(
+            (a as any).defaultManipulatorType === "reset" ||
+            a.actionType === "reset" ||
+            a.name.toLowerCase() === "reset"
+          );
+        }
+        if (isSetter) {
+          return !(
+            ((a as any).defaultManipulatorType === "setter" && (a as any).targetFieldId === targetFieldId) ||
+            a.targetFieldId === targetFieldId ||
+            a.name.toLowerCase() === `set${fields.find((f) => f.id === targetFieldId)?.name.toLowerCase()}`
+          );
+        }
+        return true;
+      });
+
+      updateNode(node.id, {
+        data: {
+          ...node.data,
+          actions: filteredActions,
+        },
+      });
+      toast.success(`Reverted ${manipulatorKey} to built-in default`);
+    },
+    [node, actions, fields, updateNode],
+  );
+
+  const handleToggleDefaultManipulator = useCallback(
+    (manipulatorKey: "populate" | "reset" | `setter-${string}`, enabled: boolean) => {
+      if (!node) return;
+      const isPopulate = manipulatorKey === "populate";
+      const isReset = manipulatorKey === "reset";
+      const isSetter = manipulatorKey.startsWith("setter-");
+      const targetFieldId = isSetter ? manipulatorKey.slice("setter-".length) : undefined;
+      const targetField = fields.find((f) => f.id === targetFieldId);
+
+      const currentDisabled = new Set(node.data?.disabledDefaultManipulators || []);
+      if (enabled) {
+        currentDisabled.delete(manipulatorKey);
+        if (isPopulate) {
+          currentDisabled.delete("populate");
+          currentDisabled.delete("load");
+        }
+        if (isReset) currentDisabled.delete("reset");
+        if (isSetter && targetField) {
+          const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
+          currentDisabled.delete(`set${cap}`);
+        }
+      } else {
+        currentDisabled.add(manipulatorKey);
+        if (isPopulate) {
+          currentDisabled.add("populate");
+          currentDisabled.add("load");
+        }
+        if (isReset) currentDisabled.add("reset");
+        if (isSetter && targetField) {
+          const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
+          currentDisabled.add(`set${cap}`);
+        }
+
+        // Clean up connected canvas edges since disabled hides from node
+        const handlesToRemove: string[] = [];
+        if (isPopulate) {
+          handlesToRemove.push("populate-in", "populate-out");
+        } else if (isReset) {
+          handlesToRemove.push("reset-in", "reset-out");
+        }
+
+        if (handlesToRemove.length > 0) {
+          allEdges
+            .filter(
+              (e) =>
+                (e.source === node.id && handlesToRemove.includes(e.sourceHandle || "")) ||
+                (e.target === node.id && handlesToRemove.includes(e.targetHandle || "")),
+            )
+            .forEach((e) => deleteEdge(e.id));
+        }
+      }
+
+      updateNode(node.id, {
+        data: {
+          ...node.data,
+          disabledDefaultManipulators: Array.from(currentDisabled),
+        },
+      });
+
+      const labelName = isPopulate
+        ? "populate"
+        : isReset
+        ? "reset"
+        : targetField?.name
+        ? `set${targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1)}`
+        : manipulatorKey;
+      toast.success(
+        enabled
+          ? `Enabled manipulator "${labelName}"`
+          : `Disabled manipulator "${labelName}" (hidden from node)`,
+      );
+    },
+    [node, fields, allEdges, deleteEdge, updateNode],
+  );
+
+  const handleDeleteDefaultManipulator = useCallback(
+    (manipulatorKey: "populate" | "reset" | `setter-${string}`) => {
+      if (!node) return;
+      const isPopulate = manipulatorKey === "populate";
+      const isReset = manipulatorKey === "reset";
+      const isSetter = manipulatorKey.startsWith("setter-");
+      const targetFieldId = isSetter ? manipulatorKey.slice("setter-".length) : undefined;
+      const targetField = fields.find((f) => f.id === targetFieldId);
+
+      // 1. Add to deletedDefaultManipulators
+      const currentDeleted = new Set(node.data?.deletedDefaultManipulators || []);
+      currentDeleted.add(manipulatorKey);
+      if (isPopulate) {
+        currentDeleted.add("populate");
+        currentDeleted.add("load");
+      }
+      if (isReset) {
+        currentDeleted.add("reset");
+      }
+      if (isSetter && targetField) {
+        const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
+        currentDeleted.add(`set${cap}`);
+      }
+
+      // Also clean from disabled if present
+      const currentDisabled = new Set(node.data?.disabledDefaultManipulators || []);
+      currentDisabled.delete(manipulatorKey);
+      if (isPopulate) {
+        currentDisabled.delete("populate");
+        currentDisabled.delete("load");
+      }
+      if (isReset) currentDisabled.delete("reset");
+      if (isSetter && targetField) {
+        const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
+        currentDisabled.delete(`set${cap}`);
+      }
+
+      // 2. Remove any custom action override in actions
+      const filteredActions = actions.filter((a) => {
+        if ((a as any).defaultManipulatorType === manipulatorKey) return false;
+        if (isPopulate) {
+          return !(
+            (a as any).defaultManipulatorType === "populate" ||
+            a.actionType === "populate" ||
+            a.name.toLowerCase() === "populate" ||
+            a.name.toLowerCase() === "load"
+          );
+        }
+        if (isReset) {
+          return !(
+            (a as any).defaultManipulatorType === "reset" ||
+            a.actionType === "reset" ||
+            a.name.toLowerCase() === "reset"
+          );
+        }
+        if (isSetter) {
+          return !(
+            ((a as any).defaultManipulatorType === "setter" && (a as any).targetFieldId === targetFieldId) ||
+            a.targetFieldId === targetFieldId ||
+            a.name.toLowerCase() === `set${targetField?.name.toLowerCase()}`
+          );
+        }
+        return true;
+      });
+
+      // 3. Clean up connected canvas edges for the deleted manipulator
+      const handlesToRemove: string[] = [];
+      if (isPopulate) {
+        handlesToRemove.push("populate-in", "populate-out");
+      } else if (isReset) {
+        handlesToRemove.push("reset-in", "reset-out");
+      }
+
+      if (handlesToRemove.length > 0) {
+        allEdges
+          .filter(
+            (e) =>
+              (e.source === node.id && handlesToRemove.includes(e.sourceHandle || "")) ||
+              (e.target === node.id && handlesToRemove.includes(e.targetHandle || "")),
+          )
+          .forEach((e) => deleteEdge(e.id));
+      }
+
+      updateNode(node.id, {
+        data: {
+          ...node.data,
+          deletedDefaultManipulators: Array.from(currentDeleted),
+          disabledDefaultManipulators: Array.from(currentDisabled),
+          actions: filteredActions,
+        },
+      });
+
+      const labelName = isPopulate
+        ? "populate"
+        : isReset
+        ? "reset"
+        : targetField?.name
+        ? `set${targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1)}`
+        : manipulatorKey;
+      toast.success(`Deleted default manipulator "${labelName}"`);
+    },
+    [node, actions, fields, allEdges, deleteEdge, updateNode],
+  );
 
   const handleSaveTestCases = useCallback((tc: StateStoreTestCase[]) => {
     if (!node) return;
@@ -353,6 +674,17 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
             onRemoveField={handleRemoveField}
           />
 
+          <StoreDefaultManipulatorsSection
+            fields={fields}
+            actions={actions}
+            disabledDefaultManipulators={disabledDefaultManipulators}
+            deletedDefaultManipulators={deletedDefaultManipulators}
+            onModifyDefaultManipulator={handleModifyDefaultManipulator}
+            onRevertDefaultManipulator={handleRevertDefaultManipulator}
+            onToggleDefaultManipulator={handleToggleDefaultManipulator}
+            onDeleteDefaultManipulator={handleDeleteDefaultManipulator}
+          />
+
           <StoreActionsSection
             actions={actions}
             fields={fields}
@@ -369,6 +701,8 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
             actions={actions}
             savedTestCases={savedTestCases}
             onSaveTestCases={handleSaveTestCases}
+            disabledDefaultManipulators={disabledDefaultManipulators}
+            deletedDefaultManipulators={deletedDefaultManipulators}
           />
         </TabsContent>
       </Tabs>
