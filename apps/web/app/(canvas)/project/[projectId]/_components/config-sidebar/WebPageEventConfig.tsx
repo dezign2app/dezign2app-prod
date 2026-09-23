@@ -390,22 +390,6 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
           />
         )}
 
-        {!isNavigateToPage && (
-          <TargetStateStoreSection
-            nodeId={nodeId}
-            actionId={id}
-            actionName={eventName || item?.name || "action"}
-            actionEvent={eventType || item?.event}
-            storeBinding={item?.storeActionBinding}
-            stateStoreNodes={nodes.filter((n) => n.type === "state_store")}
-            isEndpointConnected={Boolean(linkedTargetNode && endpoint)}
-            connectedEndpointName={endpoint?.name}
-            onUpdateStoreBinding={(newBinding) =>
-              updateActionInParent({ storeActionBinding: newBinding })
-            }
-          />
-        )}
-
         <EventPropertiesSection
           eventName={eventName}
           eventType={eventType}
@@ -488,6 +472,22 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
             onQueryParamsChange={(q) => updateEventFields({ queryParams: q })}
             onRequestBodyChange={(r) => updateEventFields({ requestBody: r })}
             onRequestBodyModeChange={(m) => updateEventFields({ requestBodyMode: m })}
+          />
+        )}
+
+        {!isNavigateToPage && (
+          <TargetStateStoreSection
+            nodeId={nodeId}
+            actionId={id}
+            actionName={eventName || item?.name || "action"}
+            actionEvent={eventType || item?.event}
+            storeBinding={item?.storeActionBinding}
+            stateStoreNodes={nodes.filter((n) => n.type === "state_store")}
+            isEndpointConnected={Boolean(linkedTargetNode && endpoint)}
+            connectedEndpointName={endpoint?.name}
+            onUpdateStoreBinding={(newBinding) =>
+              updateActionInParent({ storeActionBinding: newBinding })
+            }
           />
         )}
 

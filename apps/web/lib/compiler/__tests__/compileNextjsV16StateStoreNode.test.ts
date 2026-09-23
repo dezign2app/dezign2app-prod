@@ -398,7 +398,7 @@ describe("compileNextjsV16StateStoreNode", () => {
     // 1. Store file has populate and reset
     const storeFile = result.files.find((f) => f.filename === "lib/stores/useCartStore.ts");
     expect(storeFile).toBeDefined();
-    expect(storeFile!.content).toContain("populate: (data?: Partial<CartStoreState>) => void;");
+    expect(storeFile!.content).toContain("populate: (data?: Partial<CartStoreState>");
     expect(storeFile!.content).toContain("reset: () => void;");
 
     // 2. Page file imports the store and wires load & unmount reset
@@ -790,6 +790,228 @@ describe("compileNextjsV16StateStoreNode", () => {
     expect(pageFile?.content).toContain('import { useMetricsStore } from "@/lib/stores";');
     expect(pageFile?.content).toContain('es.addEventListener("speed.update"');
     expect(pageFile?.content).toContain("useMetricsStore.getState().recordMetric(parsed);");
+  });
+
+  it("generates clean single try-catch loadPageData, throws on !res.ok, guards with isMounted, and unwraps response data in store", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-chat",
+      type: "webApp",
+      fractionalIndex: "a0",
+      position: { x: 0, y: 0 },
+      data: { label: "ChatApp", appSlug: "chat-app" },
+    };
+
+    const stateStoreNode: BackendNode = {
+      id: "node-store-conv",
+      type: "state_store",
+      fractionalIndex: "a1",
+      position: { x: 200, y: 0 },
+      data: {
+        label: "ConversationStore",
+        storeName: "Conversation",
+        scope: "global",
+        storage: "memory",
+        fields: [
+          { id: "f-convs", name: "conversations", type: "array", defaultValue: [] },
+          { id: "f-msgs", name: "messages", type: "array", defaultValue: [] },
+        ],
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-conv",
+      type: "webPage",
+      fractionalIndex: "a2",
+      position: { x: 400, y: 0 },
+      data: {
+        label: "/conversations",
+        appSlug: "chat-app",
+        sections: [
+          {
+            id: "sec-main",
+            name: "Main Section",
+            renderMode: "client",
+            actions: [
+              {
+                id: "act-load",
+                name: "pageLoad",
+                event: "pageLoad",
+                storeActionBinding: {
+                  storeNodeId: "node-store-conv",
+                  storeName: "Conversation",
+                  actionName: "populate",
+                  actionType: "populate",
+                  updateSource: "response",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "service-chat",
+      type: "service",
+      fractionalIndex: "a3",
+      position: { x: 600, y: 0 },
+      data: { label: "ChatService", port: "8080" },
+    };
+
+    const endpoint: Endpoint & { nodeId: string } = {
+      id: "ep-convs",
+      name: "conversations",
+      type: "GET",
+      nodeId: "service-chat",
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-ep",
+      type: "connection",
+      fractionalIndex: "a0",
+      source: "node-page-conv",
+      sourceHandle: "pageload-in-act-load",
+      target: "service-chat",
+      targetHandle: "ep-in-ep-convs",
+    };
+
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      [endpoint],
+      [],
+      [webAppNode, stateStoreNode, webPageNode, serviceNode],
+      [edge],
+      "ChatApp",
+      [],
+      "chat-app",
+      webAppNode,
+    );
+
+    // 1. Check generated page.tsx
+    const pageFile = result.files.find((f) => f.filename === "app/(public)/conversations/page.tsx");
+    expect(pageFile).toBeDefined();
+    const content = pageFile!.content;
+
+    // Verify NO duplicate setPageLoadLoading or nested try
+    const loadingTrueMatches = content.match(/setPageLoadLoading\(true\)/g);
+    expect(loadingTrueMatches?.length).toBe(1);
+
+    // Verify throw on !res.ok
+    expect(content).toContain("if (!res.ok) {");
+    expect(content).toContain('throw new Error("HTTP " + res.status');
+
+    // Verify isMounted guards and typed data variable
+    expect(content).toContain("const data: ChatServiceGetConversationsResponse = await res.json();");
+    expect(content).toContain("if (isMounted) {");
+    expect(content).toContain("setPageLoadData(data);");
+    expect(content).toContain("useConversationStore.getState().populate(data);");
+
+    // 2. Check generated Zustand store unwraps payload.data into conversations and cleans up payload.data
+    const storeFile = result.files.find((f) => f.filename === "lib/stores/useConversationStore.ts");
+    expect(storeFile).toBeDefined();
+    expect(storeFile!.content).toContain("payload.conversations = payload.data");
+    expect(storeFile!.content).toContain("delete payload.data;");
+  });
+
+  it("compiles explicit response field mapping to state store field in pageLoad and action buttons", () => {
+    const webAppNode: BackendNode = {
+      id: "node-app",
+      type: "webApp",
+      fractionalIndex: "a0",
+      position: { x: 0, y: 0 },
+      data: { label: "ChatApp", appSlug: "chat-app" },
+    };
+
+    const stateStoreNode: BackendNode = {
+      id: "node-store-conv",
+      type: "state_store",
+      fractionalIndex: "a1",
+      position: { x: 200, y: 0 },
+      data: {
+        label: "Conversation",
+        storeName: "Conversation",
+        scope: "global",
+        storage: "memory",
+        fields: [
+          { id: "f1", name: "conversations", type: "array" },
+          { id: "f2", name: "messages", type: "array" },
+        ],
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-conv",
+      type: "webPage",
+      fractionalIndex: "a2",
+      position: { x: 400, y: 0 },
+      data: {
+        label: "conversations",
+        appSlug: "chat-app",
+        sections: [
+          {
+            id: "sec-main",
+            name: "Main",
+            actions: [
+              {
+                id: "act-load",
+                name: "pageLoad",
+                event: "pageLoad",
+                storeActionBinding: {
+                  storeNodeId: "node-store-conv",
+                  storeName: "Conversation",
+                  actionName: "populate",
+                  actionType: "populate",
+                  targetFieldName: "conversations",
+                  updateSource: "response_property",
+                  valuePath: "data",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "service-chat",
+      type: "service",
+      fractionalIndex: "a3",
+      position: { x: 600, y: 0 },
+      data: { label: "ChatService", port: "8080" },
+    };
+
+    const endpoint: Endpoint & { nodeId: string } = {
+      id: "ep-convs",
+      name: "conversations",
+      type: "GET",
+      nodeId: "service-chat",
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-ep",
+      type: "connection",
+      fractionalIndex: "a0",
+      source: "node-page-conv",
+      sourceHandle: "pageload-in-act-load",
+      target: "service-chat",
+      targetHandle: "ep-in-ep-convs",
+    };
+
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      [endpoint],
+      [],
+      [webAppNode, stateStoreNode, webPageNode, serviceNode],
+      [edge],
+      "ChatApp",
+      [],
+      "chat-app",
+      webAppNode,
+    );
+
+    const pageFile = result.files.find((f) => f.filename === "app/(public)/conversations/page.tsx");
+    expect(pageFile).toBeDefined();
+    expect(pageFile!.content).toContain("useConversationStore.getState().populate({ conversations: data?.data }");
   });
 });
 

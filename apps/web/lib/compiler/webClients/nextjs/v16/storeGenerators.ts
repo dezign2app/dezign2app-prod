@@ -127,6 +127,23 @@ export function generateZustandStore(
     return `  set${fPascal}: (value: ${tsType}) => void;`;
   });
 
+  // Target unwrap field for collection responses (e.g. API returning { data: [...] } into a store field)
+  const rawBase = baseName.replace(/Store$/i, "");
+  const pluralName = toCamelCase(toPlural(rawBase));
+  const storeFieldNames = fields.map((f) => toCamelCase(f.name));
+  const hasFieldNamedData = storeFieldNames.includes("data");
+  const arrayFields = fields
+    .filter((f) => f.type === "array" || f.type.endsWith("[]"))
+    .map((f) => toCamelCase(f.name));
+  const targetUnwrapField =
+    !hasFieldNamedData
+      ? storeFieldNames.includes(pluralName)
+        ? pluralName
+        : arrayFields.length === 1
+        ? arrayFields[0]
+        : null
+      : null;
+
   // Custom action types
   const customActionSignatures: string[] = [];
   const customActionImpls: string[] = [];
@@ -212,20 +229,34 @@ export function generateZustandStore(
       }
       case "populate": {
         const hasParams = Array.isArray(act.parameters) && act.parameters.length > 0;
+        const unwrapType = targetUnwrapField ? ` | { data?: ${interfaceName}["${targetUnwrapField}"] }` : "";
         const paramSigs = hasParams
           ? act.parameters!
               .map((p) => `${toCamelCase(p.name)}: ${mapFieldTypeToTs(p.type)}${p.required === false ? " | undefined" : ""}`)
               .join(", ")
-          : `data?: Partial<${interfaceName}>`;
+          : `data?: Partial<${interfaceName}>${unwrapType}`;
         const paramArgs = hasParams
           ? act.parameters!.map((p) => toCamelCase(p.name)).join(", ")
           : "data";
 
         customActionSignatures.push(`  ${actName}: (${paramSigs}) => void;`);
+        const payloadPrep = targetUnwrapField
+          ? `    const payload: Record<string, any> = ${paramArgs} && typeof ${paramArgs} === "object" ? { ...${paramArgs} } : {};
+    if ("data" in payload && payload.${targetUnwrapField} === undefined) {
+      payload.${targetUnwrapField} = payload.data;
+      delete payload.data;
+    }`
+          : `    const payload = ${paramArgs};`;
+
         if (act.code && act.code.trim()) {
           const rawCode = act.code.trim();
           const bodyLines = rawCode.split("\n").map((line) => `    ${line}`).join("\n");
-          customActionImpls.push(`  ${actName}: (${paramArgs}) => {\n${bodyLines}\n  },`);
+          customActionImpls.push(`  ${actName}: (${paramArgs}) => {\n${payloadPrep}\n${bodyLines}\n  },`);
+        } else if (targetUnwrapField) {
+          customActionImpls.push(`  ${actName}: (${paramArgs}) => set((s) => {
+${payloadPrep}
+    return { ...s, ...payload };
+  }),`);
         } else {
           customActionImpls.push(`  ${actName}: (${paramArgs}) => set((s) => ({ ...s, ...(${paramArgs} || {}) })),`);
         }
@@ -293,8 +324,19 @@ export function generateZustandStore(
   const builtInImpls: string[] = [];
 
   if (!hasPopulate && !isPopulateDisabled) {
-    builtInSignatures.push(`  populate: (data?: Partial<${interfaceName}>) => void;`);
-    builtInImpls.push("      populate: (data) => set((s) => ({ ...s, ...(data || {}) })),");
+    if (targetUnwrapField) {
+      builtInSignatures.push(`  populate: (data?: Partial<${interfaceName}> | { data?: ${interfaceName}["${targetUnwrapField}"] }) => void;`);
+      builtInImpls.push(`      populate: (data) => set((s) => {
+        const payload: Record<string, any> = data && typeof data === "object" ? { ...data } : {};
+        if ("data" in payload && payload.${targetUnwrapField} === undefined) {
+          payload.${targetUnwrapField} = payload.data;
+          delete payload.data;
+        }
+        return { ...s, ...payload };
+      }),`);
+    } else {
+      builtInImpls.push("      populate: (data) => set((s) => ({ ...s, ...(data || {}) })),");
+    }
   }
 
   if (!hasReset && !isResetDisabled) {

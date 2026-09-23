@@ -134,7 +134,7 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
     unmountCleanups,
   );
   const pageLoadSectionJsx = generatePageLoadSection(hasPageLoad);
-  const jsonValueTypeDecl = generateJsonValueTypeDecl(hasPageLoad);
+  const jsonValueTypeDecl = pageLoadDataType.includes("JSONValue") ? generateJsonValueTypeDecl(hasPageLoad) : "";
 
   // Realtime Effects
   const sseEffectsJsx = generateSseEffects(sseConnections);

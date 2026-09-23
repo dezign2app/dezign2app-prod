@@ -418,7 +418,7 @@ describe("Control Flow Pipeline Steps Compilation", () => {
           statusCode: 200,
           inputBindings: [
             {
-              argName: "data",
+              argName: "_spread",
               source: { kind: "step_output", stepId: "step-cache-read" },
             },
           ],

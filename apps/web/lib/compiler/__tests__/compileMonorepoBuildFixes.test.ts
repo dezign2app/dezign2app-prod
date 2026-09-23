@@ -525,7 +525,7 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
           statusCode: 201,
           inputBindings: [
             {
-              argName: "data",
+              argName: "_spread",
               source: { kind: "req_body" },
             },
           ],
@@ -615,7 +615,7 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
           statusCode: 201,
           inputBindings: [
             {
-              argName: "data",
+              argName: "_spread",
               source: { kind: "step_output", stepId: "step-create", field: "message" },
             },
           ],

@@ -213,7 +213,7 @@ describe("Step Pipeline & Transformer Helpers", () => {
             statusCode: 201,
             inputBindings: [
               {
-                argName: "data",
+                argName: "_spread",
                 source: { kind: "step_output", stepId: "step-2" },
               },
             ],
@@ -715,7 +715,7 @@ describe("Step Pipeline & Transformer Helpers", () => {
             statusCode: 200,
             inputBindings: [
               {
-                argName: "data",
+                argName: "_spread",
                 source: { kind: "step_output", stepId: "step-get-conv", field: "message" },
               },
             ],
@@ -773,7 +773,7 @@ describe("Step Pipeline & Transformer Helpers", () => {
             statusCode: 200,
             inputBindings: [
               {
-                argName: "data",
+                argName: "_spread",
                 source: { kind: "step_output", stepId: "step-get-conv", field: "message" },
               },
             ],
@@ -886,7 +886,50 @@ describe("Step Pipeline & Transformer Helpers", () => {
       expect(result.file.content).toContain("getConversationResult[0]?.id");
       expect(result.file.content).not.toContain("getConversationResult.id");
     });
+
+    it("preserves object wrapper when return_response explicitly names field 'data'", () => {
+      const ep: Endpoint & { nodeId: string } = {
+        id: "ep-data-field",
+        nodeId: "svc-items",
+        name: "/get-items",
+        type: "GET",
+        pipelineSteps: [
+          {
+            id: "step-ret",
+            name: "Return Response",
+            type: "return_response",
+            enabled: true,
+            statusCode: 200,
+            inputBindings: [
+              {
+                argName: "data",
+                source: { kind: "req_body", field: "items" },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = generateEndpointRouteHandler({
+        ep,
+        index: 0,
+        serviceName: "items",
+        pascalServiceName: "Items",
+        serviceFolderName: "items",
+        allNodes: [],
+        allEdges: [],
+        allEndpoints: [ep],
+        dbFunctions: [],
+        kafkaFunctions: [],
+        redisFunctions: [],
+        nodePublishedEvents: [],
+        usedFileNames: new Set(),
+      });
+
+      expect(result.file.content).toContain("return res.status(200).json({\n  data: req.body.items\n});");
+    });
   });
 });
+
 
 
