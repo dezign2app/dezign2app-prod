@@ -90,8 +90,10 @@ export interface BarycenterRefinementParams {
   hangingRefEdges?: LayoutEdge[];
   hangingRefNodes?: LayoutNode[];
   paymentsPluginEdges?: LayoutEdge[];
+  hangingStateStoreEdges?: LayoutEdge[];
   dimensionOverrides?: Map<string, { width: number; height: number }>;
   stackHandleRatios?: Map<string, number>;
+  secondaryToLeadPageMap?: Map<string, string>;
 }
 
 export function runBarycenterRefinement({
@@ -106,9 +108,13 @@ export function runBarycenterRefinement({
   hangingRefEdges = [],
   hangingRefNodes = [],
   paymentsPluginEdges = [],
+  hangingStateStoreEdges = [],
   dimensionOverrides,
   stackHandleRatios,
+  secondaryToLeadPageMap,
 }: BarycenterRefinementParams): void {
+  const resolveLeadId = (id: string): string =>
+    secondaryToLeadPageMap?.get(id) ?? id;
   // Whether any entity nodes are present — used to tune gaps
   const hasEntityNodesLocal = flowNodes.some((n) => n.type === "entity");
 
@@ -358,16 +364,21 @@ export function runBarycenterRefinement({
           (isHorizontal ? maxNodeWidth : maxNodeHeight) / 2;
 
         const hasHangingTransformersInRank = ids.some((id) =>
-          hangingEdges.some((e) => e.target === id),
+          hangingEdges.some((e) => resolveLeadId(e.target) === id),
         );
         const hasHangingReferencesInRank = ids.some((id) =>
-          hangingRefEdges.some((e) => e.source === id || e.target === id),
+          hangingRefEdges.some((e) => resolveLeadId(e.source) === id || resolveLeadId(e.target) === id),
         );
         const hasPaymentsPluginInRank = ids.some((id) =>
-          paymentsPluginEdges.some((e) => e.source === id || e.target === id),
+          paymentsPluginEdges.some((e) => resolveLeadId(e.source) === id || resolveLeadId(e.target) === id),
+        );
+        const hasHangingStateStoresInRank = ids.some((id) =>
+          hangingStateStoreEdges.some((e) => resolveLeadId(e.source) === id || resolveLeadId(e.target) === id),
         );
         const effectiveRankGap =
-          hasHangingTransformersInRank || hasHangingReferencesInRank
+          hasHangingTransformersInRank ||
+          hasHangingReferencesInRank ||
+          hasHangingStateStoresInRank
             ? Math.max(minRankGap, 500)
             : hasPaymentsPluginInRank
               ? Math.max(minRankGap, 400)
@@ -489,16 +500,21 @@ export function runBarycenterRefinement({
       );
 
       const hasHangingTransformersInRank = ids.some((id) =>
-        hangingEdges.some((e) => e.target === id),
+        hangingEdges.some((e) => resolveLeadId(e.target) === id),
       );
       const hasHangingReferencesInRank = ids.some((id) =>
-        hangingRefEdges.some((e) => e.source === id || e.target === id),
+        hangingRefEdges.some((e) => resolveLeadId(e.source) === id || resolveLeadId(e.target) === id),
       );
       const hasPaymentsPluginInRank = ids.some((id) =>
-        paymentsPluginEdges.some((e) => e.source === id || e.target === id),
+        paymentsPluginEdges.some((e) => resolveLeadId(e.source) === id || resolveLeadId(e.target) === id),
+      );
+      const hasHangingStateStoresInRank = ids.some((id) =>
+        hangingStateStoreEdges.some((e) => resolveLeadId(e.source) === id || resolveLeadId(e.target) === id),
       );
       const effectiveRankGap =
-        hasHangingTransformersInRank || hasHangingReferencesInRank
+        hasHangingTransformersInRank ||
+        hasHangingReferencesInRank ||
+        hasHangingStateStoresInRank
           ? Math.max(minRankGap, 500)
           : hasPaymentsPluginInRank
             ? Math.max(minRankGap, 400)

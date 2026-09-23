@@ -37,6 +37,8 @@ export interface NodeHandleData {
   publishedEvents?: Array<string | { id?: string; _id?: string }>;
   zones?: WebAppZone[];
   sections?: PageSection[];
+  fields?: any[];
+  actions?: any[];
 }
 
 export interface DagreNodeInfo {
