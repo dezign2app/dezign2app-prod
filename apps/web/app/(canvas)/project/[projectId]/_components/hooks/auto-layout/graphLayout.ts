@@ -18,6 +18,7 @@ import {
   REFERENCE_NODE_TYPES,
 } from "./hangingReferenceLayout";
 import { layoutPaymentsPluginNodes } from "./paymentsPluginLayout";
+import { layoutHangingStateStoreNodes } from "./hangingStateStoreLayout";
 import { layoutTypesNodes } from "./typesNodeLayout";
 import type { EndpointWithNode, EventWithNode } from "@workspace/canvas";
 import {
@@ -149,10 +150,21 @@ export function performGraphLayout({
     return false;
   };
 
+  const isHangingStateStoreEdge = (edge: LayoutEdge): boolean => {
+    const sourceNode = graphNodes.find((n: LayoutNode) => n.id === edge.source);
+    const targetNode = graphNodes.find((n: LayoutNode) => n.id === edge.target);
+    if (!sourceNode || !targetNode) return false;
+    return (
+      (sourceNode.type === "state_store" && targetNode.type === "webPage") ||
+      (targetNode.type === "state_store" && sourceNode.type === "webPage")
+    );
+  };
+
   const headEdges: LayoutEdge[] = graphEdges.filter(isHeadConnectionEdge);
   const hangingEdges: LayoutEdge[] = graphEdges.filter(isHangingTransformerEdge);
   const hangingRefEdges: LayoutEdge[] = graphEdges.filter(isHangingReferenceEdge);
   const paymentsPluginEdges: LayoutEdge[] = graphEdges.filter(isPaymentsPluginEdge);
+  const hangingStateStoreEdges: LayoutEdge[] = graphEdges.filter(isHangingStateStoreEdge);
 
   // 3. Identify attached head nodes, hanging transformer nodes, and hanging reference nodes
   const attachedHeadNodeIdSet = new Set<string>(
@@ -198,6 +210,22 @@ export function performGraphLayout({
   });
   const paymentsPluginNodes: LayoutNode[] = graphNodes.filter((n: LayoutNode) =>
     paymentsPluginNodeIdSet.has(n.id),
+  );
+
+  const hangingStateStoreNodeIdSet = new Set<string>();
+  graphNodes.forEach((n: LayoutNode) => {
+    if (n.type === "state_store") {
+      hangingStateStoreNodeIdSet.add(n.id);
+    }
+  });
+  hangingStateStoreEdges.forEach((e: LayoutEdge) => {
+    const sourceNode = graphNodes.find((n) => n.id === e.source);
+    const targetNode = graphNodes.find((n) => n.id === e.target);
+    if (sourceNode?.type === "state_store") hangingStateStoreNodeIdSet.add(sourceNode.id);
+    if (targetNode?.type === "state_store") hangingStateStoreNodeIdSet.add(targetNode.id);
+  });
+  const hangingStateStoreNodes: LayoutNode[] = graphNodes.filter((n: LayoutNode) =>
+    hangingStateStoreNodeIdSet.has(n.id),
   );
 
   // 3.5. Identify stacked WebPage zones attached to WebApp nodes
@@ -288,10 +316,13 @@ export function performGraphLayout({
       !isHangingTransformerEdge(e) &&
       !isHangingReferenceEdge(e) &&
       !isPaymentsPluginEdge(e) &&
+      !isHangingStateStoreEdge(e) &&
       !hangingRefNodeIdSet.has(e.source) &&
       !hangingRefNodeIdSet.has(e.target) &&
       !paymentsPluginNodeIdSet.has(e.source) &&
       !paymentsPluginNodeIdSet.has(e.target) &&
+      !hangingStateStoreNodeIdSet.has(e.source) &&
+      !hangingStateStoreNodeIdSet.has(e.target) &&
       !stackedSecondaryEdgeIdSet.has(e.id),
   );
 
@@ -332,6 +363,7 @@ export function performGraphLayout({
       !hangingTransformerNodeIdSet.has(n.id) &&
       !hangingRefNodeIdSet.has(n.id) &&
       !paymentsPluginNodeIdSet.has(n.id) &&
+      !hangingStateStoreNodeIdSet.has(n.id) &&
       !stackedSecondaryNodeIdSet.has(n.id),
   );
 
@@ -388,8 +420,10 @@ export function performGraphLayout({
     hangingRefEdges,
     hangingRefNodes,
     paymentsPluginEdges,
+    hangingStateStoreEdges,
     dimensionOverrides,
     stackHandleRatios,
+    secondaryToLeadPageMap,
   });
 
   // 6. Layout attached head nodes grouped by category columns above each target node
@@ -450,6 +484,16 @@ export function performGraphLayout({
         y: baseY + idx * CARD_HEADER_OFFSET_Y,
       });
     });
+  });
+
+  // 6.69. Layout hanging StateStore nodes immediately preceding their connected WebPage node
+  layoutHangingStateStoreNodes({
+    nodes: graphNodes,
+    positionsMap,
+    hangingStateStoreEdges,
+    hangingStateStoreNodes,
+    isHorizontal,
+    stackedZonesList,
   });
 
   // 6.7. Enforce positive canvas origin margin (minX >= 60, minY >= 60)

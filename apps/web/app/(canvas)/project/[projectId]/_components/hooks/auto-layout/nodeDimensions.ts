@@ -151,8 +151,14 @@ export function getNodeDimensions(node: LayoutNode): {
     case "vector_db_ref":
     case "redis-cache":
       return { width: 280, height: 80 };
-    case "state_store":
-      return { width: 240, height: 75 };
+    case "state_store": {
+      const data = getLayoutNodeData(node);
+      const fields = Array.isArray(data?.fields) ? data.fields.length : 1;
+      const actions = Array.isArray(data?.actions) ? data.actions.length : 0;
+      const manipulatorsCount = 3 + actions;
+      const estHeight = Math.max(160, 75 + 24 + fields * 28 + 24 + manipulatorsCount * 24);
+      return { width: 260, height: estHeight };
+    }
     case "end":
     case "END":
       return { width: 140, height: 60 };
@@ -379,10 +385,55 @@ export function getHandleYRatio(
     }
   }
 
+  if (node.type === "state_store") {
+    const { height } = getNodeDimensions(node);
+    if (!handleId || handleId === "store-in") {
+      return Math.min(0.95, Math.max(0.05, 28 / height));
+    }
+    const data = getLayoutNodeData(node);
+    const fields = Array.isArray(data?.fields) ? data.fields : [];
+    if (handleId.startsWith("store-field-out-") || handleId.startsWith("store-field-in-")) {
+      const fId = handleId.replace(/^store-field-(out|in)-/, "");
+      const idx = fields.findIndex((f: any) => f && f.id === fId);
+      if (idx !== -1) {
+        const targetY = 75 + 24 + idx * 28 + 14;
+        return Math.min(0.95, Math.max(0.05, targetY / height));
+      }
+    }
+    if (handleId.startsWith("populate-")) {
+      const targetY = 75 + 24 + fields.length * 28 + 24 + 12;
+      return Math.min(0.95, Math.max(0.05, targetY / height));
+    }
+    if (handleId.startsWith("mutate-")) {
+      const targetY = 75 + 24 + fields.length * 28 + 24 + 36;
+      return Math.min(0.95, Math.max(0.05, targetY / height));
+    }
+    if (handleId.startsWith("reset-")) {
+      const targetY = 75 + 24 + fields.length * 28 + 24 + 60;
+      return Math.min(0.95, Math.max(0.05, targetY / height));
+    }
+    return 0.5;
+  }
+
   if (node.type === "webPage") {
+    const { height } = getNodeDimensions(node);
     if (handleId === "page-in") {
-      const { height } = getNodeDimensions(node);
       return Math.min(0.95, Math.max(0.02, 18 / height));
+    }
+    if (handleId && handleId.startsWith("section-state-in-")) {
+      const data = getLayoutNodeData(node);
+      const sections = Array.isArray(data?.sections) ? data.sections : [];
+      let currentY = 115;
+      for (const sec of sections) {
+        const stList = Array.isArray(sec.stateObjects) ? sec.stateObjects : [];
+        const actList = Array.isArray(sec.actions) ? sec.actions : [];
+        const stIdx = stList.findIndex((st: any) => handleId === `section-state-in-${sec.id}-${st.id}`);
+        if (stIdx !== -1) {
+          const targetY = currentY + 36 + 26 + stIdx * 28 + 14;
+          return Math.min(0.95, Math.max(0.05, targetY / height));
+        }
+        currentY += 36 + (stList.length > 0 ? 26 + stList.length * 28 : 0) + (actList.length > 0 ? 26 + actList.length * 28 : 0);
+      }
     }
   }
 
