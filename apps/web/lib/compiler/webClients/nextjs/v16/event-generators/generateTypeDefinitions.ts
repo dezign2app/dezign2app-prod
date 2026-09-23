@@ -29,7 +29,7 @@ export function generateTypeDefinitions(
       `import type {\n  ${pascalName}Params,\n  ${pascalName}Query,\n  ${pascalName}Body,\n  ${pascalName}Response,\n} from "@workspace/types";`,
       `export type ${componentName}PathParams = ${pascalName}Params;\nexport type ${componentName}QueryParams = ${pascalName}Query;\nexport type ${componentName}Headers = Record<string, string>;\nexport type ${componentName}RequestBody = ${pascalName}Body;\nexport type ${componentName}Response = ${pascalName}Response;`,
       `export interface ${componentName}RequestPayload {\n  pathParams?: ${pascalName}Params;\n  queryParams?: ${pascalName}Query;\n  headers?: Record<string, string>;\n  body?: ${pascalName}Body;\n}`,
-      `export interface ${componentName}Props {\n  onTrigger?: (\n    eventName: string,\n    eventType: string,\n    url: string,\n    method: string,\n    requireAuth?: boolean,\n    customHeaders?: Record<string, string>,\n    queryParams?: Record<string, string>,\n    requestBody?: ${componentName}RequestBody,\n  ) => void;\n  onRequestChange?: (payload: ${componentName}RequestPayload) => void;\n  className?: string;\n}`,
+      `export interface ${componentName}Props {\n  onTrigger?: (\n    eventName: string,\n    eventType: string,\n    url: string,\n    method: string,\n    requireAuth?: boolean,\n    customHeaders?: Record<string, string>,\n    queryParams?: Record<string, string>,\n    requestBody?: ${componentName}RequestBody,\n  ) => Promise<any> | any;\n  onRequestChange?: (payload: ${componentName}RequestPayload) => void;\n  className?: string;\n}`,
     ];
   }
 
@@ -158,7 +158,7 @@ ${hasPathParams ? `  pathParams?: ${componentName}PathParams;\n` : ""}${hasQuery
     customHeaders?: Record<string, string>,
     queryParams?: Record<string, string>,
     requestBody?: ${hasBodyFields || hasRawJson ? `${componentName}RequestBody` : "never"},
-  ) => void;
+  ) => Promise<any> | any;
   onRequestChange?: (payload: ${componentName}RequestPayload) => void;
   className?: string;
 }`);

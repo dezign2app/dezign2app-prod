@@ -74,6 +74,8 @@ export interface RealtimeConnection {
   iceServerUrl?: string;
   /** Polling interval in ms (for POLLING protocol) */
   pollingIntervalMs?: number;
+  /** Stream URL override (SSE/WebSocket/WebRTC) */
+  streamUrl?: string;
   /** Human-readable description */
   description?: string;
   /**
@@ -85,6 +87,20 @@ export interface RealtimeConnection {
   sourceEventId?: string;
   sourceItemName?: string;
   sourceItemType?: "endpoint" | "event";
+  /** State Store binding to update when realtime messages arrive */
+  storeActionBinding?: {
+    storeNodeId?: string;
+    storeName?: string;
+    actionId?: string;
+    actionName?: string;
+    actionType?: "set" | "append" | "remove" | "toggle" | "increment" | "reset" | "populate" | "custom";
+    targetFieldId?: string;
+    targetFieldName?: string;
+    updateSource?: "full_message" | "nested_property" | "static";
+    valuePath?: string;
+    customValue?: string;
+    parameterMappings?: Record<string, string>;
+  };
 }
 
 export interface GlobalStoreField {
@@ -101,6 +117,7 @@ export interface GlobalStoreAction {
   id: string;
   name: string;
   targetFieldId?: string;
+  targetFieldName?: string;
   actionType: "set" | "append" | "remove" | "toggle" | "increment" | "reset" | "populate" | "custom";
   code?: string;
   parameters?: Parameter[];

@@ -230,13 +230,21 @@ export const clientEventInputSchema = z.object({
   pollingConfig: pollingConfigSchema.optional(),
   storeActionBinding: z
     .object({
-      storeNodeId: z.string(),
-      actionId: z.string(),
+      storeNodeId: z.string().optional(),
+      actionId: z.string().optional(),
       storeName: z.string().optional(),
       actionName: z.string().optional(),
       actionType: z
         .enum(["set", "append", "remove", "toggle", "increment", "reset", "populate", "custom"])
         .optional(),
+      targetFieldId: z.string().optional(),
+      targetFieldName: z.string().optional(),
+      updateSource: z
+        .enum(["response", "response_property", "payload", "direct", "static"])
+        .optional(),
+      valuePath: z.string().optional(),
+      customValue: z.string().optional(),
+      parameterMappings: z.record(z.string(), z.string()).optional(),
       payloadExpr: z.string().optional(),
     })
     .optional(),
@@ -291,13 +299,46 @@ export const realtimeConnectionSchema = z.object({
     .describe("Delivery protocol for real-time messages"),
   eventName: z.string().optional().describe("Event name or message type to listen for"),
   room: z.string().optional().describe("Broadcast room or channel key for WebSockets"),
+  mediaMode: z
+    .enum(["data", "audio", "video", "audio-video"])
+    .optional(),
+  enableDataChannel: z.boolean().optional(),
+  enableAudio: z.boolean().optional(),
+  enableMic: z.boolean().optional(),
+  enableSpeaker: z.boolean().optional(),
+  enableVideo: z.boolean().optional(),
+  enableCamera: z.boolean().optional(),
+  enableScreenShare: z.boolean().optional(),
+  enableRemoteVideo: z.boolean().optional(),
+  peerRole: z.enum(["peer", "initiator", "responder"]).optional(),
+  iceServerUrl: z.string().optional(),
   pollingIntervalMs: z.number().optional().describe("Polling interval in milliseconds"),
+  streamUrl: z.string().optional().describe("Stream URL override"),
   description: z.string().optional().describe("Description of real-time listener"),
   sourceServiceNodeId: z.string().optional().describe("ID of service node pushing this stream"),
   sourceServiceLabel: z.string().optional().describe("Label of service node pushing this stream"),
   sourceEventId: z.string().optional().describe("ID of source event or endpoint"),
   sourceItemName: z.string().optional().describe("Name of endpoint or event pushing this stream"),
   sourceItemType: z.enum(["endpoint", "event"]).optional().describe("Type of pipeline owner"),
+  storeActionBinding: z
+    .object({
+      storeNodeId: z.string().optional(),
+      actionId: z.string().optional(),
+      storeName: z.string().optional(),
+      actionName: z.string().optional(),
+      actionType: z
+        .enum(["set", "append", "remove", "toggle", "increment", "reset", "populate", "custom"])
+        .optional(),
+      targetFieldId: z.string().optional(),
+      targetFieldName: z.string().optional(),
+      updateSource: z
+        .enum(["full_message", "nested_property", "static"])
+        .optional(),
+      valuePath: z.string().optional(),
+      customValue: z.string().optional(),
+      parameterMappings: z.record(z.string(), z.string()).optional(),
+    })
+    .optional(),
 });
 
 export const webPageDataSchema = simpleDataSchema.extend({

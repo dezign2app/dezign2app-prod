@@ -332,10 +332,20 @@ export function classifyHandle(
     id.startsWith("role-in") ||
     id.startsWith("payment-in") ||
     id.startsWith("org-in") ||
-    id.startsWith("zone-")
+    id.startsWith("zone-") ||
+    id.startsWith("pageload-in") ||
+    id.startsWith("event-in") ||
+    id.startsWith("action-in") ||
+    id.startsWith("sse-in") ||
+    id.startsWith("websocket-in") ||
+    id.startsWith("ws-in") ||
+    id.startsWith("webrtc-in")
   ) {
     if (handleDirection === "source") return "page-out";
-    if (handleDirection === "target") return "page-section-in";
+    if (handleDirection === "target") {
+      if (id.startsWith("pageload-in")) return "pageload-in";
+      return "page-section-in";
+    }
   }
 
   if (id.startsWith("index-in-")) return "index-in";

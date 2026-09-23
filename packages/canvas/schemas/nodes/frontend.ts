@@ -69,6 +69,7 @@ export const globalStoreActionSchema = z.object({
   id: z.string(),
   name: z.string(),
   targetFieldId: z.string().optional(),
+  targetFieldName: z.string().optional(),
   actionType: z.enum([
     "set",
     "append",

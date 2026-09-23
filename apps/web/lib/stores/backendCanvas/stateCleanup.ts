@@ -102,22 +102,54 @@ export function cleanupDeletedNodesState(
         }
       }
 
-      // Clean up stateObjects if referenced state_store was deleted
-      if (node.type === "webPage" && node.data?.sections) {
+      // Clean up stateObjects, action bindings, and realtime bindings if referenced state_store was deleted
+      if (node.type === "webPage" && (node.data?.sections || node.data?.realtimeConnections)) {
         let changed = false;
-        const newSections = node.data.sections.map((section) => {
-          if (!section.stateObjects || !Array.isArray(section.stateObjects)) return section;
-          const remainingStates = section.stateObjects.filter(
-            (st) => !st.storeId || !allIdsSet.has(st.storeId),
-          );
-          if (remainingStates.length !== section.stateObjects.length) {
+        const newSections = (node.data.sections || []).map((section: any) => {
+          let secChanged = false;
+          let remainingStates = section.stateObjects;
+          if (section.stateObjects && Array.isArray(section.stateObjects)) {
+            remainingStates = section.stateObjects.filter(
+              (st: any) => !st.storeId || !allIdsSet.has(st.storeId),
+            );
+            if (remainingStates.length !== section.stateObjects.length) {
+              secChanged = true;
+            }
+          }
+
+          let remainingActions = section.actions;
+          if (section.actions && Array.isArray(section.actions)) {
+            remainingActions = section.actions.map((act: any) => {
+              if (act.storeActionBinding?.storeNodeId && allIdsSet.has(act.storeActionBinding.storeNodeId)) {
+                secChanged = true;
+                const { storeActionBinding, ...rest } = act;
+                return rest;
+              }
+              return act;
+            });
+          }
+
+          if (secChanged) {
             changed = true;
-            return { ...section, stateObjects: remainingStates };
+            return { ...section, stateObjects: remainingStates, actions: remainingActions };
           }
           return section;
         });
+
+        let newRealtime = node.data.realtimeConnections;
+        if (node.data.realtimeConnections && Array.isArray(node.data.realtimeConnections)) {
+          newRealtime = node.data.realtimeConnections.map((c: any) => {
+            if (c.storeActionBinding?.storeNodeId && allIdsSet.has(c.storeActionBinding.storeNodeId)) {
+              changed = true;
+              const { storeActionBinding, ...rest } = c;
+              return rest;
+            }
+            return c;
+          });
+        }
+
         if (changed) {
-          return { ...node, data: { ...node.data, sections: newSections } };
+          return { ...node, data: { ...node.data, sections: newSections, realtimeConnections: newRealtime } };
         }
       }
 
@@ -1372,6 +1404,101 @@ export function cleanupDeletedEdgesState(
           };
           nextNodes = nextNodes.map((n) => (n.id === storeNode.id ? updatedStore : n));
           pendingNodeUpserts.push(updatedStore);
+        }
+      }
+    }
+
+    // 4. WebPage Action / RealtimeConnection -> StateStore edge cleanup
+    const edgeSrcNode = currentState.nodes.find((n) => n.id === edge.source);
+    const edgeTgtNode = currentState.nodes.find((n) => n.id === edge.target);
+    const isWebPageToStore =
+      (edgeSrcNode?.type === "webPage" && edgeTgtNode?.type === "state_store") ||
+      (edgeSrcNode?.type === "state_store" && edgeTgtNode?.type === "webPage");
+
+    if (isWebPageToStore) {
+      const pageNode = edgeSrcNode?.type === "webPage" ? edgeSrcNode : edgeTgtNode!;
+      const storeNode = edgeSrcNode?.type === "state_store" ? edgeSrcNode : edgeTgtNode!;
+      const isSrcWebPage = edgeSrcNode?.type === "webPage";
+      const webHandle = isSrcWebPage ? edge.sourceHandle : edge.targetHandle;
+
+      const isActionHandle =
+        Boolean(webHandle?.startsWith("events-")) ||
+        Boolean(webHandle?.startsWith("event-in-")) ||
+        Boolean(webHandle?.startsWith("pageload-in-")) ||
+        Boolean(webHandle?.startsWith("action-in-")) ||
+        Boolean(webHandle?.startsWith("sse-in-")) ||
+        Boolean(webHandle?.startsWith("websocket-in-")) ||
+        Boolean(webHandle?.startsWith("ws-in-")) ||
+        Boolean(webHandle?.startsWith("webrtc-in-"));
+
+      if (isActionHandle) {
+        const actionId = webHandle!.replace(/^(events-|event-in-|pageload-in-|action-in-|sse-in-|websocket-in-|ws-in-|webrtc-in-)/, "");
+        const hasOtherActionEdge = nextEdges.some(
+          (e) =>
+            e &&
+            ((e.source === pageNode.id && e.target === storeNode.id && (e.sourceHandle?.endsWith(`-${actionId}`) || e.sourceHandle === webHandle)) ||
+              (e.target === pageNode.id && e.source === storeNode.id && (e.targetHandle?.endsWith(`-${actionId}`) || e.targetHandle === webHandle))),
+        );
+
+        if (!hasOtherActionEdge) {
+          const livePage = nextNodes.find((n) => n.id === pageNode.id);
+          if (livePage?.data?.sections) {
+            let pageModified = false;
+            const updatedSections = livePage.data.sections.map((sec: any) => ({
+              ...sec,
+              actions: (sec.actions || []).map((act: any) => {
+                if (act.id === actionId && act.storeActionBinding?.storeNodeId === storeNode.id) {
+                  pageModified = true;
+                  const { storeActionBinding, ...rest } = act;
+                  return rest;
+                }
+                return act;
+              }),
+            }));
+
+            if (pageModified) {
+              nodesChanged = true;
+              const updatedPage = {
+                ...livePage,
+                data: { ...livePage.data, sections: updatedSections },
+              };
+              nextNodes = nextNodes.map((n) => (n.id === pageNode.id ? updatedPage : n));
+              pendingNodeUpserts.push(updatedPage);
+            }
+          }
+        }
+      } else if (webHandle?.startsWith("rtc-")) {
+        const connId = webHandle.replace(/^rtc-(out|in)-/, "");
+        const hasOtherRtcEdge = nextEdges.some(
+          (e) =>
+            e &&
+            ((e.source === pageNode.id && e.target === storeNode.id && (e.sourceHandle === `rtc-out-${connId}` || e.sourceHandle === `rtc-in-${connId}`)) ||
+              (e.target === pageNode.id && e.source === storeNode.id && (e.targetHandle === `rtc-out-${connId}` || e.targetHandle === `rtc-in-${connId}`))),
+        );
+
+        if (!hasOtherRtcEdge) {
+          const livePage = nextNodes.find((n) => n.id === pageNode.id);
+          if (livePage?.data?.realtimeConnections) {
+            let pageModified = false;
+            const updatedRtc = livePage.data.realtimeConnections.map((c: any) => {
+              if (c.id === connId && c.storeActionBinding?.storeNodeId === storeNode.id) {
+                pageModified = true;
+                const { storeActionBinding, ...rest } = c;
+                return rest;
+              }
+              return c;
+            });
+
+            if (pageModified) {
+              nodesChanged = true;
+              const updatedPage = {
+                ...livePage,
+                data: { ...livePage.data, realtimeConnections: updatedRtc },
+              };
+              nextNodes = nextNodes.map((n) => (n.id === pageNode.id ? updatedPage : n));
+              pendingNodeUpserts.push(updatedPage);
+            }
+          }
         }
       }
     }

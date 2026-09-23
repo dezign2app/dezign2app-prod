@@ -333,6 +333,10 @@ export const backendEdgeDataValidator = v.object({
   fieldId: v.optional(v.string()),
   sectionId: v.optional(v.string()),
   stateObjectId: v.optional(v.string()),
+  // --- State Store Action / Realtime Binding Fields ---
+  isStoreActionBinding: v.optional(v.boolean()),
+  isStoreAction: v.optional(v.boolean()),
+  actionName: v.optional(v.string()),
   // --- Identity Connection Fields ---
   protocol: v.optional(v.string()),
   grantType: v.optional(v.string()),
@@ -456,6 +460,43 @@ export const pollingConfigConvexValidator = v.object({
   stopOnError: v.optional(v.boolean()),
 });
 
+// Store Action Binding Validator (Used in Web Page Actions & Realtime Connections)
+export const storeActionBindingConvexValidator = v.object({
+  storeNodeId: v.optional(v.string()),
+  actionId: v.optional(v.string()),
+  storeName: v.optional(v.string()),
+  actionName: v.optional(v.string()),
+  actionType: v.optional(
+    v.union(
+      v.literal("set"),
+      v.literal("append"),
+      v.literal("remove"),
+      v.literal("toggle"),
+      v.literal("increment"),
+      v.literal("reset"),
+      v.literal("populate"),
+      v.literal("custom"),
+    ),
+  ),
+  targetFieldId: v.optional(v.string()),
+  targetFieldName: v.optional(v.string()),
+  updateSource: v.optional(
+    v.union(
+      v.literal("response"),
+      v.literal("response_property"),
+      v.literal("payload"),
+      v.literal("direct"),
+      v.literal("static"),
+      v.literal("full_message"),
+      v.literal("nested_property"),
+    ),
+  ),
+  valuePath: v.optional(v.string()),
+  customValue: v.optional(v.string()),
+  payloadExpr: v.optional(v.string()),
+  parameterMappings: v.optional(v.any()),
+});
+
 // UI Event Item Validator
 export const webPageEventConvexValidator = v.object({
   id: v.optional(v.string()),
@@ -492,27 +533,7 @@ export const webPageEventConvexValidator = v.object({
   wsConfig: v.optional(wsConfigConvexValidator),
   webRtcConfig: v.optional(webRtcConfigConvexValidator),
   pollingConfig: v.optional(pollingConfigConvexValidator),
-  storeActionBinding: v.optional(
-    v.object({
-      storeNodeId: v.string(),
-      actionId: v.string(),
-      storeName: v.optional(v.string()),
-      actionName: v.optional(v.string()),
-      actionType: v.optional(
-        v.union(
-          v.literal("set"),
-          v.literal("append"),
-          v.literal("remove"),
-          v.literal("toggle"),
-          v.literal("increment"),
-          v.literal("reset"),
-          v.literal("populate"),
-          v.literal("custom"),
-        ),
-      ),
-      payloadExpr: v.optional(v.string()),
-    }),
-  ),
+  storeActionBinding: v.optional(storeActionBindingConvexValidator),
 });
 
 // Page State Object Validator
@@ -611,12 +632,14 @@ export const realtimeConnectionConvexValidator = v.object({
   ),
   iceServerUrl: v.optional(v.string()),
   pollingIntervalMs: v.optional(v.number()),
+  streamUrl: v.optional(v.string()),
   description: v.optional(v.string()),
   sourceServiceNodeId: v.optional(v.string()),
   sourceServiceLabel: v.optional(v.string()),
   sourceEventId: v.optional(v.string()),
   sourceItemName: v.optional(v.string()),
   sourceItemType: v.optional(v.union(v.literal("endpoint"), v.literal("event"))),
+  storeActionBinding: v.optional(storeActionBindingConvexValidator),
 });
 
 // Web Page Node Data Validator
@@ -757,6 +780,7 @@ export const stateStoreConvexDataValidator = v.object({
         id: v.string(),
         name: v.string(),
         targetFieldId: v.optional(v.string()),
+        targetFieldName: v.optional(v.string()),
         actionType: v.union(
           v.literal("set"),
           v.literal("append"),
@@ -790,10 +814,19 @@ export const stateStoreConvexDataValidator = v.object({
         ),
         description: v.optional(v.string()),
         prompt: v.optional(v.string()),
+        defaultManipulatorType: v.optional(
+          v.union(
+            v.literal("populate"),
+            v.literal("reset"),
+            v.literal("setter"),
+          ),
+        ),
       }),
     ),
   ),
   testCases: v.optional(v.array(v.any())),
+  disabledDefaultManipulators: v.optional(v.array(v.string())),
+  deletedDefaultManipulators: v.optional(v.array(v.string())),
   description: v.optional(v.string()),
   color: v.optional(v.string()),
   parentId: v.optional(v.string()),

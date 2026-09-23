@@ -9,16 +9,31 @@ import { Textarea } from "@workspace/ui/components/textarea";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
 import { Checkbox } from "@workspace/ui/components/checkbox";
-import { Radio, ArrowLeft, ExternalLink, Globe, Sparkles, AlertCircle, Mic, Volume2, Video, Monitor, Tv } from "lucide-react";
+import { Badge } from "@workspace/ui/components/badge";
+import { Radio, ArrowLeft, ExternalLink, Globe, Sparkles, AlertCircle, Mic, Volume2, Video, Monitor, Tv, Database, CheckCircle2, Zap, Sliders, Info } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { WEBRTC_CAPABILITIES_DEBOUNCE_MS, isRealtimeProtocol, isWebRtcPeerRole } from "@workspace/canvas/constants";
 import { sanitizeEventName, computeMediaMode } from "./pipeline-step-editor/PushToClientStepSection";
 import { cn } from "@workspace/ui/lib/utils";
+
+function toPascalCase(str: string): string {
+  const clean = str.trim();
+  if (!clean) return "";
+  if (/[\s\-_]/.test(clean)) {
+    return clean
+      .split(/[\s\-_]+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join("");
+  }
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
 
 export interface WebPageRealtimeConnectionConfigProps {
   id: string;
@@ -58,9 +73,12 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
   nodeId,
 }) => {
   const nodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
   const events = useBackendCanvasStore((s) => s.events);
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const addEdge = useBackendCanvasStore((s) => s.addEdge);
+  const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
   const pageNode = nodes.find((n) => n.id === nodeId);
@@ -718,6 +736,424 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
             />
           </div>
         )}
+
+        {/* State Store Update & Message Handler */}
+        <div className="flex flex-col gap-3 p-3.5 rounded-xl border border-indigo-500/30 bg-indigo-500/5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Database size={15} className="text-indigo-500" />
+              <Label className="text-xs font-semibold text-foreground">
+                State Store Update &amp; Message Handler
+              </Label>
+            </div>
+            {conn.storeActionBinding && (
+              <Badge
+                variant="secondary"
+                className="text-[10px] font-mono font-medium bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30"
+              >
+                {conn.storeActionBinding.storeName}.{conn.storeActionBinding.actionName}()
+              </Badge>
+            )}
+          </div>
+
+          <p className="text-[11px] text-muted-foreground leading-normal">
+            Automatically update a reactive State Store whenever a real-time message or event is received over this connection.
+          </p>
+
+          {/* Target State Store dropdown */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <Database size={10} />
+              Target State Store
+            </Label>
+            <Select
+              value={conn.storeActionBinding?.storeNodeId || "none"}
+              disabled={isDerived}
+              onValueChange={(storeId) => {
+                if (storeId === "none" || !storeId) {
+                  // Remove existing edge
+                  const existingEdges = edges.filter(
+                    (e) =>
+                      e.source === nodeId &&
+                      e.sourceHandle === `rtc-in-${id}` &&
+                      nodes.some((sn) => sn.id === e.target && sn.type === "state_store"),
+                  );
+                  existingEdges.forEach((e) => deleteEdge(e.id));
+                  handleUpdateManual({ storeActionBinding: undefined });
+                  return;
+                }
+
+                const sn = nodes.find((n) => n.id === storeId && n.type === "state_store");
+                if (!sn) return;
+                const storeName = sn.data?.storeName || sn.data?.label || "App";
+                const fields = sn.data?.fields || [];
+                const actions = sn.data?.actions || [];
+
+                let defaultActionId = "builtin-populate";
+                let defaultActionName = "populate";
+                let defaultActionType: any = "populate";
+                let defaultTargetFieldId: string | undefined = undefined;
+                let defaultTargetFieldName: string | undefined = undefined;
+                let targetHandle = "populate-in-left";
+
+                if (fields.length > 0) {
+                  const firstF = fields[0]!;
+                  defaultActionId = `setter-${firstF.id}`;
+                  defaultActionName = `set${toPascalCase(firstF.name)}`;
+                  defaultActionType = "set";
+                  defaultTargetFieldId = firstF.id;
+                  defaultTargetFieldName = firstF.name;
+                  targetHandle = "mutate-in-left";
+                } else if (actions.length > 0) {
+                  const firstA = actions[0]!;
+                  defaultActionId = firstA.id;
+                  defaultActionName = firstA.name;
+                  defaultActionType = firstA.actionType || "custom";
+                  targetHandle = `store-action-in-left-${firstA.id}`;
+                }
+
+                // Auto-sync canvas edge
+                const existingEdges = edges.filter(
+                  (e) =>
+                    e.source === nodeId &&
+                    e.sourceHandle === `rtc-in-${id}` &&
+                    nodes.some((sn) => sn.id === e.target && sn.type === "state_store"),
+                );
+                existingEdges.forEach((e) => deleteEdge(e.id));
+                addEdge({
+                  id: `edge-rtc-store-${nodeId}-${id}-${storeId}`,
+                  source: nodeId,
+                  target: storeId,
+                  sourceHandle: `rtc-in-${id}`,
+                  targetHandle,
+                  type: "connection",
+                  data: {
+                    isStoreActionBinding: true,
+                    storeName,
+                    actionName: defaultActionName,
+                  },
+                });
+
+                handleUpdateManual({
+                  storeActionBinding: {
+                    storeNodeId: storeId,
+                    storeName,
+                    actionId: defaultActionId,
+                    actionName: defaultActionName,
+                    actionType: defaultActionType,
+                    targetFieldId: defaultTargetFieldId,
+                    targetFieldName: defaultTargetFieldName,
+                    updateSource: "full_message",
+                  },
+                });
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs bg-background">
+                <SelectValue placeholder="Select State Store to update..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none" className="text-xs text-muted-foreground">
+                  None (No Store Mutation)
+                </SelectItem>
+                {nodes
+                  .filter((n) => n.type === "state_store")
+                  .map((s) => (
+                    <SelectItem key={s.id} value={s.id} className="text-xs">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "text-[9px] font-bold uppercase px-1.5 py-0.5 rounded",
+                            s.data?.scope === "global"
+                              ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                              : "bg-sky-500/15 text-sky-500",
+                          )}
+                        >
+                          {s.data?.scope || "GLOBAL"}
+                        </span>
+                        <span className="font-semibold text-foreground">
+                          {s.data?.storeName || s.data?.label || "Store"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          ({(s.data?.fields || []).length} fields, {(s.data?.actions || []).length} actions)
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Action / Mutation Selector */}
+          {conn.storeActionBinding?.storeNodeId && (() => {
+            const sn = nodes.find((n) => n.id === conn.storeActionBinding?.storeNodeId && n.type === "state_store");
+            const fields = sn?.data?.fields || [];
+            const actions = sn?.data?.actions || [];
+            const currentBinding = conn.storeActionBinding;
+
+            return (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                    <Zap size={10} />
+                    Store Mutation / Action to Call
+                  </Label>
+                  <Select
+                    value={currentBinding.actionId || "builtin-populate"}
+                    disabled={isDerived}
+                    onValueChange={(actionKey) => {
+                      if (!sn) return;
+                      const storeName = sn.data?.storeName || sn.data?.label || "App";
+                      let targetHandle = "mutate-in-left";
+                      let updated: NonNullable<RealtimeConnection["storeActionBinding"]>;
+
+                      if (actionKey === "builtin-populate") {
+                        targetHandle = "populate-in-left";
+                        updated = {
+                          ...currentBinding,
+                          actionId: "builtin-populate",
+                          actionName: "populate",
+                          actionType: "populate",
+                          targetFieldId: undefined,
+                          targetFieldName: undefined,
+                        };
+                      } else if (actionKey === "builtin-reset") {
+                        targetHandle = "reset-in-left";
+                        updated = {
+                          ...currentBinding,
+                          actionId: "builtin-reset",
+                          actionName: "reset",
+                          actionType: "reset",
+                          targetFieldId: undefined,
+                          targetFieldName: undefined,
+                        };
+                      } else if (actionKey.startsWith("setter-")) {
+                        targetHandle = "mutate-in-left";
+                        const fieldId = actionKey.replace("setter-", "");
+                        const matchedField = fields.find((f: any) => f.id === fieldId);
+                        const fieldName = matchedField?.name || "field";
+                        const setterName = `set${toPascalCase(fieldName)}`;
+                        updated = {
+                          ...currentBinding,
+                          actionId: actionKey,
+                          actionName: setterName,
+                          actionType: "set",
+                          targetFieldId: fieldId,
+                          targetFieldName: fieldName,
+                        };
+                      } else {
+                        const matchedAct = actions.find((a: any) => a.id === actionKey);
+                        targetHandle = `store-action-in-left-${actionKey}`;
+                        updated = {
+                          ...currentBinding,
+                          actionId: actionKey,
+                          actionName: matchedAct?.name || "action",
+                          actionType: matchedAct?.actionType || "custom",
+                          targetFieldId: matchedAct?.targetFieldId,
+                          targetFieldName: undefined,
+                        };
+                      }
+
+                      // Re-sync canvas edge
+                      const existingEdges = edges.filter(
+                        (e) =>
+                          e.source === nodeId &&
+                          e.sourceHandle === `rtc-in-${id}` &&
+                          nodes.some((s) => s.id === e.target && s.type === "state_store"),
+                      );
+                      existingEdges.forEach((e) => deleteEdge(e.id));
+                      addEdge({
+                        id: `edge-rtc-store-${nodeId}-${id}-${sn.id}`,
+                        source: nodeId,
+                        target: sn.id,
+                        sourceHandle: `rtc-in-${id}`,
+                        targetHandle,
+                        type: "connection",
+                        data: {
+                          isStoreActionBinding: true,
+                          storeName,
+                          actionName: updated.actionName,
+                        },
+                      });
+
+                      handleUpdateManual({ storeActionBinding: updated });
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-xs bg-background font-mono">
+                      <SelectValue placeholder="Select mutation or action..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectLabel className="text-[10px] uppercase font-bold text-muted-foreground">
+                          Standard Manipulators
+                        </SelectLabel>
+                        <SelectItem value="builtin-populate" className="text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                            <span className="font-semibold">populate(data)</span>
+                            <span className="text-[10px] text-muted-foreground font-sans">
+                              - Bulk update store state
+                            </span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="builtin-reset" className="text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                            <span className="font-semibold">reset()</span>
+                            <span className="text-[10px] text-muted-foreground font-sans">
+                              - Reset to default state
+                            </span>
+                          </div>
+                        </SelectItem>
+                      </SelectGroup>
+
+                      {fields.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel className="text-[10px] uppercase font-bold text-muted-foreground mt-1">
+                            Field Setters (Mutate State)
+                          </SelectLabel>
+                          {fields.map((f: any) => {
+                            const setterName = `set${toPascalCase(f.name)}`;
+                            return (
+                              <SelectItem key={`setter-${f.id}`} value={`setter-${f.id}`} className="text-xs">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                                  <span className="font-semibold font-mono">{setterName}(value)</span>
+                                  <Badge variant="outline" className="text-[9px] py-0 px-1 font-mono">
+                                    {f.type}
+                                  </Badge>
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectGroup>
+                      )}
+
+                      {actions.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel className="text-[10px] uppercase font-bold text-muted-foreground mt-1">
+                            Custom Actions
+                          </SelectLabel>
+                          {actions.map((act: any) => (
+                            <SelectItem key={act.id} value={act.id} className="text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0" />
+                                <span className="font-semibold font-mono">{act.name}()</span>
+                                <Badge variant="secondary" className="text-[9px] py-0 px-1 uppercase font-mono">
+                                  {act.actionType || "action"}
+                                </Badge>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Input Values & Payload Extraction */}
+                {currentBinding.actionType !== "reset" && (
+                  <div className="flex flex-col gap-2.5 p-2.5 rounded-lg bg-background/60 border border-border/60">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                      <Sliders size={10} className="text-indigo-500" />
+                      Incoming Message Input Mapping
+                    </Label>
+                    <Select
+                      value={currentBinding.updateSource || "full_message"}
+                      disabled={isDerived}
+                      onValueChange={(val: any) =>
+                        handleUpdateManual({
+                          storeActionBinding: {
+                            ...currentBinding,
+                            updateSource: val,
+                          },
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-7 text-xs bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="full_message" className="text-xs">
+                          <span className="font-semibold">Full Message Payload</span>
+                          <span className="text-muted-foreground font-mono text-[10px] ml-1.5">(parsed event.data)</span>
+                        </SelectItem>
+                        <SelectItem value="nested_property" className="text-xs">
+                          <span className="font-semibold">Nested Property / Key</span>
+                          <span className="text-muted-foreground font-mono text-[10px] ml-1.5">(parsed[property])</span>
+                        </SelectItem>
+                        <SelectItem value="static" className="text-xs">
+                          <span className="font-semibold">Static Constant Value</span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {currentBinding.updateSource === "nested_property" && (
+                      <div className="flex flex-col gap-1">
+                        <Label className="text-[11px] font-medium">Message Property Path</Label>
+                        <Input
+                          className="h-7 text-xs bg-background font-mono"
+                          disabled={isDerived}
+                          placeholder="e.g. data, items, message, user"
+                          value={currentBinding.valuePath || ""}
+                          onChange={(e) =>
+                            handleUpdateManual({
+                              storeActionBinding: {
+                                ...currentBinding,
+                                valuePath: e.target.value,
+                              },
+                            })
+                          }
+                        />
+                        <span className="text-[10px] text-muted-foreground">
+                          Extracts the specified key from the parsed message object to pass into <code className="font-mono">{currentBinding.actionName}()</code>.
+                        </span>
+                      </div>
+                    )}
+
+                    {currentBinding.updateSource === "static" && (
+                      <div className="flex flex-col gap-1">
+                        <Label className="text-[11px] font-medium">Static Value</Label>
+                        <Input
+                          className="h-7 text-xs bg-background font-mono"
+                          disabled={isDerived}
+                          placeholder="e.g. true, 1, 'received'"
+                          value={currentBinding.customValue || ""}
+                          onChange={(e) =>
+                            handleUpdateManual({
+                              storeActionBinding: {
+                                ...currentBinding,
+                                customValue: e.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Active Connection Badge Card */}
+                <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+                  <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
+                    <CheckCircle2 size={11} />
+                    <span className="text-[9px] font-bold uppercase tracking-wider">
+                      Live Stream → Store Bound
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0 font-semibold bg-indigo-500/20 text-indigo-500 border border-indigo-500/30">
+                      {currentBinding.storeName}
+                    </Badge>
+                    <span className="text-muted-foreground text-xs">→</span>
+                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-mono border-indigo-500/40">
+                      <span className="font-bold text-indigo-500">{currentBinding.actionName}()</span>
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
 
         {/* Description */}
         <div className="flex flex-col gap-1.5">

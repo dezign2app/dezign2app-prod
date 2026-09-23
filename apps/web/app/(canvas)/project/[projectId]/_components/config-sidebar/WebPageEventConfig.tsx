@@ -10,6 +10,7 @@ import { BackendNode, UIEventItem, Parameter, Schema, PageSection } from "@/type
 import { Endpoint, WEB_PAGE_EVENTS, GlobalStoreAction } from "@workspace/canvas";
 import {
   TargetEndpointSection,
+  TargetStateStoreSection,
   EventPropertiesSection,
   EventNavigationSection,
   RequestConfigSection,
@@ -373,7 +374,7 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
     <div className="flex flex-col gap-5 font-sans">
       <Accordion
         type="multiple"
-        defaultValue={isNavigateToPage ? ["navigation", "settings", "ai_context"] : ["connection", "settings", "request_config", "ai_context", "sse_config", "ws_config", "webrtc_config", "polling_config"]}
+        defaultValue={isNavigateToPage ? ["navigation", "settings", "ai_context"] : ["connection", "store_action_binding", "settings", "request_config", "ai_context", "sse_config", "ws_config", "webrtc_config", "polling_config"]}
         className="w-full flex flex-col gap-3 border-none"
       >
         {!isNavigateToPage && (
@@ -386,6 +387,22 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
             endpoint={endpoint}
             handleServiceChange={handleServiceChange}
             handleEndpointChange={handleEndpointChange}
+          />
+        )}
+
+        {!isNavigateToPage && (
+          <TargetStateStoreSection
+            nodeId={nodeId}
+            actionId={id}
+            actionName={eventName || item?.name || "action"}
+            actionEvent={eventType || item?.event}
+            storeBinding={item?.storeActionBinding}
+            stateStoreNodes={nodes.filter((n) => n.type === "state_store")}
+            isEndpointConnected={Boolean(linkedTargetNode && endpoint)}
+            connectedEndpointName={endpoint?.name}
+            onUpdateStoreBinding={(newBinding) =>
+              updateActionInParent({ storeActionBinding: newBinding })
+            }
           />
         )}
 
@@ -448,134 +465,6 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
             </AccordionContent>
           </AccordionItem>
         )}
-
-        {(() => {
-          const stateStoreNodes = nodes.filter((n) => n.type === "state_store");
-          const storeBinding = item?.storeActionBinding;
-          if (stateStoreNodes.length === 0) return null;
-
-          return (
-            <AccordionItem value="store_action_binding" className="border border-indigo-500/30 rounded-lg bg-indigo-500/5 overflow-hidden">
-              <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-indigo-600 dark:text-indigo-400">
-                <span className="flex items-center gap-2">
-                  <Database size={14} /> State Store Action Binding
-                </span>
-                {storeBinding && (
-                  <span className="text-[10px] font-mono font-normal bg-indigo-500/15 px-1.5 py-0.5 rounded border border-indigo-500/30">
-                    {storeBinding.storeName}.{storeBinding.actionName}()
-                  </span>
-                )}
-              </AccordionTrigger>
-              <AccordionContent className="px-4 pb-4 pt-1 space-y-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium">Target State Store</Label>
-                  <Select
-                    value={storeBinding?.storeNodeId || "none"}
-                    onValueChange={(storeId) => {
-                      if (storeId === "none") {
-                        updateActionInParent({ storeActionBinding: undefined });
-                      } else {
-                        const sn = stateStoreNodes.find((s) => s.id === storeId);
-                        const storeActions = sn?.data?.actions || [];
-                        const firstAction = storeActions[0];
-                        updateActionInParent({
-                          storeActionBinding: {
-                            storeNodeId: storeId,
-                            storeName: sn?.data?.storeName || sn?.data?.label || "App",
-                            actionId: firstAction?.id,
-                            actionName: firstAction?.name,
-                            actionType: firstAction?.actionType,
-                          },
-                        });
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="h-8 text-xs bg-background">
-                      <SelectValue placeholder="Select State Store..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None (No store binding)</SelectItem>
-                      {stateStoreNodes.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.data?.storeName || s.data?.label || "Store"} ({s.data?.scope || "global"})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {storeBinding?.storeNodeId && (
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium">Store Action to Trigger</Label>
-                    <Select
-                      value={storeBinding.actionId || "none"}
-                      onValueChange={(actId) => {
-                        if (actId === "builtin-populate") {
-                          updateActionInParent({
-                            storeActionBinding: {
-                              ...storeBinding,
-                              actionId: "builtin-populate",
-                              actionName: "populate",
-                              actionType: "populate",
-                            },
-                          });
-                          return;
-                        }
-                        if (actId === "builtin-reset") {
-                          updateActionInParent({
-                            storeActionBinding: {
-                              ...storeBinding,
-                              actionId: "builtin-reset",
-                              actionName: "reset",
-                              actionType: "reset",
-                            },
-                          });
-                          return;
-                        }
-                        const sn = stateStoreNodes.find((s) => s.id === storeBinding.storeNodeId);
-                        const storeActions = sn?.data?.actions || [];
-                        const action = storeActions.find((a) => a.id === actId);
-                        if (action) {
-                          updateActionInParent({
-                            storeActionBinding: {
-                              ...storeBinding,
-                              actionId: action.id,
-                              actionName: action.name,
-                              actionType: action.actionType,
-                            },
-                          });
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="h-8 text-xs bg-background font-mono">
-                        <SelectValue placeholder="Select Action..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(() => {
-                          const sn = stateStoreNodes.find((s) => s.id === storeBinding.storeNodeId);
-                          const storeActions = sn?.data?.actions || [];
-                          const builtInActions = [
-                            { id: "builtin-populate", name: "populate", actionType: "populate" },
-                            { id: "builtin-reset", name: "reset", actionType: "reset" },
-                          ];
-                          const combined = [
-                            ...storeActions,
-                            ...builtInActions.filter((b) => !storeActions.some((a) => a.name === b.name)),
-                          ];
-                          return combined.map((act) => (
-                            <SelectItem key={act.id} value={act.id}>
-                              {act.name}() [{act.actionType}]
-                            </SelectItem>
-                          ));
-                        })()}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </AccordionContent>
-            </AccordionItem>
-          );
-        })()}
 
         {!isNavigateToPage && (
           <RequestConfigSection

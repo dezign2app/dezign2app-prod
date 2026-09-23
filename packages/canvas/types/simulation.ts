@@ -106,6 +106,12 @@ export type UIEventItem = {
     actionId?: string;
     actionName?: string;
     actionType?: "set" | "append" | "remove" | "toggle" | "increment" | "reset" | "populate" | "custom";
+    targetFieldId?: string;
+    targetFieldName?: string;
+    updateSource?: "response" | "response_property" | "payload" | "direct" | "static";
+    valuePath?: string;
+    customValue?: string;
+    parameterMappings?: Record<string, string>;
   };
   // SSE config (when event === "sse")
   sseConfig?: {

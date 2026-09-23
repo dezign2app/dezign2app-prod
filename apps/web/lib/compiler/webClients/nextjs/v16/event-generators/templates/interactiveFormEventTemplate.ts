@@ -44,6 +44,12 @@ export function generateInteractiveFormEventTemplate({
     actionId?: string;
     actionName?: string;
     actionType?: string;
+    targetFieldId?: string;
+    targetFieldName?: string;
+    updateSource?: "response" | "response_property" | "payload" | "static" | "direct";
+    valuePath?: string;
+    customValue?: string;
+    parameterMappings?: Record<string, string>;
   };
 }): string {
   const {
@@ -70,12 +76,74 @@ export function generateInteractiveFormEventTemplate({
     : "";
   const storeActionName =
     storeActionBinding?.actionName ||
-    (storeActionBinding?.actionType === "reset"
+    (storeActionBinding?.targetFieldName
+      ? `set${storeActionBinding.targetFieldName.charAt(0).toUpperCase() + storeActionBinding.targetFieldName.slice(1)}`
+      : storeActionBinding?.actionType === "reset"
       ? "reset"
       : storeActionBinding?.actionType === "populate"
       ? "populate"
       : "set");
   const storeImport = storeHookName ? `import { ${storeHookName} } from "@/lib/stores";\n` : "";
+
+  // Helper to emit input mapping for store call
+  const generateStoreUpdate = (payloadVar: string) => {
+    if (!storeHookName) return { preTrigger: "", postTrigger: "" };
+    const hasApiUrl = Boolean(url && url.trim() && url !== "#");
+    const src = !hasApiUrl
+      ? (hasBodyFields || hasRawJson ? "payload" : "direct")
+      : (storeActionBinding?.updateSource || "response");
+    const vPath = storeActionBinding?.valuePath?.trim();
+    const cVal = storeActionBinding?.customValue?.trim();
+
+    if (src === "payload") {
+      return {
+        preTrigger: `      ${storeHookName}.getState().${storeActionName}(${payloadVar});\n`,
+        postTrigger: "",
+      };
+    }
+    if (src === "static") {
+      let parsed = "undefined";
+      if (cVal) {
+        try {
+          JSON.parse(cVal);
+          parsed = cVal;
+        } catch {
+          parsed = JSON.stringify(cVal);
+        }
+      }
+      return {
+        preTrigger: `      ${storeHookName}.getState().${storeActionName}(${parsed});\n`,
+        postTrigger: "",
+      };
+    }
+    if (src === "direct") {
+      return {
+        preTrigger: `      ${storeHookName}.getState().${storeActionName}();\n`,
+        postTrigger: "",
+      };
+    }
+    if (src === "response_property" && vPath) {
+      const chain = vPath.split(".").filter(Boolean).map((k) => `?.[${JSON.stringify(k)}]`).join("");
+      return {
+        preTrigger: "",
+        postTrigger: `      if (triggerResult) {
+        const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
+        const extracted = resData${chain};
+        ${storeHookName}.getState().${storeActionName}(extracted);
+      }\n`,
+      };
+    }
+    // Default response:
+    return {
+      preTrigger: "",
+      postTrigger: `      if (triggerResult) {
+        const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
+        ${storeHookName}.getState().${storeActionName}(resData);
+      }\n`,
+    };
+  };
+
+  const storeSnippet = generateStoreUpdate(hasBodyFields || hasRawJson ? "payloadBody" : "undefined");
 
   return `"use client";
 
@@ -90,7 +158,6 @@ ${libImports}${typeDefs.join("\n\n")}
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 ${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, any>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
-
   const computeFinalUrl = (): string => {
     let currentUrl = "${url}";
     let origin = "";
@@ -136,7 +203,7 @@ ${hasBodyFields || hasRawJson ? `      let payloadBody: ${componentName}RequestB
           return;
         }
       }
-` : ""}${storeHookName ? `      ${storeHookName}.getState().${storeActionName}(${hasBodyFields || hasRawJson ? "payloadBody" : ""});\n` : ""}      await onTrigger?.(
+` : ""}${storeSnippet.preTrigger}      const triggerResult = await onTrigger?.(
         "${eventName}",
         "${eventType}",
         finalUrl,
@@ -146,7 +213,7 @@ ${hasBodyFields || hasRawJson ? `      let payloadBody: ${componentName}RequestB
         ${hasQueryParams ? "Object.keys(queryParams).length > 0 ? queryParams : undefined" : "undefined"},
         ${hasBodyFields || hasRawJson ? "payloadBody" : "undefined"},
       );
-    } finally {
+${storeSnippet.postTrigger}    } finally {
       setIsSubmitting(false);
     }
   };

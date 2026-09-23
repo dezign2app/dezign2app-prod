@@ -517,6 +517,78 @@ describe("Convex canvasValidators exact schema", () => {
     expect(storeParsed.success).toBe(true);
     expect(stateStoreConvexDataValidator.fields.fields).toBeDefined();
   });
+
+  it("validates webPage actions and realtimeConnections with storeActionBinding in Convex & Zod schemas", async () => {
+    const { webPageDataSchema, edgeDataSchema } = await import("@workspace/canvas/schemas");
+    const { webPageConvexDataValidator, backendEdgeDataValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    const userConversationsPageData = {
+      isLayout: false,
+      label: "conversations",
+      sections: [
+        {
+          id: "sec-msg",
+          name: "MessagesSection",
+          actions: [
+            { event: "pageLoad", id: "evt-1790102749230", name: "pageLoad" },
+            {
+              event: "click",
+              id: "9dek2wl",
+              name: "test",
+              storeActionBinding: {
+                actionId: "setter-00ab7b6a-54d0-4424-a9f7-4df83fefcf6a",
+                actionName: "setMessages",
+                actionType: "set" as const,
+                storeName: "conversationStore",
+                storeNodeId: "9f4cecc9-5943-40e5-b0a2-a439fdf11b1b",
+                targetFieldId: "00ab7b6a-54d0-4424-a9f7-4df83fefcf6a",
+                targetFieldName: "messages",
+                updateSource: "response" as const,
+                valuePath: "data.messages",
+              },
+            },
+          ],
+        },
+      ],
+      realtimeConnections: [
+        {
+          id: "rtc-1",
+          protocol: "SSE" as const,
+          eventName: "message.new",
+          streamUrl: "http://localhost:3001/events",
+          storeActionBinding: {
+            storeNodeId: "9f4cecc9-5943-40e5-b0a2-a439fdf11b1b",
+            storeName: "conversationStore",
+            actionName: "setMessages",
+            actionType: "set" as const,
+            targetFieldId: "00ab7b6a-54d0-4424-a9f7-4df83fefcf6a",
+            targetFieldName: "messages",
+            updateSource: "full_message" as const,
+          },
+        },
+      ],
+    };
+
+    const parsedWebPage = webPageDataSchema.safeParse(userConversationsPageData);
+    expect(parsedWebPage.success).toBe(true);
+
+    const edgeData = {
+      label: "bind-store",
+      isStoreActionBinding: true,
+      storeName: "conversationStore",
+      actionName: "setMessages",
+    };
+    const parsedEdge = edgeDataSchema.safeParse(edgeData);
+    expect(parsedEdge.success).toBe(true);
+
+    // Verify Convex validator fields
+    expect(webPageConvexDataValidator.fields.realtimeConnections).toBeDefined();
+    expect(webPageConvexDataValidator.fields.sections).toBeDefined();
+    expect(backendEdgeDataValidator.fields.isStoreActionBinding).toBeDefined();
+    expect(backendEdgeDataValidator.fields.actionName).toBeDefined();
+  });
 });
 
 

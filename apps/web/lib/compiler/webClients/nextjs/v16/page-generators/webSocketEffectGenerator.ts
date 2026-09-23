@@ -1,5 +1,51 @@
 import type { LinkedRealtimeConnectionInfo } from "../types";
 
+function generateRealtimeStoreSnippet(
+  binding: {
+    storeName?: string;
+    actionName?: string;
+    targetFieldName?: string;
+    updateSource?: string;
+    valuePath?: string;
+    customValue?: string;
+  },
+  dataVar = "evtData",
+): string {
+  if (!binding?.storeName) return "";
+  const cleanStore = binding.storeName.replace(/Store$/i, "");
+  const hookName = `use${cleanStore.charAt(0).toUpperCase() + cleanStore.slice(1)}Store`;
+  const actionName =
+    binding.actionName ||
+    (binding.targetFieldName
+      ? `set${binding.targetFieldName.charAt(0).toUpperCase() + binding.targetFieldName.slice(1)}`
+      : "mutate");
+
+  const src = binding.updateSource || "full_message";
+  const vPath = binding.valuePath?.trim();
+  const cVal = binding.customValue?.trim();
+
+  if (src === "static") {
+    let parsedVal = "undefined";
+    if (cVal) {
+      try {
+        JSON.parse(cVal);
+        parsedVal = cVal;
+      } catch {
+        parsedVal = JSON.stringify(cVal);
+      }
+    }
+    return `          ${hookName}.getState().${actionName}(${parsedVal});\n`;
+  }
+
+  if (src === "nested_property" && vPath) {
+    const chain = vPath.split(".").filter(Boolean).map((k) => `?.[${JSON.stringify(k)}]`).join("");
+    return `          const extracted = (${dataVar} as any)${chain};\n          ${hookName}.getState().${actionName}(extracted);\n`;
+  }
+
+  // Default: full_message
+  return `          ${hookName}.getState().${actionName}(${dataVar});\n`;
+}
+
 export function generateWebSocketEffects(
   wsConnections: LinkedRealtimeConnectionInfo[],
   hasAuth: boolean,
@@ -29,6 +75,16 @@ export function generateWebSocketEffects(
 
     const leaveStatements = rooms
       .map((r) => `        if (ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify({ action: "leave", room: "${r}" })); }`)
+      .join("\n");
+
+    const connsWithStores = conns.filter((c) => c.storeActionBinding?.storeName);
+    const storeDispatchStatements = connsWithStores
+      .map((c) => {
+        if (c.eventName && c.eventName !== "message") {
+          return `          if (evtName === "${c.eventName}") {\n  ${generateRealtimeStoreSnippet(c.storeActionBinding!, "evtData").trim()}\n          }`;
+        }
+        return generateRealtimeStoreSnippet(c.storeActionBinding!, "evtData").trim();
+      })
       .join("\n");
 
     effectBlocks.push(`  // Real-time WebSocket listener for ${conns[0]?.sourceServiceName || "Service"}
@@ -74,7 +130,7 @@ ${joinStatements ? `${joinStatements}\n` : ""}        };
               ? parsedObj.data
               : parsed;
 
-          setTriggerLogs((prev) => [
+${storeDispatchStatements ? `${storeDispatchStatements}\n` : ""}          setTriggerLogs((prev) => [
             {
               id: Math.random().toString(36).substring(2, 9),
               eventName: evtName,

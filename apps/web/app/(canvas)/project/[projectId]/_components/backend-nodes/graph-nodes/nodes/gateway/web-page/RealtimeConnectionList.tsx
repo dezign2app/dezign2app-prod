@@ -286,15 +286,42 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
                     >
                       ← {item.sourceServiceLabel}
                     </span>
-                  ) : (
+                  ) : !isConnected ? (
                     <span
                       className="text-[8px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-destructive/20 text-destructive border border-destructive/40 flex items-center gap-0.5 shrink-0"
                       title="Disconnected / Misconfigured: No backend service pipeline is currently pushing to this connection."
                     >
                       <AlertCircle size={8} /> DISCONNECTED
                     </span>
+                  ) : null}
+
+                  {item.storeActionBinding && (
+                    <span
+                      className="text-[7px] font-mono px-1 py-0.2 rounded bg-indigo-500/15 text-indigo-500 hover:bg-indigo-500/25 border border-indigo-500/30 font-semibold cursor-pointer max-w-[120px] truncate shrink-0 transition-colors"
+                      title={`Bound to store: ${item.storeActionBinding.storeName || "Store"}.${item.storeActionBinding.actionName || item.storeActionBinding.actionType || "mutate"}()\nInput: ${item.storeActionBinding.updateSource || "full_message"}${item.storeActionBinding.valuePath ? ` (${item.storeActionBinding.valuePath})` : ""}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveConfigItem({
+                          type: "realtimeConnection",
+                          id: item.id,
+                          nodeId,
+                        });
+                      }}
+                    >
+                      ⚡{item.storeActionBinding.actionName || item.storeActionBinding.actionType || "store"}()
+                    </span>
                   )}
                 </div>
+
+                {/* Source handle for wiring realtime messages to downstream State Store */}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={`rtc-out-${item.id}`}
+                  className="w-2 h-2 -right-1 !bg-violet-500"
+                  style={{ top: "50%" }}
+                  title="Wire to State Store manipulator"
+                />
 
               <div className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-all shrink-0">
                 <button
