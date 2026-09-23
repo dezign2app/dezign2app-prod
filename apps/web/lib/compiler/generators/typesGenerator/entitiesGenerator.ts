@@ -8,6 +8,8 @@ import {
 export function generateEntitiesModule(
   nodes: BackendNode[],
   referencedEntityNames?: Set<string>,
+  customTypeNames?: Set<string>,
+  exportedNamesOut?: Set<string>,
 ): string {
   let code = `/**\n * Shared Data Models & Schemas\n */\n\n`;
   const seenNames = new Set<string>();
@@ -80,16 +82,31 @@ export function generateEntitiesModule(
       }
     }
 
-    // Generate dual singular/plural type aliases so both "Product" and "Products" work seamlessly
-    if (singularPascal && singularPascal !== pascal && !seenNames.has(singularPascal)) {
+    // Generate dual singular/plural type aliases so both "Product" and "Products" work seamlessly,
+    // but avoid colliding with explicit user-defined custom types
+    if (
+      singularPascal &&
+      singularPascal !== pascal &&
+      !seenNames.has(singularPascal) &&
+      !customTypeNames?.has(singularPascal)
+    ) {
       seenNames.add(singularPascal);
       code += `export type ${singularPascal} = ${pascal};\n`;
-      if (isJsonArray && !seenNames.has(`${singularPascal}Item`)) {
+      if (
+        isJsonArray &&
+        !seenNames.has(`${singularPascal}Item`) &&
+        !customTypeNames?.has(`${singularPascal}Item`)
+      ) {
         seenNames.add(`${singularPascal}Item`);
         code += `export type ${singularPascal}Item = ${itemType};\n`;
       }
     }
-    if (pluralPascal && pluralPascal !== pascal && !seenNames.has(pluralPascal)) {
+    if (
+      pluralPascal &&
+      pluralPascal !== pascal &&
+      !seenNames.has(pluralPascal) &&
+      !customTypeNames?.has(pluralPascal)
+    ) {
       seenNames.add(pluralPascal);
       code += `export type ${pluralPascal} = ${pascal};\n`;
     }
@@ -167,6 +184,10 @@ export function generateEntitiesModule(
 
   if (seenNames.size === 0) {
     code += `export type GenericEntity = Record<string, string | number | boolean | null>;\n`;
+  }
+
+  if (exportedNamesOut) {
+    seenNames.forEach((n) => exportedNamesOut.add(n));
   }
 
   return code;
