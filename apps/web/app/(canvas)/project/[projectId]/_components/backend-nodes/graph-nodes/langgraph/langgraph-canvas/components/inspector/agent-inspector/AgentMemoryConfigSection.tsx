@@ -1,5 +1,5 @@
 import React from "react";
-import { Database, Layers, Key } from "lucide-react";
+import { Database, Layers, Key, Sparkles } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import {
   Select,
@@ -11,6 +11,7 @@ import {
 import { Switch } from "@workspace/ui/components/switch";
 import { LocalInput } from "../../../../../common";
 import type { LangGraphAgentMemoryConfig } from "@/types/canvas";
+import { createTypesNodeFromEntity } from "@/lib/stores/backendCanvas/packageTypesSync";
 
 interface EntityNode {
   id: string;
@@ -85,7 +86,21 @@ export function AgentMemoryConfigSection({
                 <SelectItem value="memory">In-Memory (MemorySaver)</SelectItem>
                 {entities.map((e) => (
                   <SelectItem key={e.id} value={e.data?.label || e.id}>
-                    {e.data?.label || "Untitled Table"} (Schema Entity)
+                    <span className="flex items-center justify-between w-full gap-2">
+                      <span>{e.data?.label || "Untitled Table"} (Schema Entity)</span>
+                      <button
+                        type="button"
+                        title={`Generate TypesNode for ${e.data?.label || "this entity"}`}
+                        onClick={(ev: React.MouseEvent<HTMLButtonElement>) => {
+                          ev.preventDefault();
+                          ev.stopPropagation();
+                          createTypesNodeFromEntity(e.id);
+                        }}
+                        className="ml-auto flex-shrink-0 p-0.5 rounded hover:bg-amber-500/20 text-amber-500 hover:text-amber-400 transition-colors"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                      </button>
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -13,6 +13,10 @@ export const customTypeFieldSchema = z.object({
   description: z.string().optional(),
   defaultValue: z.string().optional(),
   enumValues: z.array(z.string()).optional(),
+  /** True when this field was cloned from a base type. Used to generate proper extends/intersection TS preview syntax. */
+  isInherited: z.boolean().optional(),
+  /** True when the user has toggled this inherited field to be Omit<>'d from the extended type. */
+  isOmitted: z.boolean().optional(),
 });
 
 export type CustomTypeFieldSchema = typeof customTypeFieldSchema;

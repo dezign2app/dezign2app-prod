@@ -9,6 +9,10 @@ export interface CustomTypeField {
   description?: string;
   defaultValue?: string;
   enumValues?: string[];
+  /** True when this field was cloned from a base type (extendedFrom). Used to generate proper extends/intersection TS syntax. */
+  isInherited?: boolean;
+  /** True when the user has toggled this inherited field to be Omit<>'d from the extended type output. */
+  isOmitted?: boolean;
 }
 
 export interface CustomTypeItem {
@@ -47,5 +51,7 @@ export interface CanvasTypesNodeData {
   isInstalled?: boolean;
   installError?: string;
   isReadOnly?: boolean;
+  /** ID of the EntityNode this TypesNode was auto-generated from. Used for idempotent refresh. */
+  sourceEntityId?: string;
 }
 
