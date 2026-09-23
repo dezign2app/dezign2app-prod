@@ -119,19 +119,27 @@ export interface StateManipulator {
   parameters?: Parameter[];
   code?: string;
   actionType?: GlobalStoreAction["actionType"];
-  defaultPayload?: JsonValue;
+  defaultPayload?: JsonValue | undefined;
+  defaultManipulatorType?: "populate" | "reset" | "setter";
+  isCustomized?: boolean;
 }
 
 export function getStateManipulators(
   fields: GlobalStoreField[],
   actions: GlobalStoreAction[],
+  disabledDefaultManipulators: string[] = [],
+  deletedDefaultManipulators: string[] = [],
 ): StateManipulator[] {
   const list: StateManipulator[] = [];
+  const disabledSet = new Set([
+    ...(disabledDefaultManipulators || []),
+    ...(deletedDefaultManipulators || []),
+  ]);
 
-  // 1. Actions declared by user
+  // 1. Check customized / user declared actions
   actions.forEach((act) => {
     const targetField = fields.find((f) => f.id === act.targetFieldId);
-    let defaultPayload: JsonValue = "";
+    let defaultPayload: JsonValue | undefined = "";
 
     if (act.parameters && act.parameters.length > 0) {
       const mockObj: Record<string, JsonValue> = {};
@@ -143,6 +151,13 @@ export function getStateManipulators(
         else mockObj[p.name] = `sample_${p.name}`;
       });
       defaultPayload = mockObj;
+    } else if (act.actionType === "populate" || act.name.toLowerCase() === "populate" || act.name.toLowerCase() === "load") {
+      defaultPayload = fields.reduce<StoreState>(
+        (acc, f) => ({ ...acc, [f.name]: formatInitialFieldValue(f) }),
+        {},
+      );
+    } else if (act.actionType === "reset" || act.name.toLowerCase() === "reset") {
+      defaultPayload = undefined;
     } else if (targetField) {
       if (targetField.type === "number") defaultPayload = 1;
       else if (targetField.type === "boolean") defaultPayload = true;
@@ -151,47 +166,100 @@ export function getStateManipulators(
       else defaultPayload = "Sample Value";
     }
 
+    const isPopulateOverride =
+      act.actionType === "populate" ||
+      act.name.toLowerCase() === "populate" ||
+      act.name.toLowerCase() === "load" ||
+      (act as any).defaultManipulatorType === "populate";
+
+    const isResetOverride =
+      act.actionType === "reset" ||
+      act.name.toLowerCase() === "reset" ||
+      (act as any).defaultManipulatorType === "reset";
+
+    const isSetterOverride =
+      Boolean((act as any).defaultManipulatorType === "setter") ||
+      Boolean(targetField && act.name.toLowerCase() === `set${targetField.name.toLowerCase()}`);
+
+    const defaultManipulatorType = isPopulateOverride
+      ? "populate"
+      : isResetOverride
+      ? "reset"
+      : isSetterOverride
+      ? "setter"
+      : undefined;
+
+    // Check if this default manipulator was explicitly disabled
+    if (defaultManipulatorType && disabledSet.has(defaultManipulatorType)) {
+      return;
+    }
+
     list.push({
       id: act.id,
       name: act.name,
       label: `${act.name}()`,
-      category: act.actionType === "custom" ? "custom_action" : "standard_action",
+      category: defaultManipulatorType
+        ? defaultManipulatorType === "setter"
+          ? "auto_setter"
+          : "builtin"
+        : act.actionType === "custom"
+        ? "custom_action"
+        : "standard_action",
       targetFieldId: act.targetFieldId,
       targetFieldName: targetField?.name,
       parameters: act.parameters,
       code: act.code,
       actionType: act.actionType,
       defaultPayload,
+      defaultManipulatorType,
+      isCustomized: Boolean(defaultManipulatorType),
     });
   });
 
-  // 2. Built-in actions (reset, populate)
-  list.push({
-    id: "builtin-reset",
-    name: "reset",
-    label: "reset()",
-    category: "builtin",
-    actionType: "reset",
-    defaultPayload: undefined,
-  });
+  // 2. Built-in actions (reset, populate) if not overridden and not disabled
+  const hasPopulate = list.some(
+    (m) => m.defaultManipulatorType === "populate" || m.name.toLowerCase() === "populate" || m.name.toLowerCase() === "load"
+  );
+  const hasReset = list.some(
+    (m) => m.defaultManipulatorType === "reset" || m.name.toLowerCase() === "reset"
+  );
 
-  list.push({
-    id: "builtin-populate",
-    name: "populate",
-    label: "populate(data)",
-    category: "builtin",
-    actionType: "populate",
-    defaultPayload: fields.reduce<StoreState>(
-      (acc, f) => ({ ...acc, [f.name]: formatInitialFieldValue(f) }),
-      {},
-    ),
-  });
+  if (!hasReset && !disabledSet.has("reset")) {
+    list.push({
+      id: "builtin-reset",
+      name: "reset",
+      label: "reset()",
+      category: "builtin",
+      actionType: "reset",
+      defaultManipulatorType: "reset",
+      defaultPayload: undefined,
+      isCustomized: false,
+    });
+  }
 
-  // 3. Auto-generated setters (setField)
+  if (!hasPopulate && !disabledSet.has("populate") && !disabledSet.has("load")) {
+    list.push({
+      id: "builtin-populate",
+      name: "populate",
+      label: "populate(data)",
+      category: "builtin",
+      actionType: "populate",
+      defaultManipulatorType: "populate",
+      defaultPayload: fields.reduce<StoreState>(
+        (acc, f) => ({ ...acc, [f.name]: formatInitialFieldValue(f) }),
+        {},
+      ),
+      isCustomized: false,
+    });
+  }
+
+  // 3. Auto-generated setters (setField) for fields not already customized
   fields.forEach((f) => {
     const capitalized = f.name.charAt(0).toUpperCase() + f.name.slice(1);
     const setterName = `set${capitalized}`;
-    if (!list.some((m) => m.name === setterName)) {
+    const isSetterDisabled = disabledSet.has(setterName) || disabledSet.has(`setter-${f.id}`);
+
+    if (!isSetterDisabled && !list.some((m) => m.targetFieldId === f.id || m.name.toLowerCase() === setterName.toLowerCase())) {
       let defaultSetterVal: JsonValue = "";
       if (f.type === "number") defaultSetterVal = 100;
       else if (f.type === "boolean") defaultSetterVal = true;
@@ -207,7 +275,9 @@ export function getStateManipulators(
         targetFieldId: f.id,
         targetFieldName: f.name,
         actionType: "set",
+        defaultManipulatorType: "setter",
         defaultPayload: defaultSetterVal,
+        isCustomized: false,
       });
     }
   });
@@ -228,6 +298,20 @@ export function applyManipulator({
 }): { newState: StoreState; error?: string } {
   try {
     let nextState: StoreState = { ...currentState };
+
+    // If custom code is provided on ANY manipulator, execute it directly
+    if (manipulator.code && manipulator.code.trim()) {
+      const setFn = (updater: StoreState | ((prev: StoreState) => StoreState)) => {
+        const patch = typeof updater === "function" ? updater(nextState) : updater;
+        if (patch && typeof patch === "object") {
+          nextState = { ...nextState, ...patch };
+        }
+      };
+      const getFn = () => nextState;
+      const runner = new Function("payload", "{ set, get }", manipulator.code);
+      runner(payload, { set: setFn, get: getFn });
+      return { newState: nextState };
+    }
 
     if (manipulator.category === "auto_setter" && manipulator.targetFieldName) {
       const fieldVal = payload !== undefined ? payload : currentState[manipulator.targetFieldName];
@@ -289,24 +373,13 @@ export function applyManipulator({
         }
         break;
       case "custom":
-      default:
-        if (manipulator.code && manipulator.code.trim()) {
-          const setFn = (updater: StoreState | ((prev: StoreState) => StoreState)) => {
-            const patch = typeof updater === "function" ? updater(nextState) : updater;
-            if (patch && typeof patch === "object") {
-              nextState = { ...nextState, ...patch };
-            }
-          };
-          const getFn = () => nextState;
-          const runner = new Function("payload", "{ set, get }", manipulator.code);
-          runner(payload, { set: setFn, get: getFn });
-        } else {
-          const valToSet = payload !== undefined ? payload : currentState[targetName];
-          if (valToSet !== undefined) {
-            nextState[targetName] = valToSet;
-          }
+      default: {
+        const valToSet = payload !== undefined ? payload : currentState[targetName];
+        if (valToSet !== undefined) {
+          nextState[targetName] = valToSet;
         }
         break;
+      }
     }
 
     return { newState: nextState };

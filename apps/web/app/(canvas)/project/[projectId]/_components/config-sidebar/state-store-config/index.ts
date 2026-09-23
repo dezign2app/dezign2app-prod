@@ -1,6 +1,7 @@
 export * from "./types";
 export * from "./StoreIdentitySection";
 export * from "./StoreFieldsSection";
+export * from "./StoreDefaultManipulatorsSection";
 export * from "./StoreActionsSection";
 export * from "./LiveStateInspector";
 export * from "./ManipulatorRunnerSection";

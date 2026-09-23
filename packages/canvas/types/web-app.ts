@@ -108,6 +108,7 @@ export interface GlobalStoreAction {
   responseMappingMode?: "replace" | "merge" | "custom";
   description?: string;
   prompt?: string;
+  defaultManipulatorType?: "populate" | "reset" | "setter";
 }
 
 export interface StateStoreTestCase {
@@ -132,6 +133,8 @@ export interface GlobalStoreDefinition {
   storage?: "memory" | "localStorage" | "sessionStorage";
   scope?: "global" | "local";
   targetPageId?: string;
+  disabledDefaultManipulators?: string[];
+  deletedDefaultManipulators?: string[];
 }
 
 /** WebApp node fields (canvas type). */
@@ -256,4 +259,6 @@ export interface CanvasStateStoreNodeData {
   fields?: GlobalStoreField[];
   actions?: GlobalStoreAction[];
   testCases?: StateStoreTestCase[];
+  disabledDefaultManipulators?: string[];
+  deletedDefaultManipulators?: string[];
 }
