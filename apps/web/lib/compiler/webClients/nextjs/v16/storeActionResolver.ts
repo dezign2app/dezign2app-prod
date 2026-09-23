@@ -28,10 +28,13 @@ const NON_ACTION_HANDLES: readonly string[] = [
   "store-state-out",
   "section-state-in",
   "populate-in",
+  "populate-in-left",
   "populate-out",
   "mutate-in",
+  "mutate-in-left",
   "mutate-out",
   "reset-in",
+  "reset-in-left",
   "reset-out",
   "public-in",
   "private-in",
@@ -101,6 +104,12 @@ function extractActionIdFromHandle(handleId: string | null | undefined): string 
   if (handleId.startsWith("webrtc-in-")) {
     return handleId.slice("webrtc-in-".length);
   }
+  if (handleId.startsWith("rtc-out-")) {
+    return handleId.slice("rtc-out-".length);
+  }
+  if (handleId.startsWith("rtc-in-")) {
+    return handleId.slice("rtc-in-".length);
+  }
   if (handleId.startsWith("events-")) {
     return handleId.slice("events-".length);
   }
@@ -111,7 +120,7 @@ function resolveStoreBindingFromHandle(
   storeNode: BackendNode,
   storeHandleId: string | null | undefined,
   pageAction: UIEventItem,
-): { actionId: string; actionName: string; actionType: StoreActionType } {
+): { actionId: string; actionName: string; actionType: StoreActionType; targetFieldId?: string; targetFieldName?: string } {
   const storeActions = storeNode.data?.actions;
   const storeFields = storeNode.data?.fields;
 
@@ -119,6 +128,7 @@ function resolveStoreBindingFromHandle(
   if (
     storeHandleId === "populate-out" ||
     storeHandleId === "populate-in" ||
+    storeHandleId === "populate-in-left" ||
     storeHandleId === "load" ||
     Boolean(storeHandleId?.startsWith("populate-"))
   ) {
@@ -133,6 +143,7 @@ function resolveStoreBindingFromHandle(
   if (
     storeHandleId === "reset-out" ||
     storeHandleId === "reset-in" ||
+    storeHandleId === "reset-in-left" ||
     storeHandleId === "reset" ||
     Boolean(storeHandleId?.startsWith("reset-"))
   ) {
@@ -143,13 +154,16 @@ function resolveStoreBindingFromHandle(
     };
   }
 
-  // 3. Custom store action: store-action-out-${id} or store-action-in-${id}
+  // 3. Custom store action: store-action-out-${id} or store-action-in-${id} or store-action-in-left-${id}
   if (
     Boolean(storeHandleId?.startsWith("store-action-out-")) ||
+    Boolean(storeHandleId?.startsWith("store-action-in-left-")) ||
     Boolean(storeHandleId?.startsWith("store-action-in-"))
   ) {
     const handlePrefix = storeHandleId?.startsWith("store-action-out-")
       ? "store-action-out-"
+      : storeHandleId?.startsWith("store-action-in-left-")
+      ? "store-action-in-left-"
       : "store-action-in-";
     const customId = storeHandleId ? storeHandleId.slice(handlePrefix.length) : "";
 
@@ -163,6 +177,8 @@ function resolveStoreBindingFromHandle(
           actionId: found.id,
           actionName: found.name,
           actionType,
+          targetFieldId: found.targetFieldId,
+          targetFieldName: found.targetFieldName,
         };
       }
     }
@@ -352,9 +368,15 @@ export function resolveStoreActionBindings(
                 storeActionBinding: {
                   storeNodeId: storeNode.id,
                   storeName,
-                  actionId: binding.actionId,
-                  actionName: binding.actionName,
-                  actionType: binding.actionType,
+                  actionId: act.storeActionBinding?.actionId || binding.actionId,
+                  actionName: act.storeActionBinding?.actionName || binding.actionName,
+                  actionType: (act.storeActionBinding?.actionType as any) || binding.actionType,
+                  targetFieldId: act.storeActionBinding?.targetFieldId || binding.targetFieldId,
+                  targetFieldName: act.storeActionBinding?.targetFieldName || binding.targetFieldName,
+                  updateSource: act.storeActionBinding?.updateSource || "response",
+                  valuePath: act.storeActionBinding?.valuePath,
+                  customValue: act.storeActionBinding?.customValue,
+                  parameterMappings: act.storeActionBinding?.parameterMappings,
                 },
               };
             }
@@ -387,15 +409,71 @@ export function resolveStoreActionBindings(
               storeActionBinding: {
                 storeNodeId: storeNode.id,
                 storeName,
-                actionId: binding.actionId,
-                actionName: binding.actionName,
-                actionType: binding.actionType,
+                actionId: evt.storeActionBinding?.actionId || binding.actionId,
+                actionName: evt.storeActionBinding?.actionName || binding.actionName,
+                actionType: (evt.storeActionBinding?.actionType as any) || binding.actionType,
+                targetFieldId: evt.storeActionBinding?.targetFieldId || binding.targetFieldId,
+                targetFieldName: evt.storeActionBinding?.targetFieldName || binding.targetFieldName,
+                updateSource: evt.storeActionBinding?.updateSource || "response",
+                valuePath: evt.storeActionBinding?.valuePath,
+                customValue: evt.storeActionBinding?.customValue,
+                parameterMappings: evt.storeActionBinding?.parameterMappings,
               },
             };
           }
           return evt;
         })
       : rawEvents;
+
+    // 3. Process realtimeConnections (if present)
+    const rawRealtime = node.data?.realtimeConnections;
+    const nextRealtime = Array.isArray(rawRealtime)
+      ? rawRealtime.map((conn) => {
+          // Check if edge connects this realtime connection to a state_store
+          const matchEdge = allEdges.find(
+            (e) =>
+              (e.source === node.id &&
+                (e.sourceHandle === `rtc-out-${conn.id}` || e.sourceHandle === `rtc-in-${conn.id}`)) ||
+              (e.target === node.id &&
+                (e.targetHandle === `rtc-out-${conn.id}` || e.targetHandle === `rtc-in-${conn.id}`)),
+          );
+
+          if (matchEdge) {
+            const isSource = matchEdge.source === node.id;
+            const storeNodeId = isSource ? matchEdge.target : matchEdge.source;
+            const storeHandle = isSource ? matchEdge.targetHandle : matchEdge.sourceHandle;
+            const storeNode = allNodes.find((n) => n.id === storeNodeId && n.type === "state_store");
+
+            if (storeNode) {
+              const storeName = storeNode.data?.storeName || storeNode.data?.label || "App";
+              const fakeAction: UIEventItem = {
+                id: conn.id,
+                name: conn.eventName || "message",
+                event: "message",
+              };
+              const binding = resolveStoreBindingFromHandle(storeNode, storeHandle, fakeAction);
+              hasChanges = true;
+              return {
+                ...conn,
+                storeActionBinding: {
+                  storeNodeId: storeNode.id,
+                  storeName,
+                  actionId: conn.storeActionBinding?.actionId || binding.actionId,
+                  actionName: conn.storeActionBinding?.actionName || binding.actionName,
+                  actionType: (conn.storeActionBinding?.actionType as any) || binding.actionType,
+                  targetFieldId: conn.storeActionBinding?.targetFieldId || binding.targetFieldId,
+                  targetFieldName: conn.storeActionBinding?.targetFieldName || binding.targetFieldName,
+                  updateSource: conn.storeActionBinding?.updateSource || "full_message",
+                  valuePath: conn.storeActionBinding?.valuePath,
+                  customValue: conn.storeActionBinding?.customValue,
+                  parameterMappings: conn.storeActionBinding?.parameterMappings,
+                },
+              };
+            }
+          }
+          return conn;
+        })
+      : rawRealtime;
 
     if (!hasChanges) {
       return node;
@@ -407,6 +485,7 @@ export function resolveStoreActionBindings(
         ...node.data,
         sections: nextSections,
         events: nextEvents,
+        realtimeConnections: nextRealtime,
       },
     };
   });

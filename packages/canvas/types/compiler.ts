@@ -147,6 +147,7 @@ export interface LinkedPageRefInfo {
 }
 
 export interface LinkedRealtimeConnectionInfo {
+  id?: string;
   connectionId: string;
   protocol: RealtimeProtocol;
   eventName?: string;
@@ -168,6 +169,19 @@ export interface LinkedRealtimeConnectionInfo {
   description?: string;
   sourceServicePort?: string;
   streamUrl?: string;
+  storeActionBinding?: {
+    storeNodeId?: string;
+    storeName?: string;
+    actionId?: string;
+    actionName?: string;
+    actionType?: "set" | "append" | "remove" | "toggle" | "increment" | "reset" | "populate" | "custom";
+    targetFieldId?: string;
+    targetFieldName?: string;
+    updateSource?: "full_message" | "nested_property" | "static";
+    valuePath?: string;
+    customValue?: string;
+    parameterMappings?: Record<string, string>;
+  };
 }
 
 export interface PageInfo {

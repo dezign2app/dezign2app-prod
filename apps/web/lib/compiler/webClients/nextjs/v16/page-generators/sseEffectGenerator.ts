@@ -1,5 +1,51 @@
 import type { LinkedRealtimeConnectionInfo } from "../types";
 
+function generateRealtimeStoreSnippet(
+  binding: {
+    storeName?: string;
+    actionName?: string;
+    targetFieldName?: string;
+    updateSource?: string;
+    valuePath?: string;
+    customValue?: string;
+  },
+  dataVar = "parsed",
+): string {
+  if (!binding?.storeName) return "";
+  const cleanStore = binding.storeName.replace(/Store$/i, "");
+  const hookName = `use${cleanStore.charAt(0).toUpperCase() + cleanStore.slice(1)}Store`;
+  const actionName =
+    binding.actionName ||
+    (binding.targetFieldName
+      ? `set${binding.targetFieldName.charAt(0).toUpperCase() + binding.targetFieldName.slice(1)}`
+      : "mutate");
+
+  const src = binding.updateSource || "full_message";
+  const vPath = binding.valuePath?.trim();
+  const cVal = binding.customValue?.trim();
+
+  if (src === "static") {
+    let parsedVal = "undefined";
+    if (cVal) {
+      try {
+        JSON.parse(cVal);
+        parsedVal = cVal;
+      } catch {
+        parsedVal = JSON.stringify(cVal);
+      }
+    }
+    return `        ${hookName}.getState().${actionName}(${parsedVal});\n`;
+  }
+
+  if (src === "nested_property" && vPath) {
+    const chain = vPath.split(".").filter(Boolean).map((k) => `?.[${JSON.stringify(k)}]`).join("");
+    return `        const extracted = (${dataVar} as any)${chain};\n        ${hookName}.getState().${actionName}(extracted);\n`;
+  }
+
+  // Default: full_message
+  return `        ${hookName}.getState().${actionName}(${dataVar});\n`;
+}
+
 export function generateSseEffects(sseConnections: LinkedRealtimeConnectionInfo[]): string {
   if (sseConnections.length === 0) return "";
 
@@ -21,15 +67,22 @@ export function generateSseEffects(sseConnections: LinkedRealtimeConnectionInfo[
     );
 
     const customListeners = customEvents
-      .map(
-        (evtName) => `      es.addEventListener("${evtName}", (event) => {
+      .map((evtName) => {
+        const matchingConns = conns.filter(
+          (c) => c.eventName?.trim() === evtName && c.storeActionBinding?.storeName,
+        );
+        const storeStatements = matchingConns
+          .map((c) => generateRealtimeStoreSnippet(c.storeActionBinding!, "parsed"))
+          .join("");
+
+        return `      es.addEventListener("${evtName}", (event) => {
         let parsed: unknown = event.data;
         try {
           parsed = JSON.parse(event.data);
         } catch {
           parsed = event.data;
         }
-        setTriggerLogs((prev) => [
+${storeStatements}        setTriggerLogs((prev) => [
           {
             id: Math.random().toString(36).substring(2, 9),
             eventName: "${evtName}",
@@ -41,9 +94,16 @@ export function generateSseEffects(sseConnections: LinkedRealtimeConnectionInfo[
           },
           ...prev,
         ]);
-      });`,
-      )
+      });`;
+      })
       .join("\n");
+
+    const defaultConns = conns.filter(
+      (c) => (!c.eventName || c.eventName === "message") && c.storeActionBinding?.storeName,
+    );
+    const defaultStoreStatements = defaultConns
+      .map((c) => generateRealtimeStoreSnippet(c.storeActionBinding!, "parsed"))
+      .join("");
 
     effectBlocks.push(`  // Real-time SSE listener for ${conns[0]?.sourceServiceName || "Service"}
   useEffect(() => {
@@ -64,7 +124,7 @@ ${customListeners ? `${customListeners}\n` : ""}      es.onmessage = (event) => 
         } catch {
           parsed = event.data;
         }
-        setTriggerLogs((prev) => [
+${defaultStoreStatements}        setTriggerLogs((prev) => [
           {
             id: Math.random().toString(36).substring(2, 9),
             eventName: "message",

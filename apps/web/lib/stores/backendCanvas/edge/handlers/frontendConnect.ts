@@ -2,6 +2,7 @@ import { BackendNode } from "@/types/canvas";
 import { generateKeyBetween } from "fractional-indexing";
 import { getLastIndex } from "../../utils";
 import { ConnectionContext } from "../types";
+import { toast } from "sonner";
 
 /**
  * Handles frontend Hook and Component connections to WebPages, Endpoints, or each other.
@@ -326,6 +327,203 @@ export function handleFrontendConnect({
             fields: updatedFields,
           },
         });
+      }
+    }
+  }
+
+  // Case 5: WebPage <-> StateStore (Action or Real-Time Connection mutates State Store)
+  const isWebPageToStateStore =
+    (sourceNode.type === "webPage" && targetNode.type === "state_store") ||
+    (sourceNode.type === "state_store" && targetNode.type === "webPage");
+
+  if (isWebPageToStateStore) {
+    const webPageNode = sourceNode.type === "webPage" ? sourceNode : targetNode;
+    const storeNode = sourceNode.type === "state_store" ? sourceNode : targetNode;
+    const isForward = sourceNode.type === "webPage";
+    const webHandle = isForward ? (connection.sourceHandle ?? "") : (connection.targetHandle ?? "");
+    const storeHandle = isForward ? (connection.targetHandle ?? "") : (connection.sourceHandle ?? "");
+
+    // Check if webHandle is an action or realtime connection
+    const isActionHandle =
+      webHandle.startsWith("events-") ||
+      webHandle.startsWith("event-in-") ||
+      webHandle.startsWith("pageload-in-") ||
+      webHandle.startsWith("action-in-") ||
+      webHandle.startsWith("sse-in-") ||
+      webHandle.startsWith("websocket-in-") ||
+      webHandle.startsWith("ws-in-") ||
+      webHandle.startsWith("webrtc-in-");
+    const isRealtimeHandle = webHandle.startsWith("rtc-out-") || webHandle.startsWith("rtc-in-");
+
+    if (isActionHandle || isRealtimeHandle) {
+      const storeName = storeNode.data?.label || storeNode.data?.storeName || "Store";
+      const storeActions = storeNode.data?.actions || [];
+      const storeFields = storeNode.data?.fields || [];
+
+      // Determine action type and name
+      let actionType: "populate" | "mutate" | "reset" = "mutate";
+      let actionName = "mutate";
+      let actionId: string | undefined = undefined;
+      let targetFieldId: string | undefined = undefined;
+      let targetFieldName: string | undefined = undefined;
+
+      if (storeHandle === "populate-in" || storeHandle === "populate-in-left" || storeHandle === "populate-out") {
+        actionType = "populate";
+        actionName = "populate";
+      } else if (storeHandle === "reset-in" || storeHandle === "reset-in-left" || storeHandle === "reset-out") {
+        actionType = "reset";
+        actionName = "reset";
+      } else if (
+        storeHandle.startsWith("store-action-in-left-") ||
+        storeHandle.startsWith("store-action-in-") ||
+        storeHandle.startsWith("store-action-out-")
+      ) {
+        const idPart = storeHandle.replace(/^store-action-(in-left-|in-|out-)/, "");
+        const matchedAction = storeActions.find((a: any) => a.id === idPart);
+        if (matchedAction) {
+          actionId = matchedAction.id;
+          actionName = matchedAction.name;
+          actionType = (matchedAction.actionType as any) || "mutate";
+          targetFieldId = matchedAction.targetFieldId;
+          targetFieldName = matchedAction.targetFieldName;
+        }
+      } else if (storeHandle.startsWith("store-field-in-") || storeHandle.startsWith("store-field-out-")) {
+        const fId = storeHandle.replace(/^store-field-(in-|out-)/, "");
+        const matchedField = storeFields.find((f: any) => f.id === fId);
+        if (matchedField) {
+          targetFieldId = matchedField.id;
+          targetFieldName = matchedField.name;
+          actionName = `set${matchedField.name.charAt(0).toUpperCase()}${matchedField.name.slice(1)}`;
+          actionType = "mutate";
+        }
+      } else {
+        actionType = "mutate";
+        actionName = "mutate";
+      }
+
+      if (isActionHandle) {
+        const actionIdToBind = webHandle.replace(/^(events-|event-in-|pageload-in-|action-in-|sse-in-|websocket-in-|ws-in-|webrtc-in-)/, "");
+        const sections: any[] = webPageNode.data?.sections || [];
+        let updatedActionName = "";
+
+        const updatedSections = sections.map((sec) => ({
+          ...sec,
+          actions: (sec.actions || []).map((act: any) => {
+            if (act.id === actionIdToBind) {
+              updatedActionName = act.name || "Action";
+              return {
+                ...act,
+                storeActionBinding: {
+                  storeNodeId: storeNode.id,
+                  storeName,
+                  actionId,
+                  actionName,
+                  actionType,
+                  targetFieldId,
+                  targetFieldName,
+                  updateSource: "response",
+                },
+              };
+            }
+            return act;
+          }),
+        }));
+
+        get().updateNode(webPageNode.id, {
+          data: {
+            ...webPageNode.data,
+            sections: updatedSections,
+          },
+        });
+
+        // Normalize edge direction: always from StateStore (source) to WebPage action (target)
+        const targetAction = sections.flatMap((sec: any) => sec.actions || []).find((a: any) => a.id === actionIdToBind);
+        const isPageLoad = targetAction?.event === "pageLoad" || targetAction?.name === "pageLoad";
+        const normalizedTargetHandle = isPageLoad ? `pageload-in-${actionIdToBind}` : `event-in-${actionIdToBind}`;
+        const normalizedSourceHandle =
+          actionType === "populate"
+            ? "populate-out"
+            : actionType === "reset"
+            ? "reset-out"
+            : actionId
+            ? `store-action-out-${actionId}`
+            : "mutate-out";
+
+        const currentEdges = get().edges;
+        const updatedEdges = currentEdges.map((e) =>
+          e.id === newEdge.id
+            ? {
+                ...e,
+                source: storeNode.id,
+                target: webPageNode.id,
+                sourceHandle: normalizedSourceHandle,
+                targetHandle: normalizedTargetHandle,
+                data: {
+                  ...e.data,
+                  isStoreAction: true,
+                  isStoreActionBinding: true,
+                  storeName,
+                  actionName,
+                },
+              }
+            : e,
+        );
+        set({ edges: updatedEdges });
+
+        toast.success(`Action "${updatedActionName}" bound to update ${storeName}.${actionName}()`);
+        return true;
+      }
+
+      if (isRealtimeHandle) {
+        const connIdToBind = webHandle.replace(/^rtc-(out|in)-/, "");
+        const rtcList: any[] = webPageNode.data?.realtimeConnections || [];
+        let updatedConnName = "";
+
+        const updatedRtcList = rtcList.map((c: any) => {
+          if (c.id === connIdToBind) {
+            updatedConnName = c.eventName || c.description || "Realtime connection";
+            return {
+              ...c,
+              storeActionBinding: {
+                storeNodeId: storeNode.id,
+                storeName,
+                actionId,
+                actionName,
+                actionType,
+                targetFieldId,
+                targetFieldName,
+                updateSource: "full_message",
+              },
+            };
+          }
+          return c;
+        });
+
+        get().updateNode(webPageNode.id, {
+          data: {
+            ...webPageNode.data,
+            realtimeConnections: updatedRtcList,
+          },
+        });
+
+        const currentEdges = get().edges;
+        const updatedEdges = currentEdges.map((e) =>
+          e.id === newEdge.id
+            ? {
+                ...e,
+                data: {
+                  ...e.data,
+                  isStoreActionBinding: true,
+                  storeName,
+                  actionName,
+                },
+              }
+            : e,
+        );
+        set({ edges: updatedEdges });
+
+        toast.success(`Realtime listener "${updatedConnName}" bound to update ${storeName}.${actionName}()`);
+        return true;
       }
     }
   }

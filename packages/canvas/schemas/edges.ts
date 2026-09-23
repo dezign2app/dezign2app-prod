@@ -20,6 +20,10 @@ export const edgeDataSchema = z.object({
   fieldId: z.string().optional(),
   sectionId: z.string().optional(),
   stateObjectId: z.string().optional(),
+  // --- State Store Action / Realtime Binding Fields ---
+  isStoreActionBinding: z.boolean().optional(),
+  isStoreAction: z.boolean().optional(),
+  actionName: z.string().optional(),
   // --- Identity Connection Fields ---
   protocol: z.string().optional(),
   grantType: z.string().optional(),

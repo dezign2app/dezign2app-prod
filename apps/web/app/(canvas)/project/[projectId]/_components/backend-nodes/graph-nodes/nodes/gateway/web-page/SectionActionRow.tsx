@@ -254,10 +254,19 @@ export const SectionActionRow = ({
         </span>
         {action.storeActionBinding && (
           <span
-            className="text-[7px] font-mono px-0.5 rounded bg-indigo-500/15 text-indigo-500 border border-indigo-500/30 font-semibold"
-            title={`Bound to store: ${action.storeActionBinding.storeName || "Store"}.${action.storeActionBinding.actionName || action.storeActionBinding.actionType || "action"}()`}
+            className="text-[7px] font-mono px-1 py-0.2 rounded bg-indigo-500/15 text-indigo-500 hover:bg-indigo-500/25 border border-indigo-500/30 font-semibold cursor-pointer max-w-[120px] truncate transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveConfigItem({
+                type: "pageEvent",
+                id: action.id,
+                nodeId,
+                sectionId,
+              });
+            }}
+            title={`Bound to store: ${action.storeActionBinding.storeName || "Store"}.${action.storeActionBinding.actionName || action.storeActionBinding.actionType || "mutate"}()\nSource: ${action.storeActionBinding.updateSource || "response"}${action.storeActionBinding.valuePath ? ` (${action.storeActionBinding.valuePath})` : ""}`}
           >
-            ⚡store
+            ⚡{action.storeActionBinding.actionName || action.storeActionBinding.actionType || "store"}()
           </span>
         )}
       </div>

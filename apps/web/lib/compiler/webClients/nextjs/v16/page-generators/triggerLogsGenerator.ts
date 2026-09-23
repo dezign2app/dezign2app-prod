@@ -57,6 +57,7 @@ export function generateTriggerHandler(hasApiActions: boolean): string {
         },
         ...prev,
       ]);
+      return result;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Request failed";
       setTriggerLogs((prev) => [
@@ -72,6 +73,7 @@ export function generateTriggerHandler(hasApiActions: boolean): string {
         },
         ...prev,
       ]);
+      return { error: errorMessage, data: null };
     }
   };
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { BackendNode, BackendEdge } from "@/types/canvas";
+import { Endpoint } from "@workspace/canvas";
 import { compileNextjsV16WebClient } from "../webClients/nextjs/v16";
 
 describe("compileNextjsV16StateStoreNode", () => {
@@ -608,6 +609,187 @@ describe("compileNextjsV16StateStoreNode", () => {
     expect(buttonFile).toBeDefined();
     expect(buttonFile?.content).toContain('import { useCartStore } from "@/lib/stores";');
     expect(buttonFile?.content).toContain("useCartStore.getState().addItem();");
+  });
+
+  it("compiles response property mapping and field setter in action component when bound to state store", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-user",
+      type: "webApp",
+      fractionalIndex: "a0",
+      position: { x: 0, y: 0 },
+      data: { label: "User Portal", appSlug: "user-portal" },
+    };
+
+    const stateStoreNode: BackendNode = {
+      id: "node-store-user",
+      type: "state_store",
+      fractionalIndex: "a1",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "UserStore",
+        storeName: "UserStore",
+        scope: "global",
+        storage: "memory",
+        fields: [{ id: "f-user-id", name: "currentUserId", type: "string" }],
+        actions: [{ id: "a-set-user-id", name: "setCurrentUserId", actionType: "set", targetFieldId: "f-user-id" }],
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-login",
+      type: "webPage",
+      fractionalIndex: "a2",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Login",
+        path: "/login",
+        targetWebAppId: "node-webapp-user",
+        sections: [
+          {
+            id: "sec-auth",
+            name: "Auth Section",
+            renderMode: "client",
+            actions: [
+              {
+                id: "act-submit",
+                name: "SubmitLogin",
+                event: "click",
+                storeActionBinding: {
+                  storeNodeId: "node-store-user",
+                  storeName: "UserStore",
+                  actionName: "setCurrentUserId",
+                  targetFieldName: "currentUserId",
+                  updateSource: "response_property",
+                  valuePath: "data.user.id",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const endpointLink: Endpoint & { nodeId: string } = {
+      id: "ep-login",
+      nodeId: "node-svc",
+      name: "login",
+      type: "POST",
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-svc",
+      type: "service",
+      fractionalIndex: "a3",
+      position: { x: 0, y: 0 },
+      data: { label: "AuthService" },
+    };
+
+    const edgeToEndpoint: BackendEdge = {
+      id: "edge-ep",
+      type: "connection",
+      fractionalIndex: "a0",
+      source: "node-page-login",
+      sourceHandle: "events-act-submit",
+      target: "node-svc",
+      targetHandle: "endpoint-in-ep-login",
+    };
+
+    const allNodes = [webAppNode, stateStoreNode, webPageNode, serviceNode];
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      [endpointLink],
+      [],
+      allNodes,
+      [edgeToEndpoint],
+      "UserApp",
+      [],
+      "user-app",
+      webAppNode,
+    );
+
+    const actionFile = result.files.find((f) => f.filename.toLowerCase().includes("submitlogin"));
+    expect(actionFile).toBeDefined();
+    expect(actionFile?.content).toContain('import { useUserStore } from "@/lib/stores";');
+    expect(actionFile?.content).toContain('resData?.["data"]?.["user"]?.["id"]');
+    expect(actionFile?.content).toContain("useUserStore.getState().setCurrentUserId(extracted);");
+  });
+
+  it("compiles realtime connection storeActionBinding to update store on incoming message", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-dash",
+      type: "webApp",
+      fractionalIndex: "a0",
+      position: { x: 0, y: 0 },
+      data: { label: "Dashboard", appSlug: "dash" },
+    };
+
+    const stateStoreNode: BackendNode = {
+      id: "node-store-metrics",
+      type: "state_store",
+      fractionalIndex: "a1",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "MetricsStore",
+        storeName: "MetricsStore",
+        scope: "global",
+        storage: "memory",
+        fields: [{ id: "f-speed", name: "currentSpeed", type: "number" }],
+        actions: [{ id: "a-rec", name: "recordMetric", actionType: "custom" }],
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-monitor",
+      type: "webPage",
+      fractionalIndex: "a2",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Monitor",
+        path: "/monitor",
+        targetWebAppId: "node-webapp-dash",
+        realtimeConnections: [
+          {
+            id: "rtc-sse-speed",
+            protocol: "SSE",
+            eventName: "speed.update",
+            streamUrl: "/api/stream/speed",
+            storeActionBinding: {
+              storeNodeId: "node-store-metrics",
+              storeName: "MetricsStore",
+              actionName: "recordMetric",
+              updateSource: "full_message",
+            },
+          },
+        ],
+        sections: [
+          {
+            id: "sec-mon",
+            name: "Monitor View",
+            renderMode: "client",
+            actions: [],
+          },
+        ],
+      },
+    };
+
+    const allNodes = [webAppNode, stateStoreNode, webPageNode];
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      [],
+      [],
+      allNodes,
+      [],
+      "DashApp",
+      [],
+      "dash-app",
+      webAppNode,
+    );
+
+    const pageFile = result.files.find((f) => f.filename === "app/(public)/monitor/page.tsx");
+    expect(pageFile).toBeDefined();
+    expect(pageFile?.content).toContain('import { useMetricsStore } from "@/lib/stores";');
+    expect(pageFile?.content).toContain('es.addEventListener("speed.update"');
+    expect(pageFile?.content).toContain("useMetricsStore.getState().recordMetric(parsed);");
   });
 });
 

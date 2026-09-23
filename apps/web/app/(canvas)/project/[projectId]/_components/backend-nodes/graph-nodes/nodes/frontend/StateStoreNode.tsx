@@ -548,6 +548,15 @@ export const StateStoreNode = ({
                   isLastItem("populate") && "rounded-b-[10px]",
                 )}
               >
+                {/* Left-side inbound target handle for direct wiring from WebPage actions */}
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id="populate-in-left"
+                  className="w-2.5 h-2.5 !bg-emerald-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -left-1.5 z-10"
+                  style={{ top: "50%" }}
+                  title={`${populateOverride?.name || "populate"}: Wire from WebPage action or realtime connection`}
+                />
                 <div className="flex items-center gap-1.5 truncate max-w-[170px]">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                   <span className="font-semibold text-foreground/90 truncate">
@@ -557,23 +566,17 @@ export const StateStoreNode = ({
                     {populateOverride ? "(custom)" : "(default)"}
                   </span>
                 </div>
-                {/* Inbound target handle */}
-                <Handle
-                  type="target"
-                  position={Position.Right}
-                  id="populate-in"
-                  className="w-2.5 h-2.5 !bg-emerald-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10"
-                  style={{ top: "50%" }}
-                  title={`${populateOverride?.name || "populate"}: Wire to/from pageLoad or API response action`}
-                />
-                {/* Outbound source handle */}
+                {/* Outbound source handle for wiring to WebPage actions */}
                 <Handle
                   type="source"
                   position={Position.Right}
                   id="populate-out"
-                  className="w-2.5 h-2.5 !bg-emerald-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10 opacity-0 hover:opacity-100"
+                  className={cn(
+                    "w-2.5 h-2.5 !bg-emerald-500 border-2 border-background cursor-pointer hover:scale-125 transition-all -right-1.5 z-10",
+                    edges.some((e) => (e.source === id && (e.sourceHandle === "populate-out" || e.sourceHandle === "populate-in")) || (e.target === id && (e.targetHandle === "populate-in" || e.targetHandle === "populate-in-left"))) && "ring-2 ring-emerald-500/50 scale-110",
+                  )}
                   style={{ top: "50%" }}
-                  title={`${populateOverride?.name || "populate"}: Wire to/from pageLoad or API response action`}
+                  title={`${populateOverride?.name || "populate"}: Drag to WebPage action (e.g. pageLoad)`}
                 />
               </div>
             )}
@@ -587,28 +590,31 @@ export const StateStoreNode = ({
                   isLastItem("mutate") && "rounded-b-[10px]",
                 )}
               >
+                {/* Left-side inbound target handle for direct wiring from WebPage actions */}
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id="mutate-in-left"
+                  className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -left-1.5 z-10"
+                  style={{ top: "50%" }}
+                  title="mutate: Wire from WebPage action or realtime connection"
+                />
                 <div className="flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
                   <span className="font-semibold text-foreground/90">mutate</span>
                   <span className="text-[8px] text-muted-foreground/60">(actions)</span>
                 </div>
-                {/* Inbound target handle */}
-                <Handle
-                  type="target"
-                  position={Position.Right}
-                  id="mutate-in"
-                  className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10"
-                  style={{ top: "50%" }}
-                  title="mutate: Wire to/from button or user interaction action"
-                />
-                {/* Outbound source handle */}
+                {/* Outbound source handle for wiring to WebPage actions */}
                 <Handle
                   type="source"
                   position={Position.Right}
                   id="mutate-out"
-                  className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10 opacity-0 hover:opacity-100"
+                  className={cn(
+                    "w-2.5 h-2.5 !bg-indigo-500 border-2 border-background cursor-pointer hover:scale-125 transition-all -right-1.5 z-10",
+                    edges.some((e) => (e.source === id && (e.sourceHandle === "mutate-out" || e.sourceHandle === "mutate-in")) || (e.target === id && (e.targetHandle === "mutate-in" || e.targetHandle === "mutate-in-left"))) && "ring-2 ring-indigo-500/50 scale-110",
+                  )}
                   style={{ top: "50%" }}
-                  title="mutate: Wire to/from button or user interaction action"
+                  title="mutate: Drag to WebPage action to update state on trigger"
                 />
               </div>
             )}
@@ -622,6 +628,15 @@ export const StateStoreNode = ({
                   isLastItem("reset") && "rounded-b-[10px]",
                 )}
               >
+                {/* Left-side inbound target handle for direct wiring from WebPage actions */}
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id="reset-in-left"
+                  className="w-2.5 h-2.5 !bg-rose-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -left-1.5 z-10"
+                  style={{ top: "50%" }}
+                  title={`${resetOverride?.name || "reset"}: Wire from WebPage action or realtime connection`}
+                />
                 <div className="flex items-center gap-1.5 truncate max-w-[170px]">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
                   <span className="font-semibold text-foreground/90 truncate">
@@ -631,23 +646,17 @@ export const StateStoreNode = ({
                     {resetOverride ? "(custom)" : "(unmount)"}
                   </span>
                 </div>
-                {/* Inbound target handle */}
-                <Handle
-                  type="target"
-                  position={Position.Right}
-                  id="reset-in"
-                  className="w-2.5 h-2.5 !bg-rose-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10"
-                  style={{ top: "50%" }}
-                  title={`${resetOverride?.name || "reset"}: Wire to/from unmount or reset event`}
-                />
-                {/* Outbound source handle */}
+                {/* Outbound source handle for wiring to WebPage actions */}
                 <Handle
                   type="source"
                   position={Position.Right}
                   id="reset-out"
-                  className="w-2.5 h-2.5 !bg-rose-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -right-1.5 z-10 opacity-0 hover:opacity-100"
+                  className={cn(
+                    "w-2.5 h-2.5 !bg-rose-500 border-2 border-background cursor-pointer hover:scale-125 transition-all -right-1.5 z-10",
+                    edges.some((e) => (e.source === id && (e.sourceHandle === "reset-out" || e.sourceHandle === "reset-in")) || (e.target === id && (e.targetHandle === "reset-in" || e.targetHandle === "reset-in-left"))) && "ring-2 ring-rose-500/50 scale-110",
+                  )}
                   style={{ top: "50%" }}
-                  title={`${resetOverride?.name || "reset"}: Wire to/from unmount or reset event`}
+                  title={`${resetOverride?.name || "reset"}: Drag to WebPage action to reset state`}
                 />
               </div>
             )}
@@ -666,6 +675,15 @@ export const StateStoreNode = ({
                         isLast && "rounded-b-[10px]",
                       )}
                     >
+                      {/* Left-side inbound target handle */}
+                      <Handle
+                        type="target"
+                        position={Position.Left}
+                        id={`store-action-in-left-${act.id}`}
+                        className="w-2 h-2 !bg-indigo-400 border border-background cursor-pointer hover:scale-125 transition-transform -left-1 z-10"
+                        style={{ top: "50%" }}
+                        title={`${act.name}: Wire from WebPage action or realtime connection`}
+                      />
                       <div className="flex items-center gap-1 truncate max-w-[170px]">
                         <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
                         <span className="font-medium text-foreground truncate">{act.name}</span>
@@ -674,20 +692,15 @@ export const StateStoreNode = ({
                         </span>
                       </div>
                       <Handle
-                        type="target"
-                        position={Position.Right}
-                        id={`store-action-in-${act.id}`}
-                        className="w-2 h-2 !bg-indigo-400 border border-background cursor-pointer hover:scale-125 transition-transform -right-1 z-10"
-                        style={{ top: "50%" }}
-                        title={`${act.name}: Wire to/from page action`}
-                      />
-                      <Handle
                         type="source"
                         position={Position.Right}
                         id={`store-action-out-${act.id}`}
-                        className="w-2 h-2 !bg-indigo-400 border border-background cursor-pointer hover:scale-125 transition-transform -right-1 z-10 opacity-0 hover:opacity-100"
+                        className={cn(
+                          "w-2 h-2 !bg-indigo-400 border border-background cursor-pointer hover:scale-125 transition-all -right-1 z-10",
+                          edges.some((e) => (e.source === id && (e.sourceHandle === `store-action-out-${act.id}` || e.sourceHandle === `store-action-in-${act.id}`)) || (e.target === id && (e.targetHandle === `store-action-in-${act.id}` || e.targetHandle === `store-action-in-left-${act.id}`))) && "ring-2 ring-indigo-400/50 scale-110",
+                        )}
                         style={{ top: "50%" }}
-                        title={`${act.name}: Wire to/from page action`}
+                        title={`${act.name}: Drag to WebPage action`}
                       />
                     </div>
                   );

@@ -35,6 +35,12 @@ export function generateSimpleButtonEventTemplate({
     actionId?: string;
     actionName?: string;
     actionType?: string;
+    targetFieldId?: string;
+    targetFieldName?: string;
+    updateSource?: "response" | "response_property" | "payload" | "static" | "direct";
+    valuePath?: string;
+    customValue?: string;
+    parameterMappings?: Record<string, string>;
   };
 }): string {
   const libImports = resolveActionLibImports(libraries);
@@ -44,12 +50,66 @@ export function generateSimpleButtonEventTemplate({
     : "";
   const storeActionName =
     storeActionBinding?.actionName ||
-    (storeActionBinding?.actionType === "reset"
+    (storeActionBinding?.targetFieldName
+      ? `set${storeActionBinding.targetFieldName.charAt(0).toUpperCase() + storeActionBinding.targetFieldName.slice(1)}`
+      : storeActionBinding?.actionType === "reset"
       ? "reset"
       : storeActionBinding?.actionType === "populate"
       ? "populate"
       : "set");
   const storeImport = storeHookName ? `import { ${storeHookName} } from "@/lib/stores";\n` : "";
+
+  // Helper to emit input mapping for store call
+  const generateStoreUpdate = () => {
+    if (!storeHookName) return { preTrigger: "", postTrigger: "" };
+    const hasApiUrl = Boolean(url && url.trim() && url !== "#");
+    const src = !hasApiUrl ? "direct" : (storeActionBinding?.updateSource || "response");
+    const vPath = storeActionBinding?.valuePath?.trim();
+    const cVal = storeActionBinding?.customValue?.trim();
+
+    if (src === "static") {
+      let parsed = "undefined";
+      if (cVal) {
+        try {
+          JSON.parse(cVal);
+          parsed = cVal;
+        } catch {
+          parsed = JSON.stringify(cVal);
+        }
+      }
+      return {
+        preTrigger: `      ${storeHookName}.getState().${storeActionName}(${parsed});\n`,
+        postTrigger: "",
+      };
+    }
+    if (src === "direct") {
+      return {
+        preTrigger: `      ${storeHookName}.getState().${storeActionName}();\n`,
+        postTrigger: "",
+      };
+    }
+    if (src === "response_property" && vPath) {
+      const chain = vPath.split(".").filter(Boolean).map((k) => `?.[${JSON.stringify(k)}]`).join("");
+      return {
+        preTrigger: "",
+        postTrigger: `      if (triggerResult) {
+        const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
+        const extracted = resData${chain};
+        ${storeHookName}.getState().${storeActionName}(extracted);
+      }\n`,
+      };
+    }
+    // Default response:
+    return {
+      preTrigger: "",
+      postTrigger: `      if (triggerResult) {
+        const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
+        ${storeHookName}.getState().${storeActionName}(resData);
+      }\n`,
+    };
+  };
+
+  const storeSnippet = generateStoreUpdate();
 
   return `"use client";
 
@@ -65,14 +125,14 @@ export function ${componentName}({ onTrigger }: ${componentName}Props) {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-${storeHookName ? `      ${storeHookName}.getState().${storeActionName}();\n` : ""}      await onTrigger?.(
+${storeSnippet.preTrigger}      const triggerResult = await onTrigger?.(
         "${eventName}",
         "${eventType}",
         "${url}",
         "${upperMethod}",
         ${Boolean(requireAuth)},
       );
-    } finally {
+${storeSnippet.postTrigger}    } finally {
       setIsSubmitting(false);
     }
   };

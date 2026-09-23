@@ -350,5 +350,199 @@ describe("StateStore <-> WebPage & TypesNode Connection and Cleanup", () => {
       expect(remainingStates).toHaveLength(1);
       expect(remainingStates?.[0]?.id).toBe("st-local");
     });
+
+    it("wires WebPage action to StateStore left handle and auto-syncs storeActionBinding", () => {
+      const store = useBackendCanvasStore.getState();
+
+      const storeNode: BackendNode = {
+        id: "store-cart",
+        type: "state_store",
+        position: { x: 400, y: 0 },
+        data: {
+          label: "CartStore",
+          fields: [{ id: "f-items", name: "items", type: "string[]" }],
+          actions: [{ id: "act-add", name: "addItem", actionType: "append", targetFieldId: "f-items" }],
+        },
+        fractionalIndex: "a1",
+      };
+
+      const pageNode: BackendNode = {
+        id: "page-shop",
+        type: "webPage",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "Shop Page",
+          sections: [
+            {
+              id: "sec-products",
+              name: "Products",
+              renderMode: "client",
+              actions: [
+                {
+                  id: "act-buy",
+                  name: "BuyNow",
+                  event: "click",
+                },
+              ],
+            },
+          ],
+        },
+        fractionalIndex: "a0",
+      };
+
+      store.setNodesAndEdges([pageNode, storeNode], [], [], [], [], "proj-state-test");
+
+      // Connect events-act-buy to store-action-in-left-act-add
+      useBackendCanvasStore.getState().onConnect({
+        source: "page-shop",
+        target: "store-cart",
+        sourceHandle: "events-act-buy",
+        targetHandle: "store-action-in-left-act-add",
+      });
+
+      const updatedPage = useBackendCanvasStore.getState().nodes.find((n) => n.id === "page-shop");
+      const action = updatedPage?.data?.sections?.[0]?.actions?.[0];
+
+      expect(action?.storeActionBinding).toBeDefined();
+      expect(action?.storeActionBinding?.storeNodeId).toBe("store-cart");
+      expect(action?.storeActionBinding?.actionId).toBe("act-add");
+      expect(action?.storeActionBinding?.actionName).toBe("addItem");
+      expect(action?.storeActionBinding?.actionType).toBe("append");
+
+      const edge = useBackendCanvasStore.getState().edges.find(
+        (e) => (e.source === "store-cart" && e.target === "page-shop") || (e.source === "page-shop" && e.target === "store-cart"),
+      );
+      expect(edge).toBeDefined();
+      expect(edge?.source).toBe("store-cart");
+      expect(edge?.target).toBe("page-shop");
+      expect(edge?.data?.isStoreActionBinding).toBe(true);
+    });
+
+    it("wires StateStore manipulator (mutate-out) to WebPage action (event-in) directly", () => {
+      const store = useBackendCanvasStore.getState();
+
+      const storeNode: BackendNode = {
+        id: "store-conv",
+        type: "state_store",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "conversationStore",
+          fields: [{ id: "f-msg", name: "messages", type: "Message[]" }],
+        },
+        fractionalIndex: "a0",
+      };
+
+      const pageNode: BackendNode = {
+        id: "page-conv",
+        type: "webPage",
+        position: { x: 400, y: 0 },
+        data: {
+          label: "Conversations",
+          sections: [
+            {
+              id: "sec-main",
+              name: "Main",
+              renderMode: "client",
+              actions: [
+                {
+                  id: "act-load",
+                  name: "pageLoad",
+                  event: "pageLoad",
+                },
+              ],
+            },
+          ],
+        },
+        fractionalIndex: "a1",
+      };
+
+      store.setNodesAndEdges([storeNode, pageNode], [], [], [], [], "proj-state-test");
+
+      useBackendCanvasStore.getState().onConnect({
+        source: "store-conv",
+        target: "page-conv",
+        sourceHandle: "mutate-out",
+        targetHandle: "pageload-in-act-load",
+      });
+
+      const updatedPage = useBackendCanvasStore.getState().nodes.find((n) => n.id === "page-conv");
+      const action = updatedPage?.data?.sections?.[0]?.actions?.[0];
+
+      expect(action?.storeActionBinding).toBeDefined();
+      expect(action?.storeActionBinding?.storeNodeId).toBe("store-conv");
+      expect(action?.storeActionBinding?.actionName).toBe("mutate");
+
+      const edge = useBackendCanvasStore.getState().edges.find(
+        (e) => e.source === "store-conv" && e.target === "page-conv",
+      );
+      expect(edge).toBeDefined();
+      expect(edge?.sourceHandle).toBe("mutate-out");
+      expect(edge?.targetHandle).toBe("pageload-in-act-load");
+    });
+
+    it("cleans up storeActionBinding when action edge to state_store is removed", () => {
+      const mockState: BackendCanvasState = {
+        nodes: [
+          {
+            id: "store-cart",
+            type: "state_store",
+            position: { x: 0, y: 0 },
+            data: { label: "CartStore" },
+            fractionalIndex: "a0",
+          },
+          {
+            id: "page-shop",
+            type: "webPage",
+            position: { x: 400, y: 0 },
+            data: {
+              sections: [
+                {
+                  id: "sec-1",
+                  actions: [
+                    {
+                      id: "act-buy",
+                      name: "BuyNow",
+                      storeActionBinding: {
+                        storeNodeId: "store-cart",
+                        storeName: "CartStore",
+                        actionName: "addItem",
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+            fractionalIndex: "a1",
+          },
+        ],
+        edges: [
+          {
+            id: "edge-act-store",
+            source: "store-cart",
+            target: "page-shop",
+            sourceHandle: "mutate-out",
+            targetHandle: "event-in-act-buy",
+            type: "connection",
+          },
+        ],
+        endpoints: [],
+        events: [],
+        pendingNodeUpserts: [],
+        pendingNodeRemovals: [],
+        pendingEdgeUpserts: [],
+        pendingEdgeRemovals: [],
+        pendingEndpointUpserts: [],
+        pendingEndpointRemovals: [],
+        pendingEventUpserts: [],
+        pendingEventRemovals: [],
+      } as unknown as BackendCanvasState;
+
+      const result = cleanupDeletedEdgesState(mockState, ["edge-act-store"]);
+
+      expect(result.edges).toHaveLength(0);
+      const updatedPage = result.nodes?.find((n) => n.id === "page-shop");
+      const action = updatedPage?.data?.sections?.[0]?.actions?.[0];
+      expect(action?.storeActionBinding).toBeUndefined();
+    });
   });
 });

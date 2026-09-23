@@ -418,8 +418,8 @@ export function resolvePagesInfo(
           : "SSE";
 
       const port = serviceNode ? getServicePort(serviceNode) : undefined;
-      let streamUrl: string | undefined = undefined;
-      if (port) {
+      let streamUrl: string | undefined = (conn as any).streamUrl;
+      if (port && !streamUrl) {
         if (protocol === "WEBSOCKET" || protocol === "WEBRTC") {
           streamUrl = `ws://localhost:${port}/ws`;
         } else {
@@ -474,6 +474,7 @@ export function resolvePagesInfo(
         : undefined;
 
       return {
+        id: conn.id,
         connectionId: conn.id,
         protocol,
         eventName: conn.eventName,
@@ -493,6 +494,7 @@ export function resolvePagesInfo(
         description: conn.description,
         sourceServicePort: port,
         streamUrl,
+        storeActionBinding: conn.storeActionBinding,
       };
     });
 

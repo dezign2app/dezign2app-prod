@@ -332,6 +332,11 @@ export function generatePageAndComponentFiles({
         pageStoreNames.add(evt.storeActionBinding.storeName);
       }
     });
+    (pageMeta.realtimeConnections || []).forEach((c) => {
+      if (c.storeActionBinding?.storeName) {
+        pageStoreNames.add(c.storeActionBinding.storeName);
+      }
+    });
 
     const pageStoreImports = Array.from(pageStoreNames)
       .map((sName) => {
