@@ -448,6 +448,67 @@ export const TargetStateStoreSection: React.FC<TargetStateStoreSectionProps> = (
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
+                  {/* Target Store Field Selector */}
+                  {fields.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs font-medium flex items-center justify-between">
+                        <span>Target Store Field / Property</span>
+                        {storeBinding.targetFieldName && (
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            state.{storeBinding.targetFieldName}
+                          </span>
+                        )}
+                      </Label>
+                      <Select
+                        value={storeBinding.targetFieldName || (storeBinding.actionType === "populate" ? "auto" : fields[0]?.name || "auto")}
+                        onValueChange={(val) => {
+                          if (val === "auto") {
+                            onUpdateStoreBinding({
+                              ...storeBinding,
+                              targetFieldId: undefined,
+                              targetFieldName: undefined,
+                            });
+                          } else {
+                            const matched = fields.find((f: any) => f.name === val || f.id === val);
+                            onUpdateStoreBinding({
+                              ...storeBinding,
+                              targetFieldId: matched?.id,
+                              targetFieldName: matched?.name || val,
+                            });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="h-8 text-xs bg-background font-mono">
+                          <SelectValue placeholder="Auto-detect / Bulk Hydrate" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto" className="text-xs">
+                            <span className="font-semibold text-muted-foreground font-sans">
+                              {storeBinding.actionType === "populate"
+                                ? "Auto-Detect / Bulk Hydrate All Matching Fields"
+                                : "Default Field"}
+                            </span>
+                          </SelectItem>
+                          {fields.map((f: any) => (
+                            <SelectItem key={f.id} value={f.name} className="text-xs font-mono">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-foreground">{f.name}</span>
+                                <Badge variant="outline" className="text-[9px] py-0 px-1 font-mono">
+                                  {f.type}
+                                </Badge>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <span className="text-[10px] text-muted-foreground">
+                        {storeBinding.targetFieldName
+                          ? `The response value will be mapped directly to state.${storeBinding.targetFieldName}.`
+                          : "Auto-maps matching fields or automatically unwraps collection responses (e.g. { data: [...] })."}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Value Source Selector */}
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs font-medium">Input Value Source</Label>
@@ -487,17 +548,44 @@ export const TargetStateStoreSection: React.FC<TargetStateStoreSectionProps> = (
                   </div>
 
                   {/* Nested Property Path Input */}
-                  {storeBinding.updateSource === "response_property" && (
+                  {(storeBinding.updateSource === "response_property" || (isEndpointConnected && storeBinding.valuePath)) && (
                     <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs font-medium">Response Property Path</Label>
+                      <Label className="text-xs font-medium flex items-center justify-between">
+                        <span>Response Property Path</span>
+                        <div className="flex items-center gap-1">
+                          {["data", "items", "results"].map((p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => {
+                                onUpdateStoreBinding({
+                                  ...storeBinding,
+                                  updateSource: "response_property",
+                                  valuePath: p,
+                                });
+                              }}
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-muted hover:bg-muted-foreground/20 font-mono text-muted-foreground"
+                            >
+                              +{p}
+                            </button>
+                          ))}
+                        </div>
+                      </Label>
                       <Input
                         className="h-8 text-xs bg-background font-mono"
-                        placeholder="e.g. items, user.id, data.count"
+                        placeholder="e.g. data, items, user.id, data.conversations"
                         value={storeBinding.valuePath || ""}
-                        onChange={(e) => handleValuePathChange(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          onUpdateStoreBinding({
+                            ...storeBinding,
+                            updateSource: val ? "response_property" : storeBinding.updateSource,
+                            valuePath: val,
+                          });
+                        }}
                       />
                       <span className="text-[10px] text-muted-foreground">
-                        Extracts the specified key from the API response object to pass into <code className="font-mono">{storeBinding.actionName}()</code>.
+                        Extracts <code className="font-mono">{storeBinding.valuePath ? `response.${storeBinding.valuePath}` : "res"}</code> from the API response to pass into <code className="font-mono">{storeBinding.actionName}()</code>.
                       </span>
                     </div>
                   )}

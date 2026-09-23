@@ -252,8 +252,7 @@ export function generateResponseInterface(
       if (
         bindings.length === 1 &&
         firstBinding &&
-        (firstBinding.argName === "data" ||
-          firstBinding.argName === "_spread" ||
+        (firstBinding.argName === "_spread" ||
           !firstBinding.argName)
       ) {
         if (

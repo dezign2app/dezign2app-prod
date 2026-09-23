@@ -22,8 +22,7 @@ export function renderResponseStep(
   if (
     inputBindings.length === 1 &&
     firstBinding &&
-    (firstBinding.argName === "data" ||
-      firstBinding.argName === "_spread" ||
+    (firstBinding.argName === "_spread" ||
       !firstBinding.argName)
   ) {
     const expr = resolveBinding(firstBinding, ctx);

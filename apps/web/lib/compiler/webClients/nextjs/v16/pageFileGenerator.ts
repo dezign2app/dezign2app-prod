@@ -271,11 +271,12 @@ export function generatePageAndComponentFiles({
           headers: headers${suffix},
           ${link.method === "POST" || link.method === "PUT" || link.method === "PATCH" ? `body: JSON.stringify(${nodeRequestBody !== undefined ? JSON.stringify(nodeRequestBody) : `{ eventName: "${evt.name || "pageLoad"}", eventType: "pageLoad" }`}),` : ""}
         });
-        if (res${suffix}.ok) {
-          results["${evtKey}"] = await res${suffix}.json();
-        } else {
-          results["${evtKey}"] = { error: "HTTP " + res${suffix}.status };
-        }`);
+        if (!res${suffix}.ok) {
+          throw new Error("HTTP " + res${suffix}.status + ": " + (res${suffix}.statusText || "Failed to load page data"));
+        }
+        ${firstPageLoadLink?.endpoint && effectiveServiceName && pageLoadEvents.length === 1
+          ? `const data: ${pageLoadDataType.replace(/\s*\|\s*null$/, "")} = await res${suffix}.json();`
+          : `results["${evtKey}"] = await res${suffix}.json();`}`);
         } else {
           statements.push(`results["${evtKey}"] = {
           message: "pageLoad event triggered on mount (no target endpoint connected in canvas)",
@@ -283,30 +284,62 @@ export function generatePageAndComponentFiles({
         }
       });
 
+      const isSingleLoadWithEndpoint = Boolean(firstPageLoadLink?.endpoint && effectiveServiceName && pageLoadEvents.length === 1);
+
       const storePopulationLines = pageLoadEvents
         .filter((e) => e.storeActionBinding?.storeName)
         .map((e) => {
-          const clean = e.storeActionBinding!.storeName!.replace(/Store$/i, "");
+          const binding = e.storeActionBinding!;
+          const clean = binding.storeName!.replace(/Store$/i, "");
           const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
-          const actionMethod = e.storeActionBinding?.actionName || "populate";
+          const actionMethod = binding.actionName || "populate";
           const resKey = e.name || "pageLoad";
-          return `${hookName}.getState().${actionMethod}(results["${resKey}"]);`;
-        })
-        .join("\n        ");
 
-      pageLoadFetchStatements = `setPageLoadLoading(true);
-      setPageLoadError(null);
-      try {
-        const results: Record<string, JSONValue> = {};
-        ${statements.join("\n")}
-        setPageLoadData((${pageLoadEvents.length === 1} ? results["${pageLoadEvents[0]?.name || "pageLoad"}"] : results) as unknown as ${pageLoadDataType});
-        ${storePopulationLines ? `${storePopulationLines}` : ""}
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to load page data";
-        setPageLoadError(message);
-      } finally {
-        setPageLoadLoading(false);
-      }`;
+          let dispatchArg = isSingleLoadWithEndpoint ? "data" : `results["${resKey}"]`;
+          if (binding.updateSource === "static" && binding.customValue) {
+            dispatchArg = binding.customValue;
+          } else if (binding.valuePath && binding.valuePath.trim()) {
+            const accessor = binding.valuePath.trim()
+              .split(".")
+              .map((p, i) => (i === 0 ? p : `?.${p}`))
+              .join("");
+            dispatchArg = isSingleLoadWithEndpoint ? `data?.${accessor}` : `(results["${resKey}"] as any)?.${accessor}`;
+          }
+
+          if (actionMethod === "populate" && binding.targetFieldName) {
+            const fieldVal = (!binding.valuePath && (binding.updateSource === "response" || !binding.updateSource))
+              ? `("data" in (${dispatchArg} || {}) ? (${dispatchArg} as any).data : ${dispatchArg})`
+              : dispatchArg;
+            return `${hookName}.getState().populate({ ${binding.targetFieldName}: ${fieldVal} } as any);`;
+          }
+
+          if (actionMethod.startsWith("set") && binding.targetFieldName && !binding.valuePath && (binding.updateSource === "response" || !binding.updateSource)) {
+            const fieldVal = `("data" in (${dispatchArg} || {}) ? (${dispatchArg} as any).data : ${dispatchArg})`;
+            return `${hookName}.getState().${actionMethod}(${fieldVal});`;
+          }
+
+          return `${hookName}.getState().${actionMethod}(${dispatchArg});`;
+        })
+        .join("\n          ");
+
+      const pageLoadDataExpr = pageLoadEvents.length === 1
+        ? `results["${pageLoadEvents[0]?.name || "pageLoad"}"]`
+        : `results`;
+
+      if (isSingleLoadWithEndpoint) {
+        pageLoadFetchStatements = `${statements.join("\n        ")}
+        if (isMounted) {
+          setPageLoadData(data);
+          ${storePopulationLines ? `${storePopulationLines}` : ""}
+        }`;
+      } else {
+        pageLoadFetchStatements = `const results: Record<string, JSONValue> = {};
+        ${statements.join("\n        ")}
+        if (isMounted) {
+          setPageLoadData(${pageLoadDataExpr} as unknown as ${pageLoadDataType});
+          ${storePopulationLines ? `${storePopulationLines}` : ""}
+        }`;
+      }
     }
 
     const unmountActions = allActions.filter((a) => a.event === "unmount");

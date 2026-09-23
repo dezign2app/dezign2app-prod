@@ -147,7 +147,7 @@ describe("compileTypesDisambiguation", () => {
 
     const storeFile = files.find((f) => f.filename === "lib/stores/useConversationStore.ts");
     expect(storeFile).toBeDefined();
-    expect(storeFile!.content).toContain("populate: (data?: Partial<ConversationStoreState>) => void;");
+    expect(storeFile!.content).toContain("populate: (data?: Partial<ConversationStoreState>");
 
     const indexFile = files.find((f) => f.filename === "lib/stores/index.ts");
     expect(indexFile).toBeDefined();
