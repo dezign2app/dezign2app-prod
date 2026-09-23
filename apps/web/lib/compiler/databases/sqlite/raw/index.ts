@@ -32,12 +32,21 @@ type SqliteColumn = {
   isNotNull?: boolean;
 };
 
-function getColumns(tableNode: BackendNode): SqliteColumn[] {
-  const cols = tableNode.data?.columns;
+function getColumns(tableNode: BackendNode, allNodes: BackendNode[] = []): SqliteColumn[] {
+  let targetNode = tableNode;
+  if (tableNode.type === "db_ref" && tableNode.data?.tableRef) {
+    const master = allNodes.find((n) => n.id === tableNode.data.tableRef);
+    if (master) targetNode = master;
+  }
+  const cols = targetNode.data?.columns || targetNode.data?.fields;
   if (cols && Array.isArray(cols) && cols.length > 0) {
     return cols.map((c) => ({
       ...c,
-      isPrimaryKey: c.isPrimaryKey || c.isPrimary || c.primaryKey,
+      isPrimaryKey: Boolean(
+        ("isPrimaryKey" in c && c.isPrimaryKey) ||
+        ("isPrimary" in c && c.isPrimary) ||
+        ("primaryKey" in c && c.primaryKey),
+      ),
       name: toSqlIdentifier(c.name || "col", "col"),
     }));
   }
@@ -62,12 +71,18 @@ function generateTableHelpers(
   typeExports: string[];
   valueExports: string[];
 } {
-  const tableName = toTableName(tableNode.data.label || "table");
+  const rawLabel =
+    (tableNode.type === "db_ref" && tableNode.data?.tableRef
+      ? allNodes.find((n) => n.id === tableNode.data.tableRef)?.data?.label
+      : undefined) ||
+    tableNode.data?.label ||
+    "table";
+  const tableName = toTableName(rawLabel);
   const varName = toVarName(tableName);
   const Pascal = toPascal(tableName);
   const pascalSingular = toSingular(Pascal);
   const pascalPlural = toPlural(Pascal);
-  const cols = getColumns(tableNode);
+  const cols = getColumns(tableNode, allNodes);
   const pkCol: SqliteColumn =
     cols.find((c) => c.isPrimaryKey) ||
     cols[0] || {

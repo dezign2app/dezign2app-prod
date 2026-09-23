@@ -2,6 +2,7 @@ import type { ReusableFunction, BackendNode } from "./nodes";
 import type { BackendEdge } from "./edges";
 import type { Endpoint } from "../schemas";
 import type { RealtimeProtocol } from "./realtime";
+import type { StoreActionType } from "./web-app";
 
 export interface ServiceInfo {
   id: string;
@@ -174,7 +175,7 @@ export interface LinkedRealtimeConnectionInfo {
     storeName?: string;
     actionId?: string;
     actionName?: string;
-    actionType?: "set" | "append" | "remove" | "toggle" | "increment" | "reset" | "populate" | "custom";
+    actionType?: StoreActionType;
     targetFieldId?: string;
     targetFieldName?: string;
     updateSource?: "full_message" | "nested_property" | "static";

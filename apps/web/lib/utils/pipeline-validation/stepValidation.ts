@@ -191,11 +191,15 @@ function isDbOperationStepUnconfigured(
   const tableId = step.tableNodeId || step.databaseId;
   if (!tableId) return true;
 
-  const tableNode = allNodes.find(
+  let tableNode = allNodes.find(
     (n) =>
       (n.type === "entity" || n.type === "db_ref") &&
       (n.id === tableId || n.data?.tableRef === tableId),
   );
+  if (tableNode?.type === "db_ref" && tableNode.data?.tableRef) {
+    const master = allNodes.find((n) => n.id === tableNode!.data!.tableRef);
+    if (master) tableNode = master;
+  }
 
   const columns: EntityColumn[] = tableNode?.data?.columns || [];
   const pkCol = columns.find((c) => c.isPrimaryKey) || columns[0];

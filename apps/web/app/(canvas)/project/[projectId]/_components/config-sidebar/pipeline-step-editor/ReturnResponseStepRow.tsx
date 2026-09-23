@@ -3,7 +3,6 @@
 import React, { useState, useMemo, useRef, useCallback } from "react";
 import { Endpoint, BackendNode } from "@workspace/canvas/types";
 
-import { Input } from "@workspace/ui/components/input";
 import { BufferedInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
 import {
@@ -131,7 +130,9 @@ export const ReturnResponseStepRow = ({
           );
           const base = found?.variableName || "stepResult";
           const field = source.field ? source.field.trim() : "";
-          return field ? `${base}.${field}` : base;
+          if (!field) return base;
+          if (field.startsWith("[")) return `${base}${field}`;
+          return `${base}.${field}`;
         }
         case "req_body": {
           const field = source.field ? source.field.trim() : "";
@@ -251,8 +252,8 @@ export const ReturnResponseStepRow = ({
           {responseTab === "success" && (
             <div className="flex flex-col gap-3">
               {/* Status code row */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-1 w-48">
                   <Label className="text-[10px] text-muted-foreground font-medium">
                     HTTP Status Code
                   </Label>
@@ -277,28 +278,6 @@ export const ReturnResponseStepRow = ({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <Label className="text-[10px] text-muted-foreground font-medium">
-                    Response Action / Note
-                  </Label>
-                  <BufferedInput
-                    className="h-7 text-xs bg-background/60 border-border/60"
-                    value={
-                      step.name && step.name !== "Return Response"
-                        ? step.name
-                        : (step.description ?? "")
-                    }
-                    onCommit={(val) => {
-                      onChange({
-                        ...step,
-                        name: val.trim() || "Return Response",
-                        description: val,
-                      });
-                    }}
-                    debounceMs={350}
-                    placeholder="e.g. Return Created Product"
-                  />
                 </div>
               </div>
 
@@ -380,18 +359,14 @@ export const ReturnResponseStepRow = ({
                         onChange={(updated) => updateBinding(bi, updated)}
                       />
                       {/* Delete button */}
-                      {(step.inputBindings || []).length > 1 ? (
-                        <button
-                          type="button"
-                          className="text-muted-foreground/40 hover:text-destructive transition-colors p-1 rounded hover:bg-destructive/10 cursor-pointer"
-                          onClick={() => removeBinding(bi)}
-                          title="Remove field"
-                        >
-                          <Trash size={11} />
-                        </button>
-                      ) : (
-                        <div className="w-5" />
-                      )}
+                      <button
+                        type="button"
+                        className="text-muted-foreground/40 hover:text-destructive transition-colors p-1 rounded hover:bg-destructive/10 cursor-pointer"
+                        onClick={() => removeBinding(bi)}
+                        title="Remove field"
+                      >
+                        <Trash size={11} />
+                      </button>
                     </div>
                   ))
                 )}

@@ -46,6 +46,17 @@ export interface PresetTriggerOption {
   defaultRoute: string;
 }
 
+export type StoreActionType =
+  | "set"
+  | "append"
+  | "remove"
+  | "toggle"
+  | "increment"
+  | "reset"
+  | "populate"
+  | "custom"
+  | "mutate";
+
 /**
  * A real-time connection that a WebPageNode listens on.
  * Connections can be manually declared OR derived from a `push_to_client` pipeline step.
@@ -93,7 +104,7 @@ export interface RealtimeConnection {
     storeName?: string;
     actionId?: string;
     actionName?: string;
-    actionType?: "set" | "append" | "remove" | "toggle" | "increment" | "reset" | "populate" | "custom";
+    actionType?: StoreActionType;
     targetFieldId?: string;
     targetFieldName?: string;
     updateSource?: "full_message" | "nested_property" | "static";
@@ -118,14 +129,14 @@ export interface GlobalStoreAction {
   name: string;
   targetFieldId?: string;
   targetFieldName?: string;
-  actionType: "set" | "append" | "remove" | "toggle" | "increment" | "reset" | "populate" | "custom";
+  actionType: StoreActionType;
   code?: string;
   parameters?: Parameter[];
   connectedEndpointId?: string;
   responseMappingMode?: "replace" | "merge" | "custom";
   description?: string;
   prompt?: string;
-  defaultManipulatorType?: "populate" | "reset" | "setter";
+  defaultManipulatorType?: "populate" | "reset" | "setter" | "mutate";
 }
 
 export interface StateStoreTestCase {

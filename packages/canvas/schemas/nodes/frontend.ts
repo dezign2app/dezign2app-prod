@@ -79,6 +79,7 @@ export const globalStoreActionSchema = z.object({
     "reset",
     "populate",
     "custom",
+    "mutate",
   ]),
   code: z.string().optional(),
   parameters: z.array(parameterSchema).optional(),
@@ -86,7 +87,7 @@ export const globalStoreActionSchema = z.object({
   responseMappingMode: z.enum(["replace", "merge", "custom"]).optional(),
   description: z.string().optional(),
   prompt: z.string().optional(),
-  defaultManipulatorType: z.enum(["populate", "reset", "setter"]).optional(),
+  defaultManipulatorType: z.enum(["populate", "reset", "setter", "mutate"]).optional(),
 });
 
 export type GlobalStoreActionSchemaType = z.infer<typeof globalStoreActionSchema>;

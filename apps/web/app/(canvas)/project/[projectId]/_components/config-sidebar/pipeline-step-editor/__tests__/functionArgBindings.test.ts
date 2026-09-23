@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useStepRowState } from "../useStepRowState";
+import { getAvailableSources } from "../sourcePaths";
 import { PipelineStepDraft } from "../types";
 import { BackendNode } from "@workspace/canvas/types";
 
@@ -177,5 +178,82 @@ describe("pipeline-step-editor: function argument bindings and configuration sta
     expect(onChange).toHaveBeenCalled();
     const titleBinding = (updatedStep.inputBindings || []).find((b) => b.argName === "title");
     expect(titleBinding?.source).toEqual({ kind: "req_body", field: "title" });
+  });
+
+  it("surfaces array length and indexed item paths for findAllConversations without message or success attributes", () => {
+    const findAllStep: PipelineStepDraft = {
+      id: "step-1",
+      name: "findAllConversationsResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-conversations",
+      operationId: "auto-find-all-conversations",
+      functionRef: {
+        name: "findAllConversations",
+        importPath: "@workspace/db/helpers/conversations",
+        returnIsArray: true,
+      },
+      outputVariable: "findAllConversationsResult",
+    };
+
+    const sources = getAvailableSources(mockEndpoint, [findAllStep], [mockTableNode]);
+    const stepSource = sources.find((s) => s.id === "step:step-1");
+
+    expect(stepSource).toBeDefined();
+    expect(stepSource?.variableName).toBe("findAllConversationsResult");
+
+    const paths = (stepSource?.paths || []).map((p) => p.path);
+
+    // Array operations must expose length and element paths
+    expect(paths).toContain("length");
+    expect(paths).toContain("[0].id");
+    expect(paths).toContain("[0].title");
+    expect(paths).toContain("[0].description");
+
+    // Must NOT expose operational message or success because the function returns Promise<Conversation[]>
+    expect(paths).not.toContain("message");
+    expect(paths).not.toContain("success");
+    expect(paths).not.toContain("id"); // Flat id is replaced by indexed [0].id
+  });
+
+  it("resolves db_ref node pointer to master entity node and surfaces table columns", () => {
+    const dbRefNode: BackendNode = {
+      id: "node-ref-conversations",
+      type: "db_ref",
+      position: { x: 50, y: 50 },
+      fractionalIndex: "a1",
+      data: {
+        label: "conversations",
+        tableRef: "table-conversations",
+      },
+    };
+
+    const findByIdStep: PipelineStepDraft = {
+      id: "step-by-id",
+      name: "findConversationByIdResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "node-ref-conversations",
+      functionRef: {
+        name: "findConversationById",
+        importPath: "@workspace/db/helpers/conversations",
+      },
+      outputVariable: "findConversationByIdResult",
+    };
+
+    const sources = getAvailableSources(mockEndpoint, [findByIdStep], [mockTableNode, dbRefNode]);
+    const stepSource = sources.find((s) => s.id === "step:step-by-id");
+
+    expect(stepSource).toBeDefined();
+    const paths = (stepSource?.paths || []).map((p) => p.path);
+
+    // Primary key at front
+    expect(paths[0]).toBe("id");
+    expect(paths).toContain("title");
+    expect(paths).toContain("description");
+
+    // findById does not return message or success
+    expect(paths).not.toContain("message");
+    expect(paths).not.toContain("success");
   });
 });

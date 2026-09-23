@@ -105,7 +105,7 @@ export type UIEventItem = {
     storeName?: string;
     actionId?: string;
     actionName?: string;
-    actionType?: "set" | "append" | "remove" | "toggle" | "increment" | "reset" | "populate" | "custom";
+    actionType?: "set" | "append" | "remove" | "toggle" | "increment" | "reset" | "populate" | "custom" | "mutate";
     targetFieldId?: string;
     targetFieldName?: string;
     updateSource?: "response" | "response_property" | "payload" | "direct" | "static";

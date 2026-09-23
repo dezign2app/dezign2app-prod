@@ -104,8 +104,8 @@ export const SmartPathInput = ({
             <span className="italic text-[11px] text-foreground/80">
               (whole {rootVariableName || "object"})
             </span>
-            <span className="text-[9px] text-primary/90 font-mono bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
-              {rootVariableName || "body"}
+            <span className="text-[9px] text-muted-foreground/60 px-1 py-0.2 rounded bg-muted/40 font-sans shrink-0 ml-1">
+              object
             </span>
           </button>
         </PopoverContent>
