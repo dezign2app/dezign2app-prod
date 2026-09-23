@@ -271,7 +271,7 @@ describe("Creem Payments Node & Next.js 16 Compiler Integration", () => {
     expect(connectionFile?.content).toContain("currentPeriodEnd");
 
     expect(helpersFile).toBeDefined();
-    expect(helpersFile?.content).toContain("SubscriptionRow");
+    expect(helpersFile?.content).toContain("Subscription");
   });
 
   it("preserves user-defined custom columns when subscription entity is placed on canvas", () => {

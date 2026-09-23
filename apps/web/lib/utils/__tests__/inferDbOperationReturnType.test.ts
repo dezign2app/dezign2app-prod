@@ -46,16 +46,16 @@ describe("inferDbOperationReturnType", () => {
   });
 
   it("infers type assertion in return statements", () => {
-    const code = `export function findAll(): any {\n  return stmtFindAll.all() as unknown as ConversationsRow[];\n}`;
-    expect(inferDbOperationReturnType(code, options)).toBe("ConversationsRow[]");
+    const code = `export function findAll(): any {\n  return stmtFindAll.all() as unknown as Conversations[];\n}`;
+    expect(inferDbOperationReturnType(code, options)).toBe("Conversations[]");
   });
 
   it("infers prepared statement .all(), .get(), .run() calls", () => {
     const codeAll = `function getAll() {\n  return stmtFindAll.all(20, 0);\n}`;
-    expect(inferDbOperationReturnType(codeAll, options)).toBe("ConversationsRow[]");
+    expect(inferDbOperationReturnType(codeAll, options)).toBe("Conversations[]");
 
     const codeGet = `function getOne(id: string) {\n  return stmtFindById.get(id);\n}`;
-    expect(inferDbOperationReturnType(codeGet, options)).toBe("ConversationsRow | undefined");
+    expect(inferDbOperationReturnType(codeGet, options)).toBe("Conversations | undefined");
 
     const codeRun = `function del(id: string) {\n  stmtDelete.run(id);\n  return { success: true, message: "deleted" };\n}`;
     expect(inferDbOperationReturnType(codeRun, options)).toBe("{ success: boolean; message: string }");
@@ -63,7 +63,7 @@ describe("inferDbOperationReturnType", () => {
 
   it("infers union types for nullable branches", () => {
     const code = `function find(id: string) {\n  const row = stmt.get(id);\n  if (!row) return undefined;\n  return row;\n}`;
-    expect(inferDbOperationReturnType(code, options)).toBe("ConversationsRow | undefined");
+    expect(inferDbOperationReturnType(code, options)).toBe("Conversations | undefined");
   });
 
   it("infers Redis operations", () => {
@@ -77,7 +77,7 @@ describe("inferDbOperationReturnType", () => {
   it("infers raw SQL queries", () => {
     expect(inferDbOperationReturnType("SELECT COUNT(*) FROM conversations", options)).toBe("number");
     expect(inferDbOperationReturnType("SELECT EXISTS(SELECT 1 FROM conversations)", options)).toBe("boolean");
-    expect(inferDbOperationReturnType("SELECT * FROM conversations LIMIT 10", options)).toBe("ConversationsRow[]");
+    expect(inferDbOperationReturnType("SELECT * FROM conversations LIMIT 10", options)).toBe("Conversations[]");
     expect(inferDbOperationReturnType("DELETE FROM conversations WHERE id = ?", options)).toBe("{ success: boolean; message: string }");
   });
 
@@ -87,6 +87,6 @@ describe("inferDbOperationReturnType", () => {
   });
 
   it("returns fallback for empty code", () => {
-    expect(inferDbOperationReturnType("", options)).toBe("ConversationsRow[]");
+    expect(inferDbOperationReturnType("", options)).toBe("Conversations[]");
   });
 });

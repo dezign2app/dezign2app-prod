@@ -140,7 +140,7 @@ describe("compilePostgresDatabase", () => {
     expect(helper).toBeDefined();
     const code = helper!.content;
     expect(code).not.toContain("as unknown as");
-    expect(code).not.toContain("as OrderRow");
+    expect(code).not.toContain("as Order");
     expect(code).not.toContain("as any");
     expect(code).not.toContain("unknown");
     expect(code).toContain("return res.rows[0];");

@@ -109,10 +109,10 @@ function buildSessionBlock(strategy: AuthStrategy): string {
 
 function buildDbSessionBlock(): string {
   return `      // Strategy: db — direct session lookup via shared @workspace/db (better-auth v1.6 schema)
-      type SessionRow = { userId: string; expiresAt: string };
+      type SessionRecord = { userId: string; expiresAt: string };
       const session = db
         .prepare("SELECT userId, expiresAt FROM session WHERE token = ?")
-        .get(token) as SessionRow | undefined;
+        .get(token) as SessionRecord | undefined;
 
       if (!session?.userId) {
         logger.warn("Auth failed: session not found", {
@@ -126,10 +126,10 @@ function buildDbSessionBlock(): string {
         return res.status(401).json({ error: "Unauthorized: Session has expired" });
       }
 
-      type UserRow = { role?: string };
+      type UserRecord = { role?: string };
       const userRecord = db
         .prepare("SELECT role FROM user WHERE id = ?")
-        .get(session.userId) as UserRow | undefined;
+        .get(session.userId) as UserRecord | undefined;
 
       req.user = {
         id: String(session.userId),

@@ -151,7 +151,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
             kind: "custom",
             description: `Custom database query for ${label}`,
             params: [],
-            returnType: `${pascalLabel}Row[]`,
+            returnType: `${pascalLabel}[]`,
           },
         });
 
@@ -161,7 +161,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
       kind: "custom",
       description: isRedis ? `Custom Redis operation for ${label}` : `Custom database query for ${label}`,
       returnTypeMode: "inferred",
-      returnType: isRedis ? `Promise<${pascalLabel} | null>` : `${pascalLabel}Row[]`,
+      returnType: isRedis ? `Promise<${pascalLabel} | null>` : `${pascalLabel}[]`,
       params: isRedis ? [{ name: "key", type: "string", required: true }] : [],
       pagination: {
         enabled: false,

@@ -211,14 +211,15 @@ export function useFunctionEditorState({
       const isDefaultReturn =
         !currentReturnType ||
         currentReturnType === `${pascalLabel}Row[]` ||
+        currentReturnType === `${pascalLabel}[]` ||
         currentReturnType === "boolean";
 
       const effectiveReturn =
         !hasCode && trimmed && isDefaultReturn
           ? isPredicate
             ? "boolean"
-            : `${pascalLabel}Row[]`
-          : currentReturnType || (isPredicate ? "boolean" : `${pascalLabel}Row[]`);
+            : `${pascalLabel}[]`
+          : currentReturnType || (isPredicate ? "boolean" : `${pascalLabel}[]`);
 
       const derivedSig = deriveDbFunctionSignature(
         nextVal,
@@ -489,7 +490,7 @@ export function useFunctionEditorState({
       ? inferDbOperationReturnType(draftOp.code, { pascalLabel, tableName: label })
       : null) ||
     draftOp.returnType ||
-    (isRedis ? `Promise<${pascalLabel} | null>` : `${pascalLabel}Row[]`);
+    (isRedis ? `Promise<${pascalLabel} | null>` : `${pascalLabel}[]`);
 
   const handleResetContext = useCallback(() => {
     const isPredicate =
@@ -503,7 +504,7 @@ export function useFunctionEditorState({
         ? inferDbOperationReturnType(draftOp.code, { pascalLabel, tableName: label })
         : null) ||
       draftOp.returnType ||
-      (isPredicate ? "boolean" : `${pascalLabel}Row[]`);
+      (isPredicate ? "boolean" : `${pascalLabel}[]`);
 
     const defaultText = buildDefaultDbPromptContext({
       dbType: effectiveDbType,

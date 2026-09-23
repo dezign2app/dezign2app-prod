@@ -98,7 +98,9 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
         debounceTimerRef.current = null;
       }
       if (immediate) {
-        updateSelectedOp({ testCases: cases });
+        queueMicrotask(() => {
+          updateSelectedOp({ testCases: cases });
+        });
       } else {
         debounceTimerRef.current = setTimeout(() => {
           updateSelectedOp({ testCases: cases });
@@ -156,40 +158,39 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
 
       // Reconcile missing/stale parameters across existing test cases
       const defaultParamValues = generateDefaultParams(selectedOp, label, isRedis, columns);
-      setTestCases((prevCases) => {
-        const updated = prevCases.map((tc) => {
-          const newParams: Record<string, unknown> = {};
-          (selectedOp.params || []).forEach((p) => {
-            const existingVal = tc.params?.[p.name];
-            if (existingVal !== undefined) {
-              // If existingVal is an object payload for data/item, heal stale dummy fields if they don't match any actual columns
-              if (
-                typeof existingVal === "object" &&
-                existingVal !== null &&
-                !Array.isArray(existingVal) &&
-                (p.name === "data" || p.name === "item") &&
-                columns &&
-                columns.length > 0
-              ) {
-                const existingKeys = Object.keys(existingVal);
-                const tableColNames = new Set(columns.map((c) => c.name));
-                const hasValidColKey = existingKeys.some((k) => tableColNames.has(k));
-                if (!hasValidColKey) {
-                  newParams[p.name] = defaultParamValues[p.name];
-                  return;
-                }
+      const prevCases = latestTestCasesRef.current;
+      const updated = prevCases.map((tc) => {
+        const newParams: Record<string, unknown> = {};
+        (selectedOp.params || []).forEach((p) => {
+          const existingVal = tc.params?.[p.name];
+          if (existingVal !== undefined) {
+            // If existingVal is an object payload for data/item, heal stale dummy fields if they don't match any actual columns
+            if (
+              typeof existingVal === "object" &&
+              existingVal !== null &&
+              !Array.isArray(existingVal) &&
+              (p.name === "data" || p.name === "item") &&
+              columns &&
+              columns.length > 0
+            ) {
+              const existingKeys = Object.keys(existingVal);
+              const tableColNames = new Set(columns.map((c) => c.name));
+              const hasValidColKey = existingKeys.some((k) => tableColNames.has(k));
+              if (!hasValidColKey) {
+                newParams[p.name] = defaultParamValues[p.name];
+                return;
               }
-              newParams[p.name] = existingVal;
-            } else {
-              newParams[p.name] = defaultParamValues[p.name];
             }
-          });
-          return { ...tc, params: newParams };
+            newParams[p.name] = existingVal;
+          } else {
+            newParams[p.name] = defaultParamValues[p.name];
+          }
         });
-        latestTestCasesRef.current = updated;
-        persistTestCases(updated, true);
-        return updated;
+        return { ...tc, params: newParams };
       });
+      latestTestCasesRef.current = updated;
+      setTestCases(updated);
+      persistTestCases(updated, false);
     }
   }, [
     selectedOp.id,
@@ -230,6 +231,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
       params: generateDefaultParams(selectedOp, label, isRedis, columns),
     };
     const updated = [...testCases, newCase];
+    latestTestCasesRef.current = updated;
     setTestCases(updated);
     persistTestCases(updated, true);
     setActiveCaseId(newCaseId);
@@ -244,6 +246,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
       params: JSON.parse(JSON.stringify(sourceCase.params)),
     };
     const updated = [...testCases, duplicated];
+    latestTestCasesRef.current = updated;
     setTestCases(updated);
     persistTestCases(updated, true);
     setActiveCaseId(newCaseId);
@@ -253,6 +256,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
   const handleDeleteTestCase = (caseId: string) => {
     if (testCases.length <= 1) return;
     const updated = testCases.filter((tc) => tc.id !== caseId);
+    latestTestCasesRef.current = updated;
     setTestCases(updated);
     persistTestCases(updated, true);
     if (activeCaseId === caseId) {
@@ -265,6 +269,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
     const updated = testCases.map((c) =>
       c.id === caseId ? { ...c, name: newName } : c,
     );
+    latestTestCasesRef.current = updated;
     setTestCases(updated);
     persistTestCases(updated, true);
   };
@@ -272,15 +277,15 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
   // Update a parameter value in the active test case
   const handleParamChange = useCallback(
     (paramName: string, value: unknown) => {
-      setTestCases((prev) => {
-        const updated = prev.map((tc) =>
-          tc.id === activeCaseId
-            ? { ...tc, params: { ...tc.params, [paramName]: value } }
-            : tc,
-        );
-        persistTestCases(updated, false);
-        return updated;
-      });
+      const current = latestTestCasesRef.current;
+      const updated = current.map((tc) =>
+        tc.id === activeCaseId
+          ? { ...tc, params: { ...tc.params, [paramName]: value } }
+          : tc,
+      );
+      latestTestCasesRef.current = updated;
+      setTestCases(updated);
+      persistTestCases(updated, false);
     },
     [activeCaseId, persistTestCases],
   );

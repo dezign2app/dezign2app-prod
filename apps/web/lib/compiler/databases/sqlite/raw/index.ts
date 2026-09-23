@@ -122,7 +122,7 @@ function generateTableHelpers(
 
   // Types
   code += `// ── Types ────────────────────────────────────────────────────────────────────\n\n`;
-  code += `export type ${Pascal}Row = {\n`;
+  code += `export interface ${Pascal} {\n`;
   cols.forEach((c) => {
     code += `  ${toVarName(c.name)}: ${toTsType(c.type)};\n`;
   });
@@ -137,30 +137,23 @@ function generateTableHelpers(
   code += `export type Update${Pascal}Data = Partial<Create${Pascal}Data>;\n\n`;
 
   const declaredTypes = new Set<string>([
-    `${Pascal}Row`,
+    `${Pascal}`,
     `Create${Pascal}Data`,
     `Update${Pascal}Data`,
   ]);
 
-  code += `export type ${Pascal} = ${Pascal}Row;\n`;
-  declaredTypes.add(Pascal);
-
   if (pascalSingular !== Pascal) {
-    code += `export type ${pascalSingular}Row = ${Pascal}Row;\n`;
-    code += `export type ${pascalSingular} = ${Pascal}Row;\n`;
+    code += `export type ${pascalSingular} = ${Pascal};\n`;
     code += `export type Create${pascalSingular}Data = Create${Pascal}Data;\n`;
     code += `export type Update${pascalSingular}Data = Update${Pascal}Data;\n\n`;
-    declaredTypes.add(`${pascalSingular}Row`);
     declaredTypes.add(pascalSingular);
     declaredTypes.add(`Create${pascalSingular}Data`);
     declaredTypes.add(`Update${pascalSingular}Data`);
   }
   if (pascalPlural !== Pascal && pascalPlural !== pascalSingular) {
-    code += `export type ${pascalPlural}Row = ${Pascal}Row;\n`;
-    code += `export type ${pascalPlural} = ${Pascal}Row;\n`;
+    code += `export type ${pascalPlural} = ${Pascal};\n`;
     code += `export type Create${pascalPlural}Data = Create${Pascal}Data;\n`;
     code += `export type Update${pascalPlural}Data = Update${Pascal}Data;\n\n`;
-    declaredTypes.add(`${pascalPlural}Row`);
     declaredTypes.add(pascalPlural);
     declaredTypes.add(`Create${pascalPlural}Data`);
     declaredTypes.add(`Update${pascalPlural}Data`);
@@ -179,12 +172,14 @@ function generateTableHelpers(
   dbOps.forEach((op) => {
     if (op.enabled === false) return;
     const textToScan = `${op.signature || ""} ${op.returnType || ""} ${op.code || ""}`;
-    const matches = textToScan.match(/([A-Z][A-Za-z0-9_]*Row)/g);
+    const matches = textToScan.match(/([A-Z][A-Za-z0-9_]*(?:Row)?)/g);
     if (matches) {
       matches.forEach((typeName) => {
-        if (!declaredTypes.has(typeName)) {
-          declaredTypes.add(typeName);
-          code += `export type ${typeName} = ${Pascal}Row & Record<string, unknown>;\n`;
+        // Strip any legacy Row suffix from custom-op type references
+        const cleanName = typeName.replace(/Row$/, "");
+        if (cleanName && !declaredTypes.has(cleanName) && /^[A-Z]/.test(cleanName)) {
+          declaredTypes.add(cleanName);
+          code += `export type ${cleanName} = ${Pascal} & Record<string, unknown>;\n`;
         }
       });
     }
@@ -224,10 +219,10 @@ function generateTableHelpers(
 
   // ── Prepared Statements (created once at module load) ────────────────────────
   code += `// ── Prepared Statements (created once at module load) ────────────────────────\n\n`;
-  code += `const stmtFindAll = db.prepare<[limit?: number, offset?: number], ${Pascal}Row>(\n`;
+  code += `const stmtFindAll = db.prepare<[limit?: number, offset?: number], ${Pascal}>(\n`;
   code += `  "SELECT * FROM ${tableName} LIMIT ? OFFSET ?"\n`;
   code += `);\n\n`;
-  code += `const stmtFindById = db.prepare<[${pkVarName}: ${pkTs}], ${Pascal}Row>(\n`;
+  code += `const stmtFindById = db.prepare<[${pkVarName}: ${pkTs}], ${Pascal}>(\n`;
   code += `  "SELECT * FROM ${tableName} WHERE ${pkColName} = ?"\n`;
   code += `);\n\n`;
 
@@ -387,23 +382,23 @@ function generateTableHelpers(
 
     if (op.kind === "findAll") {
       code += `/** ${op.description || `Retrieve all rows from ${tableName}`} */\n`;
-      code += `export function ${effectiveName}(limit: number = 20, offset: number = 0): ${Pascal}Row[] {\n`;
+      code += `export function ${effectiveName}(limit: number = 20, offset: number = 0): ${Pascal}[] {\n`;
       code += `  logger.debug("findAll query on ${tableName}", { limit, offset });\n`;
-      code += `  const rows = stmtFindAll.all(limit, offset) as unknown as ${Pascal}Row[];\n`;
+      code += `  const rows = stmtFindAll.all(limit, offset) as unknown as ${Pascal}[];\n`;
       code += `  logger.debug("findAll result count", { count: rows.length });\n`;
       code += `  return rows;\n`;
       code += `}\n\n`;
     } else if (op.kind === "findById") {
       code += `/** ${op.description || `Find a ${tableName} row by primary key`} */\n`;
-      code += `export function ${effectiveName}(${pkVarName}: ${pkTs}): ${Pascal}Row | undefined {\n`;
+      code += `export function ${effectiveName}(${pkVarName}: ${pkTs}): ${Pascal} | undefined {\n`;
       code += `  logger.debug("findById query on ${tableName}", { ${pkVarName} });\n`;
-      code += `  const row = stmtFindById.get(${pkVarName}) as unknown as ${Pascal}Row | undefined;\n`;
+      code += `  const row = stmtFindById.get(${pkVarName}) as unknown as ${Pascal} | undefined;\n`;
       code += `  logger.debug("findById result", { found: Boolean(row) });\n`;
       code += `  return row;\n`;
       code += `}\n\n`;
     } else if (op.kind === "create" && insertColList.length > 0) {
       code += `/** ${op.description || `Create a new record in ${tableName}`} */\n`;
-      code += `export function ${effectiveName}(data: Create${Pascal}Data): ${Pascal}Row {\n`;
+      code += `export function ${effectiveName}(data: Create${Pascal}Data): ${Pascal} {\n`;
       code += `  logger.info("Inserting record into ${tableName}...", { data });\n`;
       code += `  const now = new Date().toISOString();\n`;
       if (isStringPk) {
@@ -441,11 +436,11 @@ function generateTableHelpers(
       }).map((c) => {
         const varName = toVarName(c.name);
         return `${varName}: data.${varName} ?? now`;
-      }).join(", ")} } as unknown as ${Pascal}Row;\n`;
+      }).join(", ")} } as unknown as ${Pascal};\n`;
       code += `}\n\n`;
     } else if (op.kind === "create") {
       code += `/** ${op.description || `Create a new record in ${tableName}`} */\n`;
-      code += `export function ${effectiveName}(): ${Pascal}Row {\n`;
+      code += `export function ${effectiveName}(): ${Pascal} {\n`;
       code += `  logger.info("Inserting default record into ${tableName}...");\n`;
       code += `  const info = db.prepare("INSERT INTO ${tableName} DEFAULT VALUES").run();\n`;
       const rowIdExpr =
@@ -455,11 +450,11 @@ function generateTableHelpers(
       code += `  const _rowId = ${rowIdExpr};\n`;
       code += `  logger.info("✓ Record created in ${tableName}", { ${pkColName}: _rowId });\n`;
       const operationalCreatedDefaultMsg = colVarNames.has("message") ? "" : `, message: "${pascalSingular} created successfully"`;
-      code += `  return { ${pkColName}: _rowId${operationalCreatedDefaultMsg} } as unknown as ${Pascal}Row;\n`;
+      code += `  return { ${pkColName}: _rowId${operationalCreatedDefaultMsg} } as unknown as ${Pascal};\n`;
       code += `}\n\n`;
     } else if (op.kind === "update" && writableCols.length > 0) {
       code += `/** ${op.description || `Update a ${tableName} row by primary key`} */\n`;
-      code += `export function ${effectiveName}(${pkVarName}: ${pkTs}, data: Update${Pascal}Data): ${Pascal}Row | undefined {\n`;
+      code += `export function ${effectiveName}(${pkVarName}: ${pkTs}, data: Update${Pascal}Data): ${Pascal} | undefined {\n`;
       code += `  logger.info("Updating record in ${tableName}...", { ${pkVarName}, data });\n`;
       code += `  const current = find${toPascal(tableName)}ById(${pkVarName});\n`;
       code += `  if (!current) {\n`;
@@ -471,7 +466,7 @@ function generateTableHelpers(
       code += `  logger.info("✓ Record updated in ${tableName}", { ${pkVarName} });\n`;
       code += `  const fresh = find${toPascal(tableName)}ById(${pkVarName});\n`;
       const operationalUpdatedMsg = colVarNames.has("message") ? "" : `, message: "${pascalSingular} updated successfully"`;
-      code += `  return fresh ? ({ ...fresh${operationalUpdatedMsg} } as unknown as ${Pascal}Row) : undefined;\n`;
+      code += `  return fresh ? ({ ...fresh${operationalUpdatedMsg} } as unknown as ${Pascal}) : undefined;\n`;
       code += `}\n\n`;
     } else if (op.kind === "delete") {
       code += `/** ${op.description || `Delete a ${tableName} row by primary key`} */\n`;
@@ -921,11 +916,9 @@ export function compileRawSqliteDatabase(
   const fallbackTypeExports: string[] = [];
   if (!seenExportedSymbols.has("PrimarySQLiteDB")) {
     fallbackTypeExports.push("export type PrimarySQLiteDB = Record<string, unknown>;");
-    fallbackTypeExports.push("export type PrimarySQLiteDBRow = Record<string, unknown>;");
   }
   if (!seenExportedSymbols.has("Entity")) {
     fallbackTypeExports.push("export type Entity = Record<string, unknown>;");
-    fallbackTypeExports.push("export type EntityRow = Record<string, unknown>;");
   }
 
   const connectionContent = [
