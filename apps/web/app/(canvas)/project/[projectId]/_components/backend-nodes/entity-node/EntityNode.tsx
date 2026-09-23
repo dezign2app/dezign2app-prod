@@ -1,7 +1,8 @@
 import React, { useRef } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Table2, Trash, Settings } from "lucide-react";
+import { Database, Table2, Trash, Settings, Sparkles } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
+import { createTypesNodeFromEntity } from "@/lib/stores/backendCanvas/packageTypesSync";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   Select,
@@ -117,12 +118,24 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         selected={selected}
         onSave={handleSaveName}
         rightElement={
-          <div
-            className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-all cursor-pointer mr-1"
-            title="DB Operation Functions"
-            onClick={openSettings}
-          >
-            <Settings size={14} />
+          <div className="flex items-center gap-0.5 mr-1">
+            <div
+              className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-secondary text-muted-foreground hover:text-amber-500 transition-all cursor-pointer"
+              title="Generate / Sync TypesNode"
+              onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+                e.stopPropagation();
+                createTypesNodeFromEntity(id);
+              }}
+            >
+              <Sparkles size={14} />
+            </div>
+            <div
+              className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+              title="DB Operation Functions"
+              onClick={openSettings}
+            >
+              <Settings size={14} />
+            </div>
           </div>
         }
       />

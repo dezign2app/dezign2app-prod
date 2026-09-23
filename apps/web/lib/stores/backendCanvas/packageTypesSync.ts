@@ -325,7 +325,8 @@ export function createExtendedTypeNode(sourceNodeId: string, sourceTypeId: strin
   const newTypeId = `type-ext-${Date.now()}-${baseType.name.toLowerCase()}`;
   const extendedTypeName = `Custom${baseType.name}`;
 
-  // Clone fields from base type so user has a complete starting model
+  // Clone fields from base type so user has a complete starting model.
+  // Mark each cloned field as inherited so the preview can emit proper extends syntax.
   const clonedFields = (baseType.fields || []).map((f) => ({
     id: `f-${Date.now()}-${f.name}`,
     name: f.name,
@@ -333,6 +334,7 @@ export function createExtendedTypeNode(sourceNodeId: string, sourceTypeId: strin
     required: f.required,
     isArray: f.isArray,
     description: f.description || `Inherited from ${baseType.name}`,
+    isInherited: true,
   }));
 
   const extendedType: CustomTypeItem = {
@@ -420,4 +422,202 @@ export function createExtendedTypeNode(sourceNodeId: string, sourceTypeId: strin
   });
 
   toast.success(`Extended "${baseType.name}" as "${extendedTypeName}"`);
+}
+
+// ─── Entity → TypesNode Auto-Generation ─────────────────────────────────────
+
+/**
+ * Converts a snake_case or kebab-case entity/table name to PascalCase.
+ * e.g. "user_profiles" → "UserProfiles", "order-items" → "OrderItems"
+ */
+function toPascalCase(str: string): string {
+  return str
+    .replace(/[-_\s]+(.)?/g, (_, c: string | undefined) =>
+      c ? c.toUpperCase() : "",
+    )
+    .replace(/^(.)/, (c) => c.toUpperCase());
+}
+
+/**
+ * Maps a database column type string to the closest TypeScript primitive/type.
+ * Handles common SQL and NoSQL type names.
+ */
+function mapColumnTypeToTS(colType: string): string {
+  const t = colType.toLowerCase().trim();
+
+  // String-like
+  if (
+    t.startsWith("varchar") ||
+    t === "text" ||
+    t === "char" ||
+    t === "string" ||
+    t === "uuid" ||
+    t === "bpchar" ||
+    t === "citext" ||
+    t === "tsvector" ||
+    t === "bytea"
+  )
+    return "string";
+
+  // Numeric
+  if (
+    t === "int" ||
+    t === "integer" ||
+    t === "int2" ||
+    t === "int4" ||
+    t === "int8" ||
+    t === "bigint" ||
+    t === "smallint" ||
+    t === "serial" ||
+    t === "bigserial" ||
+    t === "float" ||
+    t === "float4" ||
+    t === "float8" ||
+    t === "double precision" ||
+    t === "decimal" ||
+    t === "numeric" ||
+    t === "real" ||
+    t === "number"
+  )
+    return "number";
+
+  // Boolean
+  if (t === "bool" || t === "boolean") return "boolean";
+
+  // JSON
+  if (t === "json" || t === "jsonb") return "Record<string, string>";
+
+  // Date / time
+  if (
+    t === "timestamp" ||
+    t === "timestamptz" ||
+    t === "date" ||
+    t === "datetime" ||
+    t === "time" ||
+    t === "timetz" ||
+    t === "interval"
+  )
+    return "Date";
+
+  // Enum hint — caller handles enumValues directly
+  if (t === "enum") return "string";
+
+  return "string";
+}
+
+/**
+ * Auto-generates a `TypesNode` on the backend canvas from an existing `EntityNode`.
+ *
+ * - Maps each `CanvasEntityColumn` → `CustomTypeItem` field with proper TS types.
+ * - Positions the TypesNode to the right of the entity node.
+ * - Creates a semantic "generates" edge connecting the two nodes.
+ * - Idempotent: if a TypesNode with `sourceEntityId` already exists, refreshes it.
+ * - Opens the config drawer for the new/refreshed type automatically.
+ */
+export function createTypesNodeFromEntity(entityNodeId: string): void {
+  const store = useBackendCanvasStore.getState();
+  const entityNode = store.nodes.find(
+    (n) => n.id === entityNodeId && n.type === "entity",
+  );
+  if (!entityNode) {
+    toast.error("Entity node not found.");
+    return;
+  }
+
+  // BackendNodeData is a flat intersection of all domain sub-types, so
+  // tableName and columns are directly typed optional fields — no casts needed.
+  const tableName = entityNode.data.tableName || entityNode.data.label || "Entity";
+  const columns = entityNode.data.columns ?? [];
+
+  const now = Date.now();
+
+  // Map columns → CustomTypeItem fields
+  const fields = columns.map((col, i) => ({
+    id: `f-${now}-${i}-${col.name}`,
+    name: col.name,
+    type:
+      col.enumValues && col.enumValues.length > 0
+        ? col.enumValues.map((v) => `"${v}"`).join(" | ")
+        : mapColumnTypeToTS(col.type),
+    required:
+      Boolean(col.isNotNull) ||
+      Boolean(col.required) ||
+      Boolean(col.isPrimaryKey) ||
+      Boolean(col.isPrimary) ||
+      Boolean(col.primaryKey),
+    isArray: false,
+    description: col.description || `Column from ${tableName}`,
+  }));
+
+  const typeItem: CustomTypeItem = {
+    id: `type-entity-${entityNodeId}`,
+    name: toPascalCase(tableName),
+    kind: "interface",
+    description: `Auto-generated TypeScript interface from entity: ${tableName}`,
+    fields,
+  };
+
+  // ── Idempotency: refresh if a linked TypesNode already exists ──────────────
+  // sourceEntityId is typed on CanvasTypesNodeData (part of BackendNodeData)
+  const existing = store.nodes.find(
+    (n) => n.type === "types" && n.data.sourceEntityId === entityNodeId,
+  );
+
+  if (existing) {
+    const existingTypes = existing.data.types ?? [];
+    const updatedTypes = existingTypes.filter((t) => t.id !== typeItem.id);
+    store.updateNode(existing.id, {
+      data: {
+        ...existing.data,
+        types: [...updatedTypes, typeItem],
+      },
+    });
+    store.setActiveConfigItem({
+      id: existing.id,
+      nodeId: existing.id,
+      type: "types",
+      selectedTypeId: typeItem.id,
+    });
+    toast.success(`Refreshed "${typeItem.name}" types from entity "${tableName}"`);
+    return;
+  }
+
+  // ── Create a new TypesNode positioned to the right of the entity ───────────
+  const newNodeId = `types-from-entity-${entityNodeId}-${now}`;
+  const pos = entityNode.position ?? { x: 100, y: 100 };
+
+  const newNodeData: BackendNode["data"] = {
+    label: `${toPascalCase(tableName)} Types`,
+    scope: "global",
+    sourceEntityId: entityNodeId,
+    types: [typeItem],
+  };
+
+  store.addNode({
+    id: newNodeId,
+    type: "types",
+    position: { x: pos.x + 380, y: pos.y },
+    data: newNodeData,
+  });
+
+  // ── Semantic "generates" edge: entity → typesNode ──────────────────────────
+  store.addEdge({
+    id: `edge-entity-types-${entityNodeId}-${newNodeId}`,
+    source: entityNodeId,
+    target: newNodeId,
+    type: "type-reference",
+    data: { label: "generates" },
+  });
+
+  // ── Open the config drawer for the newly created type ──────────────────────
+  store.setActiveConfigItem({
+    id: newNodeId,
+    nodeId: newNodeId,
+    type: "types",
+    selectedTypeId: typeItem.id,
+  });
+
+  toast.success(
+    `Generated "${typeItem.name}" TypesNode from entity "${tableName}" (${fields.length} fields)`,
+  );
 }
