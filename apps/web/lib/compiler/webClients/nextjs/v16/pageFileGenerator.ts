@@ -303,18 +303,18 @@ export function generatePageAndComponentFiles({
               .split(".")
               .map((p, i) => (i === 0 ? p : `?.${p}`))
               .join("");
-            dispatchArg = isSingleLoadWithEndpoint ? `data?.${accessor}` : `(results["${resKey}"] as any)?.${accessor}`;
+            dispatchArg = isSingleLoadWithEndpoint ? `data?.${accessor}` : `results["${resKey}"]?.${accessor}`;
           }
 
           if (actionMethod === "populate" && binding.targetFieldName) {
             const fieldVal = (!binding.valuePath && (binding.updateSource === "response" || !binding.updateSource))
-              ? `("data" in (${dispatchArg} || {}) ? (${dispatchArg} as any).data : ${dispatchArg})`
+              ? `("data" in (${dispatchArg} || {}) ? ${dispatchArg}.data : ${dispatchArg})`
               : dispatchArg;
-            return `${hookName}.getState().populate({ ${binding.targetFieldName}: ${fieldVal} } as any);`;
+            return `${hookName}.getState().populate({ ${binding.targetFieldName}: ${fieldVal} });`;
           }
 
           if (actionMethod.startsWith("set") && binding.targetFieldName && !binding.valuePath && (binding.updateSource === "response" || !binding.updateSource)) {
-            const fieldVal = `("data" in (${dispatchArg} || {}) ? (${dispatchArg} as any).data : ${dispatchArg})`;
+            const fieldVal = `("data" in (${dispatchArg} || {}) ? ${dispatchArg}.data : ${dispatchArg})`;
             return `${hookName}.getState().${actionMethod}(${fieldVal});`;
           }
 

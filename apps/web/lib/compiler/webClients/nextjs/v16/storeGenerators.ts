@@ -229,7 +229,7 @@ export function generateZustandStore(
       }
       case "populate": {
         const hasParams = Array.isArray(act.parameters) && act.parameters.length > 0;
-        const unwrapType = targetUnwrapField ? ` | { data?: ${interfaceName}["${targetUnwrapField}"] }` : "";
+        const unwrapType = " | object";
         const paramSigs = hasParams
           ? act.parameters!
               .map((p) => `${toCamelCase(p.name)}: ${mapFieldTypeToTs(p.type)}${p.required === false ? " | undefined" : ""}`)
@@ -241,7 +241,7 @@ export function generateZustandStore(
 
         customActionSignatures.push(`  ${actName}: (${paramSigs}) => void;`);
         const payloadPrep = targetUnwrapField
-          ? `    const payload: Record<string, any> = ${paramArgs} && typeof ${paramArgs} === "object" ? { ...${paramArgs} } : {};
+          ? `    const payload: Record<string, object | string | number | boolean | null | undefined> = ${paramArgs} && typeof ${paramArgs} === "object" ? { ...${paramArgs} } : {};
     if ("data" in payload && payload.${targetUnwrapField} === undefined) {
       payload.${targetUnwrapField} = payload.data;
       delete payload.data;
@@ -324,10 +324,10 @@ ${payloadPrep}
   const builtInImpls: string[] = [];
 
   if (!hasPopulate && !isPopulateDisabled) {
+    builtInSignatures.push(`  populate: (data?: Partial<${interfaceName}> | object) => void;`);
     if (targetUnwrapField) {
-      builtInSignatures.push(`  populate: (data?: Partial<${interfaceName}> | { data?: ${interfaceName}["${targetUnwrapField}"] }) => void;`);
       builtInImpls.push(`      populate: (data) => set((s) => {
-        const payload: Record<string, any> = data && typeof data === "object" ? { ...data } : {};
+        const payload: Record<string, object | string | number | boolean | null | undefined> = data && typeof data === "object" ? { ...data } : {};
         if ("data" in payload && payload.${targetUnwrapField} === undefined) {
           payload.${targetUnwrapField} = payload.data;
           delete payload.data;
