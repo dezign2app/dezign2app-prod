@@ -296,7 +296,11 @@ export const StoreActionsSection: React.FC<StoreActionsSectionProps> = ({
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            const snippet = `// Map array item by id\nset((s) => ({\n  items: (s.items || []).map((item) => item.id === payload.id ? { ...item, ...payload } : item)\n}));`;
+                            const targetField = fields.find((f) => f.id === act.targetFieldId);
+                            const fieldName = targetField
+                              ? targetField.name.charAt(0).toLowerCase() + targetField.name.slice(1)
+                              : "items";
+                            const snippet = `// Map array item by id\nset((s) => ({\n  ${fieldName}: Array.isArray(s.${fieldName})\n    ? s.${fieldName}.map((it) =>\n        typeof it === "object" && it !== null && "id" in it && it.id === payload.id\n          ? { ...it, ...payload }\n          : it\n      )\n    : s.${fieldName},\n}));`;
                             onUpdateAction(act.id, { code: snippet });
                           }}
                           className="h-5 text-[9px] px-1.5 bg-background/50 hover:bg-indigo-500/10 cursor-pointer"
