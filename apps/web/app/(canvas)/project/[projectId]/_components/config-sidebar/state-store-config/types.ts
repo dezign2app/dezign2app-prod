@@ -5,9 +5,20 @@ import {
   StateStoreTestCase,
   Parameter,
   JsonValue,
+  JsonObject,
 } from "@workspace/canvas/types";
 
 export type StoreState = Record<string, JsonValue>;
+
+export function isJsonObject(val: JsonValue | undefined): val is JsonObject {
+  return typeof val === "object" && val !== null && !Array.isArray(val);
+}
+
+export type RuntimeScopeValue =
+  | ((updater: StoreState | ((prev: StoreState) => StoreState)) => void)
+  | (() => StoreState)
+  | JsonValue
+  | undefined;
 
 export interface StorePreset {
   name: string;
@@ -91,7 +102,7 @@ export const STORE_PRESETS: StorePreset[] = [
 ];
 
 export function formatInitialFieldValue(field: GlobalStoreField): JsonValue {
-  if (field.defaultValue !== undefined && field.defaultValue !== null) {
+  if (field.defaultValue !== undefined) {
     return field.defaultValue;
   }
   switch (field.type) {
@@ -170,15 +181,15 @@ export function getStateManipulators(
       act.actionType === "populate" ||
       act.name.toLowerCase() === "populate" ||
       act.name.toLowerCase() === "load" ||
-      (act as any).defaultManipulatorType === "populate";
+      act.defaultManipulatorType === "populate";
 
     const isResetOverride =
       act.actionType === "reset" ||
       act.name.toLowerCase() === "reset" ||
-      (act as any).defaultManipulatorType === "reset";
+      act.defaultManipulatorType === "reset";
 
     const isSetterOverride =
-      Boolean((act as any).defaultManipulatorType === "setter") ||
+      act.defaultManipulatorType === "setter" ||
       Boolean(targetField && act.name.toLowerCase() === `set${targetField.name.toLowerCase()}`);
 
     const defaultManipulatorType = isPopulateOverride
@@ -258,8 +269,13 @@ export function getStateManipulators(
     const capitalized = f.name.charAt(0).toUpperCase() + f.name.slice(1);
     const setterName = `set${capitalized}`;
     const isSetterDisabled = disabledSet.has(setterName) || disabledSet.has(`setter-${f.id}`);
+    const isSetterCustomized = list.some(
+      (m) =>
+        (m.defaultManipulatorType === "setter" && m.targetFieldId === f.id) ||
+        m.name.toLowerCase() === setterName.toLowerCase(),
+    );
 
-    if (!isSetterDisabled && !list.some((m) => m.targetFieldId === f.id || m.name.toLowerCase() === setterName.toLowerCase())) {
+    if (!isSetterDisabled && !isSetterCustomized) {
       let defaultSetterVal: JsonValue = "";
       if (f.type === "number") defaultSetterVal = 100;
       else if (f.type === "boolean") defaultSetterVal = true;
@@ -299,7 +315,13 @@ export function applyManipulator({
   try {
     let nextState: StoreState = { ...currentState };
 
-    // If custom code is provided on ANY manipulator, execute it directly
+    // Initial state map based on field definitions
+    const initialState: StoreState = {};
+    fields.forEach((f) => {
+      initialState[f.name] = formatInitialFieldValue(f);
+    });
+
+    // If custom code is provided on ANY manipulator, execute it directly in a rich runtime scope
     if (manipulator.code && manipulator.code.trim()) {
       const setFn = (updater: StoreState | ((prev: StoreState) => StoreState)) => {
         const patch = typeof updater === "function" ? updater(nextState) : updater;
@@ -308,8 +330,49 @@ export function applyManipulator({
         }
       };
       const getFn = () => nextState;
-      const runner = new Function("payload", "{ set, get }", manipulator.code);
-      runner(payload, { set: setFn, get: getFn });
+
+      // Provide standard Zustand scope and helper aliases
+      const scopeKeys: string[] = ["set", "get", "payload", "initialState", "state"];
+      const scopeValues: RuntimeScopeValue[] = [setFn, getFn, payload, initialState, nextState];
+
+      // Provide aliases for common parameter conventions
+      ["item", "value", "data"].forEach((alias) => {
+        if (!scopeKeys.includes(alias)) {
+          scopeKeys.push(alias);
+          scopeValues.push(payload);
+        }
+      });
+
+      // If action has declared parameters (e.g. item, qty, id)
+      if (manipulator.parameters && manipulator.parameters.length > 0) {
+        manipulator.parameters.forEach((param, idx) => {
+          if (!scopeKeys.includes(param.name)) {
+            scopeKeys.push(param.name);
+            let val: JsonValue | undefined = undefined;
+            if (isJsonObject(payload) && param.name in payload) {
+              val = payload[param.name];
+            } else if (Array.isArray(payload) && idx < payload.length) {
+              val = payload[idx];
+            } else if (manipulator.parameters?.length === 1) {
+              val = payload;
+            }
+            scopeValues.push(val);
+          }
+        });
+      }
+
+      // If payload is an object, unpack its top-level keys into scope so code can access them directly
+      if (isJsonObject(payload)) {
+        Object.entries(payload).forEach(([k, v]) => {
+          if (!scopeKeys.includes(k) && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(k)) {
+            scopeKeys.push(k);
+            scopeValues.push(v);
+          }
+        });
+      }
+
+      const runner = new Function(...scopeKeys, manipulator.code);
+      runner(...scopeValues);
       return { newState: nextState };
     }
 
@@ -321,8 +384,10 @@ export function applyManipulator({
       return { newState: nextState };
     }
 
-    const targetField = fields.find((f) => f.id === manipulator.targetFieldId) || fields[0];
-    const targetName = targetField?.name || "value";
+    const targetField = fields.find(
+      (f) => f.id === manipulator.targetFieldId || f.name === manipulator.targetFieldName,
+    ) || (manipulator.targetFieldId ? undefined : fields[0]);
+    const targetName = targetField?.name || manipulator.targetFieldName || fields[0]?.name || "value";
 
     switch (manipulator.actionType) {
       case "set": {
@@ -335,43 +400,74 @@ export function applyManipulator({
       case "append": {
         const currentArr = currentState[targetName];
         const arr = Array.isArray(currentArr) ? currentArr : [];
-        const itemToAppend = payload !== undefined ? payload : null;
+        let itemToAppend: JsonValue = payload !== undefined ? payload : null;
+        if (
+          isJsonObject(payload) &&
+          manipulator.parameters?.length === 1 &&
+          manipulator.parameters[0]?.name &&
+          manipulator.parameters[0].name in payload
+        ) {
+          const paramName = manipulator.parameters[0].name;
+          const paramVal = payload[paramName];
+          if (paramVal !== undefined) {
+            itemToAppend = paramVal;
+          }
+        }
         nextState[targetName] = [...arr, itemToAppend];
         break;
       }
       case "remove": {
         const currentArr = currentState[targetName];
         if (Array.isArray(currentArr)) {
-          nextState[targetName] = currentArr.filter(
-            (it, idx) =>
-              idx !== payload &&
-              !(typeof it === "object" && it !== null && "id" in it && it.id === payload),
-          );
+          let removeIdOrIdx: JsonValue | undefined = payload;
+          if (isJsonObject(payload)) {
+            const candidate = payload.id !== undefined ? payload.id : payload.index;
+            if (candidate !== undefined) {
+              removeIdOrIdx = candidate;
+            }
+          }
+          nextState[targetName] = currentArr.filter((it, idx) => {
+            if (idx === removeIdOrIdx || String(idx) === String(removeIdOrIdx)) return false;
+            if (isJsonObject(it)) {
+              if (it.id !== undefined && String(it.id) === String(removeIdOrIdx)) return false;
+              if (it._id !== undefined && String(it._id) === String(removeIdOrIdx)) return false;
+            }
+            return true;
+          });
         }
         break;
       }
-      case "toggle":
-        nextState[targetName] = !currentState[targetName];
-        break;
-      case "increment": {
-        const amt = typeof payload === "number" ? payload : 1;
-        const currentVal = currentState[targetName];
-        nextState[targetName] =
-          typeof currentVal === "number"
-            ? currentVal + amt
-            : amt;
+      case "toggle": {
+        nextState[targetName] = !Boolean(currentState[targetName]);
         break;
       }
-      case "reset":
+      case "increment": {
+        let rawNum: JsonValue | undefined = payload;
+        if (isJsonObject(payload) && "amount" in payload) {
+          rawNum = payload.amount;
+        }
+        const amt =
+          typeof rawNum === "number"
+            ? rawNum
+            : typeof rawNum === "string" && !isNaN(Number(rawNum)) && rawNum.trim() !== ""
+              ? Number(rawNum)
+              : 1;
+        const currentVal = currentState[targetName];
+        nextState[targetName] = typeof currentVal === "number" ? currentVal + amt : amt;
+        break;
+      }
+      case "reset": {
         fields.forEach((f) => {
           nextState[f.name] = formatInitialFieldValue(f);
         });
         break;
-      case "populate":
-        if (typeof payload === "object" && payload !== null && !Array.isArray(payload)) {
-          nextState = { ...nextState, ...(payload as StoreState) };
+      }
+      case "populate": {
+        if (isJsonObject(payload)) {
+          nextState = { ...nextState, ...payload };
         }
         break;
+      }
       case "custom":
       default: {
         const valToSet = payload !== undefined ? payload : currentState[targetName];
@@ -383,7 +479,7 @@ export function applyManipulator({
     }
 
     return { newState: nextState };
-  } catch (err: unknown) {
+  } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     return { newState: currentState, error: errorMsg };
   }

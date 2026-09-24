@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   getStateManipulators,
   applyManipulator,
+  StateManipulator,
+  isJsonObject,
 } from "../types";
 import type {
   GlobalStoreField,
@@ -44,14 +46,14 @@ describe("stateStoreManipulators", () => {
         actionType: "populate",
         code: "set({ count: 99 });",
         defaultManipulatorType: "populate",
-      } as any,
+      },
       {
         id: "act-reset",
         name: "clearSession",
         actionType: "reset",
         code: "set({ user: null });",
         defaultManipulatorType: "reset",
-      } as any,
+      },
       {
         id: "act-setter-count",
         name: "setCount",
@@ -59,7 +61,7 @@ describe("stateStoreManipulators", () => {
         actionType: "set",
         code: "set({ count: Math.max(0, payload) });",
         defaultManipulatorType: "setter",
-      } as any,
+      },
     ];
 
     const manipulators = getStateManipulators(sampleFields, customActions);
@@ -104,12 +106,12 @@ describe("stateStoreManipulators", () => {
   });
 
   it("executes custom code in applyManipulator", () => {
-    const customManipulator = {
+    const customManipulator: StateManipulator = {
       id: "m-custom",
       name: "loadData",
       label: "loadData()",
-      category: "builtin" as const,
-      actionType: "populate" as const,
+      category: "builtin",
+      actionType: "populate",
       code: "set({ count: 42, user: { name: 'Alice' } });",
     };
 
@@ -123,5 +125,174 @@ describe("stateStoreManipulators", () => {
     expect(res.error).toBeUndefined();
     expect(res.newState.count).toBe(42);
     expect(res.newState.user).toEqual({ name: "Alice" });
+  });
+
+  it("does not suppress or replace default set<Field> when a custom action targets that field", () => {
+    const customActions: GlobalStoreAction[] = [
+      {
+        id: "act-append-conversations",
+        name: "appendConversations",
+        targetFieldId: "f1",
+        actionType: "append",
+      },
+    ];
+
+    const manipulators = getStateManipulators(sampleFields, customActions);
+    const names = manipulators.map((m) => m.name);
+
+    // Both appendConversations AND setCount must exist!
+    expect(names).toContain("appendConversations");
+    expect(names).toContain("setCount");
+
+    const setCountManipulator = manipulators.find((m) => m.name === "setCount");
+    expect(setCountManipulator?.category).toBe("auto_setter");
+    expect(setCountManipulator?.isCustomized).toBe(false);
+
+    const appendManipulator = manipulators.find((m) => m.name === "appendConversations");
+    expect(appendManipulator?.category).toBe("standard_action");
+  });
+
+  it("executes custom action with state merge and functional updater", () => {
+    const customManipulator: StateManipulator = {
+      id: "act-custom-merge",
+      name: "appendConversations",
+      label: "appendConversations()",
+      category: "custom_action",
+      actionType: "append",
+      code: 'set((s) => ({ ...s, ...(payload && typeof payload === "object" ? payload : {}) }));',
+    };
+
+    const res = applyManipulator({
+      manipulator: customManipulator,
+      payload: { count: 88 },
+      currentState: { count: 10, user: null },
+      fields: sampleFields,
+    });
+
+    expect(res.error).toBeUndefined();
+    expect(res.newState.count).toBe(88);
+  });
+
+  it("executes custom reset code using initialState in scope without error", () => {
+    const resetManipulator: StateManipulator = {
+      id: "act-reset",
+      name: "resetStore",
+      label: "resetStore()",
+      category: "builtin",
+      actionType: "reset",
+      code: "set(initialState);",
+    };
+
+    const res = applyManipulator({
+      manipulator: resetManipulator,
+      payload: undefined,
+      currentState: { count: 999, user: { name: "Bob" } },
+      fields: sampleFields,
+    });
+
+    expect(res.error).toBeUndefined();
+    expect(res.newState.count).toBe(0);
+    expect(res.newState.user).toBeNull();
+  });
+
+  it("executes standard append action without custom code on an array field", () => {
+    const fieldsWithArray: GlobalStoreField[] = [
+      { id: "f1", name: "messages", type: "array", defaultValue: [] },
+    ];
+    const appendManipulator: StateManipulator = {
+      id: "act-append-msg",
+      name: "appendMessage",
+      label: "appendMessage(item)",
+      category: "standard_action",
+      actionType: "append",
+      targetFieldId: "f1",
+      targetFieldName: "messages",
+    };
+
+    const res1 = applyManipulator({
+      manipulator: appendManipulator,
+      payload: "Hello World",
+      currentState: { messages: [] },
+      fields: fieldsWithArray,
+    });
+
+    expect(res1.error).toBeUndefined();
+    expect(res1.newState.messages).toEqual(["Hello World"]);
+
+    const res2 = applyManipulator({
+      manipulator: appendManipulator,
+      payload: "Second Message",
+      currentState: res1.newState,
+      fields: fieldsWithArray,
+    });
+
+    expect(res2.error).toBeUndefined();
+    expect(res2.newState.messages).toEqual(["Hello World", "Second Message"]);
+  });
+
+  it("executes remove action by id or index typesafely", () => {
+    const fieldsWithArray: GlobalStoreField[] = [
+      { id: "f1", name: "items", type: "array", defaultValue: [] },
+    ];
+    const removeManipulator: StateManipulator = {
+      id: "act-remove",
+      name: "removeItem",
+      label: "removeItem(id)",
+      category: "standard_action",
+      actionType: "remove",
+      targetFieldId: "f1",
+      targetFieldName: "items",
+    };
+
+    const res1 = applyManipulator({
+      manipulator: removeManipulator,
+      payload: { id: "item-2" },
+      currentState: {
+        items: [
+          { id: "item-1", name: "Item 1" },
+          { id: "item-2", name: "Item 2" },
+          { id: "item-3", name: "Item 3" },
+        ],
+      },
+      fields: fieldsWithArray,
+    });
+
+    expect(res1.error).toBeUndefined();
+    expect(res1.newState.items).toEqual([
+      { id: "item-1", name: "Item 1" },
+      { id: "item-3", name: "Item 3" },
+    ]);
+  });
+
+  it("executes increment action typesafely", () => {
+    const incManipulator: StateManipulator = {
+      id: "act-inc",
+      name: "incrementCount",
+      label: "incrementCount()",
+      category: "standard_action",
+      actionType: "increment",
+      targetFieldId: "f1",
+      targetFieldName: "count",
+    };
+
+    const res1 = applyManipulator({
+      manipulator: incManipulator,
+      payload: { amount: 5 },
+      currentState: { count: 10 },
+      fields: sampleFields,
+    });
+
+    expect(res1.error).toBeUndefined();
+    expect(res1.newState.count).toBe(15);
+  });
+
+  it("isJsonObject properly acts as a type guard", () => {
+    expect(isJsonObject({ a: 1 })).toBe(true);
+    expect(isJsonObject([1, 2, 3])).toBe(false);
+    expect(isJsonObject(null)).toBe(false);
+    expect(isJsonObject(undefined)).toBe(false);
+    expect(isJsonObject("string")).toBe(false);
+    expect(isJsonObject(42)).toBe(false);
+    expect(isJsonObject(true)).toBe(false);
   });
 });

@@ -195,10 +195,10 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
       const targetFieldId = isSetter ? manipulatorKey.slice("setter-".length) : patch.targetFieldId;
 
       const existingIndex = actions.findIndex((a) => {
-        if ((a as any).defaultManipulatorType === manipulatorKey) return true;
+        if (a.defaultManipulatorType === manipulatorKey) return true;
         if (isPopulate) {
           return (
-            (a as any).defaultManipulatorType === "populate" ||
+            a.defaultManipulatorType === "populate" ||
             a.actionType === "populate" ||
             a.name.toLowerCase() === "populate" ||
             a.name.toLowerCase() === "load"
@@ -206,16 +206,19 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
         }
         if (isReset) {
           return (
-            (a as any).defaultManipulatorType === "reset" ||
+            a.defaultManipulatorType === "reset" ||
             a.actionType === "reset" ||
             a.name.toLowerCase() === "reset"
           );
         }
         if (isSetter) {
+          const field = fields.find((f) => f.id === targetFieldId);
+          const setterName = field ? `set${field.name.toLowerCase()}` : "";
           return (
-            ((a as any).defaultManipulatorType === "setter" && (a as any).targetFieldId === targetFieldId) ||
-            a.targetFieldId === targetFieldId ||
-            a.name.toLowerCase() === `set${fields.find((f) => f.id === targetFieldId)?.name.toLowerCase()}`
+            (a.defaultManipulatorType === "setter" && a.targetFieldId === targetFieldId) ||
+            (Boolean(setterName) &&
+              a.name.toLowerCase() === setterName &&
+              (!a.targetFieldId || a.targetFieldId === targetFieldId))
           );
         }
         return false;
@@ -252,8 +255,8 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
           parameters: patch.parameters,
           prompt: patch.prompt,
           description: patch.description,
+          defaultManipulatorType: manipulatorType,
           ...patch,
-          ...({ defaultManipulatorType: manipulatorType } as any),
         };
         updatedActions = [...actions, newAction];
       }
@@ -278,10 +281,10 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
       const targetFieldId = isSetter ? manipulatorKey.slice("setter-".length) : undefined;
 
       const filteredActions = actions.filter((a) => {
-        if ((a as any).defaultManipulatorType === manipulatorKey) return false;
+        if (a.defaultManipulatorType === manipulatorKey) return false;
         if (isPopulate) {
           return !(
-            (a as any).defaultManipulatorType === "populate" ||
+            a.defaultManipulatorType === "populate" ||
             a.actionType === "populate" ||
             a.name.toLowerCase() === "populate" ||
             a.name.toLowerCase() === "load"
@@ -289,16 +292,19 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
         }
         if (isReset) {
           return !(
-            (a as any).defaultManipulatorType === "reset" ||
+            a.defaultManipulatorType === "reset" ||
             a.actionType === "reset" ||
             a.name.toLowerCase() === "reset"
           );
         }
         if (isSetter) {
+          const field = fields.find((f) => f.id === targetFieldId);
+          const setterName = field ? `set${field.name.toLowerCase()}` : "";
           return !(
-            ((a as any).defaultManipulatorType === "setter" && (a as any).targetFieldId === targetFieldId) ||
-            a.targetFieldId === targetFieldId ||
-            a.name.toLowerCase() === `set${fields.find((f) => f.id === targetFieldId)?.name.toLowerCase()}`
+            (a.defaultManipulatorType === "setter" && a.targetFieldId === targetFieldId) ||
+            (Boolean(setterName) &&
+              a.name.toLowerCase() === setterName &&
+              (!a.targetFieldId || a.targetFieldId === targetFieldId))
           );
         }
         return true;
@@ -429,10 +435,10 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
 
       // 2. Remove any custom action override in actions
       const filteredActions = actions.filter((a) => {
-        if ((a as any).defaultManipulatorType === manipulatorKey) return false;
+        if (a.defaultManipulatorType === manipulatorKey) return false;
         if (isPopulate) {
           return !(
-            (a as any).defaultManipulatorType === "populate" ||
+            a.defaultManipulatorType === "populate" ||
             a.actionType === "populate" ||
             a.name.toLowerCase() === "populate" ||
             a.name.toLowerCase() === "load"
@@ -440,16 +446,18 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
         }
         if (isReset) {
           return !(
-            (a as any).defaultManipulatorType === "reset" ||
+            a.defaultManipulatorType === "reset" ||
             a.actionType === "reset" ||
             a.name.toLowerCase() === "reset"
           );
         }
         if (isSetter) {
+          const setterName = targetField ? `set${targetField.name.toLowerCase()}` : "";
           return !(
-            ((a as any).defaultManipulatorType === "setter" && (a as any).targetFieldId === targetFieldId) ||
-            a.targetFieldId === targetFieldId ||
-            a.name.toLowerCase() === `set${targetField?.name.toLowerCase()}`
+            (a.defaultManipulatorType === "setter" && a.targetFieldId === targetFieldId) ||
+            (Boolean(setterName) &&
+              a.name.toLowerCase() === setterName &&
+              (!a.targetFieldId || a.targetFieldId === targetFieldId))
           );
         }
         return true;
@@ -629,7 +637,7 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
         onValueChange={(val) => setActiveTab(val as "schema" | "playground")}
         className="w-full"
       >
-        <TabsList className="grid grid-cols-2 w-full h-8 bg-muted/40 p-0.5 rounded-lg border border-border/50">
+        <TabsList className="grid grid-cols-2 w-full h-8 bg-muted p-0.5 rounded-lg border border-border">
           <TabsTrigger
             value="schema"
             className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
@@ -639,9 +647,9 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
           </TabsTrigger>
           <TabsTrigger
             value="playground"
-            className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-indigo-400 data-[state=active]:shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+            className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <Zap size={12} className="text-amber-400" />
+            <Zap size={12} />
             <span>Live Test Area</span>
           </TabsTrigger>
         </TabsList>

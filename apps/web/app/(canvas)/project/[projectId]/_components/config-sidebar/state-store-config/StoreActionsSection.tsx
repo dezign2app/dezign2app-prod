@@ -76,7 +76,7 @@ export const StoreActionsSection: React.FC<StoreActionsSectionProps> = ({
 
   const customActions = React.useMemo(() => {
     return actions.filter((act) => {
-      if ((act as any).defaultManipulatorType) return false;
+      if (act.defaultManipulatorType) return false;
       const isPopulateOverride =
         act.actionType === "populate" ||
         act.name.toLowerCase() === "populate" ||

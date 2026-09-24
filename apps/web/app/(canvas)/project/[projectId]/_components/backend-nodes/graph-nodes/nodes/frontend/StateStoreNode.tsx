@@ -4,6 +4,7 @@ import React, { useState, useMemo } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
 import { Database, Settings, Trash, Layers, AlertTriangle, Edit3 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
+import { CustomTypeItem } from "@workspace/canvas/types";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { toast } from "sonner";
@@ -164,10 +165,10 @@ export const StateStoreNode = ({
         return;
       }
       const typesNode = allNodes.find(
-        (n) => n.type === "types" && (n.data?.types || []).some((t: any) => t.name === baseTypeName),
+        (n) => n.type === "types" && (n.data?.types || []).some((t: CustomTypeItem) => t.name === baseTypeName),
       );
       if (!typesNode) return;
-      const typeItem = (typesNode.data?.types || []).find((t: any) => t.name === baseTypeName);
+      const typeItem = (typesNode.data?.types || []).find((t: CustomTypeItem) => t.name === baseTypeName);
       if (!typeItem) return;
 
       const expectedSourceHandle = `type-out-${typeItem.id}`;
@@ -471,19 +472,19 @@ export const StateStoreNode = ({
         ]);
         const populateOverride = (data.actions || []).find(
           (a) =>
-            (a as any).defaultManipulatorType === "populate" ||
+            a.defaultManipulatorType === "populate" ||
             a.actionType === "populate" ||
             a.name.toLowerCase() === "populate" ||
             a.name.toLowerCase() === "load",
         );
         const resetOverride = (data.actions || []).find(
           (a) =>
-            (a as any).defaultManipulatorType === "reset" ||
+            a.defaultManipulatorType === "reset" ||
             a.actionType === "reset" ||
             a.name.toLowerCase() === "reset",
         );
         const customActions = (data.actions || []).filter((act) => {
-          if ((act as any).defaultManipulatorType) return false;
+          if (act.defaultManipulatorType) return false;
           if (act === populateOverride || act === resetOverride) return false;
           const isSetter = (data.fields || []).some(
             (f) =>
