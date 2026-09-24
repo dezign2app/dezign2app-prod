@@ -1013,6 +1013,108 @@ describe("compileNextjsV16StateStoreNode", () => {
     expect(pageFile).toBeDefined();
     expect(pageFile!.content).toContain("useConversationStore.getState().populate({ conversations: data?.data }");
   });
+
+  it("compiles multi-field parameterMappings for populate without ambiguous merging", () => {
+    const webAppNode: BackendNode = {
+      id: "node-app",
+      type: "webApp",
+      fractionalIndex: "a0",
+      position: { x: 0, y: 0 },
+      data: { label: "ChatApp", appSlug: "chat-app" },
+    };
+
+    const stateStoreNode: BackendNode = {
+      id: "node-store-conv",
+      type: "state_store",
+      fractionalIndex: "a1",
+      position: { x: 200, y: 0 },
+      data: {
+        label: "Conversation",
+        storeName: "Conversation",
+        scope: "global",
+        storage: "memory",
+        fields: [
+          { id: "f1", name: "conversations", type: "array" },
+          { id: "f2", name: "messages", type: "array" },
+        ],
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-conv",
+      type: "webPage",
+      fractionalIndex: "a2",
+      position: { x: 400, y: 0 },
+      data: {
+        label: "conversations",
+        appSlug: "chat-app",
+        sections: [
+          {
+            id: "sec-main",
+            name: "Main",
+            actions: [
+              {
+                id: "act-load",
+                name: "pageLoad",
+                event: "pageLoad",
+                storeActionBinding: {
+                  storeNodeId: "node-store-conv",
+                  storeName: "Conversation",
+                  actionName: "populate",
+                  actionType: "populate",
+                  parameterMappings: {
+                    conversations: "data.items",
+                    messages: "data.recentMessages",
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "service-chat",
+      type: "service",
+      fractionalIndex: "a3",
+      position: { x: 600, y: 0 },
+      data: { label: "ChatService", port: "8080" },
+    };
+
+    const endpoint: Endpoint & { nodeId: string } = {
+      id: "ep-convs",
+      name: "conversations",
+      type: "GET",
+      nodeId: "service-chat",
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-ep",
+      type: "connection",
+      fractionalIndex: "a0",
+      source: "node-page-conv",
+      sourceHandle: "pageload-in-act-load",
+      target: "service-chat",
+      targetHandle: "ep-in-ep-convs",
+    };
+
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      [endpoint],
+      [],
+      [webAppNode, stateStoreNode, webPageNode, serviceNode],
+      [edge],
+      "ChatApp",
+      [],
+      "chat-app",
+      webAppNode,
+    );
+
+    const pageFile = result.files.find((f) => f.filename === "app/(public)/conversations/page.tsx");
+    expect(pageFile).toBeDefined();
+    expect(pageFile!.content).toContain("useConversationStore.getState().populate({ conversations: data?.data?.items, messages: data?.data?.recentMessages });");
+  });
 });
 
 
