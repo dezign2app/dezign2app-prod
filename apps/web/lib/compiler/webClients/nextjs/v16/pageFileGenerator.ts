@@ -306,11 +306,34 @@ export function generatePageAndComponentFiles({
             dispatchArg = isSingleLoadWithEndpoint ? `data?.${accessor}` : `results["${resKey}"]?.${accessor}`;
           }
 
-          if (actionMethod === "populate" && binding.targetFieldName) {
-            const fieldVal = (!binding.valuePath && (binding.updateSource === "response" || !binding.updateSource))
-              ? `("data" in (${dispatchArg} || {}) ? ${dispatchArg}.data : ${dispatchArg})`
-              : dispatchArg;
-            return `${hookName}.getState().populate({ ${binding.targetFieldName}: ${fieldVal} });`;
+          if (actionMethod === "populate") {
+            if (binding.parameterMappings && Object.keys(binding.parameterMappings).length > 0) {
+              const mappedEntries = Object.entries(binding.parameterMappings)
+                .filter(([_, path]) => path && path.trim())
+                .map(([fieldName, path]) => {
+                  const accessor = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
+                  const val = isSingleLoadWithEndpoint ? `data?.${accessor}` : `results["${resKey}"]?.${accessor}`;
+                  return `${fieldName}: ${val}`;
+                });
+              if (mappedEntries.length > 0) {
+                return `${hookName}.getState().populate({ ${mappedEntries.join(", ")} });`;
+              }
+            }
+            if (binding.targetFieldName) {
+              const fieldVal = (!binding.valuePath && (binding.updateSource === "response" || !binding.updateSource))
+                ? `("data" in (${dispatchArg} || {}) ? ${dispatchArg}.data : ${dispatchArg})`
+                : dispatchArg;
+              return `${hookName}.getState().populate({ ${binding.targetFieldName}: ${fieldVal} });`;
+            }
+          }
+
+          if (binding.actionType === "custom" && binding.parameterMappings && Object.keys(binding.parameterMappings).length > 0) {
+            const paramArgs = Object.values(binding.parameterMappings).map((path) => {
+              if (!path || !path.trim()) return "undefined";
+              const accessor = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
+              return isSingleLoadWithEndpoint ? `data?.${accessor}` : `results["${resKey}"]?.${accessor}`;
+            });
+            return `${hookName}.getState().${actionMethod}(${paramArgs.join(", ")});`;
           }
 
           if (actionMethod.startsWith("set") && binding.targetFieldName && !binding.valuePath && (binding.updateSource === "response" || !binding.updateSource)) {

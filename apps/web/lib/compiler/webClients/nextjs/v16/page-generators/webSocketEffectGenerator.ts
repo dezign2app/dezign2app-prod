@@ -8,6 +8,7 @@ function generateRealtimeStoreSnippet(
     updateSource?: string;
     valuePath?: string;
     customValue?: string;
+    parameterMappings?: Record<string, string>;
   },
   dataVar = "evtData",
 ): string {
@@ -35,6 +36,14 @@ function generateRealtimeStoreSnippet(
       }
     }
     return `          ${hookName}.getState().${actionName}(${parsedVal});\n`;
+  }
+
+  if (actionName === "populate" && binding.parameterMappings && Object.keys(binding.parameterMappings).length > 0) {
+    const fields = Object.entries(binding.parameterMappings)
+      .filter(([_, p]: [string, string]) => Boolean(p && p.trim()))
+      .map(([k, p]: [string, string]) => `${k}: (${dataVar} as any)${p.split(".").filter(Boolean).map((part: string) => `?.[${JSON.stringify(part)}]`).join("")}`)
+      .join(", ");
+    return `          ${hookName}.getState().populate({ ${fields} });\n`;
   }
 
   if (src === "nested_property" && vPath) {

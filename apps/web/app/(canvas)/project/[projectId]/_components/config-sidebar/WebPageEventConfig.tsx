@@ -485,6 +485,8 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
             stateStoreNodes={nodes.filter((n) => n.type === "state_store")}
             isEndpointConnected={Boolean(linkedTargetNode && endpoint)}
             connectedEndpointName={endpoint?.name}
+            connectedEndpoint={endpoint}
+            eventRequestBody={item?.requestBody || requestBody}
             onUpdateStoreBinding={(newBinding) =>
               updateActionInParent({ storeActionBinding: newBinding })
             }

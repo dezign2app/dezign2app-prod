@@ -99,6 +99,38 @@ export function generateSimpleButtonEventTemplate({
       }\n`,
       };
     }
+    // Response with explicit parameter mappings (e.g. for populate or multi-param custom action)
+    if (storeActionName === "populate" && storeActionBinding?.parameterMappings && Object.keys(storeActionBinding.parameterMappings).length > 0) {
+      const mappedEntries = Object.entries(storeActionBinding.parameterMappings)
+        .filter(([_, path]) => path && path.trim())
+        .map(([fieldName, path]) => {
+          const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
+          return `${fieldName}: resData?.${chain}`;
+        });
+      if (mappedEntries.length > 0) {
+        return {
+          preTrigger: "",
+          postTrigger: `      if (triggerResult) {
+        const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
+        ${storeHookName}.getState().populate({ ${mappedEntries.join(", ")} });
+      }\n`,
+        };
+      }
+    }
+    if (storeActionBinding?.actionType === "custom" && storeActionBinding?.parameterMappings && Object.keys(storeActionBinding.parameterMappings).length > 0) {
+      const paramArgs = Object.values(storeActionBinding.parameterMappings).map((path) => {
+        if (!path || !path.trim()) return "undefined";
+        const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
+        return `resData?.${chain}`;
+      });
+      return {
+        preTrigger: "",
+        postTrigger: `      if (triggerResult) {
+        const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
+        ${storeHookName}.getState().${storeActionName}(${paramArgs.join(", ")});
+      }\n`,
+      };
+    }
     // Default response:
     return {
       preTrigger: "",
