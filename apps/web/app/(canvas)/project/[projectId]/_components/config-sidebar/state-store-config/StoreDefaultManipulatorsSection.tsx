@@ -90,7 +90,7 @@ export const StoreDefaultManipulatorsSection: React.FC<
   const populateAction = useMemo(() => {
     return actions.find(
       (a) =>
-        (a as any).defaultManipulatorType === "populate" ||
+        a.defaultManipulatorType === "populate" ||
         a.actionType === "populate" ||
         a.name.toLowerCase() === "populate" ||
         a.name.toLowerCase() === "load",
@@ -100,7 +100,7 @@ export const StoreDefaultManipulatorsSection: React.FC<
   const resetAction = useMemo(() => {
     return actions.find(
       (a) =>
-        (a as any).defaultManipulatorType === "reset" ||
+        a.defaultManipulatorType === "reset" ||
         a.actionType === "reset" ||
         a.name.toLowerCase() === "reset",
     );
@@ -109,13 +109,17 @@ export const StoreDefaultManipulatorsSection: React.FC<
   const fieldSetterActions = useMemo(() => {
     const map = new Map<string, GlobalStoreAction>();
     fields.forEach((f) => {
-      const match = actions.find(
-        (a) =>
-          (a as any).defaultManipulatorType === "setter" && (a as any).targetFieldId === f.id
-            ? true
-            : a.targetFieldId === f.id ||
-              a.name.toLowerCase() === `set${f.name.toLowerCase()}`,
-      );
+      const defaultSetterName = `set${f.name.toLowerCase()}`;
+      const match = actions.find((a) => {
+        if (a.defaultManipulatorType === "setter" && a.targetFieldId === f.id) {
+          return true;
+        }
+        // Match explicit setter override by name and target field
+        return (
+          a.name.toLowerCase() === defaultSetterName &&
+          (!a.targetFieldId || a.targetFieldId === f.id)
+        );
+      });
       if (match) {
         map.set(f.id, match);
       }

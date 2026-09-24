@@ -190,22 +190,69 @@ export function generateZustandStore(
           : targetField.type === "array"
           ? "unknown"
           : mapFieldTypeToTs(targetField.type);
-        customActionSignatures.push(`  ${actName}: (item: ${itemTsType}) => void;`);
-        customActionImpls.push(`  ${actName}: (item) => set((s) => ({ ${targetName}: Array.isArray(s.${targetName}) ? [...s.${targetName}, item] : [item] })),`);
+        const hasParams = Array.isArray(act.parameters) && act.parameters.length > 0;
+        const paramSigs = hasParams
+          ? act.parameters!
+              .map((p) => `${toCamelCase(p.name)}: ${mapFieldTypeToTs(p.type)}${p.required === false ? " | undefined" : ""}`)
+              .join(", ")
+          : `item: ${itemTsType}`;
+        const paramArgs = hasParams
+          ? act.parameters!.map((p) => toCamelCase(p.name)).join(", ")
+          : "item";
+        customActionSignatures.push(`  ${actName}: (${paramSigs}) => void;`);
+        if (act.code && act.code.trim()) {
+          const rawCode = act.code.trim();
+          const bodyLines = rawCode.split("\n").map((line) => `    ${line}`).join("\n");
+          const payloadAlias = hasParams ? "" : "    const payload = item;\n";
+          customActionImpls.push(`  ${actName}: (${paramArgs}) => {\n${payloadAlias}${bodyLines}\n  },`);
+        } else {
+          customActionImpls.push(`  ${actName}: (item) => set((s) => ({ ${targetName}: Array.isArray(s.${targetName}) ? [...s.${targetName}, item] : [item] })),`);
+        }
         break;
       }
-      case "remove":
-        customActionSignatures.push(`  ${actName}: (indexOrId: string | number) => void;`);
-        customActionImpls.push(`  ${actName}: (indexOrId) => set((s) => ({ ${targetName}: Array.isArray(s.${targetName}) ? s.${targetName}.filter((it, idx) => idx !== indexOrId && !(typeof it === "object" && it !== null && "id" in it && it.id === indexOrId)) : [] })),`);
+      case "remove": {
+        const hasParams = Array.isArray(act.parameters) && act.parameters.length > 0;
+        const paramSigs = hasParams
+          ? act.parameters!
+              .map((p) => `${toCamelCase(p.name)}: ${mapFieldTypeToTs(p.type)}${p.required === false ? " | undefined" : ""}`)
+              .join(", ")
+          : `indexOrId: string | number`;
+        const paramArgs = hasParams
+          ? act.parameters!.map((p) => toCamelCase(p.name)).join(", ")
+          : "indexOrId";
+        customActionSignatures.push(`  ${actName}: (${paramSigs}) => void;`);
+        if (act.code && act.code.trim()) {
+          const rawCode = act.code.trim();
+          const bodyLines = rawCode.split("\n").map((line) => `    ${line}`).join("\n");
+          const payloadAlias = hasParams ? "" : "    const payload = indexOrId;\n";
+          customActionImpls.push(`  ${actName}: (${paramArgs}) => {\n${payloadAlias}${bodyLines}\n  },`);
+        } else {
+          customActionImpls.push(`  ${actName}: (indexOrId) => set((s) => ({ ${targetName}: Array.isArray(s.${targetName}) ? s.${targetName}.filter((it, idx) => idx !== indexOrId && !(typeof it === "object" && it !== null && "id" in it && it.id === indexOrId)) : [] })),`);
+        }
         break;
-      case "toggle":
+      }
+      case "toggle": {
         customActionSignatures.push(`  ${actName}: () => void;`);
-        customActionImpls.push(`  ${actName}: () => set((s) => ({ ${targetName}: !s.${targetName} })),`);
+        if (act.code && act.code.trim()) {
+          const rawCode = act.code.trim();
+          const bodyLines = rawCode.split("\n").map((line) => `    ${line}`).join("\n");
+          customActionImpls.push(`  ${actName}: () => {\n${bodyLines}\n  },`);
+        } else {
+          customActionImpls.push(`  ${actName}: () => set((s) => ({ ${targetName}: !s.${targetName} })),`);
+        }
         break;
-      case "increment":
+      }
+      case "increment": {
         customActionSignatures.push(`  ${actName}: (amount?: number) => void;`);
-        customActionImpls.push(`  ${actName}: (amount = 1) => set((s) => ({ ${targetName}: typeof s.${targetName} === "number" ? s.${targetName} + amount : amount })),`);
+        if (act.code && act.code.trim()) {
+          const rawCode = act.code.trim();
+          const bodyLines = rawCode.split("\n").map((line) => `    ${line}`).join("\n");
+          customActionImpls.push(`  ${actName}: (amount = 1) => {\n    const payload = amount;\n${bodyLines}\n  },`);
+        } else {
+          customActionImpls.push(`  ${actName}: (amount = 1) => set((s) => ({ ${targetName}: typeof s.${targetName} === "number" ? s.${targetName} + amount : amount })),`);
+        }
         break;
+      }
       case "reset": {
         const hasParams = Array.isArray(act.parameters) && act.parameters.length > 0;
         const paramSigs = hasParams

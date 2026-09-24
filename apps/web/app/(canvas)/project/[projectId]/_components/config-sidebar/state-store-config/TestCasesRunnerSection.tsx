@@ -53,7 +53,7 @@ export const TestCasesRunnerSection: React.FC<TestCasesRunnerSectionProps> = ({
           variant="outline"
           size="sm"
           onClick={onAutoGenerate}
-          className="h-7 text-[10px] px-2 gap-1 text-indigo-400 hover:text-indigo-300 border-indigo-500/30 bg-indigo-500/5 cursor-pointer"
+          className="h-7 text-[10px] px-2 gap-1 cursor-pointer"
         >
           <Sparkles size={11} />
           <span>Auto-Generate</span>
@@ -76,23 +76,23 @@ export const TestCasesRunnerSection: React.FC<TestCasesRunnerSectionProps> = ({
             size="sm"
             onClick={onRunAll}
             disabled={testCases.length === 0}
-            className="h-7 text-[10px] px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium gap-1 cursor-pointer"
+            className="h-7 text-[10px] px-2.5 font-semibold gap-1 cursor-pointer"
           >
-            <Play size={10} className="fill-white" />
+            <Play size={10} className="fill-current" />
             <span>Run All ({testCases.length})</span>
           </Button>
         </div>
       </div>
 
       {testCases.length === 0 ? (
-        <div className="p-4 text-center text-[10px] text-muted-foreground bg-muted/20 rounded-lg border border-dashed border-border/60 space-y-1.5">
+        <div className="p-4 text-center text-[10px] text-muted-foreground bg-muted rounded-lg border border-dashed border-border space-y-1.5">
           <p>No test cases generated yet.</p>
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={onAutoGenerate}
-            className="h-6 text-[10px] text-indigo-400"
+            className="h-6 text-[10px]"
           >
             Auto-generate from Manipulators
           </Button>
@@ -103,20 +103,20 @@ export const TestCasesRunnerSection: React.FC<TestCasesRunnerSectionProps> = ({
             return (
               <div
                 key={tc.id}
-                className="p-2.5 rounded-lg bg-card/80 border border-border/70 space-y-2 text-[11px]"
+                className="p-2.5 rounded-lg bg-card border border-border space-y-2 text-[11px]"
               >
                 <div className="flex items-center justify-between gap-2">
                   <Input
                     value={tc.name}
                     onChange={(e) => onUpdateTestCase(tc.id, { name: e.target.value })}
-                    className="h-6 text-[11px] font-semibold bg-transparent border-transparent hover:border-border/60 focus:border-border px-1 flex-1"
+                    className="h-6 text-[11px] font-semibold bg-transparent border-transparent hover:border-border focus:border-border px-1 flex-1 text-foreground"
                   />
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     {tc.status === "passed" && (
                       <Badge
                         variant="outline"
-                        className="text-[9px] text-emerald-400 border-emerald-500/30 gap-0.5"
+                        className="text-[9px] text-foreground bg-muted border-border gap-0.5"
                       >
                         <Check size={10} /> Passed {tc.lastRunAt && `(${tc.lastRunAt})`}
                       </Badge>
@@ -124,7 +124,7 @@ export const TestCasesRunnerSection: React.FC<TestCasesRunnerSectionProps> = ({
                     {tc.status === "failed" && (
                       <Badge
                         variant="outline"
-                        className="text-[9px] text-rose-400 border-rose-500/30 gap-0.5"
+                        className="text-[9px] text-destructive bg-destructive/10 border-destructive gap-0.5"
                       >
                         <XCircle size={10} /> Failed
                       </Badge>
@@ -134,7 +134,7 @@ export const TestCasesRunnerSection: React.FC<TestCasesRunnerSectionProps> = ({
                       variant="ghost"
                       size="icon"
                       onClick={() => onRunTestCase(tc.id)}
-                      className="h-6 w-6 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 cursor-pointer"
+                      className="h-6 w-6 text-foreground hover:bg-muted cursor-pointer"
                       title="Run this test case"
                     >
                       <Play size={11} className="fill-current" />

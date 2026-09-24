@@ -54,6 +54,16 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
   const [payloadText, setPayloadText] = useState<string>("");
   const [isExecuting, setIsExecuting] = useState(false);
   const [testHistory, setTestHistory] = useState<TestHistoryEntry[]>([]);
+  const [lastExecutionResult, setLastExecutionResult] = useState<{
+    manipulatorName: string;
+    category: string;
+    success: boolean;
+    error?: string;
+    changedKeys: string[];
+    beforeState: StoreState;
+    afterState: StoreState;
+    timestamp: string;
+  } | null>(null);
 
   // Test cases state
   const [testCases, setTestCases] = useState<StateStoreTestCase[]>(() => {
@@ -209,33 +219,109 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
       fields,
     });
 
+    const changedKeys = fields
+      .map((f) => f.name)
+      .filter((k) => JSON.stringify(beforeState[k]) !== JSON.stringify(newState[k]));
+
+    const result = {
+      manipulatorName: selectedManipulator.name,
+      category: selectedManipulator.category,
+      success: !error,
+      error,
+      changedKeys,
+      beforeState,
+      afterState: newState,
+      timestamp: new Date().toLocaleTimeString(),
+    };
+    setLastExecutionResult(result);
+
     if (error) {
-      toast.error(`Manipulator failed: ${error}`);
+      toast.error(`"${selectedManipulator.name}()" failed: ${error}`);
     } else {
       setSandboxState(newState);
-      const changedKeys = fields
-        .map((f) => f.name)
-        .filter((k) => JSON.stringify(beforeState[k]) !== JSON.stringify(newState[k]));
-
-      const entry: TestHistoryEntry = {
-        id: `hist-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString(),
-        manipulatorName: selectedManipulator.name,
-        category: selectedManipulator.category,
-        changedKeys,
-        beforeState,
-        afterState: newState,
-        error,
-      };
-
-      setTestHistory((prev) => [entry, ...prev.slice(0, 19)]);
       if (changedKeys.length > 0) {
         toast.success(`"${selectedManipulator.name}()" updated: ${changedKeys.join(", ")}`);
       } else {
         toast.info(`"${selectedManipulator.name}()" executed`);
       }
     }
+
+    const entry: TestHistoryEntry = {
+      id: `hist-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString(),
+      manipulatorName: selectedManipulator.name,
+      category: selectedManipulator.category,
+      changedKeys,
+      beforeState,
+      afterState: newState,
+      error,
+    };
+    setTestHistory((prev) => [entry, ...prev.slice(0, 19)]);
     setIsExecuting(false);
+  };
+
+  // Quick run an action directly by ID
+  const handleQuickRunManipulator = (manipulatorId: string) => {
+    const targetM = manipulators.find((m) => m.id === manipulatorId);
+    if (!targetM) return;
+
+    setSelectedManipulatorId(targetM.id);
+    const beforeState = { ...sandboxState };
+
+    let payload: JsonValue | undefined = targetM.defaultPayload;
+    if (targetM.id === selectedManipulatorId && payloadText.trim()) {
+      try {
+        payload = JSON.parse(payloadText);
+      } catch {
+        payload = payloadText;
+      }
+    }
+
+    const { newState, error } = applyManipulator({
+      manipulator: targetM,
+      payload,
+      currentState: sandboxState,
+      fields,
+    });
+
+    const changedKeys = fields
+      .map((f) => f.name)
+      .filter((k) => JSON.stringify(beforeState[k]) !== JSON.stringify(newState[k]));
+
+    const result = {
+      manipulatorName: targetM.name,
+      category: targetM.category,
+      success: !error,
+      error,
+      changedKeys,
+      beforeState,
+      afterState: newState,
+      timestamp: new Date().toLocaleTimeString(),
+    };
+    setLastExecutionResult(result);
+
+    if (error) {
+      toast.error(`"${targetM.name}()" failed: ${error}`);
+    } else {
+      setSandboxState(newState);
+      if (changedKeys.length > 0) {
+        toast.success(`"${targetM.name}()" updated: ${changedKeys.join(", ")}`);
+      } else {
+        toast.info(`"${targetM.name}()" executed`);
+      }
+    }
+
+    const entry: TestHistoryEntry = {
+      id: `hist-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString(),
+      manipulatorName: targetM.name,
+      category: targetM.category,
+      changedKeys,
+      beforeState,
+      afterState: newState,
+      error,
+    };
+    setTestHistory((prev) => [entry, ...prev.slice(0, 19)]);
   };
 
   // Run a single test case
@@ -375,10 +461,11 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
       <LiveStateInspector
         sandboxState={sandboxState}
         onResetDefaults={handleResetSandbox}
+        onUpdateSandboxState={setSandboxState}
       />
 
       {/* Mode Switcher: Run Manipulators vs Generated Test Cases */}
-      <div className="flex items-center justify-between p-1 bg-muted/40 rounded-lg border border-border/60">
+      <div className="flex items-center justify-between p-1 bg-muted rounded-lg border border-border">
         <button
           type="button"
           onClick={() => setActivePlaygroundTab("manipulators")}
@@ -389,8 +476,8 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
               : "text-muted-foreground hover:text-foreground",
           )}
         >
-          <Zap size={12} className="text-amber-400" />
-          <span>State Manipulator</span>
+          <Zap size={12} className="text-foreground" />
+          <span>Execute Actions</span>
         </button>
         <button
           type="button"
@@ -398,11 +485,11 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
           className={cn(
             "flex-1 text-xs py-1 px-2.5 rounded-md font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer",
             activePlaygroundTab === "testcases"
-              ? "bg-background text-indigo-400 shadow-xs font-semibold"
+              ? "bg-background text-foreground shadow-xs font-semibold"
               : "text-muted-foreground hover:text-foreground",
           )}
         >
-          <CheckCircle2 size={12} className="text-emerald-400" />
+          <CheckCircle2 size={12} className="text-foreground" />
           <span>Test Cases ({testCases.length})</span>
         </button>
       </div>
@@ -419,6 +506,8 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
           manipulatorArgInfo={manipulatorArgInfo}
           isExecuting={isExecuting}
           onRunManipulator={handleRunManipulator}
+          onQuickRunManipulator={handleQuickRunManipulator}
+          lastExecutionResult={lastExecutionResult}
         />
       )}
 
@@ -437,7 +526,10 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
       )}
 
       {/* State Transition History & Diff */}
-      <TestActivityLog history={testHistory} />
+      <TestActivityLog
+        history={testHistory}
+        onClearHistory={() => setTestHistory([])}
+      />
     </div>
   );
 };
