@@ -105,8 +105,8 @@ export function generateZustandStore(
   });
 
   const disabledManipulators = new Set([
-    ...(((store as any).disabledDefaultManipulators as string[]) || []),
-    ...(((store as any).deletedDefaultManipulators as string[]) || []),
+    ...(store.disabledDefaultManipulators || []),
+    ...(store.deletedDefaultManipulators || []),
   ]);
 
   const actionNames = new Set((store.actions || []).map((a) => toCamelCase(a.name)));
@@ -243,13 +243,56 @@ export function generateZustandStore(
         break;
       }
       case "increment": {
-        customActionSignatures.push(`  ${actName}: (amount?: number) => void;`);
         if (act.code && act.code.trim()) {
-          const rawCode = act.code.trim();
-          const bodyLines = rawCode.split("\n").map((line) => `    ${line}`).join("\n");
-          customActionImpls.push(`  ${actName}: (amount = 1) => {\n    const payload = amount;\n${bodyLines}\n  },`);
+          let rawCode = act.code.trim();
+
+          // Detect custom code that treats `payload` as an object (Item Map / merge patterns).
+          // If the snippet contains `payload.`, `payload?.`, or `...payload`, the developer
+          // intended an object payload — not the numeric `amount` the increment type normally uses.
+          const usesObjectPayload =
+            /\bpayload\s*[?.]/.test(rawCode) || /\.\.\.\s*payload\b/.test(rawCode);
+
+          if (usesObjectPayload) {
+            // Derive the element type of the target array field (same logic as "append" case).
+            // Using the item type (e.g. `Conversation`) rather than the store-state type
+            // keeps the spread result typed as `Conversation`, avoiding TS2345 when the
+            // array element type has `id: string` but the state type would widen it to
+            // `id: string | number` via intersection.
+            const itemTsType = targetField.type.endsWith("[]")
+              ? targetField.type.slice(0, -2)
+              : targetField.type === "array"
+              ? "object"
+              : mapFieldTypeToTs(targetField.type);
+
+            // Re-type: replace the hardcoded generic field name "items" with the actual
+            // target field, and make all payload property accesses optional-chain safe.
+            rawCode = rawCode
+              .replace(/\bs\.items\b/g, `s.${targetName}`)
+              .replace(/\bitems\s*:/g, `${targetName}:`)
+              .replace(/\bpayload\./g, `payload?.`)
+              // `payload` is now optional — spreading `undefined` is TS2698.
+              // Default to an empty object so the spread stays object-only.
+              .replace(/\.\.\.\s*payload\b/g, `...(payload ?? {})`);
+
+            // Payload is the item type (optional). Using `ItemType` (not partial) ensures
+            // that `{ ...item, ...(payload ?? {}) }` stays typed as `ItemType`, not a
+            // union that widens required properties to optional.
+            customActionSignatures.push(
+              `  ${actName}: (payload?: ${itemTsType}) => void;`
+            );
+            const bodyLines = rawCode.split("\n").map((line) => `    ${line}`).join("\n");
+            customActionImpls.push(`  ${actName}: (payload) => {\n${bodyLines}\n  },`);
+          } else {
+            // Standard increment with user-supplied code — keep numeric amount parameter.
+            customActionSignatures.push(`  ${actName}: (amount?: number) => void;`);
+            const bodyLines = rawCode.split("\n").map((line) => `    ${line}`).join("\n");
+            customActionImpls.push(`  ${actName}: (amount = 1) => {\n${bodyLines}\n  },`);
+          }
         } else {
-          customActionImpls.push(`  ${actName}: (amount = 1) => set((s) => ({ ${targetName}: typeof s.${targetName} === "number" ? s.${targetName} + amount : amount })),`);
+          customActionSignatures.push(`  ${actName}: (amount?: number) => void;`);
+          customActionImpls.push(
+            `  ${actName}: (amount = 1) => set((s) => ({ ${targetName}: typeof s.${targetName} === "number" ? s.${targetName} + amount : amount })),`
+          );
         }
         break;
       }
