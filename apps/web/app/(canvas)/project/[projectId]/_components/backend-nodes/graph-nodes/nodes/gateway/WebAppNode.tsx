@@ -11,11 +11,13 @@ import {
   CornerDownRight,
   CreditCard,
   Layers,
+  KeyRound,
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { WebAppZone } from "@workspace/canvas/types";
 import { normalizePageRoute } from "@workspace/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import { Badge } from "@workspace/ui/components/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -330,6 +332,18 @@ export const WebAppNode = ({
         icon={Globe}
         title="Web App"
         selected={selected}
+        badges={
+          (data.envVars?.length || 0) > 0 ? (
+            <Badge
+              variant="outline"
+              className="text-[9px] px-1 py-0 h-4 font-mono font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 flex items-center gap-0.5"
+              title={`${data.envVars?.length || 0} environment variable${(data.envVars?.length || 0) === 1 ? "" : "s"} configured`}
+            >
+              <KeyRound size={8} />
+              {(data.envVars?.length || 0)} env
+            </Badge>
+          ) : undefined
+        }
         onSave={(newLabel) => {
           const trimmed = newLabel.trim();
           const newSlug = trimmed

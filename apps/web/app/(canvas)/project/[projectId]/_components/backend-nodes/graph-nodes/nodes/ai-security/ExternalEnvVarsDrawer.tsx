@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Eye, EyeOff, Check, Settings } from "lucide-react";
+import { Plus, Trash2, Eye, EyeOff, Check, Settings, ChevronDown } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
+import { useUpdateNodeInternals } from "@xyflow/react";
 import {
   cleanEnvVarName,
   saveLocalEnvVariable,
@@ -17,10 +18,11 @@ import { generateId } from "../../common";
 import { toast } from "sonner";
 import { getDefaultNodeEnvVars } from "@workspace/canvas";
 
-interface ExternalEnvVarsDrawerProps {
+export interface ExternalEnvVarsDrawerProps {
   nodeId: string;
   projectId?: string;
   defaultOpen?: boolean;
+  className?: string;
 }
 
 interface EnvVarRowProps {
@@ -240,7 +242,11 @@ const EnvVarRow: React.FC<EnvVarRowProps> = ({
 export const ExternalEnvVarsDrawer: React.FC<ExternalEnvVarsDrawerProps> = ({
   nodeId,
   projectId,
+  defaultOpen = false,
+  className,
 }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const updateNodeInternals = useUpdateNodeInternals();
   const node = useBackendCanvasStore((s) => s.nodes.find((n) => n.id === nodeId));
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const envVars = node?.data?.envVars || [];
@@ -255,6 +261,12 @@ export const ExternalEnvVarsDrawer: React.FC<ExternalEnvVarsDrawerProps> = ({
       : node?.type === "service"
         ? "Service"
         : "External API");
+
+  useEffect(() => {
+    if (typeof updateNodeInternals === "function") {
+      updateNodeInternals(nodeId);
+    }
+  }, [isOpen, nodeId, updateNodeInternals, envVars.length]);
 
   // Auto-seed default env vars if this node has never had envVars defined
   useEffect(() => {
@@ -272,6 +284,7 @@ export const ExternalEnvVarsDrawer: React.FC<ExternalEnvVarsDrawerProps> = ({
   }, [nodeId, node?.type, node?.data, updateNode]);
 
   const handleAddVariable = useCallback(() => {
+    setIsOpen(true);
     const newId = generateId();
     const updated = [...envVars, { id: newId, name: "" }];
     updateNode(nodeId, {
@@ -286,6 +299,7 @@ export const ExternalEnvVarsDrawer: React.FC<ExternalEnvVarsDrawerProps> = ({
   }, [node, nodeId, envVars, updateNode, nodeLabel]);
 
   const handleLoadDefaults = useCallback(() => {
+    setIsOpen(true);
     const defaults = getDefaultNodeEnvVars(node?.type, node?.data);
     if (defaults.length > 0) {
       updateNode(nodeId, {
@@ -338,20 +352,41 @@ export const ExternalEnvVarsDrawer: React.FC<ExternalEnvVarsDrawerProps> = ({
   );
 
   return (
-    <div id={`external-node-env-section-${nodeId}`} className="flex flex-col">
-      {/* Section Header: EXACTLY matches EndpointList and MessagingResourceList */}
-      <div className="px-3 py-1 bg-secondary/40 border-t border-b text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex justify-between items-center group">
-        <span className="flex items-center gap-1.5">
-          Environment Variables (.env)
+    <div
+      id={`external-node-env-section-${nodeId}`}
+      className={cn("flex flex-col", !isOpen && "rounded-b-[10px]", className)}
+      onDoubleClick={(e) => e.stopPropagation()}
+    >
+      {/* Section Header: Collapsible */}
+      <div
+        className={cn(
+          "px-3 py-1 bg-secondary/40 hover:bg-secondary/60 border-t text-[10px] font-bold text-muted-foreground hover:text-foreground uppercase tracking-wider flex justify-between items-center cursor-pointer select-none transition-colors group nodrag",
+          isOpen ? "border-b" : "rounded-b-[10px]",
+        )}
+        onClick={() => setIsOpen((prev) => !prev)}
+        title={isOpen ? "Collapse Environment Variables" : "Expand Environment Variables"}
+      >
+        <span className="flex items-center gap-1.5 min-w-0">
+          <ChevronDown
+            size={12}
+            className={cn(
+              "text-muted-foreground group-hover:text-foreground transition-transform duration-200 shrink-0",
+              !isOpen && "-rotate-90",
+            )}
+          />
+          <span className="truncate">Environment Variables (.env)</span>
           {envVars.length > 0 && (
-            <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-secondary text-foreground font-semibold">
+            <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-secondary text-foreground font-semibold shrink-0">
               {envVars.length}
             </span>
           )}
         </span>
         <div
-          className="opacity-0 group-hover:opacity-100 cursor-pointer text-muted-foreground hover:text-foreground transition-all"
-          onClick={handleAddVariable}
+          className="opacity-0 group-hover:opacity-100 cursor-pointer text-muted-foreground hover:text-foreground transition-all p-0.5 rounded hover:bg-secondary shrink-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleAddVariable();
+          }}
           title="Add Environment Variable"
         >
           <Plus size={12} />
@@ -359,37 +394,39 @@ export const ExternalEnvVarsDrawer: React.FC<ExternalEnvVarsDrawerProps> = ({
       </div>
 
       {/* List of variables */}
-      <div className="flex flex-col">
-        {envVars.length === 0 ? (
-          <div className="flex items-center justify-between px-3 py-2 text-[10px] text-muted-foreground/75 bg-muted/10 border-b border-dashed border-border/60">
-            <span>No env vars configured</span>
-            <button
-              type="button"
-              onClick={handleLoadDefaults}
-              className="text-[10px] text-primary hover:underline font-medium cursor-pointer"
-            >
-              + Load defaults
-            </button>
-          </div>
-        ) : (
-          envVars.map((v) => (
-            <EnvVarRow
-              key={v.id}
-              id={v.id}
-              name={v.name}
-              projectId={projectId}
-              isEditing={editingId === v.id}
-              onStartEdit={() => {
-                setEditingId(v.id);
-                setEditingName(v.name);
-              }}
-              onSaveName={(name) => handleUpdateName(v.id, name)}
-              onCancelEdit={() => setEditingId(null)}
-              onDelete={() => handleDeleteVariable(v.id)}
-            />
-          ))
-        )}
-      </div>
+      {isOpen && (
+        <div className="flex flex-col rounded-b-[10px] overflow-hidden">
+          {envVars.length === 0 ? (
+            <div className="flex items-center justify-between px-3 py-2 text-[10px] text-muted-foreground/75 bg-muted/10 border-b border-dashed border-border/60">
+              <span>No env vars configured</span>
+              <button
+                type="button"
+                onClick={handleLoadDefaults}
+                className="text-[10px] text-primary hover:underline font-medium cursor-pointer"
+              >
+                + Load defaults
+              </button>
+            </div>
+          ) : (
+            envVars.map((v) => (
+              <EnvVarRow
+                key={v.id}
+                id={v.id}
+                name={v.name}
+                projectId={projectId}
+                isEditing={editingId === v.id}
+                onStartEdit={() => {
+                  setEditingId(v.id);
+                  setEditingName(v.name);
+                }}
+                onSaveName={(name) => handleUpdateName(v.id, name)}
+                onCancelEdit={() => setEditingId(null)}
+                onDelete={() => handleDeleteVariable(v.id)}
+              />
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 };
