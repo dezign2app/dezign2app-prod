@@ -1,6 +1,6 @@
 import { PipelineStep, ReusableFunction } from "@workspace/canvas/types";
 import { BackendNode } from "@/types/canvas";
-import { PipelineRenderContext } from "./types";
+import { PipelineRenderContext, PipelineStepOutputMeta } from "./types";
 import {
   renderTransformStep,
   renderAsyncOperationStep,
@@ -132,7 +132,7 @@ export function renderPipeline(
   options?: {
     reusableFunctions?: ReusableFunction[];
     allNodes?: BackendNode[];
-    stepOutputMeta?: Map<string, { isArray: boolean }>;
+    stepOutputMeta?: Map<string, PipelineStepOutputMeta>;
   },
 ): string[] {
   const ctx: PipelineRenderContext = {

@@ -175,6 +175,36 @@ export function inferBindingType(
           return `{\n${props.join("\n")}\n}`;
         }
       }
+      if (step.type === "storage_operation") {
+        const fnName = (
+          step.functionRef?.name ||
+          (step as { operation?: string }).operation ||
+          step.name ||
+          ""
+        ).toLowerCase();
+        const isPresigned =
+          fnName.includes("presigned") ||
+          fnName.includes("presign") ||
+          fnName === "getuploadpresignedurl" ||
+          fnName === "getdownloadpresignedurl";
+        const isExists = fnName.includes("exists") || fnName.includes("objectexists");
+        const isDelete = fnName.includes("delete");
+        const isList = fnName.includes("list");
+
+        if (isPresigned) {
+          return "string";
+        }
+        if (isExists) {
+          return "boolean";
+        }
+        if (isDelete) {
+          return "{ success: boolean }";
+        }
+        if (isList) {
+          return "string[]";
+        }
+        return "string";
+      }
     }
   }
 

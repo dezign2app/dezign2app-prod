@@ -230,7 +230,7 @@ export const ParameterEditor = ({
               {fieldOptions ? (
                 <Combobox
                   value={p.name || ""}
-                  onValueChange={(value) => {
+                  onValueChange={(value: string | null) => {
                     if (value !== null) updateParam(p.id, { name: value });
                   }}
                 >

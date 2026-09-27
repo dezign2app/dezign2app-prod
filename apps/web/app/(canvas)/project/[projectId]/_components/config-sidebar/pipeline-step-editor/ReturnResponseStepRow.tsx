@@ -131,6 +131,15 @@ export const ReturnResponseStepRow = ({
           const base = found?.variableName || "stepResult";
           const field = source.field ? source.field.trim() : "";
           if (!field) return base;
+          const baseLower = base.toLowerCase();
+          const fieldLower = field.toLowerCase();
+          if (
+            fieldLower === baseLower ||
+            ((baseLower === "uploadurl" || baseLower === "downloadurl") &&
+              (fieldLower === "uploadurl" || fieldLower === "downloadurl" || fieldLower === "url"))
+          ) {
+            return base;
+          }
           if (field.startsWith("[")) return `${base}${field}`;
           return `${base}.${field}`;
         }

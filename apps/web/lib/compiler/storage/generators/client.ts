@@ -11,8 +11,8 @@ import { storageConfig } from "./config";
 
 const clientOptions: S3ClientConfig = {
   region: storageConfig.region,
-  endpoint: storageConfig.endpoint,
-  credentials: storageConfig.credentials,
+  ...(storageConfig.endpoint ? { endpoint: storageConfig.endpoint } : {}),
+  ...(storageConfig.credentials ? { credentials: storageConfig.credentials } : {}),
   forcePathStyle: storageConfig.forcePathStyle,
 };
 

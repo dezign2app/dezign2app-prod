@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import { generateStorageOperationsFile } from "../storage/generators/operations";
+import { generateStorageConfigFile } from "../storage/generators/config";
+import { generateStorageClientFile } from "../storage/generators/client";
 import { generateStoragePackageJson, generateStorageTsConfig } from "../storage/generators/packageFiles";
 import { generateStorageUploadEventTemplate } from "../webClients/nextjs/v16/event-generators/templates/storageUploadEventTemplate";
 import { generateNavigationEventTemplate } from "../webClients/nextjs/v16/event-generators/templates/navigationEventTemplate";
@@ -16,7 +18,19 @@ const TEST_ENV_DIR = "C:/Users/subha/Downloads/test env";
 describe("syncTestEnv via Compiler", () => {
   it("compiles and verifies storage operations, express service, and nextjs web client", () => {
     // 1. Generate Storage Package Files
-    const dummyStorageNode = { id: "storage-node", type: "storage", data: { label: "aws s3" } } as BackendNode;
+    const dummyStorageNode: BackendNode = {
+      id: "storage-node",
+      type: "storage",
+      position: { x: 300, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "aws s3",
+        storageProvider: "s3",
+        defaultRegion: "us-east-1",
+        endpointUrl: "S3_ENDPOINT_URL",
+        forcePathStyle: true,
+      },
+    };
     const opsCompiled = generateStorageOperationsFile(dummyStorageNode);
     expect(opsCompiled.content).not.toContain("as any");
     expect(opsCompiled.content).not.toContain("catch (err: any)");
@@ -27,6 +41,22 @@ describe("syncTestEnv via Compiler", () => {
     if (fs.existsSync(path.dirname(targetOpsPath))) {
       fs.writeFileSync(targetOpsPath, opsCompiled.content, "utf-8");
       console.log("Updated via compiler:", targetOpsPath);
+    }
+
+    const configCompiled = generateStorageConfigFile(dummyStorageNode);
+    expect(configCompiled.content).toContain("resolveStorageEndpoint");
+    const targetConfigPath = path.join(TEST_ENV_DIR, "packages/storage/aws-s3/src/config.ts");
+    if (fs.existsSync(path.dirname(targetConfigPath))) {
+      fs.writeFileSync(targetConfigPath, configCompiled.content, "utf-8");
+      console.log("Updated via compiler:", targetConfigPath);
+    }
+
+    const clientCompiled = generateStorageClientFile(dummyStorageNode);
+    expect(clientCompiled.content).toContain("new S3Client");
+    const targetClientPath = path.join(TEST_ENV_DIR, "packages/storage/aws-s3/src/client.ts");
+    if (fs.existsSync(path.dirname(targetClientPath))) {
+      fs.writeFileSync(targetClientPath, clientCompiled.content, "utf-8");
+      console.log("Updated via compiler:", targetClientPath);
     }
 
     const pkgJsonCompiled = generateStoragePackageJson("@workspace/storage", "aws s3");
@@ -67,14 +97,29 @@ describe("syncTestEnv via Compiler", () => {
             { argName: "options", source: { kind: "inline", value: "{}" } },
           ],
         },
+        {
+          id: "step-ret",
+          name: "Return Response",
+          type: "return_response",
+          enabled: true,
+          statusCode: 201,
+          inputBindings: [
+            {
+              argName: "field_1",
+              source: { kind: "step_output", stepId: "step-storage-1", field: "uploadUrl" },
+            },
+          ],
+        },
       ],
     };
 
-    const dummyServiceNode = {
+    const dummyServiceNode: BackendNode = {
       id: "service-profile",
       type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
       data: { label: "profile" },
-    } as BackendNode;
+    };
 
     const routeCompiled = generateEndpointRouteHandler({
       ep,
@@ -97,7 +142,8 @@ describe("syncTestEnv via Compiler", () => {
     expect(routeCompiled.file.content).toContain('import { getUploadPresignedUrl } from "@workspace/storage/operations";');
     expect(routeCompiled.file.content).not.toContain("@workspace/aws-s3");
     expect(routeCompiled.file.content).toContain('await getUploadPresignedUrl("test", String(body.filename || ""), {});');
-    expect(routeCompiled.file.content).toContain('return res.status(201).json({ data: { signedUrl: uploadUrl } });');
+    expect(routeCompiled.file.content).not.toContain("uploadUrl.uploadUrl");
+    expect(routeCompiled.file.content).toContain("field_1: uploadUrl");
 
     const targetRoutePath = path.join(TEST_ENV_DIR, "apps/profile/src/routes/postUploadImage.ts");
     if (fs.existsSync(path.dirname(targetRoutePath))) {
