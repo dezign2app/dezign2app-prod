@@ -100,17 +100,37 @@ export function isServiceConnectedToStorage(
       }
     }
 
-    // Check if target is a storage_operation_ref node referencing one of the storage nodes
-    if (isSourceService) {
-      const targetNode = allNodes.find((n) => n.id === edge.target);
-      if (
-        (targetNode?.type === "storage_operation_ref" ||
-          targetNode?.type === "storage_ref" ||
-          targetNode?.type === "bucket_ref") &&
-        targetNode.data?.storageNodeId &&
-        storageNodeIds.has(targetNode.data.storageNodeId)
-      ) {
-        return true;
+    // Check if connected to a storage reference node (StorageBucketRefNode / StorageOperationRefNode)
+    const isRefType = (t?: string) =>
+      t === "StorageBucketRefNode" ||
+      t === "StorageOperationRefNode" ||
+      t === "storage_bucket_ref" ||
+      t === "storage_operation_ref" ||
+      t === "bucket_ref" ||
+      t === "storage_ref";
+
+    const otherId = isSourceService ? edge.target : isTargetService ? edge.source : null;
+    if (otherId) {
+      const otherNode = allNodes.find((n) => n.id === otherId);
+      if (otherNode && isRefType(otherNode.type)) {
+        if (otherNode.data.storageNodeId && storageNodeIds.has(otherNode.data.storageNodeId)) {
+          return true;
+        }
+        const refBucket = otherNode.data.bucketId || otherNode.data.bucketName;
+        if (refBucket) {
+          const match = storageNodes.some((s) =>
+            (s.data.buckets || []).some((b) => b.id === refBucket || b.name === refBucket),
+          );
+          if (match) return true;
+        }
+        const hasRefEdgeToStorage = allEdges.some(
+          (e) =>
+            (e.type === "storage-reference" || e.type === "reference") &&
+            ((e.source === otherNode.id && storageNodeIds.has(e.target)) ||
+              (e.target === otherNode.id && storageNodeIds.has(e.source))),
+        );
+        if (hasRefEdgeToStorage) return true;
+        if (storageNodes.length === 1) return true;
       }
     }
 
@@ -119,7 +139,55 @@ export function isServiceConnectedToStorage(
 
   if (hasConnectedEdge) return true;
 
-  // 2. Events or endpoints referencing a storage node or bucket ID
+  // 2. Direct data properties (e.g. from WebPage upload config or Service config)
+  if (
+    serviceNode.data?.connectedStorageNodeId &&
+    storageNodeIds.has(serviceNode.data.connectedStorageNodeId)
+  ) {
+    return true;
+  }
+  if (serviceNode.data?.uploadBucketId) {
+    const bucket = serviceNode.data.uploadBucketId;
+    const match = storageNodes.some((s) =>
+      (s.data?.buckets || []).some((b: any) => b.id === bucket || b.name === bucket),
+    );
+    if (match) return true;
+  }
+
+  // 3. Endpoint pipeline steps referencing storage operations
+  const hasStoragePipelineStep = serviceEndpoints.some((ep) =>
+    ep.pipelineSteps?.some(
+      (s: any) =>
+        s.type === "storage_operation" ||
+        (s.storageNodeId && storageNodeIds.has(s.storageNodeId)) ||
+        (s.bucketId &&
+          storageNodes.some((sn) =>
+            (sn.data?.buckets || []).some((b: any) => b.id === s.bucketId || b.name === s.bucketId),
+          )),
+    ),
+  );
+  if (hasStoragePipelineStep) return true;
+
+  // 4. UI Section / Event Action bindings (for WebPages or WebApps)
+  const pageSections = (serviceNode.data?.sections || []) as any[];
+  const hasActionStorageBinding = pageSections.some((sec) =>
+    (sec.actions || []).some(
+      (act: any) =>
+        act.storageOperationBinding?.storageNodeId &&
+        storageNodeIds.has(act.storageOperationBinding.storageNodeId),
+    ),
+  );
+  if (hasActionStorageBinding) return true;
+
+  const pageEvents = (serviceNode.data?.events || []) as any[];
+  const hasEventStorageBinding = pageEvents.some(
+    (ev: any) =>
+      ev.storageOperationBinding?.storageNodeId &&
+      storageNodeIds.has(ev.storageOperationBinding.storageNodeId),
+  );
+  if (hasEventStorageBinding) return true;
+
+  // 5. Events or endpoints referencing a storage node or bucket ID
   const allEvents = [
     ...serviceEvents,
     ...serviceEndpoints.flatMap((ep) => ep.publishedEvents || []),

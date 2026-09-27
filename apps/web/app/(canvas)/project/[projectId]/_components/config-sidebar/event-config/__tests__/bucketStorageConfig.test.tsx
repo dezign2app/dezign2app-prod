@@ -287,7 +287,7 @@ describe("BucketStorageConfig component", () => {
     expect(screen.getByText(".env File")).toBeDefined();
     expect(screen.getByText(/import \{ S3Client.*\} from "@aws-sdk\/client-s3"/)).toBeDefined();
     expect(screen.getAllByText(/user-avatars/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/AWS_ACCESS_KEY_ID/)).toBeDefined();
+    expect(screen.getAllByText(/AWS_ACCESS_KEY_ID/).length).toBeGreaterThan(0);
   });
 
   it("renders Configuration and Testing tabs with testing features", () => {

@@ -10,6 +10,7 @@ import { Switch } from "@workspace/ui/components/switch";
 import { Cloud, Key, AlertTriangle } from "lucide-react";
 import { LocalInput } from "../../../backend-nodes/graph-nodes/shared";
 import { EnvVarCombobox } from "../../EnvVarCombobox";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { BucketStorageSectionProps } from "./types";
 import { STORAGE_PROVIDERS, STORAGE_CLASSES } from "./constants";
 
@@ -17,6 +18,12 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
   item,
   handleUpdate,
 }) => {
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const parentNode = item.nodeId
+    ? nodes.find((n) => n.id === item.nodeId)
+    : nodes.find((n) => n.data?.buckets?.some((b) => b.id === item.id));
+  const effectiveNodeId = item.nodeId || parentNode?.id;
+
   const selectedProvider = item.storageType || "s3";
 
   return (
@@ -101,22 +108,10 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
         <div className="flex flex-col gap-1.5">
           <label className="text-[11px] font-medium text-foreground">AWS Region</label>
           <EnvVarCombobox
-            value={item.region || "us-east-1"}
+            value={item.region || "AWS_REGION"}
             onValueChange={(val) => handleUpdate(item.id, { region: val })}
-            nodeId={item.nodeId}
-            placeholder="e.g. AWS_REGION or us-east-1"
-            defaultSuggestions={[
-              "AWS_REGION",
-              "AWS_DEFAULT_REGION",
-              "us-east-1",
-              "us-east-2",
-              "us-west-1",
-              "us-west-2",
-              "eu-west-1",
-              "eu-central-1",
-              "ap-southeast-1",
-            ]}
-            allowRawInput={true}
+            nodeId={effectiveNodeId}
+            placeholder="e.g. AWS_REGION"
           />
         </div>
       </div>
@@ -128,16 +123,8 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
         <EnvVarCombobox
           value={item.endpointUrl || ""}
           onValueChange={(val) => handleUpdate(item.id, { endpointUrl: val })}
-          nodeId={item.nodeId}
+          nodeId={effectiveNodeId}
           placeholder="e.g. S3_ENDPOINT_URL or https://..."
-          defaultSuggestions={[
-            "S3_ENDPOINT_URL",
-            "AWS_ENDPOINT_URL",
-            "STORAGE_ENDPOINT_URL",
-            "https://s3.amazonaws.com",
-            "http://localhost:8333",
-            "http://localhost:9000",
-          ]}
           allowRawInput={true}
         />
       </div>
@@ -159,7 +146,7 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
             <EnvVarCombobox
               value={item.accessKeyIdEnv || "AWS_ACCESS_KEY_ID"}
               onValueChange={(val) => handleUpdate(item.id, { accessKeyIdEnv: val })}
-              nodeId={item.nodeId}
+              nodeId={effectiveNodeId}
               placeholder="AWS_ACCESS_KEY_ID"
             />
           </div>
@@ -171,7 +158,7 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
             <EnvVarCombobox
               value={item.secretAccessKeyEnv || "AWS_SECRET_ACCESS_KEY"}
               onValueChange={(val) => handleUpdate(item.id, { secretAccessKeyEnv: val })}
-              nodeId={item.nodeId}
+              nodeId={effectiveNodeId}
               placeholder="AWS_SECRET_ACCESS_KEY"
             />
           </div>
@@ -185,7 +172,7 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
             <EnvVarCombobox
               value={item.sessionTokenEnv || ""}
               onValueChange={(val) => handleUpdate(item.id, { sessionTokenEnv: val })}
-              nodeId={item.nodeId}
+              nodeId={effectiveNodeId}
               placeholder="AWS_SESSION_TOKEN"
             />
           </div>
@@ -197,57 +184,14 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
             <EnvVarCombobox
               value={item.roleArn || ""}
               onValueChange={(val) => handleUpdate(item.id, { roleArn: val })}
-              nodeId={item.nodeId}
+              nodeId={effectiveNodeId}
               placeholder="arn:aws:iam::..."
-              defaultSuggestions={[
-                "AWS_ROLE_ARN",
-                "arn:aws:iam::123456789012:role/StorageRole",
-              ]}
               allowRawInput={true}
             />
           </div>
         </div>
 
-        {/* Live / Local Testing Credentials */}
-        <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-              Live Testing & Local Emulator Credentials (Direct)
-            </span>
-            <span className="text-[10px] text-muted-foreground">
-              Direct credentials for testing or local SeaweedFS/MinIO emulator (e.g. admin &amp; change-this-secret)
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium text-foreground">
-                Access Key ID
-              </label>
-              <EnvVarCombobox
-                value={item.accessKeyId || ""}
-                onValueChange={(val) => handleUpdate(item.id, { accessKeyId: val })}
-                nodeId={item.nodeId}
-                placeholder="e.g. admin"
-                defaultSuggestions={["admin", "minioadmin", "root", "AWS_ACCESS_KEY_ID"]}
-                allowRawInput={true}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium text-foreground">
-                Secret Access Key
-              </label>
-              <EnvVarCombobox
-                type="password"
-                value={item.secretAccessKey || ""}
-                onValueChange={(val) => handleUpdate(item.id, { secretAccessKey: val })}
-                nodeId={item.nodeId}
-                placeholder="e.g. change-this-secret"
-                defaultSuggestions={["change-this-secret", "minioadmin", "AWS_SECRET_ACCESS_KEY"]}
-                allowRawInput={true}
-              />
-            </div>
-          </div>
-        </div>
+
 
         <div className="flex items-center justify-between pt-1">
           <div className="flex flex-col">

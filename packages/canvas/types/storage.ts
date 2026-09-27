@@ -193,3 +193,26 @@ export interface ExecuteStorageOperationResult {
   tip?: string;
 }
 
+export interface StorageTestCaseResult {
+  id: string;
+  title: string;
+  category: "Client Initialization & Config" | "Generated Operations";
+  passed: boolean;
+  durationMs: number;
+  error?: string;
+  details?: string;
+  snippet?: string;
+}
+
+export interface StorageTestSuiteResult {
+  total: number;
+  passed: number;
+  failed: number;
+  durationMs: number;
+  serverActive: boolean;
+  endpoint: string;
+  bucket: string;
+  cases: StorageTestCaseResult[];
+  error?: string;
+}
+

@@ -39,7 +39,6 @@ import {
 } from "@/lib/services/storageService";
 import { cn } from "@workspace/ui/lib/utils";
 import { NodeEnvVarsSection } from "./NodeEnvVarsSection";
-import type { EnvVarEntry } from "./NodeEnvVarsSection";
 import { getDefaultNodeEnvVars } from "@workspace/canvas";
 import { EnvVarCombobox } from "./EnvVarCombobox";
 
@@ -117,7 +116,7 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
   useEffect(() => {
     if (data.envVars === undefined) {
       const defaults = getDefaultNodeEnvVars("storage", data);
-      handleUpdateField("envVars", defaults as BackendNode["data"]["envVars"]);
+      handleUpdateField("envVars", defaults);
     }
   }, [node?.id, data.envVars]);
 
@@ -362,22 +361,10 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
               AWS Region
             </label>
             <EnvVarCombobox
-              value={data.defaultRegion || "us-east-1"}
+              value={data.defaultRegion || "AWS_REGION"}
               onValueChange={(val) => handleUpdateField("defaultRegion", val)}
               nodeId={targetNodeId}
-              placeholder="e.g. AWS_REGION or us-east-1"
-              defaultSuggestions={[
-                "AWS_REGION",
-                "AWS_DEFAULT_REGION",
-                "us-east-1",
-                "us-east-2",
-                "us-west-1",
-                "us-west-2",
-                "eu-west-1",
-                "eu-central-1",
-                "ap-southeast-1",
-              ]}
-              allowRawInput={true}
+              placeholder="e.g. AWS_REGION"
             />
           </div>
 
@@ -390,14 +377,6 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
               onValueChange={(val) => handleUpdateField("endpointUrl", val)}
               nodeId={targetNodeId}
               placeholder="e.g. S3_ENDPOINT_URL or https://..."
-              defaultSuggestions={[
-                "S3_ENDPOINT_URL",
-                "AWS_ENDPOINT_URL",
-                "STORAGE_ENDPOINT_URL",
-                "https://s3.amazonaws.com",
-                "http://localhost:8333",
-                "http://localhost:9000",
-              ]}
               allowRawInput={true}
             />
           </div>
@@ -412,12 +391,6 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
             onValueChange={(val) => handleUpdateField("cdnUrl", val)}
             nodeId={targetNodeId}
             placeholder="e.g. CDN_DOMAIN or cdn.example.com"
-            defaultSuggestions={[
-              "CDN_DOMAIN",
-              "CLOUDFRONT_DOMAIN",
-              "NEXT_PUBLIC_CDN_URL",
-              "cdn.example.com",
-            ]}
             allowRawInput={true}
           />
         </div>
@@ -495,53 +468,8 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
               onValueChange={(val) => handleUpdateField("roleArn", val)}
               nodeId={targetNodeId}
               placeholder="arn:aws:iam::..."
-              defaultSuggestions={[
-                "AWS_ROLE_ARN",
-                "arn:aws:iam::123456789012:role/StorageRole",
-              ]}
               allowRawInput={true}
             />
-          </div>
-        </div>
-
-        {/* Live / Local Testing Credentials */}
-        <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-              Live Testing & Local Emulator Credentials (Direct)
-            </span>
-            <span className="text-[10px] text-muted-foreground">
-              Direct credentials for testing or local SeaweedFS/MinIO emulator (e.g. admin &amp; change-this-secret)
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium text-foreground">
-                Access Key ID
-              </label>
-              <EnvVarCombobox
-                value={data.accessKeyId || ""}
-                onValueChange={(val) => handleUpdateField("accessKeyId", val)}
-                nodeId={targetNodeId}
-                placeholder="e.g. admin"
-                defaultSuggestions={["admin", "minioadmin", "root", "AWS_ACCESS_KEY_ID"]}
-                allowRawInput={true}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium text-foreground">
-                Secret Access Key
-              </label>
-              <EnvVarCombobox
-                type="password"
-                value={data.secretAccessKey || ""}
-                onValueChange={(val) => handleUpdateField("secretAccessKey", val)}
-                nodeId={targetNodeId}
-                placeholder="e.g. change-this-secret"
-                defaultSuggestions={["change-this-secret", "minioadmin", "AWS_SECRET_ACCESS_KEY"]}
-                allowRawInput={true}
-              />
-            </div>
           </div>
         </div>
       </div>
@@ -921,15 +849,17 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
         <NodeEnvVarsSection
           mode="package"
           nodeKindLabel="storage"
-          envVars={(data.envVars as EnvVarEntry[] | undefined) ?? []}
+          nodeId={nodeId}
+          projectId={id}
+          envVars={data.envVars ?? []}
           defaultEnvVars={getDefaultNodeEnvVars("storage", data)}
           onLoadDefaults={() =>
             handleUpdateField(
               "envVars",
-              getDefaultNodeEnvVars("storage", data) as BackendNode["data"]["envVars"],
+              getDefaultNodeEnvVars("storage", data),
             )
           }
-          onChange={(updated) => handleUpdateField("envVars", updated as BackendNode["data"]["envVars"])}
+          onChange={(updated) => handleUpdateField("envVars", updated)}
         />
       </div>
 

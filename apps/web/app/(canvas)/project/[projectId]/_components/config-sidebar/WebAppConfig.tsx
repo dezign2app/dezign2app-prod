@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -20,6 +20,7 @@ import {
   Package,
   Settings,
   Database,
+  KeyRound,
 } from "lucide-react";
 import { WebAppGlobalStoresTab } from "./WebAppGlobalStoresTab";
 import {
@@ -48,7 +49,8 @@ import {
   TabsTrigger,
 } from "@workspace/ui/components/tabs";
 import { NodePackageManager } from "./NodePackageManager";
-import { NodeDependencyItem } from "@workspace/canvas";
+import { NodeEnvVarsSection } from "./NodeEnvVarsSection";
+import { NodeDependencyItem, getDefaultNodeEnvVars } from "@workspace/canvas";
 
 function isWebClientTechStack(val: string): val is WebClientTechStack {
   return WEB_CLIENT_TECH_OPTIONS.some((t) => t.value === val);
@@ -76,6 +78,14 @@ export const WebAppConfig = ({
   );
   const [activeTab, setActiveTab] = useState<string>("settings");
   const [zoneToDelete, setZoneToDelete] = useState<{ id: string; name: string } | null>(null);
+
+  // Auto-seed default env vars if missing
+  useEffect(() => {
+    if (node && node.data.envVars === undefined) {
+      const defaults = getDefaultNodeEnvVars("webApp", node.data);
+      updateNode(nodeId, { data: { ...node.data, envVars: defaults } });
+    }
+  }, [nodeId, node, updateNode]);
 
   if (!node) return null;
 
@@ -222,7 +232,7 @@ export const WebAppConfig = ({
 
       {/* Tabs: Settings vs Packages vs Global Stores */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="w-full grid grid-cols-3 p-1 bg-muted/50 rounded-lg mb-4">
+        <TabsList className="w-full grid grid-cols-4 p-1 bg-muted/50 rounded-lg mb-4">
           <TabsTrigger value="settings" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-background">
             <Settings className="w-3.5 h-3.5" />
             Overview
@@ -238,10 +248,19 @@ export const WebAppConfig = ({
           </TabsTrigger>
           <TabsTrigger value="stores" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-background">
             <Database className="w-3.5 h-3.5 text-indigo-500" />
-            Global Stores
+            Stores
             {(data.globalStores?.length || 0) > 0 && (
               <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-500/20 text-indigo-500 font-mono font-bold">
                 {data.globalStores!.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="envvars" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-background">
+            <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+            Env Vars
+            {(data.envVars?.length || 0) > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20 text-amber-500 font-mono font-bold">
+                {data.envVars!.length}
               </span>
             )}
           </TabsTrigger>
@@ -516,6 +535,19 @@ export const WebAppConfig = ({
           <WebAppGlobalStoresTab
             stores={data.globalStores || []}
             onUpdateStores={(stores) => updateData({ globalStores: stores })}
+          />
+        </TabsContent>
+
+        {/* Tab 4: Environment Variables */}
+        <TabsContent value="envvars" className="pt-2">
+          <NodeEnvVarsSection
+            mode="app"
+            nodeId={nodeId}
+            projectId={id}
+            envVars={data.envVars ?? []}
+            defaultEnvVars={getDefaultNodeEnvVars("webApp", data)}
+            onLoadDefaults={() => updateData({ envVars: getDefaultNodeEnvVars("webApp", data) })}
+            onChange={(updated) => updateData({ envVars: updated })}
           />
         </TabsContent>
       </Tabs>

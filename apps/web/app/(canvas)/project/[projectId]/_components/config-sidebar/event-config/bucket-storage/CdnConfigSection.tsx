@@ -9,6 +9,7 @@ import {
 import { Switch } from "@workspace/ui/components/switch";
 import { Globe } from "lucide-react";
 import { LocalInput } from "../../../backend-nodes/graph-nodes/shared";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { BucketStorageSectionProps } from "./types";
 import { EnvVarCombobox } from "../../EnvVarCombobox";
 
@@ -16,6 +17,12 @@ export const CdnConfigSection: React.FC<BucketStorageSectionProps> = ({
   item,
   handleUpdate,
 }) => {
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const parentNode = item.nodeId
+    ? nodes.find((n) => n.id === item.nodeId)
+    : nodes.find((n) => n.data?.buckets?.some((b) => b.id === item.id));
+  const effectiveNodeId = item.nodeId || parentNode?.id;
+
   return (
     <div className="flex flex-col gap-3 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
       <div className="flex items-center justify-between">
@@ -39,13 +46,7 @@ export const CdnConfigSection: React.FC<BucketStorageSectionProps> = ({
               placeholder="e.g. CDN_DOMAIN or cdn.myapp.com"
               value={item.cdnDomain || ""}
               onValueChange={(val) => handleUpdate(item.id, { cdnDomain: val })}
-              nodeId={item.nodeId}
-              defaultSuggestions={[
-                "CDN_DOMAIN",
-                "CLOUDFRONT_DOMAIN",
-                "NEXT_PUBLIC_CDN_URL",
-                "cdn.example.com",
-              ]}
+              nodeId={effectiveNodeId}
               allowRawInput={true}
             />
           </div>

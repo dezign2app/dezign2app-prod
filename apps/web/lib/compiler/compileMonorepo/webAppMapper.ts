@@ -179,6 +179,29 @@ export function buildWebAppMap(
           }
         }
       }
+    } else if (webAppNodes.length > 0) {
+      // ── Fallback: WebApp exists but page has no explicit zone edge ────────
+      if (pageNode.data?.targetWebAppId) {
+        const found = Array.from(appMap.values()).find(
+          (a) => a.webAppNode?.id === pageNode.data.targetWebAppId,
+        );
+        if (found) targetAppSlug = found.appSlug;
+      } else if (pageNode.data?.appSlug) {
+        const candidateSlug = pageNode.data.appSlug
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        if (appMap.has(candidateSlug)) {
+          targetAppSlug = candidateSlug;
+        }
+      } else if (webAppNodes.length === 1) {
+        targetAppSlug = appMap.keys().next().value;
+      }
+      routeGroup =
+        pageNode.data?.routeGroup ||
+        (pageNode.data?.accessType && pageNode.data?.accessType !== "public"
+          ? "private"
+          : "public");
     } else if (webAppNodes.length === 0) {
       // ── Fallback: no WebApp nodes on canvas, infer from pageNode.data ───
       const isConnected = edges.some(

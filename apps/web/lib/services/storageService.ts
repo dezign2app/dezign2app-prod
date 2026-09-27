@@ -3,6 +3,7 @@ import {
   executeStorageOperationAction,
   listStorageBucketsAction,
   createStorageBucketAction,
+  executeStorageTestSuiteAction,
   type StorageConnectionConfig,
   type CheckStorageConnectionResult,
   type ExecuteStorageOperationPayload,
@@ -10,6 +11,8 @@ import {
   type ListStorageBucketsResult,
   type CreateStorageBucketResult,
   type ServerBucketInfo,
+  type StorageTestCaseResult,
+  type StorageTestSuiteResult,
 } from "@/app/actions/storageActions";
 
 export type {
@@ -20,6 +23,8 @@ export type {
   ListStorageBucketsResult,
   CreateStorageBucketResult,
   ServerBucketInfo,
+  StorageTestCaseResult,
+  StorageTestSuiteResult,
 };
 
 /**
@@ -58,5 +63,14 @@ export async function createStorageBucket(
   bucketName: string,
 ): Promise<CreateStorageBucketResult> {
   return createStorageBucketAction(config, bucketName);
+}
+
+/**
+ * Execute the entire generated Vitest test suite against the configured storage server.
+ */
+export async function executeStorageTestSuite(
+  config: StorageConnectionConfig,
+): Promise<StorageTestSuiteResult> {
+  return executeStorageTestSuiteAction(config);
 }
 
