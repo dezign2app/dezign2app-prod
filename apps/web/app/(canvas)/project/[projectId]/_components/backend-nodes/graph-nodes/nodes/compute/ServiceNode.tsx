@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Server, ChevronDown, Settings, AlertTriangle, AlertCircle } from "lucide-react";
+import { Server, ChevronDown, Settings, AlertTriangle, AlertCircle, KeyRound } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import { Badge } from "@workspace/ui/components/badge";
 import { Input } from "@workspace/ui/components/input";
 import { Switch } from "@workspace/ui/components/switch";
 import { Label } from "@workspace/ui/components/label";
@@ -176,15 +177,27 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         colorClass="bg-blue-500/10 text-blue-700 dark:text-blue-400"
         selected={selected}
         badges={
-          hasPipelineError ? (
-            <div
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 text-[9px] font-semibold shrink-0"
-              title="Pipeline has unmapped required inputs! Check endpoints."
-            >
-              <AlertTriangle size={10} className="shrink-0" />
-              <span>Pipeline Error</span>
-            </div>
-          ) : undefined
+          <div className="flex items-center gap-1">
+            {hasPipelineError && (
+              <div
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 text-[9px] font-semibold shrink-0"
+                title="Pipeline has unmapped required inputs! Check endpoints."
+              >
+                <AlertTriangle size={10} className="shrink-0" />
+                <span>Pipeline Error</span>
+              </div>
+            )}
+            {(data.envVars?.length || 0) > 0 && (
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1 py-0 h-4 font-mono font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 flex items-center gap-0.5"
+                title={`${data.envVars?.length || 0} environment variable${(data.envVars?.length || 0) === 1 ? "" : "s"} configured`}
+              >
+                <KeyRound size={8} />
+                {(data.envVars?.length || 0)} env
+              </Badge>
+            )}
+          </div>
         }
         rightElement={
           <div className="flex items-center gap-1">
