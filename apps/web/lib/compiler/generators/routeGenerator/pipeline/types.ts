@@ -1,6 +1,13 @@
 import { ReusableFunction } from "@workspace/canvas/types";
 import { BackendNode } from "@/types/canvas";
 
+export interface PipelineStepOutputMeta {
+  isArray?: boolean;
+  isPrimitive?: boolean;
+  primitiveType?: "string" | "number" | "boolean";
+  returnType?: string;
+}
+
 /**
  * Context available while rendering a pipeline step sequence.
  * Tracks which output variables are declared by prior steps so
@@ -13,8 +20,8 @@ export interface PipelineRenderContext {
   bodyVar: string;
   /** Set of outputVariable names that have been null-narrowed by an upstream guard */
   narrowedOutputs?: Set<string>;
-  /** Metadata about step outputs (e.g. whether the return type is an array) */
-  stepOutputMeta?: Map<string, { isArray: boolean }>;
+  /** Metadata about step outputs (e.g. whether the return type is an array or primitive) */
+  stepOutputMeta?: Map<string, PipelineStepOutputMeta>;
   /** Available reusable functions to inspect return type signatures */
   reusableFunctions?: ReusableFunction[];
   /** Canvas nodes for schema and data structure lookup */

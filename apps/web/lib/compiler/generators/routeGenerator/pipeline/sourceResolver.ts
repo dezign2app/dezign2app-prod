@@ -54,6 +54,25 @@ export function resolveSource(
         const meta =
           ctx.stepOutputMeta?.get(source.stepId) ||
           ctx.stepOutputMeta?.get(varName);
+
+        // If the step output is marked as a primitive (e.g. string URL or boolean),
+        // it has no child properties. Any property reference on a primitive causes TS2339.
+        if (meta?.isPrimitive) {
+          return varName;
+        }
+
+        // Defensive guard: if field name matches variable name (e.g. uploadUrl.uploadUrl),
+        // or aliases like "url" / "uploadUrl" on a presigned URL variable, return the variable itself.
+        const fieldLower = field.toLowerCase();
+        const varLower = varName.toLowerCase();
+        if (
+          fieldLower === varLower ||
+          ((varLower === "uploadurl" || varLower === "downloadurl") &&
+            (fieldLower === "uploadurl" || fieldLower === "downloadurl" || fieldLower === "url"))
+        ) {
+          return varName;
+        }
+
         if (meta?.isArray) {
           return `${varName}[0]?.${field}`;
         }

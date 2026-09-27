@@ -6,7 +6,7 @@
 
 import { PipelineStep } from "@workspace/canvas/types";
 import { toVarName } from "../../../../utils";
-import { PipelineRenderContext } from "../types";
+import { PipelineRenderContext, PipelineStepOutputMeta } from "../types";
 import { buildArgList, resolveBinding } from "../sourceResolver";
 import { sortRedisBindings } from "./compileRedisBindingSorter";
 import { PipelineStepInputBinding } from "@workspace/canvas/types";
@@ -157,11 +157,6 @@ export function renderAsyncOperationStep(
   }
 
   if (outputVariable) {
-    const sig = functionRef.signature ?? "";
-    const sigHasArrayReturn =
-      /:\s*(?:Promise<)?\s*[\w<>]+\[\]/i.test(sig) ||
-      /=>\s*(?:Promise<)?\s*[\w<>]+\[\]/i.test(sig);
-
     // 1. Look up in ctx.reusableFunctions
     const matchedFn = ctx.reusableFunctions?.find(
       (f) =>
@@ -169,6 +164,11 @@ export function renderAsyncOperationStep(
         f.name.toLowerCase() === (functionRef.name || "").toLowerCase(),
     );
     const fnSaysArray = matchedFn?.returnIsArray === true;
+
+    const sig = functionRef.signature || matchedFn?.signature || "";
+    const sigHasArrayReturn =
+      /:\s*(?:Promise<)?\s*[\w<>]+\[\]/i.test(sig) ||
+      /=>\s*(?:Promise<)?\s*[\w<>]+\[\]/i.test(sig);
 
     // 2. Check if the target node schema has jsonRootType === "array"
     const targetNodeId =
@@ -202,12 +202,42 @@ export function renderAsyncOperationStep(
       schemaIsArray ||
       fnNameIsArray;
 
-    if (isArray) {
-      if (step.id) {
-        ctx.stepOutputMeta?.set(step.id, { isArray: true });
-      }
-      ctx.stepOutputMeta?.set(outputVariable, { isArray: true });
+    const fnLower = fnName.toLowerCase();
+    const isPresignedStorage =
+      step.type === "storage_operation" &&
+      (fnLower.includes("presigned") ||
+        fnLower.includes("presign") ||
+        fnLower === "getuploadpresignedurl" ||
+        fnLower === "getdownloadpresignedurl");
+    const isBoolStorage =
+      step.type === "storage_operation" &&
+      (fnLower.includes("exists") || fnLower === "objectexists");
+
+    let primitiveType: "string" | "number" | "boolean" | undefined;
+    if (isBoolStorage || /:\s*(?:Promise<)?\s*boolean\s*>?/i.test(sig)) {
+      primitiveType = "boolean";
+    } else if (isPresignedStorage || /:\s*(?:Promise<)?\s*string\s*>?/i.test(sig)) {
+      primitiveType = "string";
+    } else if (/:\s*(?:Promise<)?\s*number\s*>?/i.test(sig)) {
+      primitiveType = "number";
     }
+
+    const isPrimitiveReturn =
+      !isArray &&
+      (isPresignedStorage ||
+        isBoolStorage ||
+        primitiveType !== undefined);
+
+    const meta: PipelineStepOutputMeta = {
+      isArray,
+      isPrimitive: isPrimitiveReturn,
+      primitiveType,
+    };
+
+    if (step.id) {
+      ctx.stepOutputMeta?.set(step.id, meta);
+    }
+    ctx.stepOutputMeta?.set(outputVariable, meta);
   }
 
   // Cache Miss handling for Redis operations

@@ -863,27 +863,6 @@ export function getAvailableSources(
             description: "Direct upload URL (alias for uploadUrl)",
           });
         }
-        if (!stepPaths.some((p) => p.path === "key")) {
-          stepPaths.push({
-            path: "key",
-            type: "string",
-            description: "Target object key/path in bucket",
-          });
-        }
-        if (!stepPaths.some((p) => p.path === "bucket")) {
-          stepPaths.push({
-            path: "bucket",
-            type: "string",
-            description: "Target storage bucket name",
-          });
-        }
-        if (!stepPaths.some((p) => p.path === "expiresIn")) {
-          stepPaths.push({
-            path: "expiresIn",
-            type: "number",
-            description: "Presigned URL expiration TTL in seconds",
-          });
-        }
       } else if (isPresignDownload) {
         if (!stepPaths.some((p) => p.path === "downloadUrl")) {
           stepPaths.push({
@@ -897,20 +876,6 @@ export function getAvailableSources(
             path: "url",
             type: "string",
             description: "Download URL (alias for downloadUrl)",
-          });
-        }
-        if (!stepPaths.some((p) => p.path === "key")) {
-          stepPaths.push({
-            path: "key",
-            type: "string",
-            description: "Target object key/path in bucket",
-          });
-        }
-        if (!stepPaths.some((p) => p.path === "bucket")) {
-          stepPaths.push({
-            path: "bucket",
-            type: "string",
-            description: "Target storage bucket name",
           });
         }
       } else if (isList) {
@@ -1149,9 +1114,6 @@ export function createPresignedUrlExtraSource(
         description: `Direct presigned ${kind} URL`,
       },
       { path: "url", type: "string", description: "Presigned URL (alias)" },
-      { path: "key", type: "string", description: "Target object key/path in bucket" },
-      { path: "bucket", type: "string", description: "Target storage bucket name" },
-      { path: "expiresIn", type: "number", description: "Expiration time in seconds" },
     ],
   };
 }

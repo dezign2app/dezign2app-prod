@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { renderPipeline, collectPipelineImports } from "../generators/routeGenerator/pipelineRenderer";
 import { compileMonorepo } from "../compileMonorepo";
+import { generateResponseInterface } from "../generators/typesGenerator/responseInference";
 import { BackendNode, BackendEdge, Endpoint } from "@workspace/canvas/types";
 
 describe("Storage Pipeline Step Compilation", () => {
@@ -55,7 +56,7 @@ describe("Storage Pipeline Step Compilation", () => {
     const lines = renderPipeline(endpoint.pipelineSteps!, "body");
     const fullCode = lines.join("\n");
 
-    expect(fullCode).toContain("await getUploadPresignedUrl(\"user-avatars\", body.filename)");
+    expect(fullCode).toContain('await getUploadPresignedUrl("user-avatars", String(body.filename || ""))');
     expect(fullCode).toContain("const uploadUrl =");
 
     // 2. Check imports
@@ -151,5 +152,66 @@ describe("Storage Pipeline Step Compilation", () => {
     expect(routeFile).toBeDefined();
     expect(routeFile!.content).toContain("uploadObject");
     expect(routeFile!.content).toContain("@workspace/storage/operations");
+  });
+
+  it("safely resolves presigned URL step output when field is 'uploadUrl' or 'url' without generating uploadUrl.uploadUrl", () => {
+    const endpoint: Endpoint = {
+      id: "ep-upload-image",
+      name: "/uploadImage",
+      type: "POST",
+      pipelineSteps: [
+        {
+          id: "step-storage-1",
+          name: "Get Upload Presigned URL",
+          type: "storage_operation",
+          enabled: true,
+          outputVariable: "uploadUrl",
+          storageNodeId: "storage-node-1",
+          bucketId: "user-avatars",
+          operationId: "storage-getUploadPresignedUrl",
+          functionRef: {
+            name: "getUploadPresignedUrl",
+            importPath: "@workspace/storage/operations",
+            signature: "getUploadPresignedUrl(bucketName: string, key: string, options?: PresignedUrlOptions): Promise<string>",
+          },
+          inputBindings: [
+            {
+              argName: "key",
+              source: { kind: "req_body", field: "filename" },
+            },
+            {
+              argName: "bucketName",
+              source: { kind: "inline", value: "user-avatars" },
+            },
+          ],
+        },
+        {
+          id: "step-ret",
+          name: "Return Response",
+          type: "return_response",
+          enabled: true,
+          statusCode: 201,
+          inputBindings: [
+            {
+              argName: "field_1",
+              source: { kind: "step_output", stepId: "step-storage-1", field: "uploadUrl" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const lines = renderPipeline(endpoint.pipelineSteps!, "body");
+    const fullCode = lines.join("\n");
+
+    // Must NOT contain invalid uploadUrl.uploadUrl
+    expect(fullCode).not.toContain("uploadUrl.uploadUrl");
+    // Must map cleanly to field_1: uploadUrl
+    expect(fullCode).toContain("field_1: uploadUrl");
+
+    // Also verify TypeScript interface inference for @workspace/types
+    const res = generateResponseInterface("PostUploadImageResponse", [], undefined, [], endpoint);
+    expect(res.code).toContain("field_1: string;");
+    expect(res.code).not.toContain("Record<string");
   });
 });
