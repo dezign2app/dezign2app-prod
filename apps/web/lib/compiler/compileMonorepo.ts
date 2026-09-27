@@ -109,6 +109,7 @@ export function compileMonorepo(
     kafkaFunctions: sharedResult.kafkaFunctions,
     redisFunctions: sharedResult.redisFunctions,
     externalFunctions: sharedResult.externalFunctions,
+    storageFunctions: sharedResult.storageFunctions,
     compiledFrontend: sharedResult.compiledFrontend,
     projectName,
     getUniqueLangGraphFolder: getUniqueServiceFolder,

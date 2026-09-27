@@ -11,3 +11,5 @@ export * from "./legacyDbRedisEmitter";
 export * from "./kafkaEmitter";
 export * from "./interServiceCallEmitter";
 export * from "./handlerPreambleEmitter";
+export * from "./storageEmitter";
+

@@ -246,6 +246,106 @@ export function resolveLinkedEndpoint(
     };
   }
 
+  const STORAGE_NODE_TYPES = [
+    "storage_operation_ref",
+    "storage_ref",
+    "storage_bucket_ref",
+    "bucket_ref",
+    "StorageBucketRefNode",
+    "StorageOperationRefNode",
+    "storage",
+  ];
+  if (STORAGE_NODE_TYPES.includes(targetNode.type)) {
+    const downstreamEdge = allEdges.find(
+      (e) =>
+        (e.source === targetNode.id && e.target !== fromNodeId) ||
+        (e.target === targetNode.id && e.source !== fromNodeId),
+    );
+    if (downstreamEdge) {
+      const otherId =
+        downstreamEdge.source === targetNode.id
+          ? downstreamEdge.target
+          : downstreamEdge.source;
+      const downstreamNode = allNodes.find((n) => n.id === otherId);
+      if (downstreamNode && downstreamNode.type === "service") {
+        const srvHandle =
+          downstreamEdge.source === downstreamNode.id
+            ? downstreamEdge.sourceHandle
+            : downstreamEdge.targetHandle;
+        let endpointId = srvHandle
+          ? srvHandle.replace(
+              /^(endpoint-in-|endpoint-out-|endpoints-in-|endpoints-out-)/,
+              "",
+            )
+          : undefined;
+        if (endpointId && endpointId.includes("-in-")) {
+          const parts = endpointId.split("-in-");
+          endpointId = parts[parts.length - 1];
+        }
+
+        let ep: Endpoint | undefined;
+        if (endpointId) {
+          ep = allEndpoints.find(
+            (e) =>
+              e.nodeId === downstreamNode.id &&
+              (e.id === endpointId || e.name === endpointId),
+          );
+          if (!ep && downstreamNode.data?.endpoints) {
+            ep = (downstreamNode.data.endpoints as Endpoint[]).find(
+              (e) => e.id === endpointId || e.name === endpointId,
+            );
+          }
+        }
+        if (!ep) {
+          const srvEndpoints = allEndpoints.filter(
+            (e) => e.nodeId === downstreamNode.id,
+          );
+          if (srvEndpoints.length > 0) ep = srvEndpoints[0];
+          else if (
+            downstreamNode.data?.endpoints &&
+            (downstreamNode.data.endpoints as Endpoint[]).length > 0
+          ) {
+            ep = (downstreamNode.data.endpoints as Endpoint[])[0];
+          }
+        }
+
+        const targetPort = getServicePort(downstreamNode);
+        const targetServiceName = downstreamNode.data?.label || "Service";
+        const method = (ep?.type || "POST").toUpperCase();
+        const rawPath = ep?.name || "upload-image";
+        let path = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+        path = path.replace(/\s+/g, "-");
+
+        if (downstreamNode.data?.techStack === "nextjs") {
+          if (!path.startsWith("/api/") && path !== "/api") {
+            path = `/api${path.startsWith("/") ? path : `/${path}`}`;
+          }
+        }
+
+        const isColocated =
+          downstreamNode.data?.techStack === "nextjs" &&
+          allNodes.some((n) => n.type === "webApp");
+        const fullUrl = isColocated
+          ? path
+          : `http://localhost:${targetPort}${path}`;
+
+        return {
+          targetNodeId: downstreamNode.id,
+          targetNodeName: targetServiceName,
+          serviceName: targetServiceName,
+          targetNodePort: targetPort,
+          endpointId: ep?.id,
+          endpointName: ep?.name || "Upload Endpoint",
+          method,
+          path,
+          fullUrl,
+          requireAuth: ep ? ep.requireAuth !== false : false,
+          endpoint: ep,
+        };
+      }
+    }
+  }
+
   return null;
 }
 

@@ -11,6 +11,7 @@ import {
   EventComponentMeta,
   SectionMeta,
 } from "./componentTemplates";
+import type { StorageUploadConfig } from "./event-generators";
 import { isAuthPage, isAuthLoginPage, isAuthRegisterPage } from "../../../compileAuth";
 import { typeStrToTsAndZod } from "../../../generators/schemaToTypeScript";
 import { generateApiClientFile } from "./apiClientTemplate";
@@ -470,6 +471,207 @@ export function generatePageAndComponentFiles({
           requireAuth = Boolean(effectiveAuthNode) && (link ? link.requireAuth !== false : true);
         }
 
+        // Detect storage node connected to this WebPage action via edges or bindings
+        const STORAGE_NODE_TYPES = new Set([
+          "storage_operation_ref",
+          "storage_ref",
+          "storage_bucket_ref",
+          "bucket_ref",
+          "StorageBucketRefNode",
+          "StorageOperationRefNode",
+          "storage",
+        ]);
+
+        const parseSizeMb = (val: unknown): number => {
+          if (typeof val === "number" && !isNaN(val)) return val;
+          if (typeof val === "string") {
+            const num = parseFloat(val);
+            if (!isNaN(num)) {
+              if (val.toUpperCase().includes("KB")) return Math.max(1, Math.round(num / 1024));
+              if (val.toUpperCase().includes("GB")) return Math.round(num * 1024);
+              return Math.round(num);
+            }
+          }
+          return 10;
+        };
+
+        const extractBucketConfig = (
+          storageNode: BackendNode,
+          preferredBucketId?: string,
+        ): StorageUploadConfig => {
+          const rawBuckets = (storageNode.data?.buckets as Array<{
+            id?: string;
+            name?: string;
+            maxFileSizeMb?: number;
+            maxFileSize?: string | number;
+            acceptedMimeTypes?: string[] | string;
+            allowedExtensions?: string;
+          }> | undefined) || [];
+
+          const matchedBucket =
+            (preferredBucketId
+              ? rawBuckets.find(
+                  (b) => b.id === preferredBucketId || b.name === preferredBucketId,
+                )
+              : undefined) ||
+            rawBuckets[0];
+
+          const rawSize =
+            matchedBucket?.maxFileSizeMb ??
+            matchedBucket?.maxFileSize ??
+            (storageNode.data as any)?.maxFileSizeMb ??
+            (storageNode.data as any)?.maxFileSize ??
+            (storageNode.data as any)?.uploadMaxFileSizeMb ??
+            10;
+          const maxSizeMb = parseSizeMb(rawSize);
+
+          const rawMimes =
+            matchedBucket?.acceptedMimeTypes ??
+            matchedBucket?.allowedExtensions ??
+            (storageNode.data as any)?.acceptedMimeTypes ??
+            (storageNode.data as any)?.uploadAcceptedMimeTypes ??
+            [];
+
+          const acceptedMimeTypes = Array.isArray(rawMimes)
+            ? rawMimes.join(",")
+            : typeof rawMimes === "string" && rawMimes.trim()
+            ? rawMimes
+            : "image/jpeg,image/png,image/webp,image/gif";
+
+          return {
+            maxSizeMb,
+            acceptedMimeTypes,
+            showPreview:
+              acceptedMimeTypes.includes("image/") ||
+              acceptedMimeTypes.includes("png") ||
+              acceptedMimeTypes.includes("jpg") ||
+              acceptedMimeTypes.includes("webp"),
+          };
+        };
+
+        let storageConfig: StorageUploadConfig | undefined = undefined;
+
+        // 1. Direct edge connecting this action to a storage node
+        const evtHandle = evt.id;
+        const storageEdge = allEdges.find(
+          (e) =>
+            (e.source === node.id || e.target === node.id) &&
+            (e.sourceHandle?.includes(evtHandle) || e.targetHandle?.includes(evtHandle)) &&
+            allNodes.some(
+              (n) =>
+                STORAGE_NODE_TYPES.has(n.type as string) &&
+                (n.id === e.source || n.id === e.target) &&
+                n.id !== node.id,
+            ),
+        );
+        if (storageEdge) {
+          const storageNodeId =
+            storageEdge.source !== node.id ? storageEdge.source : storageEdge.target;
+          const storageNode = allNodes.find((n) => n.id === storageNodeId);
+          if (storageNode) {
+            const underlyingStorageId =
+              storageNode.type === "storage"
+                ? storageNode.id
+                : storageNode.data?.storageNodeId;
+            const underlyingNode =
+              (underlyingStorageId
+                ? allNodes.find((n) => n.id === underlyingStorageId)
+                : undefined) || storageNode;
+            const preferredBucket =
+              storageNode.data?.bucketId || storageNode.data?.bucketName;
+            storageConfig = extractBucketConfig(underlyingNode, preferredBucket);
+          }
+        }
+
+        // 2. Action storageOperationBinding (e.g. from canvas connection)
+        const storageBinding = (evt as any)?.storageOperationBinding;
+        if (!storageConfig && storageBinding) {
+          const sNodeId = storageBinding.storageNodeId || storageBinding.refNodeId;
+          const sNode = allNodes.find((n) => n.id === sNodeId);
+          if (sNode) {
+            const underlyingStorageId =
+              sNode.type === "storage" ? sNode.id : sNode.data?.storageNodeId;
+            const underlyingNode =
+              (underlyingStorageId
+                ? allNodes.find((n) => n.id === underlyingStorageId)
+                : undefined) || sNode;
+            storageConfig = extractBucketConfig(underlyingNode, storageBinding.bucketId);
+          }
+        }
+
+        // 3. Connected service endpoint has a storage step or edge to a storage node
+        if (!storageConfig && link?.targetNodeId) {
+          const serviceStorageEdge = allEdges.find(
+            (e) =>
+              (e.source === link.targetNodeId || e.target === link.targetNodeId) &&
+              allNodes.some(
+                (n) =>
+                  STORAGE_NODE_TYPES.has(n.type as string) &&
+                  (n.id === e.source || n.id === e.target) &&
+                  n.id !== link.targetNodeId,
+              ),
+          );
+          if (serviceStorageEdge) {
+            const sId =
+              serviceStorageEdge.source === link.targetNodeId
+                ? serviceStorageEdge.target
+                : serviceStorageEdge.source;
+            const sNode = allNodes.find((n) => n.id === sId);
+            if (sNode) {
+              const underlyingStorageId =
+                sNode.type === "storage" ? sNode.id : sNode.data?.storageNodeId;
+              const underlyingNode =
+                (underlyingStorageId
+                  ? allNodes.find((n) => n.id === underlyingStorageId)
+                  : undefined) || sNode;
+              const preferredBucket = sNode.data?.bucketId || sNode.data?.bucketName;
+              storageConfig = extractBucketConfig(underlyingNode, preferredBucket);
+            }
+          }
+        }
+
+        // 4. Fallback from page-level or endpoint-level flags
+        if (!storageConfig) {
+          const evtAny = evt as any;
+          const epAny = link?.endpoint as any;
+          if (
+            evtAny?.storageNodeId ||
+            evtAny?.uploadBucketId ||
+            node.data?.uploadBucketId ||
+            node.data?.connectedStorageNodeId ||
+            epAny?.connectedStorageNodeId
+          ) {
+            const bucketId =
+              evtAny?.uploadBucketId ||
+              node.data?.uploadBucketId ||
+              (evtAny?.storageOperationBinding as any)?.bucketId;
+            const sNodeId =
+              evtAny?.storageNodeId ||
+              node.data?.connectedStorageNodeId ||
+              epAny?.connectedStorageNodeId;
+            const sNode = sNodeId ? allNodes.find((n) => n.id === sNodeId) : undefined;
+            if (sNode) {
+              storageConfig = extractBucketConfig(sNode, bucketId);
+            } else {
+              storageConfig = {
+                maxSizeMb:
+                  node.data?.uploadMaxFileSizeMb ??
+                  evtAny?.uploadMaxFileSizeMb ??
+                  epAny?.uploadMaxFileSizeMb ??
+                  10,
+                acceptedMimeTypes:
+                  (Array.isArray(node.data?.uploadAcceptedMimeTypes)
+                    ? node.data?.uploadAcceptedMimeTypes.join(",")
+                    : undefined) ??
+                  evtAny?.uploadAcceptedMimeTypes ??
+                  epAny?.uploadAcceptedMimeTypes ??
+                  "image/jpeg,image/png,image/webp,image/gif",
+                showPreview: true,
+              };
+            }
+          }
+        }
+
         const actionMeta: EventComponentMeta = {
           componentName: compName,
           eventName: evtName,
@@ -507,9 +709,11 @@ export function generatePageAndComponentFiles({
             evt,
             link?.endpoint,
             link?.serviceName || link?.targetNodeName,
+            storageConfig,
           ),
         });
       });
+
 
       // Section component file INSIDE section folder under _components
       const sectionFilePath = `${sectionDir}/${secCompName}.tsx`;

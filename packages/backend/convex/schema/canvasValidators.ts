@@ -147,6 +147,8 @@ export const safePipelineStepSchema = z.object({
   externalNodeId: z.string().optional(),
   externalEndpointId: z.string().optional(),
   operationId: z.string().optional(),
+  storageNodeId: z.string().optional(),
+  bucketId: z.string().optional(),
   brokerNodeId: z.string().optional(),
   messagingResourceId: z.string().optional(),
   functionRef: z

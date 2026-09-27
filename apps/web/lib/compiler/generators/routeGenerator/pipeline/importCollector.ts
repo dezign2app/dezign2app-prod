@@ -25,6 +25,17 @@ export function collectPipelineImports(
         ) {
           importPath = `../transformers/${name}`;
         }
+      } else if (
+        s.type === "storage_operation" ||
+        importPath.endsWith("/operations") ||
+        importPath.endsWith("/buckets") ||
+        importPath.endsWith("/client")
+      ) {
+        if (importPath.startsWith("@workspace/") && !importPath.startsWith("@workspace/storage")) {
+          const parts = importPath.split("/");
+          const subPath = parts.slice(2).join("/");
+          importPath = subPath ? `@workspace/storage/${subPath}` : "@workspace/storage";
+        }
       }
 
       const existing = imports.get(importPath);

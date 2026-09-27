@@ -22,7 +22,9 @@ import {
   emitKafkaPublish,
   emitInterServiceCalls,
   emitHandlerPreamble,
+  emitStorageOperations,
   toTsType,
+  traceHasStorage,
 } from "./handlers";
 
 export { toTsType };
@@ -41,6 +43,7 @@ export interface GenerateEndpointHandlerParams {
   dbFunctions: ReusableFunction[];
   kafkaFunctions: ReusableFunction[];
   redisFunctions?: ReusableFunction[];
+  storageFunctions?: ReusableFunction[];
   nodePublishedEvents: (AnyMessagingResource & { nodeId: string; variant: "publish" | "consume" })[];
   usedFileNames: Set<string>;
 }
@@ -75,6 +78,7 @@ export function generateEndpointRouteHandler(
     dbFunctions,
     kafkaFunctions,
     redisFunctions = [],
+    storageFunctions = [],
     nodePublishedEvents,
     usedFileNames,
   } = params;
@@ -233,6 +237,7 @@ export function generateEndpointRouteHandler(
       ...dbFunctions,
       ...(redisFunctions || []),
       ...(kafkaFunctions || []),
+      ...(storageFunctions || []),
     ];
     const pipelineLines = renderPipeline(pipelineSteps, payloadVar, {
       reusableFunctions: allReusableFunctions,
@@ -242,6 +247,25 @@ export function generateEndpointRouteHandler(
       routeHandlerCode += `    ${line}\n`;
     });
 
+    // If connected to storage on canvas but no storage_operation pipeline step was manually configured,
+    // emit the concrete presign-URL upload flow automatically.
+    const hasStorageStep = pipelineSteps.some(
+      (s) => s.type === "storage_operation" && s.enabled !== false,
+    );
+    let autoEmittedStorage = false;
+    if (!hasStorageStep && traceHasStorage(trace)) {
+      const storageCode = emitStorageOperations({
+        trace,
+        ep,
+        payloadVar,
+        storageFunctions,
+      });
+      if (storageCode) {
+        routeHandlerCode += storageCode;
+        autoEmittedStorage = true;
+      }
+    }
+
     const hasReturnStep = pipelineSteps.some(
       (s) => s.type === "return_response" && s.enabled !== false,
     );
@@ -249,13 +273,18 @@ export function generateEndpointRouteHandler(
       (s) => s.type === "langgraph_invoke" && s.langGraphStreamingEnabled && s.enabled !== false,
     );
 
-    if (!hasReturnStep && !hasStreaming) {
+    if (!hasReturnStep && !hasStreaming && !autoEmittedStorage) {
       const lastStep = [...pipelineSteps].reverse().find((s) => s.enabled !== false);
       const lastOutputVar = lastStep?.outputVariable || payloadVar;
       const statusCode = ep.type === "POST" ? 201 : 200;
 
+      const responseDataExpr =
+        lastStep?.type === "storage_operation" && lastStep.functionRef?.name === "getUploadPresignedUrl"
+          ? `{ signedUrl: ${lastOutputVar} }`
+          : lastOutputVar;
+
       routeHandlerCode += `\n    logger.debug("Successfully generated response for ${path}");\n`;
-      routeHandlerCode += `    return res.status(${statusCode}).json({ data: ${lastOutputVar} });\n`;
+      routeHandlerCode += `    return res.status(${statusCode}).json({ data: ${responseDataExpr} });\n`;
     }
 
     routeHandlerCode += `  } catch (err) {\n`;
@@ -326,6 +355,18 @@ export function generateEndpointRouteHandler(
     payloadVar,
   });
 
+  // Storage operations (presign-URL flow) — emitted when a StorageRef node is connected
+  const storageCode = emitStorageOperations({
+    trace,
+    ep,
+    payloadVar,
+    storageFunctions,
+  });
+  const hasStorageResponse = storageCode.length > 0;
+  if (hasStorageResponse) {
+    routeHandlerCode += storageCode;
+  }
+
   // Custom manual code block
   if (codeBlockText) {
     codeBlockText.split("\n").forEach((line: string) => {
@@ -341,7 +382,7 @@ export function generateEndpointRouteHandler(
       codeBlockText.includes("return res.") ||
       codeBlockText.includes("res.end("));
 
-  if (!hasCustomResponse) {
+  if (!hasCustomResponse && !hasStorageResponse) {
     const statusCode = ep.type === "POST" ? 201 : 200;
     const responsePayload = buildResponsePayloadCode(
       ep,

@@ -108,7 +108,10 @@ export function generateSimpleButtonEventTemplate({
       if (src === "response_property" && vPath) {
         const chain = vPath.split(".").filter(Boolean).map((k) => `?.[${JSON.stringify(k)}]`).join("");
         postTrigger += `      if (triggerResult) {
-        const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
+        const resData =
+          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
+            ? triggerResult.data
+            : triggerResult;
         const extracted = resData${chain};
         ${storeHookName}.getState().${storeActionName}(extracted);
       }\n`;
@@ -125,7 +128,10 @@ export function generateSimpleButtonEventTemplate({
           });
         if (mappedEntries.length > 0) {
           postTrigger += `      if (triggerResult) {
-        const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
+        const resData =
+          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
+            ? triggerResult.data
+            : triggerResult;
         ${storeHookName}.getState().populate({ ${mappedEntries.join(", ")} });
       }\n`;
           return;
@@ -139,7 +145,10 @@ export function generateSimpleButtonEventTemplate({
           return `resData?.${chain}`;
         });
         postTrigger += `      if (triggerResult) {
-        const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
+        const resData =
+          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
+            ? triggerResult.data
+            : triggerResult;
         ${storeHookName}.getState().${storeActionName}(${paramArgs.join(", ")});
       }\n`;
         return;
@@ -147,7 +156,10 @@ export function generateSimpleButtonEventTemplate({
 
       // Default response:
       postTrigger += `      if (triggerResult) {
-        const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
+        const resData =
+          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
+            ? triggerResult.data
+            : triggerResult;
         ${storeHookName}.getState().${storeActionName}(resData);
       }\n`;
     });

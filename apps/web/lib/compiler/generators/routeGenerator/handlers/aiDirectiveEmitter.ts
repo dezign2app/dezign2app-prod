@@ -73,6 +73,30 @@ export function emitAiDirective(params: EmitAiDirectiveParams): string {
     });
   }
 
+  // Storage-specific step-by-step directive
+  const storageOutgoing = trace.outgoing.filter(
+    (out) => out.nodeType === "Storage Bucket",
+  );
+  const storageIncoming = trace.incoming.filter(
+    (inc) => inc.nodeType === "storage_operation_ref",
+  );
+  if (storageOutgoing.length > 0 || storageIncoming.length > 0) {
+    const storageNode = storageOutgoing[0] || storageIncoming[0];
+    const bucketCtx = storageNode?.dataContext || "";
+    const bucketLine = bucketCtx.match(/Bucket: ([^\n]+)/)?.[1] || "STORAGE_BUCKETS[Object.keys(STORAGE_BUCKETS)[0] ?? \"\"] ?? \"\"";
+    code += `    //\n    // STORAGE OPERATION — PRESIGN-URL UPLOAD FLOW:\n`;
+    code += `    //   1. Extract fileName, fileType, fileSize from request body\n`;
+    code += `    //   2. Validate: check fileType against allowed MIME types and fileSize against max limit\n`;
+    code += `    //   3. Generate a unique object key, e.g.: \`\${Date.now()}-\${fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}\`\n`;
+    code += `    //   4. Import from @workspace/storage/operations:\n`;
+    code += `    //      { getUploadPresignedUrl, STORAGE_BUCKETS }\n`;
+    code += `    //   5. Call: const signedUrl = await getUploadPresignedUrl(bucketName, objectKey, { expiresInSeconds: 300 })\n`;
+    code += `    //      bucketName = ${bucketLine}\n`;
+    code += `    //   6. Return res.status(200).json({ signedUrl, key: objectKey })\n`;
+    code += `    //      (The client will PUT the file directly to the signedUrl — do NOT upload server-side)\n`;
+  }
+
+
   if (ep.crudOperations && Object.keys(ep.crudOperations).length > 0) {
     const activeOps = Object.entries(ep.crudOperations).filter(
       ([_, ops]) => ops && ops.length > 0,

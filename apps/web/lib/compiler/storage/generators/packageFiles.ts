@@ -33,6 +33,7 @@ export function generateStoragePackageJson(
         },
         devDependencies: {
           "@workspace/typescript-config": "workspace:*",
+          "@types/node": "^20.11.0",
           typescript: "^5.3.3",
         },
       },
@@ -52,6 +53,7 @@ export function generateStorageTsConfig(): CompiledFile {
         compilerOptions: {
           outDir: "./dist",
           rootDir: "./src",
+          types: ["node"],
         },
         include: ["src/**/*"],
       },

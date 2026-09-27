@@ -16,6 +16,7 @@ import {
   CopyObjectCommand,
   ObjectCannedACL,
 } from "@aws-sdk/client-s3";
+import type { PutObjectCommandInput } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { s3Client } from "./client";
 import { getBucketMetadata } from "./buckets";
@@ -77,13 +78,13 @@ export async function getDownloadPresignedUrl(
 export async function uploadObject(
   bucketName: string,
   key: string,
-  body: string | Uint8Array | Buffer | ReadableStream | Blob,
+  body: PutObjectCommandInput["Body"],
   options?: UploadObjectOptions,
 ) {
   const command = new PutObjectCommand({
     Bucket: bucketName,
     Key: key,
-    Body: body as any,
+    Body: body,
     ContentType: options?.contentType,
     Metadata: options?.metadata,
     ACL: options?.acl,
@@ -160,11 +161,20 @@ export async function objectExists(bucketName: string, key: string): Promise<boo
     });
     await s3Client.send(command);
     return true;
-  } catch (err: any) {
-    if (err?.name === "NotFound" || err?.$metadata?.httpStatusCode === 404) {
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      (("name" in error && error.name === "NotFound") ||
+        ("$metadata" in error &&
+          typeof error.$metadata === "object" &&
+          error.$metadata !== null &&
+          "httpStatusCode" in error.$metadata &&
+          error.$metadata.httpStatusCode === 404))
+    ) {
       return false;
     }
-    throw err;
+    throw error;
   }
 }
 
@@ -177,8 +187,12 @@ export async function copyObject(
   destBucket: string,
   destKey: string,
 ) {
+  let cleanSourceKey = sourceKey;
+  while (cleanSourceKey.startsWith("/")) {
+    cleanSourceKey = cleanSourceKey.slice(1);
+  }
   const command = new CopyObjectCommand({
-    CopySource: sourceBucket + "/" + sourceKey.replace(/^\\/+/, ""),
+    CopySource: sourceBucket + "/" + cleanSourceKey,
     Bucket: destBucket,
     Key: destKey,
   });
@@ -191,13 +205,20 @@ export async function copyObject(
  */
 export function getPublicObjectUrl(bucketName: string, key: string): string {
   const meta = getBucketMetadata(bucketName);
-  const cleanKey = key.replace(/^\/+/, "");
+  let cleanKey = key;
+  while (cleanKey.startsWith("/")) {
+    cleanKey = cleanKey.slice(1);
+  }
   if (meta?.cdnUrl) {
-    const base = meta.cdnUrl.replace(/\/+$/, "");
+    let base = meta.cdnUrl;
+    while (base.endsWith("/")) {
+      base = base.slice(0, -1);
+    }
     return base + "/" + cleanKey;
   }
   return "https://" + bucketName + ".s3.amazonaws.com/" + cleanKey;
 }
+
 `;
 
   return {

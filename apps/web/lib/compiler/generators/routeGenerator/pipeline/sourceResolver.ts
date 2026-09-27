@@ -68,10 +68,21 @@ export function resolveSource(
       const v = source.value;
       if (typeof v === "number" || typeof v === "boolean") return String(v);
       const str = String(v ?? "");
+      const trimmed = str.trim();
+      if (
+        (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+        (trimmed.startsWith("[") && trimmed.endsWith("]"))
+      ) {
+        try {
+          JSON.parse(trimmed);
+          return trimmed;
+        } catch {
+          // not plain JSON, proceed to interpolation check
+        }
+      }
       if (!/\$\{([^}]+)\}/.test(str)) {
         return JSON.stringify(str);
       }
-      const trimmed = str.trim();
       if (
         (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
         (trimmed.startsWith("[") && trimmed.endsWith("]"))

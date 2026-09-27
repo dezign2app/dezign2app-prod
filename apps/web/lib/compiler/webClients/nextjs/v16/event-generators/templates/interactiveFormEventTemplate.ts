@@ -174,7 +174,10 @@ export function generateInteractiveFormEventTemplate({
       if (src === "response_property" && vPath) {
         const chain = vPath.split(".").filter(Boolean).map((k) => `?.[${JSON.stringify(k)}]`).join("");
         postTrigger += `      if (triggerResult) {
-        const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
+        const resData =
+          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
+            ? triggerResult.data
+            : triggerResult;
         const extracted = resData${chain};
         ${storeHookName}.getState().${storeActionName}(extracted);
       }\n`;
@@ -195,7 +198,10 @@ export function generateInteractiveFormEventTemplate({
           });
         if (mappedEntries.length > 0) {
           postTrigger += `      if (triggerResult) {
-        const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
+        const resData =
+          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
+            ? triggerResult.data
+            : triggerResult;
         ${storeHookName}.getState().populate({ ${mappedEntries.join(", ")} });
       }\n`;
           return;
@@ -213,7 +219,10 @@ export function generateInteractiveFormEventTemplate({
           return `resData?.${chain}`;
         });
         postTrigger += `      if (triggerResult) {
-        const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
+        const resData =
+          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
+            ? triggerResult.data
+            : triggerResult;
         ${storeHookName}.getState().${storeActionName}(${paramArgs.join(", ")});
       }\n`;
         return;
@@ -221,7 +230,10 @@ export function generateInteractiveFormEventTemplate({
 
       // Default response:
       postTrigger += `      if (triggerResult) {
-        const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
+        const resData =
+          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
+            ? triggerResult.data
+            : triggerResult;
         ${storeHookName}.getState().${storeActionName}(resData);
       }\n`;
     });
@@ -243,7 +255,7 @@ ${libImports}${typeDefs.join("\n\n")}
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, any>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
+${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, string | number | boolean | null | undefined>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
   const computeFinalUrl = (): string => {
     let currentUrl = "${url}";
     let origin = "";
