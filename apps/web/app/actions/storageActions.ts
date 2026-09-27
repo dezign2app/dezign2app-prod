@@ -5,6 +5,7 @@ import {
   executeStorageOperationLive,
   listStorageBucketsLive,
   createStorageBucketLive,
+  executeStorageTestSuiteLive,
   type StorageConnectionConfig,
   type CheckStorageConnectionResult,
   type ExecuteStorageOperationPayload,
@@ -12,6 +13,8 @@ import {
   type ListStorageBucketsResult,
   type CreateStorageBucketResult,
   type ServerBucketInfo,
+  type StorageTestCaseResult,
+  type StorageTestSuiteResult,
 } from "@/lib/utils/storageRunner";
 
 export type {
@@ -22,6 +25,8 @@ export type {
   ListStorageBucketsResult,
   CreateStorageBucketResult,
   ServerBucketInfo,
+  StorageTestCaseResult,
+  StorageTestSuiteResult,
 };
 
 /**
@@ -61,5 +66,14 @@ export async function createStorageBucketAction(
   bucketName: string,
 ): Promise<CreateStorageBucketResult> {
   return createStorageBucketLive(config, bucketName);
+}
+
+/**
+ * Server action to execute the entire generated test suite against the live storage server.
+ */
+export async function executeStorageTestSuiteAction(
+  config: StorageConnectionConfig,
+): Promise<StorageTestSuiteResult> {
+  return executeStorageTestSuiteLive(config);
 }
 

@@ -11,7 +11,7 @@ import {
 } from "@workspace/ui/components/combobox";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { cleanEnvVarName } from "@/lib/utils/localEnvSync";
-import { KeyRound, Globe, Link } from "lucide-react";
+import { KeyRound, Link } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 
 export interface EnvVarComboboxProps {
@@ -40,7 +40,7 @@ export const EnvVarCombobox: React.FC<EnvVarComboboxProps> = ({
   nodeId,
   placeholder = "Select or type .env variable...",
   className,
-  defaultSuggestions = DEFAULT_S3_ENV_SUGGESTIONS,
+  defaultSuggestions = [],
   disabled = false,
   allowRawInput = false,
   type = "text",
@@ -57,37 +57,59 @@ export const EnvVarCombobox: React.FC<EnvVarComboboxProps> = ({
 
     const normalize = (s: string) => (allowRawInput ? s.trim() : cleanEnvVarName(s));
 
-    // Current value
+    // 1. Resolve the target node (either by direct id or by checking which node contains this bucket)
+    const targetNode = nodeId
+      ? nodes.find((n) => n.id === nodeId) ||
+        nodes.find((n) => n.data?.buckets?.some((b: any) => b?.id === nodeId))
+      : null;
+
+    const configuredNodeVars =
+      (targetNode?.data?.envVars as Array<{ name: string }> | undefined) || [];
+
+    const hasConfiguredVars = configuredNodeVars.some((v) => Boolean(v?.name?.trim()));
+
+    if (hasConfiguredVars) {
+      // STRICTLY show only the environment variables configured for this node
+      configuredNodeVars.forEach((v) => {
+        if (v?.name && v.name.trim()) {
+          const norm = cleanEnvVarName(v.name);
+          if (norm) set.add(norm);
+        }
+      });
+    } else if (defaultSuggestions && defaultSuggestions.length > 0) {
+      // Fallback only if the node has NO configured variables at all
+      defaultSuggestions.forEach((s) => {
+        const norm = normalize(s);
+        if (norm) set.add(norm);
+      });
+    }
+
+    // Preserve the currently selected value if valid so combobox display works
     if (value && value.trim()) {
-      set.add(normalize(value));
+      if (allowRawInput) {
+        set.add(value.trim());
+      } else if (!hasConfiguredVars) {
+        const normVal = cleanEnvVarName(value);
+        if (normVal) set.add(normVal);
+      }
     }
 
-    // Input value being typed
-    if (inputValue && inputValue.trim()) {
-      set.add(normalize(inputValue));
+    // If allowRawInput is true and user is typing a custom value (like a custom URL), include it
+    if (allowRawInput && inputValue && inputValue.trim()) {
+      set.add(inputValue.trim());
     }
 
-    // Node-specific env vars if nodeId provided
-    if (nodeId) {
-      const node = nodes.find((n) => n.id === nodeId);
-      const nodeVars = (node?.data?.envVars as Array<{ name: string }> | undefined) || [];
-      nodeVars.forEach((v) => {
-        if (v?.name) set.add(normalize(v.name));
-      });
-    }
+    return Array.from(set).filter((item) => {
+      if (!item) return false;
+      const isUrl = item.includes("://");
+      const isEnv = !isUrl && item === item.toUpperCase() && !item.includes(".");
 
-    // All env vars defined across canvas nodes
-    nodes.forEach((n) => {
-      const envVars = (n.data?.envVars as Array<{ name: string }> | undefined) || [];
-      envVars.forEach((v) => {
-        if (v?.name) set.add(normalize(v.name));
-      });
+      // If allowRawInput is true, permit URLs; otherwise strictly valid .env names
+      if (allowRawInput) {
+        return isEnv || isUrl;
+      }
+      return isEnv;
     });
-
-    // Default suggestions
-    defaultSuggestions.forEach((s) => set.add(normalize(s)));
-
-    return Array.from(set).filter(Boolean);
   }, [value, inputValue, nodeId, nodes, defaultSuggestions, allowRawInput]);
 
   const handleCommitValue = (val: string) => {
@@ -141,13 +163,12 @@ export const EnvVarCombobox: React.FC<EnvVarComboboxProps> = ({
           sideOffset={4}
         >
           <ComboboxEmpty className="py-2.5 px-3 text-xs text-muted-foreground text-center">
-            Press Enter to use custom value
+            {allowRawInput ? "Press Enter to use custom value" : "Type a valid .env variable name"}
           </ComboboxEmpty>
           <ComboboxList className="max-h-56 overflow-y-auto no-scrollbar p-1 bg-popover text-popover-foreground hide-scrollbar">
             {(item: string) => {
               const isUrl = item.includes("://");
-              const isRegion = item.startsWith("us-") || item.startsWith("eu-") || item.startsWith("ap-") || item.startsWith("sa-") || item.startsWith("ca-");
-              const isEnv = !isUrl && !isRegion && item === item.toUpperCase() && !item.includes(".");
+              const isEnv = !isUrl && item === item.toUpperCase() && !item.includes(".");
 
               return (
                 <ComboboxItem
@@ -158,8 +179,6 @@ export const EnvVarCombobox: React.FC<EnvVarComboboxProps> = ({
                   <div className="flex items-center gap-1.5 min-w-0 truncate">
                     {isUrl ? (
                       <Link size={12} className="text-blue-500 shrink-0" />
-                    ) : isRegion ? (
-                      <Globe size={12} className="text-emerald-500 shrink-0" />
                     ) : (
                       <KeyRound size={12} className="text-amber-500 shrink-0" />
                     )}
@@ -168,7 +187,7 @@ export const EnvVarCombobox: React.FC<EnvVarComboboxProps> = ({
                     </span>
                   </div>
                   <span className="text-[10px] font-mono text-muted-foreground/70 shrink-0">
-                    {isEnv ? ".env" : isUrl ? "url" : "value"}
+                    {isEnv ? ".env" : "url"}
                   </span>
                 </ComboboxItem>
               );

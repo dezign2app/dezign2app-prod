@@ -17,17 +17,18 @@ export const BucketConnectionSection: React.FC<BucketStorageSectionProps> = ({
 
   const parentNode = item.nodeId
     ? nodes.find((n) => n.id === item.nodeId)
-    : null;
+    : nodes.find((n) => n.data?.buckets?.some((b) => b.id === item.id));
+  const effectiveNodeId = item.nodeId || parentNode?.id;
   const parentData = parentNode?.data;
   const parentLabel = parentData?.label || "Storage Host";
   const parentProvider = parentData?.storageProvider || item.storageType || "s3";
 
   const handleOpenStorageNode = () => {
-    if (item.nodeId) {
+    if (effectiveNodeId) {
       setActiveConfigItem({
         type: "storage",
-        id: item.nodeId,
-        nodeId: item.nodeId,
+        id: effectiveNodeId,
+        nodeId: effectiveNodeId,
       });
     }
   };
@@ -36,8 +37,6 @@ export const BucketConnectionSection: React.FC<BucketStorageSectionProps> = ({
   const secretKeyVal = item.secretAccessKeyEnv || parentData?.secretAccessKeyEnv || "AWS_SECRET_ACCESS_KEY";
   const sessionTokenVal = item.sessionTokenEnv || parentData?.sessionTokenEnv || "";
   const roleArnVal = item.roleArn || parentData?.roleArn || "";
-  const directAccessKeyVal = item.accessKeyId || parentData?.accessKeyId || "";
-  const directSecretKeyVal = item.secretAccessKey || parentData?.secretAccessKey || "";
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
@@ -48,7 +47,7 @@ export const BucketConnectionSection: React.FC<BucketStorageSectionProps> = ({
             Connection & Network
           </span>
         </div>
-        {item.nodeId && (
+        {effectiveNodeId && (
           <Button
             type="button"
             variant="ghost"
@@ -90,7 +89,7 @@ export const BucketConnectionSection: React.FC<BucketStorageSectionProps> = ({
             <EnvVarCombobox
               value={accessKeyVal}
               onValueChange={(val) => handleUpdate(item.id, { accessKeyIdEnv: val })}
-              nodeId={item.nodeId}
+              nodeId={effectiveNodeId}
               placeholder="AWS_ACCESS_KEY_ID"
             />
           </div>
@@ -107,7 +106,7 @@ export const BucketConnectionSection: React.FC<BucketStorageSectionProps> = ({
             <EnvVarCombobox
               value={secretKeyVal}
               onValueChange={(val) => handleUpdate(item.id, { secretAccessKeyEnv: val })}
-              nodeId={item.nodeId}
+              nodeId={effectiveNodeId}
               placeholder="AWS_SECRET_ACCESS_KEY"
             />
           </div>
@@ -128,7 +127,7 @@ export const BucketConnectionSection: React.FC<BucketStorageSectionProps> = ({
             <EnvVarCombobox
               value={sessionTokenVal}
               onValueChange={(val) => handleUpdate(item.id, { sessionTokenEnv: val })}
-              nodeId={item.nodeId}
+              nodeId={effectiveNodeId}
               placeholder="AWS_SESSION_TOKEN"
             />
           </div>
@@ -147,55 +146,10 @@ export const BucketConnectionSection: React.FC<BucketStorageSectionProps> = ({
             <EnvVarCombobox
               value={roleArnVal}
               onValueChange={(val) => handleUpdate(item.id, { roleArn: val })}
-              nodeId={item.nodeId}
+              nodeId={effectiveNodeId}
               placeholder="arn:aws:iam::..."
-              defaultSuggestions={[
-                "AWS_ROLE_ARN",
-                "arn:aws:iam::123456789012:role/StorageRole",
-              ]}
               allowRawInput={true}
             />
-          </div>
-        </div>
-
-        {/* Live / Local Testing Credentials */}
-        <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-              Live Testing & Local Emulator Credentials (Direct)
-            </span>
-            <span className="text-[10px] text-muted-foreground">
-              Direct credentials for testing or local SeaweedFS/MinIO emulator (e.g. admin &amp; change-this-secret)
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium text-foreground">
-                Access Key ID
-              </label>
-              <EnvVarCombobox
-                value={directAccessKeyVal}
-                onValueChange={(val) => handleUpdate(item.id, { accessKeyId: val })}
-                nodeId={item.nodeId}
-                placeholder="e.g. admin"
-                defaultSuggestions={["admin", "minioadmin", "root", "AWS_ACCESS_KEY_ID"]}
-                allowRawInput={true}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium text-foreground">
-                Secret Access Key
-              </label>
-              <EnvVarCombobox
-                type="password"
-                value={directSecretKeyVal}
-                onValueChange={(val) => handleUpdate(item.id, { secretAccessKey: val })}
-                nodeId={item.nodeId}
-                placeholder="e.g. change-this-secret"
-                defaultSuggestions={["change-this-secret", "minioadmin", "AWS_SECRET_ACCESS_KEY"]}
-                allowRawInput={true}
-              />
-            </div>
           </div>
         </div>
       </div>
@@ -207,22 +161,10 @@ export const BucketConnectionSection: React.FC<BucketStorageSectionProps> = ({
             AWS Region
           </label>
           <EnvVarCombobox
-            value={item.region || parentData?.defaultRegion || "us-east-1"}
+            value={item.region || parentData?.defaultRegion || "AWS_REGION"}
             onValueChange={(val) => handleUpdate(item.id, { region: val })}
-            nodeId={item.nodeId}
-            placeholder="e.g. AWS_REGION or us-east-1"
-            defaultSuggestions={[
-              "AWS_REGION",
-              "AWS_DEFAULT_REGION",
-              "us-east-1",
-              "us-east-2",
-              "us-west-1",
-              "us-west-2",
-              "eu-west-1",
-              "eu-central-1",
-              "ap-southeast-1",
-            ]}
-            allowRawInput={true}
+            nodeId={effectiveNodeId}
+            placeholder="e.g. AWS_REGION"
           />
         </div>
 
@@ -233,16 +175,8 @@ export const BucketConnectionSection: React.FC<BucketStorageSectionProps> = ({
           <EnvVarCombobox
             value={item.endpointUrl || parentData?.endpointUrl || ""}
             onValueChange={(val) => handleUpdate(item.id, { endpointUrl: val })}
-            nodeId={item.nodeId}
+            nodeId={effectiveNodeId}
             placeholder="e.g. S3_ENDPOINT_URL or https://..."
-            defaultSuggestions={[
-              "S3_ENDPOINT_URL",
-              "AWS_ENDPOINT_URL",
-              "STORAGE_ENDPOINT_URL",
-              "https://s3.amazonaws.com",
-              "http://localhost:8333",
-              "http://localhost:9000",
-            ]}
             allowRawInput={true}
           />
         </div>
