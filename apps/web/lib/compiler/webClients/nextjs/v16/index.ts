@@ -10,6 +10,7 @@ import { generateWebClientE2ETests } from "../../../generators/testGenerator";
 import { LinkedEndpointInfo, LinkedPageRefInfo } from "./types";
 import { getServicePort, resolveLinkedEndpoint, resolvePageRefLink } from "./endpointResolver";
 import { generateProjectConfigFiles } from "./configTemplates";
+import { generateEnvFilesForNode } from "@/lib/compiler/generators/generateEnvFile";
 import { generateRootLayout, generateRouteGroupLayouts } from "./layoutGenerators";
 import { generateProxy } from "./middlewareTemplate";
 import { resolvePagesInfo } from "./pageResolver";
@@ -280,6 +281,55 @@ export function compileNextjsV16WebClient(
       dbPackageName,
     ),
   );
+
+  // Generate canvas-driven .env and .env.example with connected package nodes (Storage, DB, etc.)
+  const targetAppNode: BackendNode = webAppNode || {
+    id: enrichedWebClientNodes[0]?.id || "web-app",
+    type: "webApp",
+    data: {
+      label: effectiveAppSlug,
+      appSlug: effectiveAppSlug,
+      envVars: [],
+    },
+  };
+
+  const { env: compiledEnv, envExample: compiledEnvExample } =
+    generateEnvFilesForNode(
+      targetAppNode,
+      allNodes,
+      allEdges,
+      enrichedWebClientNodes,
+    );
+
+  const envFileIdx = files.findIndex((f) => f.filename === ".env");
+  if (envFileIdx !== -1) {
+    files[envFileIdx] = {
+      filename: ".env",
+      language: "dotenv",
+      content: compiledEnv,
+    };
+  } else {
+    files.push({
+      filename: ".env",
+      language: "dotenv",
+      content: compiledEnv,
+    });
+  }
+
+  const envExFileIdx = files.findIndex((f) => f.filename === ".env.example");
+  if (envExFileIdx !== -1) {
+    files[envExFileIdx] = {
+      filename: ".env.example",
+      language: "dotenv",
+      content: compiledEnvExample,
+    };
+  } else {
+    files.push({
+      filename: ".env.example",
+      language: "dotenv",
+      content: compiledEnvExample,
+    });
+  }
 
   // 4. Auth Server, Client SDK, Authorization Helpers & Dependencies (only if authNode connected)
   generateAuthFilesAndDependencies({
