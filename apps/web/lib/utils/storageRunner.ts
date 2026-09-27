@@ -57,6 +57,61 @@ export function resolveCredentials(config: StorageConnectionConfig): {
   return { accessKeyId, secretAccessKey, sessionToken };
 }
 
+/**
+ * Normalizes an S3/storage endpoint URL:
+ * - Strips enclosing quotes ("http://..." -> http://...)
+ * - Resolves environment variables if given an env token (e.g. S3_ENDPOINT_URL or process.env.S3_ENDPOINT_URL)
+ * - Auto-prepends http:// if missing protocol scheme (e.g. localhost:8333 -> http://localhost:8333)
+ * - Safely falls back to default AWS S3 endpoint or standard env vars
+ */
+export function normalizeEndpointUrl(
+  rawEndpoint?: string,
+  region: string = "us-east-1",
+): string {
+  let val = (rawEndpoint || "").trim();
+
+  // Strip leading and trailing single or double quotes
+  val = val.replace(/^["']+|["']+$/g, "").trim();
+
+  // If empty, check standard environment variables
+  if (!val) {
+    val = (
+      process.env.S3_ENDPOINT_URL ||
+      process.env.STORAGE_ENDPOINT_URL ||
+      process.env.AWS_ENDPOINT_URL ||
+      ""
+    ).trim();
+  }
+
+  // If val matches an env var reference (e.g. process.env.S3_ENDPOINT_URL)
+  if (val.startsWith("process.env.")) {
+    const varName = val.replace(/^process\.env\./, "").trim();
+    val = (process.env[varName] || "").trim();
+  } else if (/^[A-Z0-9_]+$/.test(val)) {
+    // If it's an uppercase token like S3_ENDPOINT_URL, check process.env
+    const envVal = process.env[val];
+    if (envVal) {
+      val = envVal.trim();
+    }
+  }
+
+  // Strip quotes again in case the env var value had quotes (e.g. S3_ENDPOINT_URL="http://localhost:8333")
+  val = val.replace(/^["']+|["']+$/g, "").trim();
+
+  // If still empty, fall back to default AWS regional S3 endpoint
+  if (!val) {
+    return `https://s3.${region}.amazonaws.com`;
+  }
+
+  // If missing protocol (e.g. localhost:8333, 127.0.0.1:8333, minio:9000), auto-prefix http://
+  if (!/^https?:\/\//i.test(val)) {
+    val = `http://${val}`;
+  }
+
+  // Remove trailing slashes
+  return val.replace(/\/+$/, "");
+}
+
 export function resolveStorageUrl(config: StorageConnectionConfig, objectKey: string = ""): {
   endpoint: string;
   url: string;
@@ -64,20 +119,21 @@ export function resolveStorageUrl(config: StorageConnectionConfig, objectKey: st
   isPathStyle: boolean;
 } {
   const region = config.region || process.env.AWS_REGION || "us-east-1";
-  const rawEndpoint = (config.endpointUrl || "").trim();
   const bucket = config.bucketName || "default-bucket";
   const cleanKey = objectKey.replace(/^\/+/, "");
 
-  let endpoint = rawEndpoint;
-  if (!endpoint) {
-    endpoint = `https://s3.${region}.amazonaws.com`;
+  const endpoint = normalizeEndpointUrl(config.endpointUrl, region);
+
+  // Validate endpoint URL safely
+  let urlObj: URL;
+  try {
+    urlObj = new URL(endpoint);
+  } catch {
+    throw new Error(
+      `Invalid storage endpoint URL: "${endpoint}". Must be a valid URL (e.g. http://localhost:8333 or https://s3.amazonaws.com).`,
+    );
   }
 
-  // Normalize endpoint without trailing slash
-  endpoint = endpoint.replace(/\/+$/, "");
-
-  // Determine path-style vs virtual-hosted-style
-  const urlObj = new URL(endpoint);
   const isLocalOrIp =
     urlObj.hostname === "localhost" ||
     urlObj.hostname === "127.0.0.1" ||
@@ -304,10 +360,20 @@ export function generatePresignedUrlSigV4(params: {
 // XML Parser Helper (Extract basic S3 XML tags without external libs)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function parseS3XmlResponse(text: string): Record<string, unknown> | null {
+export type S3XmlParsedData = {
+  code?: string;
+  message?: string;
+  bucket?: string;
+  key?: string;
+  resource?: string;
+  items?: Array<{ Key: string; Size: number }>;
+  keyCount?: number;
+};
+
+export function parseS3XmlResponse(text: string): S3XmlParsedData | null {
   if (!text || (!text.includes("<") && !text.includes(">"))) return null;
 
-  const result: Record<string, unknown> = {};
+  const result: S3XmlParsedData = {};
 
   const codeMatch = text.match(/<Code>([^<]+)<\/Code>/i);
   if (codeMatch) result.code = codeMatch[1];
@@ -372,16 +438,15 @@ export async function listStorageBucketsLive(
 ): Promise<ListStorageBucketsResult> {
   const region = config.region || process.env.AWS_REGION || "us-east-1";
   const { accessKeyId, secretAccessKey, sessionToken } = resolveCredentials(config);
-
-  let endpoint = (config.endpointUrl || "").trim() || `https://s3.${region}.amazonaws.com`;
-  endpoint = endpoint.replace(/\/+$/, "");
+  const endpoint = normalizeEndpointUrl(config.endpointUrl, region);
   const requestUrl = `${endpoint}/`;
-  const urlObj = new URL(requestUrl);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8000);
 
   try {
+    const urlObj = new URL(requestUrl);
+
     const signedHeaders = signS3Request({
       method: "GET",
       url: requestUrl,
@@ -436,8 +501,14 @@ export async function listStorageBucketsLive(
           ? "Check your credentials. For local SeaweedFS/MinIO, set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY."
           : undefined,
     };
-  } catch (err: any) {
+  } catch (err) {
     clearTimeout(timeoutId);
+    const isAbort = err instanceof Error && err.name === "AbortError";
+    const errorMsg = isAbort
+      ? `Connection timed out after 8000ms while reaching ${endpoint}`
+      : err instanceof Error
+        ? err.message
+        : String(err);
     return {
       success: false,
       serverActive: false,
@@ -445,7 +516,7 @@ export async function listStorageBucketsLive(
       statusText: "Connection Failed",
       buckets: [],
       endpoint,
-      error: `Could not connect to storage server at ${endpoint} (${err.message || String(err)})`,
+      error: `Could not connect to storage server at ${endpoint} (${errorMsg})`,
       tip: `Ensure your storage server is running and reachable at ${endpoint}.`,
     };
   }
@@ -472,24 +543,27 @@ export async function createStorageBucketLive(
   const region = config.region || process.env.AWS_REGION || "us-east-1";
   const { accessKeyId, secretAccessKey, sessionToken } = resolveCredentials(config);
 
-  const resolved = resolveStorageUrl({ ...config, bucketName: cleanBucket, forcePathStyle: true }, "");
-  const requestUrl = resolved.url;
-  const urlObj = new URL(requestUrl);
-
-  const isLocalOrIp =
-    urlObj.hostname === "localhost" ||
-    urlObj.hostname === "127.0.0.1" ||
-    /^\d+\.\d+\.\d+\.\d+$/.test(urlObj.hostname);
-
-  let body = "";
-  if (!isLocalOrIp && region && region !== "us-east-1") {
-    body = `<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><LocationConstraint>${region}</LocationConstraint></CreateBucketConfiguration>`;
-  }
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8000);
 
+  let targetEndpoint = normalizeEndpointUrl(config.endpointUrl, region);
+
   try {
+    const resolved = resolveStorageUrl({ ...config, bucketName: cleanBucket, forcePathStyle: true }, "");
+    targetEndpoint = resolved.endpoint;
+    const requestUrl = resolved.url;
+    const urlObj = new URL(requestUrl);
+
+    const isLocalOrIp =
+      urlObj.hostname === "localhost" ||
+      urlObj.hostname === "127.0.0.1" ||
+      /^\d+\.\d+\.\d+\.\d+$/.test(urlObj.hostname);
+
+    let body = "";
+    if (!isLocalOrIp && region && region !== "us-east-1") {
+      body = `<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><LocationConstraint>${region}</LocationConstraint></CreateBucketConfiguration>`;
+    }
+
     const signedHeaders = signS3Request({
       method: "PUT",
       url: requestUrl,
@@ -550,15 +624,21 @@ export async function createStorageBucketLive(
           ? "Access denied. Ensure your credentials have permission to create buckets."
           : undefined,
     };
-  } catch (err: any) {
+  } catch (err) {
     clearTimeout(timeoutId);
+    const isAbort = err instanceof Error && err.name === "AbortError";
+    const errorMsg = isAbort
+      ? `Bucket creation timed out after 8000ms connecting to ${targetEndpoint}`
+      : err instanceof Error
+        ? err.message
+        : String(err);
     return {
       success: false,
       bucketName: cleanBucket,
       status: 0,
       statusText: "Request Failed",
-      message: `Failed to connect to storage server at ${resolved.endpoint}`,
-      error: err.message || String(err),
+      message: `Failed to connect to storage server at ${targetEndpoint}`,
+      error: errorMsg,
     };
   }
 }
@@ -572,12 +652,15 @@ export async function checkStorageConnectionLive(
   const startTime = performance.now();
   const region = config.region || process.env.AWS_REGION || "us-east-1";
   const { accessKeyId, secretAccessKey, sessionToken } = resolveCredentials(config);
-  const resolved = resolveStorageUrl(config, "");
+  let endpoint = normalizeEndpointUrl(config.endpointUrl, region);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 6000);
 
   try {
+    const resolved = resolveStorageUrl(config, "");
+    endpoint = resolved.endpoint;
+
     const headers = signS3Request({
       method: "HEAD",
       url: resolved.url,
@@ -630,14 +713,16 @@ export async function checkStorageConnectionLive(
             ? `Storage server is reachable, but bucket "${config.bucketName}" was not found. Use "Create Bucket" to initialize it.`
             : undefined,
     };
-  } catch (err: any) {
+  } catch (err) {
     clearTimeout(timeoutId);
     const durationMs = Math.max(1, Math.round(performance.now() - startTime));
 
-    const isAbort = err.name === "AbortError";
+    const isAbort = err instanceof Error && err.name === "AbortError";
     const errorMsg = isAbort
-      ? `Connection timed out after 6000ms while reaching ${resolved.endpoint}`
-      : err?.message || String(err);
+      ? `Connection timed out after 6000ms while reaching ${endpoint}`
+      : err instanceof Error
+        ? err.message
+        : String(err);
 
     return {
       success: false,
@@ -646,11 +731,11 @@ export async function checkStorageConnectionLive(
       status: 0,
       statusText: "Connection Failed",
       durationMs,
-      endpoint: resolved.endpoint,
+      endpoint,
       bucket: config.bucketName,
       region,
-      error: `Could not connect to storage server at ${resolved.endpoint} (${errorMsg}).`,
-      tip: `Ensure your storage server (e.g. MinIO, LocalStack, or cloud S3) is running and reachable at "${resolved.endpoint}".`,
+      error: `Could not connect to storage server at ${endpoint} (${errorMsg}).`,
+      tip: `Ensure your storage server (e.g. MinIO, SeaweedFS, LocalStack, or cloud S3) is running and reachable at "${endpoint}".`,
     };
   }
 }
@@ -666,124 +751,128 @@ export async function executeStorageOperationLive(
   const region = connection.region || process.env.AWS_REGION || "us-east-1";
   const { accessKeyId, secretAccessKey, sessionToken } = resolveCredentials(connection);
 
-  const key = params.key || "test-file.txt";
-  const resolved = resolveStorageUrl(connection, key);
-
-  let method = "GET";
-  let requestUrl = resolved.url;
-  let body: string | Buffer | undefined = undefined;
-  let extraHeaders: Record<string, string> = {};
-  let presignedResultUrl: string | undefined = undefined;
-
-  switch (operation) {
-    case "createBucket": {
-      method = "PUT";
-      const bucketToCreate = params.key || connection.bucketName;
-      const bucketResolved = resolveStorageUrl({ ...connection, bucketName: bucketToCreate, forcePathStyle: true }, "");
-      requestUrl = bucketResolved.url;
-      const isLocalOrIp =
-        new URL(bucketResolved.endpoint).hostname === "localhost" ||
-        new URL(bucketResolved.endpoint).hostname === "127.0.0.1";
-      if (!isLocalOrIp && region && region !== "us-east-1") {
-        body = `<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><LocationConstraint>${region}</LocationConstraint></CreateBucketConfiguration>`;
-        extraHeaders["Content-Type"] = "application/xml";
-      } else {
-        body = "";
-      }
-      break;
-    }
-
-    case "uploadObject": {
-      method = "PUT";
-      body = params.body || "Hello world from live storage test";
-      extraHeaders["Content-Type"] = params.contentType || "application/octet-stream";
-      if (params.metadata) {
-        Object.entries(params.metadata).forEach(([k, v]) => {
-          extraHeaders[`x-amz-meta-${k.toLowerCase()}`] = String(v);
-        });
-      }
-      break;
-    }
-
-    case "downloadObject": {
-      method = "GET";
-      break;
-    }
-
-    case "objectExists": {
-      method = "HEAD";
-      break;
-    }
-
-    case "deleteObject": {
-      method = "DELETE";
-      break;
-    }
-
-    case "listObjects": {
-      method = "GET";
-      const listResolved = resolveStorageUrl(connection, "");
-      const searchParams = new URLSearchParams();
-      searchParams.set("list-type", "2");
-      if (params.prefix) searchParams.set("prefix", params.prefix);
-      if (params.maxKeys) searchParams.set("max-keys", String(params.maxKeys));
-      requestUrl = `${listResolved.url}?${searchParams.toString()}`;
-      break;
-    }
-
-    case "getUploadPresignedUrl": {
-      const ttl = Number(params.ttl) || 900;
-      presignedResultUrl = generatePresignedUrlSigV4({
-        method: "PUT",
-        url: resolved.url,
-        region,
-        host: resolved.host,
-        accessKeyId: accessKeyId || "AKIAIOSFODNN7EXAMPLE",
-        secretAccessKey: secretAccessKey || "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-        sessionToken,
-        expiresInSeconds: ttl,
-      });
-
-      // Also do a preflight OPTIONS check to verify server reachability
-      method = "OPTIONS";
-      extraHeaders["Origin"] = "http://localhost:3000";
-      extraHeaders["Access-Control-Request-Method"] = "PUT";
-      break;
-    }
-
-    case "getDownloadPresignedUrl": {
-      const ttl = Number(params.ttl) || 3600;
-      presignedResultUrl = generatePresignedUrlSigV4({
-        method: "GET",
-        url: resolved.url,
-        region,
-        host: resolved.host,
-        accessKeyId: accessKeyId || "AKIAIOSFODNN7EXAMPLE",
-        secretAccessKey: secretAccessKey || "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-        sessionToken,
-        expiresInSeconds: ttl,
-      });
-      method = "HEAD";
-      break;
-    }
-
-    case "getPublicObjectUrl": {
-      method = "HEAD";
-      if (connection.cdnUrl) {
-        requestUrl = `${connection.cdnUrl.replace(/\/+$/, "")}/${key.replace(/^\/+/, "")}`;
-      }
-      break;
-    }
-
-    default: {
-      method = "GET";
-    }
-  }
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8000);
 
+  let targetEndpoint = normalizeEndpointUrl(connection.endpointUrl, region);
+  let requestUrl = "";
+  let method = "GET";
+
   try {
+    const key = params.key || "test-file.txt";
+    const resolved = resolveStorageUrl(connection, key);
+    targetEndpoint = resolved.endpoint;
+    requestUrl = resolved.url;
+
+    let body: string | Buffer | undefined = undefined;
+    const extraHeaders: Record<string, string> = {};
+    let presignedResultUrl: string | undefined = undefined;
+
+    switch (operation) {
+      case "createBucket": {
+        method = "PUT";
+        const bucketToCreate = params.key || connection.bucketName;
+        const bucketResolved = resolveStorageUrl({ ...connection, bucketName: bucketToCreate, forcePathStyle: true }, "");
+        requestUrl = bucketResolved.url;
+        const isLocalOrIp =
+          new URL(bucketResolved.endpoint).hostname === "localhost" ||
+          new URL(bucketResolved.endpoint).hostname === "127.0.0.1";
+        if (!isLocalOrIp && region && region !== "us-east-1") {
+          body = `<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><LocationConstraint>${region}</LocationConstraint></CreateBucketConfiguration>`;
+          extraHeaders["Content-Type"] = "application/xml";
+        } else {
+          body = "";
+        }
+        break;
+      }
+
+      case "uploadObject": {
+        method = "PUT";
+        body = params.body || "Hello world from live storage test";
+        extraHeaders["Content-Type"] = params.contentType || "application/octet-stream";
+        if (params.metadata) {
+          Object.entries(params.metadata).forEach(([k, v]) => {
+            extraHeaders[`x-amz-meta-${k.toLowerCase()}`] = String(v);
+          });
+        }
+        break;
+      }
+
+      case "downloadObject": {
+        method = "GET";
+        break;
+      }
+
+      case "objectExists": {
+        method = "HEAD";
+        break;
+      }
+
+      case "deleteObject": {
+        method = "DELETE";
+        break;
+      }
+
+      case "listObjects": {
+        method = "GET";
+        const listResolved = resolveStorageUrl(connection, "");
+        const searchParams = new URLSearchParams();
+        searchParams.set("list-type", "2");
+        if (params.prefix) searchParams.set("prefix", params.prefix);
+        if (params.maxKeys) searchParams.set("max-keys", String(params.maxKeys));
+        requestUrl = `${listResolved.url}?${searchParams.toString()}`;
+        break;
+      }
+
+      case "getUploadPresignedUrl": {
+        const ttl = Number(params.ttl) || 900;
+        presignedResultUrl = generatePresignedUrlSigV4({
+          method: "PUT",
+          url: resolved.url,
+          region,
+          host: resolved.host,
+          accessKeyId: accessKeyId || "AKIAIOSFODNN7EXAMPLE",
+          secretAccessKey: secretAccessKey || "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+          sessionToken,
+          expiresInSeconds: ttl,
+        });
+
+        // Also do a preflight OPTIONS check to verify server reachability
+        method = "OPTIONS";
+        extraHeaders["Origin"] = "http://localhost:3000";
+        extraHeaders["Access-Control-Request-Method"] = "PUT";
+        break;
+      }
+
+      case "getDownloadPresignedUrl": {
+        const ttl = Number(params.ttl) || 3600;
+        presignedResultUrl = generatePresignedUrlSigV4({
+          method: "GET",
+          url: resolved.url,
+          region,
+          host: resolved.host,
+          accessKeyId: accessKeyId || "AKIAIOSFODNN7EXAMPLE",
+          secretAccessKey: secretAccessKey || "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+          sessionToken,
+          expiresInSeconds: ttl,
+        });
+        method = "HEAD";
+        break;
+      }
+
+      case "getPublicObjectUrl": {
+        method = "HEAD";
+        if (connection.cdnUrl) {
+          requestUrl = `${connection.cdnUrl.replace(/\/+$/, "")}/${key.replace(/^\/+/, "")}`;
+        }
+        break;
+      }
+
+      default: {
+        method = "GET";
+      }
+    }
+
     const signedHeaders = signS3Request({
       method,
       url: requestUrl,
@@ -818,7 +907,11 @@ export async function executeStorageOperationLive(
     const isSuccess = response.status >= 200 && response.status < 400;
     const rawText = await response.text();
 
-    let parsedData: unknown = null;
+    let parsedData:
+      | S3XmlParsedData
+      | Record<string, string | number | boolean | null | undefined | Record<string, string>>
+      | string
+      | null = null;
     const xmlParsed = parseS3XmlResponse(rawText);
 
     if (xmlParsed) {
@@ -866,14 +959,16 @@ export async function executeStorageOperationLive(
         ? `Server responded with ${response.status} ${response.statusText}`
         : undefined,
     };
-  } catch (err: any) {
+  } catch (err) {
     clearTimeout(timeoutId);
     const durationMs = Math.max(1, Math.round(performance.now() - startTime));
 
-    const isAbort = err.name === "AbortError";
+    const isAbort = err instanceof Error && err.name === "AbortError";
     const errorMsg = isAbort
-      ? `Operation timed out after 8000ms connecting to ${resolved.endpoint}`
-      : err?.message || String(err);
+      ? `Operation timed out after 8000ms connecting to ${targetEndpoint}`
+      : err instanceof Error
+        ? err.message
+        : String(err);
 
     return {
       success: false,
@@ -881,16 +976,16 @@ export async function executeStorageOperationLive(
       status: 0,
       statusText: "Connection Failed",
       durationMs,
-      endpoint: resolved.endpoint,
+      endpoint: targetEndpoint,
       method,
       url: requestUrl,
       data: {
         error: "NetworkError",
         message: errorMsg,
-        endpoint: resolved.endpoint,
+        endpoint: targetEndpoint,
       },
-      error: `Could not reach configured storage server at ${resolved.endpoint}: ${errorMsg}`,
-      tip: `Check that your storage server at "${resolved.endpoint}" is running, or verify network and CORS settings.`,
+      error: `Could not reach configured storage server at ${targetEndpoint}: ${errorMsg}`,
+      tip: `Check that your storage server at "${targetEndpoint}" is running, or verify network and CORS settings.`,
     };
   }
 }
@@ -909,7 +1004,35 @@ export async function executeStorageTestSuiteLive(
   const cases: StorageTestCaseResult[] = [];
 
   const { accessKeyId, secretAccessKey } = resolveCredentials(config);
-  const resolved = resolveStorageUrl(config, "");
+  let resolvedEndpoint = normalizeEndpointUrl(config.endpointUrl, region);
+
+  try {
+    const resolved = resolveStorageUrl(config, "");
+    resolvedEndpoint = resolved.endpoint;
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    cases.push({
+      id: "case-client-config",
+      title: "Client Initialization & Config",
+      category: "Client Initialization & Config",
+      passed: false,
+      durationMs: 1,
+      error: errorMsg,
+      details: `Target region: ${region}, endpoint: ${resolvedEndpoint}`,
+      snippet: `expect(s3Client).toBeDefined();\nexpect(storageConfig.region).toBe("${region}");`,
+    });
+    return {
+      total: 1,
+      passed: 0,
+      failed: 1,
+      durationMs: 1,
+      serverActive: false,
+      endpoint: resolvedEndpoint,
+      bucket: bucketName,
+      cases,
+      error: errorMsg,
+    };
+  }
 
   // 1. Client Initialization & Env Config test case
   const t0 = performance.now();
@@ -931,7 +1054,7 @@ export async function executeStorageTestSuiteLive(
     error: clientInitPassed
       ? undefined
       : `Missing required environment variables in local environment: ${missingEnvKeys.join(", ")}`,
-    details: `Target region: ${region}, endpoint: ${resolved.endpoint}`,
+    details: `Target region: ${region}, endpoint: ${resolvedEndpoint}`,
     snippet: `expect(s3Client).toBeDefined();\nexpect(storageConfig.region).toBe("${region}");`,
   });
 
@@ -958,7 +1081,7 @@ export async function executeStorageTestSuiteLive(
     error: connResult.error,
     details: connResult.serverActive
       ? `HTTP ${connResult.status} ${connResult.statusText}`
-      : `Server offline at ${resolved.endpoint}`,
+      : `Server offline at ${resolvedEndpoint}`,
     snippet: `const cmd = new HeadBucketCommand({ Bucket: "${bucketName}" });\nconst res = await s3Client.send(cmd);`,
   });
 
@@ -1036,7 +1159,7 @@ export async function executeStorageTestSuiteLive(
 
   // 7. getPublicObjectUrl operation
   const t7 = performance.now();
-  const cdnOrEndpoint = config.cdnUrl || resolved.endpoint;
+  const cdnOrEndpoint = config.cdnUrl || resolvedEndpoint;
   const publicUrlExpected = `${cdnOrEndpoint.replace(/\/+$/, "")}/${bucketName}/images/banner.jpg`;
   cases.push({
     id: "case-public-url",
@@ -1058,7 +1181,7 @@ export async function executeStorageTestSuiteLive(
     failed: totalFailed,
     durationMs: overallDurationMs,
     serverActive: connResult.serverActive,
-    endpoint: resolved.endpoint,
+    endpoint: resolvedEndpoint,
     bucket: bucketName,
     cases,
     error: totalFailed > 0 ? `${totalFailed} of ${cases.length} test cases failed.` : undefined,

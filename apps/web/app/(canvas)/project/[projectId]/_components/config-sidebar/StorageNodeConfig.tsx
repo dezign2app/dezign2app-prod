@@ -39,7 +39,6 @@ import {
 } from "@/lib/services/storageService";
 import { cn } from "@workspace/ui/lib/utils";
 import { NodeEnvVarsSection } from "./NodeEnvVarsSection";
-import type { EnvVarEntry } from "./NodeEnvVarsSection";
 import { getDefaultNodeEnvVars } from "@workspace/canvas";
 import { EnvVarCombobox } from "./EnvVarCombobox";
 
@@ -117,7 +116,7 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
   useEffect(() => {
     if (data.envVars === undefined) {
       const defaults = getDefaultNodeEnvVars("storage", data);
-      handleUpdateField("envVars", defaults as BackendNode["data"]["envVars"]);
+      handleUpdateField("envVars", defaults);
     }
   }, [node?.id, data.envVars]);
 
@@ -850,15 +849,17 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
         <NodeEnvVarsSection
           mode="package"
           nodeKindLabel="storage"
-          envVars={(data.envVars as EnvVarEntry[] | undefined) ?? []}
+          nodeId={nodeId}
+          projectId={id}
+          envVars={data.envVars ?? []}
           defaultEnvVars={getDefaultNodeEnvVars("storage", data)}
           onLoadDefaults={() =>
             handleUpdateField(
               "envVars",
-              getDefaultNodeEnvVars("storage", data) as BackendNode["data"]["envVars"],
+              getDefaultNodeEnvVars("storage", data),
             )
           }
-          onChange={(updated) => handleUpdateField("envVars", updated as BackendNode["data"]["envVars"])}
+          onChange={(updated) => handleUpdateField("envVars", updated)}
         />
       </div>
 

@@ -76,9 +76,8 @@ export function resolveStorageNodeFromRef(
 
   // 1. Direct reference in refNode.data
   const storageId =
-    refNode.data?.storageNodeId ||
-    refNode.data?.nodeId ||
-    refNode.data?.connectedStorageNodeId;
+    refNode.data.storageNodeId ||
+    refNode.data.connectedStorageNodeId;
   if (storageId) {
     const found = storageNodes.find((n) => n.id === storageId);
     if (found) return found;
@@ -100,14 +99,11 @@ export function resolveStorageNodeFromRef(
   }
 
   // 3. Bucket matching
-  const bucketKey =
-    refNode.data?.bucketId ||
-    refNode.data?.bucketName ||
-    refNode.data?.bucket;
+  const bucketKey = refNode.data.bucketId || refNode.data.bucketName;
   if (bucketKey) {
     const found = storageNodes.find((sn) =>
-      sn.data?.buckets?.some(
-        (b: any) => b.id === bucketKey || b.name === bucketKey,
+      sn.data.buckets?.some(
+        (b) => b.id === bucketKey || b.name === bucketKey,
       ),
     );
     if (found) return found;
@@ -133,10 +129,7 @@ export function resolveDatabaseNodeFromRef(
   const dbNodes = allNodes.filter((n) => n.type === "database" && n.data?.dbEngine !== "redis");
   if (dbNodes.length === 0) return undefined;
 
-  const dbId =
-    refNode.data?.dbNodeId ||
-    refNode.data?.databaseId ||
-    refNode.data?.nodeId;
+  const dbId = refNode.data.databaseId || refNode.data.dbRef;
   if (dbId) {
     const found = dbNodes.find((n) => n.id === dbId);
     if (found) return found;
@@ -181,7 +174,7 @@ export function resolveRedisNodeFromRef(
   const redisNodes = allNodes.filter((n) => n.type === "redis_instance");
   if (redisNodes.length === 0) return undefined;
 
-  const redisId = refNode.data?.redisNodeId || refNode.data?.nodeId;
+  const redisId = refNode.data.schemaRef;
   if (redisId) {
     const found = redisNodes.find((n) => n.id === redisId);
     if (found) return found;
@@ -219,45 +212,33 @@ function resolveEnvValue(name: string, packageNode?: BackendNode): string {
     return process.env[name]!;
   }
 
-  // Check if explicitly configured inside the node's data.envVars array
-  if (Array.isArray(packageNode?.data?.envVars)) {
-    const matched = packageNode.data.envVars.find(
-      (v: any) => v && (v.name === name || v.id === name),
-    );
-    if (matched?.value) return matched.value;
-    if (matched?.exampleValue) return matched.exampleValue;
-  }
-
   if (packageNode?.type === "storage") {
     if (name === "AWS_REGION") {
-      const r = packageNode.data?.defaultRegion || packageNode.data?.region;
+      const r = packageNode.data.defaultRegion;
       if (r && r !== "AWS_REGION") return r;
     }
     if (name === "S3_ENDPOINT_URL" || name === "ENDPOINT_URL") {
-      const u = packageNode.data?.endpointUrl;
+      const u = packageNode.data.endpointUrl;
       if (u && u !== "S3_ENDPOINT_URL") return u;
     }
-    if (name === (packageNode.data?.accessKeyIdEnv || "AWS_ACCESS_KEY_ID")) {
-      const k = packageNode.data?.accessKeyId;
+    if (name === (packageNode.data.accessKeyIdEnv || "AWS_ACCESS_KEY_ID")) {
+      const k = packageNode.data.accessKeyId;
       if (k) return k;
     }
-    if (name === (packageNode.data?.secretAccessKeyEnv || "AWS_SECRET_ACCESS_KEY")) {
-      const s = packageNode.data?.secretAccessKey;
+    if (name === (packageNode.data.secretAccessKeyEnv || "AWS_SECRET_ACCESS_KEY")) {
+      const s = packageNode.data.secretAccessKey;
       if (s) return s;
     }
-    if (name === "AWS_SESSION_TOKEN" && packageNode.data?.sessionToken) {
-      return packageNode.data.sessionToken;
-    }
-    if (name === "AWS_ROLE_ARN" && packageNode.data?.roleArn) {
+    if (name === "AWS_ROLE_ARN" && packageNode.data.roleArn) {
       return packageNode.data.roleArn;
     }
-    if ((name === "CDN_URL" || name === "AWS_CDN_URL") && packageNode.data?.cdnUrl) {
+    if ((name === "CDN_URL" || name === "AWS_CDN_URL") && packageNode.data.cdnUrl) {
       return packageNode.data.cdnUrl;
     }
-    if (name.startsWith("STORAGE_BUCKET_") && Array.isArray(packageNode.data?.buckets)) {
+    if (name.startsWith("STORAGE_BUCKET_") && packageNode.data.buckets) {
       const bKey = name.replace("STORAGE_BUCKET_", "");
       const foundBucket = packageNode.data.buckets.find(
-        (b: any) => toBucketKey(b?.name) === bKey || toBucketKey(b?.id) === bKey,
+        (b) => toBucketKey(b.name) === bKey || toBucketKey(b.id) === bKey,
       );
       if (foundBucket?.name) return foundBucket.name;
     }
@@ -342,46 +323,35 @@ export function inferExampleValue(name: string, nodeType?: string): string {
 
 // ── Core collection logic ────────────────────────────────────────────────────
 
+export interface DetectedEnvVar {
+  name: string;
+  description?: string;
+  exampleValue?: string;
+  sourceNodeType: string;
+  sourceNodeLabel: string;
+  sourceNodeId: string;
+}
+
 /**
- * Collects all env var sections for a given **app node** (service / webApp / langgraph).
- *
- * @param appNode         - The app node being compiled (service / webApp / langgraph).
- * @param allNodes        - Full flat node list from the canvas.
- * @param allEdges        - Full edge list from the canvas.
- * @param associatedNodes - Optional array of associated nodes (e.g. WebPages in a WebApp).
- * @returns               - Ordered array of {@link EnvSection} objects, ready for rendering.
+ * Discovers all environment variables declared on package nodes (storage, db, redis, auth, etc.)
+ * that are connected to a target app node (directly or via reference nodes like StorageBucketRefNode).
  */
-export function collectEnvSections(
+export function getDetectedPackageEnvVars(
   appNode: BackendNode,
   allNodes: BackendNode[],
   allEdges: BackendEdge[],
   associatedNodes?: BackendNode[],
-): EnvSection[] {
-  const sections: EnvSection[] = [];
-
-  // ── 1. Own env vars (defined directly on the app node) ─────────────────
-  const ownVars = ((appNode.data?.envVars ?? []) as EnvVarEntry[]);
-  if (ownVars.length > 0) {
-    sections.push({
-      heading: "Application",
-      vars: ownVars.map((v) => ({
-        name: v.name,
-        description: v.description,
-        exampleValue: resolveEnvValue(v.name, appNode) || v.exampleValue || inferExampleValue(v.name, appNode.type),
-      })),
-    });
-  }
-
-  // ── 2. Connected package node env vars ──────────────────────────────────
-  // Check appNode and any associated nodes (e.g. WebPages) for direct or ref-based connections.
-  const seenNodeIds = new Set<string>();
+): DetectedEnvVar[] {
   const checkNodes = [appNode, ...(associatedNodes || [])];
+  const detected: DetectedEnvVar[] = [];
+  const seenNames = new Set<string>();
+  const seenPackageNodeIds = new Set<string>();
 
-  function addPackageNode(packageNode: BackendNode) {
-    if (seenNodeIds.has(packageNode.id)) return;
-    seenNodeIds.add(packageNode.id);
+  function collectFromPackageNode(packageNode: BackendNode) {
+    if (seenPackageNodeIds.has(packageNode.id)) return;
+    seenPackageNodeIds.add(packageNode.id);
 
-    let pkgVars = ((packageNode.data?.envVars ?? []) as EnvVarEntry[]);
+    let pkgVars: EnvVarEntry[] = packageNode.data.envVars ?? [];
     if (pkgVars.length === 0) {
       const defaults = getDefaultNodeEnvVars(packageNode.type, packageNode.data);
       if (defaults && defaults.length > 0) {
@@ -389,11 +359,10 @@ export function collectEnvSections(
       }
     }
 
-    // For storage nodes, also include bucket names
     const extraVars: EnvVarEntry[] = [];
-    if (packageNode.type === "storage" && Array.isArray(packageNode.data?.buckets)) {
-      packageNode.data.buckets.forEach((b: any) => {
-        const rawName = b?.name || "bucket";
+    if (packageNode.type === "storage" && packageNode.data.buckets) {
+      packageNode.data.buckets.forEach((b) => {
+        const rawName = b.name || "bucket";
         const key = toBucketKey(rawName);
         extraVars.push({
           name: `STORAGE_BUCKET_${key}`,
@@ -404,21 +373,19 @@ export function collectEnvSections(
     }
 
     const allSectionVars = [...pkgVars, ...extraVars];
-    if (allSectionVars.length === 0) return;
+    const nodeLabel = packageNode.data.label || sectionHeadingForNodeType(packageNode.type || "");
 
-    const heading = sectionHeadingForNodeType(packageNode.type ?? "");
-    const nodeLabel = packageNode.data?.label as string | undefined;
-
-    sections.push({
-      heading,
-      subheading: nodeLabel
-        ? `from package node: "${nodeLabel}"`
-        : `from package node (id: ${packageNode.id.slice(0, 8)})`,
-      vars: allSectionVars.map((v) => ({
+    allSectionVars.forEach((v) => {
+      if (seenNames.has(v.name)) return;
+      seenNames.add(v.name);
+      detected.push({
         name: v.name,
         description: v.description,
         exampleValue: resolveEnvValue(v.name, packageNode) || v.exampleValue || inferExampleValue(v.name, packageNode.type),
-      })),
+        sourceNodeType: packageNode.type || "package",
+        sourceNodeLabel: nodeLabel,
+        sourceNodeId: packageNode.id,
+      });
     });
   }
 
@@ -436,51 +403,47 @@ export function collectEnvSections(
       const connectedNode = allNodes.find((n) => n.id === connectedId);
       if (!connectedNode) return;
 
-      // Direct package node
       if (isPackageNode(connectedNode.type)) {
-        addPackageNode(connectedNode);
+        collectFromPackageNode(connectedNode);
         return;
       }
 
-      // Storage reference node (e.g. StorageBucketRefNode / StorageOperationRefNode)
       if (isStorageRefNode(connectedNode.type)) {
         const parentStorage = resolveStorageNodeFromRef(connectedNode, allNodes, allEdges);
         if (parentStorage) {
-          addPackageNode(parentStorage);
+          collectFromPackageNode(parentStorage);
         }
         return;
       }
 
-      // Database table reference node (e.g. db_ref / DatabaseTableRefNode / entity)
       if (isDatabaseRefNode(connectedNode.type)) {
         const parentDb = resolveDatabaseNodeFromRef(connectedNode, allNodes, allEdges);
         if (parentDb) {
-          addPackageNode(parentDb);
+          collectFromPackageNode(parentDb);
         }
         return;
       }
 
-      // Redis reference node (e.g. redis_schema / RedisSchemaNode)
       if (isRedisRefNode(connectedNode.type)) {
         const parentRedis = resolveRedisNodeFromRef(connectedNode, allNodes, allEdges);
         if (parentRedis) {
-          addPackageNode(parentRedis);
+          collectFromPackageNode(parentRedis);
         }
         return;
       }
     });
   });
 
-  // B. Storage connection resolver fallback (handle-based, endpoint-out, or explicit storage ID)
+  // B. Storage connection resolver fallback
   const storageNodes = allNodes.filter((n) => n.type === "storage");
   storageNodes.forEach((storageNode) => {
-    if (seenNodeIds.has(storageNode.id)) return;
+    if (seenPackageNodeIds.has(storageNode.id)) return;
     const isConnected =
       checkNodes.some((n) => isServiceConnectedToStorage(n, allNodes, allEdges)) ||
       checkNodes.some((n) => n.data?.connectedStorageNodeId === storageNode.id);
 
     if (isConnected) {
-      addPackageNode(storageNode);
+      collectFromPackageNode(storageNode);
     }
   });
 
@@ -490,7 +453,7 @@ export function collectEnvSections(
   );
   if (dbNodes.length > 0) {
     const isConnectedToDb =
-      checkNodes.some((n) => n.data?.connectedDatabaseNodeId || n.data?.dbNodeId) ||
+      checkNodes.some((n) => n.data.databaseId || n.data.dbRef) ||
       allEdges.some(
         (e) =>
           checkNodes.some((cn) => cn.id === e.source || cn.id === e.target) &&
@@ -504,40 +467,107 @@ export function collectEnvSections(
 
     if (isConnectedToDb || appNode.type === "webApp") {
       dbNodes.forEach((dbNode) => {
-        if (!seenNodeIds.has(dbNode.id)) {
-          addPackageNode(dbNode);
+        if (!seenPackageNodeIds.has(dbNode.id)) {
+          collectFromPackageNode(dbNode);
         }
       });
     }
   }
 
-  // D. Ensure NEXT_PUBLIC_LOG_LEVEL for web applications
-  if (appNode.type === "webApp") {
-    const hasLogLevel = sections.some((s) =>
-      s.vars.some((v) => v.name === "NEXT_PUBLIC_LOG_LEVEL"),
-    );
-    if (!hasLogLevel) {
-      const appSection = sections.find((s) => s.heading === "Application");
-      if (appSection) {
-        appSection.vars.push({
-          name: "NEXT_PUBLIC_LOG_LEVEL",
-          description: "Client logging level",
-          exampleValue: "info",
-        });
-      } else {
-        sections.unshift({
-          heading: "Application",
-          vars: [
-            {
-              name: "NEXT_PUBLIC_LOG_LEVEL",
-              description: "Client logging level",
-              exampleValue: "info",
-            },
-          ],
+  return detected;
+}
+
+// ── Core collection logic ────────────────────────────────────────────────────
+
+/**
+ * Collects all env var sections for a given **app node** (service / webApp / langgraph).
+ * Only variables that the user explicitly configured or imported into `appNode.data.envVars`
+ * will be rendered into .env, preventing accidental exposure of root keys to client apps.
+ *
+ * @param appNode         - The app node being compiled (service / webApp / langgraph).
+ * @param allNodes        - Full flat node list from the canvas.
+ * @param allEdges        - Full edge list from the canvas.
+ * @param associatedNodes - Optional array of associated nodes (e.g. WebPages in a WebApp).
+ * @returns               - Ordered array of {@link EnvSection} objects, ready for rendering.
+ */
+export function collectEnvSections(
+  appNode: BackendNode,
+  allNodes: BackendNode[],
+  allEdges: BackendEdge[],
+  associatedNodes?: BackendNode[],
+): EnvSection[] {
+  const sections: EnvSection[] = [];
+  const ownVars: EnvVarEntry[] = appNode.data.envVars ?? [];
+  const ownVarNames = new Set(ownVars.map((v) => v.name));
+
+  // Detect available package environment variables
+  const detectedVars = getDetectedPackageEnvVars(appNode, allNodes, allEdges, associatedNodes);
+  const detectedMap = new Map<string, DetectedEnvVar>();
+  detectedVars.forEach((d) => detectedMap.set(d.name, d));
+
+  const packageSectionsMap = new Map<
+    string,
+    { heading: string; subheading?: string; vars: EnvVarEntry[] }
+  >();
+  const appVars: EnvVarEntry[] = [];
+
+  ownVars.forEach((v) => {
+    const detected = detectedMap.get(v.name);
+    if (detected) {
+      const pkgNode = allNodes.find((n) => n.id === detected.sourceNodeId);
+      const heading = sectionHeadingForNodeType(detected.sourceNodeType);
+      const subheading = detected.sourceNodeLabel
+        ? `from package node: "${detected.sourceNodeLabel}"`
+        : `from package node`;
+      const key = `${heading}_${detected.sourceNodeId}`;
+
+      if (!packageSectionsMap.has(key)) {
+        packageSectionsMap.set(key, {
+          heading,
+          subheading,
+          vars: [],
         });
       }
+      packageSectionsMap.get(key)!.vars.push({
+        name: v.name,
+        description: v.description || detected.description,
+        exampleValue:
+          resolveEnvValue(v.name, pkgNode) ||
+          v.exampleValue ||
+          detected.exampleValue ||
+          inferExampleValue(v.name, detected.sourceNodeType),
+      });
+    } else {
+      appVars.push({
+        name: v.name,
+        description: v.description,
+        exampleValue:
+          resolveEnvValue(v.name, appNode) ||
+          v.exampleValue ||
+          inferExampleValue(v.name, appNode.type),
+      });
     }
+  });
+
+  // Ensure default app vars if applicable
+  if (appNode.type === "webApp" && !ownVarNames.has("NEXT_PUBLIC_LOG_LEVEL")) {
+    appVars.push({
+      name: "NEXT_PUBLIC_LOG_LEVEL",
+      description: "Client logging level",
+      exampleValue: "info",
+    });
   }
+
+  if (appVars.length > 0) {
+    sections.push({
+      heading: "Application",
+      vars: appVars,
+    });
+  }
+
+  packageSectionsMap.forEach((pkgSec) => {
+    sections.push(pkgSec);
+  });
 
   return sections;
 }

@@ -17,7 +17,6 @@ import { BackendNode, DEFAULT_DATABASE_ENV_VARS, getUniqueNodeLabel, getDefaultN
 import { cn } from "@workspace/ui/lib/utils";
 import { DatabaseConnectionCheckCard } from "./database-config/DatabaseConnectionCheckCard";
 import { NodeEnvVarsSection } from "./NodeEnvVarsSection";
-import type { EnvVarEntry } from "./NodeEnvVarsSection";
 
 interface DatabaseConfigProps {
   id: string;
@@ -746,7 +745,9 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
         <NodeEnvVarsSection
           mode="package"
           nodeKindLabel="database"
-          envVars={(data.envVars as EnvVarEntry[] | undefined) ?? []}
+          nodeId={nodeId}
+          projectId={id}
+          envVars={data.envVars ?? []}
           defaultEnvVars={getDefaultNodeEnvVars("database", data)}
           onLoadDefaults={() =>
             updateNode(nodeId, {

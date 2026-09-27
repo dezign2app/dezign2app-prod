@@ -286,6 +286,8 @@ export function compileNextjsV16WebClient(
   const targetAppNode: BackendNode = webAppNode || {
     id: enrichedWebClientNodes[0]?.id || "web-app",
     type: "webApp",
+    position: { x: 0, y: 0 },
+    fractionalIndex: "a0",
     data: {
       label: effectiveAppSlug,
       appSlug: effectiveAppSlug,

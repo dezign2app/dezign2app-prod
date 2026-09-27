@@ -60,11 +60,10 @@ export const EnvVarCombobox: React.FC<EnvVarComboboxProps> = ({
     // 1. Resolve the target node (either by direct id or by checking which node contains this bucket)
     const targetNode = nodeId
       ? nodes.find((n) => n.id === nodeId) ||
-        nodes.find((n) => n.data?.buckets?.some((b: any) => b?.id === nodeId))
+        nodes.find((n) => n.data?.buckets?.some((b: { id?: string }) => b?.id === nodeId))
       : null;
 
-    const configuredNodeVars =
-      (targetNode?.data?.envVars as Array<{ name: string }> | undefined) || [];
+    const configuredNodeVars = targetNode?.data?.envVars || [];
 
     const hasConfiguredVars = configuredNodeVars.some((v) => Boolean(v?.name?.trim()));
 
@@ -101,13 +100,9 @@ export const EnvVarCombobox: React.FC<EnvVarComboboxProps> = ({
 
     return Array.from(set).filter((item) => {
       if (!item) return false;
+      if (allowRawInput) return true;
       const isUrl = item.includes("://");
       const isEnv = !isUrl && item === item.toUpperCase() && !item.includes(".");
-
-      // If allowRawInput is true, permit URLs; otherwise strictly valid .env names
-      if (allowRawInput) {
-        return isEnv || isUrl;
-      }
       return isEnv;
     });
   }, [value, inputValue, nodeId, nodes, defaultSuggestions, allowRawInput]);

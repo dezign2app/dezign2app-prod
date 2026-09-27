@@ -25,7 +25,6 @@ import {
 } from "lucide-react";
 import { NodePackageManager } from "./NodePackageManager";
 import { NodeEnvVarsSection } from "./NodeEnvVarsSection";
-import type { EnvVarEntry } from "./NodeEnvVarsSection";
 import { NodeDependencyItem, getDefaultNodeEnvVars } from "@workspace/canvas";
 import { toast } from "sonner";
 import {
@@ -348,7 +347,9 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
         <TabsContent value="envvars" className="pt-3">
           <NodeEnvVarsSection
             mode="app"
-            envVars={(data.envVars as EnvVarEntry[] | undefined) ?? []}
+            nodeId={nodeId}
+            projectId={id}
+            envVars={data.envVars ?? []}
             defaultEnvVars={getDefaultNodeEnvVars("service", data)}
             onLoadDefaults={() => updateData({ envVars: getDefaultNodeEnvVars("service", data) })}
             onChange={(updated) => updateData({ envVars: updated })}

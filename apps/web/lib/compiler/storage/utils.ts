@@ -113,17 +113,13 @@ export function isServiceConnectedToStorage(
     if (otherId) {
       const otherNode = allNodes.find((n) => n.id === otherId);
       if (otherNode && isRefType(otherNode.type)) {
-        if (otherNode.data?.storageNodeId && storageNodeIds.has(otherNode.data.storageNodeId)) {
+        if (otherNode.data.storageNodeId && storageNodeIds.has(otherNode.data.storageNodeId)) {
           return true;
         }
-        if (otherNode.data?.nodeId && storageNodeIds.has(otherNode.data.nodeId)) {
-          return true;
-        }
-        const refBucket =
-          otherNode.data?.bucketId || otherNode.data?.bucketName || otherNode.data?.bucket;
+        const refBucket = otherNode.data.bucketId || otherNode.data.bucketName;
         if (refBucket) {
           const match = storageNodes.some((s) =>
-            (s.data?.buckets || []).some((b: any) => b.id === refBucket || b.name === refBucket),
+            (s.data.buckets || []).some((b) => b.id === refBucket || b.name === refBucket),
           );
           if (match) return true;
         }
