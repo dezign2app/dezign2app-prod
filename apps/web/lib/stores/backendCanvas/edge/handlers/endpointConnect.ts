@@ -98,7 +98,7 @@ export function handleEndpointConnect({
           operationId: op?.id,
           functionRef: {
             name: op?.name || fnName,
-            importPath: `@workspace/${packageFolder}/operations`,
+            importPath: "@workspace/storage/operations",
             signature: op?.signature,
           },
           inputBindings: nextBindings,
@@ -262,7 +262,7 @@ export function handleEndpointConnect({
           operationId: op?.id,
           functionRef: {
             name: op?.name || fnName,
-            importPath: `@workspace/${packageFolder}/operations`,
+            importPath: "@workspace/storage/operations",
             signature: op?.signature,
           },
           inputBindings: nextBindings,
@@ -362,7 +362,7 @@ export function handleEndpointConnect({
           operationId: "storage-uploadObject",
           functionRef: {
             name: "uploadObject",
-            importPath: `@workspace/${packageFolder}/operations`,
+            importPath: "@workspace/storage/operations",
           },
           inputBindings: [
             {

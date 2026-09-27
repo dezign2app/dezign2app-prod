@@ -24,6 +24,7 @@ export function compileServiceNode(
   kafkaFunctions: ReusableFunction[] = [],
   folderName?: string,
   redisFunctions: ReusableFunction[] = [],
+  storageFunctions: ReusableFunction[] = [],
 ): CompiledServiceResult {
   const techStack = node.data?.techStack || "express";
 
@@ -151,6 +152,7 @@ export function compileServiceNode(
         folderName,
         endpoints.length > 0 ? endpoints : nodeEndpoints,
         redisFunctions,
+        storageFunctions,
       );
   }
 }

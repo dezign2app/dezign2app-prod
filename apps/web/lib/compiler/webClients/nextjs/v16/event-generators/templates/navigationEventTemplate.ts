@@ -18,8 +18,8 @@ export interface ${componentName}Props {
     requireAuth?: boolean,
     customHeaders?: Record<string, string>,
     queryParams?: Record<string, string>,
-    requestBody?: unknown,
-  ) => void;
+    requestBody?: Record<string, string | number | boolean | null | undefined>,
+  ) => Promise<Record<string, string | number | boolean | null | undefined> | void> | void;
 }
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {

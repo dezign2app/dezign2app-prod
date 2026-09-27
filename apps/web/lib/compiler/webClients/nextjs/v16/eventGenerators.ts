@@ -8,6 +8,8 @@ import {
   generateNavigationEventTemplate,
   generateSimpleButtonEventTemplate,
   generateInteractiveFormEventTemplate,
+  generateStorageUploadEventTemplate,
+  StorageUploadConfig,
 } from "./event-generators";
 
 export type { EventComponentMeta };
@@ -15,8 +17,9 @@ export { METHOD_BADGE_CLASSES };
 
 /**
  * Generates an event component for Next.js web clients.
- * Produces navigation links for page navigation, simple buttons for parameterless triggers,
- * or interactive form components for configured API parameters/body.
+ * Produces navigation links for page navigation, storage upload components for
+ * file-upload actions, simple buttons for parameterless triggers, or interactive
+ * form components for configured API parameters/body.
  */
 export function generateEventComponent(
   eventName: string,
@@ -33,6 +36,7 @@ export function generateEventComponent(
   eventItem?: UIEventItem,
   endpoint?: Endpoint,
   serviceName?: string,
+  storageConfig?: StorageUploadConfig,
 ): string {
   // 1. Navigation Event (e.g. navigateToPage)
   if (eventType === "navigateToPage") {
@@ -51,11 +55,41 @@ export function generateEventComponent(
     endpoint,
   });
 
-  // 3. Generate TypeScript Interfaces (reusing @workspace/types when connected to an endpoint)
+  // 3. Generate TypeScript Interfaces
   const endpointLink = serviceName && endpoint ? { serviceName, endpoint } : undefined;
   const typeDefs = generateTypeDefinitions(componentName, params, endpointLink);
 
-  // 4A. If no form inputs configured, render a clean, direct action Button
+  // 4A. Storage Upload Component — rendered when a StorageRef node is connected
+  const hasStorageConnection =
+    Boolean(storageConfig) ||
+    Boolean((eventItem as any)?.storageNodeId) ||
+    Boolean((endpoint as any)?.connectedStorageNodeId) ||
+    Boolean((eventItem as any)?.uploadBucketId);
+
+  if (hasStorageConnection) {
+    const resolvedStorageConfig: StorageUploadConfig = storageConfig ?? {
+      maxSizeMb: (eventItem as any)?.uploadMaxFileSizeMb ?? (endpoint as any)?.uploadMaxFileSizeMb ?? 10,
+      acceptedMimeTypes:
+        (eventItem as any)?.uploadAcceptedMimeTypes ??
+        (endpoint as any)?.uploadAcceptedMimeTypes ??
+        "image/jpeg,image/png,image/webp,image/gif",
+      showPreview: true,
+    };
+    return generateStorageUploadEventTemplate({
+      componentName,
+      eventName,
+      eventType,
+      url,
+      upperMethod: params.upperMethod,
+      requireAuth,
+      typeDefs,
+      storageConfig: resolvedStorageConfig,
+      storeActionBinding: eventItem?.storeActionBinding,
+      storeActionBindings: eventItem?.storeActionBindings,
+    });
+  }
+
+  // 4B. If no form inputs configured, render a clean, direct action Button
   if (!params.hasFields) {
     return generateSimpleButtonEventTemplate({
       componentName,
@@ -71,7 +105,7 @@ export function generateEventComponent(
     });
   }
 
-  // 4B. Interactive Form Component with ONLY Configured Parameters & Body
+  // 4C. Interactive Form Component with ONLY Configured Parameters & Body
   return generateInteractiveFormEventTemplate({
     componentName,
     eventName,
@@ -86,3 +120,4 @@ export function generateEventComponent(
     storeActionBindings: eventItem?.storeActionBindings,
   });
 }
+

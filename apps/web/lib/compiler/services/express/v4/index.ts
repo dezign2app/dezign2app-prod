@@ -29,6 +29,7 @@ export function compileExpressV4Service(
   folderName?: string,
   allEndpoints: (Endpoint & { nodeId: string })[] = [],
   redisFunctions: ReusableFunction[] = [],
+  storageFunctions: ReusableFunction[] = [],
 ): CompiledServiceResult {
   const serviceName = node.data?.label || node.id || "Service";
   const sanitizedName =
@@ -127,6 +128,7 @@ export function compileExpressV4Service(
       nodePublishedEvents,
       sanitizedName,
       redisFunctions,
+      storageFunctions,
     ),
     ...generateConsumers(
       serviceName,

@@ -54,6 +54,7 @@ export function compileAllApps(params: {
   kafkaFunctions: ReusableFunction[];
   redisFunctions: ReusableFunction[];
   externalFunctions: ReusableFunction[];
+  storageFunctions?: ReusableFunction[];
   compiledFrontend: ReturnType<typeof compileFrontendNodes>;
   projectName: string;
   getUniqueLangGraphFolder: (label: string, defaultName: string) => string;
@@ -76,6 +77,7 @@ export function compileAllApps(params: {
     kafkaFunctions,
     redisFunctions,
     externalFunctions,
+    storageFunctions = [],
     compiledFrontend,
     projectName,
     getUniqueWebAppFolder,
@@ -100,6 +102,7 @@ export function compileAllApps(params: {
       kafkaFunctions,
       folderName,
       redisFunctions,
+      storageFunctions,
     );
 
     srvResult.files.forEach((f) => {

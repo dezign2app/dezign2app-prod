@@ -110,7 +110,18 @@ export function renderAsyncOperationStep(
       args = buildArgList(inputBindings, ctx);
     } else {
       const sorted = sortStorageBindings(inputBindings, functionRef.name);
-      args = sorted.map((b) => resolveBinding(b, ctx)).join(", ");
+      args = sorted
+        .map((b) => {
+          const expr = resolveBinding(b, ctx);
+          if (
+            (b.argName.toLowerCase() === "key" || b.argName.toLowerCase() === "bucketname") &&
+            b.source?.kind === "req_body"
+          ) {
+            return `String(${expr} || "")`;
+          }
+          return expr;
+        })
+        .join(", ");
     }
   } else {
     args = buildArgList(inputBindings, ctx);

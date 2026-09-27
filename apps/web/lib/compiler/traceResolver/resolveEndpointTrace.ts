@@ -167,7 +167,29 @@ export function resolveEndpointTrace(
         dataContext: `Routes to ${epMethod} ${epPath}`,
       });
     }
-    // E. External API / Webhook / Other
+    // E. Storage Ref / Bucket Ref Node
+    else if (
+      srcNode.type === "storage_operation_ref" ||
+      srcNode.type === "storage_ref" ||
+      srcNode.type === "storage_bucket_ref" ||
+      srcNode.type === "bucket_ref" ||
+      srcNode.type === "StorageBucketRefNode" ||
+      srcNode.type === "StorageOperationRefNode" ||
+      srcNode.type === "storage"
+    ) {
+      const bucketName = srcNode.data?.bucketName || srcNode.data?.label || "bucket";
+      const provider = srcNode.data?.storageProvider || "s3";
+      const rawOps = (srcNode.data?.storageOperations as Array<{ kind?: string; name?: string }> | undefined) || [];
+      const ops = rawOps.map((op) => op.kind || op.name).filter(Boolean).join(", ") || "presign_upload";
+      incoming.push({
+        nodeId: srcNode.id,
+        nodeName: srcName,
+        nodeType: "storage_operation_ref",
+        detail: `Storage bucket "${bucketName}" (${provider}) — Operations: [${ops}]`,
+        dataContext: `Payload: Request params/body (fileName: string, fileType: string, fileSize: number)\nBucket: ${bucketName}\nProvider: ${provider}`,
+      });
+    }
+    // F. External API / Webhook / Other
     else {
       incoming.push({
         nodeId: srcNode.id,
@@ -283,7 +305,27 @@ export function resolveEndpointTrace(
         dataContext: `Broker topic/queue event stream`,
       });
     }
-    // E. Other
+    // E. Storage / Bucket Ref Node
+    else if (
+      tgtNode.type === "storage_operation_ref" ||
+      tgtNode.type === "storage_ref" ||
+      tgtNode.type === "storage_bucket_ref" ||
+      tgtNode.type === "bucket_ref" ||
+      tgtNode.type === "StorageBucketRefNode" ||
+      tgtNode.type === "StorageOperationRefNode" ||
+      tgtNode.type === "storage"
+    ) {
+      const bucketName = nodeData?.bucketName || tgtName;
+      const provider = nodeData?.storageProvider || "s3";
+      outgoing.push({
+        nodeId: tgtNode.id,
+        nodeName: tgtName,
+        nodeType: "Storage Bucket",
+        detail: `Upload/Presign to bucket "${bucketName}" via ${provider}`,
+        dataContext: `Bucket: ${bucketName}\nProvider: ${provider}\nPackage: @workspace/storage`,
+      });
+    }
+    // F. Other
     else {
       outgoing.push({
         nodeId: tgtNode.id,
