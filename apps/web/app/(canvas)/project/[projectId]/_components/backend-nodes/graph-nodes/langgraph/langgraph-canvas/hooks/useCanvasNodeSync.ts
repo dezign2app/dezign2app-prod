@@ -29,6 +29,12 @@ interface UseCanvasNodeSyncProps {
     React.SetStateAction<"inspector" | "inputs" | "state" | "memory">
   >;
   handleAddChannel: () => void;
+  handleUpdateChannel?: (
+    index: number,
+    channel: Partial<LangGraphStateChannel>,
+  ) => void;
+  handleDeleteChannel?: (index: number) => void;
+  handleDuplicateChannel?: (index: number) => void;
 }
 
 export function useCanvasNodeSync({
@@ -39,6 +45,9 @@ export function useCanvasNodeSync({
   setSelectedNodeId,
   setActiveSideTab,
   handleAddChannel,
+  handleUpdateChannel,
+  handleDeleteChannel,
+  handleDuplicateChannel,
 }: UseCanvasNodeSyncProps) {
   useEffect(() => {
     setNodes((nds) => {
@@ -57,8 +66,14 @@ export function useCanvasNodeSync({
             data: {
               ...n.data,
               stateChannels,
-              onOpenStateTab: () => setActiveSideTab("state"),
+              onOpenStateTab: () => {
+                setSelectedNodeId(NODE_ID_STATE_GLOBAL);
+                setActiveSideTab("state");
+              },
               onAddChannel: handleAddChannel,
+              onUpdateChannel: handleUpdateChannel,
+              onDeleteChannel: handleDeleteChannel,
+              onDuplicateChannel: handleDuplicateChannel,
             },
           };
         }
@@ -172,8 +187,14 @@ export function useCanvasNodeSync({
           data: {
             label: "Global Graph State",
             stateChannels,
-            onOpenStateTab: () => setActiveSideTab("state"),
+            onOpenStateTab: () => {
+              setSelectedNodeId(NODE_ID_STATE_GLOBAL);
+              setActiveSideTab("state");
+            },
             onAddChannel: handleAddChannel,
+            onUpdateChannel: handleUpdateChannel,
+            onDeleteChannel: handleDeleteChannel,
+            onDuplicateChannel: handleDuplicateChannel,
           },
           deletable: false,
         };
@@ -186,6 +207,9 @@ export function useCanvasNodeSync({
     inputChannels,
     stateChannels,
     handleAddChannel,
+    handleUpdateChannel,
+    handleDeleteChannel,
+    handleDuplicateChannel,
     setNodes,
     setEdges,
     setSelectedNodeId,

@@ -8,7 +8,7 @@ import {
   type LangGraphCanvasNode,
   type LangGraphCanvasEdge,
 } from "@workspace/canvas";
-import { isReservedNodeId } from "../constants";
+import { isReservedNodeId, NODE_ID_STATE_GLOBAL } from "../constants";
 
 import { buildInitialNodes, buildInitialEdges } from "./utils/initializers";
 import { useAgentResourceConnections } from "./useAgentResourceConnections";
@@ -82,7 +82,33 @@ export function useLangGraphCanvasState({
       defaultValue: "",
     };
     setStateChannels((prev) => [...prev, newChannel]);
+    setSelectedNodeId(NODE_ID_STATE_GLOBAL);
     setActiveSideTab("state");
+  }, [setSelectedNodeId, setActiveSideTab]);
+
+  const handleUpdateChannel = useCallback(
+    (index: number, channelChanges: Partial<LangGraphStateChannel>) => {
+      setStateChannels((prev) =>
+        prev.map((c, i) => (i === index ? { ...c, ...channelChanges } : c)),
+      );
+    },
+    [],
+  );
+
+  const handleDeleteChannel = useCallback((index: number) => {
+    setStateChannels((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleDuplicateChannel = useCallback((index: number) => {
+    setStateChannels((prev) => {
+      const target = prev[index];
+      if (!target) return prev;
+      const copy: LangGraphStateChannel = {
+        ...target,
+        key: target.key ? `${target.key}_copy` : "",
+      };
+      return [...prev.slice(0, index + 1), copy, ...prev.slice(index + 1)];
+    });
   }, []);
 
   // ── Sync node callbacks and internal attributes ──
@@ -95,6 +121,9 @@ export function useLangGraphCanvasState({
     setSelectedNodeId,
     setActiveSideTab,
     handleAddChannel,
+    handleUpdateChannel,
+    handleDeleteChannel,
+    handleDuplicateChannel,
   });
 
   // ── Connection handling hook ──
@@ -214,6 +243,9 @@ export function useLangGraphCanvasState({
     updateSelectedAgent,
     updateSelectedMemory,
     updateSelectedOutput,
+    handleAddChannel,
+    handleUpdateChannel,
+    handleDeleteChannel,
     handleDeleteStep,
     handleDeleteSelected,
     handleSave,
