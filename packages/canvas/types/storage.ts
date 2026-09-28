@@ -216,3 +216,27 @@ export interface StorageTestSuiteResult {
   error?: string;
 }
 
+export interface SyncBucketOptions {
+  accessPolicy?: "private" | "public-read" | "presigned-only" | "authenticated-read" | string;
+  enableCors?: boolean;
+  corsOrigins?: string;
+  corsMethods?: string[];
+  corsHeaders?: string;
+  corsMaxAge?: string | number;
+}
+
+export interface SyncStorageBucketResult {
+  success: boolean;
+  bucketName: string;
+  status: number;
+  statusText?: string;
+  message: string;
+  appliedPolicy?: string;
+  corsApplied?: boolean;
+  policyApplied?: boolean;
+  publicAccessVerified?: boolean;
+  publicUrl?: string;
+  error?: string;
+  tip?: string;
+}
+

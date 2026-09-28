@@ -20,6 +20,7 @@ import type { PutObjectCommandInput } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { s3Client } from "./client";
 import { getBucketMetadata } from "./buckets";
+import { storageConfig } from "./config";
 
 export interface PresignedUrlOptions {
   expiresInSeconds?: number;
@@ -215,6 +216,21 @@ export function getPublicObjectUrl(bucketName: string, key: string): string {
       base = base.slice(0, -1);
     }
     return base + "/" + cleanKey;
+  }
+  if (storageConfig.endpoint) {
+    let endpoint = storageConfig.endpoint;
+    while (endpoint.endsWith("/")) {
+      endpoint = endpoint.slice(0, -1);
+    }
+    if (storageConfig.forcePathStyle) {
+      return endpoint + "/" + bucketName + "/" + cleanKey;
+    }
+    try {
+      const url = new URL(endpoint);
+      return url.protocol + "//" + bucketName + "." + url.host + "/" + cleanKey;
+    } catch {
+      return endpoint + "/" + bucketName + "/" + cleanKey;
+    }
   }
   return "https://" + bucketName + ".s3.amazonaws.com/" + cleanKey;
 }

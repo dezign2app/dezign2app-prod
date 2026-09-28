@@ -4,11 +4,13 @@ import {
   executeStorageOperation,
   listStorageBuckets,
   createStorageBucket,
+  syncStorageBucket,
   executeStorageTestSuite,
   type CheckStorageConnectionResult,
   type ExecuteStorageOperationResult,
   type ServerBucketInfo,
   type StorageTestSuiteResult,
+  type SyncStorageBucketResult,
 } from "@/lib/services/storageService";
 import { ConfigItemData } from "../types";
 import { StorageTestingConfig } from "./useStorageTestingConfig";
@@ -19,6 +21,13 @@ export interface StorageTestingActions {
   createSuccessMsg: string | null;
   createErrorMsg: string | null;
   handleCreateBucketNow: () => Promise<void>;
+
+  // Bucket sync (policy, ACL, CORS)
+  isSyncingBucket: boolean;
+  syncSuccessMsg: string | null;
+  syncErrorMsg: string | null;
+  syncResult: SyncStorageBucketResult | null;
+  handleSyncBucketToServer: () => Promise<void>;
 
   // Server bucket scan
   serverBuckets: ServerBucketInfo[] | null;
@@ -71,6 +80,11 @@ export function useStorageTestingActions(
   const [isCreatingBucket, setIsCreatingBucket] = useState(false);
   const [createSuccessMsg, setCreateSuccessMsg] = useState<string | null>(null);
   const [createErrorMsg, setCreateErrorMsg] = useState<string | null>(null);
+
+  const [isSyncingBucket, setIsSyncingBucket] = useState(false);
+  const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
+  const [syncErrorMsg, setSyncErrorMsg] = useState<string | null>(null);
+  const [syncResult, setSyncResult] = useState<SyncStorageBucketResult | null>(null);
 
   const [serverBuckets, setServerBuckets] = useState<ServerBucketInfo[] | null>(null);
   const [serverScanError, setServerScanError] = useState<string | null>(null);
@@ -166,6 +180,38 @@ export function useStorageTestingActions(
   }, [bucketName, handleRunConnectionTest, handleScanServerBuckets, activeEndpoint, region,
       configuredStorageType, configuredForcePathStyle, effectiveAccessKeyId, effectiveSecretAccessKey,
       configuredAccessKeyIdEnv, configuredSecretAccessKeyEnv]);
+
+  const handleSyncBucketToServer = useCallback(async () => {
+    setIsSyncingBucket(true);
+    setSyncSuccessMsg(null);
+    setSyncErrorMsg(null);
+    try {
+      const res = await syncStorageBucket(connectionConfig, {
+        accessPolicy: item.accessPolicy || "private",
+        enableCors: item.enableCors,
+        corsOrigins: item.corsOrigins,
+        corsMethods: item.corsMethods,
+        corsHeaders: item.corsHeaders,
+        corsMaxAge: item.corsMaxAge,
+      });
+      setSyncResult(res);
+      if (res.success) {
+        setSyncSuccessMsg(res.message);
+        await handleRunConnectionTest();
+        await handleScanServerBuckets();
+      } else {
+        setSyncErrorMsg(res.error || res.message || "Failed to sync bucket with storage server");
+      }
+    } catch (err) {
+      setSyncErrorMsg(err instanceof Error ? err.message : "Failed to sync bucket with storage server");
+    } finally {
+      setIsSyncingBucket(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bucketName, handleRunConnectionTest, handleScanServerBuckets, activeEndpoint, region,
+      configuredStorageType, configuredForcePathStyle, effectiveAccessKeyId, effectiveSecretAccessKey,
+      configuredAccessKeyIdEnv, configuredSecretAccessKeyEnv, item.accessPolicy, item.enableCors,
+      item.corsOrigins, item.corsMethods, item.corsHeaders, item.corsMaxAge]);
 
   const handleRunOperation = useCallback(async (args: {
     selectedOpKey: string;
@@ -272,6 +318,7 @@ export function useStorageTestingActions(
 
   return {
     isCreatingBucket, createSuccessMsg, createErrorMsg, handleCreateBucketNow,
+    isSyncingBucket, syncSuccessMsg, syncErrorMsg, syncResult, handleSyncBucketToServer,
     serverBuckets, serverScanError, isScanningServer, handleScanServerBuckets,
     isTestingConn, connResult, handleRunConnectionTest,
     isExecutingOp, opResult, setOpResult, handleRunOperation,

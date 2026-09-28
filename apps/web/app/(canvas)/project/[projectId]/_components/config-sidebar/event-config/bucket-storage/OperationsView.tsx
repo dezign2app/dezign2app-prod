@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import {
-  Play, Check, Copy, Clock, Terminal, CheckCircle2, XCircle, Loader2,
+  Play, Check, Copy, Clock, Terminal, CheckCircle2, XCircle, Loader2, RefreshCw,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
@@ -74,10 +74,19 @@ export const OperationsView: React.FC<OperationsViewProps> = ({ config, actions 
             setSelectedOpKey(val);
             const found = STORAGE_OPERATIONS.find((o) => o.key === val);
             if (found) {
-              setKeyInput(found.defaultKey);
-              if (found.defaultContentType) setContentTypeInput(found.defaultContentType);
-              if (found.defaultBody) setBodyInput(found.defaultBody);
-              if (found.defaultTtl) setTtlInput(found.defaultTtl);
+              // Keep keyInput across operations so upload and download share the same test case key
+              if (!keyInput.trim() && found.defaultKey) {
+                setKeyInput(found.defaultKey);
+              }
+              if (found.defaultContentType && !contentTypeInput.trim()) {
+                setContentTypeInput(found.defaultContentType);
+              }
+              if (found.defaultBody && !bodyInput.trim()) {
+                setBodyInput(found.defaultBody);
+              }
+              if (found.defaultTtl && !ttlInput.trim()) {
+                setTtlInput(found.defaultTtl);
+              }
             }
             setOpResult(null);
           }}
@@ -106,16 +115,21 @@ export const OperationsView: React.FC<OperationsViewProps> = ({ config, actions 
           Request Parameters (Live Server Dispatch)
         </span>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-[11px] font-medium text-foreground">Object Key / Path</label>
-          <LocalInput
-            className="h-8 text-xs font-mono bg-background"
-            value={keyInput}
-            onChange={(e) => setKeyInput(e.target.value)}
-            debounceMs={150}
-            placeholder="e.g. uploads/avatars/user-1.png"
-          />
-        </div>
+        {selectedOpKey !== "createBucket" && selectedOpKey !== "listObjects" && (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-medium text-foreground">Object Key / Path</label>
+              <span className="text-[10px] text-muted-foreground">Shared across operations</span>
+            </div>
+            <LocalInput
+              className="h-8 text-xs font-mono bg-background"
+              value={keyInput}
+              onChange={(e) => setKeyInput(e.target.value)}
+              debounceMs={150}
+              placeholder="e.g. uploads/avatars/user-42.png"
+            />
+          </div>
+        )}
 
         {selectedOpKey === "uploadObject" && (
           <>
@@ -250,6 +264,25 @@ export const OperationsView: React.FC<OperationsViewProps> = ({ config, actions 
             </div>
           </div>
 
+          {opResult.success && selectedOpKey === "uploadObject" && (
+            <div className="flex items-center justify-between p-2 rounded bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-400">
+              <span>
+                Uploaded to <code className="font-mono text-emerald-300 font-semibold">{keyInput}</code>.
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[10px] text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 gap-1 font-semibold"
+                onClick={() => {
+                  setSelectedOpKey("downloadObject");
+                  setOpResult(null);
+                }}
+              >
+                Test Download with Same Key &rarr;
+              </Button>
+            </div>
+          )}
+
           {opResult.error && (
             <div className="flex flex-col gap-2 p-2.5 rounded bg-destructive/10 border border-destructive/20 text-destructive text-[11px]">
               <div>
@@ -281,6 +314,40 @@ export const OperationsView: React.FC<OperationsViewProps> = ({ config, actions 
                     <div className="p-2 rounded bg-destructive/15 border border-destructive/30 text-destructive text-[11px] flex items-start gap-1.5 font-mono">
                       <XCircle size={12} className="shrink-0 mt-0.5" />
                       <span className="break-all">{createErrorMsg}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {opResult.status === 403 && (
+                <div className="flex flex-col gap-2 pt-2 border-t border-destructive/20">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground">
+                      Access Denied (403). Bucket permissions on the server are preventing access.
+                    </span>
+                    <Button
+                      size="sm"
+                      disabled={actions.isSyncingBucket}
+                      onClick={actions.handleSyncBucketToServer}
+                      className="h-6 text-[10px] bg-amber-500 hover:bg-amber-600 text-black font-semibold gap-1 px-2 shrink-0"
+                    >
+                      {actions.isSyncingBucket ? (
+                        <Loader2 size={10} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={10} />
+                      )}
+                      Sync Bucket Policy to Server
+                    </Button>
+                  </div>
+                  {actions.syncSuccessMsg && (
+                    <div className="text-[11px] text-emerald-500 font-medium flex items-center gap-1">
+                      <CheckCircle2 size={12} /> {actions.syncSuccessMsg}
+                    </div>
+                  )}
+                  {actions.syncErrorMsg && (
+                    <div className="p-2 rounded bg-destructive/15 border border-destructive/30 text-destructive text-[11px] flex items-start gap-1.5 font-mono">
+                      <XCircle size={12} className="shrink-0 mt-0.5" />
+                      <span className="break-all">{actions.syncErrorMsg}</span>
                     </div>
                   )}
                 </div>

@@ -111,6 +111,16 @@ vi.mock("@/lib/services/storageService", () => ({
     success: true,
     buckets: [{ name: "existing-bucket-1" }, { name: "existing-bucket-2" }],
   })),
+  syncStorageBucket: vi.fn(async (_connection, options) => ({
+    success: true,
+    bucketName: _connection.bucketName || "user-avatars",
+    status: 200,
+    statusText: "OK",
+    message: "Bucket synced successfully",
+    appliedPolicy: options?.accessPolicy || "public-read",
+    policyApplied: true,
+    corsApplied: true,
+  })),
 }));
 
 describe("BucketTestingTab component", () => {
