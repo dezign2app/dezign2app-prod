@@ -103,6 +103,7 @@ export function LangGraphStudioView({
     handleToggleMemoryForAgent,
     showCompileModal,
     setShowCompileModal,
+    suggestedParams,
   } = useLangGraphCanvasState({ node, updateNode, onClose });
 
   const { handleLayout } = useLangGraphAutoLayout({ nodes, edges, onNodesChange });
@@ -362,7 +363,7 @@ export function LangGraphStudioView({
             }}
             onNodeClick={(_: React.MouseEvent, n: LangGraphCanvasNode) => {
               setSelectedNodeId(n.id);
-              if (n.id === "START") setActiveSideTab("inspector");
+              if (n.id === "START") setActiveSideTab("inputs");
               else if (n.id === "STATE_GLOBAL") setActiveSideTab("state");
               else setActiveSideTab("inspector");
             }}
@@ -472,6 +473,7 @@ export function LangGraphStudioView({
           setStateChannels={setStateChannels}
           memoryConfig={memoryConfig}
           setMemoryConfig={setMemoryConfig}
+          suggestedParams={suggestedParams}
         />
       </div>
 

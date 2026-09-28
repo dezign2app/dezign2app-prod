@@ -17,6 +17,7 @@ import { useNodeFactory } from "./useNodeFactory";
 import { useCanvasNodeSync } from "./useCanvasNodeSync";
 import { useCanvasConnections } from "./useCanvasConnections";
 import { useCanvasPersistence } from "./useCanvasPersistence";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
 export interface UseLangGraphCanvasStateProps {
   node: BackendNode;
@@ -111,6 +112,113 @@ export function useLangGraphCanvasState({
     });
   }, []);
 
+  // ── Input channel CRUD handlers ──
+  const handleAddInputChannel = useCallback(() => {
+    const newChannel: LangGraphInputChannel = {
+      key: `var_${inputChannels.length + 1}`,
+      type: "string",
+      required: false,
+      description: "",
+      source: "custom",
+    };
+    setInputChannels((prev) => [...prev, newChannel]);
+  }, [inputChannels.length]);
+
+  const handleUpdateInputChannel = useCallback(
+    (index: number, changes: Partial<LangGraphInputChannel>) => {
+      setInputChannels((prev) =>
+        prev.map((c, i) => (i === index ? { ...c, ...changes } : c)),
+      );
+    },
+    [],
+  );
+
+  const handleDeleteInputChannel = useCallback((index: number) => {
+    setInputChannels((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleAddSuggestedChannel = useCallback((channel: LangGraphInputChannel) => {
+    setInputChannels((prev) => [...prev, { ...channel, source: channel.source || "request" }]);
+  }, []);
+
+  // ── Derive suggested params from connected ServiceNode endpoints ──
+  const allEdges = useBackendCanvasStore((s) => s.edges);
+  const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
+
+  const suggestedParams = useMemo(() => {
+    // Find edges pointing at this LangGraph node
+    const incomingEdges = allEdges.filter((e) => e.target === node.id);
+    const suggested: Array<{
+      key: string;
+      type: LangGraphInputChannel["type"];
+      description?: string;
+      required?: boolean;
+    }> = [];
+    const seen = new Set<string>();
+
+    for (const edge of incomingEdges) {
+      if (!edge.sourceHandle?.startsWith("endpoint-out-")) continue;
+      const endpointId = edge.sourceHandle.replace("endpoint-out-", "");
+      const ep = allEndpoints.find((e) => e.id === endpointId);
+      if (!ep) continue;
+
+      // Collect from params (legacy), queryParams, pathParams
+      const paramSources = [
+        ...(ep.params || []),
+        ...(ep.queryParams || []),
+        ...(ep.pathParams || []),
+      ];
+      for (const p of paramSources) {
+        if (!p.name || seen.has(p.name)) continue;
+        seen.add(p.name);
+        suggested.push({
+          key: p.name,
+          type: (p.type === "number" ? "number" : p.type === "boolean" ? "boolean" : "string") as LangGraphInputChannel["type"],
+          description: p.description,
+          required: p.required,
+        });
+      }
+
+      // Collect from requestBody fields
+      const bodyFields = ep.requestBody?.fields || [];
+      for (const f of bodyFields) {
+        const fieldName = f.name;
+        if (!fieldName || seen.has(fieldName)) continue;
+        seen.add(fieldName);
+        const resolvedType: LangGraphInputChannel["type"] =
+          f.type === "number" ? "number"
+          : f.type === "boolean" ? "boolean"
+          : f.type === "object" ? "object"
+          : f.type === "array" ? "array"
+          : "string";
+        suggested.push({
+          key: fieldName,
+          type: resolvedType,
+          description: f.description,
+          required: f.required,
+        });
+      }
+    }
+    return suggested;
+  }, [allEdges, allEndpoints, node.id]);
+
+  // Auto-seed inputChannels from suggestedParams when they are empty and suggestions exist
+  useEffect(() => {
+    if (inputChannels.length === 0 && suggestedParams.length > 0) {
+      setInputChannels(
+        suggestedParams.map((p) => ({
+          key: p.key,
+          type: p.type,
+          required: p.required ?? true,
+          description: p.description || "",
+          source: "request" as const,
+        })),
+      );
+    }
+  // Only run once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Sync node callbacks and internal attributes ──
   useCanvasNodeSync({
     nodes,
@@ -124,6 +232,11 @@ export function useLangGraphCanvasState({
     handleUpdateChannel,
     handleDeleteChannel,
     handleDuplicateChannel,
+    handleAddInputChannel,
+    handleAddSuggestedChannel,
+    handleUpdateInputChannel,
+    handleDeleteInputChannel,
+    suggestedParams,
   });
 
   // ── Connection handling hook ──
@@ -260,5 +373,6 @@ export function useLangGraphCanvasState({
     handleToggleMemoryForAgent,
     showCompileModal,
     setShowCompileModal,
+    suggestedParams,
   };
 }

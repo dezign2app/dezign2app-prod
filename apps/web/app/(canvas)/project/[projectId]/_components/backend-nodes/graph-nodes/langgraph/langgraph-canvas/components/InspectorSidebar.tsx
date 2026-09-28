@@ -38,6 +38,8 @@ export interface InspectorSidebarProps {
   selectedMemoryData?: MemoryNodeData | null;
   selectedOutputData?: OutputNodeData | null;
   selectedStartData?: { inputChannels?: LangGraphInputChannel[] } | null;
+  /** Params from connected endpoint used as default suggestions */
+  suggestedParams?: Array<{ key: string; type: LangGraphInputChannel["type"]; description?: string; required?: boolean }>;
   graphNodeId?: string;
   graphSteps?: LangGraphStepConfig[];
   graphEdges?: Array<{
@@ -129,6 +131,7 @@ export function InspectorSidebar({
   setInputChannels,
   memoryConfig,
   setMemoryConfig,
+  suggestedParams,
 }: InspectorSidebarProps) {
   const [width, setWidth] = useState(340);
   const [isResizing, setIsResizing] = useState(false);
@@ -211,6 +214,8 @@ export function InspectorSidebar({
           <InputsTabContent
             inputChannels={inputChannels}
             setInputChannels={setInputChannels}
+            suggestedParams={suggestedParams}
+            stateChannels={stateChannels}
           />
         </div>
       ) : isMemorySelected && setMemoryConfig && memoryConfig ? (

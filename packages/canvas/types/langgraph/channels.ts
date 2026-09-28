@@ -40,6 +40,10 @@ export type LangGraphInputChannel = {
     | boolean
     | Record<string, unknown>
     | unknown[];
+  /** Whether this came from the connected endpoint or was manually added */
+  source?: "request" | "custom";
+  /** Which state channel key this input initializes */
+  stateChannelKey?: string;
 };
 
 export type LangGraphOutputPort = {
