@@ -35,6 +35,12 @@ interface UseCanvasNodeSyncProps {
   ) => void;
   handleDeleteChannel?: (index: number) => void;
   handleDuplicateChannel?: (index: number) => void;
+  // Input channel callbacks (for StartNode inline editing)
+  handleAddInputChannel?: () => void;
+  handleAddSuggestedChannel?: (channel: LangGraphInputChannel) => void;
+  handleUpdateInputChannel?: (index: number, changes: Partial<LangGraphInputChannel>) => void;
+  handleDeleteInputChannel?: (index: number) => void;
+  suggestedParams?: Array<{ key: string; type: LangGraphInputChannel["type"]; description?: string; required?: boolean }>;
 }
 
 export function useCanvasNodeSync({
@@ -48,6 +54,11 @@ export function useCanvasNodeSync({
   handleUpdateChannel,
   handleDeleteChannel,
   handleDuplicateChannel,
+  handleAddInputChannel,
+  handleAddSuggestedChannel,
+  handleUpdateInputChannel,
+  handleDeleteInputChannel,
+  suggestedParams,
 }: UseCanvasNodeSyncProps) {
   useEffect(() => {
     setNodes((nds) => {
@@ -55,7 +66,23 @@ export function useCanvasNodeSync({
 
       let updated = nds.map((n): LangGraphCanvasNode => {
         if (n.id === NODE_ID_START && n.type === LANGGRAPH_CANVAS_NODE_START) {
-          return { ...n, data: { ...n.data, inputChannels } };
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              inputChannels,
+              stateChannels,
+              suggestedParams,
+              onAddInputChannel: handleAddInputChannel,
+              onAddSuggestedChannel: handleAddSuggestedChannel,
+              onUpdateInputChannel: handleUpdateInputChannel,
+              onDeleteInputChannel: handleDeleteInputChannel,
+              onOpenInputsTab: () => {
+                setSelectedNodeId(NODE_ID_START);
+                setActiveSideTab("inputs");
+              },
+            },
+          };
         }
         if (
           n.id === NODE_ID_STATE_GLOBAL &&
@@ -206,10 +233,15 @@ export function useCanvasNodeSync({
   }, [
     inputChannels,
     stateChannels,
+    suggestedParams,
     handleAddChannel,
     handleUpdateChannel,
     handleDeleteChannel,
     handleDuplicateChannel,
+    handleAddInputChannel,
+    handleAddSuggestedChannel,
+    handleUpdateInputChannel,
+    handleDeleteInputChannel,
     setNodes,
     setEdges,
     setSelectedNodeId,

@@ -240,6 +240,20 @@ export interface StepNodeData extends Record<string, unknown> {
 export interface StartNodeData extends Record<string, unknown> {
   label: string;
   inputChannels?: LangGraphInputChannel[];
+  /** Called when user clicks the + button to add a new input field */
+  onAddInputChannel?: () => void;
+  /** Called to add a pre-filled channel directly (e.g. from suggestions) */
+  onAddSuggestedChannel?: (channel: LangGraphInputChannel) => void;
+  /** Called when user updates an existing input channel */
+  onUpdateInputChannel?: (index: number, changes: Partial<LangGraphInputChannel>) => void;
+  /** Called when user deletes an input channel */
+  onDeleteInputChannel?: (index: number) => void;
+  /** Opens the Inputs tab in the inspector sidebar */
+  onOpenInputsTab?: () => void;
+  /** Derived from connected endpoint – shown as "suggested" fields */
+  suggestedParams?: Array<{ key: string; type: LangGraphInputChannel["type"]; description?: string; required?: boolean }>;
+  /** Available state channels for mapping dropdowns */
+  stateChannels?: LangGraphStateChannel[];
 }
 
 export interface EndNodeData extends Record<string, unknown> {
