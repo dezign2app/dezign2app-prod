@@ -767,6 +767,11 @@ export function handleFrontendConnect({
       });
 
       // Update newEdge data
+      const existingStepNumber =
+        currentEdges.filter(
+          (e) => e.source === webPageNode.id && e.sourceHandle === webHandle,
+        ).length || 1;
+
       set({
         edges: currentEdges.map((e) =>
           e.id === newEdge.id
@@ -774,6 +779,8 @@ export function handleFrontendConnect({
                 ...e,
                 data: {
                   ...e.data,
+                  label: e.data?.label ?? String(existingStepNumber),
+                  sequenceOrder: e.data?.sequenceOrder ?? existingStepNumber,
                   isStorageOperationBinding: true,
                   actionId,
                   operationName: opName,

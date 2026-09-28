@@ -1,0 +1,145 @@
+import React from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  GripVertical,
+  Trash2,
+} from "lucide-react";
+import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
+import type { BackendNode, Endpoint } from "@workspace/canvas";
+import type { FrontendActionStepDraft } from "./types";
+import { FRONTEND_STEP_TYPE_META } from "./actionStepConstants";
+
+export interface FrontendStepRowHeaderProps {
+  step: FrontendActionStepDraft;
+  index: number;
+  expanded: boolean;
+  allNodes: BackendNode[];
+  endpoints: (Endpoint & { nodeId: string })[];
+  dragHandleProps?: DraggableProvidedDragHandleProps | null;
+  onToggleExpand: () => void;
+  onDelete: () => void;
+}
+
+export function formatStepCodePreview(
+  step: FrontendActionStepDraft,
+  allNodes: BackendNode[],
+  endpoints: (Endpoint & { nodeId: string })[],
+): string {
+  switch (step.type) {
+    case "api_call": {
+      const ep = endpoints.find((e) => e.id === step.endpointId);
+      const srv = allNodes.find((n) => n.id === step.serviceNodeId);
+      const method = (ep?.type || "POST").toLowerCase();
+      const path = ep?.name || "/api";
+      const srvName = srv?.data?.label || "";
+      return `const res = await ${srvName ? `${srvName}.` : ""}${method}("${path}")`;
+    }
+
+    case "storage_put": {
+      const bucket = step.bucketId || "bucket";
+      const fileKey = step.fileSource?.key || "file";
+      return `await storage.upload("${bucket}", ${fileKey})`;
+    }
+
+    case "state_mutation": {
+      const key = step.stateKey || "state";
+      const op = step.stateUpdateType || "set";
+      if (op === "toggle") return `setState(${key} => !${key})`;
+      if (op === "increment") return `setState(${key} => ${key} + 1)`;
+      if (op === "reset") return `resetState("${key}")`;
+      return `setState({ ${key}: ... })`;
+    }
+
+    case "navigation": {
+      const route = step.targetRoute || "/";
+      return `router.push("${route}")`;
+    }
+
+    case "custom_code": {
+      const firstLine = step.code?.trim().split("\n")[0] || "// custom code";
+      return firstLine.slice(0, 40);
+    }
+
+    case "condition": {
+      return `if (${step.conditionExpr || "condition"})`;
+    }
+
+    case "notification": {
+      const lvl = step.notifyLevel || "success";
+      const msg = step.notifyMessage ? `"${step.notifyMessage.slice(0, 20)}"` : '""';
+      return `toast.${lvl}(${msg})`;
+    }
+
+    case "reset_form": {
+      return `form.reset()`;
+    }
+  }
+}
+
+export const FrontendStepRowHeader: React.FC<FrontendStepRowHeaderProps> = ({
+  step,
+  index,
+  expanded,
+  allNodes,
+  endpoints,
+  dragHandleProps,
+  onToggleExpand,
+  onDelete,
+}) => {
+  const meta = FRONTEND_STEP_TYPE_META[step.type];
+  const codePreview = formatStepCodePreview(step, allNodes, endpoints);
+
+  return (
+    <div
+      className="flex items-center gap-1.5 px-2.5 py-1.5 cursor-pointer select-none bg-muted/20 hover:bg-muted/40 transition-colors"
+      onClick={onToggleExpand}
+    >
+      {/* Drag Grip */}
+      <div
+        {...dragHandleProps}
+        className="text-muted-foreground/40 hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing p-1 -ml-1 rounded hover:bg-muted/40"
+        title="Drag to reorder"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical size={13} className="shrink-0" />
+      </div>
+
+      {/* Step Number */}
+      <span className="text-[11px] text-muted-foreground/60 w-3.5 shrink-0 font-mono">
+        {index + 1}
+      </span>
+
+      {/* Type Badge */}
+      <span
+        className={`flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${meta.color}`}
+      >
+        {meta.icon}
+        {meta.label}
+      </span>
+
+      {/* Inline Code Preview */}
+      <span className="text-xs font-mono font-medium text-foreground/90 flex-1 truncate min-w-0">
+        {codePreview}
+      </span>
+
+      {/* Delete Button */}
+      <button
+        type="button"
+        className="p-1 text-muted-foreground/40 hover:text-destructive transition-colors rounded hover:bg-destructive/10 shrink-0"
+        title="Delete step"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+      >
+        <Trash2 size={12} />
+      </button>
+
+      {/* Expand / Collapse Chevron */}
+      <div className="text-muted-foreground shrink-0 ml-0.5">
+        {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+      </div>
+    </div>
+  );
+};

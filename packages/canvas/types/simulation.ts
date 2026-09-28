@@ -105,6 +105,86 @@ export interface StoreActionBinding {
   parameterMappings?: Record<string, string>;
 }
 
+export type FrontendActionStepType =
+  | "api_call"
+  | "storage_put"
+  | "state_mutation"
+  | "navigation"
+  | "custom_code"
+  | "condition"
+  | "notification"
+  | "reset_form";
+
+export type FrontendFieldSource =
+  | { kind: "literal"; value: string }
+  | { kind: "state_var"; stateKey: string }
+  | { kind: "prev_response"; stepId: string; fieldPath: string }
+  | { kind: "user_input"; fieldName: string };
+
+export type FrontendRequestFieldBinding = {
+  id: string;
+  targetField: string;
+  source: FrontendFieldSource;
+};
+
+export type FrontendActionStepDraft = {
+  id: string;
+  order: number;
+  type: FrontendActionStepType;
+  name?: string;
+  description?: string;
+  edgeId?: string; // canvas edge id if this step is connected to a canvas node
+
+  // --- For type === "api_call" ---
+  serviceNodeId?: string;
+  endpointId?: string;
+  requestBindings?: FrontendRequestFieldBinding[];
+
+  // --- For type === "storage_put" ---
+  storageNodeId?: string;
+  storageRefNodeId?: string;
+  storageServiceNodeId?: string;
+  bucketId?: string;
+  presignedUrlSource?: {
+    stepId: string;
+    fieldPath: string;
+  };
+  fileSource?: {
+    kind: "state_var" | "user_input";
+    key: string;
+  };
+  contentType?: string;
+
+  // --- For type === "state_mutation" ---
+  stateTargetKind?: "local" | "store";
+  stateStoreNodeId?: string;
+  stateKey?: string;
+  stateUpdateType?: "set" | "toggle" | "increment" | "reset";
+  stateValueSource?: FrontendFieldSource;
+
+  // --- For type === "navigation" ---
+  navType?: "route" | "page";
+  targetRoute?: string;
+  targetPageId?: string;
+  navCondition?: "direct" | "on_success" | "on_error";
+
+  // --- For type === "custom_code" ---
+  code?: string;
+
+  // --- For type === "condition" ---
+  conditionExpr?: string;
+  thenSteps?: FrontendActionStepDraft[];
+  elseSteps?: FrontendActionStepDraft[];
+
+  // --- For type === "notification" ---
+  notifyType?: "toast" | "alert";
+  notifyMessage?: string;
+  notifyLevel?: "success" | "error" | "info" | "warning";
+
+  // --- For type === "reset_form" ---
+  formTarget?: string;
+};
+
 export type UIEventItem = {
   id: string;
   name: string;
@@ -138,6 +218,8 @@ export type UIEventItem = {
     endpointId?: string;
     serviceNodeId?: string;
   };
+  // Sequential multi-step flow configuration
+  actionSteps?: FrontendActionStepDraft[];
   // SSE config (when event === "sse")
   sseConfig?: {
     reconnectStrategy?: "none" | "exponential" | "linear";

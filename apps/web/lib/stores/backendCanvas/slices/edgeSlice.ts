@@ -172,8 +172,56 @@ export const createEdgeSlice = (
     const lastEdgeIndex = getLastIndex(get().edges);
     const fractionalIndex = generateKeyBetween(lastEdgeIndex, null);
 
+    const isActionHandle = connection.sourceHandle?.startsWith("events-");
+    let initialData = (connection as any).data;
+
+    if (isActionHandle && sourceNode?.type === "webPage") {
+      const existingActionEdges = get().edges.filter(
+        (e) =>
+          e.source === connection.source &&
+          e.sourceHandle === connection.sourceHandle,
+      );
+      const stepNumber = existingActionEdges.length + 1;
+      initialData = {
+        ...initialData,
+        label: String(stepNumber),
+        sequenceOrder: stepNumber,
+      };
+
+      // Also ensure previous existing edges have sequenceOrder and label if missing
+      if (
+        existingActionEdges.some(
+          (e) => !e.data?.label || e.data?.sequenceOrder === undefined,
+        )
+      ) {
+        const sorted = [...existingActionEdges].sort(
+          (a, b) => (a.data?.sequenceOrder ?? 0) - (b.data?.sequenceOrder ?? 0),
+        );
+        const map = new Map<string, number>();
+        sorted.forEach((e, idx) => {
+          map.set(e.id, idx + 1);
+        });
+        set({
+          edges: get().edges.map((e) => {
+            const ord = map.get(e.id);
+            if (ord !== undefined) {
+              return {
+                ...e,
+                data: {
+                  ...e.data,
+                  label: String(ord),
+                  sequenceOrder: ord,
+                },
+              };
+            }
+            return e;
+          }),
+        });
+      }
+    }
+
     const newEdge: BackendEdge = {
-      id: `edge-${Date.now()}`,
+      id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       source: connection.source!,
       target: connection.target!,
       type: edgeType as BackendEdge["type"],
@@ -183,6 +231,7 @@ export const createEdgeSlice = (
       targetResourceId,
       sourceResourceId,
       resourceType,
+      data: initialData,
     };
 
     const next = addReactFlowEdge(newEdge, get().edges);

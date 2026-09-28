@@ -521,7 +521,7 @@ export function cleanupDeletedEdgesState(
   const removedEdges = currentState.edges.filter(
     (e) => e && removedSet.has(e.id),
   );
-  const nextEdges = currentState.edges.filter(
+  let nextEdges = currentState.edges.filter(
     (e) => e && !removedSet.has(e.id),
   );
 
@@ -544,6 +544,11 @@ export function cleanupDeletedEdgesState(
 
   const pendingEndpointUpserts = [...currentState.pendingEndpointUpserts];
   const pendingEventUpserts = [...currentState.pendingEventUpserts];
+  const pendingEdgeUpserts = [
+    ...(currentState.pendingEdgeUpserts || []).filter(
+      (e) => !removedSet.has(e.id),
+    ),
+  ];
 
   removedEdges.forEach((edge) => {
     if (!edge) return;
@@ -814,6 +819,44 @@ export function cleanupDeletedEdgesState(
             pendingNodeUpserts.push(updatedWp);
           }
         }
+      }
+
+      // Renumber remaining action edges for this action handle
+      const remainingActionEdges = nextEdges.filter(
+        (e) =>
+          e.source === edge.source &&
+          e.sourceHandle === edge.sourceHandle &&
+          !removedSet.has(e.id),
+      );
+      if (remainingActionEdges.length > 0) {
+        const sorted = [...remainingActionEdges].sort(
+          (a, b) =>
+            (a.data?.sequenceOrder ?? 99) - (b.data?.sequenceOrder ?? 99),
+        );
+        const renumberedMap = new Map<string, number>();
+        sorted.forEach((e, idx) => {
+          renumberedMap.set(e.id, idx + 1);
+        });
+        nextEdges = nextEdges.map((e) => {
+          const newOrder = renumberedMap.get(e.id);
+          if (
+            newOrder !== undefined &&
+            (e.data?.sequenceOrder !== newOrder ||
+              e.data?.label !== String(newOrder))
+          ) {
+            const updatedEdge = {
+              ...e,
+              data: {
+                ...e.data,
+                label: String(newOrder),
+                sequenceOrder: newOrder,
+              },
+            };
+            pendingEdgeUpserts.push(updatedEdge);
+            return updatedEdge;
+          }
+          return e;
+        });
       }
     }
 
@@ -1607,9 +1650,7 @@ export function cleanupDeletedEdgesState(
 
   const updates: Partial<BackendCanvasState> = {
     edges: nextEdges,
-    pendingEdgeUpserts: (currentState.pendingEdgeUpserts || []).filter(
-      (e) => !removedSet.has(e.id),
-    ),
+    pendingEdgeUpserts,
     pendingEdgeRemovals: [
       ...(currentState.pendingEdgeRemovals || []),
       ...removedEdgeIds,

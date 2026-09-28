@@ -21,13 +21,16 @@ const isStandardWebPageEvent = (event: string): boolean => {
   return EVENT_OPTIONS.some((opt) => opt === event);
 };
 
+import { StepLink } from "./SectionList";
+
 export interface SectionActionRowProps {
   nodeId: string;
   sectionId: string;
   action: UIEventItem;
   sections: PageSection[];
   updateSections: (sections: PageSection[]) => void;
-  getLinkedEndpoint: (actionId: string) => { targetNode: BackendNode; endpoint: Endpoint } | null;
+  getLinkedEndpoint?: (actionId: string) => { targetNode: BackendNode; endpoint: Endpoint } | null;
+  getLinkedEndpoints?: (actionId: string) => StepLink[];
   onTriggerEvent: (triggerInfo: { event: UIEventItem; targetNode: BackendNode; endpoint: Endpoint }) => void;
   isEditing?: boolean;
   onStartEdit?: () => void;
@@ -41,6 +44,7 @@ export const SectionActionRow = ({
   sections,
   updateSections,
   getLinkedEndpoint,
+  getLinkedEndpoints,
   onTriggerEvent,
   isEditing: isEditingProp,
   onStartEdit,
@@ -110,7 +114,28 @@ export const SectionActionRow = ({
     evtLower === "ws";
   const isWebrtc = evtStr === "webrtc" || evtLower === "webrtc";
 
-  const link = getLinkedEndpoint(action.id);
+  const stepLinks: StepLink[] = getLinkedEndpoints
+    ? getLinkedEndpoints(action.id)
+    : getLinkedEndpoint
+    ? (() => {
+        const link = getLinkedEndpoint(action.id);
+        return link
+          ? [
+              {
+                step: 1,
+                label: "1",
+                edgeId: "",
+                targetNode: link.targetNode,
+                endpoint: link.endpoint,
+              },
+            ]
+          : [];
+      })()
+    : [];
+  const primaryStep = stepLinks[0];
+  const triggerTarget = primaryStep?.endpoint
+    ? { targetNode: primaryStep.targetNode, endpoint: primaryStep.endpoint }
+    : null;
 
   const handleUpdate = (name: string, event: string) => {
     const defaultNavType: "link" | "router" = "link";
@@ -135,21 +160,21 @@ export const SectionActionRow = ({
 
   const handleDelete = () => {
     const store = useBackendCanvasStore.getState();
-    const existingEdge = store.edges.find(
+    const matchingEdges = store.edges.filter(
       (e) => e.source === nodeId && e.sourceHandle === `events-${action.id}`,
     );
-    if (existingEdge) {
-      const targetNode = store.nodes.find((n) => n.id === existingEdge.target);
-      store.deleteEdge(existingEdge.id);
+    matchingEdges.forEach((edge) => {
+      const targetNode = store.nodes.find((n) => n.id === edge.target);
+      store.deleteEdge(edge.id);
       if (targetNode && targetNode.type === "page_ref") {
         const remainingEdges = store.edges.filter(
-          (e) => e.target === targetNode.id && e.id !== existingEdge.id,
+          (e) => e.target === targetNode.id && e.id !== edge.id,
         );
         if (remainingEdges.length === 0) {
           store.deleteNode(targetNode.id);
         }
       }
-    }
+    });
 
     const updatedSections = sections.map((sec) => {
       if (sec.id !== sectionId) return sec;
@@ -474,17 +499,44 @@ export const SectionActionRow = ({
             setEditEvent(isStandard ? evt : "click");
           }}
         >
-          <div className="flex flex-col gap-0.5 overflow-hidden">
+          <div className="flex flex-col gap-1 overflow-hidden">
             <div className="flex items-center gap-1.5 truncate">
               <span className="font-medium text-xs truncate">{action.name}</span>
               {getEventBadge()}
             </div>
+            {stepLinks.length > 1 && (
+              <div className="flex items-center gap-1 flex-wrap pl-1 border-l-2 border-indigo-500/40 mt-0.5">
+                {stepLinks.map((sl) => (
+                  <span
+                    key={sl.edgeId || sl.step}
+                    className={cn(
+                      "text-[8px] font-mono px-1.5 py-0.5 rounded flex items-center gap-1 font-semibold",
+                      sl.isStorageRef
+                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25"
+                        : "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/25",
+                    )}
+                    title={`Step ${sl.label}: ${sl.isStorageRef ? `Upload via Presigned URL (${sl.bucketName})` : `${sl.endpoint?.type || "API"} ${sl.endpoint?.name} (${sl.targetNode.data?.label || "Service"})`}`}
+                  >
+                    <span className="w-3 h-3 rounded-full bg-foreground/10 text-[7px] flex items-center justify-center font-bold">
+                      {sl.label}
+                    </span>
+                    {sl.isStorageRef ? (
+                      <span>🪣 {sl.operationName}()</span>
+                    ) : (
+                      <span>
+                        {sl.endpoint?.type || "API"} {sl.endpoint?.name}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <div
             className="flex items-center gap-1 shrink-0"
             onClick={(e) => e.stopPropagation()}
           >
-            {link && (
+            {triggerTarget && (
               <button
                 type="button"
                 className="flex items-center justify-center p-1 rounded hover:bg-green-500/10 text-green-500 transition-all cursor-pointer"
@@ -492,11 +544,11 @@ export const SectionActionRow = ({
                   e.stopPropagation();
                   onTriggerEvent({
                     event: action,
-                    targetNode: link.targetNode,
-                    endpoint: link.endpoint,
+                    targetNode: triggerTarget.targetNode,
+                    endpoint: triggerTarget.endpoint,
                   });
                 }}
-                title={`Trigger simulated request: ${link.endpoint.type || "GET"} ${link.endpoint.name}`}
+                title={`Trigger simulated request: ${triggerTarget.endpoint.type || "GET"} ${triggerTarget.endpoint.name}`}
               >
                 <Play size={10} className="fill-green-600 text-green-600" />
               </button>
