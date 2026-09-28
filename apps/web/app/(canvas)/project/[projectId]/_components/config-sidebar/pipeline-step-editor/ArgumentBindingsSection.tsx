@@ -171,13 +171,32 @@ export const ArgumentBindingsSection = ({
           matchingExpectedArg?.required !== false &&
           !isBindingSourceConfigured(binding);
 
+        const getArgDisplayLabel = (name?: string) => {
+          if (!name) return "";
+          const lower = name.trim().toLowerCase();
+          if (lower === "key" || lower === "objectkey") return `${name} (file path)`;
+          if (lower === "sourcekey") return `${name} (source path)`;
+          if (lower === "destkey") return `${name} (dest path)`;
+          return name;
+        };
+
+        const isCredentialLeak =
+          binding.source.kind === "env" &&
+          (binding.argName?.toLowerCase() === "key" ||
+            binding.argName?.toLowerCase() === "filepath" ||
+            binding.argName?.toLowerCase() === "filekey" ||
+            binding.argName?.toLowerCase() === "objectkey") &&
+          /secret|access_key|token|credential/i.test(binding.source.field || "");
+
         return (
           <div
             key={bi}
             className={cn(
               "grid grid-cols-[1.1fr_auto_2.2fr_auto] gap-1.5 bg-background/60 p-1.5 rounded border",
               isInlineSource ? "items-start pt-2" : "items-center",
-              isRequiredAndUnmapped
+              isCredentialLeak
+                ? "border-amber-500/60 bg-amber-500/5"
+                : isRequiredAndUnmapped
                 ? "border-destructive/50 bg-destructive/5"
                 : "border-border/40",
             )}
@@ -191,7 +210,7 @@ export const ArgumentBindingsSection = ({
                 >
                   <SelectTrigger className="h-7 text-xs font-mono bg-background/70 border-border/60 w-full min-w-0">
                     <SelectValue placeholder="Select arg...">
-                      {binding.argName || undefined}
+                      {getArgDisplayLabel(binding.argName) || undefined}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
@@ -204,11 +223,12 @@ export const ArgumentBindingsSection = ({
                           idx !== bi &&
                           b.argName.trim().toLowerCase() === arg.name.trim().toLowerCase(),
                       );
+                      const displayLabel = getArgDisplayLabel(arg.name);
                       return (
                         <SelectItem key={arg.name} value={arg.name} className="text-xs font-mono">
                           <div className="flex items-center justify-between w-full gap-2 pr-2">
                             <div className="flex items-center gap-1.5 truncate">
-                              <span className="font-semibold">{arg.name}</span>
+                              <span className="font-semibold">{displayLabel}</span>
                               {isAlreadyBound && (
                                 <span className="text-[8px] font-sans text-muted-foreground/60">
                                   (bound)
@@ -231,7 +251,7 @@ export const ArgumentBindingsSection = ({
                     {isCustomValue && Boolean(binding.argName?.trim()) && (
                       <SelectItem value={binding.argName.trim()} className="text-xs font-mono">
                         <div className="flex items-center justify-between w-full gap-2 pr-2">
-                          <span>{binding.argName}</span>
+                          <span>{getArgDisplayLabel(binding.argName)}</span>
                           <span className="text-[9px] text-muted-foreground font-sans italic shrink-0">
                             (custom)
                           </span>
