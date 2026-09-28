@@ -21,7 +21,7 @@ export function ensureActionServiceConnection({
 
   const store = useBackendCanvasStore.getState();
   const sourceHandle = `events-${actionId}`;
-  const targetHandle = `func-in-${endpointId}`;
+  const targetHandle = `endpoint-in-${endpointId}`;
 
   // Find existing edge matching this action and endpoint
   const existingEdge = store.edges.find((e) => {
@@ -29,18 +29,23 @@ export function ensureActionServiceConnection({
       e.source === webPageNodeId &&
       e.target === serviceNodeId &&
       e.sourceHandle === sourceHandle &&
-      (e.targetHandle === targetHandle || e.targetHandle?.includes(endpointId));
+      (e.targetHandle === targetHandle ||
+        e.targetHandle === `func-in-${endpointId}` ||
+        e.targetHandle?.includes(endpointId));
     return forwardMatch;
   });
 
   if (existingEdge) {
-    // Ensure sequence order is updated if needed
-    if (
+    const needsHandleFix = existingEdge.targetHandle !== targetHandle;
+    const needsOrderFix =
       existingEdge.data?.sequenceOrder !== stepOrder ||
-      existingEdge.data?.label !== String(stepOrder)
-    ) {
+      existingEdge.data?.label !== String(stepOrder);
+
+    // Ensure sequence order or target handle is updated if needed
+    if (needsHandleFix || needsOrderFix) {
       store.updateEdge(existingEdge.id, {
         ...existingEdge,
+        targetHandle,
         data: {
           ...existingEdge.data,
           sequenceOrder: stepOrder,
