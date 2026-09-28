@@ -415,6 +415,8 @@ export function LangGraphStudioView({
 
         {/* Right Inspector Sidebar */}
         <InspectorSidebar
+          selectedNodeId={selectedNodeId}
+          onClose={() => setSelectedNodeId(null)}
           activeSideTab={activeSideTab}
           setActiveSideTab={setActiveSideTab}
           selectedStepData={selectedStepData}

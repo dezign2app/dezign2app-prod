@@ -256,6 +256,12 @@ export interface StateGlobalNodeData extends Record<string, unknown> {
   stateChannels: LangGraphStateChannel[];
   onOpenStateTab?: () => void;
   onAddChannel?: () => void;
+  onUpdateChannel?: (
+    index: number,
+    channel: Partial<LangGraphStateChannel>,
+  ) => void;
+  onDeleteChannel?: (index: number) => void;
+  onDuplicateChannel?: (index: number) => void;
 }
 
 export interface OutputNodeData
