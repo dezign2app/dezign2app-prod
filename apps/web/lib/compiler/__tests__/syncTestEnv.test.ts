@@ -10,7 +10,9 @@ import { generateNavigationEventTemplate } from "../webClients/nextjs/v16/event-
 import { generateTypeDefinitions } from "../webClients/nextjs/v16/event-generators/generateTypeDefinitions";
 import { resolveEventParameters } from "../webClients/nextjs/v16/event-generators/resolveEventParameters";
 import { generateSectionComponent } from "../webClients/nextjs/v16/sectionGenerators";
+import { generatePageCode } from "../webClients/nextjs/v16/pageGenerators";
 import { generateEndpointRouteHandler } from "../generators/routeGenerator";
+import { generateServiceRouteTypes } from "../generators/typesGenerator/serviceRoutesGenerator";
 import { BackendNode, Endpoint } from "@workspace/canvas/types";
 
 const TEST_ENV_DIR = "C:/Users/subha/Downloads/test env";
@@ -153,6 +155,22 @@ describe("syncTestEnv via Compiler", () => {
       console.log("Updated via compiler:", targetRoutePath);
     }
 
+    const healthEp: Endpoint & { nodeId: string } = {
+      id: "ep-health",
+      nodeId: "service-profile",
+      name: "/health",
+      type: "GET",
+      summary: "Health check",
+    };
+    const typesRes = generateServiceRouteTypes([dummyServiceNode], [ep, healthEp]);
+    for (const f of typesRes.files) {
+      const targetTypePath = path.join(TEST_ENV_DIR, "packages/types", f.filename);
+      if (fs.existsSync(path.dirname(targetTypePath))) {
+        fs.writeFileSync(targetTypePath, f.content, "utf-8");
+        console.log("Updated via compiler:", targetTypePath);
+      }
+    }
+
     // 3. Generate Next.js UploadImageAction component
     const resolvedParams = resolveEventParameters({
       url: "",
@@ -229,6 +247,54 @@ describe("syncTestEnv via Compiler", () => {
     if (fs.existsSync(path.dirname(targetBackPath))) {
       fs.writeFileSync(targetBackPath, backToHomeCode, "utf-8");
       console.log("Updated via compiler:", targetBackPath);
+    }
+
+    // 6. Generate Next.js NotFound page component
+    const notFoundPageCode = generatePageCode(
+      {
+        nodeId: "page-not-found",
+        label: "/not-found",
+        slug: "not-found",
+        routePath: "/not-found",
+        componentName: "NotFoundPage",
+        isRoot: false,
+      },
+      "",
+      [
+        {
+          id: "sec-nav",
+          name: "Navigation",
+          folderName: "navigation",
+          componentName: "NavigationSection",
+          actions: [
+            {
+              componentName: "BackToHomeAction",
+              eventName: "Back to Home",
+              eventType: "navigateToPage",
+              url: "/",
+              method: "GET",
+              targetRoute: "/",
+            },
+            {
+              componentName: "UploadImageAction",
+              eventName: "upload image",
+              eventType: "custom",
+              url: "/upload-image",
+              method: "POST",
+            },
+          ],
+        },
+      ],
+    );
+
+    expect(notFoundPageCode).toContain("handleTriggerAction");
+    expect(notFoundPageCode).toContain("executeApiAction");
+    expect(notFoundPageCode).toContain("onTrigger={handleTriggerAction}");
+
+    const targetNotFoundPagePath = path.join(TEST_ENV_DIR, "apps/web/app/(public)/not-found/page.tsx");
+    if (fs.existsSync(path.dirname(targetNotFoundPagePath))) {
+      fs.writeFileSync(targetNotFoundPagePath, notFoundPageCode, "utf-8");
+      console.log("Updated via compiler:", targetNotFoundPagePath);
     }
   });
 });
