@@ -110,11 +110,12 @@ export const OutputDeliverySection: React.FC<OutputDeliverySectionProps> = ({
 
           {responseOutputMode === "selected" && (
             <div className="flex flex-wrap gap-1.5 p-2 bg-background/80 rounded-lg border border-border/50">
-              {stateChannels.map((ch) => {
+              {stateChannels.map((ch, idx) => {
                 const isSelected = responseFields.includes(ch.key);
+                const chKey = ch.key ? `output-${ch.key}-${idx}` : `output-empty-${idx}`;
                 return (
                   <button
-                    key={ch.key}
+                    key={chKey}
                     type="button"
                     onClick={() => {
                       if (isSelected) {

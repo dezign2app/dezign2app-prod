@@ -127,4 +127,32 @@ describe("terminalSessionStore", () => {
     const active = store.getActiveSession(projectId);
     expect(active?.logs).toEqual(["chunk 1\r\n", "chunk 2\r\n"]);
   });
+
+  it("clears all sessions and active session id for a project with clearSessions", () => {
+    const store = useTerminalSessionStore.getState();
+    store.addSession(projectId, {
+      id: "term-1",
+      title: "Terminal 1",
+      type: "shell",
+      status: "running",
+      createdAt: Date.now(),
+    });
+    store.addSession(projectId, {
+      id: "term-2",
+      title: "Terminal 2",
+      type: "powershell",
+      status: "running",
+      createdAt: Date.now(),
+    });
+
+    expect(store.getSessions(projectId)).toHaveLength(2);
+    expect(store.getActiveSessionId(projectId)).toBe("term-2");
+
+    store.clearSessions(projectId);
+
+    const updated = useTerminalSessionStore.getState();
+    expect(updated.getSessions(projectId)).toEqual([]);
+    expect(updated.getActiveSessionId(projectId)).toBeNull();
+  });
 });
+

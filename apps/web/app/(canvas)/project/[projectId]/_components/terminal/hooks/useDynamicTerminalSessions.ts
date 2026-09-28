@@ -475,6 +475,13 @@ export function useDynamicTerminalSessions({
     [inElectron, projectId, store],
   );
 
+  /**
+   * Terminates all running OS terminal PTY processes and clears active sessions for a project.
+   */
+  const killAllJobs = useCallback(() => {
+    killAllTerminalJobs(projectId, outputDir);
+  }, [projectId, outputDir]);
+
   // Write interactive keystroke data to active/target session
   const writeToSession = useCallback(
     (sessionId: string, data: string) => {
@@ -656,5 +663,51 @@ export function useDynamicTerminalSessions({
     resizeSession,
     allDetectedPorts,
     replayMissedLogs,
+    killAllJobs,
   };
 }
+
+/**
+ * Terminates all running OS terminal PTY processes and clears active sessions for a project.
+ */
+export function killAllTerminalJobs(projectId: string, outputDir?: string) {
+  const store = useTerminalSessionStore.getState();
+  const sessions = store.getSessions(projectId);
+
+  sessions.forEach((session) => {
+    // 1. Clean up IPC listeners
+    if (activeListeners.has(session.id)) {
+      const listeners = activeListeners.get(session.id);
+      try {
+        listeners?.dataCleanup?.();
+        listeners?.exitCleanup?.();
+      } catch (e) {
+        console.warn("[Terminal] Listener cleanup error:", e);
+      }
+      activeListeners.delete(session.id);
+    }
+
+    // 2. Kill underlying OS PTY process
+    if (isElectron()) {
+      try {
+        const api = getElectronAPI();
+        api?.terminal?.kill?.(session.id);
+      } catch (e) {
+        console.warn("[Terminal] PTY process kill error:", e);
+      }
+    }
+  });
+
+  if (isElectron() && outputDir) {
+    try {
+      const api = getElectronAPI();
+      api?.dev?.stop?.(outputDir);
+    } catch (e) {
+      console.warn("[Terminal] Dev stop error:", e);
+    }
+  }
+
+  // 3. Remove all sessions from store for this project
+  store.clearSessions(projectId);
+}
+

@@ -182,16 +182,18 @@ export function RouterNodeInspector({
                   <SelectValue placeholder="Select State Variable..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableChannels.map((ch) => (
-                    <SelectItem key={ch.key} value={ch.key}>
-                      <span className="font-mono text-sky-400 font-semibold">
-                        state.{ch.key}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground ml-2">
-                        ({ch.type})
-                      </span>
-                    </SelectItem>
-                  ))}
+                  {availableChannels
+                    .filter((ch) => Boolean(ch.key?.trim()))
+                    .map((ch) => (
+                      <SelectItem key={ch.key} value={ch.key}>
+                        <span className="font-mono text-sky-400 font-semibold">
+                          state.{ch.key}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground ml-2">
+                          ({ch.type})
+                        </span>
+                      </SelectItem>
+                    ))}
                   <SelectItem value="custom">
                     <span className="italic text-muted-foreground">
                       Custom Property / Expression...

@@ -70,10 +70,11 @@ export const StateChannelMappingSection: React.FC<
           <span className="col-span-1 text-right">Clear</span>
         </div>
 
-        {stateChannels.map((ch) => {
+        {stateChannels.map((ch, idx) => {
+          const chKey = ch.key ? `mapping-${ch.key}-${idx}` : `mapping-empty-${idx}`;
           return (
             <div
-              key={ch.key}
+              key={chKey}
               className="grid grid-cols-12 gap-2 items-center text-xs"
             >
               <div className="col-span-5 flex items-center gap-1.5 min-w-0">

@@ -168,11 +168,13 @@ export function StepNodeInspector({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {stateChannels.map((ch) => (
-                      <SelectItem key={ch.key} value={ch.key}>
-                        {ch.key} ({ch.type})
-                      </SelectItem>
-                    ))}
+                    {stateChannels
+                      .filter((ch) => Boolean(ch.key?.trim()))
+                      .map((ch) => (
+                        <SelectItem key={ch.key} value={ch.key}>
+                          {ch.key} ({ch.type})
+                        </SelectItem>
+                      ))}
                     {!stateChannels.some((c) => c.key === su.channelKey) &&
                       su.channelKey && (
                         <SelectItem value={su.channelKey}>
