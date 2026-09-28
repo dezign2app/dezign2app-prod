@@ -287,7 +287,11 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
               pointerEvents: "all",
             }}
-            className="px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold bg-background/95 border border-blue-500/40 text-blue-500 shadow-xs"
+            className={
+              props.sourceHandle?.startsWith("events-")
+                ? "w-4 h-4 rounded-full flex items-center justify-center bg-indigo-600 text-white border border-white/80 dark:border-indigo-300 text-[9px] font-bold shadow-md ring-2 ring-indigo-500/30 select-none cursor-default"
+                : "px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold bg-background/95 border border-blue-500/40 text-blue-500 shadow-xs"
+            }
           >
             {props.data.label}
           </div>

@@ -6,20 +6,17 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@workspace/ui/components/accordion";
-import { BackendNode, UIEventItem, Parameter, Schema, PageSection } from "@/types/canvas";
-import { Endpoint, WEB_PAGE_EVENTS, GlobalStoreAction } from "@workspace/canvas";
+import { BackendNode, UIEventItem, PageSection } from "@/types/canvas";
+import { Endpoint, WEB_PAGE_EVENTS } from "@workspace/canvas";
 import {
-  TargetEndpointSection,
-  TargetStateStoreSection,
-  EventPropertiesSection,
   EventNavigationSection,
-  RequestConfigSection,
+  ActionFlowEditor,
 } from "./web-page-event-config";
-import { RequestBodyMode } from "./RequestBodyEditor";
-import { generateId } from "../backend-nodes/graph-nodes/common";
+import { ActionStepItem } from "./web-page-event-config/TargetEndpointSection";
+import { isStorageRefNode } from "@/lib/stores/backendCanvas/edge/utils";
 import { Label } from "@workspace/ui/components/label";
 import { Input } from "@workspace/ui/components/input";
-import { Checkbox } from "@workspace/ui/components/checkbox";
+import { Badge } from "@workspace/ui/components/badge";
 import {
   Select,
   SelectContent,
@@ -27,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Radio, Wifi, Video, RefreshCw, Database } from "lucide-react";
+import { Radio, Wifi, Video, RefreshCw, Layers, Zap } from "lucide-react";
 
 const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
 
@@ -77,8 +74,6 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   const edges = useBackendCanvasStore((s) => s.edges);
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
-  const updateEndpoint = useBackendCanvasStore((s) => s.updateEndpoint);
-  const onConnect = useBackendCanvasStore((s) => s.onConnect);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
 
   const parentNode = nodes.find((n) => n.id === nodeId);
@@ -86,6 +81,9 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   const item: UIEventItem | undefined = sections
     .flatMap((s) => s.actions || [])
     .find((e) => e.id === id);
+  const parentSection = sections.find((s) =>
+    (s.actions || []).some((act) => act.id === id),
+  );
 
   const initialEvent = item?.event || "click";
   const isStandard = EVENT_OPTIONS.some((opt) => opt === initialEvent);
@@ -197,86 +195,114 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
     updateActionInParent(changes);
   };
 
-  const existingEdge = edges.find(
+  const actionEdges = edges.filter(
     (e) =>
       (e.source === nodeId && e.sourceHandle === `events-${id}`) ||
       (e.target === nodeId && e.targetHandle === `events-${id}`),
   );
 
-  const getLinkedEndpoint = () => {
-    let targetNodeId: string | undefined;
-    let endpointId: string | undefined;
+  const sortedActionEdges = [...actionEdges].sort((a, b) => {
+    const ordA =
+      a.data?.sequenceOrder ??
+      (a.data?.label ? parseInt(a.data.label, 10) : 99);
+    const ordB =
+      b.data?.sequenceOrder ??
+      (b.data?.label ? parseInt(b.data.label, 10) : 99);
+    return ordA - ordB;
+  });
 
-    if (existingEdge) {
-      const isSource = existingEdge.source === nodeId;
-      targetNodeId = isSource ? existingEdge.target : existingEdge.source;
-      const handle = isSource ? existingEdge.targetHandle : existingEdge.sourceHandle;
-      if (handle) {
-        const parts = handle.split("-in-");
-        endpointId = parts[parts.length - 1];
-      }
+  const steps: ActionStepItem[] = sortedActionEdges.map((e, idx) => {
+    const isSource = e.source === nodeId;
+    const targetNodeId = isSource ? e.target : e.source;
+    const handle = isSource ? e.targetHandle : e.sourceHandle;
+    const targetNode = nodes.find((n) => n.id === targetNodeId);
+    const stepNumber = e.data?.sequenceOrder ?? idx + 1;
+    const stepLabel = e.data?.label ?? String(stepNumber);
+    const isStorageRef = isStorageRefNode(targetNode?.type);
+
+    if (isStorageRef) {
+      const opName =
+        handle?.replace(/^func-(?:in-)?/, "") ||
+        e.data?.operationName ||
+        "uploadObject";
+      const bucketName =
+        targetNode?.data?.bucketId ||
+        targetNode?.data?.bucketName ||
+        e.data?.bucketId ||
+        "bucket";
+      return {
+        step: stepNumber,
+        label: stepLabel,
+        edgeId: e.id,
+        targetNodeId,
+        targetNode,
+        isStorageRef: true,
+        operationName: opName,
+        bucketName,
+        endpoint: {
+          id: `storage-op-${opName}`,
+          name: `${opName}()`,
+          type:
+            opName.toLowerCase().includes("presign") ||
+            opName.toLowerCase().includes("upload")
+              ? "PUT"
+              : "STORAGE",
+          summary: `Storage bucket operation via ${bucketName}`,
+        },
+        edge: e,
+      };
     }
 
-    if (!targetNodeId) return null;
-    const targetNode = nodes.find((n) => n.id === targetNodeId);
-    if (!targetNode) return null;
+    let endpointId: string | undefined;
+    if (handle) {
+      const parts = handle.split("-in-");
+      endpointId = parts[parts.length - 1];
+    }
 
     let targetEndpoint: Endpoint | undefined;
-    if (endpointId) {
-      const storeEndpoints = endpoints.filter((ep) => ep.nodeId === targetNodeId && ep.id === endpointId);
+    if (endpointId && targetNode) {
+      const storeEndpoints = endpoints.filter(
+        (ep) => ep.nodeId === targetNodeId && ep.id === endpointId,
+      );
       if (storeEndpoints.length > 0) targetEndpoint = storeEndpoints[0];
-      if (!targetEndpoint && targetNode.data.endpoints) targetEndpoint = targetNode.data.endpoints.find((ep: Endpoint) => ep.id === endpointId);
-      if (!targetEndpoint && targetNode.data.routeGroups) {
+      if (!targetEndpoint && targetNode.data?.endpoints) {
+        targetEndpoint = targetNode.data.endpoints.find(
+          (ep: Endpoint) => ep.id === endpointId,
+        );
+      }
+      if (!targetEndpoint && targetNode.data?.routeGroups) {
         for (const group of targetNode.data.routeGroups) {
-          targetEndpoint = group.endpoints?.find((ep: Endpoint) => ep.id === endpointId);
+          targetEndpoint = group.endpoints?.find(
+            (ep: Endpoint) => ep.id === endpointId,
+          );
           if (targetEndpoint) break;
         }
       }
     }
 
-    if (!targetEndpoint) {
+    if (!targetEndpoint && targetNode) {
       const allTargetEndpoints = collectEndpoints(targetNode, endpoints);
       if (allTargetEndpoints.length > 0) targetEndpoint = allTargetEndpoints[0];
     }
 
-    return { targetNode, endpoint: targetEndpoint };
-  };
+    return {
+      step: stepNumber,
+      label: stepLabel,
+      edgeId: e.id,
+      targetNodeId,
+      targetNode,
+      endpointId,
+      endpoint: targetEndpoint,
+      edge: e,
+    };
+  });
 
-  const link = getLinkedEndpoint();
-  const linkedTargetNode = link?.targetNode;
-  const endpoint = link?.endpoint;
+  const serviceNodes = nodes.filter(
+    (n) => n.id !== nodeId && SERVER_NODE_TYPES.includes(n.type),
+  );
 
-  const serviceNodes = nodes.filter((n) => n.id !== nodeId && SERVER_NODE_TYPES.includes(n.type));
-  const currentServiceId = linkedTargetNode?.id || "";
-  const currentEndpointId = endpoint?.id || "";
-  const availableEndpoints = linkedTargetNode ? collectEndpoints(linkedTargetNode, endpoints) : [];
-
-  const handleServiceChange = (serviceId: string) => {
-    if (existingEdge) deleteEdge(existingEdge.id);
-    if (serviceId === "none" || !serviceId) return;
-    const targetService = serviceNodes.find((n) => n.id === serviceId);
-    if (!targetService) return;
-    const endpointsList = collectEndpoints(targetService, endpoints);
-    if (endpointsList.length > 0 && endpointsList[0]) {
-      onConnect({
-        source: nodeId,
-        target: serviceId,
-        sourceHandle: `events-${id}`,
-        targetHandle: `endpoint-in-${endpointsList[0].id}`,
-      });
-    }
-  };
-
-  const handleEndpointChange = (endpointId: string) => {
-    if (!currentServiceId) return;
-    if (existingEdge) deleteEdge(existingEdge.id);
-    if (endpointId === "none" || !endpointId) return;
-    onConnect({
-      source: nodeId,
-      target: currentServiceId,
-      sourceHandle: `events-${id}`,
-      targetHandle: `endpoint-in-${endpointId}`,
-    });
+  const handleDeleteStep = (edgeId: string) => {
+    deleteEdge(edgeId);
   };
 
   if (!item) return <div className="p-4 text-xs text-muted-foreground">Action not found.</div>;
@@ -287,120 +313,114 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   const isWebrtc = eventType === "webrtc";
   const isPolling = eventType === "polling";
 
-  const isParentProtected = React.useMemo(() => {
-    if (!parentNode) return false;
-    const pData = parentNode.data;
-    if (pData?.useZoneDefault === false && pData?.protectionOverride) {
-      return pData.protectionOverride.accessType === "protected";
-    }
-    if (pData?.accessType && pData.accessType !== "public") {
-      return true;
-    }
-    const webAppEdge = edges.find((e) => {
-      const isTarget = e.target === parentNode.id;
-      const isSource = e.source === parentNode.id;
-      if (!isTarget && !isSource) return false;
-      const otherId = isSource ? e.target : e.source;
-      const otherNode = nodes.find((n) => n.id === otherId);
-      return otherNode?.type === "webApp";
-    });
-    if (webAppEdge) {
-      const handleId =
-        webAppEdge.source === parentNode.id
-          ? webAppEdge.targetHandle
-          : webAppEdge.sourceHandle;
-      if (
-        handleId === "private-in" ||
-        handleId?.includes("private") ||
-        handleId?.includes("protect")
-      ) {
-        return true;
-      }
-    }
-    return Boolean(pData?.requireAuth);
-  }, [parentNode, edges, nodes]);
-
-  const isExternalTarget = linkedTargetNode?.type === "external";
-  const isAuthRequired = Boolean(
-    !isExternalTarget &&
-      (endpoint
-        ? endpoint.requireAuth !== undefined
-          ? endpoint.requireAuth
-          : isParentProtected
-        : parentNode?.data?.requireAuth !== undefined
-        ? parentNode.data.requireAuth
-        : isParentProtected),
-  );
-
-  const headers: Parameter[] = React.useMemo(() => {
-    const baseHeaders = endpoint?.headers?.length
-      ? [...endpoint.headers]
-      : item?.headers?.length
-      ? [...item.headers]
-      : [];
-    return baseHeaders.filter(
-      (h) =>
-        h.name?.toLowerCase() !== "authorization" &&
-        h.id !== "auth-bearer-header" &&
-        !h.id?.startsWith("auth-"),
-    );
-  }, [endpoint?.headers, item?.headers]);
-
-  // Auto-clean any default/stale auth headers from the action's headers
-  React.useEffect(() => {
-    if (item?.headers && item.headers.length > 0) {
-      const hasAuth = item.headers.some(
-        (h) =>
-          h.name?.toLowerCase() === "authorization" ||
-          h.id === "auth-bearer-header" ||
-          h.id?.startsWith("auth-"),
-      );
-      if (hasAuth) {
-        const cleaned = item.headers.filter(
-          (h) =>
-            h.name?.toLowerCase() !== "authorization" &&
-            h.id !== "auth-bearer-header" &&
-            !h.id?.startsWith("auth-"),
-        );
-        updateActionInParent({ headers: cleaned });
-      }
-    }
-  }, [item?.headers]);
-
-  const pathParams: Parameter[] = React.useMemo(() => (endpoint?.pathParams?.length ? endpoint.pathParams : item?.pathParams || []), [endpoint?.pathParams, item?.pathParams]);
-  const queryParams: Parameter[] = React.useMemo(() => (endpoint?.queryParams?.length ? endpoint.queryParams : item?.queryParams || []), [endpoint?.queryParams, item?.queryParams]);
-  const requestBody: Schema = React.useMemo(() => endpoint?.requestBody || item?.requestBody || { id: generateId(), fields: [] }, [endpoint?.requestBody, item?.requestBody]);
-  const requestBodyMode: RequestBodyMode = React.useMemo(() => endpoint?.requestBodyMode || item?.requestBodyMode || "field_builder", [endpoint?.requestBodyMode, item?.requestBodyMode]);
-
   return (
     <div className="flex flex-col gap-5 font-sans">
+      {/* Merged Action Header: Event Type & Action Name */}
+      <div className="p-4 rounded-xl border border-border/60 bg-gradient-to-b from-card to-card/60 shadow-xs flex flex-col gap-3.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary/10 text-primary border border-primary/20">
+              <Zap size={13} className="fill-primary/20" />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-foreground">Action Event</span>
+              <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 uppercase">
+                {eventType}
+              </Badge>
+            </div>
+          </div>
+          {parentSection?.name ? (
+            <Badge variant="secondary" className="text-[10px] font-normal text-muted-foreground px-2 py-0.5">
+              {parentSection.name}
+            </Badge>
+          ) : null}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-0.5">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[11px] font-medium text-muted-foreground">
+              Trigger Event
+            </Label>
+            <Select
+              value={eventType}
+              onValueChange={(v) => {
+                setEventType(v);
+                handleUpdateEvent(eventName, v);
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs bg-background font-mono focus:ring-1 focus:ring-ring focus:ring-offset-0">
+                <SelectValue placeholder="Select trigger event" />
+              </SelectTrigger>
+              <SelectContent>
+                {EVENT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt} value={opt} className="text-xs font-mono">
+                    {opt}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[11px] font-medium text-muted-foreground">
+              Action Name
+            </Label>
+            <Input
+              className="h-8 text-xs bg-background font-mono"
+              value={eventName}
+              onChange={(e) => setEventName(e.target.value)}
+              onBlur={() => handleUpdateEvent(eventName, eventType)}
+              placeholder="e.g. submitOrder, fetchUserProfile"
+            />
+          </div>
+        </div>
+      </div>
+
       <Accordion
         type="multiple"
-        defaultValue={isNavigateToPage ? ["navigation", "settings", "ai_context"] : ["connection", "store_action_binding", "settings", "request_config", "ai_context", "sse_config", "ws_config", "webrtc_config", "polling_config"]}
+        defaultValue={
+          isNavigateToPage
+            ? ["navigation"]
+            : ["connection", "sse_config", "ws_config", "webrtc_config", "polling_config"]
+        }
         className="w-full flex flex-col gap-3 border-none"
       >
         {!isNavigateToPage && (
-          <TargetEndpointSection
-            currentServiceId={currentServiceId}
-            currentEndpointId={currentEndpointId}
-            serviceNodes={serviceNodes}
-            availableEndpoints={availableEndpoints}
-            linkedTargetNode={linkedTargetNode}
-            endpoint={endpoint}
-            handleServiceChange={handleServiceChange}
-            handleEndpointChange={handleEndpointChange}
-          />
+          <AccordionItem
+            value="connection"
+            className="border rounded-xl overflow-hidden bg-card"
+          >
+            <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-secondary/20 transition-colors [&>svg]:shrink-0">
+              <div className="flex items-center gap-2">
+                <Layers size={14} className="text-primary" />
+                <span className="text-xs font-semibold">
+                  Pipeline Steps
+                </span>
+                <Badge
+                  variant="secondary"
+                  className="text-[9px] px-1.5 py-0 font-mono"
+                >
+                  {(item?.actionSteps?.length || steps.length)} {((item?.actionSteps?.length || steps.length) === 1 ? "step" : "steps")}
+                </Badge>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-5 pt-2">
+              <ActionFlowEditor
+                item={item}
+                canvasSteps={steps}
+                serviceNodes={serviceNodes}
+                allNodes={nodes}
+                endpoints={endpoints}
+                webPageNodeId={nodeId}
+                actionId={id}
+                onSave={(drafts) =>
+                  updateActionInParent({ actionSteps: drafts })
+                }
+                onDeleteStep={handleDeleteStep}
+              />
+            </AccordionContent>
+          </AccordionItem>
         )}
-
-        <EventPropertiesSection
-          eventName={eventName}
-          eventType={eventType}
-          eventOptions={EVENT_OPTIONS}
-          isNavigateToPage={isNavigateToPage}
-          setEventName={setEventName}
-          setEventType={setEventType}
-          handleUpdateEvent={handleUpdateEvent}
-        />
 
         {isSse && (
           <AccordionItem value="sse_config" className="border border-amber-500/30 rounded-lg bg-amber-500/5 overflow-hidden">
@@ -410,7 +430,7 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
             <AccordionContent className="px-4 pb-4 pt-1 space-y-3">
               <div className="space-y-1">
                 <Label className="text-xs">Reconnect Strategy</Label>
-                <Select value={sseConfig.reconnectStrategy || "exponential"} onValueChange={(val: any) => { const next = { ...sseConfig, reconnectStrategy: val }; setSseConfig(next); updateEventFields({ sseConfig: next }); }}>
+                <Select value={sseConfig.reconnectStrategy || "exponential"} onValueChange={(val: "exponential" | "linear" | "none") => { const next = { ...sseConfig, reconnectStrategy: val }; setSseConfig(next); updateEventFields({ sseConfig: next }); }}>
                   <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="exponential">Exponential</SelectItem><SelectItem value="linear">Linear</SelectItem><SelectItem value="none">None</SelectItem></SelectContent>
                 </Select>
@@ -450,59 +470,6 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
               <div className="space-y-1"><Label className="text-xs">Interval (ms)</Label><Input type="number" value={pollingConfig.intervalMs ?? 5000} onChange={(e) => { const next = { ...pollingConfig, intervalMs: parseInt(e.target.value, 10) }; setPollingConfig(next); updateEventFields({ pollingConfig: next }); }} className="h-8 text-xs bg-background" /></div>
             </AccordionContent>
           </AccordionItem>
-        )}
-
-        {!isNavigateToPage && (
-          <RequestConfigSection
-            headers={headers}
-            pathParams={pathParams}
-            queryParams={queryParams}
-            requestBody={requestBody}
-            requestBodyMode={requestBodyMode}
-            connectedEndpoint={endpoint}
-            onHeadersChange={(h) =>
-              updateEventFields({
-                headers: h.filter(
-                  (x) =>
-                    x.name?.toLowerCase() !== "authorization" &&
-                    x.id !== "auth-bearer-header" &&
-                    !x.id?.startsWith("auth-"),
-                ),
-              })
-            }
-            onPathParamsChange={(p) => updateEventFields({ pathParams: p })}
-            onQueryParamsChange={(q) => updateEventFields({ queryParams: q })}
-            onRequestBodyChange={(r) => updateEventFields({ requestBody: r })}
-            onRequestBodyModeChange={(m) => updateEventFields({ requestBodyMode: m })}
-          />
-        )}
-
-        {!isNavigateToPage && (
-          <TargetStateStoreSection
-            nodeId={nodeId}
-            actionId={id}
-            actionName={eventName || item?.name || "action"}
-            actionEvent={eventType || item?.event}
-            storeBinding={item?.storeActionBinding}
-            storeBindings={item?.storeActionBindings}
-            stateStoreNodes={nodes.filter((n) => n.type === "state_store")}
-            isEndpointConnected={Boolean(linkedTargetNode && endpoint)}
-            connectedEndpointName={endpoint?.name}
-            connectedEndpoint={endpoint}
-            eventRequestBody={item?.requestBody || requestBody}
-            onUpdateStoreBindings={(newBindings) =>
-              updateActionInParent({
-                storeActionBindings: newBindings,
-                storeActionBinding: newBindings[0] || undefined,
-              })
-            }
-            onUpdateStoreBinding={(newBinding) =>
-              updateActionInParent({
-                storeActionBinding: newBinding,
-                storeActionBindings: newBinding ? [newBinding] : [],
-              })
-            }
-          />
         )}
 
         {isNavigateToPage && (

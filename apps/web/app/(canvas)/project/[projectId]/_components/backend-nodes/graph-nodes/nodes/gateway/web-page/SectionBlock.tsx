@@ -12,13 +12,16 @@ import { SectionStateObjectsList } from "./SectionStateObjectsList";
 import { useSectionCollapseStore } from "@/lib/stores/sectionCollapseStore";
 import { NodeDeletionDialog } from "../../../../../node-deletion-dialog";
 
+import { StepLink } from "./SectionList";
+
 export interface SectionBlockProps {
   nodeId: string;
   section: PageSection;
   sections: PageSection[];
   isLastSection?: boolean;
   updateSections: (sections: PageSection[]) => void;
-  getLinkedEndpoint: (actionId: string) => { targetNode: BackendNode; endpoint: Endpoint } | null;
+  getLinkedEndpoints?: (actionId: string) => StepLink[];
+  getLinkedEndpoint?: (actionId: string) => { targetNode: BackendNode; endpoint: Endpoint } | null;
   onTriggerEvent: (triggerInfo: { event: UIEventItem; targetNode: BackendNode; endpoint: Endpoint }) => void;
   isEditingName?: boolean;
   onStartEditName?: () => void;
@@ -31,12 +34,32 @@ export const SectionBlock = ({
   sections,
   isLastSection,
   updateSections,
+  getLinkedEndpoints,
   getLinkedEndpoint,
   onTriggerEvent,
   isEditingName: isEditingNameProp,
   onStartEditName,
   onFinishEditName,
 }: SectionBlockProps) => {
+  const resolveLinkedEndpoints = (actionId: string): StepLink[] => {
+    if (getLinkedEndpoints) return getLinkedEndpoints(actionId);
+    if (getLinkedEndpoint) {
+      const ep = getLinkedEndpoint(actionId);
+      if (ep) {
+        return [
+          {
+            step: 1,
+            label: "1",
+            edgeId: "",
+            targetNode: ep.targetNode,
+            endpoint: ep.endpoint,
+          },
+        ];
+      }
+    }
+    return [];
+  };
+
   const isCollapsed = useSectionCollapseStore((s) =>
     s.isSectionCollapsed(nodeId, section.id),
   );
@@ -542,7 +565,7 @@ export const SectionBlock = ({
                   action={act}
                   sections={sections}
                   updateSections={updateSections}
-                  getLinkedEndpoint={getLinkedEndpoint}
+                  getLinkedEndpoints={resolveLinkedEndpoints}
                   onTriggerEvent={onTriggerEvent}
                   isEditing={editingActionId === act.id}
                   onStartEdit={() => setEditingActionId(act.id)}
