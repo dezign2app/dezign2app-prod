@@ -12,6 +12,7 @@ export { ConditionStep } from "./ConditionStep";
 export { NotificationStep } from "./NotificationStep";
 export { ResetFormStep } from "./ResetFormStep";
 export { ResponseFieldPicker } from "./ResponseFieldPicker";
+export { ActionFlowCombobox } from "./ActionFlowCombobox";
 export * from "./types";
 export * from "./utils";
 export * from "./actionStepConstants";

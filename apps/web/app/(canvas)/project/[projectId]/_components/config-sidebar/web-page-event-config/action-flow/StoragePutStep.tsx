@@ -11,6 +11,7 @@ import {
 } from "@workspace/ui/components/select";
 import type { StoragePutStepProps } from "./types";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
+import { ActionFlowCombobox } from "./ActionFlowCombobox";
 import { ensureActionStorageConnection } from "./actionStepCanvasSync";
 
 const COMMON_CONTENT_TYPES = [
@@ -274,10 +275,9 @@ export const StoragePutStep: React.FC<StoragePutStepProps> = ({
             <Label className="text-[10px] text-muted-foreground">
               Input Name / State Key
             </Label>
-            <Input
+            <ActionFlowCombobox
               value={fileSource.key}
-              onChange={(e) => {
-                const keyVal = e.target.value;
+              onChange={(keyVal) => {
                 onChange({
                   ...draft,
                   fileSource: {
@@ -287,49 +287,52 @@ export const StoragePutStep: React.FC<StoragePutStepProps> = ({
                 });
               }}
               placeholder={fileSource.kind === "user_input" ? "e.g. file, avatar" : "e.g. selectedFile"}
-              className="h-7 text-xs bg-background font-mono"
+              headerLabel={fileSource.kind === "user_input" ? "Suggested File Inputs" : "Suggested State Keys"}
+              options={
+                fileSource.kind === "user_input"
+                  ? [
+                      { value: "file", type: "file" },
+                      { value: "avatar", type: "file" },
+                      { value: "image", type: "file" },
+                      { value: "document", type: "file" },
+                      { value: "attachment", type: "file" },
+                      { value: "file.name", type: "string" },
+                      { value: "file.type", type: "string" },
+                      { value: "file.size", type: "number" },
+                    ]
+                  : [
+                      { value: "selectedFile", type: "File" },
+                      { value: "uploadedFile", type: "File" },
+                      { value: "currentFile", type: "File" },
+                      { value: "file", type: "File" },
+                    ]
+              }
             />
           </div>
         </div>
       </div>
 
       {/* Section 3: Content-Type Header */}
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         <Label className="text-[10px] text-muted-foreground">
           Request Content-Type Header
         </Label>
-        <div className="space-y-1.5">
-          <Input
-            value={contentType}
-            onChange={(e) => {
-              const val = e.target.value;
-              onChange({
-                ...draft,
-                contentType: val,
-              });
-            }}
-            placeholder="application/octet-stream"
-            className="h-7 text-xs bg-background font-mono"
-          />
-          <div className="flex flex-wrap gap-1 items-center">
-            <span className="text-[10px] text-muted-foreground mr-1">
-              Presets:
-            </span>
-            {COMMON_CONTENT_TYPES.map((ct) => (
-              <span
-                key={ct}
-                onClick={() => onChange({ ...draft, contentType: ct })}
-                className={`text-[10px] px-1.5 py-0.5 rounded border cursor-pointer font-mono transition-colors ${
-                  contentType === ct
-                    ? "bg-primary/15 text-primary border-primary/40 font-semibold"
-                    : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
-                }`}
-              >
-                {ct}
-              </span>
-            ))}
-          </div>
-        </div>
+        <ActionFlowCombobox
+          value={contentType}
+          onChange={(val) => {
+            onChange({
+              ...draft,
+              contentType: val,
+            });
+          }}
+          placeholder="application/octet-stream"
+          headerLabel="Content-Type Presets"
+          options={COMMON_CONTENT_TYPES.map((ct) => ({
+            value: ct,
+            label: ct,
+            type: ct.split("/")[0] || "mime",
+          }))}
+        />
       </div>
     </div>
   );

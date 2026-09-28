@@ -15,6 +15,7 @@ import type {
   FrontendFieldSource,
 } from "./types";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
+import { ActionFlowCombobox } from "./ActionFlowCombobox";
 
 export interface StateMutationStepProps {
   draft: FrontendActionStepDraft;
@@ -93,13 +94,23 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
             <Label className="text-[10px] text-muted-foreground">
               State Key / Property Name
             </Label>
-            <Input
+            <ActionFlowCombobox
               value={stateKey}
-              onChange={(e) =>
-                onChange({ ...draft, stateKey: e.target.value })
+              onChange={(val) =>
+                onChange({ ...draft, stateKey: val })
               }
               placeholder="e.g. currentUser, selectedItem, isSubmitting"
-              className="h-7 text-xs bg-background font-mono"
+              headerLabel="Suggested State Keys"
+              options={[
+                { value: "currentUser", type: "object" },
+                { value: "selectedItem", type: "object" },
+                { value: "items", type: "array" },
+                { value: "selectedFile", type: "file" },
+                { value: "isSubmitting", type: "boolean" },
+                { value: "isLoading", type: "boolean" },
+                { value: "error", type: "string" },
+                { value: "count", type: "number" },
+              ]}
             />
           </div>
         )}
@@ -197,19 +208,29 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
               <Label className="text-[10px] text-muted-foreground">
                 Form Input Field Name
               </Label>
-              <Input
-                value={valueSource.fieldName}
-                onChange={(e) =>
+              <ActionFlowCombobox
+                value={valueSource.fieldName || ""}
+                onChange={(val) =>
                   onChange({
                     ...draft,
                     stateValueSource: {
                       kind: "user_input",
-                      fieldName: e.target.value,
+                      fieldName: val,
                     },
                   })
                 }
                 placeholder="e.g. email, message, query"
-                className="h-7 text-xs bg-background"
+                headerLabel="Suggested Form Inputs"
+                options={[
+                  { value: "file", type: "file" },
+                  { value: "file.name", type: "string" },
+                  { value: "file.type", type: "string" },
+                  { value: "file.size", type: "number" },
+                  { value: "email", type: "string" },
+                  { value: "username", type: "string" },
+                  { value: "message", type: "string" },
+                  { value: "query", type: "string" },
+                ]}
               />
             </div>
           )}
@@ -219,19 +240,26 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
               <Label className="text-[10px] text-muted-foreground">
                 Source State Key
               </Label>
-              <Input
-                value={valueSource.stateKey}
-                onChange={(e) =>
+              <ActionFlowCombobox
+                value={valueSource.stateKey || ""}
+                onChange={(val) =>
                   onChange({
                     ...draft,
                     stateValueSource: {
                       kind: "state_var",
-                      stateKey: e.target.value,
+                      stateKey: val,
                     },
                   })
                 }
                 placeholder="e.g. otherState"
-                className="h-7 text-xs bg-background font-mono"
+                headerLabel="Suggested State Keys"
+                options={[
+                  { value: "currentUser", type: "object" },
+                  { value: "selectedItem", type: "object" },
+                  { value: "items", type: "array" },
+                  { value: "count", type: "number" },
+                  { value: "selectedFile", type: "file" },
+                ]}
               />
             </div>
           )}
