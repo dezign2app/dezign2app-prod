@@ -179,7 +179,17 @@ ${previewLogic}  };
           ? presignObj.signedUrl
           : typeof nestedData.signedUrl === "string"
           ? nestedData.signedUrl
-          : typeof presignObj.url === "string"
+          : typeof presignObj.presignedUrl === "string"
+          ? presignObj.presignedUrl
+          : typeof nestedData.presignedUrl === "string"
+          ? nestedData.presignedUrl
+          : typeof presignObj.uploadUrl === "string"
+          ? presignObj.uploadUrl
+          : typeof nestedData.uploadUrl === "string"
+          ? nestedData.uploadUrl
+          : typeof nestedData.url === "string"
+          ? nestedData.url
+          : typeof presignObj.url === "string" && presignObj.url !== "${url}"
           ? presignObj.url
           : undefined;
       const objectKey: string | undefined =
@@ -187,15 +197,23 @@ ${previewLogic}  };
           ? presignObj.key
           : typeof nestedData.key === "string"
           ? nestedData.key
-          : undefined;
+          : typeof presignObj.objectKey === "string"
+          ? presignObj.objectKey
+          : typeof nestedData.objectKey === "string"
+          ? nestedData.objectKey
+          : selectedFile.name;
 
       if (!signedUrl) throw new Error("No presigned URL returned from server");
 
       // Step 2: PUT the file directly to cloud storage (no server bandwidth consumed)
+      const uploadHeaders: Record<string, string> = {};
+      if (selectedFile.type) {
+        uploadHeaders["Content-Type"] = selectedFile.type;
+      }
       const uploadRes = await fetch(signedUrl, {
         method: "PUT",
         body: selectedFile,
-        headers: { "Content-Type": selectedFile.type },
+        headers: uploadHeaders,
       });
       if (!uploadRes.ok) {
         throw new Error(String('Upload failed: ' + uploadRes.status + ' ' + uploadRes.statusText));

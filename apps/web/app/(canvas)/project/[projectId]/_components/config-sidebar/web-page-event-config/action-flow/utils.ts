@@ -24,6 +24,25 @@ const COMMON_RESPONSE_FIELD_SUGGESTIONS = [
 export function extractResponseFieldSuggestions(endpoint?: Endpoint): string[] {
   const suggestions = new Set<string>(COMMON_RESPONSE_FIELD_SUGGESTIONS);
 
+  if (endpoint?.responseBody?.fields) {
+    for (const field of endpoint.responseBody.fields) {
+      if (field.name) {
+        suggestions.add(field.name);
+      }
+    }
+  }
+
+  if (endpoint?.responseBody?.rawJson) {
+    try {
+      const parsed = JSON.parse(endpoint.responseBody.rawJson);
+      if (parsed && typeof parsed === "object") {
+        for (const key of Object.keys(parsed)) {
+          suggestions.add(key);
+        }
+      }
+    } catch {}
+  }
+
   if (endpoint?.requestBody?.fields) {
     for (const field of endpoint.requestBody.fields) {
       if (field.name) {

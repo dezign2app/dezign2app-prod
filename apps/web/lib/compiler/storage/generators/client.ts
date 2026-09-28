@@ -14,6 +14,8 @@ const clientOptions: S3ClientConfig = {
   ...(storageConfig.endpoint ? { endpoint: storageConfig.endpoint } : {}),
   ...(storageConfig.credentials ? { credentials: storageConfig.credentials } : {}),
   forcePathStyle: storageConfig.forcePathStyle,
+  requestChecksumCalculation: "WHEN_REQUIRED",
+  responseChecksumValidation: "WHEN_REQUIRED",
 };
 
 /**

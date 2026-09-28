@@ -16,6 +16,7 @@ import type {
   FrontendFieldSource,
 } from "./types";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
+import { ActionFlowCombobox, ComboboxOption } from "./ActionFlowCombobox";
 import { ensureActionServiceConnection } from "./actionStepCanvasSync";
 
 type SourceKindOption = "user_input" | "state_var" | "literal" | "prev_response";
@@ -55,6 +56,61 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
   const serviceEndpoints = endpoints.filter(
     (ep) => ep.nodeId === currentServiceId,
   );
+
+  const selectedEndpoint =
+    serviceEndpoints.find((ep) => ep.id === currentEndpointId) ||
+    canvasStep?.endpoint;
+
+  const requestFieldSuggestions: ComboboxOption[] = React.useMemo(() => {
+    const list: ComboboxOption[] = [];
+    const seen = new Set<string>();
+
+    if (selectedEndpoint?.requestBody?.fields) {
+      for (const f of selectedEndpoint.requestBody.fields) {
+        if (f.name && !seen.has(f.name)) {
+          seen.add(f.name);
+          list.push({ value: f.name, label: f.name, type: f.type || "body" });
+        }
+      }
+    }
+
+    if (selectedEndpoint?.pathParams) {
+      for (const p of selectedEndpoint.pathParams) {
+        if (p.name && !seen.has(p.name)) {
+          seen.add(p.name);
+          list.push({ value: p.name, label: p.name, type: "path" });
+        }
+      }
+    }
+
+    if (selectedEndpoint?.queryParams) {
+      for (const q of selectedEndpoint.queryParams) {
+        if (q.name && !seen.has(q.name)) {
+          seen.add(q.name);
+          list.push({ value: q.name, label: q.name, type: "query" });
+        }
+      }
+    }
+
+    const common = [
+      { value: "fileName", type: "string" },
+      { value: "fileType", type: "string" },
+      { value: "fileSize", type: "number" },
+      { value: "fileKey", type: "string" },
+      { value: "userId", type: "string" },
+      { value: "id", type: "string" },
+      { value: "query", type: "string" },
+    ];
+
+    for (const c of common) {
+      if (!seen.has(c.value)) {
+        seen.add(c.value);
+        list.push(c);
+      }
+    }
+
+    return list;
+  }, [selectedEndpoint]);
 
   const handleServiceSelect = (newServiceId: string) => {
     const eps = endpoints.filter((ep) => ep.nodeId === newServiceId);
@@ -246,20 +302,21 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                 className="p-2.5 rounded-md border bg-card/60 space-y-2 text-xs"
               >
                 <div className="flex items-center gap-2">
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <Label className="text-[10px] text-muted-foreground">
                       Request Field Name
                     </Label>
-                    <Input
+                    <ActionFlowCombobox
                       value={binding.targetField}
-                      onChange={(e) =>
+                      onChange={(val) =>
                         handleUpdateBinding(binding.id, (prev) => ({
                           ...prev,
-                          targetField: e.target.value,
+                          targetField: val,
                         }))
                       }
                       placeholder="e.g. userId, fileKey, query"
-                      className="h-7 text-xs bg-background"
+                      headerLabel="Suggested Request Fields"
+                      options={requestFieldSuggestions}
                     />
                   </div>
                   <div className="w-36">
@@ -325,17 +382,25 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       <Label className="text-[10px] text-muted-foreground">
                         State Variable Key
                       </Label>
-                      <Input
+                      <ActionFlowCombobox
                         value={binding.source.stateKey}
-                        onChange={(e) => {
-                          const key = e.target.value;
+                        onChange={(key) => {
                           handleUpdateBinding(binding.id, (prev) => ({
                             ...prev,
                             source: { kind: "state_var", stateKey: key },
                           }));
                         }}
                         placeholder="e.g. currentUser, selectedItem"
-                        className="h-7 text-xs bg-background font-mono"
+                        headerLabel="Suggested State Keys"
+                        options={[
+                          { value: "currentUser", type: "object" },
+                          { value: "selectedItem", type: "object" },
+                          { value: "items", type: "array" },
+                          { value: "selectedFile", type: "file" },
+                          { value: "isLoading", type: "boolean" },
+                          { value: "isSubmitting", type: "boolean" },
+                          { value: "token", type: "string" },
+                        ]}
                       />
                     </div>
                   )}
@@ -345,17 +410,28 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       <Label className="text-[10px] text-muted-foreground">
                         Form Field / Input Name
                       </Label>
-                      <Input
+                      <ActionFlowCombobox
                         value={binding.source.fieldName}
-                        onChange={(e) => {
-                          const name = e.target.value;
+                        onChange={(name) => {
                           handleUpdateBinding(binding.id, (prev) => ({
                             ...prev,
                             source: { kind: "user_input", fieldName: name },
                           }));
                         }}
                         placeholder="e.g. email, file, query"
-                        className="h-7 text-xs bg-background"
+                        headerLabel="Suggested Form Inputs"
+                        options={[
+                          { value: "file", type: "file" },
+                          { value: "file.name", type: "string" },
+                          { value: "file.type", type: "string" },
+                          { value: "file.size", type: "number" },
+                          { value: "email", type: "string" },
+                          { value: "username", type: "string" },
+                          { value: "password", type: "string" },
+                          { value: "query", type: "string" },
+                          { value: "search", type: "string" },
+                          ...(binding.targetField ? [{ value: binding.targetField, type: "field" }] : []),
+                        ]}
                       />
                     </div>
                   )}
