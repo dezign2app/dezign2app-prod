@@ -4,8 +4,10 @@ import React, { useEffect, useRef } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
+import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { useTerminalWorkspace } from "./terminal/hooks/useTerminalWorkspace";
+import { killAllTerminalJobs } from "./terminal/hooks/useDynamicTerminalSessions";
 import { ProjectFolderModal } from "./ProjectFolderModal";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -23,6 +25,9 @@ export function ProjectCanvasLayout({
   children,
   projectId,
 }: ProjectCanvasLayoutProps) {
+  const pathname = usePathname();
+  const isLangGraph = Boolean(pathname?.includes("/langgraph"));
+
   const project = useQuery(api.projects.getProjectById, {
     projectId: projectId as Id<"projects">,
   });
@@ -35,6 +40,7 @@ export function ProjectCanvasLayout({
   const setPaletteOpen = useSidebarStore((s) => s.setPaletteOpen);
   const aiPanelOpen = useSidebarStore((s) => s.aiPanelOpen);
   const setAiPanelOpen = useSidebarStore((s) => s.setAiPanelOpen);
+  const setTerminalOpen = useSidebarStore((s) => s.setTerminalOpen);
 
   const projectFolderModalOpen = useSidebarStore(
     (s) => s.projectFolderModalOpen
@@ -59,8 +65,8 @@ export function ProjectCanvasLayout({
       const isSwitch = Boolean(lastProjectId && lastProjectId !== projectId);
       localStorage.setItem("dezign2app_last_project_id", projectId);
 
-      // If switching to a project that has NO folder selected, prompt the user
-      if (!outputDir) {
+      // If switching to a project that has NO folder selected, prompt the user (unless in LangGraph Studio)
+      if (!outputDir && !isLangGraph) {
         setProjectFolderModalOpen(true);
       } else if (isSwitch && project?.name) {
         const folderName =
@@ -75,7 +81,16 @@ export function ProjectCanvasLayout({
     } catch (e) {
       console.warn("[ProjectCanvasLayout] Switch detection error:", e);
     }
-  }, [projectId, outputDir, project?.name, setProjectFolderModalOpen]);
+  }, [projectId, outputDir, project?.name, isLangGraph, setProjectFolderModalOpen]);
+
+  // When in LangGraph Studio, kill all active terminal jobs and ensure drawers are closed
+  useEffect(() => {
+    if (isLangGraph) {
+      killAllTerminalJobs(projectId, outputDir);
+      setTerminalOpen(false);
+      setPaletteOpen(false);
+    }
+  }, [isLangGraph, projectId, outputDir, setTerminalOpen, setPaletteOpen]);
 
   return (
     <ReactFlowProvider>
@@ -87,37 +102,40 @@ export function ProjectCanvasLayout({
 
         {/* ======================================================================== */}
         {/* SHARED UI OVERLAY - Sidebars + Terminal (persists across all tab routes)  */}
+        {/* Hidden in LangGraph Studio: no pallet sidebar, toggle button, or terminal */}
         {/* ======================================================================== */}
-        <div className="absolute inset-0 w-full h-full z-20 pointer-events-none flex flex-col overflow-hidden">
-          {/* Top spacer: matches toolbar height so sidebars start below the toolbar */}
-          <div className="shrink-0 h-14" />
-          <div className="flex-1 min-h-0 w-full flex overflow-hidden relative pointer-events-none">
-            {/* Left: Node Palette Sidebar */}
-            <NodePaletteSidebar
-              view={canvasView ?? "graph"}
-              isOpen={paletteOpen}
-              onToggle={() => setPaletteOpen(!paletteOpen)}
-            />
+        {!isLangGraph && (
+          <div className="absolute inset-0 w-full h-full z-20 pointer-events-none flex flex-col overflow-hidden">
+            {/* Top spacer: matches toolbar height so sidebars start below the toolbar */}
+            <div className="shrink-0 h-14" />
+            <div className="flex-1 min-h-0 w-full flex overflow-hidden relative pointer-events-none">
+              {/* Left: Node Palette Sidebar */}
+              <NodePaletteSidebar
+                view={canvasView ?? "graph"}
+                isOpen={paletteOpen}
+                onToggle={() => setPaletteOpen(!paletteOpen)}
+              />
 
-            {/* Center Column: Transparent canvas area + Terminal docked at bottom */}
-            <div className="flex-1 min-w-0 h-full pointer-events-none overflow-hidden relative flex flex-col">
-              <div className="flex-1 min-h-0" />
-              <Terminal
+              {/* Center Column: Transparent canvas area + Terminal docked at bottom */}
+              <div className="flex-1 min-w-0 h-full pointer-events-none overflow-hidden relative flex flex-col">
+                <div className="flex-1 min-h-0" />
+                <Terminal
+                  projectId={projectId}
+                  projectName={project?.name || "Dezign2App"}
+                  outputDir={outputDir}
+                  onPickDirectory={() => setProjectFolderModalOpen(true)}
+                />
+              </div>
+
+              {/* Right: AI Assistant Sidebar */}
+              <AiPanel
                 projectId={projectId}
-                projectName={project?.name || "Dezign2App"}
-                outputDir={outputDir}
-                onPickDirectory={() => setProjectFolderModalOpen(true)}
+                isOpen={aiPanelOpen}
+                onClose={() => setAiPanelOpen(false)}
               />
             </div>
-
-            {/* Right: AI Assistant Sidebar */}
-            <AiPanel
-              projectId={projectId}
-              isOpen={aiPanelOpen}
-              onClose={() => setAiPanelOpen(false)}
-            />
           </div>
-        </div>
+        )}
 
         {/* Unique Project Folder Selection Modal */}
         <ProjectFolderModal

@@ -21,8 +21,9 @@ export function TerminalDockButton({
 }: TerminalDockButtonProps) {
   const pathname = usePathname();
   const isCompiler = pathname?.includes("/compiler");
+  const isLangGraph = pathname?.includes("/langgraph");
 
-  if (isOpen || isCompiler) return null;
+  if (isOpen || isCompiler || isLangGraph) return null;
 
   return (
     <div className="h-8 bg-sidebar/95 backdrop-blur-md border-t border-sidebar-border w-full px-4 flex items-center justify-between text-xs font-mono text-sidebar-foreground select-none shadow-md z-30 shrink-0 pointer-events-auto">

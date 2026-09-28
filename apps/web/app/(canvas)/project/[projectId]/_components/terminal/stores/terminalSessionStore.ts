@@ -64,6 +64,7 @@ interface TerminalStoreState {
   ) => void;
   appendLog: (projectId: string, sessionId: string, logChunk: string) => void;
   removeSession: (projectId: string, sessionId: string) => void;
+  clearSessions: (projectId: string) => void;
   renameSession: (projectId: string, sessionId: string, newTitle: string) => void;
 }
 
@@ -192,6 +193,19 @@ export const useTerminalSessionStore = create<TerminalStoreState>((set, get) => 
         },
       };
     });
+  },
+
+  clearSessions: (projectId: string) => {
+    set((state) => ({
+      sessionsByProject: {
+        ...state.sessionsByProject,
+        [projectId]: [],
+      },
+      activeSessionIdByProject: {
+        ...state.activeSessionIdByProject,
+        [projectId]: null,
+      },
+    }));
   },
 
   renameSession: (projectId: string, sessionId: string, newTitle: string) => {
