@@ -17,6 +17,7 @@ export interface EarlyReturnStepSectionProps {
   step: PipelineStepDraft;
   availableSources: AvailableSource[];
   expectedArgs: ExpectedArg[];
+  serviceNodeId?: string;
   onChange: (updated: PipelineStepDraft) => void;
   onAutoMapArguments?: () => void;
 }
@@ -25,6 +26,7 @@ export const EarlyReturnStepSection = ({
   step,
   availableSources,
   expectedArgs,
+  serviceNodeId,
   onChange,
   onAutoMapArguments,
 }: EarlyReturnStepSectionProps) => {
@@ -102,6 +104,7 @@ export const EarlyReturnStepSection = ({
           bindings={step.inputBindings || []}
           expectedArgs={expectedArgs.length > 0 ? expectedArgs : [{ name: "data", type: "any" }]}
           availableSources={availableSources}
+          serviceNodeId={serviceNodeId}
           onAddBinding={addBinding}
           onUpdateBinding={updateBinding}
           onRemoveBinding={removeBinding}

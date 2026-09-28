@@ -16,6 +16,7 @@ import {
 } from "@workspace/ui/components/popover";
 import { Braces, Sparkles, Maximize2, Minimize2 } from "lucide-react";
 import { SmartPathInput } from "./SmartPathInput";
+import { EnvVarCombobox } from "../EnvVarCombobox";
 import { StepBinding, AvailableSource } from "./types";
 import { cn } from "@workspace/ui/lib/utils";
 
@@ -23,12 +24,14 @@ export interface BindingSourceEditorProps {
   binding: StepBinding;
   availableSources: AvailableSource[];
   onChange: (updated: StepBinding) => void;
+  serviceNodeId?: string;
 }
 
 export const BindingSourceEditor = ({
   binding,
   availableSources,
   onChange,
+  serviceNodeId,
 }: BindingSourceEditorProps) => {
   const { source } = binding;
   const [isExpanded, setIsExpanded] = useState(false);
@@ -85,6 +88,8 @@ export const BindingSourceEditor = ({
         }
       } else if (selectedId === "inline") {
         onChange({ ...binding, source: { kind: "inline", value: "" } });
+      } else if (selectedId === "env") {
+        onChange({ ...binding, source: { kind: "env", field: "" } });
       } else if (selectedId === "req_body") {
         onChange({ ...binding, source: { kind: "req_body", field: "" } });
       } else if (selectedId === "req_params") {
@@ -115,10 +120,12 @@ export const BindingSourceEditor = ({
           ? "query"
           : src.kind === "req_headers"
           ? "headers"
+          : src.kind === "env"
+          ? "process.env"
           : src.variableName || "step");
 
-      // Whole object token
-      if (src.paths.length > 0) {
+      // Whole object token (omit for env)
+      if (src.paths.length > 0 && src.kind !== "env") {
         list.push({
           label: `${prefix} (whole)`,
           token: `\${${prefix}}`,
@@ -138,13 +145,14 @@ export const BindingSourceEditor = ({
       }
     }
 
-    // Common env vars token
-    list.push({
-      label: "process.env.API_KEY",
-      token: "${process.env.API_KEY}",
-      category: "Environment Variables",
-      type: "string",
-    });
+    if (!uniqueSources.some((s) => s.kind === "env" || s.id === "env")) {
+      list.push({
+        label: "process.env.API_KEY",
+        token: "${process.env.API_KEY}",
+        category: "Environment Variables",
+        type: "string",
+      });
+    }
 
     return list;
   }, [uniqueSources]);
@@ -195,7 +203,21 @@ export const BindingSourceEditor = ({
         </Select>
 
         {/* Path / Value field editor */}
-        {source.kind !== "inline" ? (
+        {source.kind === "env" ? (
+          <div className="flex-1 min-w-0">
+            <EnvVarCombobox
+              value={source.field ?? ""}
+              onValueChange={(field) =>
+                onChange({ ...binding, source: { ...source, field } })
+              }
+              nodeId={serviceNodeId}
+              defaultSuggestions={activeSource?.paths.map((p) => p.path) || []}
+              placeholder="Select or type .env variable..."
+              className="h-7 text-xs font-mono"
+              allowRawInput={false}
+            />
+          </div>
+        ) : source.kind !== "inline" ? (
           <SmartPathInput
             value={source.field ?? ""}
             onChange={(field) => onChange({ ...binding, source: { ...source, field } })}

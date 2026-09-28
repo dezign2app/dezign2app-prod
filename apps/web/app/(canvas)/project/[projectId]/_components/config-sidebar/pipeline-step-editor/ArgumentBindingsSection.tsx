@@ -22,6 +22,7 @@ export interface ArgumentBindingsSectionProps {
   bindings: StepBinding[];
   expectedArgs?: ExpectedArg[];
   availableSources: AvailableSource[];
+  serviceNodeId?: string;
   onAddBinding: () => void;
   onUpdateBinding: (index: number, updated: StepBinding) => void;
   onRemoveBinding: (index: number) => void;
@@ -32,6 +33,7 @@ export const ArgumentBindingsSection = ({
   bindings,
   expectedArgs = [],
   availableSources,
+  serviceNodeId,
   onAddBinding,
   onUpdateBinding,
   onRemoveBinding,
@@ -75,7 +77,8 @@ export const ArgumentBindingsSection = ({
               src.kind === "req_body" ||
               src.kind === "req_params" ||
               src.kind === "req_query" ||
-              src.kind === "req_headers"
+              src.kind === "req_headers" ||
+              src.kind === "env"
             ) {
               updated = {
                 ...updated,
@@ -280,6 +283,7 @@ export const ArgumentBindingsSection = ({
               <BindingSourceEditor
                 binding={binding}
                 availableSources={availableSources}
+                serviceNodeId={serviceNodeId}
                 onChange={(updated) => onUpdateBinding(bi, updated)}
               />
               {isRequiredAndUnmapped && (

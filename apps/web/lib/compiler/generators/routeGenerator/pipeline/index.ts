@@ -13,6 +13,7 @@ import {
   renderPushToClientStep,
 } from "./compilePipelineSteps";
 import { applyStepDecorators } from "./stepDecorators";
+import { collectReferencedEnvVars } from "./envCollector";
 
 export * from "./types";
 export * from "./sourceResolver";
@@ -21,6 +22,7 @@ export * from "./compilePipelineSteps";
 export * from "./stepRenderers";
 export * from "./stepDecorators";
 export * from "./importCollector";
+export * from "./envCollector";
 
 /**
  * Renders a single pipeline step into one or more lines of TypeScript.
@@ -145,6 +147,24 @@ export function renderPipeline(
   };
 
   const allLines: string[] = [];
+
+  // Validate all environment variables referenced by the pipeline steps.
+  // Throws an Error if not defined, which naturally narrows their types to `string` in TypeScript
+  // without needing `as any`, `as unknown`, or type assertions.
+  const referencedEnvVars = collectReferencedEnvVars(steps);
+  if (referencedEnvVars.length > 0) {
+    allLines.push("// Validate required environment variables");
+    for (const envVar of referencedEnvVars) {
+      const isIdentifier = /^[A-Za-z_][A-Za-z0-9_]*$/.test(envVar);
+      const envExpr = isIdentifier
+        ? `process.env.${envVar}`
+        : `process.env["${envVar}"]`;
+      allLines.push(`if (!${envExpr}) {`);
+      allLines.push(`  throw new Error("Environment variable ${envVar} is required but not set.");`);
+      allLines.push(`}`);
+    }
+    allLines.push("");
+  }
 
   for (const step of steps) {
     if (step.enabled === false) continue;

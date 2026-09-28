@@ -352,4 +352,77 @@ describe("pipeline-step-editor: useStepRowState handleAutoMapArguments", () => {
     const convBinding = (updatedStep.inputBindings || []).find((b) => b.argName === "conversation_id");
     expect(convBinding?.source).toEqual({ kind: "req_body", field: "conversation_id" });
   });
+
+  it("introspects .env variables configured on service node and auto-maps matching arguments", () => {
+    const serviceNode: BackendNode = {
+      id: "service-main",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Main Service",
+        envVars: [
+          { id: "env-1", name: "STRIPE_SECRET_KEY", description: "Stripe API Key" },
+          { id: "env-2", name: "APP_PORT", description: "Port" },
+        ],
+      },
+    };
+
+    const externalStep: PipelineStepDraft = {
+      id: "step-ext-1",
+      name: "stripeCharge",
+      type: "transform",
+      enabled: true,
+      functionRef: {
+        name: "stripeCharge",
+        importPath: "@workspace/transformers",
+        inputSchema: [
+          { name: "stripe_secret_key", type: "string", required: true },
+          { name: "amount", type: "number", required: true },
+        ],
+      },
+      inputBindings: [],
+    };
+
+    let updatedStep: PipelineStepDraft = externalStep;
+    const onChange = vi.fn((updated) => {
+      updatedStep = updated;
+    });
+
+    const { result } = renderHook(() =>
+      useStepRowState({
+        step: externalStep,
+        index: 0,
+        priorSteps: [],
+        endpoint: mockEndpoint,
+        allNodes: [serviceNode],
+        allEdges: [],
+        serviceNodeId: "service-main",
+        onChange,
+      }),
+    );
+
+    // 1. Verify .env source is available with configured envVars
+    const envSource = result.current.availableSources.find(
+      (s) => s.id === "env" || s.kind === "env",
+    );
+    expect(envSource).toBeDefined();
+    expect(envSource?.kind).toBe("env");
+    expect(envSource?.paths.map((p) => p.path)).toContain("STRIPE_SECRET_KEY");
+    expect(envSource?.paths.map((p) => p.path)).toContain("APP_PORT");
+
+    // 2. Run handleAutoMapArguments
+    act(() => {
+      result.current.handleAutoMapArguments();
+    });
+
+    expect(onChange).toHaveBeenCalled();
+    const stripeBinding = (updatedStep.inputBindings || []).find(
+      (b) => b.argName === "stripe_secret_key",
+    );
+    expect(stripeBinding?.source).toEqual({
+      kind: "env",
+      field: "STRIPE_SECRET_KEY",
+    });
+  });
 });

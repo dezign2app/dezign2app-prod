@@ -17,7 +17,7 @@ import { cn } from "@workspace/ui/lib/utils";
 import { toast } from "sonner";
 import { NestedResponseSchemaEditor } from "../NestedResponseSchemaEditor";
 import { BindingSourceEditor } from "./BindingSourceEditor";
-import { PipelineStepDraft, StepBinding } from "./types";
+import { PipelineStepDraft, StepBinding, AvailableSource } from "./types";
 import { getAvailableSources, HTTP_STATUS_OPTIONS } from "./utils";
 
 export interface ReturnResponseStepRowProps {
@@ -25,6 +25,8 @@ export interface ReturnResponseStepRowProps {
   priorSteps: PipelineStepDraft[];
   endpoint?: Endpoint;
   allNodes: BackendNode[];
+  serviceNodeId?: string;
+  extraSources?: AvailableSource[];
   onChange: (updated: PipelineStepDraft) => void;
   onEndpointChange?: (changes: Partial<Endpoint>) => void;
 }
@@ -34,6 +36,8 @@ export const ReturnResponseStepRow = ({
   priorSteps,
   endpoint,
   allNodes,
+  serviceNodeId,
+  extraSources = [],
   onChange,
   onEndpointChange,
 }: ReturnResponseStepRowProps) => {
@@ -46,10 +50,10 @@ export const ReturnResponseStepRow = ({
   onChangeRef.current = onChange;
 
 
-  // Available sources (request body, params, query, headers, prior steps)
+  // Available sources (request body, params, query, headers, env, prior steps)
   const availableSources = useMemo(
-    () => getAvailableSources(endpoint, priorSteps, allNodes),
-    [endpoint, priorSteps, allNodes],
+    () => getAvailableSources(endpoint, priorSteps, allNodes, undefined, extraSources, serviceNodeId),
+    [endpoint, priorSteps, allNodes, extraSources, serviceNodeId],
   );
 
   const statusCode = step.statusCode || (endpoint?.type === "POST" ? 201 : 200);
@@ -158,6 +162,10 @@ export const ReturnResponseStepRow = ({
         case "req_headers": {
           const field = source.field ? source.field.trim() : "";
           return field ? `req.headers["${field}"]` : "req.headers";
+        }
+        case "env": {
+          const field = source.field ? source.field.trim() : "";
+          return field ? `process.env.${field}` : "process.env";
         }
         default:
           return '""';
@@ -365,6 +373,7 @@ export const ReturnResponseStepRow = ({
                       <BindingSourceEditor
                         binding={binding}
                         availableSources={availableSources}
+                        serviceNodeId={serviceNodeId}
                         onChange={(updated) => updateBinding(bi, updated)}
                       />
                       {/* Delete button */}

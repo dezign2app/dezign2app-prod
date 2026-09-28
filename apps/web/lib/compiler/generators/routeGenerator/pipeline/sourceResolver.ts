@@ -7,6 +7,7 @@ import {
   compileJsonExpression,
 } from "../jsonInterpolation";
 import { PipelineRenderContext } from "./types";
+import { cleanEnvVarName } from "./envCollector";
 
 /**
  * Resolves a single StepSource into a TypeScript expression string.
@@ -33,6 +34,13 @@ export function resolveSource(
     case "req_headers": {
       const field = source.field ? source.field.trim() : "";
       return field ? `req.headers["${field}"]` : "req.headers";
+    }
+    case "env": {
+      const field = cleanEnvVarName(source.field);
+      if (!field) return "process.env";
+      return /^[A-Za-z_][A-Za-z0-9_]*$/.test(field)
+        ? `process.env.${field}`
+        : `process.env["${field}"]`;
     }
     case "step_output": {
       if (source.stepId === "__catch_error__") {
