@@ -26,8 +26,8 @@ export function generateTriggerHandler(hasApiActions: boolean): string {
     requireAuth?: boolean,
     customHeaders?: Record<string, string>,
     queryParams?: Record<string, string>,
-    requestBody?: unknown,
-  ) => {
+    requestBody?: Record<string, string | number | boolean | null | undefined>,
+  ): Promise<Record<string, string | number | boolean | null | undefined> | void> => {
     const timestamp = new Date().toLocaleTimeString();
     const logId = Math.random().toString(36).substring(2, 9);
     try {
@@ -57,7 +57,7 @@ export function generateTriggerHandler(hasApiActions: boolean): string {
         },
         ...prev,
       ]);
-      return result;
+      return (result.data && typeof result.data === "object" ? { ...result, ...(result.data as object) } : result) as unknown as Record<string, string | number | boolean | null | undefined>;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Request failed";
       setTriggerLogs((prev) => [
@@ -73,7 +73,7 @@ export function generateTriggerHandler(hasApiActions: boolean): string {
         },
         ...prev,
       ]);
-      return { error: errorMessage, data: null };
+      return { error: errorMessage } as unknown as Record<string, string | number | boolean | null | undefined>;
     }
   };
 
