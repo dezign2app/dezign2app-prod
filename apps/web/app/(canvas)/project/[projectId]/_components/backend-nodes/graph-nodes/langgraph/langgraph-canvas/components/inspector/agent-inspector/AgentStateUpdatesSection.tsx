@@ -95,11 +95,13 @@ export function AgentStateUpdatesSection({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {stateChannels.map((ch: LangGraphStateChannel) => (
-                      <SelectItem key={ch.key} value={ch.key}>
-                        {ch.key}
-                      </SelectItem>
-                    ))}
+                    {stateChannels
+                      .filter((ch: LangGraphStateChannel) => Boolean(ch.key?.trim()))
+                      .map((ch: LangGraphStateChannel) => (
+                        <SelectItem key={ch.key} value={ch.key}>
+                          {ch.key}
+                        </SelectItem>
+                      ))}
                     {!stateChannels.some(
                       (c: LangGraphStateChannel) => c.key === su.channelKey,
                     ) &&

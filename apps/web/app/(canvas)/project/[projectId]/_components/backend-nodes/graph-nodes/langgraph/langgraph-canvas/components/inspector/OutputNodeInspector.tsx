@@ -280,15 +280,17 @@ export function OutputNodeInspector({
                 <SelectItem value="__all__" className="text-xs font-mono">
                   Full Graph State (All Fields)
                 </SelectItem>
-                {stateChannels.map((ch) => (
-                  <SelectItem
-                    key={ch.key}
-                    value={ch.key}
-                    className="text-xs font-mono"
-                  >
-                    {ch.key} ({ch.type})
-                  </SelectItem>
-                ))}
+                {stateChannels
+                  .filter((ch) => Boolean(ch.key?.trim()))
+                  .map((ch) => (
+                    <SelectItem
+                      key={ch.key}
+                      value={ch.key}
+                      className="text-xs font-mono"
+                    >
+                      {ch.key} ({ch.type})
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

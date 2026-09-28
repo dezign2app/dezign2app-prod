@@ -286,9 +286,9 @@ export const LangGraphInvokeStepSection: React.FC<
             <span className="col-span-1 text-right"></span>
           </div>
 
-          {stateChannels.map((ch) => (
+          {stateChannels.map((ch, idx) => (
             <div
-              key={ch.key}
+              key={ch.key ? `invoke-ch-${ch.key}-${idx}` : `invoke-ch-empty-${idx}`}
               className="grid grid-cols-12 gap-2 items-center text-xs"
             >
               <div className="col-span-5 flex items-center gap-1 min-w-0">
@@ -469,11 +469,11 @@ export const LangGraphInvokeStepSection: React.FC<
                 (empty = all tokens):
               </p>
               <div className="flex flex-wrap gap-1.5 mt-1">
-                {stateChannels.map((ch) => {
+                {stateChannels.map((ch, idx) => {
                   const isSelected = streamingFields.includes(ch.key);
                   return (
                     <button
-                      key={ch.key}
+                      key={ch.key ? `stream-ch-${ch.key}-${idx}` : `stream-ch-empty-${idx}`}
                       type="button"
                       onClick={() => handleToggleStreamingField(ch.key)}
                       className={`text-[10px] font-mono px-2 py-0.5 rounded-full border transition-all ${
@@ -556,11 +556,11 @@ export const LangGraphInvokeStepSection: React.FC<
                   Select state channels to include in step output:
                 </span>
                 <div className="flex flex-wrap gap-1.5">
-                  {stateChannels.map((ch) => {
+                  {stateChannels.map((ch, idx) => {
                     const isSelected = outputFields.includes(ch.key);
                     return (
                       <button
-                        key={ch.key}
+                        key={ch.key ? `out-ch-${ch.key}-${idx}` : `out-ch-empty-${idx}`}
                         type="button"
                         onClick={() => handleToggleOutputField(ch.key)}
                         className={`text-[10px] font-mono px-2 py-0.5 rounded-full border transition-all ${

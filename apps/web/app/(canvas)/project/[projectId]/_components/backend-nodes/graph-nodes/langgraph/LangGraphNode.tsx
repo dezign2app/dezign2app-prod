@@ -264,12 +264,13 @@ export const LangGraphNode = ({
           </div>
 
           <div className="flex flex-col divide-y divide-border/40">
-            {(data.outputChannels || []).map((ch) => {
+            {(data.outputChannels || []).map((ch, idx: number) => {
               const typeInfo = getChannelTypeBadge(ch.type);
               const IconComponent = typeInfo.icon;
+              const chKey = ch.id ? `ch-${ch.id}-${idx}` : `ch-empty-${idx}`;
               return (
                 <div
-                  key={ch.id}
+                  key={chKey}
                   className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-secondary/40 transition-colors nodrag relative group/channel"
                   title={`Emitted output channel: ${ch.name} (${ch.type})`}
                 >
@@ -310,14 +311,17 @@ export const LangGraphNode = ({
             <span className="font-mono">{stateChannels.length} fields</span>
           </div>
           <div className="flex flex-wrap gap-1">
-            {stateChannels.slice(0, 3).map((ch: LangGraphStateChannel) => (
-              <span
-                key={ch.key}
-                className="text-[9px] px-1.5 py-0.5 rounded bg-[#006ddd]/15 text-[#006ddd] font-mono border border-[#006ddd]/30 font-semibold"
-              >
-                {ch.key}
-              </span>
-            ))}
+            {stateChannels.slice(0, 3).map((ch: LangGraphStateChannel, idx: number) => {
+              const channelKey = ch.key?.trim() ? `state-${ch.key}-${idx}` : `state-empty-${idx}`;
+              return (
+                <span
+                  key={channelKey}
+                  className="text-[9px] px-1.5 py-0.5 rounded bg-[#006ddd]/15 text-[#006ddd] font-mono border border-[#006ddd]/30 font-semibold"
+                >
+                  {ch.key || `field_${idx + 1}`}
+                </span>
+              );
+            })}
             {stateChannels.length > 3 && (
               <span className="text-[9px] px-1 py-0.5 rounded bg-secondary text-muted-foreground font-mono">
                 +{stateChannels.length - 3}
@@ -328,13 +332,14 @@ export const LangGraphNode = ({
 
         {/* Steps mini-list */}
         <div className="flex flex-wrap gap-1.5">
-          {graphSteps.slice(0, 4).map((step: LangGraphStepConfig) => {
+          {graphSteps.slice(0, 4).map((step: LangGraphStepConfig, idx: number) => {
             const hasUpdates = Boolean(
               step.stateUpdates && step.stateUpdates.length > 0,
             );
+            const stepKey = step.id?.trim() ? `step-${step.id}-${idx}` : `step-empty-${idx}`;
             return (
               <span
-                key={step.id}
+                key={stepKey}
                 className={cn(
                   "text-[10px] px-2 py-0.5 rounded-md border font-mono flex items-center gap-1",
                   hasUpdates
@@ -342,7 +347,7 @@ export const LangGraphNode = ({
                     : "bg-secondary text-foreground border-border/50",
                 )}
               >
-                {step.name || step.id}
+                {step.name || step.id || `Step ${idx + 1}`}
                 {hasUpdates && (
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                 )}
