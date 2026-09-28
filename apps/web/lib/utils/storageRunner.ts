@@ -933,12 +933,44 @@ export async function executeStorageOperationLive(
         headers: resHeaders,
       };
     } else if (operation === "getUploadPresignedUrl" || operation === "getDownloadPresignedUrl") {
+      const isUpload = operation === "getUploadPresignedUrl";
+      const ttl = Number(params.ttl) || (isUpload ? 900 : 3600);
       parsedData = {
         presignedUrl: presignedResultUrl,
+        uploadUrl: isUpload ? presignedResultUrl : undefined,
+        downloadUrl: !isUpload ? presignedResultUrl : undefined,
+        signedUrl: presignedResultUrl,
+        url: presignedResultUrl,
+        key: key,
+        bucket: connection.bucketName,
+        method: isUpload ? "PUT" : "GET",
+        expiresInSeconds: ttl,
         serverPreflightStatus: response.status,
         serverPreflightText: response.statusText,
-        method: operation === "getUploadPresignedUrl" ? "PUT" : "GET",
-        expiresInSeconds: Number(params.ttl) || (operation === "getUploadPresignedUrl" ? 900 : 3600),
+      };
+    } else if (operation === "uploadObject") {
+      parsedData = {
+        success: isSuccess,
+        status: response.status,
+        url: resolved.url,
+        key: key,
+        bucket: connection.bucketName,
+        etag: resHeaders["etag"],
+      };
+    } else if (operation === "deleteObject") {
+      parsedData = {
+        success: isSuccess,
+        status: response.status,
+        key: key,
+        bucket: connection.bucketName,
+      };
+    } else if (operation === "getPublicObjectUrl") {
+      parsedData = {
+        url: requestUrl,
+        key: key,
+        bucket: connection.bucketName,
+        exists: response.status === 200,
+        status: response.status,
       };
     }
 

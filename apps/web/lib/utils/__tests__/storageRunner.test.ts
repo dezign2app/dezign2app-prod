@@ -3,6 +3,7 @@ import {
   normalizeEndpointUrl,
   resolveStorageUrl,
   checkStorageConnectionLive,
+  executeStorageOperationLive,
   type StorageConnectionConfig,
 } from "../storageRunner";
 
@@ -213,6 +214,87 @@ describe("storageRunner endpoint normalization and connection", () => {
       expect(result.serverActive).toBe(false);
       expect(result.status).toBe(0);
       expect(result.error).toContain("Invalid storage endpoint URL");
+    });
+  });
+
+  describe("executeStorageOperationLive", () => {
+    it("returns aligned presigned URL response fields for getUploadPresignedUrl", async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({ server: "SeaweedFS S3", "x-amz-request-id": "req-presign-1" }),
+        text: vi.fn().mockResolvedValue(""),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const config: StorageConnectionConfig = {
+        endpointUrl: "http://localhost:8333",
+        bucketName: "user-avatars",
+        accessKeyId: "test-access-key",
+        secretAccessKey: "test-secret-key",
+      };
+
+      const result = await executeStorageOperationLive({
+        connection: config,
+        operation: "getUploadPresignedUrl",
+        params: {
+          key: "avatars/user-1.png",
+          ttl: 900,
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.signedUrl).toBeDefined();
+      expect(result.signedUrl).toContain("user-avatars");
+      expect(result.signedUrl).toContain("avatars/user-1.png");
+
+      expect(result.data).toMatchObject({
+        presignedUrl: result.signedUrl,
+        uploadUrl: result.signedUrl,
+        signedUrl: result.signedUrl,
+        url: result.signedUrl,
+        key: "avatars/user-1.png",
+        bucket: "user-avatars",
+        method: "PUT",
+        expiresInSeconds: 900,
+        serverPreflightStatus: 200,
+      });
+    });
+
+    it("returns aligned presigned URL response fields for getDownloadPresignedUrl", async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({ server: "SeaweedFS S3" }),
+        text: vi.fn().mockResolvedValue(""),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const config: StorageConnectionConfig = {
+        endpointUrl: "http://localhost:8333",
+        bucketName: "private-documents",
+      };
+
+      const result = await executeStorageOperationLive({
+        connection: config,
+        operation: "getDownloadPresignedUrl",
+        params: {
+          key: "reports/q3.pdf",
+          ttl: 3600,
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toMatchObject({
+        presignedUrl: result.signedUrl,
+        downloadUrl: result.signedUrl,
+        signedUrl: result.signedUrl,
+        url: result.signedUrl,
+        key: "reports/q3.pdf",
+        bucket: "private-documents",
+        method: "GET",
+        expiresInSeconds: 3600,
+      });
     });
   });
 });

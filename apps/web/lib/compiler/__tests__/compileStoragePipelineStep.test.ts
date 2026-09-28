@@ -214,4 +214,90 @@ describe("Storage Pipeline Step Compilation", () => {
     expect(res.code).toContain("field_1: string;");
     expect(res.code).not.toContain("Record<string");
   });
+
+  it("safely resolves presignedUrl, signedUrl, key, bucket, method, expiresInSeconds from getUploadPresignedUrl step", () => {
+    const endpoint: Endpoint = {
+      id: "ep-upload-ticket",
+      name: "/uploadTicket",
+      type: "POST",
+      pipelineSteps: [
+        {
+          id: "step-storage-1",
+          name: "Get Upload Presigned URL",
+          type: "storage_operation",
+          enabled: true,
+          outputVariable: "uploadUrl",
+          storageNodeId: "storage-node-1",
+          bucketId: "ticket-attachments",
+          operationId: "storage-getUploadPresignedUrl",
+          functionRef: {
+            name: "getUploadPresignedUrl",
+            importPath: "@workspace/storage/operations",
+            signature: "getUploadPresignedUrl(bucketName: string, key: string, options?: PresignedUrlOptions): Promise<string>",
+          },
+          inputBindings: [
+            {
+              argName: "key",
+              source: { kind: "req_body", field: "filename" },
+            },
+            {
+              argName: "bucketName",
+              source: { kind: "inline", value: "ticket-attachments" },
+            },
+          ],
+        },
+        {
+          id: "step-ret",
+          name: "Return Response",
+          type: "return_response",
+          enabled: true,
+          statusCode: 200,
+          inputBindings: [
+            {
+              argName: "presignedUrl",
+              source: { kind: "step_output", stepId: "step-storage-1", field: "presignedUrl" },
+            },
+            {
+              argName: "signedUrl",
+              source: { kind: "step_output", stepId: "step-storage-1", field: "signedUrl" },
+            },
+            {
+              argName: "fileKey",
+              source: { kind: "step_output", stepId: "step-storage-1", field: "key" },
+            },
+            {
+              argName: "targetBucket",
+              source: { kind: "step_output", stepId: "step-storage-1", field: "bucket" },
+            },
+            {
+              argName: "httpMethod",
+              source: { kind: "step_output", stepId: "step-storage-1", field: "method" },
+            },
+            {
+              argName: "ttlSeconds",
+              source: { kind: "step_output", stepId: "step-storage-1", field: "expiresInSeconds" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const lines = renderPipeline(endpoint.pipelineSteps!, "body");
+    const fullCode = lines.join("\n");
+
+    expect(fullCode).not.toContain("uploadUrl.presignedUrl");
+    expect(fullCode).not.toContain("uploadUrl.signedUrl");
+    expect(fullCode).toContain("presignedUrl: uploadUrl");
+    expect(fullCode).toContain("signedUrl: uploadUrl");
+    expect(fullCode).toContain("fileKey: String(body.filename || \"\")");
+    expect(fullCode).toContain("targetBucket: \"ticket-attachments\"");
+    expect(fullCode).toContain("httpMethod: \"PUT\"");
+    expect(fullCode).toContain("ttlSeconds: 900");
+
+    const res = generateResponseInterface("PostUploadTicketResponse", [], undefined, [], endpoint);
+    expect(res.code).toContain("presignedUrl: string;");
+    expect(res.code).toContain("signedUrl: string;");
+    expect(res.code).toContain("fileKey: string;");
+    expect(res.code).toContain("ttlSeconds: number;");
+  });
 });
