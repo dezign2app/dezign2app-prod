@@ -145,6 +145,7 @@ export type FrontendActionStepDraft = {
   storageRefNodeId?: string;
   storageServiceNodeId?: string;
   bucketId?: string;
+  bucketName?: string; // human-readable bucket name (separate from the raw resource ID)
   presignedUrlSource?: {
     stepId: string;
     fieldPath: string;

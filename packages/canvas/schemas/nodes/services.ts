@@ -201,6 +201,15 @@ export const storeActionBindingSchema = z.object({
   payloadExpr: z.string().optional(),
 });
 
+export const storageOperationBindingSchema = z.object({
+  storageNodeId: z.string().optional(),
+  bucketId: z.string().optional(),
+  operationName: z.string().optional(),
+  refNodeId: z.string().optional(),
+  endpointId: z.string().optional(),
+  serviceNodeId: z.string().optional(),
+});
+
 export const clientEventInputSchema = z.object({
   id: z.string().optional().describe("Unique identifier for this event"),
   name: z
@@ -250,6 +259,8 @@ export const clientEventInputSchema = z.object({
   pollingConfig: pollingConfigSchema.optional(),
   storeActionBinding: storeActionBindingSchema.optional(),
   storeActionBindings: z.array(storeActionBindingSchema).optional(),
+  storageOperationBinding: storageOperationBindingSchema.optional(),
+  actionSteps: z.array(z.any()).optional(),
 });
 
 export const webPageEventSchema = clientEventInputSchema;
@@ -367,6 +378,14 @@ export const webPageDataSchema = simpleDataSchema.extend({
   renderMode: z.enum(["server", "client"]).optional().describe("Page-level render mode"),
   customDependencies: z.array(nodeDependencyItemSchema).optional(),
   stackOrder: z.number().optional().describe("User-defined stack order index in hand-of-cards mode"),
+  // Storage & Image Upload configuration
+  connectedStorageNodeId: z.string().optional(),
+  uploadBucketId: z.string().optional(),
+  uploadAcceptedMimeTypes: z.array(z.string()).optional(),
+  uploadMaxFileSizeMb: z.number().optional(),
+  uploadPreviewMode: z.enum(["thumbnail", "none"]).optional(),
+  autoGeneratePresignEndpoint: z.boolean().optional(),
+  presignEndpointId: z.string().optional(),
 });
 
 export const webPageDataInputSchema = baseNodeDataSchema.extend({
@@ -401,6 +420,14 @@ export const webPageDataInputSchema = baseNodeDataSchema.extend({
   renderMode: z.enum(["server", "client"]).optional(),
   customDependencies: z.array(nodeDependencyItemInputSchema).optional(),
   stackOrder: z.number().optional(),
+  // Storage & Image Upload configuration
+  connectedStorageNodeId: z.string().optional(),
+  uploadBucketId: z.string().optional(),
+  uploadAcceptedMimeTypes: z.array(z.string()).optional(),
+  uploadMaxFileSizeMb: z.number().optional(),
+  uploadPreviewMode: z.enum(["thumbnail", "none"]).optional(),
+  autoGeneratePresignEndpoint: z.boolean().optional(),
+  presignEndpointId: z.string().optional(),
 });
 
 // --- WebApp Node ---

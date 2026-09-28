@@ -69,11 +69,19 @@ export function StorageOperationRefConfig({
   const selectedBucket =
     data.bucketId ||
     data.bucketName ||
+    availableBuckets[0]?.id ||
     availableBuckets[0]?.name ||
     "default-bucket";
   const activeBucketObj = availableBuckets.find(
-    (b) => b.name === selectedBucket || b.id === selectedBucket,
+    (b) => b.name === selectedBucket || b.id === selectedBucket ||
+           b.name === data.bucketName || b.id === data.bucketId,
   );
+  const displayBucketName =
+    activeBucketObj?.name ||
+    data.bucketName ||
+    data.label ||
+    availableBuckets[0]?.name ||
+    selectedBucket;
 
   const provider =
     activeStorageNode?.data?.storageProvider || data.storageProvider || "s3";
@@ -105,28 +113,35 @@ export function StorageOperationRefConfig({
 
   const handleSelectStorage = (val: string) => {
     const targetStorage = storageNodes.find((n) => n.id === val);
-    const targetBuckets = targetStorage?.data?.buckets || [];
-    const firstBucketName = targetBuckets[0]?.name || "default-bucket";
+    const targetBuckets: Array<{ id?: string; name?: string }> =
+      targetStorage?.data?.buckets || [];
+    const firstBucket = targetBuckets[0];
+    const firstBucketId = firstBucket?.id || firstBucket?.name || "default-bucket";
+    const firstBucketName = firstBucket?.name || firstBucket?.id || "default-bucket";
 
     updateNode(nodeId, {
       data: {
         ...data,
         storageNodeId: val,
         storageProvider: targetStorage?.data?.storageProvider || "s3",
-        bucketId: firstBucketName,
+        bucketId: firstBucketId,
         bucketName: firstBucketName,
-        label: `${firstBucketName}`,
+        label: firstBucketName,
       },
     });
   };
 
   const handleSelectBucket = (val: string) => {
+    // val is b.name from SelectItem; resolve the full bucket to get id vs name
+    const bucketObj = availableBuckets.find((b) => b.name === val || b.id === val);
+    const resolvedId = bucketObj?.id || val;
+    const resolvedName = bucketObj?.name || val;
     updateNode(nodeId, {
       data: {
         ...data,
-        bucketId: val,
-        bucketName: val,
-        label: `${val}`,
+        bucketId: resolvedId,
+        bucketName: resolvedName,
+        label: resolvedName,
       },
     });
   };
@@ -177,7 +192,7 @@ export function StorageOperationRefConfig({
                 )}
               </div>
               <h3 className="font-semibold text-sm text-foreground">
-                {selectedBucket}
+                {displayBucketName}
               </h3>
             </div>
           </div>
@@ -257,7 +272,7 @@ export function StorageOperationRefConfig({
               Target Bucket
             </Label>
             <Select
-              value={selectedBucket || "__none__"}
+              value={displayBucketName || "__none__"}
               onValueChange={handleSelectBucket}
             >
               <SelectTrigger className="h-8 text-xs bg-background font-mono">

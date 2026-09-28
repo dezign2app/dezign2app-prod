@@ -39,6 +39,13 @@ export const edgeDataSchema = z.object({
   responseType: z.string().optional(),
   responseMode: z.string().optional(),
   notes: z.string().optional(),
+  // --- Storage Bucket Connection Fields ---
+  isStorageOperationBinding: z.boolean().optional(),
+  actionId: z.string().optional(),
+  operationName: z.string().optional(),
+  bucketId: z.string().optional(),
+  storageNodeId: z.string().optional(),
+  refNodeId: z.string().optional(),
   // --- LangGraph Route Invocation ---
   // Maps HTTP body / event payload fields → LangGraph state channel keys.
   payloadMapping: z.record(z.string(), z.string()).optional(),

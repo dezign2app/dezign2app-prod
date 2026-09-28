@@ -97,6 +97,7 @@ export const StoragePutStep: React.FC<StoragePutStepProps> = ({
     onChange({
       ...draft,
       bucketId: selectedBucketId,
+      bucketName: bInfo?.bucketName || selectedBucketId,
       storageRefNodeId: newRefNodeId || draft.storageRefNodeId,
       edgeId: newEdgeId || draft.edgeId,
     });

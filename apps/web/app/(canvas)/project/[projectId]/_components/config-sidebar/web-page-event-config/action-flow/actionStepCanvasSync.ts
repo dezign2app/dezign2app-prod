@@ -107,7 +107,18 @@ export function ensureActionStorageConnection({
       allNodes.find((n) => n.id === storageNodeId) ||
       allNodes.find((n) => n.type === "storage");
 
-    const newRefNodeId = `storage-ref-${bucketId}-${Date.now()}`;
+    // Resolve the human-readable bucket name from the storage node's buckets array
+    const storageBuckets = (storageNode?.data?.buckets ?? []) as Array<{
+      id?: string;
+      name?: string;
+    }>;
+    const matchedBucket = storageBuckets.find(
+      (b) => b.id === bucketId || b.name === bucketId,
+    );
+    const resolvedBucketName = matchedBucket?.name || bucketId;
+    const resolvedBucketId = matchedBucket?.id || bucketId;
+
+    const newRefNodeId = `storage-ref-${resolvedBucketId}-${Date.now()}`;
     const basePos = webPageNode?.position || { x: 300, y: 300 };
     const existingRefNodes = allNodes.filter(
       (n) =>
@@ -125,9 +136,9 @@ export function ensureActionStorageConnection({
         y: basePos.y + offset,
       },
       data: {
-        label: bucketId,
-        bucketId,
-        bucketName: bucketId,
+        label: resolvedBucketName,
+        bucketId: resolvedBucketId,
+        bucketName: resolvedBucketName,
         storageNodeId: storageNode?.id || storageNodeId,
         storageOperations: [
           {
