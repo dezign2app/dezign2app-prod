@@ -295,6 +295,7 @@ const StepRowComponent = ({
                     bindings={step.inputBindings || []}
                     expectedArgs={expectedArgs}
                     availableSources={availableSources}
+                    serviceNodeId={serviceNodeId}
                     onAddBinding={addBinding}
                     onUpdateBinding={updateBinding}
                     onRemoveBinding={removeBinding}
@@ -388,6 +389,7 @@ const StepRowComponent = ({
                       step={step}
                       availableSources={availableSources}
                       expectedArgs={expectedArgs}
+                      serviceNodeId={serviceNodeId}
                       onChange={onChange}
                       onAutoMapArguments={handleAutoMapArguments}
                     />

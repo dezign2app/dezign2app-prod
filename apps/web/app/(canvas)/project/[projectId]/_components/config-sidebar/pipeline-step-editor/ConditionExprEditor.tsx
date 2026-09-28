@@ -11,6 +11,7 @@ import {
 } from "@workspace/ui/components/select";
 import { Plus, Trash } from "lucide-react";
 import { SmartPathInput } from "./SmartPathInput";
+import { EnvVarCombobox } from "../EnvVarCombobox";
 import {
   ConditionExpr,
   ConditionClause,
@@ -269,6 +270,8 @@ const SourcePicker = ({
       onChange({ kind: "req_query", field: "" });
     } else if (selectedId === "req_headers") {
       onChange({ kind: "req_headers", field: "" });
+    } else if (selectedId === "env") {
+      onChange({ kind: "env", field: "" });
     } else if (selectedId === "inline") {
       onChange({ kind: "inline", value: "" });
     }
@@ -291,7 +294,18 @@ const SourcePicker = ({
         </SelectContent>
       </Select>
 
-      {source.kind !== "inline" ? (
+      {source.kind === "env" ? (
+        <div className="flex-1 min-w-0">
+          <EnvVarCombobox
+            value={source.field ?? ""}
+            onValueChange={(field) => onChange({ ...source, field })}
+            defaultSuggestions={activeSource?.paths.map((p) => p.path) || []}
+            placeholder="Select or type .env variable..."
+            className="h-7 text-xs font-mono"
+            allowRawInput={false}
+          />
+        </div>
+      ) : source.kind !== "inline" ? (
         <SmartPathInput
           value={source.field ?? ""}
           onChange={(field) => onChange({ ...source, field })}

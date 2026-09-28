@@ -15,7 +15,7 @@ import { StepRow } from "./StepRow";
 import { ReturnResponseStepRow } from "./ReturnResponseStepRow";
 import { AddStepToolbar } from "./AddStepToolbar";
 import { usePipelineSteps } from "./usePipelineSteps";
-import { createPresignedUrlExtraSource } from "./utils";
+import { createPresignedUrlExtraSource, createEnvExtraSource } from "./utils";
 
 export interface PipelineStepEditorProps {
   steps: PipelineStepDraft[];
@@ -98,6 +98,11 @@ export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
     return map;
   }, [executableSteps]);
 
+  const envSource = React.useMemo(
+    () => createEnvExtraSource(allNodes, serviceNodeId),
+    [allNodes, serviceNodeId],
+  );
+
   return (
     <div className="flex flex-col gap-3">
       {hasUnconfiguredInputs && !isNested && (
@@ -146,7 +151,7 @@ export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
                     allEdges={allEdges}
                     serviceNodeId={serviceNodeId}
                     depth={depth}
-                    extraSources={[...extraSources, ...(presignSourcesMap.get(i) || [])]}
+                    extraSources={[...extraSources, ...(presignSourcesMap.get(i) || []), envSource]}
                     onChange={(updated) => updateStep(i, updated)}
                     onDelete={() => deleteStep(i)}
                     isFirst={i === 0}
@@ -173,6 +178,8 @@ export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
             priorSteps={executableSteps}
             endpoint={endpoint}
             allNodes={allNodes}
+            serviceNodeId={serviceNodeId}
+            extraSources={[...extraSources, envSource]}
             onChange={updateReturnStep}
             onEndpointChange={onEndpointChange}
           />

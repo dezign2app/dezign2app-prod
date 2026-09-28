@@ -249,6 +249,10 @@ export function inferBindingType(
     return "string | number | boolean | null";
   }
 
+  if (source.kind === "env") {
+    return "string";
+  }
+
   if (source.kind === "context") {
     if (source.field === "timestamp") return "string";
     if (source.field === "user") return "Record<string, string | number | boolean | null>";

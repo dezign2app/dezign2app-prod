@@ -92,8 +92,8 @@ describe("syncTestEnv via Compiler", () => {
             signature: "getUploadPresignedUrl(bucketName: string, key: string, options?: PresignedUrlOptions): Promise<string>",
           },
           inputBindings: [
-            { argName: "bucketName", source: { kind: "inline", value: "test" } },
-            { argName: "key", source: { kind: "req_body", field: "filename" } },
+            { argName: "bucketName", source: { kind: "env", field: "STORAGE_BUCKET_TEST" } },
+            { argName: "key", source: { kind: "env", field: "AWS_SECRET_ACCESS_KEY" } },
             { argName: "options", source: { kind: "inline", value: "{}" } },
           ],
         },
@@ -141,7 +141,9 @@ describe("syncTestEnv via Compiler", () => {
 
     expect(routeCompiled.file.content).toContain('import { getUploadPresignedUrl } from "@workspace/storage/operations";');
     expect(routeCompiled.file.content).not.toContain("@workspace/aws-s3");
-    expect(routeCompiled.file.content).toContain('await getUploadPresignedUrl("test", String(body.filename || ""), {});');
+    expect(routeCompiled.file.content).toContain("if (!process.env.STORAGE_BUCKET_TEST) {");
+    expect(routeCompiled.file.content).toContain("if (!process.env.AWS_SECRET_ACCESS_KEY) {");
+    expect(routeCompiled.file.content).toContain("await getUploadPresignedUrl(process.env.STORAGE_BUCKET_TEST, process.env.AWS_SECRET_ACCESS_KEY, {});");
     expect(routeCompiled.file.content).not.toContain("uploadUrl.uploadUrl");
     expect(routeCompiled.file.content).toContain("field_1: uploadUrl");
 

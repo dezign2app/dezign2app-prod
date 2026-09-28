@@ -146,10 +146,10 @@ export function useStepRowState({
 }: UseStepRowStateProps) {
   const meta = STEP_TYPE_META[step.type] || STEP_TYPE_META.custom_code;
 
-  // Available sources (request body, params, query, headers, prior steps, or event payload/metadata)
+  // Available sources (request body, params, query, headers, env, prior steps, or event payload/metadata)
   const availableSources = useMemo(
-    () => getAvailableSources(endpoint, priorSteps, allNodes, consumedEvent, extraSources),
-    [endpoint, priorSteps, allNodes, consumedEvent, extraSources],
+    () => getAvailableSources(endpoint, priorSteps, allNodes, consumedEvent, extraSources, serviceNodeId),
+    [endpoint, priorSteps, allNodes, consumedEvent, extraSources, serviceNodeId],
   );
 
   // Available transformers
@@ -198,14 +198,18 @@ export function useStepRowState({
   // Expected arguments (for DB Operation, Redis, Transform, Kafka, Service Call)
   const expectedArgs = useMemo((): ExpectedArg[] => {
     const compute = (): ExpectedArg[] => {
-      if (step.type === "transform" && selectedTransformer) {
-        return (selectedTransformer.inputSchema || [])
-          .filter((f) => f && f.name && f.name.trim())
-          .map((f) => ({
-            name: f.name.trim(),
-            type: f.type || "string",
-            required: f.required !== false,
-          }));
+      if (step.type === "transform") {
+        const schema = selectedTransformer?.inputSchema || step.functionRef?.inputSchema;
+        if (schema && Array.isArray(schema)) {
+          return schema
+            .filter((f) => f && f.name && f.name.trim())
+            .map((f) => ({
+              name: f.name.trim(),
+              type: f.type || "string",
+              required: f.required !== false,
+            }));
+        }
+        return [];
       }
 
       if (step.type === "db_operation" && selectedTableNode) {
@@ -552,6 +556,7 @@ export function useStepRowState({
   }, [
     step.type,
     selectedTransformer,
+    step.functionRef?.inputSchema,
     selectedTableNode,
     step.databaseId,
     step.tableNodeId,
@@ -573,6 +578,9 @@ export function useStepRowState({
     const reqQuerySource = availableSources.find((s) => s.kind === "req_query");
     const reqHeadersSource = availableSources.find(
       (s) => s.kind === "req_headers" || s.id === "event_metadata",
+    );
+    const envSource = availableSources.find(
+      (s) => s.kind === "env" || s.id === "env",
     );
 
     const existingBindingMap = new Map<string, StepBinding>();
@@ -668,6 +676,18 @@ export function useStepRowState({
         newBindings.push({
           argName: arg.name,
           source: { kind: "req_headers", field: matchHeader.path },
+        });
+        continue;
+      }
+
+      // 6b. Environment Variables (.env) match
+      const matchEnv = envSource?.paths.find((p) =>
+        isPathMatch(p.path, arg.name),
+      );
+      if (matchEnv) {
+        newBindings.push({
+          argName: arg.name,
+          source: { kind: "env", field: matchEnv.path },
         });
         continue;
       }

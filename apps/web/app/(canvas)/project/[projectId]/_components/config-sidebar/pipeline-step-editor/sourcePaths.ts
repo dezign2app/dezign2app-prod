@@ -17,6 +17,7 @@ import {
 } from "@/lib/utils/inferReturnSchema";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { cleanEnvVarName } from "@/lib/utils/localEnvSync";
 import {
   PipelineStepDraft,
   AvailablePath,
@@ -115,6 +116,7 @@ export function getAvailableSources(
   allNodes: BackendNode[] = [],
   consumedEvent?: AnyMessagingResource,
   extraSources: AvailableSource[] = [],
+  serviceNodeId?: string,
 ): AvailableSource[] {
   const sources: AvailableSource[] = [];
 
@@ -281,7 +283,13 @@ export function getAvailableSources(
     });
   }
 
-  // 5. Prior Steps (Variable-centric output paths)
+  // 5. Environment Variables (.env)
+  const hasEnvInExtra = extraSources.some((s) => s.id === "env" || s.kind === "env");
+  if (!hasEnvInExtra) {
+    sources.push(createEnvExtraSource(allNodes, serviceNodeId));
+  }
+
+  // 6. Prior Steps (Variable-centric output paths)
   priorSteps.forEach((s, idx) => {
     const varName = s.outputVariable || s.name || `step${idx + 1}Result`;
     const stepPaths: AvailablePath[] = [];
@@ -1117,4 +1125,72 @@ export function createPresignedUrlExtraSource(
     ],
   };
 }
+
+/**
+ * Creates an AvailableSource representation for environment variables (.env)
+ * strictly displaying the envVars configured on this node (matching EnvVarCombobox).
+ */
+export function createEnvExtraSource(
+  allNodes: BackendNode[] = [],
+  serviceNodeId?: string,
+): AvailableSource {
+  const envPaths: AvailablePath[] = [];
+  const seenEnv = new Set<string>();
+
+  const nodesToScan =
+    allNodes && allNodes.length > 0
+      ? allNodes
+      : useBackendCanvasStore.getState().nodes || [];
+
+  const addEnvVar = (name?: string, desc?: string) => {
+    if (!name || typeof name !== "string") return;
+    const clean = cleanEnvVarName(name);
+    if (!clean || seenEnv.has(clean)) return;
+    seenEnv.add(clean);
+    envPaths.push({
+      path: clean,
+      type: "string",
+      description: desc || "Environment variable (.env)",
+    });
+  };
+
+  // Resolve target node (matching EnvVarCombobox logic)
+  const targetNode = serviceNodeId
+    ? nodesToScan.find((n) => n.id === serviceNodeId) ||
+      nodesToScan.find((n) => n.data?.buckets?.some((b: { id?: string }) => b?.id === serviceNodeId))
+    : nodesToScan.find((n) => n.type === "service");
+
+  const configuredNodeVars: Array<{ id?: string; name?: string; description?: string }> =
+    targetNode?.data?.envVars || [];
+
+  if (Array.isArray(configuredNodeVars) && configuredNodeVars.length > 0) {
+    // Strictly display only the environment variables configured for this node
+    configuredNodeVars.forEach((v) => {
+      if (v?.name && v.name.trim()) {
+        addEnvVar(v.name, v.description);
+      }
+    });
+  } else if (!serviceNodeId) {
+    // If no specific serviceNodeId is provided, collect envVars configured on canvas nodes
+    nodesToScan.forEach((n) => {
+      const vars = n.data?.envVars;
+      if (Array.isArray(vars)) {
+        vars.forEach((v: { name?: string; description?: string }) => {
+          if (v?.name && v.name.trim()) {
+            addEnvVar(v.name, v.description);
+          }
+        });
+      }
+    });
+  }
+
+  return {
+    id: "env",
+    label: "Environment (.env)",
+    kind: "env",
+    rootVariableName: "process.env",
+    paths: envPaths,
+  };
+}
+
 

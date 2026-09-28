@@ -79,6 +79,8 @@ export const pipelineStepInputSourceSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("req_query"), field: z.string().optional() }),
   /** A field from req.headers */
   z.object({ kind: z.literal("req_headers"), field: z.string().optional() }),
+  /** An environment variable from process.env (.env) */
+  z.object({ kind: z.literal("env"), field: z.string().optional() }),
   /** A field (or the whole object) from a prior step's output variable */
   z.object({
     kind: z.literal("step_output"),

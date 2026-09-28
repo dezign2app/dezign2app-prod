@@ -12,6 +12,7 @@ import {
 } from "@workspace/ui/components/select";
 import { Plus, Trash } from "lucide-react";
 import { SmartPathInput } from "./SmartPathInput";
+import { EnvVarCombobox } from "../EnvVarCombobox";
 import { PipelineStepDraft, AvailableSource, StepSource, SwitchCase } from "./types";
 import { PipelineStepEditor } from "./index";
 import { generateId } from "./utils";
@@ -76,6 +77,8 @@ export const SwitchStepSection = ({
       onChange({ ...step, switchSource: { kind: "req_query", field: "" } });
     } else if (selectedId === "req_headers") {
       onChange({ ...step, switchSource: { kind: "req_headers", field: "" } });
+    } else if (selectedId === "env") {
+      onChange({ ...step, switchSource: { kind: "env", field: "" } });
     } else if (selectedId === "inline") {
       onChange({ ...step, switchSource: { kind: "inline", value: "" } });
     }
@@ -129,7 +132,24 @@ export const SwitchStepSection = ({
             </SelectContent>
           </Select>
 
-          {switchSource.kind !== "inline" ? (
+          {switchSource.kind === "env" ? (
+            <div className="flex-1 min-w-0">
+              <EnvVarCombobox
+                value={switchSource.field ?? ""}
+                onValueChange={(field) =>
+                  onChange({
+                    ...step,
+                    switchSource: { ...switchSource, field },
+                  })
+                }
+                nodeId={serviceNodeId}
+                defaultSuggestions={activeSource?.paths.map((p) => p.path) || []}
+                placeholder="Select or type .env variable..."
+                className="h-7 text-xs font-mono"
+                allowRawInput={false}
+              />
+            </div>
+          ) : switchSource.kind !== "inline" ? (
             <SmartPathInput
               value={switchSource.field ?? ""}
               onChange={(field) =>
