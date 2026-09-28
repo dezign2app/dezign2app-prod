@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { BackendNode, BackendEdge } from "@workspace/canvas/types";
+import { BackendNode, BackendEdge, StepBinding } from "@workspace/canvas/types";
 import {
   getStorageOperations,
   computeStorageOpBindings,
@@ -171,6 +171,72 @@ export const StorageOperationStepSection: React.FC<StorageOperationStepSectionPr
     });
   };
 
+  // Auto-migrate: Ensure filename binding exists for storage operations that require/support a filename
+  React.useEffect(() => {
+    if (!selectedOp) return;
+    const isUploadOrPresign =
+      selectedOp.kind === "presign_upload" ||
+      selectedOp.kind === "presign_download" ||
+      selectedOp.kind === "upload" ||
+      selectedOp.name === "getUploadPresignedUrl" ||
+      selectedOp.name === "getDownloadPresignedUrl" ||
+      selectedOp.name === "uploadObject" ||
+      selectedOp.params?.some((p) => p.name.toLowerCase() === "filename");
+
+    if (!isUploadOrPresign) return;
+
+    const currentBindings = step.inputBindings || [];
+    const hasFilename = currentBindings.some(
+      (b) => (b.argName || "").trim().toLowerCase() === "filename",
+    );
+
+    if (!hasFilename) {
+      const reqBodySource = _availableSources?.find(
+        (s) => s.kind === "req_body" || s.id === "event_payload",
+      );
+      const matchField =
+        reqBodySource?.paths.find((p) => {
+          const norm = p.path.toLowerCase();
+          return (
+            norm === "filename" ||
+            norm === "name" ||
+            norm === "file" ||
+            norm === "filepath" ||
+            norm === "originalname"
+          );
+        })?.path || "filename";
+
+      const filenameBinding: StepBinding = {
+        argName: "filename",
+        source: {
+          kind: "req_body",
+          field: matchField,
+        },
+      };
+
+      const optionsIdx = currentBindings.findIndex(
+        (b) => (b.argName || "").trim().toLowerCase() === "options",
+      );
+      const keyIdx = currentBindings.findIndex(
+        (b) => (b.argName || "").trim().toLowerCase() === "key",
+      );
+
+      const next = [...currentBindings];
+      if (keyIdx !== -1) {
+        next.splice(keyIdx + 1, 0, filenameBinding);
+      } else if (optionsIdx !== -1) {
+        next.splice(optionsIdx, 0, filenameBinding);
+      } else {
+        next.push(filenameBinding);
+      }
+
+      onChange({
+        ...step,
+        inputBindings: next,
+      });
+    }
+  }, [selectedOp, step, onChange, _availableSources]);
+
   return (
     <div className="flex flex-col gap-3">
       {/* 1. Storage Node & Bucket Pickers */}
@@ -307,7 +373,7 @@ export const StorageOperationStepSection: React.FC<StorageOperationStepSectionPr
               </Badge>
             )}
           </div>
-          <div className="font-mono text-[11px] text-amber-500 dark:text-amber-400 select-text overflow-x-auto whitespace-pre">
+          <div className="font-mono text-[11px] text-amber-500 dark:text-amber-400 select-text overflow-x-auto whitespace-pre hide-scrollbar text-wrap">
             {selectedOp.signature}
           </div>
           <p className="text-[10px] text-muted-foreground leading-relaxed">

@@ -4,13 +4,11 @@
 // EMITS:  Async database operations, Redis operations with cache-miss fallbacks, and microservice calls
 // ═══════════════════════════════════════════════════════════════
 
-import { PipelineStep } from "@workspace/canvas/types";
+import { PipelineStep, PipelineStepInputBinding } from "@workspace/canvas/types";
 import { toVarName } from "../../../../utils";
 import { PipelineRenderContext, PipelineStepOutputMeta } from "../types";
 import { buildArgList, resolveBinding } from "../sourceResolver";
 import { sortRedisBindings } from "./compileRedisBindingSorter";
-import { PipelineStepInputBinding } from "@workspace/canvas/types";
-
 function sortStorageBindings(
   bindings: PipelineStepInputBinding[],
   fnName?: string,
@@ -47,6 +45,198 @@ function sortStorageBindings(
   });
 
   return result;
+}
+
+function sanitizeOptionsObjectLiteral(
+  expr: string,
+  allowedProps: string[],
+): string {
+  const trimmed = expr.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+    return expr;
+  }
+  const inner = trimmed.slice(1, -1).trim();
+  if (!inner) return "{}";
+
+  const lines = inner
+    .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const keptLines: string[] = [];
+  for (const line of lines) {
+    const colonIdx = line.indexOf(":");
+    if (colonIdx === -1) {
+      keptLines.push(line);
+      continue;
+    }
+    const propKey = line.slice(0, colonIdx).trim().replace(/['"]/g, "").toLowerCase();
+    if (allowedProps.includes(propKey) || propKey.startsWith("...")) {
+      keptLines.push(line);
+    }
+  }
+
+  if (keptLines.length === 0) return "{}";
+  return `{\n  ${keptLines.join(",\n  ")}\n}`;
+}
+
+function compileStorageStepArgs(
+  bindings: PipelineStepInputBinding[],
+  fnName: string | undefined,
+  ctx: PipelineRenderContext,
+): string {
+  const normFn = (fnName || "").toLowerCase();
+
+  const resolveStorageBindingVal = (b: PipelineStepInputBinding): string => {
+    const expr = resolveBinding(b, ctx);
+    const argLower = (b.argName || "").toLowerCase();
+    if (
+      (argLower === "key" ||
+        argLower === "filename" ||
+        argLower === "name" ||
+        argLower === "bucketname" ||
+        argLower === "sourcekey" ||
+        argLower === "destkey") &&
+      b.source?.kind === "req_body"
+    ) {
+      return `String(${expr} || "")`;
+    }
+    return expr;
+  };
+
+  if (
+    normFn === "getuploadpresignedurl" ||
+    normFn === "getdownloadpresignedurl" ||
+    normFn === "uploadobject"
+  ) {
+    const isUploadPresigned = normFn === "getuploadpresignedurl";
+    const isDownloadPresigned = normFn === "getdownloadpresignedurl";
+    const isUploadObj = normFn === "uploadobject";
+
+    const optionsPropNames = isUploadPresigned
+      ? ["expiresinseconds", "contenttype", "acl"]
+      : isDownloadPresigned
+      ? ["expiresinseconds"]
+      : ["contenttype", "metadata", "acl"];
+
+    const bucketBinding = bindings.find((b) => {
+      const l = (b.argName || "").toLowerCase();
+      return l === "bucketname" || l === "bucket" || l === "sourcebucket";
+    });
+
+    const keyBinding = bindings.find((b) => {
+      const l = (b.argName || "").toLowerCase();
+      return l === "key" || l === "objectkey" || l === "sourcekey";
+    });
+
+    const filenameBinding = bindings.find((b) => {
+      const l = (b.argName || "").toLowerCase();
+      return l === "filename" || l === "name";
+    });
+
+    const bodyBinding = isUploadObj
+      ? bindings.find(
+          (b) =>
+            (b.argName || "").toLowerCase() === "body" ||
+            (b.argName || "").toLowerCase() === "file",
+        )
+      : undefined;
+
+    const directOptionsBinding = bindings.find(
+      (b) => (b.argName || "").toLowerCase() === "options",
+    );
+
+    // Resolve final target key expression by combining key/folder and filename
+    let finalKeyArg: string;
+    const keyVal = keyBinding ? resolveStorageBindingVal(keyBinding).trim() : "";
+    const fnVal = filenameBinding ? resolveStorageBindingVal(filenameBinding).trim() : "";
+
+    const isKeyNonEmpty = Boolean(keyVal && keyVal !== '""' && keyVal !== "''");
+    const isFnNonEmpty = Boolean(fnVal && fnVal !== '""' && fnVal !== "''");
+
+    if (isKeyNonEmpty && isFnNonEmpty) {
+      if (
+        (keyVal.startsWith('"') && keyVal.endsWith('"')) ||
+        (keyVal.startsWith("'") && keyVal.endsWith("'"))
+      ) {
+        const rawFolder = keyVal.slice(1, -1).replace(/\/+$/, "");
+        finalKeyArg = rawFolder ? `\`${rawFolder}/\${${fnVal}}\`` : fnVal;
+      } else {
+        finalKeyArg = `\`\${${keyVal}.replace(/\\/+$/, "")}/\${${fnVal}}\``;
+      }
+    } else if (isFnNonEmpty) {
+      finalKeyArg = fnVal;
+    } else if (isKeyNonEmpty) {
+      finalKeyArg = keyVal;
+    } else if (directOptionsBinding && directOptionsBinding.source?.kind === "inline") {
+      const rawVal = String(directOptionsBinding.source.value || "");
+      const nameMatch = rawVal.match(/["']?name["']?\s*:\s*([^,\n}]+)/);
+      if (nameMatch && nameMatch[1]) {
+        finalKeyArg = nameMatch[1].trim();
+      } else {
+        finalKeyArg = `""`;
+      }
+    } else {
+      finalKeyArg = `""`;
+    }
+
+    // Filter option sub-field bindings
+    const optionFieldBindings = bindings.filter((b) => {
+      const l = (b.argName || "").toLowerCase();
+      if (l.startsWith("options.")) return true;
+      return optionsPropNames.includes(l);
+    });
+
+    const positionalArgs: string[] = [];
+    if (bucketBinding) {
+      positionalArgs.push(resolveStorageBindingVal(bucketBinding));
+    }
+    positionalArgs.push(finalKeyArg);
+    if (isUploadObj && bodyBinding) {
+      positionalArgs.push(resolveStorageBindingVal(bodyBinding));
+    }
+
+    let optionsArg: string | undefined;
+
+    if (optionFieldBindings.length > 0) {
+      const optionLines = optionFieldBindings.map((b) => {
+        const rawName = b.argName.startsWith("options.")
+          ? b.argName.slice(8)
+          : b.argName;
+        const val = resolveBinding(b, ctx);
+        return `  ${rawName}: ${val}`;
+      });
+
+      if (directOptionsBinding) {
+        const directExpr = resolveBinding(directOptionsBinding, ctx).trim();
+        const sanitizedDirect = sanitizeOptionsObjectLiteral(directExpr, optionsPropNames);
+        if (sanitizedDirect && sanitizedDirect !== "{}" && sanitizedDirect !== "undefined") {
+          optionsArg = `{\n  ...${sanitizedDirect},\n${optionLines.join(",\n")}\n}`;
+        } else {
+          optionsArg = `{\n${optionLines.join(",\n")}\n}`;
+        }
+      } else {
+        optionsArg = `{\n${optionLines.join(",\n")}\n}`;
+      }
+    } else if (directOptionsBinding) {
+      const directExpr = resolveBinding(directOptionsBinding, ctx).trim();
+      const sanitized = sanitizeOptionsObjectLiteral(directExpr, optionsPropNames);
+      optionsArg = sanitized;
+    }
+
+    if (optionsArg !== undefined) {
+      positionalArgs.push(optionsArg);
+    }
+
+    if (positionalArgs.length > 0) {
+      return positionalArgs.join(", ");
+    }
+  }
+
+  const sorted = sortStorageBindings(bindings, fnName);
+  return sorted
+    .map((b) => resolveStorageBindingVal(b))
+    .join(", ");
 }
 
 /**
@@ -109,19 +299,7 @@ export function renderAsyncOperationStep(
     if (allPositional) {
       args = buildArgList(inputBindings, ctx);
     } else {
-      const sorted = sortStorageBindings(inputBindings, functionRef.name);
-      args = sorted
-        .map((b) => {
-          const expr = resolveBinding(b, ctx);
-          if (
-            (b.argName.toLowerCase() === "key" || b.argName.toLowerCase() === "bucketname") &&
-            b.source?.kind === "req_body"
-          ) {
-            return `String(${expr} || "")`;
-          }
-          return expr;
-        })
-        .join(", ");
+      args = compileStorageStepArgs(inputBindings, functionRef.name, ctx);
     }
   } else {
     args = buildArgList(inputBindings, ctx);

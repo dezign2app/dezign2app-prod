@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useEffect } from "react";
 import { Endpoint, BackendNode, BackendEdge, AnyMessagingResource, AvailableSource } from "@workspace/canvas/types";
 import {
   PipelineStepDraft,
@@ -17,7 +17,10 @@ import {
 import { toVarName, toPascalCase, parseSchemaJson } from "@/lib/compiler/utils";
 import { isStepInputUnconfigured } from "@/lib/utils/pipelineValidation";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
-import { getStorageOperations } from "@/lib/utils/storageOperationsHelper";
+import {
+  getStorageOperations,
+  getStorageOperationExpectedArgs,
+} from "@/lib/utils/storageOperationsHelper";
 
 function extractKafkaTopicSchemaArgs(
   step: PipelineStepDraft,
@@ -366,12 +369,8 @@ export function useStepRowState({
             o.name === step.functionRef?.name ||
             o.name.toLowerCase() === (step.functionRef?.name || "").toLowerCase(),
         );
-        if (matchedOp && matchedOp.params) {
-          return matchedOp.params.map((p) => ({
-            name: p.name,
-            type: p.type,
-            required: p.required !== false,
-          }));
+        if (matchedOp) {
+          return getStorageOperationExpectedArgs(matchedOp);
         }
         return [
           { name: "bucketName", type: "string", required: true },
@@ -567,6 +566,81 @@ export function useStepRowState({
     endpoint,
   ]);
 
+  // Auto-migrate missing storage operation arguments (like filename)
+  useEffect(() => {
+    if (step.type !== "storage_operation") return;
+    const ops = getStorageOperations();
+    const matchedOp = ops.find(
+      (o) =>
+        o.id === step.operationId ||
+        o.name === step.functionRef?.name ||
+        o.name.toLowerCase() === (step.functionRef?.name || "").toLowerCase(),
+    );
+    if (!matchedOp) return;
+
+    const opNeedsFilename =
+      matchedOp.kind === "presign_upload" ||
+      matchedOp.kind === "presign_download" ||
+      matchedOp.kind === "upload" ||
+      matchedOp.name === "getUploadPresignedUrl" ||
+      matchedOp.name === "getDownloadPresignedUrl" ||
+      matchedOp.name === "uploadObject" ||
+      matchedOp.params?.some((p) => p.name.toLowerCase() === "filename");
+
+    if (!opNeedsFilename) return;
+
+    const currentBindings = step.inputBindings || [];
+    const hasFilename = currentBindings.some(
+      (b) => (b.argName || "").trim().toLowerCase() === "filename",
+    );
+
+    if (!hasFilename) {
+      const reqBodySource = availableSources.find(
+        (s) => s.kind === "req_body" || s.id === "event_payload",
+      );
+      const matchField =
+        reqBodySource?.paths.find((p) => {
+          const norm = p.path.toLowerCase();
+          return (
+            norm === "filename" ||
+            norm === "name" ||
+            norm === "file" ||
+            norm === "filepath" ||
+            norm === "originalname"
+          );
+        })?.path || "filename";
+
+      const filenameBinding: StepBinding = {
+        argName: "filename",
+        source: {
+          kind: "req_body",
+          field: matchField,
+        },
+      };
+
+      const optionsIdx = currentBindings.findIndex(
+        (b) => (b.argName || "").trim().toLowerCase() === "options",
+      );
+      const keyIdx = currentBindings.findIndex(
+        (b) => (b.argName || "").trim().toLowerCase() === "key",
+      );
+
+      const next = [...currentBindings];
+      if (keyIdx !== -1) {
+        next.splice(keyIdx + 1, 0, filenameBinding);
+      } else if (optionsIdx !== -1) {
+        next.splice(optionsIdx, 0, filenameBinding);
+      } else {
+        next.push(filenameBinding);
+      }
+
+      onChange({
+        ...step,
+        inputBindings: next,
+      });
+    }
+  }, [step, onChange, availableSources]);
+
   // Auto-map arguments from route params / query / body / prior steps (preserving existing)
   // ONLY maps and adds fields that actually exist in available sources, preventing adding non-existent fields.
   const handleAutoMapArguments = useCallback(() => {
@@ -656,10 +730,62 @@ export function useStepRowState({
       }
       if (stepMatched) continue;
 
-      // 5. Request body / Event payload match
-      const matchBody = reqBodySource?.paths.find((p) =>
-        isPathMatch(p.path, arg.name),
-      );
+      // 5. Request body / Event payload match (with storage synonyms)
+      const matchBody = reqBodySource?.paths.find((p) => {
+        if (isPathMatch(p.path, arg.name)) return true;
+        const normP = p.path.trim().toLowerCase();
+        if (normArg === "filename") {
+          return (
+            normP === "filename" ||
+            normP === "name" ||
+            normP === "file" ||
+            normP === "filepath" ||
+            normP === "filekey" ||
+            normP === "originalname" ||
+            normP === "imagename" ||
+            normP === "uploadname"
+          );
+        }
+        if (normArg === "key" || normArg === "objectkey") {
+          const hasSeparateFilenameArg = expectedArgs.some(
+            (a) => a.name.trim().toLowerCase() === "filename",
+          );
+          if (hasSeparateFilenameArg) {
+            return (
+              normP === "key" ||
+              normP === "folder" ||
+              normP === "path" ||
+              normP === "prefix" ||
+              normP === "dir" ||
+              normP === "directory"
+            );
+          }
+          return (
+            normP === "filename" ||
+            normP === "name" ||
+            normP === "file" ||
+            normP === "filepath" ||
+            normP === "filekey"
+          );
+        }
+        if (normArg === "contenttype") {
+          return (
+            normP === "contenttype" ||
+            normP === "mimetype" ||
+            normP === "type" ||
+            normP === "filetype"
+          );
+        }
+        if (normArg === "expiresinseconds") {
+          return (
+            normP === "expiresinseconds" ||
+            normP === "expiresin" ||
+            normP === "ttl" ||
+            normP === "expiry"
+          );
+        }
+        return false;
+      });
       if (matchBody) {
         newBindings.push({
           argName: arg.name,
@@ -680,10 +806,15 @@ export function useStepRowState({
         continue;
       }
 
-      // 6b. Environment Variables (.env) match
-      const matchEnv = envSource?.paths.find((p) =>
-        isPathMatch(p.path, arg.name),
-      );
+      // 6b. Environment Variables (.env) match (with bucket synonym)
+      const matchEnv = envSource?.paths.find((p) => {
+        if (isPathMatch(p.path, arg.name)) return true;
+        const normP = p.path.trim().toLowerCase();
+        if (normArg === "bucketname" || normArg === "bucket") {
+          return normP.includes("bucket");
+        }
+        return false;
+      });
       if (matchEnv) {
         newBindings.push({
           argName: arg.name,
