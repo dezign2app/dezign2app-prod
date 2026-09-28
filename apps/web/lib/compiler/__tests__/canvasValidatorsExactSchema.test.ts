@@ -899,6 +899,98 @@ describe("Convex canvasValidators exact schema", () => {
     expect(backendDatabaseDataValidator).toBeDefined();
     expect(backendDatabaseDataValidator.fields.envVars).toBeDefined();
   });
+
+  it("validates webPage node with storage upload configuration and storageOperationBinding", async () => {
+    const { webPageDataSchema } = await import("@workspace/canvas/schemas");
+    const { webPageConvexDataValidator, storageOperationBindingConvexValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    // Exact payload reported in user's Convex upsertBackendNode error
+    const failingPayload = {
+      appSlug: "web-app-1",
+      connectedStorageNodeId: "b4afff7b-290e-4b39-a196-902591b4fc47",
+      description: "Default 404 not found page",
+      label: "/not-found",
+      position: { x: 1120.0, y: 485.75 },
+      presignEndpointId: "66miezw",
+      sections: [
+        {
+          id: "sec-404-1",
+          name: "Main",
+          actions: [
+            {
+              event: "navigateToPage",
+              id: "evt-1790373194002-2",
+              name: "Back to Home",
+              targetPageId: "9d0d9714-5989-42e8-9418-62a783dddd3a",
+              targetRoute: "/",
+            },
+            {
+              event: "click",
+              id: "5rgx7x2",
+              name: "upload image",
+              storageOperationBinding: {
+                bucketId: "test",
+                endpointId: "66miezw",
+                operationName: "getUploadPresignedUrl",
+                serviceNodeId: "service-1",
+                storageNodeId: "b4afff7b-290e-4b39-a196-902591b4fc47",
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const parsed = webPageDataSchema.safeParse(failingPayload);
+    expect(parsed.success).toBe(true);
+
+    // Verify convex validator fields
+    expect(webPageConvexDataValidator.fields.connectedStorageNodeId).toBeDefined();
+    expect(webPageConvexDataValidator.fields.presignEndpointId).toBeDefined();
+    expect(webPageConvexDataValidator.fields.uploadBucketId).toBeDefined();
+    expect(webPageConvexDataValidator.fields.uploadAcceptedMimeTypes).toBeDefined();
+    expect(webPageConvexDataValidator.fields.uploadMaxFileSizeMb).toBeDefined();
+    expect(webPageConvexDataValidator.fields.uploadPreviewMode).toBeDefined();
+    expect(webPageConvexDataValidator.fields.autoGeneratePresignEndpoint).toBeDefined();
+    expect(storageOperationBindingConvexValidator).toBeDefined();
+    expect(storageOperationBindingConvexValidator.fields.storageNodeId).toBeDefined();
+    expect(storageOperationBindingConvexValidator.fields.bucketId).toBeDefined();
+    expect(storageOperationBindingConvexValidator.fields.operationName).toBeDefined();
+    expect(storageOperationBindingConvexValidator.fields.endpointId).toBeDefined();
+    expect(storageOperationBindingConvexValidator.fields.serviceNodeId).toBeDefined();
+  });
+
+  it("validates edge with storage operation fields (bucketId, operationName, etc.) in Convex & Zod schemas", async () => {
+    const { edgeDataSchema } = await import("@workspace/canvas/schemas");
+    const { backendEdgeDataValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    // Exact payload reported in user's Convex upsertBackendEdge error
+    const edgePayload = {
+      bucketId: "9y7nwhr",
+      label: "3",
+      operationName: "uploadObject",
+      sequenceOrder: 3.0,
+      isStorageOperationBinding: true,
+      storageNodeId: "storage-node-1",
+      refNodeId: "ref-node-1",
+      actionId: "act-1",
+    };
+
+    const parsed = edgeDataSchema.safeParse(edgePayload);
+    expect(parsed.success).toBe(true);
+
+    // Verify convex validator fields
+    expect(backendEdgeDataValidator.fields.bucketId).toBeDefined();
+    expect(backendEdgeDataValidator.fields.operationName).toBeDefined();
+    expect(backendEdgeDataValidator.fields.isStorageOperationBinding).toBeDefined();
+    expect(backendEdgeDataValidator.fields.actionId).toBeDefined();
+    expect(backendEdgeDataValidator.fields.storageNodeId).toBeDefined();
+    expect(backendEdgeDataValidator.fields.refNodeId).toBeDefined();
+  });
 });
 
 

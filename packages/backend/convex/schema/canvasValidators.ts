@@ -356,6 +356,13 @@ export const backendEdgeDataValidator = v.object({
   responseType: v.optional(v.string()),
   responseMode: v.optional(v.string()),
   notes: v.optional(v.string()),
+  // --- Storage Bucket Connection Fields ---
+  isStorageOperationBinding: v.optional(v.boolean()),
+  actionId: v.optional(v.string()),
+  operationName: v.optional(v.string()),
+  bucketId: v.optional(v.string()),
+  storageNodeId: v.optional(v.string()),
+  refNodeId: v.optional(v.string()),
   // --- LangGraph Route Invocation ---
   payloadMapping: v.optional(v.record(v.string(), v.string())),
   preInvokeLogicMode: v.optional(
@@ -508,6 +515,16 @@ export const storeActionBindingConvexValidator = v.object({
   parameterMappings: v.optional(v.any()),
 });
 
+// Storage Operation Binding Validator (Used in Web Page Actions connected to storage operation ref)
+export const storageOperationBindingConvexValidator = v.object({
+  storageNodeId: v.optional(v.string()),
+  bucketId: v.optional(v.string()),
+  operationName: v.optional(v.string()),
+  refNodeId: v.optional(v.string()),
+  endpointId: v.optional(v.string()),
+  serviceNodeId: v.optional(v.string()),
+});
+
 // UI Event Item Validator
 export const webPageEventConvexValidator = v.object({
   id: v.optional(v.string()),
@@ -547,6 +564,8 @@ export const webPageEventConvexValidator = v.object({
   pollingConfig: v.optional(pollingConfigConvexValidator),
   storeActionBinding: v.optional(storeActionBindingConvexValidator),
   storeActionBindings: v.optional(v.array(storeActionBindingConvexValidator)),
+  storageOperationBinding: v.optional(storageOperationBindingConvexValidator),
+  actionSteps: v.optional(v.array(v.any())),
 });
 
 // Page State Object Validator
@@ -722,6 +741,17 @@ export const webPageConvexDataValidator = v.object({
   protectionOverride: v.optional(protectionRuleConvexValidator),
   customDependencies: v.optional(v.array(nodeDependencyItemConvexValidator)),
   stackOrder: v.optional(v.number()),
+
+  // Storage & Image Upload configuration
+  connectedStorageNodeId: v.optional(v.string()),
+  uploadBucketId: v.optional(v.string()),
+  uploadAcceptedMimeTypes: v.optional(v.array(v.string())),
+  uploadMaxFileSizeMb: v.optional(v.number()),
+  uploadPreviewMode: v.optional(
+    v.union(v.literal("thumbnail"), v.literal("none")),
+  ),
+  autoGeneratePresignEndpoint: v.optional(v.boolean()),
+  presignEndpointId: v.optional(v.string()),
 });
 
 export const backendWebPageDataValidator = webPageConvexDataValidator;

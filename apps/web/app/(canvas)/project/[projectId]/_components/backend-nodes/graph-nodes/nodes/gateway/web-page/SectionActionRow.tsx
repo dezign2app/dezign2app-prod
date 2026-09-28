@@ -504,33 +504,6 @@ export const SectionActionRow = ({
               <span className="font-medium text-xs truncate">{action.name}</span>
               {getEventBadge()}
             </div>
-            {stepLinks.length > 1 && (
-              <div className="flex items-center gap-1 flex-wrap pl-1 border-l-2 border-indigo-500/40 mt-0.5">
-                {stepLinks.map((sl) => (
-                  <span
-                    key={sl.edgeId || sl.step}
-                    className={cn(
-                      "text-[8px] font-mono px-1.5 py-0.5 rounded flex items-center gap-1 font-semibold",
-                      sl.isStorageRef
-                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25"
-                        : "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/25",
-                    )}
-                    title={`Step ${sl.label}: ${sl.isStorageRef ? `Upload via Presigned URL (${sl.bucketName})` : `${sl.endpoint?.type || "API"} ${sl.endpoint?.name} (${sl.targetNode.data?.label || "Service"})`}`}
-                  >
-                    <span className="w-3 h-3 rounded-full bg-foreground/10 text-[7px] flex items-center justify-center font-bold">
-                      {sl.label}
-                    </span>
-                    {sl.isStorageRef ? (
-                      <span>🪣 {sl.operationName}()</span>
-                    ) : (
-                      <span>
-                        {sl.endpoint?.type || "API"} {sl.endpoint?.name}
-                      </span>
-                    )}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
           <div
             className="flex items-center gap-1 shrink-0"

@@ -54,8 +54,12 @@ export type BackendEdge = {
     responseMode?: string;
     notes?: string;
     // --- Storage Bucket Connection Fields ---
+    isStorageOperationBinding?: boolean;
+    actionId?: string;
     operationName?: string;
     bucketId?: string;
+    storageNodeId?: string;
+    refNodeId?: string;
     // --- LangGraph Route Invocation ---
     // Maps HTTP body / event payload fields → LangGraph state channel keys.
     // Lives on the edge so the graph itself stays immutable and reusable.
