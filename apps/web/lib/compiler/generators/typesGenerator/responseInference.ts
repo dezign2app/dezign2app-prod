@@ -192,6 +192,11 @@ export function inferBindingType(
         const isList = fnName.includes("list");
 
         if (isPresigned) {
+          if (source.field) {
+            const fLower = source.field.toLowerCase();
+            if (fLower === "expiresinseconds") return "number";
+            if (fLower === "method" || fLower === "key" || fLower === "bucket") return "string";
+          }
           return "string";
         }
         if (isExists) {

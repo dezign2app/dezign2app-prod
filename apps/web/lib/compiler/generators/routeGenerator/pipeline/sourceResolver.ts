@@ -63,21 +63,48 @@ export function resolveSource(
           ctx.stepOutputMeta?.get(source.stepId) ||
           ctx.stepOutputMeta?.get(varName);
 
-        // If the step output is marked as a primitive (e.g. string URL or boolean),
-        // it has no child properties. Any property reference on a primitive causes TS2339.
-        if (meta?.isPrimitive) {
+        const fieldLower = field.toLowerCase();
+        const varLower = varName.toLowerCase();
+
+        const isPresignedStorage =
+          Boolean(meta?.isPresignedStorage) ||
+          varLower === "uploadurl" ||
+          varLower === "downloadurl" ||
+          varLower === "presignedurl" ||
+          varLower === "signedurl";
+
+        if (
+          fieldLower === varLower ||
+          ((varLower === "uploadurl" || varLower === "downloadurl" || varLower === "presignedurl" || varLower === "signedurl" || isPresignedStorage) &&
+            (fieldLower === "uploadurl" ||
+              fieldLower === "downloadurl" ||
+              fieldLower === "presignedurl" ||
+              fieldLower === "signedurl" ||
+              fieldLower === "url"))
+        ) {
           return varName;
         }
 
-        // Defensive guard: if field name matches variable name (e.g. uploadUrl.uploadUrl),
-        // or aliases like "url" / "uploadUrl" on a presigned URL variable, return the variable itself.
-        const fieldLower = field.toLowerCase();
-        const varLower = varName.toLowerCase();
-        if (
-          fieldLower === varLower ||
-          ((varLower === "uploadurl" || varLower === "downloadurl") &&
-            (fieldLower === "uploadurl" || fieldLower === "downloadurl" || fieldLower === "url"))
-        ) {
+        if (isPresignedStorage) {
+          if (fieldLower === "key") {
+            return meta?.keyExpression || `""`;
+          }
+          if (fieldLower === "bucket") {
+            return meta?.bucketExpression || `""`;
+          }
+          if (fieldLower === "method") {
+            const isDownload = Boolean(meta?.isDownload) || varLower.includes("download");
+            return JSON.stringify(isDownload ? "GET" : "PUT");
+          }
+          if (fieldLower === "expiresinseconds") {
+            const isDownload = Boolean(meta?.isDownload) || varLower.includes("download");
+            return isDownload ? "3600" : "900";
+          }
+        }
+
+        // If the step output is marked as a primitive (e.g. string URL or boolean),
+        // it has no child properties. Any property reference on a primitive causes TS2339.
+        if (meta?.isPrimitive) {
           return varName;
         }
 

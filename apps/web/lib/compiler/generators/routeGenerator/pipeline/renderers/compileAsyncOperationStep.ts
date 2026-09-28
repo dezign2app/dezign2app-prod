@@ -228,10 +228,38 @@ export function renderAsyncOperationStep(
         isBoolStorage ||
         primitiveType !== undefined);
 
+    const isDownload =
+      fnLower.includes("download") ||
+      fnLower === "getdownloadpresignedurl";
+
+    let keyExpression: string | undefined;
+    let bucketExpression: string | undefined;
+    if (step.type === "storage_operation" && inputBindings.length > 0) {
+      const keyBinding = inputBindings.find(
+        (b) => b.argName?.toLowerCase() === "key" || b.argName?.toLowerCase() === "objectkey",
+      );
+      if (keyBinding) {
+        const resolvedKey = resolveBinding(keyBinding, ctx);
+        keyExpression = keyBinding.source?.kind === "req_body" ? `String(${resolvedKey} || "")` : resolvedKey;
+      }
+      const bucketBinding = inputBindings.find(
+        (b) => b.argName?.toLowerCase() === "bucketname" || b.argName?.toLowerCase() === "bucket",
+      );
+      if (bucketBinding) {
+        bucketExpression = resolveBinding(bucketBinding, ctx);
+      } else if (step.bucketId) {
+        bucketExpression = JSON.stringify(step.bucketId);
+      }
+    }
+
     const meta: PipelineStepOutputMeta = {
       isArray,
       isPrimitive: isPrimitiveReturn,
       primitiveType,
+      isPresignedStorage,
+      isDownload,
+      keyExpression,
+      bucketExpression,
     };
 
     if (step.id) {

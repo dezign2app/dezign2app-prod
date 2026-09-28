@@ -137,13 +137,53 @@ export const ReturnResponseStepRow = ({
           if (!field) return base;
           const baseLower = base.toLowerCase();
           const fieldLower = field.toLowerCase();
+          const isPresigned =
+            baseLower === "uploadurl" ||
+            baseLower === "downloadurl" ||
+            baseLower === "presignedurl" ||
+            baseLower === "signedurl" ||
+            (found?.label && found.label.toLowerCase().includes("presign"));
+
           if (
             fieldLower === baseLower ||
-            ((baseLower === "uploadurl" || baseLower === "downloadurl") &&
-              (fieldLower === "uploadurl" || fieldLower === "downloadurl" || fieldLower === "url"))
+            (isPresigned &&
+              (fieldLower === "uploadurl" ||
+                fieldLower === "downloadurl" ||
+                fieldLower === "presignedurl" ||
+                fieldLower === "signedurl" ||
+                fieldLower === "url"))
           ) {
             return base;
           }
+
+          if (isPresigned) {
+            if (fieldLower === "key") {
+              const prior = priorSteps.find((s) => s.id === source.stepId);
+              const keyBinding = prior?.inputBindings?.find(
+                (b) => b.argName?.toLowerCase() === "key" || b.argName?.toLowerCase() === "objectkey",
+              );
+              if (keyBinding?.source?.kind === "req_body" && keyBinding.source.field) {
+                return `req.body.${keyBinding.source.field}`;
+              }
+              if (keyBinding?.source?.kind === "inline" && keyBinding.source.value) {
+                return JSON.stringify(keyBinding.source.value);
+              }
+              return `"uploads/file.png"`;
+            }
+            if (fieldLower === "bucket") {
+              const prior = priorSteps.find((s) => s.id === source.stepId);
+              return JSON.stringify(prior?.bucketId || "default-bucket");
+            }
+            if (fieldLower === "method") {
+              const isDownload = baseLower.includes("download");
+              return JSON.stringify(isDownload ? "GET" : "PUT");
+            }
+            if (fieldLower === "expiresinseconds") {
+              const isDownload = baseLower.includes("download");
+              return isDownload ? "3600" : "900";
+            }
+          }
+
           if (field.startsWith("[")) return `${base}${field}`;
           return `${base}.${field}`;
         }

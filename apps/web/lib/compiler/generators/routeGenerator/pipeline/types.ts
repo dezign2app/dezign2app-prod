@@ -6,6 +6,10 @@ export interface PipelineStepOutputMeta {
   isPrimitive?: boolean;
   primitiveType?: "string" | "number" | "boolean";
   returnType?: string;
+  isPresignedStorage?: boolean;
+  isDownload?: boolean;
+  keyExpression?: string;
+  bucketExpression?: string;
 }
 
 /**
