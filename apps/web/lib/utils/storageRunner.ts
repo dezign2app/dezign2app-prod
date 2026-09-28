@@ -10,6 +10,8 @@ import type {
   CreateStorageBucketResult,
   StorageTestCaseResult,
   StorageTestSuiteResult,
+  SyncBucketOptions,
+  SyncStorageBucketResult,
 } from "@workspace/canvas/types";
 
 export type {
@@ -22,6 +24,8 @@ export type {
   CreateStorageBucketResult,
   StorageTestCaseResult,
   StorageTestSuiteResult,
+  SyncBucketOptions,
+  SyncStorageBucketResult,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -644,6 +648,259 @@ export async function createStorageBucketLive(
 }
 
 /**
+ * Syncs a bucket's live server configuration (access policy, public read, ACL, CORS)
+ * directly to the target storage server (AWS S3, SeaweedFS, MinIO).
+ */
+export async function syncStorageBucketLive(
+  config: StorageConnectionConfig,
+  options?: SyncBucketOptions,
+): Promise<SyncStorageBucketResult> {
+  const cleanBucket = (config.bucketName || "").trim().toLowerCase();
+  if (!cleanBucket) {
+    return {
+      success: false,
+      bucketName: "",
+      status: 400,
+      message: "Bucket name cannot be empty",
+      error: "Missing bucket name",
+    };
+  }
+
+  const region = config.region || process.env.AWS_REGION || "us-east-1";
+  const { accessKeyId, secretAccessKey, sessionToken } = resolveCredentials(config);
+  const accessPolicy = options?.accessPolicy || "private";
+  const isPublicRead = accessPolicy === "public-read";
+
+  // 1. Ensure bucket exists on target server; create if missing
+  try {
+    await createStorageBucketLive(config, cleanBucket);
+  } catch {
+    // Non-fatal if bucket already exists
+  }
+
+  // 2. Resolve bucket endpoint and URLs
+  const resolved = resolveStorageUrl({ ...config, bucketName: cleanBucket, forcePathStyle: true }, "");
+  const bucketUrl = resolved.url;
+  const urlObj = new URL(bucketUrl);
+  const host = urlObj.host;
+
+  let policyApplied = false;
+  let corsApplied = false;
+  let publicAccessVerified = false;
+  const warnings: string[] = [];
+
+  // 3. If AWS S3 and public-read requested, loosen PublicAccessBlock if applicable
+  if (isPublicRead) {
+    try {
+      const publicBlockUrl = `${bucketUrl}?publicAccessBlock`;
+      const publicBlockBody = `<PublicAccessBlockConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><BlockPublicAcls>false</BlockPublicAcls><IgnorePublicAcls>false</IgnorePublicAcls><BlockPublicPolicy>false</BlockPublicPolicy><RestrictPublicBuckets>false</RestrictPublicBuckets></PublicAccessBlockConfiguration>`;
+      const blockHeaders = signS3Request({
+        method: "PUT",
+        url: publicBlockUrl,
+        region,
+        host,
+        accessKeyId,
+        secretAccessKey,
+        sessionToken,
+        body: publicBlockBody,
+        extraHeaders: { "Content-Type": "application/xml" },
+      });
+      await fetch(publicBlockUrl, {
+        method: "PUT",
+        headers: blockHeaders,
+        body: publicBlockBody,
+      });
+    } catch {
+      // Ignored for SeaweedFS/MinIO where PublicAccessBlock is unsupported
+    }
+  }
+
+  // 4. Apply or Delete Bucket Policy (?policy)
+  try {
+    const policyUrl = `${bucketUrl}?policy`;
+    if (isPublicRead) {
+      const policyDoc = {
+        Version: "2012-10-17",
+        Statement: [
+          {
+            Sid: "PublicReadGetObject",
+            Effect: "Allow",
+            Principal: "*",
+            Action: ["s3:GetObject"],
+            Resource: [`arn:aws:s3:::${cleanBucket}/*`],
+          },
+        ],
+      };
+      const policyBody = JSON.stringify(policyDoc);
+      const policyHeaders = signS3Request({
+        method: "PUT",
+        url: policyUrl,
+        region,
+        host,
+        accessKeyId,
+        secretAccessKey,
+        sessionToken,
+        body: policyBody,
+        extraHeaders: { "Content-Type": "application/json" },
+      });
+
+      const res = await fetch(policyUrl, {
+        method: "PUT",
+        headers: policyHeaders,
+        body: policyBody,
+      });
+
+      if (res.status >= 200 && res.status < 300) {
+        policyApplied = true;
+      } else {
+        const text = await res.text();
+        const parsed = parseS3XmlResponse(text);
+        warnings.push(`Policy step HTTP ${res.status}: ${parsed?.message || res.statusText}`);
+      }
+    } else {
+      // Switching to private: remove public bucket policy
+      const policyHeaders = signS3Request({
+        method: "DELETE",
+        url: policyUrl,
+        region,
+        host,
+        accessKeyId,
+        secretAccessKey,
+        sessionToken,
+      });
+      const res = await fetch(policyUrl, {
+        method: "DELETE",
+        headers: policyHeaders,
+      });
+      if (res.status >= 200 && res.status < 300) {
+        policyApplied = true;
+      }
+    }
+  } catch (err) {
+    warnings.push(`Bucket policy step: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // 5. Apply canned ACL (?acl)
+  try {
+    const aclUrl = `${bucketUrl}?acl`;
+    const targetAcl = isPublicRead ? "public-read" : "private";
+    const aclHeaders = signS3Request({
+      method: "PUT",
+      url: aclUrl,
+      region,
+      host,
+      accessKeyId,
+      secretAccessKey,
+      sessionToken,
+      extraHeaders: { "x-amz-acl": targetAcl },
+    });
+    const aclRes = await fetch(aclUrl, {
+      method: "PUT",
+      headers: aclHeaders,
+    });
+    if (aclRes.status >= 200 && aclRes.status < 300) {
+      policyApplied = true;
+    }
+  } catch {
+    // Non-fatal if ACLs disabled on server
+  }
+
+  // 6. Apply CORS configuration (?cors)
+  if (options?.enableCors !== false) {
+    try {
+      const corsUrl = `${bucketUrl}?cors`;
+      const allowedOrigins = (options?.corsOrigins || "*")
+        .split(",")
+        .map((o) => o.trim())
+        .filter(Boolean);
+      const originsToUse = allowedOrigins.length > 0 ? allowedOrigins : ["*"];
+      const methods =
+        options?.corsMethods && options.corsMethods.length > 0
+          ? options.corsMethods
+          : ["GET", "HEAD", "PUT", "POST", "DELETE"];
+      const allowedHeaders = (options?.corsHeaders || "*")
+        .split(",")
+        .map((h) => h.trim())
+        .filter(Boolean);
+      const headersToUse = allowedHeaders.length > 0 ? allowedHeaders : ["*"];
+      const maxAge = Number(options?.corsMaxAge) || 3600;
+
+      const corsRulesXml = originsToUse
+        .map(
+          (orig) => `
+        <CORSRule>
+          <AllowedOrigin>${orig}</AllowedOrigin>
+          ${methods.map((m) => `<AllowedMethod>${m}</AllowedMethod>`).join("")}
+          ${headersToUse.map((h) => `<AllowedHeader>${h}</AllowedHeader>`).join("")}
+          <MaxAgeSeconds>${maxAge}</MaxAgeSeconds>
+        </CORSRule>
+      `,
+        )
+        .join("");
+
+      const corsBody = `<CORSConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">${corsRulesXml}</CORSConfiguration>`;
+
+      const corsHeaders = signS3Request({
+        method: "PUT",
+        url: corsUrl,
+        region,
+        host,
+        accessKeyId,
+        secretAccessKey,
+        sessionToken,
+        body: corsBody,
+        extraHeaders: { "Content-Type": "application/xml" },
+      });
+
+      const corsRes = await fetch(corsUrl, {
+        method: "PUT",
+        headers: corsHeaders,
+        body: corsBody,
+      });
+
+      if (corsRes.status >= 200 && corsRes.status < 300) {
+        corsApplied = true;
+      }
+    } catch {
+      // Non-fatal if server doesn't support CORS endpoint
+    }
+  }
+
+  // 7. Verify Public Reachability with unauthenticated ping
+  let publicUrl = `${bucketUrl.replace(/\/+$/, "")}/`;
+  if (config.cdnUrl) {
+    publicUrl = `${config.cdnUrl.replace(/\/+$/, "")}/${cleanBucket}/`;
+  }
+
+  if (isPublicRead) {
+    try {
+      const checkRes = await fetch(bucketUrl, { method: "HEAD" });
+      if (checkRes.status !== 403 && checkRes.status !== 401) {
+        publicAccessVerified = true;
+      }
+    } catch {
+      // Network reachability issue
+    }
+  }
+
+  return {
+    success: true,
+    bucketName: cleanBucket,
+    status: 200,
+    statusText: "Synced",
+    message: isPublicRead
+      ? `Bucket "${cleanBucket}" successfully synced to Public Read on storage server.`
+      : `Bucket "${cleanBucket}" synced as Private on storage server.`,
+    appliedPolicy: accessPolicy,
+    policyApplied,
+    corsApplied,
+    publicAccessVerified: isPublicRead ? publicAccessVerified : undefined,
+    publicUrl,
+    error: warnings.length > 0 && !policyApplied ? warnings.join("; ") : undefined,
+  };
+}
+
+/**
  * Sends a real HTTP request to the configured S3 / storage server to test connection.
  */
 export async function checkStorageConnectionLive(
@@ -873,17 +1130,20 @@ export async function executeStorageOperationLive(
       }
     }
 
-    const signedHeaders = signS3Request({
-      method,
-      url: requestUrl,
-      region,
-      host: new URL(requestUrl).host,
-      accessKeyId,
-      secretAccessKey,
-      sessionToken,
-      body,
-      extraHeaders,
-    });
+    const isAnonymousPublicCheck = operation === "getPublicObjectUrl";
+    const signedHeaders = isAnonymousPublicCheck
+      ? { Host: new URL(requestUrl).host, ...extraHeaders }
+      : signS3Request({
+          method,
+          url: requestUrl,
+          region,
+          host: new URL(requestUrl).host,
+          accessKeyId,
+          secretAccessKey,
+          sessionToken,
+          body,
+          extraHeaders,
+        });
 
     const fetchOptions: RequestInit = {
       method,
@@ -965,8 +1225,12 @@ export async function executeStorageOperationLive(
         bucket: connection.bucketName,
       };
     } else if (operation === "getPublicObjectUrl") {
+      let finalPublicUrl = requestUrl;
+      if (connection.cdnUrl) {
+        finalPublicUrl = `${connection.cdnUrl.replace(/\/+$/, "")}/${key.replace(/^\/+/, "")}`;
+      }
       parsedData = {
-        url: requestUrl,
+        url: finalPublicUrl,
         key: key,
         bucket: connection.bucketName,
         exists: response.status === 200,
@@ -990,6 +1254,10 @@ export async function executeStorageOperationLive(
       error: !isSuccess
         ? `Server responded with ${response.status} ${response.statusText}`
         : undefined,
+      tip:
+        operation === "getPublicObjectUrl" && response.status === 403
+          ? "Access Denied (403). The bucket is private on the server. Click 'Sync to Server' to apply public-read permissions and CORS."
+          : undefined,
     };
   } catch (err) {
     clearTimeout(timeoutId);

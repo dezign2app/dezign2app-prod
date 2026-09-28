@@ -5,6 +5,7 @@ import {
   executeStorageOperationLive,
   listStorageBucketsLive,
   createStorageBucketLive,
+  syncStorageBucketLive,
   executeStorageTestSuiteLive,
   type StorageConnectionConfig,
   type CheckStorageConnectionResult,
@@ -15,6 +16,8 @@ import {
   type ServerBucketInfo,
   type StorageTestCaseResult,
   type StorageTestSuiteResult,
+  type SyncBucketOptions,
+  type SyncStorageBucketResult,
 } from "@/lib/utils/storageRunner";
 
 export type {
@@ -27,6 +30,8 @@ export type {
   ServerBucketInfo,
   StorageTestCaseResult,
   StorageTestSuiteResult,
+  SyncBucketOptions,
+  SyncStorageBucketResult,
 };
 
 /**
@@ -66,6 +71,17 @@ export async function createStorageBucketAction(
   bucketName: string,
 ): Promise<CreateStorageBucketResult> {
   return createStorageBucketLive(config, bucketName);
+}
+
+/**
+ * Server action to sync and update bucket policy (public/private), ACL, and CORS
+ * directly on the live storage server.
+ */
+export async function syncStorageBucketAction(
+  config: StorageConnectionConfig,
+  options?: SyncBucketOptions,
+): Promise<SyncStorageBucketResult> {
+  return syncStorageBucketLive(config, options);
 }
 
 /**

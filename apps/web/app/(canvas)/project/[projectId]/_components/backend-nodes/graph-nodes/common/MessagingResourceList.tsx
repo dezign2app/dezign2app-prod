@@ -394,6 +394,14 @@ export const MessagingResourceRow = ({
                     {consumerCount}
                   </span>
                 )}
+                {resourceType === "buckets" && item.accessPolicy === "public-read" && (
+                  <span
+                    className="text-[8px] bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-1 py-0 rounded font-mono font-medium shrink-0"
+                    title="Public Read bucket: Anonymous read access enabled"
+                  >
+                    public
+                  </span>
+                )}
               </div>
               <div
                 className={cn(

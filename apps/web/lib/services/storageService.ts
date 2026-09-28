@@ -3,6 +3,7 @@ import {
   executeStorageOperationAction,
   listStorageBucketsAction,
   createStorageBucketAction,
+  syncStorageBucketAction,
   executeStorageTestSuiteAction,
   type StorageConnectionConfig,
   type CheckStorageConnectionResult,
@@ -13,6 +14,8 @@ import {
   type ServerBucketInfo,
   type StorageTestCaseResult,
   type StorageTestSuiteResult,
+  type SyncBucketOptions,
+  type SyncStorageBucketResult,
 } from "@/app/actions/storageActions";
 
 export type {
@@ -25,6 +28,8 @@ export type {
   ServerBucketInfo,
   StorageTestCaseResult,
   StorageTestSuiteResult,
+  SyncBucketOptions,
+  SyncStorageBucketResult,
 };
 
 /**
@@ -63,6 +68,16 @@ export async function createStorageBucket(
   bucketName: string,
 ): Promise<CreateStorageBucketResult> {
   return createStorageBucketAction(config, bucketName);
+}
+
+/**
+ * Sync bucket access policy (public/private), ACL, and CORS directly to the storage server.
+ */
+export async function syncStorageBucket(
+  config: StorageConnectionConfig,
+  options?: SyncBucketOptions,
+): Promise<SyncStorageBucketResult> {
+  return syncStorageBucketAction(config, options);
 }
 
 /**

@@ -9,7 +9,7 @@ import {
 import { Switch } from "@workspace/ui/components/switch";
 import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
-import { Shield, Check, Clock } from "lucide-react";
+import { Shield, Check, Clock, RefreshCw, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { LocalInput } from "../../../backend-nodes/graph-nodes/shared";
 import { BucketStorageSectionProps } from "./types";
 import { ACCESS_POLICIES, OPERATIONS, PRESET_EXPIRATIONS } from "./constants";
@@ -17,6 +17,9 @@ import {
   syncOperationsWithAccessControl,
   StorageOperationFunction,
 } from "@/lib/utils/storageOperationsHelper";
+import { cn } from "@workspace/ui/lib/utils";
+import { useStorageTestingConfig } from "./useStorageTestingConfig";
+import { useStorageTestingActions } from "./useStorageTestingActions";
 
 export const AccessPolicySection: React.FC<BucketStorageSectionProps> = ({
   item,
@@ -30,6 +33,15 @@ export const AccessPolicySection: React.FC<BucketStorageSectionProps> = ({
   const isPresignedActive = Boolean(
     item.enablePresignedUrls || accessPolicy === "presigned-only",
   );
+
+  const config = useStorageTestingConfig(item);
+  const {
+    isSyncingBucket,
+    syncSuccessMsg,
+    syncErrorMsg,
+    syncResult,
+    handleSyncBucketToServer,
+  } = useStorageTestingActions(item, config, handleUpdate);
 
   const toggleOp = (opKey: string) => {
     const nextAllowed = allowedOps.includes(opKey)
@@ -118,6 +130,77 @@ export const AccessPolicySection: React.FC<BucketStorageSectionProps> = ({
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      {/* ─── Live Server Policy Synchronization Card ─── */}
+      <div
+        className={cn(
+          "flex flex-col gap-2 p-3 rounded-lg border transition-all",
+          accessPolicy === "public-read"
+            ? "bg-amber-500/10 border-amber-500/30"
+            : "bg-secondary/20 border-border/60",
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <RefreshCw
+              size={13}
+              className={cn("text-amber-500 shrink-0", isSyncingBucket && "animate-spin")}
+            />
+            <span className="text-[11px] font-semibold text-foreground truncate">
+              Storage Server Policy Sync
+            </span>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            disabled={isSyncingBucket}
+            onClick={handleSyncBucketToServer}
+            className="h-6 px-2.5 text-[10px] font-medium gap-1 bg-amber-500 hover:bg-amber-600 text-black font-semibold shadow-sm shrink-0"
+          >
+            {isSyncingBucket ? (
+              <>
+                <Loader2 size={11} className="animate-spin" />
+                <span>Applying to Server...</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw size={11} />
+                <span>Sync Policy to Server</span>
+              </>
+            )}
+          </Button>
+        </div>
+
+        <p className="text-[10px] text-muted-foreground leading-normal">
+          {accessPolicy === "public-read"
+            ? "Canvas is set to Public Read. To allow anonymous downloads from your browser, click 'Sync Policy to Server' to apply public s3:GetObject policies and CORS on the storage server."
+            : "Click 'Sync Policy to Server' to enforce private IAM permissions and remove public bucket policies on the target server."}
+        </p>
+
+        {syncSuccessMsg && (
+          <div className="p-2 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[10px] flex items-start gap-1.5 font-medium">
+            <CheckCircle2 size={12} className="shrink-0 mt-0.5" />
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span>{syncSuccessMsg}</span>
+              {syncResult?.publicUrl && accessPolicy === "public-read" && (
+                <div className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground pt-0.5">
+                  <span>Public Base URL:</span>
+                  <code className="text-emerald-500 dark:text-emerald-300 font-semibold select-all break-all">
+                    {syncResult.publicUrl}
+                  </code>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {syncErrorMsg && (
+          <div className="p-2 rounded bg-destructive/10 border border-destructive/20 text-destructive text-[10px] flex items-start gap-1.5 font-medium">
+            <XCircle size={12} className="shrink-0 mt-0.5" />
+            <span>{syncErrorMsg}</span>
+          </div>
+        )}
       </div>
 
       {/* Allowed Operations Matrix */}

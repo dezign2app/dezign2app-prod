@@ -1,5 +1,8 @@
 import type { StorageOperationOption } from "../types/storage";
 
+export const STORAGE_TEST_DEFAULT_KEY = "uploads/avatars/user-42.png";
+export const STORAGE_TEST_DEFAULT_CONTENT_TYPE = "image/png";
+
 export const STORAGE_OPERATIONS: readonly StorageOperationOption[] = [
   {
     key: "createBucket",
@@ -15,8 +18,8 @@ export const STORAGE_OPERATIONS: readonly StorageOperationOption[] = [
     label: "uploadObject(bucket, key, body, options)",
     desc: "Dispatches HTTP PUT with file payload directly to configured storage server",
     kind: "write",
-    defaultKey: "uploads/avatars/user-42.png",
-    defaultContentType: "image/png",
+    defaultKey: STORAGE_TEST_DEFAULT_KEY,
+    defaultContentType: STORAGE_TEST_DEFAULT_CONTENT_TYPE,
     defaultBody: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
   },
   {
@@ -25,8 +28,8 @@ export const STORAGE_OPERATIONS: readonly StorageOperationOption[] = [
     label: "downloadObject(bucket, key)",
     desc: "Dispatches HTTP GET to fetch object stream/body from configured server",
     kind: "read",
-    defaultKey: "documents/contracts/2026-summary.pdf",
-    defaultContentType: "application/pdf",
+    defaultKey: STORAGE_TEST_DEFAULT_KEY,
+    defaultContentType: STORAGE_TEST_DEFAULT_CONTENT_TYPE,
   },
   {
     key: "getUploadPresignedUrl",
@@ -34,8 +37,8 @@ export const STORAGE_OPERATIONS: readonly StorageOperationOption[] = [
     label: "getUploadPresignedUrl(bucket, key, options)",
     desc: "Generates SigV4 presigned PUT URL and tests reachability against server",
     kind: "presign",
-    defaultKey: "uploads/direct/upload-target.jpg",
-    defaultContentType: "image/jpeg",
+    defaultKey: STORAGE_TEST_DEFAULT_KEY,
+    defaultContentType: STORAGE_TEST_DEFAULT_CONTENT_TYPE,
     defaultTtl: "900",
   },
   {
@@ -44,7 +47,8 @@ export const STORAGE_OPERATIONS: readonly StorageOperationOption[] = [
     label: "getDownloadPresignedUrl(bucket, key, options)",
     desc: "Generates SigV4 presigned GET URL for downloading private assets",
     kind: "presign",
-    defaultKey: "vault/financial-reports/q3.xlsx",
+    defaultKey: STORAGE_TEST_DEFAULT_KEY,
+    defaultContentType: STORAGE_TEST_DEFAULT_CONTENT_TYPE,
     defaultTtl: "3600",
   },
   {
@@ -53,7 +57,7 @@ export const STORAGE_OPERATIONS: readonly StorageOperationOption[] = [
     label: "objectExists(bucket, key)",
     desc: "Dispatches HTTP HEAD request to check if object exists on live server",
     kind: "read",
-    defaultKey: "uploads/avatars/user-42.png",
+    defaultKey: STORAGE_TEST_DEFAULT_KEY,
   },
   {
     key: "deleteObject",
@@ -61,7 +65,7 @@ export const STORAGE_OPERATIONS: readonly StorageOperationOption[] = [
     label: "deleteObject(bucket, key)",
     desc: "Dispatches HTTP DELETE to permanently purge object on configured server",
     kind: "delete",
-    defaultKey: "temp/cache-file-9.tmp",
+    defaultKey: STORAGE_TEST_DEFAULT_KEY,
   },
   {
     key: "listObjects",
@@ -77,6 +81,6 @@ export const STORAGE_OPERATIONS: readonly StorageOperationOption[] = [
     label: "getPublicObjectUrl(bucket, key)",
     desc: "Resolves public CDN or direct S3 URL and verifies public reachability",
     kind: "read",
-    defaultKey: "assets/logo.svg",
+    defaultKey: STORAGE_TEST_DEFAULT_KEY,
   },
 ];

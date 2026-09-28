@@ -1,6 +1,15 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { NodeProps } from "@xyflow/react";
-import { HardDrive, Settings, Upload, Download, Link2, KeyRound } from "lucide-react";
+import {
+  HardDrive,
+  Settings,
+  Upload,
+  Download,
+  Link2,
+  KeyRound,
+  RefreshCw,
+  CheckCircle2,
+} from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -14,6 +23,7 @@ import { NodeEnvVarsSection } from "../ai-security/ExternalEnvVarsDrawer";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
+import { syncStorageBucket } from "@/lib/services/storageService";
 
 const isStorageBucketRefNode = (type?: string) =>
   type === "StorageBucketRefNode" ||
@@ -51,6 +61,59 @@ export const StorageNode: React.FC<NodeProps<BackendNode>> = ({
     (data.buckets || []).some(
       (b) => b.enablePresignedUrls !== false || b.accessPolicy === "presigned-only",
     );
+
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+
+  const handleSyncBuckets = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const currentBuckets = data.buckets || [];
+    if (currentBuckets.length === 0) return;
+    setIsSyncingAll(true);
+    setSyncStatusMsg(null);
+    try {
+      const results = await Promise.all(
+        currentBuckets.map((b) =>
+          syncStorageBucket(
+            {
+              endpointUrl: data.endpointUrl,
+              region: data.defaultRegion || "us-east-1",
+              bucketName: b.name || "default",
+              storageType: provider,
+              forcePathStyle: data.forcePathStyle,
+              accessKeyId: data.accessKeyId,
+              secretAccessKey: data.secretAccessKey,
+              accessKeyIdEnv: data.accessKeyIdEnv,
+              secretAccessKeyEnv: data.secretAccessKeyEnv,
+              cdnUrl: b.cdnDomain || data.cdnUrl,
+            },
+            {
+              accessPolicy: b.accessPolicy || "private",
+              enableCors: b.enableCors,
+              corsOrigins: b.corsOrigins,
+              corsMethods: b.corsMethods,
+              corsHeaders: b.corsHeaders,
+              corsMaxAge: b.corsMaxAge,
+            },
+          ),
+        ),
+      );
+      const allOk = results.every((r) => r.success);
+      if (allOk) {
+        setSyncStatusMsg(`✓ ${results.length} bucket${results.length === 1 ? "" : "s"} synced`);
+        setTimeout(() => setSyncStatusMsg(null), 4000);
+      } else {
+        const failed = results.find((r) => !r.success);
+        setSyncStatusMsg(`Sync warning: ${failed?.error || failed?.message || "Failed"}`);
+        setTimeout(() => setSyncStatusMsg(null), 5000);
+      }
+    } catch (err) {
+      setSyncStatusMsg(err instanceof Error ? err.message : "Sync failed");
+      setTimeout(() => setSyncStatusMsg(null), 5000);
+    } finally {
+      setIsSyncingAll(false);
+    }
+  };
 
   // Draw and maintain invisible reference edges from StorageNode buckets to StorageBucketRefNode headers
   useEffect(() => {
@@ -195,17 +258,42 @@ export const StorageNode: React.FC<NodeProps<BackendNode>> = ({
           </div>
         }
         rightElement={
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 text-muted-foreground hover:text-foreground nodrag shrink-0"
-            onClick={handleOpenConfig}
-            title="Configure Storage Node in Sidebar"
-          >
-            <Settings size={13} />
-          </Button>
+          <div className="flex items-center gap-0.5">
+            {bucketCount > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={isSyncingAll}
+                className="h-6 w-6 text-muted-foreground hover:text-amber-500 nodrag shrink-0"
+                onClick={handleSyncBuckets}
+                title="Sync all bucket policies & CORS directly to target storage server"
+              >
+                <RefreshCw
+                  size={12}
+                  className={cn(isSyncingAll && "animate-spin text-amber-500")}
+                />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground nodrag shrink-0"
+              onClick={handleOpenConfig}
+              title="Configure Storage Node in Sidebar"
+            >
+              <Settings size={13} />
+            </Button>
+          </div>
         }
       />
+
+      {/* Sync Status Feedback Banner */}
+      {syncStatusMsg && (
+        <div className="px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] flex items-center gap-1.5 font-medium">
+          <CheckCircle2 size={12} className="shrink-0" />
+          <span className="truncate">{syncStatusMsg}</span>
+        </div>
+      )}
 
       {/* Strategy Description */}
       <div className="px-3 py-2 bg-secondary/5 border-b nodrag">

@@ -35,6 +35,7 @@ import { BackendNode, AnyMessagingResource } from "@/types/canvas";
 import {
   listStorageBuckets,
   createStorageBucket,
+  syncStorageBucket,
   type ServerBucketInfo,
 } from "@/lib/services/storageService";
 import { cn } from "@workspace/ui/lib/utils";
@@ -85,8 +86,10 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
   const [creatingBucketName, setCreatingBucketName] = useState<string | null>(null);
   const [createdSuccessMap, setCreatedSuccessMap] = useState<Record<string, boolean>>({});
   const [bucketActionErrors, setBucketActionErrors] = useState<Record<string, string>>({});
+  const [syncingBucketName, setSyncingBucketName] = useState<string | null>(null);
+  const [bucketSyncSuccessMap, setBucketSyncSuccessMap] = useState<Record<string, string>>({});
 
-  if (!node) {
+  if (!node) {  
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
         <HardDrive size={32} className="mb-2 opacity-50" />
@@ -253,6 +256,54 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
       },
     });
     setCreatedSuccessMap((prev) => ({ ...prev, [serverBucketName]: true }));
+  };
+
+  const handleSyncBucket = async (bucket: AnyMessagingResource) => {
+    const bucketName = bucket.name || "default";
+    setSyncingBucketName(bucketName);
+    try {
+      const res = await syncStorageBucket(
+        {
+          endpointUrl: data.endpointUrl,
+          region: data.defaultRegion || "us-east-1",
+          bucketName,
+          storageType: provider,
+          forcePathStyle: data.forcePathStyle,
+          accessKeyId: data.accessKeyId,
+          secretAccessKey: data.secretAccessKey,
+          accessKeyIdEnv: data.accessKeyIdEnv,
+          secretAccessKeyEnv: data.secretAccessKeyEnv,
+          cdnUrl: bucket.cdnDomain || data.cdnUrl,
+        },
+        {
+          accessPolicy: bucket.accessPolicy || "private",
+          enableCors: bucket.enableCors,
+          corsOrigins: bucket.corsOrigins,
+          corsMethods: bucket.corsMethods,
+          corsHeaders: bucket.corsHeaders,
+          corsMaxAge: bucket.corsMaxAge,
+        },
+      );
+
+      if (res.success) {
+        setBucketSyncSuccessMap((prev) => ({ ...prev, [bucketName]: res.message }));
+        setCreatedSuccessMap((prev) => ({ ...prev, [bucketName]: true }));
+        setBucketActionErrors((prev) => {
+          const next = { ...prev };
+          delete next[bucketName];
+          return next;
+        });
+        await handleScanServerBuckets();
+      } else {
+        const errorMsg = res.error || res.message || `Failed to sync bucket "${bucketName}"`;
+        setBucketActionErrors((prev) => ({ ...prev, [bucketName]: errorMsg }));
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to sync bucket on server";
+      setBucketActionErrors((prev) => ({ ...prev, [bucketName]: errorMsg }));
+    } finally {
+      setSyncingBucketName(null);
+    }
   };
 
   return (
@@ -809,6 +860,22 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
 
                       <Button
                         size="sm"
+                        variant="outline"
+                        disabled={syncingBucketName === bucketName}
+                        onClick={() => handleSyncBucket(b)}
+                        className="h-6 px-1.5 text-[10px] text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 border-amber-500/30 gap-1 font-medium"
+                        title={`Sync bucket "${bucketName}" access policy (${b.accessPolicy || "private"}) and CORS to server`}
+                      >
+                        {syncingBucketName === bucketName ? (
+                          <Loader2 size={10} className="animate-spin" />
+                        ) : (
+                          <RefreshCw size={10} />
+                        )}
+                        <span>Sync</span>
+                      </Button>
+
+                      <Button
+                        size="sm"
                         variant="ghost"
                         className="h-6 px-2 text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 gap-1 font-medium"
                         onClick={() => handleOpenBucketConfig(b.id)}
@@ -829,6 +896,13 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
                       </Button>
                     </div>
                   </div>
+
+                  {bucketSyncSuccessMap[bucketName] && (
+                    <div className="px-3 py-1 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-t border-emerald-500/20 flex items-center gap-1 font-medium">
+                      <CheckCircle2 size={11} className="shrink-0" />
+                      <span>{bucketSyncSuccessMap[bucketName]}</span>
+                    </div>
+                  )}
 
                   {bucketActionErrors[bucketName] && (
                     <div className="px-3 py-1.5 text-[10px] text-destructive bg-destructive/10 border-t border-destructive/20 flex items-start gap-1.5 font-mono">

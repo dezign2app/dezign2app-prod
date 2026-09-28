@@ -4,6 +4,7 @@ import {
   resolveStorageUrl,
   checkStorageConnectionLive,
   executeStorageOperationLive,
+  syncStorageBucketLive,
   type StorageConnectionConfig,
 } from "../storageRunner";
 
@@ -295,6 +296,87 @@ describe("storageRunner endpoint normalization and connection", () => {
         method: "GET",
         expiresInSeconds: 3600,
       });
+    });
+
+    it("verifies public object URL anonymously and provides sync tip on 403", async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        status: 403,
+        statusText: "Forbidden",
+        headers: new Headers({ server: "SeaweedFS S3" }),
+        text: vi.fn().mockResolvedValue("<Error><Code>AccessDenied</Code></Error>"),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const config: StorageConnectionConfig = {
+        endpointUrl: "http://localhost:8333",
+        bucketName: "public-assets",
+      };
+
+      const result = await executeStorageOperationLive({
+        connection: config,
+        operation: "getPublicObjectUrl",
+        params: { key: "avatar.png" },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.status).toBe(403);
+      expect(result.tip).toContain("Sync to Server");
+    });
+  });
+
+  describe("syncStorageBucketLive", () => {
+    it("successfully applies public-read policy, ACL, and CORS to server", async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({ server: "SeaweedFS S3" }),
+        text: vi.fn().mockResolvedValue(""),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const config: StorageConnectionConfig = {
+        endpointUrl: "http://localhost:8333",
+        bucketName: "user-uploads",
+        accessKeyId: "test-admin",
+        secretAccessKey: "test-secret",
+      };
+
+      const result = await syncStorageBucketLive(config, {
+        accessPolicy: "public-read",
+        enableCors: true,
+        corsOrigins: "http://localhost:3000",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.status).toBe(200);
+      expect(result.appliedPolicy).toBe("public-read");
+      expect(result.policyApplied).toBe(true);
+      expect(result.corsApplied).toBe(true);
+      expect(result.publicUrl).toBe("http://localhost:8333/user-uploads/");
+      expect(result.message).toContain("Public Read");
+    });
+
+    it("removes public policy when syncing private accessPolicy", async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        status: 204,
+        statusText: "No Content",
+        headers: new Headers(),
+        text: vi.fn().mockResolvedValue(""),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const config: StorageConnectionConfig = {
+        endpointUrl: "http://localhost:8333",
+        bucketName: "secure-vault",
+      };
+
+      const result = await syncStorageBucketLive(config, {
+        accessPolicy: "private",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.appliedPolicy).toBe("private");
+      expect(result.message).toContain("Private");
     });
   });
 });
