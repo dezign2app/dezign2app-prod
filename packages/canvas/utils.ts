@@ -178,6 +178,20 @@ export function classifyHandle(
     id.startsWith("routeEndpoints-out-")
   )
     return "endpoint-out";
+
+  if (
+    nodeType === "service" ||
+    nodeType === "serverless" ||
+    nodeType === "api_gateway" ||
+    nodeType === "webhook"
+  ) {
+    if (id.startsWith("func-in-") || id.startsWith("func-")) {
+      return handleDirection === "source" ? "endpoint-out" : "endpoint-in";
+    }
+    if (id.startsWith("func-out-")) {
+      return "endpoint-out";
+    }
+  }
   if (id.startsWith("events-")) return "event-source";
   if (id.startsWith("event-in-") || id.startsWith("action-in-"))
     return "action-target";
