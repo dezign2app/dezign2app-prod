@@ -5,6 +5,7 @@ import {
   syncOperationsWithAccessControl,
   getOperationAccessRestrictedReason,
   BASE_STORAGE_OPERATIONS,
+  getStorageOperationExpectedArgs,
 } from "../storageOperationsHelper";
 
 describe("storageOperationsHelper", () => {
@@ -76,15 +77,19 @@ describe("storageOperationsHelper", () => {
     expect(op).toBeDefined();
 
     const bindings = computeStorageOpBindings(op, [], "my-bucket");
-    expect(bindings).toHaveLength(3);
+    expect(bindings).toHaveLength(4);
 
     const bucketBinding = bindings.find((b) => b.argName === "bucketName");
     expect(bucketBinding).toBeDefined();
     expect(bucketBinding?.source).toEqual({ kind: "inline", value: "my-bucket" });
 
+    const filenameBinding = bindings.find((b) => b.argName === "filename");
+    expect(filenameBinding).toBeDefined();
+    expect(filenameBinding?.source).toEqual({ kind: "req_body", field: "filename" });
+
     const keyBinding = bindings.find((b) => b.argName === "key");
     expect(keyBinding).toBeDefined();
-    expect(keyBinding?.source).toEqual({ kind: "req_body", field: "filename" });
+    expect(keyBinding?.source).toEqual({ kind: "inline", value: "" });
   });
 
   it("preserves existing bindings when re-computing", () => {
@@ -101,5 +106,22 @@ describe("storageOperationsHelper", () => {
     const bindings = computeStorageOpBindings(op, existing, "avatars");
     const keyBinding = bindings.find((b) => b.argName === "key");
     expect(keyBinding?.source).toEqual({ kind: "req_params", field: "customKey" });
+  });
+
+  it("unpacks fixed options types and filename into expectedArgs for getUploadPresignedUrl", () => {
+    const op = BASE_STORAGE_OPERATIONS.find((o) => o.name === "getUploadPresignedUrl");
+    expect(op).toBeDefined();
+
+    const expectedArgs = getStorageOperationExpectedArgs(op);
+    const argNames = expectedArgs.map((a: any) => a.name);
+
+    // Shows bucketName, key, filename, unpacked option fields (contentType, expiresInSeconds, acl) and options
+    expect(argNames).toContain("bucketName");
+    expect(argNames).toContain("key");
+    expect(argNames).toContain("filename");
+    expect(argNames).toContain("contentType");
+    expect(argNames).toContain("expiresInSeconds");
+    expect(argNames).toContain("acl");
+    expect(argNames).toContain("options");
   });
 });

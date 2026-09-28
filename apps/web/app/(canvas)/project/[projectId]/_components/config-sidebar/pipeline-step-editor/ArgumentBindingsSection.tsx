@@ -151,9 +151,14 @@ export const ArgumentBindingsSection = ({
       )}
 
       {bindings.map((binding, bi) => {
-        const validExpectedArgs = expectedArgs.filter(
-          (a) => Boolean(a && a.name && a.name.trim().length > 0),
-        );
+        const seenArgNames = new Set<string>();
+        const validExpectedArgs = expectedArgs.filter((a) => {
+          if (!a || !a.name || !a.name.trim()) return false;
+          const norm = a.name.trim().toLowerCase();
+          if (seenArgNames.has(norm)) return false;
+          seenArgNames.add(norm);
+          return true;
+        });
         const hasExpectedArgs = validExpectedArgs.length > 0;
         const isCustomMode = Boolean(customModeRows[bi]);
         const matchingExpectedArg = validExpectedArgs.find(
@@ -174,15 +179,22 @@ export const ArgumentBindingsSection = ({
         const getArgDisplayLabel = (name?: string) => {
           if (!name) return "";
           const lower = name.trim().toLowerCase();
-          if (lower === "key" || lower === "objectkey") return `${name} (file path)`;
+          if (lower === "filename") return `${name} (file name)`;
+          if (lower === "key" || lower === "objectkey") return `${name} (folder / key)`;
           if (lower === "sourcekey") return `${name} (source path)`;
           if (lower === "destkey") return `${name} (dest path)`;
+          if (lower === "expiresinseconds") return `${name} (TTL seconds)`;
+          if (lower === "contenttype") return `${name} (MIME type)`;
+          if (lower === "acl") return `${name} (Access Control)`;
+          if (lower === "metadata") return `${name} (custom headers)`;
+          if (lower === "options") return `${name} (options object)`;
           return name;
         };
 
         const isCredentialLeak =
           binding.source.kind === "env" &&
           (binding.argName?.toLowerCase() === "key" ||
+            binding.argName?.toLowerCase() === "filename" ||
             binding.argName?.toLowerCase() === "filepath" ||
             binding.argName?.toLowerCase() === "filekey" ||
             binding.argName?.toLowerCase() === "objectkey") &&

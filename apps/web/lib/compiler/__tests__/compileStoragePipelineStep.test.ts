@@ -66,6 +66,105 @@ describe("Storage Pipeline Step Compilation", () => {
     expect(storageImports?.has("getUploadPresignedUrl")).toBe(true);
   });
 
+  it("compiles getUploadPresignedUrl with unpacked option fields (contentType, expiresInSeconds) and filename mapping", () => {
+    const endpoint: Endpoint = {
+      id: "ep-upload-options",
+      name: "/upload-avatar",
+      type: "POST",
+      pipelineSteps: [
+        {
+          id: "step-storage-1",
+          name: "Get Upload URL",
+          type: "storage_operation",
+          enabled: true,
+          outputVariable: "uploadUrl",
+          storageNodeId: "storage-node-1",
+          bucketId: "user-avatars",
+          operationId: "storage-getUploadPresignedUrl",
+          functionRef: {
+            name: "getUploadPresignedUrl",
+            importPath: "@workspace/storage/operations",
+            signature: "getUploadPresignedUrl(bucketName: string, key: string, options?: PresignedUrlOptions): Promise<string>",
+          },
+          inputBindings: [
+            {
+              argName: "bucketName",
+              source: { kind: "inline", value: "user-avatars" },
+            },
+            {
+              argName: "filename", // bound as filename alias
+              source: { kind: "req_body", field: "filename" },
+            },
+            {
+              argName: "contentType",
+              source: { kind: "req_body", field: "contentType" },
+            },
+            {
+              argName: "expiresInSeconds",
+              source: { kind: "inline", value: 900 },
+            },
+          ],
+        },
+      ],
+    };
+
+    const lines = renderPipeline(endpoint.pipelineSteps!, "body");
+    const fullCode = lines.join("\n");
+
+    expect(fullCode).toContain("const uploadUrl = await getUploadPresignedUrl(");
+    expect(fullCode).toContain('"user-avatars", String(body.filename || ""), {');
+    expect(fullCode).toContain("contentType: body.contentType");
+    expect(fullCode).toContain("expiresInSeconds: 900");
+  });
+
+  it("combines folder key and filename (e.g. key: 'profile', filename: 'body.filename')", () => {
+    const endpoint: Endpoint = {
+      id: "ep-upload-folder",
+      name: "/upload-profile-image",
+      type: "POST",
+      pipelineSteps: [
+        {
+          id: "step-storage-1",
+          name: "Get Upload URL",
+          type: "storage_operation",
+          enabled: true,
+          outputVariable: "uploadUrl",
+          storageNodeId: "storage-node-1",
+          bucketId: "test-bucket",
+          operationId: "storage-getUploadPresignedUrl",
+          functionRef: {
+            name: "getUploadPresignedUrl",
+            importPath: "@workspace/storage/operations",
+            signature: "getUploadPresignedUrl(bucketName: string, key: string, options?: PresignedUrlOptions): Promise<string>",
+          },
+          inputBindings: [
+            {
+              argName: "bucketName",
+              source: { kind: "env", field: "STORAGE_BUCKET_TEST" },
+            },
+            {
+              argName: "key",
+              source: { kind: "inline", value: "profile" },
+            },
+            {
+              argName: "filename",
+              source: { kind: "req_body", field: "filename" },
+            },
+            {
+              argName: "options",
+              source: { kind: "inline", value: "{}" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const lines = renderPipeline(endpoint.pipelineSteps!, "body");
+    const fullCode = lines.join("\n");
+
+    expect(fullCode).toContain('await getUploadPresignedUrl(process.env.STORAGE_BUCKET_TEST, `profile/${String(body.filename || "")}`, {});');
+  });
+
   it("compiles monorepo with service containing storage_operation and connects to @workspace/storage", () => {
     const nodes: BackendNode[] = [
       {

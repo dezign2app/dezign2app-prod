@@ -27,7 +27,8 @@ export const BASE_STORAGE_OPERATIONS: readonly StorageOperationFunction[] = [
     returnType: "Promise<string>",
     params: [
       { name: "bucketName", type: "string", required: true, description: "Target bucket name" },
-      { name: "key", type: "string", required: true, description: "Target object key/path" },
+      { name: "filename", type: "string", required: true, description: "File name from request body (e.g. filename)" },
+      { name: "key", type: "string", required: false, description: "Folder or prefix path (e.g. profile)" },
       { name: "options", type: "PresignedUrlOptions", required: false, description: "TTL, Content-Type, ACL options" },
     ],
     badge: {
@@ -46,7 +47,8 @@ export const BASE_STORAGE_OPERATIONS: readonly StorageOperationFunction[] = [
     returnType: "Promise<string>",
     params: [
       { name: "bucketName", type: "string", required: true, description: "Target bucket name" },
-      { name: "key", type: "string", required: true, description: "Target object key/path" },
+      { name: "filename", type: "string", required: true, description: "File name to download (e.g. filename)" },
+      { name: "key", type: "string", required: false, description: "Folder or prefix path (e.g. profile)" },
       { name: "options", type: "{ expiresInSeconds?: number }", required: false, description: "Expiration time in seconds" },
     ],
     badge: {
@@ -65,7 +67,8 @@ export const BASE_STORAGE_OPERATIONS: readonly StorageOperationFunction[] = [
     returnType: "Promise<PutObjectCommandOutput>",
     params: [
       { name: "bucketName", type: "string", required: true, description: "Target bucket name" },
-      { name: "key", type: "string", required: true, description: "Target object key/path" },
+      { name: "filename", type: "string", required: true, description: "File name from request body (e.g. filename)" },
+      { name: "key", type: "string", required: false, description: "Folder or prefix path (e.g. profile)" },
       { name: "body", type: "Buffer | Uint8Array | Blob | string", required: true, description: "Payload file data or stream" },
       { name: "options", type: "UploadObjectOptions", required: false, description: "Content-Type, metadata, ACL" },
     ],
@@ -494,12 +497,22 @@ export function computeStorageOpBindings(
       };
     }
 
+    if (param.name === "filename") {
+      return {
+        argName: "filename",
+        source: {
+          kind: "req_body",
+          field: "filename",
+        },
+      };
+    }
+
     if (param.name === "key" || param.name === "sourceKey" || param.name === "destKey") {
       return {
         argName: param.name,
         source: {
-          kind: "req_body",
-          field: "filename",
+          kind: "inline",
+          value: "",
         },
       };
     }
@@ -552,4 +565,95 @@ export function computeStorageOpBindings(
       },
     };
   });
+}
+
+export interface StorageExpectedArg {
+  name: string;
+  type: string;
+  required?: boolean;
+  description?: string;
+}
+
+export const STORAGE_OPERATION_OPTIONS_SCHEMA: Record<
+  string,
+  Array<{ name: string; type: string; required?: boolean; description?: string }>
+> = {
+  getUploadPresignedUrl: [
+    { name: "contentType", type: "string", required: false, description: "MIME type (e.g. image/png)" },
+    { name: "expiresInSeconds", type: "number", required: false, description: "TTL in seconds (default: 900)" },
+    { name: "acl", type: "ObjectCannedACL", required: false, description: "Access Control: private | public-read | etc." },
+  ],
+  getDownloadPresignedUrl: [
+    { name: "expiresInSeconds", type: "number", required: false, description: "Expiration time in seconds (default: 3600)" },
+  ],
+  uploadObject: [
+    { name: "contentType", type: "string", required: false, description: "MIME type (e.g. image/png)" },
+    { name: "metadata", type: "Record<string, string>", required: false, description: "Custom object metadata key-value pairs" },
+    { name: "acl", type: "ObjectCannedACL", required: false, description: "Access Control: private | public-read | etc." },
+  ],
+};
+
+/**
+ * Returns expected arguments for a storage operation, unpacking fixed option types
+ * (such as PresignedUrlOptions: contentType, expiresInSeconds, acl) into individual
+ * bindable arguments for the UI while keeping the generic options object available.
+ */
+export function getStorageOperationExpectedArgs(
+  op: StorageOperationFunction | undefined,
+): StorageExpectedArg[] {
+  if (!op) return [];
+  const baseParams = (op.params || []).map((p) => ({
+    name: p.name,
+    type: p.type,
+    required: p.required !== false,
+    description: p.description,
+  }));
+
+  const optionsFields = STORAGE_OPERATION_OPTIONS_SCHEMA[op.name] || [];
+
+  const isUploadOrPresign =
+    op.name === "getUploadPresignedUrl" ||
+    op.name === "getDownloadPresignedUrl" ||
+    op.name === "uploadObject";
+
+  const nonOptionsParams = baseParams.filter((p) => p.name.toLowerCase() !== "options");
+  const optionsParam = baseParams.find((p) => p.name.toLowerCase() === "options");
+
+  const hasFilename = nonOptionsParams.some((p) => p.name.toLowerCase() === "filename");
+  const filenameArg: StorageExpectedArg[] =
+    isUploadOrPresign && !hasFilename
+      ? [
+          {
+            name: "filename",
+            type: "string",
+            required: true,
+            description: "File name from request body (e.g. filename)",
+          },
+        ]
+      : [];
+
+  const rawList: StorageExpectedArg[] = [
+    ...nonOptionsParams,
+    ...filenameArg,
+    ...optionsFields.map((f) => ({
+      name: f.name,
+      type: f.type,
+      required: f.required === true,
+      description: f.description,
+    })),
+    ...(optionsParam ? [optionsParam] : []),
+  ];
+
+  // Guarantee uniqueness of argument names
+  const seen = new Set<string>();
+  const uniqueArgs: StorageExpectedArg[] = [];
+  for (const item of rawList) {
+    const key = item.name.trim().toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueArgs.push(item);
+    }
+  }
+
+  return uniqueArgs;
 }

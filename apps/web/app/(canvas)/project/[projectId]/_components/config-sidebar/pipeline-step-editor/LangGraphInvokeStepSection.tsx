@@ -17,8 +17,7 @@ import {
 } from "lucide-react";
 import { BackendNode } from "@workspace/canvas/types";
 import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
-import { BufferedInput } from "./BufferedInput";
+import { BufferedInput, LocalInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
 import { Switch } from "@workspace/ui/components/switch";
 import { Badge } from "@workspace/ui/components/badge";
@@ -368,7 +367,7 @@ export const LangGraphInvokeStepSection: React.FC<
           {/* Add custom state field */}
           <div className="grid grid-cols-12 gap-2 items-center pt-2 border-t border-border/30">
             <div className="col-span-5">
-              <Input
+              <LocalInput
                 value={newKey}
                 placeholder="Custom key"
                 onChange={(e) => setNewKey(e.target.value)}
@@ -376,7 +375,7 @@ export const LangGraphInvokeStepSection: React.FC<
               />
             </div>
             <div className="col-span-6">
-              <Input
+              <LocalInput
                 value={newValue}
                 placeholder="e.g. headers['x-user-id']"
                 onChange={(e) => setNewValue(e.target.value)}
