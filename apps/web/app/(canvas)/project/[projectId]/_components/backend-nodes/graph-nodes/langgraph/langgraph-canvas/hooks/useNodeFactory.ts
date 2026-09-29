@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useReactFlow } from "@xyflow/react";
 import type {
   LangGraphCanvasNode,
   LangGraphCanvasEdge,
@@ -50,6 +51,33 @@ interface UseNodeFactoryProps {
   stateChannels: LangGraphStateChannel[];
 }
 
+function getNodeDimensions(type: LangGraphCanvasNodeAddType): {
+  width: number;
+  height: number;
+} {
+  switch (type) {
+    case LANGGRAPH_CANVAS_NODE_END:
+      return { width: 140, height: 45 };
+    case LANGGRAPH_CANVAS_NODE_LLM:
+    case LANGGRAPH_CANVAS_NODE_LLM_REF:
+      return { width: 320, height: 180 };
+    case LANGGRAPH_CANVAS_NODE_TOOL:
+    case LANGGRAPH_CANVAS_NODE_TOOL_REF:
+    case LANGGRAPH_CANVAS_NODE_MIDDLEWARE:
+    case LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF:
+    case LANGGRAPH_CANVAS_NODE_MEMORY:
+    case LANGGRAPH_CANVAS_NODE_MEMORY_REF:
+    case LANGGRAPH_CANVAS_NODE_OUTPUT:
+      return { width: 280, height: 140 };
+    case STEP_TYPE_ROUTER:
+      return { width: 260, height: 120 };
+    case LANGGRAPH_CANVAS_NODE_NODE:
+    case LANGGRAPH_CANVAS_NODE_AGENT:
+    default:
+      return { width: 360, height: 160 };
+  }
+}
+
 export function useNodeFactory({
   setNodes,
   setEdges,
@@ -57,21 +85,72 @@ export function useNodeFactory({
   setActiveSideTab,
   stateChannels,
 }: UseNodeFactoryProps) {
+  const { screenToFlowPosition } = useReactFlow();
+
+  const getCenterPosition = useCallback(
+    (type: LangGraphCanvasNodeAddType, currentNodes: LangGraphCanvasNode[]) => {
+      const { width, height } = getNodeDimensions(type);
+
+      let screenX = typeof window !== "undefined" ? window.innerWidth / 2 : 400;
+      let screenY = typeof window !== "undefined" ? window.innerHeight / 2 : 250;
+
+      if (typeof document !== "undefined") {
+        const reactFlowEl = document.querySelector(".react-flow") as HTMLElement | null;
+        if (reactFlowEl) {
+          const rect = reactFlowEl.getBoundingClientRect();
+          screenX = rect.left + rect.width / 2;
+          screenY = rect.top + rect.height / 2;
+        }
+      }
+
+      let flowX = 400;
+      let flowY = 250;
+
+      try {
+        if (screenToFlowPosition) {
+          const pos = screenToFlowPosition({ x: screenX, y: screenY });
+          if (Number.isFinite(pos?.x) && Number.isFinite(pos?.y)) {
+            flowX = pos.x;
+            flowY = pos.y;
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to get flow position for center of view:", err);
+      }
+
+      let x = Math.round(flowX - width / 2);
+      let y = Math.round(flowY - height / 2);
+      const offset = 24;
+
+      // Avoid exact overlapping with existing nodes
+      while (
+        currentNodes.some(
+          (n) => Math.abs(n.position.x - x) < 15 && Math.abs(n.position.y - y) < 15,
+        )
+      ) {
+        x += offset;
+        y += offset;
+      }
+
+      return { x, y };
+    },
+    [screenToFlowPosition],
+  );
+
   const handleAddStep = useCallback(
     (type: LangGraphCanvasNodeAddType, label: string) => {
       if (type === LANGGRAPH_CANVAS_NODE_END) {
         const endId = `end_${Date.now().toString(36).slice(-4)}`;
-        const newEndNode: EndNode = {
-          id: endId,
-          type: LANGGRAPH_CANVAS_NODE_END,
-          position: {
-            x: 500 + Math.random() * 140,
-            y: 200 + Math.random() * 80,
-          },
-          data: { label: label || "END State" },
-        };
-
-        setNodes((nds) => [...nds, newEndNode]);
+        setNodes((nds) => {
+          const position = getCenterPosition(type, nds);
+          const newEndNode: EndNode = {
+            id: endId,
+            type: LANGGRAPH_CANVAS_NODE_END,
+            position,
+            data: { label: label || "END State" },
+          };
+          return [...nds, newEndNode];
+        });
         setSelectedNodeId(endId);
         return;
       }
@@ -82,35 +161,34 @@ export function useNodeFactory({
           LLM_PROVIDER_PRESETS[DEFAULT_LLM_PROVIDER] ??
           LLM_PROVIDER_PRESETS[LLM_PROVIDERS.CUSTOM];
 
-        const newLLMNode: LangGraphLLMNode = {
-          id: llmId,
-          type: LANGGRAPH_CANVAS_NODE_LLM,
-          position: {
-            x: 360 + Math.random() * 140,
-            y: 100 + Math.random() * 80,
-          },
-          data: {
-            label: label || "LLM",
-            llmId,
-            provider: DEFAULT_LLM_PROVIDER,
-            baseUrl: defaultPreset?.defaultUrl ?? DEFAULT_LLM_BASE_URL,
-            model: defaultPreset?.defaultModel ?? DEFAULT_LLM_MODEL,
-            apiKeyHeader:
-              defaultPreset?.defaultApiKeyEnv ?? DEFAULT_LLM_API_KEY_ENV,
-            temperature: DEFAULT_LLM_TEMPERATURE,
-            onDeleteLLM: () => {
-              setNodes((nodes) => nodes.filter((node) => node.id !== llmId));
-              setEdges((edges) =>
-                edges.filter(
-                  (edge) => edge.source !== llmId && edge.target !== llmId,
-                ),
-              );
-              setSelectedNodeId((curr) => (curr === llmId ? null : curr));
+        setNodes((nds) => {
+          const position = getCenterPosition(type, nds);
+          const newLLMNode: LangGraphLLMNode = {
+            id: llmId,
+            type: LANGGRAPH_CANVAS_NODE_LLM,
+            position,
+            data: {
+              label: label || "LLM",
+              llmId,
+              provider: DEFAULT_LLM_PROVIDER,
+              baseUrl: defaultPreset?.defaultUrl ?? DEFAULT_LLM_BASE_URL,
+              model: defaultPreset?.defaultModel ?? DEFAULT_LLM_MODEL,
+              apiKeyHeader:
+                defaultPreset?.defaultApiKeyEnv ?? DEFAULT_LLM_API_KEY_ENV,
+              temperature: DEFAULT_LLM_TEMPERATURE,
+              onDeleteLLM: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== llmId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== llmId && edge.target !== llmId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === llmId ? null : curr));
+              },
             },
-          },
-        };
-
-        setNodes((nds) => [...nds, newLLMNode]);
+          };
+          return [...nds, newLLMNode];
+        });
         setSelectedNodeId(llmId);
         return;
       }
@@ -126,14 +204,12 @@ export function useNodeFactory({
             preselectedMasterId = master.id;
             preselectedMasterLabel = (master.data as { label?: string })?.label || "LLM";
           }
+          const position = getCenterPosition(type, nds);
 
           const newLLMRefNode: LangGraphLLMRefNode = {
             id: refId,
             type: LANGGRAPH_CANVAS_NODE_LLM_REF,
-            position: {
-              x: 360 + Math.random() * 140,
-              y: 100 + Math.random() * 80,
-            },
+            position,
             data: {
               label: label || `${preselectedMasterLabel} (Ref)`,
               refId,
@@ -159,34 +235,33 @@ export function useNodeFactory({
 
       if (type === LANGGRAPH_CANVAS_NODE_TOOL) {
         const toolId = `tool_${Date.now().toString(36).slice(-4)}`;
-        const newToolNode: ToolNode = {
-          id: toolId,
-          type: LANGGRAPH_CANVAS_NODE_TOOL,
-          position: {
-            x: 360 + Math.random() * 140,
-            y: 160 + Math.random() * 80,
-          },
-          data: {
-            label: label || "Tool Node",
-            toolId,
-            name: "my_tool",
-            description: "Description of the tool",
-            source: "inline",
-            executionMode: "sandboxed_vm",
-            returnType: "string",
-            onDeleteTool: () => {
-              setNodes((nodes) => nodes.filter((node) => node.id !== toolId));
-              setEdges((edges) =>
-                edges.filter(
-                  (edge) => edge.source !== toolId && edge.target !== toolId,
-                ),
-              );
-              setSelectedNodeId((curr) => (curr === toolId ? null : curr));
+        setNodes((nds) => {
+          const position = getCenterPosition(type, nds);
+          const newToolNode: ToolNode = {
+            id: toolId,
+            type: LANGGRAPH_CANVAS_NODE_TOOL,
+            position,
+            data: {
+              label: label || "Tool Node",
+              toolId,
+              name: "my_tool",
+              description: "Description of the tool",
+              source: "inline",
+              executionMode: "sandboxed_vm",
+              returnType: "string",
+              onDeleteTool: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== toolId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== toolId && edge.target !== toolId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === toolId ? null : curr));
+              },
             },
-          },
-        };
-
-        setNodes((nds) => [...nds, newToolNode]);
+          };
+          return [...nds, newToolNode];
+        });
         setSelectedNodeId(toolId);
         setActiveSideTab("inspector");
         return;
@@ -206,14 +281,12 @@ export function useNodeFactory({
               (master.data as { label?: string })?.label ||
               "Tool";
           }
+          const position = getCenterPosition(type, nds);
 
           const newToolRefNode: LangGraphToolRefNode = {
             id: refId,
             type: LANGGRAPH_CANVAS_NODE_TOOL_REF,
-            position: {
-              x: 360 + Math.random() * 140,
-              y: 160 + Math.random() * 80,
-            },
+            position,
             data: {
               label: label || `${preselectedMasterLabel} (Ref)`,
               refId,
@@ -239,35 +312,34 @@ export function useNodeFactory({
 
       if (type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE) {
         const mwId = `mw_${Date.now().toString(36).slice(-4)}`;
-        const newMiddlewareNode: MiddlewareNode = {
-          id: mwId,
-          type: LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
-          position: {
-            x: 360 + Math.random() * 140,
-            y: 220 + Math.random() * 80,
-          },
-          data: {
-            label: label || "Middleware",
-            middlewareId: mwId,
-            name: "middleware",
-            type: DEFAULT_MIDDLEWARE_TYPE,
-            humanInTheLoopConfig: {
-              interruptOn: { writeFile: true },
-              approvalPrompt: "Requires approval before writing files...",
+        setNodes((nds) => {
+          const position = getCenterPosition(type, nds);
+          const newMiddlewareNode: MiddlewareNode = {
+            id: mwId,
+            type: LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+            position,
+            data: {
+              label: label || "Middleware",
+              middlewareId: mwId,
+              name: "middleware",
+              type: DEFAULT_MIDDLEWARE_TYPE,
+              humanInTheLoopConfig: {
+                interruptOn: { writeFile: true },
+                approvalPrompt: "Requires approval before writing files...",
+              },
+              onDeleteMiddleware: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== mwId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== mwId && edge.target !== mwId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === mwId ? null : curr));
+              },
             },
-            onDeleteMiddleware: () => {
-              setNodes((nodes) => nodes.filter((node) => node.id !== mwId));
-              setEdges((edges) =>
-                edges.filter(
-                  (edge) => edge.source !== mwId && edge.target !== mwId,
-                ),
-              );
-              setSelectedNodeId((curr) => (curr === mwId ? null : curr));
-            },
-          },
-        };
-
-        setNodes((nds) => [...nds, newMiddlewareNode]);
+          };
+          return [...nds, newMiddlewareNode];
+        });
         setSelectedNodeId(mwId);
         setActiveSideTab("inspector");
         return;
@@ -289,14 +361,12 @@ export function useNodeFactory({
               (master.data as { label?: string })?.label ||
               "Middleware";
           }
+          const position = getCenterPosition(type, nds);
 
           const newMiddlewareRefNode: LangGraphMiddlewareRefNode = {
             id: refId,
             type: LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
-            position: {
-              x: 360 + Math.random() * 140,
-              y: 220 + Math.random() * 80,
-            },
+            position,
             data: {
               label: label || `${preselectedMasterLabel} (Ref)`,
               refId,
@@ -322,35 +392,34 @@ export function useNodeFactory({
 
       if (type === LANGGRAPH_CANVAS_NODE_MEMORY) {
         const memId = `mem_${Date.now().toString(36).slice(-4)}`;
-        const newMemoryNode: MemoryNode = {
-          id: memId,
-          type: LANGGRAPH_CANVAS_NODE_MEMORY,
-          position: {
-            x: 360 + Math.random() * 140,
-            y: 280 + Math.random() * 80,
-          },
-          data: {
-            label: label || "Memory Saver",
-            memoryId: memId,
-            name: "memory_saver",
-            checkpointer: "memory",
-            threadIdKey: "thread_id",
-            threadScope: "session",
-            autoSummarize: true,
-            saveMessages: true,
-            onDeleteMemory: () => {
-              setNodes((nodes) => nodes.filter((node) => node.id !== memId));
-              setEdges((edges) =>
-                edges.filter(
-                  (edge) => edge.source !== memId && edge.target !== memId,
-                ),
-              );
-              setSelectedNodeId((curr) => (curr === memId ? null : curr));
+        setNodes((nds) => {
+          const position = getCenterPosition(type, nds);
+          const newMemoryNode: MemoryNode = {
+            id: memId,
+            type: LANGGRAPH_CANVAS_NODE_MEMORY,
+            position,
+            data: {
+              label: label || "Memory Saver",
+              memoryId: memId,
+              name: "memory_saver",
+              checkpointer: "memory",
+              threadIdKey: "thread_id",
+              threadScope: "session",
+              autoSummarize: true,
+              saveMessages: true,
+              onDeleteMemory: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== memId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== memId && edge.target !== memId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === memId ? null : curr));
+              },
             },
-          },
-        };
-
-        setNodes((nds) => [...nds, newMemoryNode]);
+          };
+          return [...nds, newMemoryNode];
+        });
         setSelectedNodeId(memId);
         setActiveSideTab("inspector");
         return;
@@ -370,14 +439,12 @@ export function useNodeFactory({
               (master.data as { label?: string })?.label ||
               "Memory";
           }
+          const position = getCenterPosition(type, nds);
 
           const newMemoryRefNode: LangGraphMemoryRefNode = {
             id: refId,
             type: LANGGRAPH_CANVAS_NODE_MEMORY_REF,
-            position: {
-              x: 360 + Math.random() * 140,
-              y: 280 + Math.random() * 80,
-            },
+            position,
             data: {
               label: label || `${preselectedMasterLabel} (Ref)`,
               refId,
@@ -406,38 +473,37 @@ export function useNodeFactory({
         type === LANGGRAPH_CANVAS_NODE_AGENT
       ) {
         const nodeId = `node_${Date.now().toString(36).slice(-4)}`;
-        const newNode: CanvasNode = {
-          id: nodeId,
-          type: LANGGRAPH_CANVAS_NODE_NODE,
-          position: {
-            x: 420 + Math.random() * 140,
-            y: 160 + Math.random() * 80,
-          },
-          data: {
-            label: label || "Node",
-            agentId: nodeId,
-            name: label || "Node",
-            systemPrompt: "System prompt / instructions for this node...",
-            modelConfig: {
-              provider: DEFAULT_LLM_PROVIDER,
-              model: DEFAULT_LLM_MODEL,
-              temperature: DEFAULT_LLM_TEMPERATURE,
+        setNodes((nds) => {
+          const position = getCenterPosition(type, nds);
+          const newNode: CanvasNode = {
+            id: nodeId,
+            type: LANGGRAPH_CANVAS_NODE_NODE,
+            position,
+            data: {
+              label: label || "Node",
+              agentId: nodeId,
+              name: label || "Node",
+              systemPrompt: "System prompt / instructions for this node...",
+              modelConfig: {
+                provider: DEFAULT_LLM_PROVIDER,
+                model: DEFAULT_LLM_MODEL,
+                temperature: DEFAULT_LLM_TEMPERATURE,
+              },
+              tools: [],
+              middleware: [],
+              onDeleteAgent: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== nodeId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== nodeId && edge.target !== nodeId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === nodeId ? null : curr));
+              },
             },
-            tools: [],
-            middleware: [],
-            onDeleteAgent: () => {
-              setNodes((nodes) => nodes.filter((node) => node.id !== nodeId));
-              setEdges((edges) =>
-                edges.filter(
-                  (edge) => edge.source !== nodeId && edge.target !== nodeId,
-                ),
-              );
-              setSelectedNodeId((curr) => (curr === nodeId ? null : curr));
-            },
-          },
-        };
-
-        setNodes((nds) => [...nds, newNode]);
+          };
+          return [...nds, newNode];
+        });
         setSelectedNodeId(nodeId);
         setActiveSideTab("inspector");
         return;
@@ -446,33 +512,32 @@ export function useNodeFactory({
       if (type === LANGGRAPH_CANVAS_NODE_OUTPUT) {
         const outId = `output_${Date.now().toString(36).slice(-4)}`;
         const permanentChannelId = `channel_${crypto.randomUUID()}`;
-        const newOutputNode: OutputNode = {
-          id: outId,
-          type: LANGGRAPH_CANVAS_NODE_OUTPUT,
-          position: {
-            x: 420 + Math.random() * 140,
-            y: 240 + Math.random() * 80,
-          },
-          data: {
-            id: permanentChannelId,
-            label: label || "Output Channel",
-            name: label || "Output Channel",
-            type: "sse",
-            targetStateChannel: "messages",
-            topicOrEventName: "messages",
-            onDeleteOutput: () => {
-              setNodes((nodes) => nodes.filter((node) => node.id !== outId));
-              setEdges((edges) =>
-                edges.filter(
-                  (edge) => edge.source !== outId && edge.target !== outId,
-                ),
-              );
-              setSelectedNodeId((curr) => (curr === outId ? null : curr));
+        setNodes((nds) => {
+          const position = getCenterPosition(type, nds);
+          const newOutputNode: OutputNode = {
+            id: outId,
+            type: LANGGRAPH_CANVAS_NODE_OUTPUT,
+            position,
+            data: {
+              id: permanentChannelId,
+              label: label || "Output Channel",
+              name: label || "Output Channel",
+              type: "sse",
+              targetStateChannel: "messages",
+              topicOrEventName: "messages",
+              onDeleteOutput: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== outId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== outId && edge.target !== outId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === outId ? null : curr));
+              },
             },
-          },
-        };
-
-        setNodes((nds) => [...nds, newOutputNode]);
+          };
+          return [...nds, newOutputNode];
+        });
         setSelectedNodeId(outId);
         setActiveSideTab("inspector");
         return;
@@ -482,51 +547,59 @@ export function useNodeFactory({
         type === STEP_TYPE_ROUTER
           ? `router_${Date.now().toString(36).slice(-4)}`
           : `step_${Date.now().toString(36).slice(-4)}`;
-      const newNode: StepNode = {
-        id: stepId,
-        type: LANGGRAPH_CANVAS_NODE_STEP,
-        position: {
-          x: 360 + Math.random() * 180,
-          y: 160 + Math.random() * 100,
-        },
-        data: {
-          label:
-            label ||
-            (type === STEP_TYPE_ROUTER ? "Conditional Router" : "Node"),
-          stepId,
-          stepType: type,
-          ...(type === STEP_TYPE_ROUTER
-            ? {
-                routerConfig: {
-                  branches: [],
-                },
-              }
-            : {
-                modelConfig: {
-                  provider: DEFAULT_LLM_PROVIDER,
-                  model: DEFAULT_LLM_MODEL,
-                  temperature: DEFAULT_LLM_TEMPERATURE,
-                },
-              }),
-          stateUpdates: [],
-          availableStateChannels: stateChannels,
-          onDeleteStep: () => {
-            setNodes((nodes) => nodes.filter((node) => node.id !== stepId));
-            setEdges((edges) =>
-              edges.filter(
-                (edge) => edge.source !== stepId && edge.target !== stepId,
-              ),
-            );
-            setSelectedNodeId((curr) => (curr === stepId ? null : curr));
-          },
-        },
-      };
 
-      setNodes((nds) => [...nds, newNode]);
+      setNodes((nds) => {
+        const position = getCenterPosition(type, nds);
+        const newNode: StepNode = {
+          id: stepId,
+          type: LANGGRAPH_CANVAS_NODE_STEP,
+          position,
+          data: {
+            label:
+              label ||
+              (type === STEP_TYPE_ROUTER ? "Conditional Router" : "Node"),
+            stepId,
+            stepType: type,
+            ...(type === STEP_TYPE_ROUTER
+              ? {
+                  routerConfig: {
+                    branches: [],
+                  },
+                }
+              : {
+                  modelConfig: {
+                    provider: DEFAULT_LLM_PROVIDER,
+                    model: DEFAULT_LLM_MODEL,
+                    temperature: DEFAULT_LLM_TEMPERATURE,
+                  },
+                }),
+            stateUpdates: [],
+            availableStateChannels: stateChannels,
+            onDeleteStep: () => {
+              setNodes((nodes) => nodes.filter((node) => node.id !== stepId));
+              setEdges((edges) =>
+                edges.filter(
+                  (edge) => edge.source !== stepId && edge.target !== stepId,
+                ),
+              );
+              setSelectedNodeId((curr) => (curr === stepId ? null : curr));
+            },
+          },
+        };
+        return [...nds, newNode];
+      });
+
       setSelectedNodeId(stepId);
       setActiveSideTab("inspector");
     },
-    [setNodes, setEdges, setSelectedNodeId, setActiveSideTab, stateChannels],
+    [
+      setNodes,
+      setEdges,
+      setSelectedNodeId,
+      setActiveSideTab,
+      stateChannels,
+      getCenterPosition,
+    ],
   );
 
   return { handleAddStep };
