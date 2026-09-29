@@ -357,7 +357,9 @@ export function reconstructEdges(
   const memoryDefs: LangGraphMemoryDefinition[] = data.memoryDefinitions || [];
   const graphEdges: LangGraphEdgeConfig[] = data.graphEdges || [];
 
-  return graphEdges
+  const reconstructedNodeIds = new Set(reconstructedNodes.map((n) => n.id));
+
+  const mainEdges = graphEdges
     .filter((e) => !e.id.startsWith("auto_edge_"))
     .filter((e) => !e.targets?.some((t) => t.kind === TARGET_KIND_PORT))
     .flatMap((e) =>
@@ -430,4 +432,91 @@ export function reconstructEdges(
         };
       }),
     );
+
+  const resourceEdges: LangGraphCanvasEdge[] = [];
+  const agentDefs: LangGraphAgentDefinition[] = data.agentDefinitions || [];
+  agentDefs.forEach((ag) => {
+    const agId = ag.id || ag.agentId;
+    if (!agId) return;
+
+    (ag.tools || []).forEach((toolId) => {
+      if (!reconstructedNodeIds.has(toolId)) return;
+      resourceEdges.push({
+        id: `edge_${toolId}_${agId}`,
+        source: toolId,
+        target: agId,
+        sourceHandle: HANDLE_TOOL_OUT,
+        targetHandle: HANDLE_TOOL_IN,
+        animated: true,
+      });
+    });
+
+    (ag.middleware || []).forEach((mwId) => {
+      if (!reconstructedNodeIds.has(mwId)) return;
+      resourceEdges.push({
+        id: `edge_${mwId}_${agId}`,
+        source: mwId,
+        target: agId,
+        sourceHandle: HANDLE_MIDDLEWARE_OUT,
+        targetHandle: HANDLE_MIDDLEWARE_IN,
+        animated: true,
+      });
+    });
+
+    (ag.memory || []).forEach((memId) => {
+      if (!reconstructedNodeIds.has(memId)) return;
+      resourceEdges.push({
+        id: `edge_${memId}_${agId}`,
+        source: memId,
+        target: agId,
+        sourceHandle: HANDLE_MEMORY_OUT,
+        targetHandle: HANDLE_MEMORY_IN,
+        animated: true,
+      });
+    });
+
+    if (ag.llmNodeId && reconstructedNodeIds.has(ag.llmNodeId)) {
+      resourceEdges.push({
+        id: `edge_${ag.llmNodeId}_${agId}`,
+        source: ag.llmNodeId,
+        target: agId,
+        sourceHandle: HANDLE_LLM_OUT,
+        targetHandle: HANDLE_LLM_IN,
+        animated: true,
+      });
+    }
+  });
+
+  const steps: LangGraphStepConfig[] = data.graphSteps || [];
+  steps.forEach((step) => {
+    (step.tools || []).forEach((toolId) => {
+      if (!reconstructedNodeIds.has(toolId)) return;
+      resourceEdges.push({
+        id: `edge_${toolId}_${step.id}`,
+        source: toolId,
+        target: step.id,
+        sourceHandle: HANDLE_TOOL_OUT,
+        targetHandle: HANDLE_TOOL_IN,
+        animated: true,
+      });
+    });
+  });
+
+  const isResourceHandle = (handle?: string) =>
+    handle === HANDLE_LLM_IN ||
+    handle === HANDLE_TOOL_IN ||
+    handle === HANDLE_MIDDLEWARE_IN ||
+    handle === HANDLE_MEMORY_IN;
+
+  const cleanMainEdges = mainEdges.filter((edge) => !isResourceHandle(edge.targetHandle));
+
+  const uniqueEdges = new Map<string, LangGraphCanvasEdge>();
+  [...resourceEdges, ...cleanMainEdges].forEach((edge) => {
+    const key = `${edge.source}:${edge.sourceHandle || ""}->${edge.target}:${edge.targetHandle || ""}`;
+    if (!uniqueEdges.has(key)) {
+      uniqueEdges.set(key, edge);
+    }
+  });
+
+  return Array.from(uniqueEdges.values());
 }

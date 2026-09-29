@@ -5,7 +5,7 @@ import {
   EdgeChange,
   applyNodeChanges,
   applyEdgeChanges,
-  addEdge as rfAddEdge,
+  addEdge,
 } from "@xyflow/react";
 import {
   type LangGraphCanvasNode,
@@ -15,6 +15,7 @@ import {
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
+  LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
@@ -77,7 +78,10 @@ export function useCanvasConnections({
                       e.targetHandle === HANDLE_LLM_IN,
                   );
                   if (!hasRemaining) {
-                    if (n.type === LANGGRAPH_CANVAS_NODE_AGENT) {
+                    if (
+                      n.type === LANGGRAPH_CANVAS_NODE_NODE ||
+                      n.type === LANGGRAPH_CANVAS_NODE_AGENT
+                    ) {
                       return {
                         ...n,
                         data: {
@@ -284,7 +288,10 @@ export function useCanvasConnections({
           setNodes((nds) =>
             nds.map((n) => {
               if (n.id === params.target) {
-                if (n.type === LANGGRAPH_CANVAS_NODE_AGENT) {
+                if (
+                  n.type === LANGGRAPH_CANVAS_NODE_NODE ||
+                  n.type === LANGGRAPH_CANVAS_NODE_AGENT
+                ) {
                   return {
                     ...n,
                     data: {
@@ -351,7 +358,7 @@ export function useCanvasConnections({
             )
           : eds;
 
-        return rfAddEdge(
+        return addEdge(
           {
             ...params,
             sourceHandle,

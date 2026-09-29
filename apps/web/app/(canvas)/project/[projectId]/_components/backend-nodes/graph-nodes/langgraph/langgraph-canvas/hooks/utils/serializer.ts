@@ -34,9 +34,7 @@ import type {
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
-  LANGGRAPH_CANVAS_NODE_START,
   LANGGRAPH_CANVAS_NODE_END,
-  LANGGRAPH_CANVAS_NODE_STATE_GLOBAL,
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
@@ -62,6 +60,8 @@ import {
   TARGET_KIND_PORT,
   TARGET_KIND_END,
   DEFAULT_MIDDLEWARE_TYPE,
+  DEFAULT_LLM_PROVIDER,
+  DEFAULT_LLM_MODEL,
 } from "../../constants";
 
 export interface BuildGraphDataParams {
@@ -212,67 +212,77 @@ export function buildGraphData({
       const rawLlmSourceId = edges.find(
         (e) => e.target === n.id && e.targetHandle === HANDLE_LLM_IN,
       )?.source;
-      let llmNodeId = rawLlmSourceId;
+      const llmNodeId = rawLlmSourceId;
+
+      let resolvedModelConfig = n.data.modelConfig
+        ? { ...n.data.modelConfig }
+        : undefined;
       if (rawLlmSourceId) {
-        const sourceNode = nodes.find((node) => node.id === rawLlmSourceId);
-        if (
-          sourceNode?.type === LANGGRAPH_CANVAS_NODE_LLM_REF &&
-          sourceNode.data.llmRef
-        ) {
-          llmNodeId = sourceNode.data.llmRef;
+        const sourceLlmNode = nodes.find((node) => node.id === rawLlmSourceId);
+        if (sourceLlmNode) {
+          if (sourceLlmNode.type === LANGGRAPH_CANVAS_NODE_LLM) {
+            resolvedModelConfig = {
+              provider:
+                sourceLlmNode.data.provider ||
+                resolvedModelConfig?.provider ||
+                DEFAULT_LLM_PROVIDER,
+              model:
+                sourceLlmNode.data.model ||
+                resolvedModelConfig?.model ||
+                DEFAULT_LLM_MODEL,
+              temperature:
+                sourceLlmNode.data.temperature ??
+                resolvedModelConfig?.temperature,
+            };
+          } else if (
+            sourceLlmNode.type === LANGGRAPH_CANVAS_NODE_LLM_REF &&
+            sourceLlmNode.data.llmRef
+          ) {
+            const master = nodes.find(
+              (node) => node.id === sourceLlmNode.data.llmRef,
+            );
+            if (master && master.type === LANGGRAPH_CANVAS_NODE_LLM) {
+              resolvedModelConfig = {
+                provider:
+                  master.data.provider ||
+                  resolvedModelConfig?.provider ||
+                  DEFAULT_LLM_PROVIDER,
+                model:
+                  master.data.model ||
+                  resolvedModelConfig?.model ||
+                  DEFAULT_LLM_MODEL,
+                temperature:
+                  master.data.temperature ?? resolvedModelConfig?.temperature,
+              };
+            }
+          }
         }
       }
+
       return {
         id: n.data.agentId || n.id,
         agentId: n.data.agentId || n.id,
         name: n.data.name || "Node",
         systemPrompt: n.data.systemPrompt,
         llmNodeId,
-        modelConfig: {
+        modelConfig: resolvedModelConfig || {
           ...(n.data.modelConfig || {}),
         },
         streamConfig: n.data.streamConfig,
         memoryConfig: n.data.memoryConfig,
         tools: edges
           .filter((e) => e.target === n.id && e.targetHandle === HANDLE_TOOL_IN)
-          .map((e) => {
-            const sourceNode = nodes.find((node) => node.id === e.source);
-            if (
-              sourceNode?.type === LANGGRAPH_CANVAS_NODE_TOOL_REF &&
-              sourceNode.data.toolRef
-            ) {
-              return sourceNode.data.toolRef;
-            }
-            return e.source;
-          }),
+          .map((e) => e.source),
         middleware: edges
           .filter(
             (e) => e.target === n.id && e.targetHandle === HANDLE_MIDDLEWARE_IN,
           )
-          .map((e) => {
-            const sourceNode = nodes.find((node) => node.id === e.source);
-            if (
-              sourceNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF &&
-              sourceNode.data.middlewareRef
-            ) {
-              return sourceNode.data.middlewareRef;
-            }
-            return e.source;
-          }),
+          .map((e) => e.source),
         memory: edges
           .filter(
             (e) => e.target === n.id && e.targetHandle === HANDLE_MEMORY_IN,
           )
-          .map((e) => {
-            const sourceNode = nodes.find((node) => node.id === e.source);
-            if (
-              sourceNode?.type === LANGGRAPH_CANVAS_NODE_MEMORY_REF &&
-              sourceNode.data.memoryRef
-            ) {
-              return sourceNode.data.memoryRef;
-            }
-            return e.source;
-          }),
+          .map((e) => e.source),
         position: n.position,
       };
     });
@@ -322,16 +332,7 @@ export function buildGraphData({
         ...(n.data.stateUpdates ? { stateUpdates: n.data.stateUpdates } : {}),
         tools: edges
           .filter((e) => e.target === n.id && e.targetHandle === HANDLE_TOOL_IN)
-          .map((e) => {
-            const sourceNode = nodes.find((node) => node.id === e.source);
-            if (
-              sourceNode?.type === LANGGRAPH_CANVAS_NODE_TOOL_REF &&
-              sourceNode.data.toolRef
-            ) {
-              return sourceNode.data.toolRef;
-            }
-            return e.source;
-          }),
+          .map((e) => e.source),
         position: n.position,
       };
     });

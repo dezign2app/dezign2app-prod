@@ -44,7 +44,6 @@ import {
   NODE_ID_END,
   NODE_ID_STATE_GLOBAL,
   makePortNodeId,
-  TARGET_KIND_STEP,
   TARGET_KIND_PORT,
   TARGET_KIND_END,
 } from "../../constants";
@@ -388,26 +387,26 @@ export function buildInitialEdges(
           e.source.startsWith("llm_") ||
           e.source.startsWith("llm_ref_") ||
           (data.customLlmNodes || []).some((c) => c.id === e.source) ||
-          ((data as any).customLlmRefNodes || []).some((c: any) => c.id === e.source);
+          (data.customLlmRefNodes || []).some((c) => c.id === e.source);
         const isToolSource =
           e.sourceHandle === HANDLE_TOOL_OUT ||
           e.source.startsWith("tool_") ||
           e.source.startsWith("tool_ref_") ||
           (data.toolDefinitions || []).some((t) => t.id === e.source) ||
-          ((data as any).customToolRefNodes || []).some((c: any) => c.id === e.source);
+          (data.customToolRefNodes || []).some((c) => c.id === e.source);
         const isMiddlewareSource =
           e.sourceHandle === HANDLE_MIDDLEWARE_OUT ||
           e.source.startsWith("mw_") ||
           e.source.startsWith("mw_ref_") ||
           (data.middlewareDefinitions || []).some((m) => m.id === e.source) ||
-          ((data as any).customMiddlewareRefNodes || []).some((c: any) => c.id === e.source);
+          (data.customMiddlewareRefNodes || []).some((c) => c.id === e.source);
         const isMemorySource =
           e.sourceHandle === HANDLE_MEMORY_OUT ||
           e.source.startsWith("mem_") ||
           e.source.startsWith("mem_ref_") ||
           e.source.startsWith("db_") ||
           (data.memoryDefinitions || []).some((m) => m.id === e.source) ||
-          ((data as any).customMemoryRefNodes || []).some((c: any) => c.id === e.source);
+          (data.customMemoryRefNodes || []).some((c) => c.id === e.source);
 
         const sourceStep = steps.find((s) => s.id === e.source);
         const routerBranch = sourceStep?.routerConfig?.branches?.find(
@@ -522,12 +521,15 @@ export function buildInitialEdges(
       }),
     );
 
+  const initialNodeIds = new Set(initialNodes.map((n) => n.id));
+
   const resourceEdges: LangGraphCanvasEdge[] = [];
   agentDefs.forEach((ag) => {
     const agId = ag.id || ag.agentId;
     if (!agId) return;
 
     (ag.tools || []).forEach((toolId) => {
+      if (!initialNodeIds.has(toolId)) return;
       resourceEdges.push({
         id: `edge_${toolId}_${agId}`,
         source: toolId,
@@ -540,6 +542,7 @@ export function buildInitialEdges(
     });
 
     (ag.middleware || []).forEach((mwId) => {
+      if (!initialNodeIds.has(mwId)) return;
       resourceEdges.push({
         id: `edge_${mwId}_${agId}`,
         source: mwId,
@@ -552,6 +555,7 @@ export function buildInitialEdges(
     });
 
     (ag.memory || []).forEach((memId) => {
+      if (!initialNodeIds.has(memId)) return;
       resourceEdges.push({
         id: `edge_${memId}_${agId}`,
         source: memId,
@@ -566,8 +570,7 @@ export function buildInitialEdges(
     const connectedLlmId = ag.llmNodeId;
     if (
       connectedLlmId &&
-      ((data.customLlmNodes || []).some((llm) => llm.id === connectedLlmId) ||
-        ((data as any).customLlmRefNodes || []).some((llm: any) => llm.id === connectedLlmId))
+      initialNodeIds.has(connectedLlmId)
     ) {
       resourceEdges.push({
         id: `edge_${connectedLlmId}_${agId}`,
@@ -583,6 +586,7 @@ export function buildInitialEdges(
 
   steps.forEach((step) => {
     (step.tools || []).forEach((toolId) => {
+      if (!initialNodeIds.has(toolId)) return;
       resourceEdges.push({
         id: `edge_${toolId}_${step.id}`,
         source: toolId,
@@ -614,12 +618,29 @@ export function buildInitialEdges(
       };
     });
 
-  // Older saved graphs can contain resource connections in both `graphEdges`
-  // and the agent/step relationship arrays. Keep the first representation so
-  // React Flow never receives duplicate edge keys.
+  // Resource connections (LLM, Tool, Middleware, Memory) are authoritatively
+  // managed by agentDefs and steps. Filter out any legacy resource edges that
+  // might still exist in graphEdges from older schemas to prevent double-connecting.
+  const isResourceHandle = (handle?: string) =>
+    handle === HANDLE_LLM_IN ||
+    handle === HANDLE_TOOL_IN ||
+    handle === HANDLE_MIDDLEWARE_IN ||
+    handle === HANDLE_MEMORY_IN;
+
+  const cleanMainEdges = mainEdges.filter((edge) => {
+    if (isResourceHandle(edge.targetHandle)) {
+      return false;
+    }
+    return true;
+  });
+
+  // Deduplicate edges based on source + sourceHandle + target + targetHandle
   const uniqueEdges = new Map<string, LangGraphCanvasEdge>();
-  [...mainEdges, ...resourceEdges, ...outputChannelEdges].forEach((edge) => {
-    if (!uniqueEdges.has(edge.id)) uniqueEdges.set(edge.id, edge);
+  [...resourceEdges, ...outputChannelEdges, ...cleanMainEdges].forEach((edge) => {
+    const key = `${edge.source}:${edge.sourceHandle || ""}->${edge.target}:${edge.targetHandle || ""}`;
+    if (!uniqueEdges.has(key)) {
+      uniqueEdges.set(key, edge);
+    }
   });
 
   return Array.from(uniqueEdges.values());

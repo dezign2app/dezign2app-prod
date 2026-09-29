@@ -23,8 +23,13 @@ import type { LangGraphLLMRefNode, LangGraphCanvasNode, LangGraphLLMNode } from 
 import {
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
+  LANGGRAPH_CANVAS_NODE_NODE,
+  LANGGRAPH_CANVAS_NODE_AGENT,
+  LANGGRAPH_CANVAS_NODE_STEP,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
+  DEFAULT_LLM_PROVIDER,
+  DEFAULT_LLM_MODEL,
 } from "../constants";
 import { LocalInput } from "../../../common";
 
@@ -33,7 +38,8 @@ export const LangGraphCanvasLLMRefNode = ({
   data,
   selected,
 }: NodeProps<LangGraphLLMRefNode>) => {
-  const { setNodes, getNodes } = useReactFlow<LangGraphCanvasNode>();
+  const { setNodes, getNodes, getEdges, setEdges } =
+    useReactFlow<LangGraphCanvasNode>();
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(data.label || "LLM Ref");
 
@@ -75,11 +81,86 @@ export const LangGraphCanvasLLMRefNode = ({
   const handleSelectMaster = (masterId: string) => {
     const master = availableMasterLLMs.find((m) => m.id === masterId);
     const masterLabel = master?.data?.label || "LLM";
+    const masterProvider = master?.data?.provider;
+    const masterModel = master?.data?.model;
+    const masterTemp = master?.data?.temperature;
+
     updateLLMRefData({
       llmRef: masterId,
       label: `${masterLabel} (Ref)`,
     });
     setNameValue(`${masterLabel} (Ref)`);
+
+    const edges = getEdges();
+    const connectedTargetIds = new Set(
+      edges
+        .filter((e) => e.source === id && e.targetHandle === HANDLE_LLM_IN)
+        .map((e) => e.target),
+    );
+
+    if (connectedTargetIds.size > 0 && master) {
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (!connectedTargetIds.has(n.id)) return n;
+
+          if (
+            n.type === LANGGRAPH_CANVAS_NODE_NODE ||
+            n.type === LANGGRAPH_CANVAS_NODE_AGENT
+          ) {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                llmConfig: {
+                  ...n.data.llmConfig,
+                  enabled: true,
+                  provider:
+                    masterProvider ||
+                    n.data.llmConfig?.provider ||
+                    DEFAULT_LLM_PROVIDER,
+                  model:
+                    masterModel ||
+                    n.data.llmConfig?.model ||
+                    DEFAULT_LLM_MODEL,
+                  temperature:
+                    masterTemp ?? n.data.llmConfig?.temperature,
+                },
+                modelConfig: {
+                  provider: masterProvider || DEFAULT_LLM_PROVIDER,
+                  model: masterModel || DEFAULT_LLM_MODEL,
+                  temperature: masterTemp,
+                },
+              },
+            };
+          }
+
+          if (n.type === LANGGRAPH_CANVAS_NODE_STEP) {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                modelConfig: {
+                  provider: masterProvider || DEFAULT_LLM_PROVIDER,
+                  model: masterModel || DEFAULT_LLM_MODEL,
+                  temperature: masterTemp,
+                },
+              },
+            };
+          }
+
+          return n;
+        }),
+      );
+    }
+  };
+
+  const handleDelete = () => {
+    if (data.onDeleteLLMRef) {
+      data.onDeleteLLMRef();
+    } else {
+      setNodes((nds) => nds.filter((n) => n.id !== id));
+      setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
+    }
   };
 
   const activeProvider = selectedMaster?.data?.provider || "unconfigured";
@@ -163,19 +244,17 @@ export const LangGraphCanvasLLMRefNode = ({
               {activeProvider.toUpperCase()}
             </span>
           )}
-          {data.onDeleteLLMRef && (
-            <button
-              type="button"
-              className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all opacity-0 group-hover:opacity-100 nodrag"
-              onClick={(e) => {
-                e.stopPropagation();
-                data.onDeleteLLMRef?.();
-              }}
-              title="Delete LLM Ref"
-            >
-              <Trash className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <button
+            type="button"
+            className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all opacity-0 group-hover:opacity-100 nodrag"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete();
+            }}
+            title="Delete LLM Ref"
+          >
+            <Trash className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 

@@ -32,7 +32,7 @@ export const LangGraphCanvasMiddlewareRefNode = ({
   data,
   selected,
 }: NodeProps<LangGraphMiddlewareRefNode>) => {
-  const { setNodes, getNodes } = useReactFlow<LangGraphCanvasNode>();
+  const { setNodes, getNodes, setEdges } = useReactFlow<LangGraphCanvasNode>();
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(data.label || "Middleware Ref");
 
@@ -79,6 +79,15 @@ export const LangGraphCanvasMiddlewareRefNode = ({
       label: `${masterLabel} (Ref)`,
     });
     setNameValue(`${masterLabel} (Ref)`);
+  };
+
+  const handleDelete = () => {
+    if (data.onDeleteMiddlewareRef) {
+      data.onDeleteMiddlewareRef();
+    } else {
+      setNodes((nds) => nds.filter((n) => n.id !== id));
+      setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
+    }
   };
 
   const activeType = selectedMaster?.data?.type || "unconfigured";
@@ -162,19 +171,17 @@ export const LangGraphCanvasMiddlewareRefNode = ({
               {activeType.toUpperCase()}
             </span>
           )}
-          {data.onDeleteMiddlewareRef && (
-            <button
-              type="button"
-              className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all opacity-0 group-hover:opacity-100 nodrag"
-              onClick={(e) => {
-                e.stopPropagation();
-                data.onDeleteMiddlewareRef?.();
-              }}
-              title="Delete Middleware Ref"
-            >
-              <Trash className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <button
+            type="button"
+            className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all opacity-0 group-hover:opacity-100 nodrag"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete();
+            }}
+            title="Delete Middleware Ref"
+          >
+            <Trash className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
