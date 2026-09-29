@@ -71,9 +71,66 @@ export const LangGraphCanvasToolRefNode = ({
     }
   };
 
+  // Ensure invisible reference edge from the master ToolNode to this ref node
+  useEffect(() => {
+    if (!selectedMaster?.id) {
+      setEdges((eds) => {
+        const hasRef = eds.some(
+          (e) => e.type === "langgraph-reference" && e.target === id,
+        );
+        if (!hasRef) return eds;
+        return eds.filter(
+          (e) => !(e.type === "langgraph-reference" && e.target === id),
+        );
+      });
+      return;
+    }
+
+    const refEdgeId = `edge-tool-ref-link-${selectedMaster.id}-${id}`;
+    setEdges((eds) => {
+      const existingRefEdges = eds.filter(
+        (e) => e.type === "langgraph-reference" && e.target === id,
+      );
+
+      // If exactly one reference edge already exists matching this master, no-op
+      if (
+        existingRefEdges.length === 1 &&
+        existingRefEdges[0]?.id === refEdgeId &&
+        existingRefEdges[0]?.source === selectedMaster.id
+      ) {
+        return eds;
+      }
+
+      // Filter out any reference edges targeting this ref node (cleans up stale edges and duplicates)
+      const cleanEdges = eds.filter(
+        (e) => !(e.type === "langgraph-reference" && e.target === id),
+      );
+
+      return [
+        ...cleanEdges,
+        {
+          id: refEdgeId,
+          source: selectedMaster.id,
+          sourceHandle: HANDLE_TOOL_OUT,
+          target: id,
+          targetHandle: HANDLE_TOOL_IN,
+          type: "langgraph-reference",
+          hidden: true,
+          data: {},
+        },
+      ];
+    });
+  }, [selectedMaster?.id, id, setEdges]);
+
   const handleSelectMaster = (masterId: string) => {
     const master = availableMasterTools.find((m) => m.id === masterId);
     const masterLabel = master?.data?.name || master?.data?.label || "Tool";
+    // Clean up old reference edges when switching master
+    setEdges((eds) =>
+      eds.filter(
+        (e) => !(e.type === "langgraph-reference" && e.target === id),
+      ),
+    );
     updateToolRefData({
       toolRef: masterId,
       label: `${masterLabel} (Ref)`,
@@ -86,7 +143,11 @@ export const LangGraphCanvasToolRefNode = ({
       data.onDeleteToolRef();
     } else {
       setNodes((nds) => nds.filter((n) => n.id !== id));
-      setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
+      setEdges((eds) =>
+        eds.filter(
+          (e) => e.source !== id && e.target !== id,
+        ),
+      );
     }
   };
 
@@ -100,6 +161,24 @@ export const LangGraphCanvasToolRefNode = ({
           : "border-border hover:border-emerald-500/40 hover:shadow-emerald-500/5"
       }`}
     >
+      {/* Inbound Handle on header (left) for reference from master Tool */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id={HANDLE_TOOL_IN}
+        style={{ top: "24px" }}
+        isValidConnection={(connection: Connection) =>
+          connection.sourceHandle === HANDLE_TOOL_OUT ||
+          Boolean(connection.source?.startsWith("tool_"))
+        }
+        className={`!w-3.5 !h-3.5 !border-2 transition-all hover:!scale-125 !-left-[7px] z-10 ${
+          selectedMaster?.id
+            ? "!bg-emerald-500 !border-background ring-2 ring-emerald-500/30"
+            : "!bg-background !border-emerald-500/60 hover:!bg-emerald-500"
+        }`}
+        title="Inbound Tool Reference: Connect from Master Tool"
+      />
+
       {/* Output Handle to connect to step/agent nodes */}
       <Handle
         type="source"

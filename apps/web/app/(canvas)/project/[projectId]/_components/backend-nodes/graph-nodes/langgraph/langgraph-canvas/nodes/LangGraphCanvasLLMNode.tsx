@@ -103,17 +103,17 @@ export const LangGraphCanvasLLMNode = ({
           : "border-border hover:border-blue-500/40 hover:shadow-blue-500/5"
       }`}
     >
-      {/* Output Handle to connect edge to step nodes */}
+      {/* Output Handle on right side to connect to ref or step nodes */}
       <Handle
         type="source"
-        position={Position.Bottom}
+        position={Position.Right}
         id={HANDLE_LLM_OUT}
-        style={{ left: "50%" }}
+        style={{ top: "24px" }}
         isValidConnection={(connection: Connection) =>
           connection.targetHandle === HANDLE_LLM_IN
         }
-        className="!bg-sky-400 !w-3.5 !h-3.5 !border-2 !border-background hover:!scale-125 transition-transform !-bottom-[7px]"
-        title="Connect to Step Node LLM Config"
+        className="!bg-sky-400 !w-3.5 !h-3.5 !border-2 !border-background hover:!scale-125 transition-transform !-right-[7px] z-10"
+        title="Connect to LLM Ref or Step Node LLM Config"
       />
       {/* Header */}
       <div className="flex items-center justify-between gap-2 p-3 -mx-3 -mt-3 border-b border-border/50 bg-blue-500/10 text-blue-700 dark:text-blue-400 rounded-t-xl">

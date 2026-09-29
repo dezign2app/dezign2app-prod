@@ -93,11 +93,10 @@ export const LangGraphCanvasToolNode = ({
     >
       <Handle
         type="source"
-        position={Position.Bottom}
+        position={Position.Right}
         id={HANDLE_TOOL_OUT}
-        style={{ left: "50%" }}
-        className="!bg-emerald-500 !w-3.5 !h-3.5 !border-2 !border-background hover:!scale-125 transition-transform !-bottom-[7px]"
-        title="Connect to Step or Agent node tools"
+        className="!bg-emerald-500 !w-3.5 !h-3.5 !border-2 !border-background hover:!scale-125 transition-transform !-right-[7px] z-10"
+        title="Connect to Step, Agent, or Tool Ref node"
       />
 
       {/* Header */}

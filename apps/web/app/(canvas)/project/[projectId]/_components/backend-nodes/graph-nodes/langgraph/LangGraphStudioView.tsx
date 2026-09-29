@@ -19,6 +19,7 @@ import { useLangGraphCanvasState } from "./langgraph-canvas/hooks/useLangGraphCa
 import { LangGraphCanvasHeader } from "./langgraph-canvas/components/LangGraphCanvasHeader";
 import { ToolsSidebar } from "./langgraph-canvas/components/ToolsSidebar";
 import { InspectorSidebar } from "./langgraph-canvas/components/InspectorSidebar";
+import { LangGraphReferenceEdge } from "./langgraph-canvas/components/LangGraphReferenceEdge";
 import { CompilerDialog } from "../../../compiler";
 import { compileLangGraph } from "@/lib/compiler";
 import { simulateLangGraphTestCase } from "@/lib/simulation/runtime";
@@ -37,6 +38,10 @@ import {
 } from "./langgraph-canvas/constants";
 
 import { useConnectedRoutes } from "./LangGraphNode";
+
+const langGraphCanvasEdgeTypes = {
+  "langgraph-reference": LangGraphReferenceEdge,
+};
 
 interface LangGraphStudioViewProps {
   node: BackendNode;
@@ -206,6 +211,30 @@ export function LangGraphStudioView({
 
   const displayEdges = useMemo(() => {
     return edges.map((edge) => {
+      if (edge.type === "langgraph-reference") {
+        const isConnectedToSelected = Boolean(
+          selectedNodeId &&
+            (edge.source === selectedNodeId || edge.target === selectedNodeId),
+        );
+        const sourceNode = nodes.find((n) => n.id === edge.source);
+        const targetNode = nodes.find((n) => n.id === edge.target);
+        const isNodeSelected = Boolean(
+          sourceNode?.selected ||
+            targetNode?.selected ||
+            isConnectedToSelected ||
+            edge.selected,
+        );
+
+        return {
+          ...edge,
+          hidden: !isNodeSelected,
+          data: {
+            ...edge.data,
+            isActive: isNodeSelected,
+          },
+        };
+      }
+
       const isCurrent = currentEdgeId === edge.id;
       const isActive = activeEdgeIds.includes(edge.id);
       const strokeColor = isCurrent
@@ -234,7 +263,7 @@ export function LangGraphStudioView({
         },
       };
     });
-  }, [edges, activeEdgeIds, currentEdgeId]);
+  }, [edges, nodes, selectedNodeId, activeEdgeIds, currentEdgeId]);
 
   const displayNodes = useMemo(() => {
     return nodes.map((n) => {
@@ -350,6 +379,7 @@ export function LangGraphStudioView({
             onConnect={onConnect}
             isValidConnection={isValidConnection}
             nodeTypes={langGraphCanvasNodeTypes}
+            edgeTypes={langGraphCanvasEdgeTypes}
             deleteKeyCode={["Backspace", "Delete"]}
             edgesReconnectable={true}
             edgesFocusable={true}
