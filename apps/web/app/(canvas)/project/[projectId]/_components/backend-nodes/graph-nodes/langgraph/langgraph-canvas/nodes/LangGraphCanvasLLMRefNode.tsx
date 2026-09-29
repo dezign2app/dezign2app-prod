@@ -78,6 +78,57 @@ export const LangGraphCanvasLLMRefNode = ({
     }
   };
 
+  // Ensure invisible reference edge from the master LLMNode to this ref node
+  useEffect(() => {
+    if (!selectedMaster?.id) {
+      setEdges((eds) => {
+        const hasRef = eds.some(
+          (e) => e.type === "langgraph-reference" && e.target === id,
+        );
+        if (!hasRef) return eds;
+        return eds.filter(
+          (e) => !(e.type === "langgraph-reference" && e.target === id),
+        );
+      });
+      return;
+    }
+
+    const refEdgeId = `edge-llm-ref-link-${selectedMaster.id}-${id}`;
+    setEdges((eds) => {
+      const existingRefEdges = eds.filter(
+        (e) => e.type === "langgraph-reference" && e.target === id,
+      );
+
+      // If exactly one reference edge already exists matching this master, no-op
+      if (
+        existingRefEdges.length === 1 &&
+        existingRefEdges[0]?.id === refEdgeId &&
+        existingRefEdges[0]?.source === selectedMaster.id
+      ) {
+        return eds;
+      }
+
+      // Filter out any reference edges targeting this ref node (cleans up stale edges and duplicates)
+      const cleanEdges = eds.filter(
+        (e) => !(e.type === "langgraph-reference" && e.target === id),
+      );
+
+      return [
+        ...cleanEdges,
+        {
+          id: refEdgeId,
+          source: selectedMaster.id,
+          sourceHandle: HANDLE_LLM_OUT,
+          target: id,
+          targetHandle: HANDLE_LLM_IN,
+          type: "langgraph-reference",
+          hidden: true,
+          data: {},
+        },
+      ];
+    });
+  }, [selectedMaster?.id, id, setEdges]);
+
   const handleSelectMaster = (masterId: string) => {
     const master = availableMasterLLMs.find((m) => m.id === masterId);
     const masterLabel = master?.data?.label || "LLM";
@@ -90,6 +141,13 @@ export const LangGraphCanvasLLMRefNode = ({
       label: `${masterLabel} (Ref)`,
     });
     setNameValue(`${masterLabel} (Ref)`);
+
+    // Clean up stale reference edges when switching master
+    setEdges((eds) =>
+      eds.filter(
+        (e) => !(e.type === "langgraph-reference" && e.target === id),
+      ),
+    );
 
     const edges = getEdges();
     const connectedTargetIds = new Set(
@@ -173,6 +231,24 @@ export const LangGraphCanvasLLMRefNode = ({
           : "border-border hover:border-sky-500/40 hover:shadow-sky-500/5"
       }`}
     >
+      {/* Inbound Handle on header (left) for reference from master LLM */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id={HANDLE_LLM_IN}
+        style={{ top: "24px" }}
+        isValidConnection={(connection: Connection) =>
+          connection.sourceHandle === HANDLE_LLM_OUT ||
+          Boolean(connection.source?.startsWith("llm_"))
+        }
+        className={`!w-3.5 !h-3.5 !border-2 transition-all hover:!scale-125 !-left-[7px] z-10 ${
+          selectedMaster?.id
+            ? "!bg-sky-400 !border-background ring-2 ring-sky-400/30"
+            : "!bg-background !border-sky-400/60 hover:!bg-sky-400"
+        }`}
+        title="Inbound LLM Reference: Connect from Master LLM"
+      />
+
       {/* Output Handle to connect to step/agent nodes */}
       <Handle
         type="source"

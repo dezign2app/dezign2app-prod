@@ -289,6 +289,21 @@ export function useCanvasConnections({
             nds.map((n) => {
               if (n.id === params.target) {
                 if (
+                  n.type === LANGGRAPH_CANVAS_NODE_LLM_REF &&
+                  srcNode?.type === LANGGRAPH_CANVAS_NODE_LLM
+                ) {
+                  const masterLabel = srcNode.data.label || "LLM";
+                  return {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      llmRef: srcNode.id,
+                      label: `${masterLabel} (Ref)`,
+                    },
+                  };
+                }
+
+                if (
                   n.type === LANGGRAPH_CANVAS_NODE_NODE ||
                   n.type === LANGGRAPH_CANVAS_NODE_AGENT
                 ) {
@@ -349,6 +364,41 @@ export function useCanvasConnections({
               return n;
             }),
           );
+        }
+
+        if (isTool) {
+          const srcNode = nodes.find((n) => n.id === params.source);
+          if (srcNode?.type === LANGGRAPH_CANVAS_NODE_TOOL) {
+            setNodes((nds) =>
+              nds.map((n) => {
+                if (
+                  n.id === params.target &&
+                  n.type === LANGGRAPH_CANVAS_NODE_TOOL_REF
+                ) {
+                  const masterLabel =
+                    srcNode.data.name || srcNode.data.label || "Tool";
+                  return {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      toolRef: srcNode.id,
+                      label: `${masterLabel} (Ref)`,
+                    },
+                  };
+                }
+                return n;
+              }),
+            );
+          }
+        }
+
+        const targetNode = nodes.find((n) => n.id === params.target);
+        if (
+          (isLLM && targetNode?.type === LANGGRAPH_CANVAS_NODE_LLM_REF) ||
+          (isTool && targetNode?.type === LANGGRAPH_CANVAS_NODE_TOOL_REF)
+        ) {
+          // Reference edge is automatically managed by the Ref node's effect
+          return eds;
         }
 
         const filteredEds = isLLM

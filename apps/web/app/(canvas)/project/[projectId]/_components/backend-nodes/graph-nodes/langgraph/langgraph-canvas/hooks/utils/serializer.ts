@@ -365,7 +365,9 @@ export function buildGraphData({
   const graphEdges: LangGraphEdgeConfig[] = edges
     .filter(
       (e) =>
-        e.source !== NODE_ID_STATE_GLOBAL && e.target !== NODE_ID_STATE_GLOBAL,
+        e.source !== NODE_ID_STATE_GLOBAL &&
+        e.target !== NODE_ID_STATE_GLOBAL &&
+        e.type !== "langgraph-reference",
     )
     .filter((e) => {
       const isTool =
