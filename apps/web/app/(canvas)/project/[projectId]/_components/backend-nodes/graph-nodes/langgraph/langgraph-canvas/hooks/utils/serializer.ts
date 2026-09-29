@@ -28,6 +28,9 @@ import type {
   LangGraphLLMNode,
   LangGraphLLMRefNode,
   EndNode,
+  LangGraphToolRefNode,
+  LangGraphMiddlewareRefNode,
+  LangGraphMemoryRefNode,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
@@ -37,10 +40,13 @@ import {
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
+  LANGGRAPH_CANVAS_NODE_TOOL_REF,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+  LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
   LANGGRAPH_CANVAS_NODE_MEMORY,
+  LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
   HANDLE_LLM_IN,
   HANDLE_TOOL_IN,
@@ -101,6 +107,41 @@ export function buildGraphData({
       id: n.id,
       label: n.data.label,
       llmRef: n.data.llmRef,
+      position: n.position,
+    }));
+
+  const customToolRefNodes = nodes
+    .filter(
+      (n): n is LangGraphToolRefNode => n.type === LANGGRAPH_CANVAS_NODE_TOOL_REF,
+    )
+    .map((n) => ({
+      id: n.id,
+      label: n.data.label,
+      toolRef: n.data.toolRef,
+      position: n.position,
+    }));
+
+  const customMiddlewareRefNodes = nodes
+    .filter(
+      (n): n is LangGraphMiddlewareRefNode =>
+        n.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
+    )
+    .map((n) => ({
+      id: n.id,
+      label: n.data.label,
+      middlewareRef: n.data.middlewareRef,
+      position: n.position,
+    }));
+
+  const customMemoryRefNodes = nodes
+    .filter(
+      (n): n is LangGraphMemoryRefNode =>
+        n.type === LANGGRAPH_CANVAS_NODE_MEMORY_REF,
+    )
+    .map((n) => ({
+      id: n.id,
+      label: n.data.label,
+      memoryRef: n.data.memoryRef,
       position: n.position,
     }));
 
@@ -194,17 +235,44 @@ export function buildGraphData({
         memoryConfig: n.data.memoryConfig,
         tools: edges
           .filter((e) => e.target === n.id && e.targetHandle === HANDLE_TOOL_IN)
-          .map((e) => e.source),
+          .map((e) => {
+            const sourceNode = nodes.find((node) => node.id === e.source);
+            if (
+              sourceNode?.type === LANGGRAPH_CANVAS_NODE_TOOL_REF &&
+              sourceNode.data.toolRef
+            ) {
+              return sourceNode.data.toolRef;
+            }
+            return e.source;
+          }),
         middleware: edges
           .filter(
             (e) => e.target === n.id && e.targetHandle === HANDLE_MIDDLEWARE_IN,
           )
-          .map((e) => e.source),
+          .map((e) => {
+            const sourceNode = nodes.find((node) => node.id === e.source);
+            if (
+              sourceNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF &&
+              sourceNode.data.middlewareRef
+            ) {
+              return sourceNode.data.middlewareRef;
+            }
+            return e.source;
+          }),
         memory: edges
           .filter(
             (e) => e.target === n.id && e.targetHandle === HANDLE_MEMORY_IN,
           )
-          .map((e) => e.source),
+          .map((e) => {
+            const sourceNode = nodes.find((node) => node.id === e.source);
+            if (
+              sourceNode?.type === LANGGRAPH_CANVAS_NODE_MEMORY_REF &&
+              sourceNode.data.memoryRef
+            ) {
+              return sourceNode.data.memoryRef;
+            }
+            return e.source;
+          }),
         position: n.position,
       };
     });
@@ -254,7 +322,16 @@ export function buildGraphData({
         ...(n.data.stateUpdates ? { stateUpdates: n.data.stateUpdates } : {}),
         tools: edges
           .filter((e) => e.target === n.id && e.targetHandle === HANDLE_TOOL_IN)
-          .map((e) => e.source),
+          .map((e) => {
+            const sourceNode = nodes.find((node) => node.id === e.source);
+            if (
+              sourceNode?.type === LANGGRAPH_CANVAS_NODE_TOOL_REF &&
+              sourceNode.data.toolRef
+            ) {
+              return sourceNode.data.toolRef;
+            }
+            return e.source;
+          }),
         position: n.position,
       };
     });
@@ -381,6 +458,9 @@ export function buildGraphData({
     memoryConfig,
     customLlmNodes,
     customLlmRefNodes,
+    customToolRefNodes,
+    customMiddlewareRefNodes,
+    customMemoryRefNodes,
     toolDefinitions,
     middlewareDefinitions,
     memoryDefinitions,

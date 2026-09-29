@@ -16,8 +16,11 @@ import type {
   LangGraphLLMNode,
   LangGraphLLMRefNode,
   ToolNode,
+  LangGraphToolRefNode,
   MiddlewareNode,
+  LangGraphMiddlewareRefNode,
   MemoryNode,
+  LangGraphMemoryRefNode,
   AgentNode,
   StepNode,
   OutputNode,
@@ -30,8 +33,11 @@ import {
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
+  LANGGRAPH_CANVAS_NODE_TOOL_REF,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+  LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   LANGGRAPH_CANVAS_NODE_MEMORY,
+  LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_STEP,
   LANGGRAPH_CANVAS_NODE_END,
@@ -111,6 +117,51 @@ export function reconstructNodes(
         label: cRef.label || "LLM Ref",
         refId: cRef.id,
         llmRef: cRef.llmRef,
+      },
+    };
+    reconstructedNodes.push(customRefNode);
+  });
+
+  const customToolRefs = data.customToolRefNodes || [];
+  customToolRefs.forEach((tRef) => {
+    const customRefNode: LangGraphToolRefNode = {
+      id: tRef.id,
+      type: LANGGRAPH_CANVAS_NODE_TOOL_REF,
+      position: tRef.position || { x: 340, y: 160 },
+      data: {
+        label: tRef.label || "Tool Ref",
+        refId: tRef.id,
+        toolRef: tRef.toolRef,
+      },
+    };
+    reconstructedNodes.push(customRefNode);
+  });
+
+  const customMiddlewareRefs = data.customMiddlewareRefNodes || [];
+  customMiddlewareRefs.forEach((mRef) => {
+    const customRefNode: LangGraphMiddlewareRefNode = {
+      id: mRef.id,
+      type: LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
+      position: mRef.position || { x: 340, y: 220 },
+      data: {
+        label: mRef.label || "Middleware Ref",
+        refId: mRef.id,
+        middlewareRef: mRef.middlewareRef,
+      },
+    };
+    reconstructedNodes.push(customRefNode);
+  });
+
+  const customMemoryRefs = data.customMemoryRefNodes || [];
+  customMemoryRefs.forEach((memRef) => {
+    const customRefNode: LangGraphMemoryRefNode = {
+      id: memRef.id,
+      type: LANGGRAPH_CANVAS_NODE_MEMORY_REF,
+      position: memRef.position || { x: 340, y: 280 },
+      data: {
+        label: memRef.label || "Memory Ref",
+        refId: memRef.id,
+        memoryRef: memRef.memoryRef,
       },
     };
     reconstructedNodes.push(customRefNode);
@@ -320,16 +371,22 @@ export function reconstructEdges(
         const isToolSource =
           e.sourceHandle === HANDLE_TOOL_OUT ||
           e.source.startsWith("tool_") ||
-          toolDefs.some((td) => (td.id || td.toolId) === e.source);
+          e.source.startsWith("tool_ref_") ||
+          toolDefs.some((td) => (td.id || td.toolId) === e.source) ||
+          (data.customToolRefNodes || []).some((r) => r.id === e.source);
         const isMiddlewareSource =
           e.sourceHandle === HANDLE_MIDDLEWARE_OUT ||
           e.source.startsWith("mw_") ||
-          middlewareDefs.some((m) => (m.id || m.middlewareId) === e.source);
+          e.source.startsWith("mw_ref_") ||
+          middlewareDefs.some((m) => (m.id || m.middlewareId) === e.source) ||
+          (data.customMiddlewareRefNodes || []).some((r) => r.id === e.source);
         const isMemorySource =
           e.sourceHandle === HANDLE_MEMORY_OUT ||
           e.source.startsWith("mem_") ||
+          e.source.startsWith("mem_ref_") ||
           e.source.startsWith("db_") ||
-          memoryDefs.some((m) => (m.id || m.memoryId) === e.source);
+          memoryDefs.some((m) => (m.id || m.memoryId) === e.source) ||
+          (data.customMemoryRefNodes || []).some((r) => r.id === e.source);
 
         const sourceHandle =
           e.sourceHandle ||

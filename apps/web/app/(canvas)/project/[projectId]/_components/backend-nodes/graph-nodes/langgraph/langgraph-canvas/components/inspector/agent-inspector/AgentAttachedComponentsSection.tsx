@@ -20,15 +20,18 @@ import type {
   LangGraphLLMNode,
   LangGraphLLMRefNode,
   ToolNode,
+  LangGraphToolRefNode,
   MiddlewareNode,
+  LangGraphMiddlewareRefNode,
   MemoryNode,
+  LangGraphMemoryRefNode,
 } from "../../../types";
 
 interface AgentAttachedComponentsSectionProps {
   availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
-  availableToolNodes?: ToolNode[];
-  availableMiddlewareNodes?: MiddlewareNode[];
-  availableMemoryNodes?: MemoryNode[];
+  availableToolNodes?: (ToolNode | LangGraphToolRefNode)[];
+  availableMiddlewareNodes?: (MiddlewareNode | LangGraphMiddlewareRefNode)[];
+  availableMemoryNodes?: (MemoryNode | LangGraphMemoryRefNode)[];
   connectedLLMId?: string | null;
   connectedToolIds?: string[];
   connectedMiddlewareIds?: string[];
@@ -181,17 +184,26 @@ export function AgentAttachedComponentsSection({
             <div className="flex flex-col gap-1.5 mt-1 max-h-[160px] overflow-y-auto pr-1">
               {availableToolNodes.map((tool) => {
                 const isConnected = connectedToolIds.includes(tool.id);
+                const isRef = tool.type === "langgraph_tool_ref";
+                const toolSubtitle = isRef
+                  ? "referenced tool"
+                  : `returnType: ${(tool as ToolNode).data.returnType || "string"}`;
                 return (
                   <div
                     key={tool.id}
                     className="flex items-center justify-between p-1.5 rounded bg-background/60 border border-border/40 text-xs"
                   >
                     <div className="flex flex-col min-w-0">
-                      <span className="font-mono font-medium text-foreground truncate">
-                        {tool.data.name || tool.data.label}
+                      <span className="font-mono font-medium text-foreground truncate flex items-center gap-1">
+                        {isRef && (
+                          <span className="text-[8px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-400 font-bold uppercase">
+                            REF
+                          </span>
+                        )}
+                        {(tool.data as { name?: string; label?: string }).name || tool.data.label}
                       </span>
                       <span className="text-[9px] text-muted-foreground font-mono">
-                        returnType: {tool.data.returnType || "string"}
+                        {toolSubtitle}
                       </span>
                     </div>
                     <Switch
@@ -238,17 +250,26 @@ export function AgentAttachedComponentsSection({
             <div className="flex flex-col gap-1.5 mt-1 max-h-[160px] overflow-y-auto pr-1">
               {availableMiddlewareNodes.map((mw) => {
                 const isConnected = connectedMiddlewareIds.includes(mw.id);
+                const isRef = mw.type === "langgraph_middleware_ref";
+                const mwSubtitle = isRef
+                  ? "referenced middleware"
+                  : `type: ${(mw as MiddlewareNode).data.type}`;
                 return (
                   <div
                     key={mw.id}
                     className="flex items-center justify-between p-1.5 rounded bg-background/60 border border-border/40 text-xs"
                   >
                     <div className="flex flex-col min-w-0">
-                      <span className="font-mono font-medium text-foreground truncate">
-                        {mw.data.name || mw.data.label}
+                      <span className="font-mono font-medium text-foreground truncate flex items-center gap-1">
+                        {isRef && (
+                          <span className="text-[8px] px-1 py-0.2 rounded bg-purple-500/20 text-purple-400 font-bold uppercase">
+                            REF
+                          </span>
+                        )}
+                        {(mw.data as { name?: string; label?: string }).name || mw.data.label}
                       </span>
                       <span className="text-[9px] text-muted-foreground font-mono">
-                        type: {mw.data.type}
+                        {mwSubtitle}
                       </span>
                     </div>
                     <Switch
@@ -295,18 +316,26 @@ export function AgentAttachedComponentsSection({
             <div className="flex flex-col gap-1.5 mt-1 max-h-[160px] overflow-y-auto pr-1">
               {availableMemoryNodes.map((mem) => {
                 const isConnected = connectedMemoryIds.includes(mem.id);
+                const isRef = mem.type === "langgraph_memory_ref";
+                const memSubtitle = isRef
+                  ? "referenced memory / db"
+                  : `checkpointer: ${(mem as MemoryNode).data.checkpointer || "memory"} (${(mem as MemoryNode).data.threadIdKey || "thread_id"})`;
                 return (
                   <div
                     key={mem.id}
                     className="flex items-center justify-between p-1.5 rounded bg-background/60 border border-border/40 text-xs"
                   >
                     <div className="flex flex-col min-w-0">
-                      <span className="font-mono font-medium text-foreground truncate">
-                        {mem.data.name || mem.data.label}
+                      <span className="font-mono font-medium text-foreground truncate flex items-center gap-1">
+                        {isRef && (
+                          <span className="text-[8px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-400 font-bold uppercase">
+                            REF
+                          </span>
+                        )}
+                        {(mem.data as { name?: string; label?: string }).name || mem.data.label}
                       </span>
                       <span className="text-[9px] text-muted-foreground font-mono">
-                        checkpointer: {mem.data.checkpointer || "memory"} (
-                        {mem.data.threadIdKey || "thread_id"})
+                        {memSubtitle}
                       </span>
                     </div>
                     <Switch

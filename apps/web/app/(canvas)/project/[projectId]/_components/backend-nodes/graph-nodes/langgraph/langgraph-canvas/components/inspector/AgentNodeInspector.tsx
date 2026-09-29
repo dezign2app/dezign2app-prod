@@ -3,8 +3,11 @@ import type {
   LangGraphLLMNode,
   LangGraphLLMRefNode,
   ToolNode,
+  LangGraphToolRefNode,
   MiddlewareNode,
+  LangGraphMiddlewareRefNode,
   MemoryNode,
+  LangGraphMemoryRefNode,
   LangGraphAgentResponseFormatConfig,
   LangGraphAgentMemoryConfig,
   LangGraphStateChannel,
@@ -24,9 +27,9 @@ interface AgentNodeInspectorProps {
   onDeleteAgent: () => void;
   onUpdateAgent: (changes: Partial<AgentNodeData>) => void;
   availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
-  availableToolNodes?: ToolNode[];
-  availableMiddlewareNodes?: MiddlewareNode[];
-  availableMemoryNodes?: MemoryNode[];
+  availableToolNodes?: (ToolNode | LangGraphToolRefNode)[];
+  availableMiddlewareNodes?: (MiddlewareNode | LangGraphMiddlewareRefNode)[];
+  availableMemoryNodes?: (MemoryNode | LangGraphMemoryRefNode)[];
   connectedLLMId?: string | null;
   connectedToolIds?: string[];
   connectedMiddlewareIds?: string[];

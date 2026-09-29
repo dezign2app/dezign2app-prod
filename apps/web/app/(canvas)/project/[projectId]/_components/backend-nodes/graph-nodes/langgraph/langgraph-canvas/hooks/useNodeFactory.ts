@@ -6,8 +6,11 @@ import type {
   LangGraphLLMNode,
   LangGraphLLMRefNode,
   ToolNode,
+  LangGraphToolRefNode,
   MiddlewareNode,
+  LangGraphMiddlewareRefNode,
   MemoryNode,
+  LangGraphMemoryRefNode,
   CanvasNode,
   OutputNode,
   StepNode,
@@ -20,10 +23,13 @@ import {
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
+  LANGGRAPH_CANVAS_NODE_TOOL_REF,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+  LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
   LANGGRAPH_CANVAS_NODE_MEMORY,
+  LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
   DEFAULT_MIDDLEWARE_TYPE,
   LLM_PROVIDERS,
@@ -186,6 +192,51 @@ export function useNodeFactory({
         return;
       }
 
+      if (type === LANGGRAPH_CANVAS_NODE_TOOL_REF) {
+        const refId = `tool_ref_${Date.now().toString(36).slice(-4)}`;
+        let preselectedMasterId: string | undefined = undefined;
+        let preselectedMasterLabel = "Tool";
+
+        setNodes((nds) => {
+          const master = nds.find((n) => n.type === LANGGRAPH_CANVAS_NODE_TOOL);
+          if (master) {
+            preselectedMasterId = master.id;
+            preselectedMasterLabel =
+              (master.data as { name?: string; label?: string })?.name ||
+              (master.data as { label?: string })?.label ||
+              "Tool";
+          }
+
+          const newToolRefNode: LangGraphToolRefNode = {
+            id: refId,
+            type: LANGGRAPH_CANVAS_NODE_TOOL_REF,
+            position: {
+              x: 360 + Math.random() * 140,
+              y: 160 + Math.random() * 80,
+            },
+            data: {
+              label: label || `${preselectedMasterLabel} (Ref)`,
+              refId,
+              toolRef: preselectedMasterId,
+              onDeleteToolRef: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== refId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== refId && edge.target !== refId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === refId ? null : curr));
+              },
+            },
+          };
+
+          return [...nds, newToolRefNode];
+        });
+
+        setSelectedNodeId(refId);
+        return;
+      }
+
       if (type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE) {
         const mwId = `mw_${Date.now().toString(36).slice(-4)}`;
         const newMiddlewareNode: MiddlewareNode = {
@@ -222,6 +273,53 @@ export function useNodeFactory({
         return;
       }
 
+      if (type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF) {
+        const refId = `mw_ref_${Date.now().toString(36).slice(-4)}`;
+        let preselectedMasterId: string | undefined = undefined;
+        let preselectedMasterLabel = "Middleware";
+
+        setNodes((nds) => {
+          const master = nds.find(
+            (n) => n.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+          );
+          if (master) {
+            preselectedMasterId = master.id;
+            preselectedMasterLabel =
+              (master.data as { name?: string; label?: string })?.name ||
+              (master.data as { label?: string })?.label ||
+              "Middleware";
+          }
+
+          const newMiddlewareRefNode: LangGraphMiddlewareRefNode = {
+            id: refId,
+            type: LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
+            position: {
+              x: 360 + Math.random() * 140,
+              y: 220 + Math.random() * 80,
+            },
+            data: {
+              label: label || `${preselectedMasterLabel} (Ref)`,
+              refId,
+              middlewareRef: preselectedMasterId,
+              onDeleteMiddlewareRef: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== refId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== refId && edge.target !== refId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === refId ? null : curr));
+              },
+            },
+          };
+
+          return [...nds, newMiddlewareRefNode];
+        });
+
+        setSelectedNodeId(refId);
+        return;
+      }
+
       if (type === LANGGRAPH_CANVAS_NODE_MEMORY) {
         const memId = `mem_${Date.now().toString(36).slice(-4)}`;
         const newMemoryNode: MemoryNode = {
@@ -255,6 +353,51 @@ export function useNodeFactory({
         setNodes((nds) => [...nds, newMemoryNode]);
         setSelectedNodeId(memId);
         setActiveSideTab("inspector");
+        return;
+      }
+
+      if (type === LANGGRAPH_CANVAS_NODE_MEMORY_REF) {
+        const refId = `mem_ref_${Date.now().toString(36).slice(-4)}`;
+        let preselectedMasterId: string | undefined = undefined;
+        let preselectedMasterLabel = "Memory";
+
+        setNodes((nds) => {
+          const master = nds.find((n) => n.type === LANGGRAPH_CANVAS_NODE_MEMORY);
+          if (master) {
+            preselectedMasterId = master.id;
+            preselectedMasterLabel =
+              (master.data as { name?: string; label?: string })?.name ||
+              (master.data as { label?: string })?.label ||
+              "Memory";
+          }
+
+          const newMemoryRefNode: LangGraphMemoryRefNode = {
+            id: refId,
+            type: LANGGRAPH_CANVAS_NODE_MEMORY_REF,
+            position: {
+              x: 360 + Math.random() * 140,
+              y: 280 + Math.random() * 80,
+            },
+            data: {
+              label: label || `${preselectedMasterLabel} (Ref)`,
+              refId,
+              memoryRef: preselectedMasterId,
+              onDeleteMemoryRef: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== refId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== refId && edge.target !== refId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === refId ? null : curr));
+              },
+            },
+          };
+
+          return [...nds, newMemoryRefNode];
+        });
+
+        setSelectedNodeId(refId);
         return;
       }
 

@@ -5,15 +5,21 @@ import type {
   LangGraphLLMNode,
   LangGraphLLMRefNode,
   ToolNode,
+  LangGraphToolRefNode,
   MiddlewareNode,
+  LangGraphMiddlewareRefNode,
   MemoryNode,
+  LangGraphMemoryRefNode,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
+  LANGGRAPH_CANVAS_NODE_TOOL_REF,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+  LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   LANGGRAPH_CANVAS_NODE_MEMORY,
+  LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_STEP,
   LANGGRAPH_CANVAS_NODE_AGENT,
   HANDLE_LLM_IN,
@@ -50,21 +56,35 @@ export function useAgentResourceConnections({
   }, [nodes]);
 
   const availableToolNodes = useMemo(() => {
-    return nodes.filter(
+    const refs = nodes.filter(
+      (n): n is LangGraphToolRefNode => n.type === LANGGRAPH_CANVAS_NODE_TOOL_REF,
+    );
+    const masters = nodes.filter(
       (n): n is ToolNode => n.type === LANGGRAPH_CANVAS_NODE_TOOL,
     );
+    return [...refs, ...masters];
   }, [nodes]);
 
   const availableMiddlewareNodes = useMemo(() => {
-    return nodes.filter(
+    const refs = nodes.filter(
+      (n): n is LangGraphMiddlewareRefNode =>
+        n.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
+    );
+    const masters = nodes.filter(
       (n): n is MiddlewareNode => n.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
     );
+    return [...refs, ...masters];
   }, [nodes]);
 
   const availableMemoryNodes = useMemo(() => {
-    return nodes.filter(
+    const refs = nodes.filter(
+      (n): n is LangGraphMemoryRefNode =>
+        n.type === LANGGRAPH_CANVAS_NODE_MEMORY_REF,
+    );
+    const masters = nodes.filter(
       (n): n is MemoryNode => n.type === LANGGRAPH_CANVAS_NODE_MEMORY,
     );
+    return [...refs, ...masters];
   }, [nodes]);
 
   const handleSelectLLMForAgent = useCallback(

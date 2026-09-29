@@ -14,8 +14,11 @@ import type {
   LangGraphLLMNode,
   LangGraphLLMRefNode,
   ToolNode,
+  LangGraphToolRefNode,
   MiddlewareNode,
+  LangGraphMiddlewareRefNode,
   MemoryNode,
+  LangGraphMemoryRefNode,
 } from "@workspace/canvas";
 import { InspectorTabContent } from "./inspector/InspectorTabContent";
 import { LangGraphTestCasesInspector } from "./inspector/LangGraphTestCasesInspector";
@@ -53,9 +56,9 @@ export interface InspectorSidebarProps {
   connectedToolsCount?: number;
   connectedMiddlewareCount?: number;
   availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
-  availableToolNodes?: ToolNode[];
-  availableMiddlewareNodes?: MiddlewareNode[];
-  availableMemoryNodes?: MemoryNode[];
+  availableToolNodes?: (ToolNode | LangGraphToolRefNode)[];
+  availableMiddlewareNodes?: (MiddlewareNode | LangGraphMiddlewareRefNode)[];
+  availableMemoryNodes?: (MemoryNode | LangGraphMemoryRefNode)[];
   connectedRoutes?: ConnectedRouteInfo[];
   connectedLLMId?: string | null;
   connectedToolIds?: string[];

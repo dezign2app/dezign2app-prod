@@ -8,10 +8,13 @@ import {
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
+  LANGGRAPH_CANVAS_NODE_TOOL_REF,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+  LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
   LANGGRAPH_CANVAS_NODE_MEMORY,
+  LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
 } from "../../constants";
 import type {
@@ -23,9 +26,12 @@ import type {
   PortNodeData,
   StateGlobalNodeData,
   ToolNodeData,
+  LangGraphToolRefNodeData,
   MiddlewareNodeData,
+  LangGraphMiddlewareRefNodeData,
   CanvasNodeData,
   MemoryNodeData,
+  LangGraphMemoryRefNodeData,
   OutputNodeData,
 } from "./node-data";
 import type { LangGraphStepConfig } from "./steps";
@@ -72,9 +78,21 @@ export type StateGlobalNode = Node<
 export type ToolNode = Node<ToolNodeData, typeof LANGGRAPH_CANVAS_NODE_TOOL> &
   BaseCanvasNodeProps;
 
+export type LangGraphToolRefNode = Node<
+  LangGraphToolRefNodeData,
+  typeof LANGGRAPH_CANVAS_NODE_TOOL_REF
+> &
+  BaseCanvasNodeProps;
+
 export type MiddlewareNode = Node<
   MiddlewareNodeData,
   typeof LANGGRAPH_CANVAS_NODE_MIDDLEWARE
+> &
+  BaseCanvasNodeProps;
+
+export type LangGraphMiddlewareRefNode = Node<
+  LangGraphMiddlewareRefNodeData,
+  typeof LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF
 > &
   BaseCanvasNodeProps;
 
@@ -89,6 +107,12 @@ export type AgentNode = CanvasNode;
 export type MemoryNode = Node<
   MemoryNodeData,
   typeof LANGGRAPH_CANVAS_NODE_MEMORY
+> &
+  BaseCanvasNodeProps;
+
+export type LangGraphMemoryRefNode = Node<
+  LangGraphMemoryRefNodeData,
+  typeof LANGGRAPH_CANVAS_NODE_MEMORY_REF
 > &
   BaseCanvasNodeProps;
 
@@ -111,9 +135,12 @@ export type LangGraphCanvasNodeUnion =
   | LangGraphLLMNode
   | LangGraphLLMRefNode
   | ToolNode
+  | LangGraphToolRefNode
   | MiddlewareNode
+  | LangGraphMiddlewareRefNode
   | CanvasNode
   | MemoryNode
+  | LangGraphMemoryRefNode
   | OutputNode;
 
 export type LangGraphCanvasNode = LangGraphCanvasNodeUnion;
@@ -128,9 +155,12 @@ export type LangGraphCanvasNodeAddType =
   | typeof LANGGRAPH_CANVAS_NODE_LLM
   | typeof LANGGRAPH_CANVAS_NODE_LLM_REF
   | typeof LANGGRAPH_CANVAS_NODE_TOOL
+  | typeof LANGGRAPH_CANVAS_NODE_TOOL_REF
   | typeof LANGGRAPH_CANVAS_NODE_MIDDLEWARE
+  | typeof LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF
   | typeof LANGGRAPH_CANVAS_NODE_NODE
   | typeof LANGGRAPH_CANVAS_NODE_AGENT
   | typeof LANGGRAPH_CANVAS_NODE_MEMORY
+  | typeof LANGGRAPH_CANVAS_NODE_MEMORY_REF
   | typeof LANGGRAPH_CANVAS_NODE_END
   | typeof LANGGRAPH_CANVAS_NODE_OUTPUT;

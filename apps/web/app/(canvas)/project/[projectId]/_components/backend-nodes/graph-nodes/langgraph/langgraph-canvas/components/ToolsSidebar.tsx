@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Radio,
   HelpCircle,
+  Link2,
 } from "lucide-react";
 import type { LangGraphCanvasNodeAddType } from "@workspace/canvas";
 import {
@@ -17,8 +18,11 @@ import {
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
+  LANGGRAPH_CANVAS_NODE_TOOL_REF,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+  LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   LANGGRAPH_CANVAS_NODE_MEMORY,
+  LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
   STEP_TYPE_ROUTER,
 } from "../constants";
@@ -68,16 +72,34 @@ export const TOOL_PALETTE_ITEMS: ToolPaletteItem[] = [
     icon: Wrench,
   },
   {
+    type: LANGGRAPH_CANVAS_NODE_TOOL_REF,
+    label: "Tool Ref",
+    desc: "Reference an existing Tool configuration across nodes",
+    icon: Link2,
+  },
+  {
     type: LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
     label: "Middleware",
     desc: "Interceptors for Human-in-the-loop, rate limit & tracing",
     icon: Shield,
   },
   {
+    type: LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
+    label: "Middleware Ref",
+    desc: "Reference an existing Middleware configuration across nodes",
+    icon: Link2,
+  },
+  {
     type: LANGGRAPH_CANVAS_NODE_MEMORY,
-    label: "Memory / DB Ref",
+    label: "Memory / DB Config",
     desc: "Save chat history & state checkpoints per session",
     icon: Database,
+  },
+  {
+    type: LANGGRAPH_CANVAS_NODE_MEMORY_REF,
+    label: "Memory / DB Ref",
+    desc: "Reference an existing Memory configuration across nodes",
+    icon: Link2,
   },
   {
     type: LANGGRAPH_CANVAS_NODE_OUTPUT,

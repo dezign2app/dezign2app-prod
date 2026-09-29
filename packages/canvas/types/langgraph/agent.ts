@@ -93,6 +93,27 @@ export interface CustomLLMRefNodeDefinition {
   position?: { x: number; y: number };
 }
 
+export interface CustomToolRefNodeDefinition {
+  id: string;
+  label?: string;
+  toolRef?: string;
+  position?: { x: number; y: number };
+}
+
+export interface CustomMiddlewareRefNodeDefinition {
+  id: string;
+  label?: string;
+  middlewareRef?: string;
+  position?: { x: number; y: number };
+}
+
+export interface CustomMemoryRefNodeDefinition {
+  id: string;
+  label?: string;
+  memoryRef?: string;
+  position?: { x: number; y: number };
+}
+
 /** LangGraph Agent node fields — the parent graph node (canvas type). */
 export interface CanvasLangGraphNodeData {
   label?: string;
@@ -120,6 +141,9 @@ export interface CanvasLangGraphNodeData {
     position?: { x: number; y: number };
   }[];
   customLlmRefNodes?: CustomLLMRefNodeDefinition[];
+  customToolRefNodes?: CustomToolRefNodeDefinition[];
+  customMiddlewareRefNodes?: CustomMiddlewareRefNodeDefinition[];
+  customMemoryRefNodes?: CustomMemoryRefNodeDefinition[];
   toolDefinitions?: LangGraphToolDefinition[];
   middlewareDefinitions?: LangGraphMiddlewareDefinition[];
   agentDefinitions?: LangGraphAgentDefinition[];

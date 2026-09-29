@@ -19,8 +19,11 @@ import {
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
+  LANGGRAPH_CANVAS_NODE_TOOL_REF,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+  LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   LANGGRAPH_CANVAS_NODE_MEMORY,
+  LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
   HANDLE_TOOL_IN,
@@ -133,20 +136,26 @@ export function useCanvasConnections({
       const isToolSource =
         connection.sourceHandle === HANDLE_TOOL_OUT ||
         sourceNode?.type === LANGGRAPH_CANVAS_NODE_TOOL ||
-        connection.source?.startsWith("tool_");
+        sourceNode?.type === LANGGRAPH_CANVAS_NODE_TOOL_REF ||
+        connection.source?.startsWith("tool_") ||
+        connection.source?.startsWith("tool_ref_");
       const isToolTarget = connection.targetHandle === HANDLE_TOOL_IN;
 
       const isMiddlewareSource =
         connection.sourceHandle === HANDLE_MIDDLEWARE_OUT ||
         sourceNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE ||
-        connection.source?.startsWith("mw_");
+        sourceNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF ||
+        connection.source?.startsWith("mw_") ||
+        connection.source?.startsWith("mw_ref_");
       const isMiddlewareTarget =
         connection.targetHandle === HANDLE_MIDDLEWARE_IN;
 
       const isMemorySource =
         connection.sourceHandle === HANDLE_MEMORY_OUT ||
         sourceNode?.type === LANGGRAPH_CANVAS_NODE_MEMORY ||
+        sourceNode?.type === LANGGRAPH_CANVAS_NODE_MEMORY_REF ||
         connection.source?.startsWith("mem_") ||
+        connection.source?.startsWith("mem_ref_") ||
         connection.source?.startsWith("db_");
       const isMemoryTarget = connection.targetHandle === HANDLE_MEMORY_IN;
 
