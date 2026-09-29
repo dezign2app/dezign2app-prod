@@ -551,6 +551,8 @@ const StepRowComponent = ({
                     <LangGraphInvokeStepSection
                       step={step}
                       allNodes={allNodes}
+                      availableSources={availableSources}
+                      serviceNodeId={serviceNodeId}
                       onChange={onChange}
                     />
                   );
