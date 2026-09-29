@@ -32,7 +32,7 @@ export const LangGraphCanvasToolRefNode = ({
   data,
   selected,
 }: NodeProps<LangGraphToolRefNode>) => {
-  const { setNodes, getNodes } = useReactFlow<LangGraphCanvasNode>();
+  const { setNodes, getNodes, setEdges } = useReactFlow<LangGraphCanvasNode>();
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(data.label || "Tool Ref");
 
@@ -79,6 +79,15 @@ export const LangGraphCanvasToolRefNode = ({
       label: `${masterLabel} (Ref)`,
     });
     setNameValue(`${masterLabel} (Ref)`);
+  };
+
+  const handleDelete = () => {
+    if (data.onDeleteToolRef) {
+      data.onDeleteToolRef();
+    } else {
+      setNodes((nds) => nds.filter((n) => n.id !== id));
+      setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
+    }
   };
 
   const activeSource = selectedMaster?.data?.source || "unconfigured";
@@ -162,19 +171,17 @@ export const LangGraphCanvasToolRefNode = ({
               {activeSource.toUpperCase()}
             </span>
           )}
-          {data.onDeleteToolRef && (
-            <button
-              type="button"
-              className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all opacity-0 group-hover:opacity-100 nodrag"
-              onClick={(e) => {
-                e.stopPropagation();
-                data.onDeleteToolRef?.();
-              }}
-              title="Delete Tool Ref"
-            >
-              <Trash className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <button
+            type="button"
+            className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all opacity-0 group-hover:opacity-100 nodrag"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete();
+            }}
+            title="Delete Tool Ref"
+          >
+            <Trash className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 

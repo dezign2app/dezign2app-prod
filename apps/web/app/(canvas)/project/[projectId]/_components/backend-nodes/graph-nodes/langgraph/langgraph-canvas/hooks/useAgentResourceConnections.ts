@@ -21,6 +21,7 @@ import {
   LANGGRAPH_CANVAS_NODE_MEMORY,
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_STEP,
+  LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
@@ -112,7 +113,10 @@ export function useAgentResourceConnections({
           setNodes((nds) =>
             nds.map((n) => {
               if (n.id === agentId) {
-                if (n.type === LANGGRAPH_CANVAS_NODE_AGENT) {
+                if (
+                  n.type === LANGGRAPH_CANVAS_NODE_NODE ||
+                  n.type === LANGGRAPH_CANVAS_NODE_AGENT
+                ) {
                   return {
                     ...n,
                     data: {
@@ -165,7 +169,10 @@ export function useAgentResourceConnections({
           setNodes((nds) =>
             nds.map((n) => {
               if (n.id === agentId) {
-                if (n.type === LANGGRAPH_CANVAS_NODE_AGENT) {
+                if (
+                  n.type === LANGGRAPH_CANVAS_NODE_NODE ||
+                  n.type === LANGGRAPH_CANVAS_NODE_AGENT
+                ) {
                   return {
                     ...n,
                     data: {
