@@ -7,11 +7,8 @@ import {
   Connection,
 } from "@xyflow/react";
 import {
-  Brain,
   Trash,
   Link2,
-  ExternalLink,
-  Shield,
   AlertCircle,
   Cpu,
 } from "lucide-react";
@@ -86,7 +83,6 @@ export const LangGraphCanvasLLMRefNode = ({
   };
 
   const activeProvider = selectedMaster?.data?.provider || "unconfigured";
-  const activeModel = selectedMaster?.data?.model || "default";
 
   return (
     <div
@@ -228,35 +224,6 @@ export const LangGraphCanvasLLMRefNode = ({
         )}
       </div>
 
-      {/* Referenced LLM Summary (Read-Only Preview) */}
-      {selectedMaster ? (
-        <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-secondary/30 border border-border/50 text-[10px]">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground font-medium">Model:</span>
-            <span className="font-mono font-semibold text-foreground truncate max-w-[170px]">
-              {activeModel}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground font-medium">Provider:</span>
-            <span className="font-mono text-sky-400">
-              {selectedMaster.data?.provider || "custom"}
-            </span>
-          </div>
-          {selectedMaster.data?.apiKeyHeader && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground font-medium flex items-center gap-1">
-                <Shield className="w-3 h-3 text-amber-400" /> Token:
-              </span>
-              <span className="font-mono text-muted-foreground">••••••••</span>
-            </div>
-          )}
-          <div className="pt-1 mt-0.5 border-t border-border/40 text-[9px] text-muted-foreground flex items-center gap-1">
-            <ExternalLink className="w-2.5 h-2.5 text-sky-400" />
-            <span>Updates dynamically from master config</span>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 };
