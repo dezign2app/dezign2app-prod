@@ -111,6 +111,17 @@ export const langgraphDataSchema = baseNodeDataSchema
       )
       .optional()
       .default([]),
+    customLlmRefNodes: z
+      .array(
+        z.object({
+          id: z.string(),
+          label: z.string().optional(),
+          llmRef: z.string().optional(),
+          position: z.object({ x: z.number(), y: z.number() }).optional(),
+        }),
+      )
+      .optional()
+      .default([]),
     startNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),
     stateNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),
     endNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),

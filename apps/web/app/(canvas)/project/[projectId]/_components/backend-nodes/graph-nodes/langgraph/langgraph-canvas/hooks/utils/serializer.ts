@@ -26,6 +26,7 @@ import type {
   AgentNode,
   OutputNode,
   LangGraphLLMNode,
+  LangGraphLLMRefNode,
   EndNode,
 } from "@workspace/canvas";
 import {
@@ -34,6 +35,7 @@ import {
   LANGGRAPH_CANVAS_NODE_END,
   LANGGRAPH_CANVAS_NODE_STATE_GLOBAL,
   LANGGRAPH_CANVAS_NODE_LLM,
+  LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
   LANGGRAPH_CANVAS_NODE_NODE,
@@ -88,6 +90,17 @@ export function buildGraphData({
       apiKeyHeader: n.data.apiKeyHeader,
       temperature: n.data.temperature,
       maxTokens: n.data.maxTokens,
+      position: n.position,
+    }));
+
+  const customLlmRefNodes = nodes
+    .filter(
+      (n): n is LangGraphLLMRefNode => n.type === LANGGRAPH_CANVAS_NODE_LLM_REF,
+    )
+    .map((n) => ({
+      id: n.id,
+      label: n.data.label,
+      llmRef: n.data.llmRef,
       position: n.position,
     }));
 
@@ -155,9 +168,19 @@ export function buildGraphData({
         n.type === LANGGRAPH_CANVAS_NODE_AGENT,
     )
     .map((n) => {
-      const llmNodeId = edges.find(
+      const rawLlmSourceId = edges.find(
         (e) => e.target === n.id && e.targetHandle === HANDLE_LLM_IN,
       )?.source;
+      let llmNodeId = rawLlmSourceId;
+      if (rawLlmSourceId) {
+        const sourceNode = nodes.find((node) => node.id === rawLlmSourceId);
+        if (
+          sourceNode?.type === LANGGRAPH_CANVAS_NODE_LLM_REF &&
+          sourceNode.data.llmRef
+        ) {
+          llmNodeId = sourceNode.data.llmRef;
+        }
+      }
       return {
         id: n.data.agentId || n.id,
         agentId: n.data.agentId || n.id,
@@ -270,7 +293,9 @@ export function buildGraphData({
       const isTool =
         e.targetHandle === HANDLE_TOOL_IN || e.source.startsWith("tool_");
       const isLLM =
-        e.targetHandle === HANDLE_LLM_IN || e.source.startsWith("llm_");
+        e.targetHandle === HANDLE_LLM_IN ||
+        e.source.startsWith("llm_") ||
+        e.source.startsWith("llm_ref_");
       const isMiddleware =
         e.targetHandle === HANDLE_MIDDLEWARE_IN || e.source.startsWith("mw_");
       const isMemory =
@@ -355,6 +380,7 @@ export function buildGraphData({
     stateChannels,
     memoryConfig,
     customLlmNodes,
+    customLlmRefNodes,
     toolDefinitions,
     middlewareDefinitions,
     memoryDefinitions,

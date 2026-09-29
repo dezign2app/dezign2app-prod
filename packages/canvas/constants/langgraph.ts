@@ -61,6 +61,7 @@ export const LANGGRAPH_CANVAS_NODE_END = "end" as const;
 export const LANGGRAPH_CANVAS_NODE_PORT = "port" as const;
 export const LANGGRAPH_CANVAS_NODE_STATE_GLOBAL = "state_global" as const;
 export const LANGGRAPH_CANVAS_NODE_LLM = "langgraph_llm" as const;
+export const LANGGRAPH_CANVAS_NODE_LLM_REF = "langgraph_llm_ref" as const;
 export const LANGGRAPH_CANVAS_NODE_TOOL = "langgraph_tool" as const;
 export const LANGGRAPH_CANVAS_NODE_MIDDLEWARE = "langgraph_middleware" as const;
 export const LANGGRAPH_CANVAS_NODE_NODE = "langgraph_node" as const;

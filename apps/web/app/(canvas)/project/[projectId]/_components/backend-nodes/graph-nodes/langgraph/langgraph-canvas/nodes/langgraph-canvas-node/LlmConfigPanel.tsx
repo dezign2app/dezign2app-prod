@@ -34,7 +34,7 @@ export const LlmConfigPanel: React.FC<LlmConfigPanelProps> = ({
               LLM Config
               {boundLLMs.length > 0 ? (
                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-600 dark:text-sky-400 font-mono font-semibold shrink-0">
-                  Bound Edge
+                  {boundLLMs[0]?.source?.startsWith("llm_ref") ? "Bound Ref" : "Bound Edge"}
                 </span>
               ) : llmConfig.enabled !== false ? (
                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-600 dark:text-sky-400 font-mono font-semibold shrink-0">

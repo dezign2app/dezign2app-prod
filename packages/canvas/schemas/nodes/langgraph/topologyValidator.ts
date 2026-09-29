@@ -13,6 +13,7 @@ export interface LangGraphRefinementData {
   memoryDefinitions: MemoryDefinition[];
   outputPorts: OutputPort[];
   customLlmNodes?: Array<{ id: string }>;
+  customLlmRefNodes?: Array<{ id: string }>;
   outputChannels?: OutputChannel[];
   graphEdges: GraphEdge[];
 }
@@ -43,7 +44,10 @@ export function validateLangGraphTopology(
       .filter((id): id is string => Boolean(id)),
   );
   const portIds = new Set(data.outputPorts.map((p) => p.id));
-  const customLlmIds = new Set(data.customLlmNodes?.map((l) => l.id) || []);
+  const customLlmIds = new Set([
+    ...(data.customLlmNodes?.map((l) => l.id) || []),
+    ...(data.customLlmRefNodes?.map((l) => l.id) || []),
+  ]);
   const outputChannelIds = new Set(
     data.outputChannels?.map((o) => o.id) || [],
   );

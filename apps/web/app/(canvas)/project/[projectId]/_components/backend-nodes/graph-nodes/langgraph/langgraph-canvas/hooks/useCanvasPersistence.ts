@@ -72,6 +72,7 @@ export function useCanvasPersistence({
           maxWindowMessages: 10,
         },
         customLlmNodes: data.customLlmNodes || [],
+        customLlmRefNodes: data.customLlmRefNodes || [],
         toolDefinitions: data.toolDefinitions || [],
         middlewareDefinitions: data.middlewareDefinitions || [],
         memoryDefinitions: data.memoryDefinitions || [],

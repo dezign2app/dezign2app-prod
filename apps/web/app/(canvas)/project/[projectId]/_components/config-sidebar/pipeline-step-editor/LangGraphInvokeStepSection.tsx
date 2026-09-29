@@ -28,20 +28,107 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { PipelineStepDraft } from "./types";
+import { BindingSourceEditor } from "./BindingSourceEditor";
+import { PipelineStepDraft, StepBinding, StepSource, AvailableSource } from "./types";
+
+function stepSourceToAccessor(
+  source: StepSource,
+  availableSources?: AvailableSource[],
+): string {
+  if (source.kind === "req_body") {
+    return source.field ? `body.${source.field}` : "body";
+  }
+  if (source.kind === "req_params") {
+    return source.field ? `params.${source.field}` : "params";
+  }
+  if (source.kind === "req_query") {
+    return source.field ? `query.${source.field}` : "query";
+  }
+  if (source.kind === "req_headers") {
+    return source.field ? `headers.${source.field}` : "headers";
+  }
+  if (source.kind === "env") {
+    return source.field ? `env.${source.field}` : "env";
+  }
+  if (source.kind === "step_output") {
+    const matched = availableSources?.find(
+      (s) => s.kind === "step_output" && s.stepId === source.stepId,
+    );
+    const varName = matched?.variableName || source.stepId;
+    return source.field ? `${varName}.${source.field}` : varName;
+  }
+  if (source.kind === "inline") {
+    return String(source.value ?? "");
+  }
+  return "";
+}
+
+function accessorToStepSource(
+  accessor: string,
+  availableSources?: AvailableSource[],
+): StepSource {
+  const trimmed = (accessor || "").trim();
+  if (!trimmed) {
+    return { kind: "req_body", field: "" };
+  }
+  if (trimmed.startsWith("body.") || trimmed === "body") {
+    return { kind: "req_body", field: trimmed === "body" ? "" : trimmed.slice(5) };
+  }
+  if (trimmed.startsWith("event.") || trimmed === "event") {
+    return { kind: "req_body", field: trimmed === "event" ? "" : trimmed.slice(6) };
+  }
+  if (trimmed.startsWith("params.") || trimmed === "params") {
+    return { kind: "req_params", field: trimmed === "params" ? "" : trimmed.slice(7) };
+  }
+  if (trimmed.startsWith("query.") || trimmed === "query") {
+    return { kind: "req_query", field: trimmed === "query" ? "" : trimmed.slice(6) };
+  }
+  if (trimmed.startsWith("headers.") || trimmed === "headers") {
+    return { kind: "req_headers", field: trimmed === "headers" ? "" : trimmed.slice(8) };
+  }
+  const headerMatch = trimmed.match(/(?:req\.)?headers\[['"]([^'"]+)['"]\]/);
+  if (headerMatch) {
+    return { kind: "req_headers", field: headerMatch[1] };
+  }
+  if (trimmed.startsWith("env.") || trimmed.startsWith("process.env.")) {
+    const field = trimmed.startsWith("process.env.") ? trimmed.slice(12) : trimmed.slice(4);
+    return { kind: "env", field };
+  }
+  if (availableSources) {
+    for (const src of availableSources) {
+      if (src.kind === "step_output" && src.stepId) {
+        const varName = src.variableName;
+        if (varName && (trimmed === varName || trimmed.startsWith(`${varName}.`))) {
+          const field = trimmed === varName ? "" : trimmed.slice(varName.length + 1);
+          return { kind: "step_output", stepId: src.stepId, field };
+        }
+        if (trimmed === src.stepId || trimmed.startsWith(`${src.stepId}.`)) {
+          const field = trimmed === src.stepId ? "" : trimmed.slice(src.stepId.length + 1);
+          return { kind: "step_output", stepId: src.stepId, field };
+        }
+      }
+    }
+  }
+  return { kind: "req_body", field: trimmed };
+}
 
 export interface LangGraphInvokeStepSectionProps {
   step: PipelineStepDraft;
   allNodes: BackendNode[];
+  availableSources?: AvailableSource[];
+  serviceNodeId?: string;
   onChange: (updated: PipelineStepDraft) => void;
   children?: React.ReactNode;
 }
 
 export const LangGraphInvokeStepSection: React.FC<
   LangGraphInvokeStepSectionProps
-> = ({ step, allNodes, onChange, children }) => {
+> = ({ step, allNodes, availableSources = [], serviceNodeId, onChange, children }) => {
   const [newKey, setNewKey] = useState("");
-  const [newValue, setNewValue] = useState("");
+  const [newCustomBinding, setNewCustomBinding] = useState<StepBinding>({
+    argName: "",
+    source: { kind: "req_body", field: "" },
+  });
 
   // 1. Identify all LangGraph nodes on canvas
   const availableAgents = useMemo(() => {
@@ -97,55 +184,144 @@ export const LangGraphInvokeStepSection: React.FC<
     });
   };
 
-  const handleMappingChange = (stateKey: string, sourcePath: string) => {
-    const updated = { ...mapping };
-    if (!sourcePath.trim()) {
-      delete updated[stateKey];
-    } else {
-      updated[stateKey] = sourcePath;
+  const getBindingForChannel = (channelKey: string): StepBinding => {
+    const existing = (step.inputBindings || []).find((b) => b.argName === channelKey);
+    if (existing) return existing;
+    const rawMapping = mapping[channelKey];
+    if (rawMapping) {
+      return {
+        argName: channelKey,
+        source: accessorToStepSource(rawMapping, availableSources),
+      };
     }
+    return {
+      argName: channelKey,
+      source: {
+        kind: "req_body",
+        field: channelKey === "messages" ? "message" : channelKey,
+      },
+    };
+  };
+
+  const handleBindingChange = (channelKey: string, updatedBinding: StepBinding) => {
+    const currentBindings = step.inputBindings || [];
+    const otherBindings = currentBindings.filter((b) => b.argName !== channelKey);
+    const nextBindings = [...otherBindings, { ...updatedBinding, argName: channelKey }];
+
+    const accessor = stepSourceToAccessor(updatedBinding.source, availableSources);
+    const nextMapping = { ...mapping };
+    if (accessor) {
+      nextMapping[channelKey] = accessor;
+    } else {
+      delete nextMapping[channelKey];
+    }
+
     onChange({
       ...step,
-      langGraphStateMapping: updated,
+      inputBindings: nextBindings,
+      langGraphStateMapping: nextMapping,
     });
   };
 
   const handleRemoveMapping = (stateKey: string) => {
-    const updated = { ...mapping };
-    delete updated[stateKey];
+    const nextBindings = (step.inputBindings || []).filter((b) => b.argName !== stateKey);
+    const nextMapping = { ...mapping };
+    delete nextMapping[stateKey];
     onChange({
       ...step,
-      langGraphStateMapping: updated,
+      inputBindings: nextBindings,
+      langGraphStateMapping: nextMapping,
     });
   };
 
   const handleAutoMap = () => {
     const newMapping: Record<string, string> = { ...mapping };
+    const newBindings: StepBinding[] = [...(step.inputBindings || [])];
+
     stateChannels.forEach((ch) => {
-      if (ch.key === "messages") {
-        newMapping[ch.key] = "body.message";
+      let matchedSource: StepSource | null = null;
+      const keyLower = ch.key.toLowerCase();
+
+      // Look for match in availableSources
+      for (const src of availableSources) {
+        if (src.kind === "inline") continue;
+        const foundPath = src.paths.find((p) => {
+          const pLower = p.path.toLowerCase();
+          if (pLower === keyLower) return true;
+          if (keyLower === "messages" && (pLower === "messages" || pLower === "message" || pLower === "prompt" || pLower === "query")) {
+            return true;
+          }
+          return false;
+        });
+        if (foundPath) {
+          if (src.kind === "step_output" && src.stepId) {
+            matchedSource = { kind: "step_output", stepId: src.stepId, field: foundPath.path };
+          } else if (
+            src.kind === "req_body" ||
+            src.kind === "req_params" ||
+            src.kind === "req_query" ||
+            src.kind === "req_headers" ||
+            src.kind === "env"
+          ) {
+            matchedSource = { kind: src.kind, field: foundPath.path };
+          }
+          break;
+        }
+      }
+
+      if (!matchedSource) {
+        matchedSource = {
+          kind: "req_body",
+          field: ch.key === "messages" ? "message" : ch.key,
+        };
+      }
+
+      const accessor = stepSourceToAccessor(matchedSource, availableSources);
+      newMapping[ch.key] = accessor;
+
+      const existingIdx = newBindings.findIndex((b) => b.argName === ch.key);
+      const updatedB: StepBinding = { argName: ch.key, source: matchedSource };
+      if (existingIdx >= 0) {
+        newBindings[existingIdx] = updatedB;
       } else {
-        newMapping[ch.key] = `body.${ch.key}`;
+        newBindings.push(updatedB);
       }
     });
+
     onChange({
       ...step,
+      inputBindings: newBindings,
       langGraphStateMapping: newMapping,
     });
   };
 
   const handleAddCustomField = () => {
     if (!newKey.trim()) return;
-    const updated = {
-      ...mapping,
-      [newKey.trim()]: newValue.trim() || `body.${newKey.trim()}`,
+    const key = newKey.trim();
+    const bindingToAdd: StepBinding = {
+      argName: key,
+      source: newCustomBinding.source,
     };
+    const nextBindings = [
+      ...(step.inputBindings || []).filter((b) => b.argName !== key),
+      bindingToAdd,
+    ];
+    const accessor = stepSourceToAccessor(bindingToAdd.source, availableSources);
+    const nextMapping = {
+      ...mapping,
+      [key]: accessor || `body.${key}`,
+    };
+
     onChange({
       ...step,
-      langGraphStateMapping: updated,
+      inputBindings: nextBindings,
+      langGraphStateMapping: nextMapping,
     });
     setNewKey("");
-    setNewValue("");
+    setNewCustomBinding({
+      argName: "",
+      source: { kind: "req_body", field: "" },
+    });
   };
 
   const handleToggleStreaming = (enabled: boolean) => {
@@ -224,9 +400,6 @@ export const LangGraphInvokeStepSection: React.FC<
                   <span className="font-semibold text-foreground">
                     {agent.data?.label || "LangGraph Agent"}
                   </span>
-                  <span className="text-[10px] text-muted-foreground font-mono">
-                    ({agent.id})
-                  </span>
                 </div>
               </SelectItem>
             ))}
@@ -279,94 +452,102 @@ export const LangGraphInvokeStepSection: React.FC<
           `step_output`).
         </p>
 
-        <div className="flex flex-col gap-1.5 mt-1">
-          <div className="grid grid-cols-12 gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider px-1">
-            <span className="col-span-5">State Channel</span>
-            <span className="col-span-6">Source Accessor</span>
-            <span className="col-span-1 text-right"></span>
+        <div className="flex flex-col gap-2 mt-1">
+          <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider px-1">
+            <span>State Channel</span>
+            <span></span>
+            <span>Source & Field</span>
+            <span className="w-6 text-right"></span>
           </div>
 
-          {stateChannels.map((ch, idx) => (
-            <div
-              key={ch.key ? `invoke-ch-${ch.key}-${idx}` : `invoke-ch-empty-${idx}`}
-              className="grid grid-cols-12 gap-2 items-center text-xs"
-            >
-              <div className="col-span-5 flex items-center gap-1 min-w-0">
-                <span className="font-mono font-bold text-purple-300 text-[11px] truncate bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                  {ch.key}
-                </span>
-                <span className="text-[9px] text-muted-foreground font-mono truncate">
-                  {ch.type}
-                </span>
-              </div>
-              <div className="col-span-6">
-                <BufferedInput
-                  value={mapping[ch.key] ?? ""}
-                  placeholder={
-                    ch.key === "messages"
-                      ? "body.message"
-                      : `body.${ch.key}`
-                  }
-                  onCommit={(val) => handleMappingChange(ch.key, val)}
-                  className="h-7 text-xs font-mono bg-background/80"
-                />
-              </div>
-              <div className="col-span-1 flex justify-end">
-                {mapping[ch.key] !== undefined && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleRemoveMapping(ch.key)}
-                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                    title="Clear mapping"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
+          {stateChannels.map((ch, idx) => {
+            const binding = getBindingForChannel(ch.key);
+            const isMapped = mapping[ch.key] !== undefined || (step.inputBindings || []).some((b) => b.argName === ch.key);
 
-          {/* Any custom mappings not in declared channels */}
-          {Object.entries(mapping)
-            .filter(([k]) => !stateChannels.some((ch) => ch.key === k))
-            .map(([k, v]) => (
+            return (
               <div
-                key={k}
-                className="grid grid-cols-12 gap-2 items-center text-xs"
+                key={ch.key ? `invoke-ch-${ch.key}-${idx}` : `invoke-ch-empty-${idx}`}
+                className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/50 p-1.5 rounded-lg border border-border/40"
               >
-                <div className="col-span-5 flex items-center gap-1 min-w-0">
-                  <span className="font-mono font-bold text-primary text-[11px] truncate bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
-                    {k}
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-mono font-bold text-purple-300 text-[11px] truncate bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                    {ch.key}
                   </span>
-                  <span className="text-[9px] text-muted-foreground font-mono">
-                    (custom)
+                  <span className="text-[9px] text-muted-foreground font-mono truncate">
+                    {ch.type}
                   </span>
                 </div>
-                <div className="col-span-6">
-                  <BufferedInput
-                    value={v}
-                    onCommit={(val) => handleMappingChange(k, val)}
-                    className="h-7 text-xs font-mono bg-background/80"
+                <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
+                <div className="min-w-0">
+                  <BindingSourceEditor
+                    binding={binding}
+                    availableSources={availableSources}
+                    serviceNodeId={serviceNodeId}
+                    onChange={(updated) => handleBindingChange(ch.key, updated)}
                   />
                 </div>
-                <div className="col-span-1 flex justify-end">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleRemoveMapping(k)}
-                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                    title="Remove custom mapping"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
+                <div className="flex justify-end">
+                  {isMapped && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveMapping(ch.key)}
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                      title="Clear mapping"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
-            ))}
+            );
+          })}
+
+          {/* Any custom mappings not in declared channels */}
+          {Object.keys(mapping)
+            .filter((k) => !stateChannels.some((ch) => ch.key === k))
+            .map((k) => {
+              const binding = getBindingForChannel(k);
+              return (
+                <div
+                  key={`custom-${k}`}
+                  className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/50 p-1.5 rounded-lg border border-border/40"
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-mono font-bold text-primary text-[11px] truncate bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
+                      {k}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground font-mono">
+                      (custom)
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
+                  <div className="min-w-0">
+                    <BindingSourceEditor
+                      binding={binding}
+                      availableSources={availableSources}
+                      serviceNodeId={serviceNodeId}
+                      onChange={(updated) => handleBindingChange(k, updated)}
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveMapping(k)}
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                      title="Remove custom mapping"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
 
           {/* Add custom state field */}
-          <div className="grid grid-cols-12 gap-2 items-center pt-2 border-t border-border/30">
-            <div className="col-span-5">
+          <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center pt-2 border-t border-border/30">
+            <div className="min-w-0">
               <LocalInput
                 value={newKey}
                 placeholder="Custom key"
@@ -374,24 +555,25 @@ export const LangGraphInvokeStepSection: React.FC<
                 className="h-7 text-xs font-mono bg-background/80"
               />
             </div>
-            <div className="col-span-6">
-              <LocalInput
-                value={newValue}
-                placeholder="e.g. headers['x-user-id']"
-                onChange={(e) => setNewValue(e.target.value)}
-                className="h-7 text-xs font-mono bg-background/80"
+            <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
+            <div className="min-w-0">
+              <BindingSourceEditor
+                binding={newCustomBinding}
+                availableSources={availableSources}
+                serviceNodeId={serviceNodeId}
+                onChange={setNewCustomBinding}
               />
             </div>
-            <div className="col-span-1 flex justify-end">
+            <div className="flex justify-end">
               <Button
                 variant="outline"
                 size="icon"
                 onClick={handleAddCustomField}
                 disabled={!newKey.trim()}
-                className="h-7 w-7 text-primary border-border/60 hover:bg-primary/10"
+                className="h-7 w-7 text-primary border-border/60 hover:bg-primary/10 shrink-0"
                 title="Add state mapping"
               >
-                <Plus className="w-3 h-3" />
+                <Plus className="w-3.5 h-3.5" />
               </Button>
             </div>
           </div>

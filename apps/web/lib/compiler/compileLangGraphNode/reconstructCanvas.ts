@@ -14,6 +14,7 @@ import type {
   LangGraphCanvasNode,
   LangGraphCanvasEdge,
   LangGraphLLMNode,
+  LangGraphLLMRefNode,
   ToolNode,
   MiddlewareNode,
   MemoryNode,
@@ -27,6 +28,7 @@ import {
   NODE_ID_START,
   LANGGRAPH_CANVAS_NODE_START,
   LANGGRAPH_CANVAS_NODE_LLM,
+  LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
   LANGGRAPH_CANVAS_NODE_MEMORY,
@@ -97,6 +99,21 @@ export function reconstructNodes(
       },
     };
     reconstructedNodes.push(customNode);
+  });
+
+  const customLLMRefs = data.customLlmRefNodes || [];
+  customLLMRefs.forEach((cRef) => {
+    const customRefNode: LangGraphLLMRefNode = {
+      id: cRef.id,
+      type: LANGGRAPH_CANVAS_NODE_LLM_REF,
+      position: cRef.position || { x: 340, y: 120 },
+      data: {
+        label: cRef.label || "LLM Ref",
+        refId: cRef.id,
+        llmRef: cRef.llmRef,
+      },
+    };
+    reconstructedNodes.push(customRefNode);
   });
 
   const toolDefs: LangGraphToolDefinition[] = data.toolDefinitions || [];
@@ -297,7 +314,9 @@ export function reconstructEdges(
         const isLLMSource =
           e.sourceHandle === HANDLE_LLM_OUT ||
           e.source.startsWith("llm_") ||
-          customLLMs.some((c) => c.id === e.source);
+          e.source.startsWith("llm_ref_") ||
+          customLLMs.some((c) => c.id === e.source) ||
+          (data.customLlmRefNodes || []).some((r) => r.id === e.source);
         const isToolSource =
           e.sourceHandle === HANDLE_TOOL_OUT ||
           e.source.startsWith("tool_") ||

@@ -15,6 +15,7 @@ import {
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_END,
   LANGGRAPH_CANVAS_NODE_LLM,
+  LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
   LANGGRAPH_CANVAS_NODE_MEMORY,
@@ -51,8 +52,14 @@ export const TOOL_PALETTE_ITEMS: ToolPaletteItem[] = [
   {
     type: LANGGRAPH_CANVAS_NODE_LLM,
     label: "LLM config",
-    desc: "Configure an LLM provider or raw API endpoint",
+    desc: "Configure an LLM provider (configure once)",
     icon: Cpu,
+  },
+  {
+    type: LANGGRAPH_CANVAS_NODE_LLM_REF,
+    label: "LLM Ref",
+    desc: "Reference an existing LLM configuration across nodes",
+    icon: Brain,
   },
   {
     type: LANGGRAPH_CANVAS_NODE_TOOL,

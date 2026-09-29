@@ -546,6 +546,21 @@ export function useStepRowState({
         return args;
       }
 
+      if (step.type === "langgraph_invoke") {
+        const targetNode =
+          allNodes.find((n) => n.id === step.langGraphTargetNodeId && n.type === "langgraph") ||
+          allNodes.find((n) => n.type === "langgraph");
+        const channels = targetNode?.data?.stateChannels;
+        if (Array.isArray(channels) && channels.length > 0) {
+          return channels.map((ch) => ({
+            name: ch.key,
+            type: ch.type || "string",
+            required: true,
+          }));
+        }
+        return [{ name: "messages", type: "BaseMessage[]", required: true }];
+      }
+
       return [];
     };
 
@@ -554,6 +569,7 @@ export function useStepRowState({
     );
   }, [
     step.type,
+    step.langGraphTargetNodeId,
     selectedTransformer,
     step.functionRef?.inputSchema,
     selectedTableNode,

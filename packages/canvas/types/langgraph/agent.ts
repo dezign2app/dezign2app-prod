@@ -86,6 +86,13 @@ export interface LangGraphAgentDefinition {
   position?: { x: number; y: number };
 }
 
+export interface CustomLLMRefNodeDefinition {
+  id: string;
+  label?: string;
+  llmRef?: string;
+  position?: { x: number; y: number };
+}
+
 /** LangGraph Agent node fields — the parent graph node (canvas type). */
 export interface CanvasLangGraphNodeData {
   label?: string;
@@ -112,6 +119,7 @@ export interface CanvasLangGraphNodeData {
     maxTokens?: number;
     position?: { x: number; y: number };
   }[];
+  customLlmRefNodes?: CustomLLMRefNodeDefinition[];
   toolDefinitions?: LangGraphToolDefinition[];
   middlewareDefinitions?: LangGraphMiddlewareDefinition[];
   agentDefinitions?: LangGraphAgentDefinition[];

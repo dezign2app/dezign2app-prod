@@ -12,6 +12,7 @@ import type {
   MemoryNodeData,
   OutputNodeData,
   LangGraphLLMNode,
+  LangGraphLLMRefNode,
   ToolNode,
   MiddlewareNode,
   MemoryNode,
@@ -51,7 +52,7 @@ export interface InspectorSidebarProps {
   onRunTestCase?: (testCase: SimulationTestCase) => void;
   connectedToolsCount?: number;
   connectedMiddlewareCount?: number;
-  availableLLMNodes?: LangGraphLLMNode[];
+  availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
   availableToolNodes?: ToolNode[];
   availableMiddlewareNodes?: MiddlewareNode[];
   availableMemoryNodes?: MemoryNode[];

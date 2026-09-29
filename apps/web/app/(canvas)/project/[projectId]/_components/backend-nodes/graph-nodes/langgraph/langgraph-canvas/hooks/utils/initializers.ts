@@ -12,6 +12,7 @@ import type {
   AgentNode,
   OutputNode,
   LangGraphLLMNode,
+  LangGraphLLMRefNode,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
@@ -19,6 +20,7 @@ import {
   LANGGRAPH_CANVAS_NODE_END,
   LANGGRAPH_CANVAS_NODE_STATE_GLOBAL,
   LANGGRAPH_CANVAS_NODE_LLM,
+  LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
   LANGGRAPH_CANVAS_NODE_NODE,
@@ -98,6 +100,21 @@ export function buildInitialNodes(
       },
     };
     result.push(customNode);
+  });
+
+  const savedCustomLLMRefs = data.customLlmRefNodes || [];
+  savedCustomLLMRefs.forEach((cRef) => {
+    const customRefNode: LangGraphLLMRefNode = {
+      id: cRef.id,
+      type: LANGGRAPH_CANVAS_NODE_LLM_REF,
+      position: cRef.position || { x: 340, y: 120 },
+      data: {
+        label: cRef.label || "LLM Ref",
+        refId: cRef.id,
+        llmRef: cRef.llmRef,
+      },
+    };
+    result.push(customRefNode);
   });
 
   const savedTools = data.toolDefinitions || [];
@@ -318,7 +335,9 @@ export function buildInitialEdges(
         const isLLMSource =
           e.sourceHandle === HANDLE_LLM_OUT ||
           e.source.startsWith("llm_") ||
-          (data.customLlmNodes || []).some((c) => c.id === e.source);
+          e.source.startsWith("llm_ref_") ||
+          (data.customLlmNodes || []).some((c) => c.id === e.source) ||
+          ((data as any).customLlmRefNodes || []).some((c: any) => c.id === e.source);
         const isToolSource =
           e.sourceHandle === HANDLE_TOOL_OUT ||
           e.source.startsWith("tool_") ||
@@ -490,7 +509,8 @@ export function buildInitialEdges(
     const connectedLlmId = ag.llmNodeId;
     if (
       connectedLlmId &&
-      (data.customLlmNodes || []).some((llm) => llm.id === connectedLlmId)
+      ((data.customLlmNodes || []).some((llm) => llm.id === connectedLlmId) ||
+        ((data as any).customLlmRefNodes || []).some((llm: any) => llm.id === connectedLlmId))
     ) {
       resourceEdges.push({
         id: `edge_${connectedLlmId}_${agId}`,

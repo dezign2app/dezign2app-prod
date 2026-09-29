@@ -18,13 +18,14 @@ import {
 import { Switch } from "@workspace/ui/components/switch";
 import type {
   LangGraphLLMNode,
+  LangGraphLLMRefNode,
   ToolNode,
   MiddlewareNode,
   MemoryNode,
 } from "../../../types";
 
 interface AgentAttachedComponentsSectionProps {
-  availableLLMNodes?: LangGraphLLMNode[];
+  availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
   availableToolNodes?: ToolNode[];
   availableMiddlewareNodes?: MiddlewareNode[];
   availableMemoryNodes?: MemoryNode[];
@@ -119,18 +120,30 @@ export function AgentAttachedComponentsSection({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None (Unbound)</SelectItem>
-                {availableLLMNodes.map((node) => (
-                  <SelectItem key={node.id} value={node.id}>
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-mono font-medium text-foreground truncate">
-                        {node.data.label || node.id}
-                      </span>
-                      <span className="text-[9px] text-muted-foreground font-mono">
-                        {node.data.model || "custom"}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {availableLLMNodes.map((node) => {
+                  const isRef = node.type === "langgraph_llm_ref";
+                  const modelSubtitle: string =
+                    node.type === "langgraph_llm"
+                      ? node.data.model || "custom"
+                      : "referenced config";
+                  return (
+                    <SelectItem key={node.id} value={node.id}>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-mono font-medium text-foreground truncate flex items-center gap-1">
+                          {isRef && (
+                            <span className="text-[8px] px-1 py-0.2 rounded bg-sky-500/20 text-sky-400 font-bold uppercase">
+                              REF
+                            </span>
+                          )}
+                          {node.data.label || node.id}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground font-mono">
+                          {modelSubtitle}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           ) : (
