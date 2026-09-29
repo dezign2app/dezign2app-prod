@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useParams } from "next/navigation";
 import {
   ReactFlow,
   Background,
@@ -13,6 +14,7 @@ import { Layout } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import type { BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { useLangGraphAutoLayout } from "../../../hooks/useAutoLayout";
 import { langGraphCanvasNodeTypes } from "./langgraph-canvas/nodes";
 import { useLangGraphCanvasState } from "./langgraph-canvas/hooks/useLangGraphCanvasState";
@@ -20,6 +22,7 @@ import { LangGraphCanvasHeader } from "./langgraph-canvas/components/LangGraphCa
 import { ToolsSidebar } from "./langgraph-canvas/components/ToolsSidebar";
 import { InspectorSidebar } from "./langgraph-canvas/components/InspectorSidebar";
 import { LangGraphReferenceEdge } from "./langgraph-canvas/components/LangGraphReferenceEdge";
+import { Terminal } from "../../../terminal/Terminal";
 import { CompilerDialog } from "../../../compiler";
 import { compileLangGraph } from "@/lib/compiler";
 import { simulateLangGraphTestCase } from "@/lib/simulation/runtime";
@@ -46,12 +49,24 @@ const langGraphCanvasEdgeTypes = {
 interface LangGraphStudioViewProps {
   node: BackendNode;
   onClose: () => void;
+  projectId?: string;
 }
 
 export function LangGraphStudioView({
   node,
   onClose,
+  projectId: propProjectId,
 }: LangGraphStudioViewProps) {
+  const params = useParams();
+  const routeProjectId = (params?.projectId as string) || "";
+  const projectId = propProjectId || routeProjectId;
+
+  const terminalOpen = useSidebarStore((s) => s.terminalOpen);
+  const toggleTerminal = useSidebarStore((s) => s.toggleTerminal);
+  const setProjectFolderModalOpen = useSidebarStore(
+    (s) => s.setProjectFolderModalOpen,
+  );
+
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const connectedRoutes = useConnectedRoutes(node.id);
   const allTestCases = useSimulationStore((state) => state.testCases);
@@ -350,10 +365,12 @@ export function LangGraphStudioView({
         onAutoLayout={(dir) => handleLayout(dir || "LR")}
         onCompile={() => setShowCompileModal(true)}
         saveStatus={saveStatus}
+        terminalOpen={terminalOpen}
+        onToggleTerminal={toggleTerminal}
       />
 
       {/* Main Workspace */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Left Sidebar Tools */}
         <ToolsSidebar onAddStep={handleAddStep} />
 
@@ -506,6 +523,15 @@ export function LangGraphStudioView({
           suggestedParams={suggestedParams}
         />
       </div>
+
+      {/* Terminal Drawer and Dock Button */}
+      {projectId && (
+        <Terminal
+          projectId={projectId}
+          projectName={node.data.label || "LangGraph Agent"}
+          onPickDirectory={() => setProjectFolderModalOpen(true)}
+        />
+      )}
 
       {/* Compiled Code Dialog */}
       <CompilerDialog

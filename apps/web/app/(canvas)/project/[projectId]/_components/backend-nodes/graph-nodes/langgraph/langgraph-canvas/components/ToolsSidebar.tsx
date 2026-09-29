@@ -115,7 +115,7 @@ interface ToolsSidebarProps {
 
 export function ToolsSidebar({ onAddStep }: ToolsSidebarProps) {
   return (
-    <div className="w-60 border-r border-border bg-card flex flex-col shrink-0 overflow-y-auto p-3 gap-3">
+    <div className="w-60 border-r border-border bg-card flex flex-col shrink-0 overflow-y-auto p-3 gap-3 hide-scrollbar">
       <div className="flex items-center justify-between px-1 pb-1 border-b border-border/40">
         <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
           <Wrench className="w-3.5 h-3.5" /> Tools Sidebar
