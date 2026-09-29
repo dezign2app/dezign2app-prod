@@ -42,25 +42,29 @@ export function layoutHeadNodes({
       if (
         handle === "llm_in" ||
         handle === "HANDLE_LLM_IN" ||
-        hn.type === "langgraph_llm"
+        hn.type === "langgraph_llm" ||
+        hn.type === "langgraph_llm_ref"
       )
         return 0;
       if (
         handle === "tool_in" ||
         handle === "HANDLE_TOOL_IN" ||
-        hn.type === "langgraph_tool"
+        hn.type === "langgraph_tool" ||
+        hn.type === "langgraph_tool_ref"
       )
         return 1;
       if (
         handle === "middleware_in" ||
         handle === "HANDLE_MIDDLEWARE_IN" ||
-        hn.type === "langgraph_middleware"
+        hn.type === "langgraph_middleware" ||
+        hn.type === "langgraph_middleware_ref"
       )
         return 2;
       if (
         handle === "memory_in" ||
         handle === "HANDLE_MEMORY_IN" ||
         hn.type === "langgraph_memory" ||
+        hn.type === "langgraph_memory_ref" ||
         hn.type === "db_ref" ||
         hn.type === "vector_db_ref"
       )
