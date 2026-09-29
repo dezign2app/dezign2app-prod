@@ -170,6 +170,27 @@ export const LangGraphInvokeStepSection: React.FC<
     return step.langGraphStateMapping || {};
   }, [step.langGraphStateMapping]);
 
+  const isChannelMapped = (key: string) => {
+    const hasInMapping = key in mapping && mapping[key] !== undefined && mapping[key] !== "";
+    const hasInBindings = (step.inputBindings || []).some((b) => b.argName === key);
+    return hasInMapping || hasInBindings;
+  };
+
+  const mappedDeclaredChannels = useMemo(() => {
+    return stateChannels.filter((ch) => isChannelMapped(ch.key));
+  }, [stateChannels, mapping, step.inputBindings]);
+
+  const customKeys = useMemo(() => {
+    const keysFromMapping = Object.keys(mapping).filter((k) => Boolean(mapping[k]));
+    const keysFromBindings = (step.inputBindings || []).map((b) => b.argName).filter(Boolean);
+    const allKeys = Array.from(new Set([...keysFromMapping, ...keysFromBindings]));
+    return allKeys.filter((k) => !stateChannels.some((ch) => ch.key === k));
+  }, [mapping, step.inputBindings, stateChannels]);
+
+  const unmappedDeclaredChannels = useMemo(() => {
+    return stateChannels.filter((ch) => !isChannelMapped(ch.key));
+  }, [stateChannels, mapping, step.inputBindings]);
+
   const isStreaming = step.langGraphStreamingEnabled ?? false;
   const streamingProtocol = step.langGraphStreamingProtocol || "sse";
   const outputMode = step.langGraphOutputMode || "full_state";
@@ -205,7 +226,19 @@ export const LangGraphInvokeStepSection: React.FC<
 
   const handleBindingChange = (channelKey: string, updatedBinding: StepBinding) => {
     const currentBindings = step.inputBindings || [];
-    const otherBindings = currentBindings.filter((b) => b.argName !== channelKey);
+    const existingKeys = new Set(currentBindings.map((b) => b.argName));
+    const backfilledBindings: StepBinding[] = [...currentBindings];
+
+    for (const [k, rawMap] of Object.entries(mapping)) {
+      if (k !== channelKey && !existingKeys.has(k)) {
+        backfilledBindings.push({
+          argName: k,
+          source: accessorToStepSource(rawMap, availableSources),
+        });
+      }
+    }
+
+    const otherBindings = backfilledBindings.filter((b) => b.argName !== channelKey);
     const nextBindings = [...otherBindings, { ...updatedBinding, argName: channelKey }];
 
     const accessor = stepSourceToAccessor(updatedBinding.source, availableSources);
@@ -224,9 +257,99 @@ export const LangGraphInvokeStepSection: React.FC<
   };
 
   const handleRemoveMapping = (stateKey: string) => {
-    const nextBindings = (step.inputBindings || []).filter((b) => b.argName !== stateKey);
     const nextMapping = { ...mapping };
     delete nextMapping[stateKey];
+
+    const currentBindings = step.inputBindings || [];
+    const existingKeys = new Set(currentBindings.map((b) => b.argName));
+    const backfilledBindings: StepBinding[] = [...currentBindings];
+
+    for (const [k, rawMap] of Object.entries(nextMapping)) {
+      if (!existingKeys.has(k)) {
+        backfilledBindings.push({
+          argName: k,
+          source: accessorToStepSource(rawMap, availableSources),
+        });
+      }
+    }
+
+    const nextBindings = backfilledBindings.filter((b) => b.argName !== stateKey);
+
+    onChange({
+      ...step,
+      inputBindings: nextBindings,
+      langGraphStateMapping: nextMapping,
+    });
+  };
+
+  const handleAddChannel = (channelKey: string) => {
+    let matchedSource: StepSource | null = null;
+    const keyLower = channelKey.toLowerCase();
+
+    for (const src of availableSources) {
+      if (src.kind === "inline") continue;
+      const foundPath = src.paths.find((p) => {
+        const pLower = p.path.toLowerCase();
+        if (pLower === keyLower) return true;
+        if (
+          keyLower === "messages" &&
+          (pLower === "messages" || pLower === "message" || pLower === "prompt" || pLower === "query")
+        ) {
+          return true;
+        }
+        return false;
+      });
+      if (foundPath) {
+        if (src.kind === "step_output" && src.stepId) {
+          matchedSource = { kind: "step_output", stepId: src.stepId, field: foundPath.path };
+        } else if (
+          src.kind === "req_body" ||
+          src.kind === "req_params" ||
+          src.kind === "req_query" ||
+          src.kind === "req_headers" ||
+          src.kind === "env"
+        ) {
+          matchedSource = { kind: src.kind, field: foundPath.path };
+        }
+        break;
+      }
+    }
+
+    if (!matchedSource) {
+      matchedSource = {
+        kind: "req_body",
+        field: channelKey === "messages" ? "message" : channelKey,
+      };
+    }
+
+    const accessor = stepSourceToAccessor(matchedSource, availableSources);
+    const nextMapping = {
+      ...mapping,
+      [channelKey]: accessor || `body.${channelKey}`,
+    };
+
+    const bindingToAdd: StepBinding = {
+      argName: channelKey,
+      source: matchedSource,
+    };
+
+    const currentBindings = step.inputBindings || [];
+    const existingKeys = new Set(currentBindings.map((b) => b.argName));
+    const backfilledBindings: StepBinding[] = [...currentBindings];
+    for (const [k, rawMap] of Object.entries(mapping)) {
+      if (k !== channelKey && !existingKeys.has(k)) {
+        backfilledBindings.push({
+          argName: k,
+          source: accessorToStepSource(rawMap, availableSources),
+        });
+      }
+    }
+
+    const nextBindings = [
+      ...backfilledBindings.filter((b) => b.argName !== channelKey),
+      bindingToAdd,
+    ];
+
     onChange({
       ...step,
       inputBindings: nextBindings,
@@ -302,8 +425,21 @@ export const LangGraphInvokeStepSection: React.FC<
       argName: key,
       source: newCustomBinding.source,
     };
+
+    const currentBindings = step.inputBindings || [];
+    const existingKeys = new Set(currentBindings.map((b) => b.argName));
+    const backfilledBindings: StepBinding[] = [...currentBindings];
+    for (const [k, rawMap] of Object.entries(mapping)) {
+      if (k !== key && !existingKeys.has(k)) {
+        backfilledBindings.push({
+          argName: k,
+          source: accessorToStepSource(rawMap, availableSources),
+        });
+      }
+    }
+
     const nextBindings = [
-      ...(step.inputBindings || []).filter((b) => b.argName !== key),
+      ...backfilledBindings.filter((b) => b.argName !== key),
       bindingToAdd,
     ];
     const accessor = stepSourceToAccessor(bindingToAdd.source, availableSources);
@@ -453,20 +589,21 @@ export const LangGraphInvokeStepSection: React.FC<
         </p>
 
         <div className="flex flex-col gap-2 mt-1">
-          <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider px-1">
-            <span>State Channel</span>
-            <span></span>
-            <span>Source & Field</span>
-            <span className="w-6 text-right"></span>
-          </div>
+          {(mappedDeclaredChannels.length > 0 || customKeys.length > 0) && (
+            <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider px-1">
+              <span>State Channel</span>
+              <span></span>
+              <span>Source & Field</span>
+              <span className="w-6 text-right"></span>
+            </div>
+          )}
 
-          {stateChannels.map((ch, idx) => {
+          {mappedDeclaredChannels.map((ch, idx) => {
             const binding = getBindingForChannel(ch.key);
-            const isMapped = mapping[ch.key] !== undefined || (step.inputBindings || []).some((b) => b.argName === ch.key);
 
             return (
               <div
-                key={ch.key ? `invoke-ch-${ch.key}-${idx}` : `invoke-ch-empty-${idx}`}
+                key={`mapped-ch-${ch.key}-${idx}`}
                 className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/50 p-1.5 rounded-lg border border-border/40"
               >
                 <div className="flex items-center gap-1.5 min-w-0">
@@ -487,63 +624,97 @@ export const LangGraphInvokeStepSection: React.FC<
                   />
                 </div>
                 <div className="flex justify-end">
-                  {isMapped && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleRemoveMapping(ch.key)}
-                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                      title="Clear mapping"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveMapping(ch.key)}
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                    title="Remove mapping"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
               </div>
             );
           })}
 
           {/* Any custom mappings not in declared channels */}
-          {Object.keys(mapping)
-            .filter((k) => !stateChannels.some((ch) => ch.key === k))
-            .map((k) => {
-              const binding = getBindingForChannel(k);
-              return (
-                <div
-                  key={`custom-${k}`}
-                  className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/50 p-1.5 rounded-lg border border-border/40"
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-mono font-bold text-primary text-[11px] truncate bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
-                      {k}
-                    </span>
-                    <span className="text-[9px] text-muted-foreground font-mono">
-                      (custom)
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
-                  <div className="min-w-0">
-                    <BindingSourceEditor
-                      binding={binding}
-                      availableSources={availableSources}
-                      serviceNodeId={serviceNodeId}
-                      onChange={(updated) => handleBindingChange(k, updated)}
-                    />
-                  </div>
-                  <div className="flex justify-end">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleRemoveMapping(k)}
-                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                      title="Remove custom mapping"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
+          {customKeys.map((k) => {
+            const binding = getBindingForChannel(k);
+            return (
+              <div
+                key={`custom-${k}`}
+                className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/50 p-1.5 rounded-lg border border-border/40"
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-mono font-bold text-primary text-[11px] truncate bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
+                    {k}
+                  </span>
+                  <span className="text-[9px] text-muted-foreground font-mono">
+                    (custom)
+                  </span>
                 </div>
-              );
-            })}
+                <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
+                <div className="min-w-0">
+                  <BindingSourceEditor
+                    binding={binding}
+                    availableSources={availableSources}
+                    serviceNodeId={serviceNodeId}
+                    onChange={(updated) => handleBindingChange(k, updated)}
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveMapping(k)}
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                    title="Remove custom mapping"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+
+          {mappedDeclaredChannels.length === 0 && customKeys.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border/40 p-3 text-center bg-background/30">
+              <p className="text-[11px] text-muted-foreground">
+                No payload channels mapped yet. The agent will run with its default state.
+              </p>
+              <p
+                className="text-[10px] text-primary/70 mt-1 cursor-pointer hover:underline"
+                onClick={handleAutoMap}
+              >
+                Click here to auto-map all available state channels.
+              </p>
+            </div>
+          )}
+
+          {/* Unmapped state channels quick-add chips */}
+          {unmappedDeclaredChannels.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-2 pb-1 border-t border-border/20 text-xs">
+              <span className="text-[10px] text-muted-foreground font-medium">
+                Available channels:
+              </span>
+              {unmappedDeclaredChannels.map((ch) => (
+                <button
+                  key={ch.key}
+                  type="button"
+                  onClick={() => handleAddChannel(ch.key)}
+                  className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/25 text-purple-300 hover:bg-purple-500/20 hover:border-purple-500/40 transition-colors"
+                  title={`Map channel: ${ch.key} (${ch.type})`}
+                >
+                  <Plus className="w-3 h-3 text-purple-400" />
+                  <span>{ch.key}</span>
+                  <span className="text-[9px] text-muted-foreground font-sans">
+                    ({ch.type})
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Add custom state field */}
           <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center pt-2 border-t border-border/30">

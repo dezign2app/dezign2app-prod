@@ -7,6 +7,7 @@
 import { PipelineStep } from "@workspace/canvas/types";
 import { PipelineRenderContext } from "../types";
 import { resolveBinding } from "../sourceResolver";
+import { toVarName } from "../../../../utils";
 
 /**
  * Renders a LangGraph agent invocation step (sync await or real-time streaming).
@@ -28,11 +29,15 @@ export function renderLangGraphInvokeStep(
   } = step;
 
   const rawLines: string[] = [];
+  const rawLabel = step.name || "agent";
   const graphVar =
     functionRef?.name ||
-    (langGraphTargetNodeId
-      ? `${langGraphTargetNodeId.replace(/[^a-zA-Z0-9]/g, "")}Graph`
-      : "agentGraph");
+    (langGraphTargetNodeId &&
+    !/^[0-9]/.test(langGraphTargetNodeId) &&
+    !langGraphTargetNodeId.includes("-") &&
+    langGraphTargetNodeId.length < 20
+      ? `${toVarName(langGraphTargetNodeId)}Graph`
+      : `${toVarName(rawLabel)}Graph`);
 
   // Build state input object
   const stateFields: string[] = [];

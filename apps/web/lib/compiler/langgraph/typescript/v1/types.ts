@@ -63,8 +63,6 @@ export interface CompileLangGraphInput {
   outputMode?: "app" | "package";
   /** Optional override for package.json name when in package mode. */
   packageName?: string;
-  /** Canvas node ID for generating backward-compatible graph variable aliases. */
-  targetNodeId?: string;
 }
 
 export interface LLMMeta {

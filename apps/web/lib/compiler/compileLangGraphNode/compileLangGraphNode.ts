@@ -23,7 +23,6 @@ export function compileLangGraphNode(
 ): CompiledServiceResult {
   const serviceName = node.data?.label || "LangGraph Service";
   const input = extractLangGraphInput(node);
-  input.targetNodeId = node.id;
 
   if (context?.outputMode) {
     input.outputMode = context.outputMode;
