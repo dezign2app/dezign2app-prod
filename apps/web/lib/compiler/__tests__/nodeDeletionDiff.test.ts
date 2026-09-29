@@ -234,7 +234,7 @@ describe("Canvas Node Deletion File Diff Engine", () => {
 
     expect(diff.deletedNodes.length).toBe(1);
     expect(diff.deletedNodes[0]?.label).toBe("AI Support Agent");
-    expect(diff.deletedFiles.some((f) => f.startsWith("apps/ai-support-agent/"))).toBe(true);
+    expect(diff.deletedFiles.some((f) => f.startsWith("packages/langgraph/"))).toBe(true);
   });
 });
 

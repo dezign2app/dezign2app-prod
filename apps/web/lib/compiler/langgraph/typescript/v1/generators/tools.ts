@@ -1,7 +1,10 @@
-import type { CompileContext } from "../types";
-import { toIdentifier, jsonSchemaToZod, escapeStr, indent } from "../utils";
+import type { CompileContext, ToolMeta } from "../types";
+import { jsonSchemaToZod, escapeStr, indent } from "../utils";
 
-export function buildToolsFile(ctx: CompileContext): string {
+export function buildToolsFile(
+  ctx: CompileContext,
+  toolMetaMap: Map<string, ToolMeta>,
+): string {
   if (ctx.toolNodes.length === 0) return "// No tools defined";
 
   const parts: string[] = [
@@ -10,9 +13,22 @@ export function buildToolsFile(ctx: CompileContext): string {
     ``,
   ];
 
+  const seenVarNames = new Set<string>();
+  const seenNodeIds = new Set<string>();
+
   for (const toolNode of ctx.toolNodes) {
+    if (seenNodeIds.has(toolNode.id)) continue;
+    seenNodeIds.add(toolNode.id);
+
     const d = toolNode.data;
-    const fnName = toIdentifier(d.name || `tool_${toolNode.id}`);
+    const meta = toolMetaMap.get(toolNode.id);
+    const fnName = meta
+      ? meta.varName
+      : `tool_${toolNode.id.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+
+    if (seenVarNames.has(fnName)) continue;
+    seenVarNames.add(fnName);
+
     let inputSchemaCode = "z.object({})";
 
     if (d.inputSchema) {
@@ -36,7 +52,7 @@ export function buildToolsFile(ctx: CompileContext): string {
     return response.json();
   },
   {
-    name: "${d.name}",
+    name: "${d.name || fnName}",
     description: "${escapeStr(d.description)}",
     schema: ${inputSchemaCode},
   }
@@ -68,7 +84,7 @@ export function buildToolsFile(ctx: CompileContext): string {
 ${body}
   },
   {
-    name: "${d.name}",
+    name: "${d.name || fnName}",
     description: "${escapeStr(d.description)}",
     schema: ${inputSchemaCode},
   }

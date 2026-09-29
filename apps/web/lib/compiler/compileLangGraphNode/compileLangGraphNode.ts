@@ -17,10 +17,20 @@ export function compileLangGraphNode(
     endpoints?: Endpoint[];
     events?: Array<{ id: string; name?: string; variant?: string }>;
     testCases?: SimulationTestCase[];
+    outputMode?: "app" | "package";
+    packageName?: string;
   },
 ): CompiledServiceResult {
   const serviceName = node.data?.label || "LangGraph Service";
   const input = extractLangGraphInput(node);
+  input.targetNodeId = node.id;
+
+  if (context?.outputMode) {
+    input.outputMode = context.outputMode;
+  }
+  if (context?.packageName) {
+    input.packageName = context.packageName;
+  }
 
   // Resolve connected route callers from the main canvas edge graph
   if (context) {

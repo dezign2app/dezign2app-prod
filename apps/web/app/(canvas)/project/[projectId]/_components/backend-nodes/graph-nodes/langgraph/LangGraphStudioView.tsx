@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   ReactFlow,
@@ -125,6 +125,8 @@ export function LangGraphStudioView({
     setShowCompileModal,
     suggestedParams,
   } = useLangGraphCanvasState({ node, updateNode, onClose });
+
+  const [outputMode, setOutputMode] = useState<"app" | "package">("app");
 
   const { handleLayout } = useLangGraphAutoLayout({ nodes, edges, onNodesChange });
 
@@ -539,6 +541,8 @@ export function LangGraphStudioView({
         onOpenChange={setShowCompileModal}
         projectName={node.data.label || "LangGraph Agent Project"}
         overrideTitle={`${node.data.label || "LangGraph Agent"} Compiler Engine`}
+        outputMode={outputMode}
+        onOutputModeChange={setOutputMode}
         overrideFiles={useMemo(() => {
           if (!showCompileModal) return [];
           return compileLangGraph({
@@ -549,6 +553,7 @@ export function LangGraphStudioView({
             edges,
             memoryConfig,
             testCases: graphTestCases,
+            outputMode,
           });
         }, [
           showCompileModal,
@@ -559,6 +564,7 @@ export function LangGraphStudioView({
           edges,
           memoryConfig,
           graphTestCases,
+          outputMode,
         ])}
       />
     </div>

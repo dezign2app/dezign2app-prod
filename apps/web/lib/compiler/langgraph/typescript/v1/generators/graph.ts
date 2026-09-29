@@ -35,9 +35,9 @@ export function buildGraphFile(
 
   const imports = [
     `import { StateGraph, START, END${ctx.hasMemory ? ", MemorySaver" + (ctxMemoryNeedsStore(ctx) ? ", MemoryStore" : "") : ""} } from "@langchain/langgraph";`,
-    `import { ${schemaName} } from "./state";`,
+    `import { ${schemaName} } from "./state.js";`,
     nodeExports.length > 0
-      ? `import { ${nodeExports.join(", ")} } from "./nodes";`
+      ? `import { ${nodeExports.join(", ")} } from "./nodes/index.js";`
       : "",
   ].filter(Boolean);
 

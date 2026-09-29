@@ -69,28 +69,28 @@ export function getZodType(type: string, defaultValue?: unknown): string {
     case "boolean":
       return `z.boolean().default(${Boolean(defaultValue ?? false)})`;
     case "array":
-      return `z.array(z.any()).default(${JSON.stringify(defaultValue ?? [])})`;
+      return `z.array(z.string()).default(${JSON.stringify(defaultValue ?? [])})`;
     case "object":
-      return `z.record(z.any()).default({})`;
+      return `z.record(z.string()).default({})`;
     case "messages":
       return "MessagesValue";
     default:
-      return `z.any().default(${JSON.stringify(defaultValue ?? null)})`;
+      return `z.string().default(${JSON.stringify(defaultValue ?? "")})`;
   }
 }
 
 export function getReducerFn(reducer: string, type: string): string {
   switch (reducer) {
     case "append":
+    case "concat_array":
       return type === "array" ? "(x, y) => x.concat(y)" : "(x, y) => x + y";
-    case "add":
-      return "(x, y) => x + y";
-    case "max":
-      return "(x, y) => Math.max(x, y)";
-    case "min":
-      return "(x, y) => Math.min(x, y)";
+    case "merge_object":
+      return "(x, y) => ({ ...x, ...y })";
+    case "add_messages":
+      return "(x, y) => x.concat(y)";
+    case "replace":
     default:
-      return "(x, y) => y";
+      return "(_, y) => y";
   }
 }
 
@@ -118,10 +118,10 @@ export function jsonSchemaToZod(schema: Record<string, unknown>): string {
           zodType = "z.boolean()";
           break;
         case "array":
-          zodType = "z.array(z.any())";
+          zodType = "z.array(z.string())";
           break;
         default:
-          zodType = "z.any()";
+          zodType = "z.string()";
       }
     }
     if (!required.includes(key)) zodType += ".optional()";
@@ -214,7 +214,7 @@ export function buildCondition(
     case "is_not_null":
       return `${field} != null && ${field} !== ""`;
     case "has_tool_calls":
-      return `(Array.isArray((state as { messages?: Array<{ tool_calls?: unknown[] }> }).messages?.at(-1)?.tool_calls) && ((state as { messages?: Array<{ tool_calls?: unknown[] }> }).messages?.at(-1)?.tool_calls?.length ?? 0) > 0)`;
+      return `Boolean(state.messages && state.messages.length > 0 && "tool_calls" in (state.messages[state.messages.length - 1] || {}) && Array.isArray((state.messages[state.messages.length - 1] || {}).tool_calls) && ((state.messages[state.messages.length - 1] || {}).tool_calls?.length ?? 0) > 0)`;
     case "is_true":
       return `Boolean(${field})`;
     case "is_false":

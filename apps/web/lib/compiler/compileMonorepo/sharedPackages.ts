@@ -37,9 +37,19 @@ import {
 } from "../generators/rootFilesGenerator";
 import { compileGrpcPackages } from "../grpc";
 import { compileTransformerHelpers } from "../compileTransformerHelpers";
-import { compileExternalNodes } from "../compileExternalNodes";
-import { compileFrontendNodes } from "../compileFrontendHelpers";
 import { compileStorageNodes } from "../compileStorageNodes";
+import { compileLangGraphNode } from "../compileLangGraphNode";
+import { SimulationTestCase } from "@/types/canvas";
+import { compileFrontendNodes } from "../compileFrontendHelpers";
+import { compileExternalNodes } from "../compileExternalNodes";
+
+export interface LangGraphPackageMeta {
+  nodeId: string;
+  label: string;
+  folderName: string;
+  packageName: string;
+  graphVarName: string;
+}
 
 /** Output produced by {@link compileSharedPackages}. */
 export interface SharedPackagesResult {
@@ -65,10 +75,14 @@ export interface SharedPackagesResult {
   grpcPackageFolders: string[];
   /** Storage package folder paths for tsconfig references, e.g. ["packages/storage"]. */
   storagePackageFolders: string[];
+  /** LangGraph package folder paths for tsconfig references, e.g. ["packages/langgraph/agent1"]. */
+  langGraphPackageFolders: string[];
+  /** Metadata for all compiled LangGraph packages for service route integration. */
+  langGraphPackages: LangGraphPackageMeta[];
 }
 
 /**
- * Compiles all shared workspace packages (steps 1 through 4.11) and returns
+ * Compiles all shared workspace packages (steps 1 through 4.13) and returns
  * the combined file list plus reusable-function metadata for service compilers.
  *
  * @param nodes        - All canvas nodes.
@@ -77,9 +91,11 @@ export interface SharedPackagesResult {
  * @param events       - All messaging event definitions.
  * @param servicesInfo - Pre-populated service folder registry (read-only here).
  * @param projectName  - Human-readable project name for root files.
+ * @param testCases    - Optional simulation test cases for LangGraph nodes.
+ * @param getUniqueLangGraphFolder - Optional folder resolver closure.
  * @returns            - {@link SharedPackagesResult}
  *
- * @debugTag shared-packages-step-1-to-4.11
+ * @debugTag shared-packages-step-1-to-4.13
  */
 export function compileSharedPackages(
   nodes: BackendNode[],
@@ -91,6 +107,8 @@ export function compileSharedPackages(
   })[],
   servicesInfo: FolderEntry[],
   projectName: string,
+  testCases?: SimulationTestCase[],
+  getUniqueLangGraphFolder?: (label: string, defaultName: string) => string,
 ): SharedPackagesResult {
   const files: CompiledFile[] = [];
 
@@ -265,6 +283,63 @@ export function compileSharedPackages(
     });
   }
 
+  // ── step 4.13 | LangGraph AI agent packages ──────────────────────────────
+  // ✦ emits: packages/langgraph/<label>/**
+  const langGraphPackageFolders: string[] = [];
+  const langGraphPackages: LangGraphPackageMeta[] = [];
+
+  const langGraphNodes = nodes.filter((n) => n.type === "langgraph");
+  const seenLgFolders = new Set<string>();
+
+  langGraphNodes.forEach((lgNode) => {
+    const rawLabel = lgNode.data?.label || lgNode.id || "agent";
+    let folderName: string;
+    if (getUniqueLangGraphFolder) {
+      folderName = getUniqueLangGraphFolder(rawLabel, "agent");
+    } else {
+      const trimmed = rawLabel.trim();
+      const base = trimmed.replace(/[/\\?%*:|"<>]/g, "-").replace(/\s+/g, "-") || "agent";
+      folderName = base;
+      let counter = 1;
+      while (seenLgFolders.has(folderName.toLowerCase())) {
+        counter++;
+        folderName = `${base}-${counter}`;
+      }
+      seenLgFolders.add(folderName.toLowerCase());
+    }
+
+    const pkgSlug = folderName.toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/^-+|-+$/g, "") || "agent";
+    const packageName = `@workspace/langgraph-${pkgSlug.replace(/^langgraph-/, "")}`;
+    const folderPath = `packages/langgraph/${folderName}`;
+    langGraphPackageFolders.push(folderPath);
+
+    const lgResult = compileLangGraphNode(lgNode, {
+      edges,
+      nodes,
+      endpoints,
+      events,
+      testCases,
+      outputMode: "package",
+      packageName,
+    });
+
+    lgResult.files.forEach((f) => {
+      files.push({
+        filename: `${folderPath}/${f.filename}`,
+        language: f.language,
+        content: f.content,
+      });
+    });
+
+    langGraphPackages.push({
+      nodeId: lgNode.id,
+      label: rawLabel,
+      folderName,
+      packageName,
+      graphVarName: `${rawLabel.replace(/[^a-zA-Z0-9]/g, "")}Graph`,
+    });
+  });
+
   // ── Collect reusable function metadata for service route generators ───────
   const dbFunctions: ReusableFunction[] = compiledDb.reusableFunctions ?? [];
   const kafkaFunctions: ReusableFunction[] = compiledKafka.reusableFunctions ?? [];
@@ -282,5 +357,7 @@ export function compileSharedPackages(
     compiledFrontend,
     grpcPackageFolders,
     storagePackageFolders,
+    langGraphPackageFolders,
+    langGraphPackages,
   };
 }

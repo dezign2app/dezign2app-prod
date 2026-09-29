@@ -1,11 +1,12 @@
 import type { LangGraphLLMNodeData } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/types";
-import type { CompileContext, LLMMeta } from "../types";
+import type { CompileContext, LLMMeta, ToolMeta } from "../types";
 import { toIdentifier, getProviderPackage, getProviderClass } from "../utils";
 
 export function buildIndividualLLMFile(
   llmNode: { id: string; data: LangGraphLLMNodeData },
   ctx: CompileContext,
   llmMetaMap: Map<string, LLMMeta>,
+  toolMetaMap: Map<string, ToolMeta>,
 ): string {
   const d = llmNode.data;
   const meta = llmMetaMap.get(llmNode.id);
@@ -31,17 +32,19 @@ export function buildIndividualLLMFile(
     toolIds.forEach((tid) => connectedToolIds.add(tid));
   }
 
-  const toolVarNames = [...connectedToolIds]
-    .map((tid) => {
-      const toolNode = ctx.toolNodes.find((t) => t.id === tid);
-      return toolNode
-        ? toIdentifier(toolNode.data.name || `tool_${tid}`)
-        : null;
-    })
-    .filter(Boolean) as string[];
+  const toolVarNames = [
+    ...new Set(
+      [...connectedToolIds]
+        .map((tid) => {
+          const tMeta = toolMetaMap.get(tid);
+          return tMeta ? tMeta.varName : null;
+        })
+        .filter(Boolean),
+    ),
+  ] as string[];
 
   if (toolVarNames.length > 0) {
-    imports.push(`import { ${toolVarNames.join(", ")} } from "../tools";`);
+    imports.push(`import { ${toolVarNames.join(", ")} } from "../tools.js";`);
   }
 
   const configLines: string[] = [];
@@ -82,7 +85,7 @@ export function buildLLMIndexFile(
 ): string {
   const exports = ctx.llmNodes.map((l) => {
     const meta = llmMetaMap.get(l.id);
-    return `export * from "./${meta?.fileName}";`;
+    return `export * from "./${meta?.fileName}.js";`;
   });
   return exports.join("\n") + "\n";
 }

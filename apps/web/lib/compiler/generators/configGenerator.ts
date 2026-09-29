@@ -640,11 +640,94 @@ export function generateConfigFiles(
     }
   }
 
+  const langGraphDeps: Record<string, string> = {};
+  const serviceEndpoints = endpoints.filter(
+    (e) =>
+      e.nodeId === node.id ||
+      (e.nodeId &&
+        ((node.data?.label && e.nodeId === node.data.label) ||
+          (node.data?.label && e.nodeId === node.data.label.toLowerCase()))),
+  );
+
+  function checkStepsForLangGraph(steps: unknown[]) {
+    if (!Array.isArray(steps)) return;
+    for (const s of steps) {
+      const step = s as {
+        type?: string;
+        enabled?: boolean;
+        name?: string;
+        langGraphTargetNodeId?: string;
+        functionRef?: { importPath?: string };
+        thenSteps?: unknown[];
+        elseSteps?: unknown[];
+        trySteps?: unknown[];
+        catchSteps?: unknown[];
+        loopBody?: unknown[];
+      };
+      if (step.enabled === false) continue;
+      if (step.type === "langgraph_invoke") {
+        if (step.functionRef?.importPath?.startsWith("@")) {
+          langGraphDeps[step.functionRef.importPath] = "workspace:*";
+        } else {
+          const targetNode =
+            allNodes.find(
+              (n) => n.id === step.langGraphTargetNodeId && n.type === "langgraph",
+            ) ||
+            allNodes.find(
+              (n) => n.type === "langgraph" && n.data?.label === step.name,
+            );
+          const rawLabel =
+            targetNode?.data?.label ||
+            step.name ||
+            step.langGraphTargetNodeId ||
+            "agent";
+          const pkgSlug =
+            rawLabel
+              .toLowerCase()
+              .replace(/[^a-z0-9_-]/g, "-")
+              .replace(/^-+|-+$/g, "") || "agent";
+          langGraphDeps[
+            `@workspace/langgraph-${pkgSlug.replace(/^langgraph-/, "")}`
+          ] = "workspace:*";
+        }
+      }
+      if (step.thenSteps) checkStepsForLangGraph(step.thenSteps);
+      if (step.elseSteps) checkStepsForLangGraph(step.elseSteps);
+      if (step.trySteps) checkStepsForLangGraph(step.trySteps);
+      if (step.catchSteps) checkStepsForLangGraph(step.catchSteps);
+      if (step.loopBody) checkStepsForLangGraph(step.loopBody);
+    }
+  }
+
+  serviceEndpoints.forEach((ep) => {
+    if (ep.pipelineSteps) checkStepsForLangGraph(ep.pipelineSteps);
+  });
+
+  allEdges.forEach((edge) => {
+    if (edge.source === node.id) {
+      const target = allNodes.find(
+        (n) => n.id === edge.target && n.type === "langgraph",
+      );
+      if (target) {
+        const rawLabel = target.data?.label || target.id || "agent";
+        const pkgSlug =
+          rawLabel
+            .toLowerCase()
+            .replace(/[^a-z0-9_-]/g, "-")
+            .replace(/^-+|-+$/g, "") || "agent";
+        langGraphDeps[
+          `@workspace/langgraph-${pkgSlug.replace(/^langgraph-/, "")}`
+        ] = "workspace:*";
+      }
+    }
+  });
+
   const dependencies: Record<string, string> = {
     ...dbDeps,
     ...(hasKafka ? { [kafkaPackageName]: "workspace:*" } : {}),
     ...redisDeps,
     ...storageDeps,
+    ...langGraphDeps,
     "@workspace/logger": "workspace:*",
     "@workspace/types": "workspace:*",
     express: "^4.19.2",

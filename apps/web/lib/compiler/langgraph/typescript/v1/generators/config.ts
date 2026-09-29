@@ -2,6 +2,16 @@ import type { CompileContext } from "../types";
 import { getEnvKey } from "../utils";
 
 export function buildPackageJson(pkgId: string, deps: Record<string, string>): string {
+  const devDependencies: Record<string, string> = {
+    "@types/node": "^22.0.0",
+    tsx: "^4.19.0",
+    typescript: "^5.7.0",
+  };
+
+  if (deps["express"]) {
+    devDependencies["@types/express"] = "^4.17.21";
+  }
+
   return JSON.stringify(
     {
       name: pkgId,
@@ -16,11 +26,7 @@ export function buildPackageJson(pkgId: string, deps: Record<string, string>): s
         dev: "tsx watch src/index.ts",
       },
       dependencies: deps,
-      devDependencies: {
-        "@types/node": "^22.0.0",
-        tsx: "^4.19.0",
-        typescript: "^5.7.0",
-      },
+      devDependencies,
     },
     null,
     2,
@@ -34,7 +40,8 @@ export function buildTsConfig(): string {
         target: "ES2022",
         module: "NodeNext",
         moduleResolution: "NodeNext",
-        lib: ["ES2022"],
+        lib: ["ES2022", "DOM"],
+        types: ["node"],
         strict: true,
         esModuleInterop: true,
         skipLibCheck: true,

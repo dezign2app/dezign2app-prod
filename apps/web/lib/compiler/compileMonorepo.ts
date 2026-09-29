@@ -8,7 +8,7 @@
 //   step 0   — classifyNodes        → typed node subsets
 //   step 1-4.11 — sharedPackages   → packages/**
 //   step 5   — service apps         → apps/<service>/**
-//   step 5.5 — langgraph apps       → apps/<langgraph>/**
+//   step 5.5 — langgraph graphs     → apps/<service>/src/graphs/<name>/**
 //   step 6   — web-app clients      → apps/<webapp>/**
 //   step 7   — root tsconfig.json
 //   step 8   — README.md
@@ -61,24 +61,22 @@ export function compileMonorepo(
   const {
     getUniqueServiceFolder,
     getUniqueWebAppFolder,
+    getUniqueLangGraphFolder,
     servicesInfo,
     webClientsInfo,
   } = createFolderNameResolvers();
 
   // Pre-populate servicesInfo so shared packages (types, grpc, docker) get
   // consistent folder names before any individual service is compiled.
+  // NOTE: LangGraph nodes are compiled as reusable workspace packages under
+  //       packages/langgraph/<label>/ (step 4.13 in compileSharedPackages).
   standaloneServiceNodes.forEach((srvNode) => {
     const rawName = srvNode.data?.label || srvNode.id || "Service";
     const folderName = getUniqueServiceFolder(rawName, "service");
     servicesInfo.push({ id: srvNode.id, name: rawName, folderName });
   });
-  langGraphNodes.forEach((lgNode) => {
-    const rawName = lgNode.data?.label || lgNode.id || "LangGraph Service";
-    const folderName = getUniqueServiceFolder(rawName, "langgraph-service");
-    servicesInfo.push({ id: lgNode.id, name: rawName, folderName });
-  });
 
-  // ── steps 1–4.11 | shared packages ───────────────────────────────────────
+  // ── steps 1–4.13 | shared packages ───────────────────────────────────────
   const sharedResult = compileSharedPackages(
     nodes,
     edges,
@@ -86,6 +84,8 @@ export function compileMonorepo(
     events,
     servicesInfo,
     projectName,
+    testCases,
+    getUniqueLangGraphFolder,
   );
 
   // ── step 6 | build webApp → page-nodes mapping ───────────────────────────
@@ -93,7 +93,7 @@ export function compileMonorepo(
     ? buildWebAppMap(webAppNodes, webPageNodes, edges)
     : new Map();
 
-  // ── steps 5, 5.5, 6 | compile all apps ───────────────────────────────────
+  // ── steps 5, 6 | compile all apps ────────────────────────────────────────
   const appsResult = compileAllApps({
     standaloneServiceNodes,
     langGraphNodes,
@@ -112,7 +112,7 @@ export function compileMonorepo(
     storageFunctions: sharedResult.storageFunctions,
     compiledFrontend: sharedResult.compiledFrontend,
     projectName,
-    getUniqueLangGraphFolder: getUniqueServiceFolder,
+    getUniqueLangGraphFolder,
     getUniqueWebAppFolder,
   });
 
@@ -156,6 +156,7 @@ export function compileMonorepo(
     ...redisPackagePaths,
     ...sharedResult.grpcPackageFolders,
     ...sharedResult.storagePackageFolders,
+    ...sharedResult.langGraphPackageFolders,
     ...servicesInfo.map((s) => `apps/${s.folderName}`),
     ...webClientsInfo.map((w) => `apps/${w.folderName}`),
   ];

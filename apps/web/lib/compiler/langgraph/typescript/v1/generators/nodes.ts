@@ -3,7 +3,7 @@ import type {
   StepNodeData,
 } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/types";
 import { NODE_ID_END } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/constants";
-import type { CompileContext, NodeMeta, LLMMeta } from "../types";
+import type { CompileContext, NodeMeta, LLMMeta, ToolMeta } from "../types";
 import {
   toIdentifier,
   toPascalCase,
@@ -31,7 +31,7 @@ export function buildAgentNodeFile(
   const llmMeta = llmId ? llmMetaMap.get(llmId) : null;
   const llmVar = llmMeta ? llmMeta.varName : null;
 
-  const imports: string[] = [`import { ${schemaName}Type } from "../state";`];
+  const imports: string[] = [`import { ${schemaName}Type } from "../state.js";`];
 
   const systemPrompt = d.systemPrompt?.trim();
   if (systemPrompt && llmVar) {
@@ -39,7 +39,7 @@ export function buildAgentNodeFile(
   }
 
   if (llmVar && llmMeta) {
-    imports.push(`import { ${llmVar} } from "../llm/${llmMeta.fileName}";`);
+    imports.push(`import { ${llmVar} } from "../llm/${llmMeta.fileName}.js";`);
   }
 
   const bodyLines: string[] = [];
@@ -89,6 +89,7 @@ export function buildStepNodeFile(
   ctx: CompileContext,
   nodeMetaMap: Map<string, NodeMeta>,
   llmMetaMap: Map<string, LLMMeta>,
+  toolMetaMap?: Map<string, ToolMeta>,
 ): string {
   const d = stepNode.data;
   const nodeMeta = nodeMetaMap.get(stepNode.id);
@@ -241,8 +242,8 @@ export function buildStepNodeFile(
       possibleTargets.size > 0 ? [...possibleTargets].join(" | ") : "string";
     const hasEnd = possibleTargets.has("typeof END");
     const importHeader = hasEnd
-      ? `import { END } from "@langchain/langgraph";\nimport { ${schemaName}Type } from "../state";`
-      : `import { ${schemaName}Type } from "../state";`;
+      ? `import { END } from "@langchain/langgraph";\nimport { ${schemaName}Type } from "../state.js";`
+      : `import { ${schemaName}Type } from "../state.js";`;
 
     return `${importHeader}
 
@@ -254,11 +255,18 @@ ${branchLines.join("\n")}
   }
 
   if (d.stepType === "tool_node") {
-    const toolVarNames = ctx.toolNodes.map((t) =>
-      toIdentifier(t.data.name || `tool_${t.id}`),
-    );
+    const toolVarNames = [
+      ...new Set(
+        ctx.toolNodes
+          .map((t) => {
+            const tMeta = toolMetaMap?.get(t.id);
+            return tMeta ? tMeta.varName : toIdentifier(t.data.name || `tool_${t.id}`);
+          })
+          .filter(Boolean),
+      ),
+    ] as string[];
     return `import { ToolNode } from "@langchain/langgraph";
-import { ${toolVarNames.join(", ")} } from "../tools";
+import { ${toolVarNames.join(", ")} } from "../tools.js";
 
 export const ${fnName} = new ToolNode([${toolVarNames.join(", ")}]);
 `;
@@ -266,7 +274,7 @@ export const ${fnName} = new ToolNode([${toolVarNames.join(", ")}]);
 
   if (d.stepType === "human_gate" || d.stepType === "interrupt") {
     return `import { interrupt } from "@langchain/langgraph";
-import { ${schemaName}Type } from "../state";
+import { ${schemaName}Type } from "../state.js";
 
 export async function ${fnName}(state: ${schemaName}Type) {
   const humanInput = interrupt({
@@ -296,7 +304,7 @@ export async function ${fnName}(state: ${schemaName}Type) {
     }
 
     const body = bodyLines.join("\n");
-    return `import { ${schemaName}Type } from "../state";
+    return `import { ${schemaName}Type } from "../state.js";
 
 export async function ${fnName}(state: ${schemaName}Type) {
 ${body}
@@ -304,7 +312,7 @@ ${body}
 `;
   }
 
-  return `import { ${schemaName}Type } from "../state";
+  return `import { ${schemaName}Type } from "../state.js";
 
 export async function ${fnName}(state: ${schemaName}Type) {
   return {};
@@ -325,5 +333,5 @@ export function buildNodesIndexFile(
     const meta = nodeMetaMap.get(stepNode.id);
     if (meta) files.add(meta.fileName);
   }
-  return [...files].map((f) => `export * from "./${f}";`).join("\n") + "\n";
+  return [...files].map((f) => `export * from "./${f}.js";`).join("\n") + "\n";
 }
