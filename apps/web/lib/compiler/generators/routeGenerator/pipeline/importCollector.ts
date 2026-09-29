@@ -45,14 +45,11 @@ export function collectPipelineImports(
         imports.set(importPath, new Set([name]));
       }
     } else if (s.type === "langgraph_invoke" && s.enabled !== false) {
-      const graphName = s.functionRef?.name || (s.langGraphTargetNodeId
-        ? `${s.langGraphTargetNodeId.replace(/[^a-zA-Z0-9]/g, "")}Graph`
-        : "agentGraph");
+      const rawLabel = s.name || "agent";
       let importPath: string;
       if (s.functionRef?.importPath && s.functionRef.importPath.startsWith("@")) {
         importPath = s.functionRef.importPath;
       } else {
-        const rawLabel = s.name || s.langGraphTargetNodeId || "agent";
         const pkgSlug =
           rawLabel
             .toLowerCase()
@@ -60,6 +57,14 @@ export function collectPipelineImports(
             .replace(/^-+|-+$/g, "") || "agent";
         importPath = `@workspace/langgraph-${pkgSlug.replace(/^langgraph-/, "")}`;
       }
+      const graphName =
+        s.functionRef?.name ||
+        (s.langGraphTargetNodeId &&
+        !/^[0-9]/.test(s.langGraphTargetNodeId) &&
+        !s.langGraphTargetNodeId.includes("-") &&
+        s.langGraphTargetNodeId.length < 20
+          ? `${toVarName(s.langGraphTargetNodeId)}Graph`
+          : `${toVarName(rawLabel)}Graph`);
       const existing = imports.get(importPath);
       if (existing) {
         existing.add(graphName);

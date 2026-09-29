@@ -11,19 +11,6 @@ import { toCamelCase, toPascalCase, getEnvKey } from "../utils";
 export function buildLibIndexFile(ctx: CompileContext): string {
   const graphVarName = `${toCamelCase(ctx.graphId)}Graph`;
   const schemaName = `${toPascalCase(ctx.graphId)}State`;
-  const targetNodeId = ctx.input.targetNodeId;
-  const altVarName = targetNodeId
-    ? `${targetNodeId.replace(/[^a-zA-Z0-9]/g, "")}Graph`
-    : "";
-
-  const extraExports: string[] = [];
-  if (altVarName && altVarName !== graphVarName) {
-    extraExports.push(`export { ${graphVarName} as ${altVarName} } from "./graph.js";`);
-  }
-  if (graphVarName !== "agentGraph" && altVarName !== "agentGraph") {
-    extraExports.push(`export { ${graphVarName} as agentGraph } from "./graph.js";`);
-  }
-  extraExports.push(`export default ${graphVarName};`);
 
   return `/**
  * @workspace package — LangGraph agent compiled by Dezign2App Studio
@@ -33,7 +20,6 @@ export function buildLibIndexFile(ctx: CompileContext): string {
  *   import { ${graphVarName}, type ${schemaName}Type } from "${ctx.input.packageName || `@workspace/${toCamelCase(ctx.graphId)}`}";
  */
 export { ${graphVarName} } from "./graph.js";
-${extraExports.join("\n")}
 export type { ${schemaName}Type, ${schemaName}UpdateType } from "./state.js";
 `;
 }
@@ -79,7 +65,7 @@ export function buildLibPackageJson(
     packageName ||
     (pkgId.startsWith("@")
       ? pkgId
-      : `@workspace/${pkgId.startsWith("langgraph-") ? pkgId : `langgraph-${pkgId}`}`);
+      : `@workspace/${pkgId}`);
 
   return JSON.stringify(
     {

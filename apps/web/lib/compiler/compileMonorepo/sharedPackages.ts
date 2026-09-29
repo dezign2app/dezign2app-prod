@@ -39,6 +39,7 @@ import { compileGrpcPackages } from "../grpc";
 import { compileTransformerHelpers } from "../compileTransformerHelpers";
 import { compileStorageNodes } from "../compileStorageNodes";
 import { compileLangGraphNode } from "../compileLangGraphNode";
+import { toCamelCase } from "../langgraph/typescript/v1/utils";
 import { SimulationTestCase } from "@/types/canvas";
 import { compileFrontendNodes } from "../compileFrontendHelpers";
 import { compileExternalNodes } from "../compileExternalNodes";
@@ -336,7 +337,7 @@ export function compileSharedPackages(
       label: rawLabel,
       folderName,
       packageName,
-      graphVarName: `${rawLabel.replace(/[^a-zA-Z0-9]/g, "")}Graph`,
+      graphVarName: `${toCamelCase(rawLabel)}Graph`,
     });
   });
 
