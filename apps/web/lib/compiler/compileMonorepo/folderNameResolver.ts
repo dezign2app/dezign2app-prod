@@ -33,7 +33,13 @@ export interface FolderNameResolvers {
    */
   getUniqueStorageFolder: (label: string, defaultName: string) => string;
 
-  /** All service / langgraph folder entries registered so far. */
+  /**
+   * Returns a unique folder name for a LangGraph package under packages/langgraph/<label>.
+   * Appends `-2`, `-3`, … when the base folder already exists.
+   */
+  getUniqueLangGraphFolder: (label: string, defaultName: string) => string;
+
+  /** All service folder entries registered so far. */
   servicesInfo: FolderEntry[];
 
   /** All web-app client folder entries registered so far. */
@@ -41,6 +47,9 @@ export interface FolderNameResolvers {
 
   /** All storage folder entries registered so far. */
   storageInfo: FolderEntry[];
+
+  /** All langgraph folder entries registered so far. */
+  langGraphInfo: FolderEntry[];
 }
 
 /**
@@ -62,6 +71,7 @@ export function createFolderNameResolvers(): FolderNameResolvers {
   const servicesInfo: FolderEntry[] = [];
   const webClientsInfo: FolderEntry[] = [];
   const storageInfo: FolderEntry[] = [];
+  const langGraphInfo: FolderEntry[] = [];
 
   /**
    * Converts a label into a kebab-case base slug and appends a numeric
@@ -132,12 +142,31 @@ export function createFolderNameResolvers(): FolderNameResolvers {
     return folderName;
   }
 
+  /**
+   * Preserves or sanitizes a LangGraph label into a folder name and appends
+   * a numeric suffix until the folder name is unique within `langGraphInfo`.
+   */
+  function getUniqueLangGraphFolder(label: string, defaultName: string = "agent"): string {
+    const trimmed = (label || defaultName).trim();
+    const base = trimmed.replace(/[/\\?%*:|"<>]/g, "-").replace(/\s+/g, "-") || defaultName;
+
+    let folderName = base;
+    let counter = 1;
+    while (langGraphInfo.some((lg) => lg.folderName.toLowerCase() === folderName.toLowerCase())) {
+      counter++;
+      folderName = `${base}-${counter}`;
+    }
+    return folderName;
+  }
+
   return {
     getUniqueServiceFolder,
     getUniqueWebAppFolder,
     getUniqueStorageFolder,
+    getUniqueLangGraphFolder,
     servicesInfo,
     webClientsInfo,
     storageInfo,
+    langGraphInfo,
   };
 }

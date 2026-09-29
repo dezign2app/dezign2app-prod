@@ -73,7 +73,7 @@ export function compileLangGraph(input: CompileLangGraphInput): CompiledFile[] {
     filename: "package.json",
     language: "json",
     content: isPackageMode
-      ? buildLibPackageJson(pkgId, deps)
+      ? buildLibPackageJson(pkgId, deps, input.packageName)
       : buildPackageJson(pkgId, deps),
   });
 

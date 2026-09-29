@@ -2,12 +2,11 @@
 // MODULE:  appCompilers
 // LAYER:   compilers
 // PURPOSE: Compiles individual app packages: standalone service nodes
-//          (step 5), LangGraph nodes (step 5.5), and web app clients (step 6).
+//          (step 5) and web app clients (step 6).
 //
 // EMITS:
-//   apps/<serviceFolder>/**       (Express / FastAPI / Next.js services)
-//   apps/<langGraphFolder>/**     (LangGraph Python agents)
-//   apps/<webAppFolder>/**        (Next.js web-app clients)
+//   apps/<serviceFolder>/**                     (Express / FastAPI / Next.js services)
+//   apps/<webAppFolder>/**                      (Next.js web-app clients)
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { BackendNode, BackendEdge, SimulationTestCase } from "@/types/canvas";
@@ -20,7 +19,6 @@ import {
 import { FolderEntry } from "./folderNameResolver";
 import { WebAppEntry } from "./webAppMapper";
 import { compileServiceNode } from "../compileServiceNode";
-import { compileLangGraphNode } from "../compileLangGraphNode";
 import { compileWebPageNodes } from "../compileWebPageNode";
 import { compileFrontendNodes } from "../compileFrontendHelpers";
 
@@ -34,7 +32,7 @@ export interface AllAppsResult {
  * Compiles all three app categories and returns their combined file list.
  *
  * Step 5   — Standalone service nodes (Express / FastAPI / Next.js microservices)
- * Step 5.5 — LangGraph AI agent nodes
+ * Step 5.5 — LangGraph AI agent graphs (injected into the service that uses them)
  * Step 6   — Web-app clients (Next.js full-stack apps with connected WebPage nodes)
  *
  * @debugTag app-compilers-step-5-to-6
@@ -107,32 +105,6 @@ export function compileAllApps(params: {
 
     srvResult.files.forEach((f) => {
       // ✦ step-5 | service → apps/<folderName>/<filename>
-      files.push({
-        filename: `apps/${folderName}/${f.filename}`,
-        language: f.language,
-        content: f.content,
-      });
-    });
-  });
-
-  // ── step 5.5 | langgraph nodes ───────────────────────────────────────────
-  // ✦ emits: apps/<langGraphFolder>/**
-  langGraphNodes.forEach((lgNode) => {
-    const lgInfo = servicesInfo.find((s) => s.id === lgNode.id);
-    if (!lgInfo) return;
-
-    const folderName = lgInfo.folderName;
-
-    const lgResult = compileLangGraphNode(lgNode, {
-      edges,
-      nodes,
-      endpoints,
-      events,
-      testCases,
-    });
-
-    lgResult.files.forEach((f) => {
-      // ✦ step-5.5 | langgraph → apps/<folderName>/<filename>
       files.push({
         filename: `apps/${folderName}/${f.filename}`,
         language: f.language,

@@ -45,10 +45,21 @@ export function collectPipelineImports(
         imports.set(importPath, new Set([name]));
       }
     } else if (s.type === "langgraph_invoke" && s.enabled !== false) {
-      const graphName = s.langGraphTargetNodeId
+      const graphName = s.functionRef?.name || (s.langGraphTargetNodeId
         ? `${s.langGraphTargetNodeId.replace(/[^a-zA-Z0-9]/g, "")}Graph`
-        : "agentGraph";
-      const importPath = `../graphs/${graphName}`;
+        : "agentGraph");
+      let importPath: string;
+      if (s.functionRef?.importPath && s.functionRef.importPath.startsWith("@")) {
+        importPath = s.functionRef.importPath;
+      } else {
+        const rawLabel = s.name || s.langGraphTargetNodeId || "agent";
+        const pkgSlug =
+          rawLabel
+            .toLowerCase()
+            .replace(/[^a-z0-9_-]/g, "-")
+            .replace(/^-+|-+$/g, "") || "agent";
+        importPath = `@workspace/langgraph-${pkgSlug.replace(/^langgraph-/, "")}`;
+      }
       const existing = imports.get(importPath);
       if (existing) {
         existing.add(graphName);
