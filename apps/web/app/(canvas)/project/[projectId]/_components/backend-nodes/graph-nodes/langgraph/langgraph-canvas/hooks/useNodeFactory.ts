@@ -4,6 +4,7 @@ import type {
   LangGraphCanvasEdge,
   EndNode,
   LangGraphLLMNode,
+  LangGraphLLMRefNode,
   ToolNode,
   MiddlewareNode,
   MemoryNode,
@@ -17,6 +18,7 @@ import {
   LANGGRAPH_CANVAS_NODE_STEP,
   LANGGRAPH_CANVAS_NODE_END,
   LANGGRAPH_CANVAS_NODE_LLM,
+  LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
   LANGGRAPH_CANVAS_NODE_NODE,
@@ -104,6 +106,48 @@ export function useNodeFactory({
 
         setNodes((nds) => [...nds, newLLMNode]);
         setSelectedNodeId(llmId);
+        return;
+      }
+
+      if (type === LANGGRAPH_CANVAS_NODE_LLM_REF) {
+        const refId = `llm_ref_${Date.now().toString(36).slice(-4)}`;
+        let preselectedMasterId: string | undefined = undefined;
+        let preselectedMasterLabel = "LLM";
+
+        setNodes((nds) => {
+          const master = nds.find((n) => n.type === LANGGRAPH_CANVAS_NODE_LLM);
+          if (master) {
+            preselectedMasterId = master.id;
+            preselectedMasterLabel = (master.data as { label?: string })?.label || "LLM";
+          }
+
+          const newLLMRefNode: LangGraphLLMRefNode = {
+            id: refId,
+            type: LANGGRAPH_CANVAS_NODE_LLM_REF,
+            position: {
+              x: 360 + Math.random() * 140,
+              y: 100 + Math.random() * 80,
+            },
+            data: {
+              label: label || `${preselectedMasterLabel} (Ref)`,
+              refId,
+              llmRef: preselectedMasterId,
+              onDeleteLLMRef: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== refId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== refId && edge.target !== refId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === refId ? null : curr));
+              },
+            },
+          };
+
+          return [...nds, newLLMRefNode];
+        });
+
+        setSelectedNodeId(refId);
         return;
       }
 

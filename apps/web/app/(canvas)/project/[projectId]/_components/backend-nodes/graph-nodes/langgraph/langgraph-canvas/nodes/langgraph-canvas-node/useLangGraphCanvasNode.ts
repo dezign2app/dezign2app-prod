@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useReactFlow, NodeProps } from "@xyflow/react";
+import { useReactFlow, NodeProps, type Edge } from "@xyflow/react";
 import type {
   CanvasNode,
   LangGraphCanvasNodeUnion,
@@ -7,11 +7,16 @@ import type {
   LangGraphAgentResponseFormatConfig,
   LangGraphAgentMemoryConfig,
   UseLangGraphCanvasNodeReturn,
+  LangGraphLLMNode,
+  LangGraphLLMRefNode,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
+  LANGGRAPH_CANVAS_NODE_LLM,
+  LANGGRAPH_CANVAS_NODE_LLM_REF,
   HANDLE_LLM_IN,
+  HANDLE_LLM_OUT,
   HANDLE_TOOL_IN,
   HANDLE_MIDDLEWARE_IN,
   HANDLE_MEMORY_IN,
@@ -27,7 +32,7 @@ export function useLangGraphCanvasNode({
   id,
   data,
 }: NodeProps<CanvasNode>): UseLangGraphCanvasNodeReturn {
-  const { setNodes, getEdges } = useReactFlow<LangGraphCanvasNodeUnion>();
+  const { setNodes, getNodes, getEdges, setEdges } = useReactFlow<LangGraphCanvasNodeUnion>();
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(data.name || "Node");
   const [isExpanded, setIsExpanded] = useState(data.isExpanded ?? false);
@@ -136,20 +141,116 @@ export function useLangGraphCanvasNode({
   const availableFields = (data.availableStateChannels || []).map((c) => c.key);
 
   const handleToggleLLMConfig = (enabled: boolean) => {
-    const updatedLLMConfig = {
-      ...llmConfig,
-      enabled,
-    };
-    const updatedModelConfig = enabled
-      ? data.modelConfig || {
-          provider: DEFAULT_LLM_PROVIDER,
-          model: DEFAULT_LLM_MODEL,
-          temperature: DEFAULT_LLM_TEMPERATURE,
+    if (!enabled) {
+      // Disconnect any existing LLM edge targeting this node
+      setEdges((eds) =>
+        eds.filter(
+          (e) => !(e.target === id && e.targetHandle === HANDLE_LLM_IN),
+        ),
+      );
+      updateAgentData({
+        llmConfig: {
+          ...llmConfig,
+          enabled: false,
+        },
+        modelConfig: undefined,
+      });
+      return;
+    }
+
+    // When enabling, check if there's an existing bound edge
+    const currentEdges = getEdges();
+    const hasBound = currentEdges.some(
+      (e) => e.target === id && e.targetHandle === HANDLE_LLM_IN,
+    );
+
+    if (hasBound) {
+      updateAgentData({
+        llmConfig: {
+          ...llmConfig,
+          enabled: true,
+        },
+        modelConfig: data.modelConfig || {
+          provider: llmConfig.provider || DEFAULT_LLM_PROVIDER,
+          model: llmConfig.model || DEFAULT_LLM_MODEL,
+          temperature: llmConfig.temperature ?? DEFAULT_LLM_TEMPERATURE,
+        },
+      });
+      return;
+    }
+
+    // Check if there is an available master LLM or LLM Ref node on canvas to auto-connect
+    const allNodes = getNodes();
+    const availableLLM = allNodes.find(
+      (n): n is LangGraphLLMNode | LangGraphLLMRefNode =>
+        n.type === LANGGRAPH_CANVAS_NODE_LLM ||
+        n.type === LANGGRAPH_CANVAS_NODE_LLM_REF,
+    );
+
+    if (availableLLM) {
+      const newEdge: Edge = {
+        id: `xy-edge__${availableLLM.id}${HANDLE_LLM_OUT}-${id}${HANDLE_LLM_IN}`,
+        source: availableLLM.id,
+        sourceHandle: HANDLE_LLM_OUT,
+        target: id,
+        targetHandle: HANDLE_LLM_IN,
+        animated: true,
+        style: { stroke: "#38bdf8", strokeWidth: 2, strokeDasharray: "5 5" },
+      };
+      setEdges((eds) => [
+        ...eds.filter(
+          (e) => !(e.target === id && e.targetHandle === HANDLE_LLM_IN),
+        ),
+        newEdge,
+      ]);
+
+      let resolvedProvider: string | undefined;
+      let resolvedModel: string | undefined;
+      let resolvedTemp: number | undefined;
+
+      if (availableLLM.type === LANGGRAPH_CANVAS_NODE_LLM) {
+        resolvedProvider = availableLLM.data.provider;
+        resolvedModel = availableLLM.data.model;
+        resolvedTemp = availableLLM.data.temperature;
+      } else if (availableLLM.type === LANGGRAPH_CANVAS_NODE_LLM_REF) {
+        const masterId = availableLLM.data.llmRef;
+        const master = allNodes.find((n) => n.id === masterId);
+        if (master?.type === LANGGRAPH_CANVAS_NODE_LLM) {
+          resolvedProvider = master.data.provider;
+          resolvedModel = master.data.model;
+          resolvedTemp = master.data.temperature;
         }
-      : undefined;
+      }
+
+      updateAgentData({
+        llmConfig: {
+          ...llmConfig,
+          enabled: true,
+          provider:
+            resolvedProvider || llmConfig.provider || DEFAULT_LLM_PROVIDER,
+          model: resolvedModel || llmConfig.model || DEFAULT_LLM_MODEL,
+          temperature: resolvedTemp ?? llmConfig.temperature,
+        },
+        modelConfig: {
+          provider: resolvedProvider || DEFAULT_LLM_PROVIDER,
+          model: resolvedModel || DEFAULT_LLM_MODEL,
+          temperature: resolvedTemp ?? DEFAULT_LLM_TEMPERATURE,
+        },
+      });
+      return;
+    }
+
+    // No LLM on canvas yet, enable with default config
     updateAgentData({
-      llmConfig: updatedLLMConfig,
-      modelConfig: updatedModelConfig,
+      llmConfig: {
+        ...llmConfig,
+        enabled: true,
+      },
+      modelConfig: data.modelConfig || {
+        provider: DEFAULT_LLM_PROVIDER,
+        model: DEFAULT_LLM_MODEL,
+        temperature: DEFAULT_LLM_TEMPERATURE,
+      },
     });
   };
 

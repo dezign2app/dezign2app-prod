@@ -3,6 +3,7 @@ import { LangGraphCanvasStartNode } from "./LangGraphCanvasStartNode";
 import { LangGraphCanvasEndNode } from "./LangGraphCanvasEndNode";
 import { LangGraphCanvasPortNode } from "./LangGraphCanvasPortNode";
 import { LangGraphCanvasLLMNode } from "./LangGraphCanvasLLMNode";
+import { LangGraphCanvasLLMRefNode } from "./LangGraphCanvasLLMRefNode";
 import { LangGraphCanvasToolNode } from "./LangGraphCanvasToolNode";
 import { LangGraphCanvasMiddlewareNode } from "./LangGraphCanvasMiddlewareNode";
 import { LangGraphCanvasNode } from "./LangGraphCanvasNode";
@@ -18,6 +19,7 @@ import {
   LANGGRAPH_CANVAS_NODE_PORT,
   LANGGRAPH_CANVAS_NODE_STATE_GLOBAL,
   LANGGRAPH_CANVAS_NODE_LLM,
+  LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
   LANGGRAPH_CANVAS_NODE_NODE,
@@ -33,6 +35,7 @@ export const langGraphCanvasNodeTypes = {
   [LANGGRAPH_CANVAS_NODE_PORT]: LangGraphCanvasPortNode,
   [LANGGRAPH_CANVAS_NODE_STATE_GLOBAL]: LangGraphCanvasStateNode,
   [LANGGRAPH_CANVAS_NODE_LLM]: LangGraphCanvasLLMNode,
+  [LANGGRAPH_CANVAS_NODE_LLM_REF]: LangGraphCanvasLLMRefNode,
   [LANGGRAPH_CANVAS_NODE_TOOL]: LangGraphCanvasToolNode,
   [LANGGRAPH_CANVAS_NODE_MIDDLEWARE]: LangGraphCanvasMiddlewareNode,
   [LANGGRAPH_CANVAS_NODE_NODE]: LangGraphCanvasNode,
@@ -47,6 +50,7 @@ export {
   LangGraphCanvasEndNode,
   LangGraphCanvasPortNode,
   LangGraphCanvasLLMNode,
+  LangGraphCanvasLLMRefNode,
   LangGraphCanvasToolNode,
   LangGraphCanvasMiddlewareNode,
   LangGraphCanvasNode,

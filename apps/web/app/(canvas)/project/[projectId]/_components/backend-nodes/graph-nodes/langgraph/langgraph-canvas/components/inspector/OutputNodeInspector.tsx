@@ -19,7 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import type { OutputNodeData, LangGraphLLMNode } from "@workspace/canvas";
+import type {
+  OutputNodeData,
+  LangGraphLLMNode,
+  LangGraphLLMRefNode,
+} from "@workspace/canvas";
 import type { LangGraphStateChannel } from "@/types/canvas";
 import type { ConnectedRouteInfo } from "../../../LangGraphNode";
 import { LocalInput } from "../../../../common";
@@ -29,7 +33,7 @@ interface OutputNodeInspectorProps {
   onDeleteOutput: () => void;
   onUpdateOutput: (changes: Partial<OutputNodeData>) => void;
   stateChannels?: LangGraphStateChannel[];
-  availableLLMNodes?: LangGraphLLMNode[];
+  availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
   connectedRoutes?: ConnectedRouteInfo[];
 }
 
@@ -219,15 +223,25 @@ export function OutputNodeInspector({
                 <SelectItem value="__first__" className="text-xs font-mono">
                   Default / First AI Node
                 </SelectItem>
-                {availableLLMNodes.map((llm) => (
-                  <SelectItem
-                    key={llm.id}
-                    value={llm.id}
-                    className="text-xs font-mono"
-                  >
-                    {llm.data.label || llm.id} ({llm.data.provider || "llm"})
-                  </SelectItem>
-                ))}
+                {availableLLMNodes.map((llm) => {
+                  const isRef = llm.type === "langgraph_llm_ref";
+                  const providerLabel: string =
+                    llm.type === "langgraph_llm"
+                      ? llm.data.provider || "custom"
+                      : "ref";
+                  return (
+                    <SelectItem
+                      key={llm.id}
+                      value={llm.id}
+                      className="text-xs font-mono"
+                    >
+                      {isRef
+                        ? `[REF] ${llm.data.label || llm.id}`
+                        : llm.data.label || llm.id}{" "}
+                      ({providerLabel})
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>

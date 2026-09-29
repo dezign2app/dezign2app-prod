@@ -3,15 +3,19 @@ import type {
   LangGraphCanvasNode,
   LangGraphCanvasEdge,
   LangGraphLLMNode,
+  LangGraphLLMRefNode,
   ToolNode,
   MiddlewareNode,
   MemoryNode,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_LLM,
+  LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
   LANGGRAPH_CANVAS_NODE_MEMORY,
+  LANGGRAPH_CANVAS_NODE_STEP,
+  LANGGRAPH_CANVAS_NODE_AGENT,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
   HANDLE_TOOL_IN,
@@ -20,20 +24,26 @@ import {
   HANDLE_MIDDLEWARE_OUT,
   HANDLE_MEMORY_IN,
   HANDLE_MEMORY_OUT,
+  DEFAULT_LLM_PROVIDER,
+  DEFAULT_LLM_MODEL,
 } from "../constants";
 
 interface UseAgentResourceConnectionsProps {
   nodes: LangGraphCanvasNode[];
   setEdges: React.Dispatch<React.SetStateAction<LangGraphCanvasEdge[]>>;
+  setNodes?: React.Dispatch<React.SetStateAction<LangGraphCanvasNode[]>>;
 }
 
 export function useAgentResourceConnections({
   nodes,
   setEdges,
+  setNodes,
 }: UseAgentResourceConnectionsProps) {
   const availableLLMNodes = useMemo(() => {
     return nodes.filter(
-      (n): n is LangGraphLLMNode => n.type === LANGGRAPH_CANVAS_NODE_LLM,
+      (n): n is LangGraphLLMNode | LangGraphLLMRefNode =>
+        n.type === LANGGRAPH_CANVAS_NODE_LLM ||
+        n.type === LANGGRAPH_CANVAS_NODE_LLM_REF,
     );
   }, [nodes]);
 
@@ -73,8 +83,128 @@ export function useAgentResourceConnections({
         };
         return [...filtered, newEdge];
       });
+
+      // Tight coupling: update target node's llmConfig and modelConfig
+      if (setNodes) {
+        if (!llmId) {
+          setNodes((nds) =>
+            nds.map((n) => {
+              if (n.id === agentId) {
+                if (n.type === LANGGRAPH_CANVAS_NODE_AGENT) {
+                  return {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      llmConfig: {
+                        ...(n.data.llmConfig || {}),
+                        enabled: false,
+                      },
+                      modelConfig: undefined,
+                    },
+                  };
+                }
+                if (n.type === LANGGRAPH_CANVAS_NODE_STEP) {
+                  return {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      llmConfig: {
+                        ...(n.data.llmConfig || {}),
+                        enabled: false,
+                      },
+                      modelConfig: undefined,
+                    },
+                  };
+                }
+              }
+              return n;
+            }),
+          );
+        } else {
+          const srcNode = nodes.find((n) => n.id === llmId);
+          let resolvedProvider: string | undefined;
+          let resolvedModel: string | undefined;
+          let resolvedTemp: number | undefined;
+
+          if (srcNode?.type === LANGGRAPH_CANVAS_NODE_LLM) {
+            resolvedProvider = srcNode.data.provider;
+            resolvedModel = srcNode.data.model;
+            resolvedTemp = srcNode.data.temperature;
+          } else if (srcNode?.type === LANGGRAPH_CANVAS_NODE_LLM_REF) {
+            const masterId = srcNode.data.llmRef;
+            const master = nodes.find((n) => n.id === masterId);
+            if (master?.type === LANGGRAPH_CANVAS_NODE_LLM) {
+              resolvedProvider = master.data.provider;
+              resolvedModel = master.data.model;
+              resolvedTemp = master.data.temperature;
+            }
+          }
+
+          setNodes((nds) =>
+            nds.map((n) => {
+              if (n.id === agentId) {
+                if (n.type === LANGGRAPH_CANVAS_NODE_AGENT) {
+                  return {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      llmConfig: {
+                        ...(n.data.llmConfig || {}),
+                        enabled: true,
+                        provider:
+                          resolvedProvider ||
+                          n.data.llmConfig?.provider ||
+                          DEFAULT_LLM_PROVIDER,
+                        model:
+                          resolvedModel ||
+                          n.data.llmConfig?.model ||
+                          DEFAULT_LLM_MODEL,
+                        temperature:
+                          resolvedTemp ?? n.data.llmConfig?.temperature,
+                      },
+                      modelConfig: {
+                        provider: resolvedProvider || DEFAULT_LLM_PROVIDER,
+                        model: resolvedModel || DEFAULT_LLM_MODEL,
+                        temperature: resolvedTemp,
+                      },
+                    },
+                  };
+                }
+                if (n.type === LANGGRAPH_CANVAS_NODE_STEP) {
+                  return {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      llmConfig: {
+                        ...(n.data.llmConfig || {}),
+                        enabled: true,
+                        provider:
+                          resolvedProvider ||
+                          n.data.llmConfig?.provider ||
+                          DEFAULT_LLM_PROVIDER,
+                        model:
+                          resolvedModel ||
+                          n.data.llmConfig?.model ||
+                          DEFAULT_LLM_MODEL,
+                        temperature:
+                          resolvedTemp ?? n.data.llmConfig?.temperature,
+                      },
+                      modelConfig: {
+                        provider: resolvedProvider || DEFAULT_LLM_PROVIDER,
+                        model: resolvedModel || DEFAULT_LLM_MODEL,
+                        temperature: resolvedTemp,
+                      },
+                    },
+                  };
+                }
+              }
+              return n;
+            }),
+          );
+        }
+      }
     },
-    [setEdges],
+    [nodes, setEdges, setNodes],
   );
 
   const handleToggleToolForAgent = useCallback(

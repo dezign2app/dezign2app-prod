@@ -11,6 +11,7 @@ import type {
   MemoryNodeData,
   OutputNodeData,
   LangGraphLLMNode,
+  LangGraphLLMRefNode,
   ToolNode,
   MiddlewareNode,
   MemoryNode,
@@ -35,7 +36,7 @@ interface InspectorTabContentProps {
   selectedOutputData?: OutputNodeData | null;
   connectedToolsCount?: number;
   connectedMiddlewareCount?: number;
-  availableLLMNodes?: LangGraphLLMNode[];
+  availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
   availableToolNodes?: ToolNode[];
   availableMiddlewareNodes?: MiddlewareNode[];
   availableMemoryNodes?: MemoryNode[];

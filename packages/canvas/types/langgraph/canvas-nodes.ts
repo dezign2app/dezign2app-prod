@@ -6,6 +6,7 @@ import {
   LANGGRAPH_CANVAS_NODE_PORT,
   LANGGRAPH_CANVAS_NODE_STATE_GLOBAL,
   LANGGRAPH_CANVAS_NODE_LLM,
+  LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
   LANGGRAPH_CANVAS_NODE_NODE,
@@ -15,6 +16,7 @@ import {
 } from "../../constants";
 import type {
   LangGraphLLMNodeData,
+  LangGraphLLMRefNodeData,
   StepNodeData,
   StartNodeData,
   EndNodeData,
@@ -39,6 +41,12 @@ export type LangGraphLLMNode = Node<
 > &
   BaseCanvasNodeProps;
 export type CustomLLMNode = LangGraphLLMNode;
+
+export type LangGraphLLMRefNode = Node<
+  LangGraphLLMRefNodeData,
+  typeof LANGGRAPH_CANVAS_NODE_LLM_REF
+> &
+  BaseCanvasNodeProps;
 
 export type StepNode = Node<StepNodeData, typeof LANGGRAPH_CANVAS_NODE_STEP> &
   BaseCanvasNodeProps;
@@ -101,6 +109,7 @@ export type LangGraphCanvasNodeUnion =
   | PortNode
   | StateGlobalNode
   | LangGraphLLMNode
+  | LangGraphLLMRefNode
   | ToolNode
   | MiddlewareNode
   | CanvasNode
@@ -117,6 +126,7 @@ export function getStepData(node: LangGraphCanvasNode): StepNodeData | null {
 export type LangGraphCanvasNodeAddType =
   | LangGraphStepConfig["type"]
   | typeof LANGGRAPH_CANVAS_NODE_LLM
+  | typeof LANGGRAPH_CANVAS_NODE_LLM_REF
   | typeof LANGGRAPH_CANVAS_NODE_TOOL
   | typeof LANGGRAPH_CANVAS_NODE_MIDDLEWARE
   | typeof LANGGRAPH_CANVAS_NODE_NODE

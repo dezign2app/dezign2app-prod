@@ -1,7 +1,7 @@
-import React from "react";
 import type {
   AgentNodeData,
   LangGraphLLMNode,
+  LangGraphLLMRefNode,
   ToolNode,
   MiddlewareNode,
   MemoryNode,
@@ -23,7 +23,7 @@ interface AgentNodeInspectorProps {
   selectedAgentData: AgentNodeData;
   onDeleteAgent: () => void;
   onUpdateAgent: (changes: Partial<AgentNodeData>) => void;
-  availableLLMNodes?: LangGraphLLMNode[];
+  availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
   availableToolNodes?: ToolNode[];
   availableMiddlewareNodes?: MiddlewareNode[];
   availableMemoryNodes?: MemoryNode[];

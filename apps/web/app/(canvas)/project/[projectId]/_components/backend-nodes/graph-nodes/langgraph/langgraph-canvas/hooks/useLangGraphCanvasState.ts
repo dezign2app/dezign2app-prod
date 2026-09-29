@@ -283,7 +283,7 @@ export function useLangGraphCanvasState({
     handleToggleToolForAgent,
     handleToggleMiddlewareForAgent,
     handleToggleMemoryForAgent,
-  } = useAgentResourceConnections({ nodes, setEdges });
+  } = useAgentResourceConnections({ nodes, setEdges, setNodes });
 
   // ── Persistence & Auto-Save ──
   const { saveStatus, handleSave } = useCanvasPersistence({

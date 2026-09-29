@@ -172,6 +172,13 @@ export interface LangGraphLLMNodeData extends Record<string, unknown> {
 
 export type CustomLLMNodeData = LangGraphLLMNodeData;
 
+export interface LangGraphLLMRefNodeData extends Record<string, unknown> {
+  label: string;
+  refId: string;
+  llmRef?: string;
+  onDeleteLLMRef?: () => void;
+}
+
 export interface ToolNodeData extends Record<string, unknown> {
   label: string;
   toolId: string;
@@ -224,6 +231,12 @@ export interface StepNodeData extends Record<string, unknown> {
   label: string;
   stepId: string;
   stepType: LangGraphStepConfig["type"];
+  llmConfig?: {
+    enabled?: boolean;
+    provider?: string;
+    model?: string;
+    temperature?: number;
+  };
   modelConfig?: LangGraphStepConfig["modelConfig"];
   humanGateConfig?: LangGraphStepConfig["humanGateConfig"];
   customCode?: LangGraphStepConfig["customCode"];
