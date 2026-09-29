@@ -60,7 +60,11 @@ export default function LangGraphStudioPage({
 
   return (
     <ReactFlowProvider>
-      <LangGraphStudioView node={node} onClose={handleClose} />
+      <LangGraphStudioView
+        node={node}
+        onClose={handleClose}
+        projectId={projectId}
+      />
     </ReactFlowProvider>
   );
 }

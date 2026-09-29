@@ -7,7 +7,6 @@ import { Id } from "@workspace/backend/_generated/dataModel";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { useTerminalWorkspace } from "./terminal/hooks/useTerminalWorkspace";
-import { killAllTerminalJobs } from "./terminal/hooks/useDynamicTerminalSessions";
 import { ProjectFolderModal } from "./ProjectFolderModal";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -83,14 +82,12 @@ export function ProjectCanvasLayout({
     }
   }, [projectId, outputDir, project?.name, isLangGraph, setProjectFolderModalOpen]);
 
-  // When in LangGraph Studio, kill all active terminal jobs and ensure drawers are closed
+  // When in LangGraph Studio, ensure palette drawer is closed
   useEffect(() => {
     if (isLangGraph) {
-      killAllTerminalJobs(projectId, outputDir);
-      setTerminalOpen(false);
       setPaletteOpen(false);
     }
-  }, [isLangGraph, projectId, outputDir, setTerminalOpen, setPaletteOpen]);
+  }, [isLangGraph, setPaletteOpen]);
 
   return (
     <ReactFlowProvider>

@@ -7,6 +7,7 @@ import {
   Check,
   Loader2,
   Code2,
+  Terminal,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 
@@ -20,6 +21,8 @@ interface LangGraphCanvasHeaderProps {
   onAutoLayout?: (direction?: "LR" | "TB") => void;
   onCompile?: () => void;
   saveStatus?: "saved" | "saving" | "idle";
+  terminalOpen?: boolean;
+  onToggleTerminal?: () => void;
 }
 
 export function LangGraphCanvasHeader({
@@ -30,6 +33,8 @@ export function LangGraphCanvasHeader({
   onAutoLayout,
   onCompile,
   saveStatus = "idle",
+  terminalOpen = false,
+  onToggleTerminal,
 }: LangGraphCanvasHeaderProps) {
   return (
     <div className="flex items-center justify-between px-6 py-3 bg-card border-b border-border shrink-0">
@@ -79,6 +84,22 @@ export function LangGraphCanvasHeader({
       </div>
 
       <div className="flex items-center gap-3">
+        {onToggleTerminal && (
+          <Button
+            variant={terminalOpen ? "secondary" : "outline"}
+            size="sm"
+            className={`h-8 font-semibold gap-1.5 px-3 border-border transition-all ${
+              terminalOpen
+                ? "bg-secondary text-foreground border-primary/40 shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+            }`}
+            onClick={onToggleTerminal}
+            title={terminalOpen ? "Hide Terminal" : "Open Terminal"}
+          >
+            <Terminal className="w-4 h-4 text-sky-400" />
+            <span>Terminal</span>
+          </Button>
+        )}
         {onCompile && (
           <Button
             variant="outline"
