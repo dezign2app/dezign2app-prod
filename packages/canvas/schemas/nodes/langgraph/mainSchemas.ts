@@ -122,6 +122,39 @@ export const langgraphDataSchema = baseNodeDataSchema
       )
       .optional()
       .default([]),
+    customToolRefNodes: z
+      .array(
+        z.object({
+          id: z.string(),
+          label: z.string().optional(),
+          toolRef: z.string().optional(),
+          position: z.object({ x: z.number(), y: z.number() }).optional(),
+        }),
+      )
+      .optional()
+      .default([]),
+    customMiddlewareRefNodes: z
+      .array(
+        z.object({
+          id: z.string(),
+          label: z.string().optional(),
+          middlewareRef: z.string().optional(),
+          position: z.object({ x: z.number(), y: z.number() }).optional(),
+        }),
+      )
+      .optional()
+      .default([]),
+    customMemoryRefNodes: z
+      .array(
+        z.object({
+          id: z.string(),
+          label: z.string().optional(),
+          memoryRef: z.string().optional(),
+          position: z.object({ x: z.number(), y: z.number() }).optional(),
+        }),
+      )
+      .optional()
+      .default([]),
     startNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),
     stateNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),
     endNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),

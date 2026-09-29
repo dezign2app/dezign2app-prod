@@ -13,8 +13,11 @@ import type {
   LangGraphLLMNode,
   LangGraphLLMRefNode,
   ToolNode,
+  LangGraphToolRefNode,
   MiddlewareNode,
+  LangGraphMiddlewareRefNode,
   MemoryNode,
+  LangGraphMemoryRefNode,
   OutputNode,
 } from "@workspace/canvas";
 import { LLMNodeInspector } from "./LLMNodeInspector";
@@ -37,9 +40,9 @@ interface InspectorTabContentProps {
   connectedToolsCount?: number;
   connectedMiddlewareCount?: number;
   availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
-  availableToolNodes?: ToolNode[];
-  availableMiddlewareNodes?: MiddlewareNode[];
-  availableMemoryNodes?: MemoryNode[];
+  availableToolNodes?: (ToolNode | LangGraphToolRefNode)[];
+  availableMiddlewareNodes?: (MiddlewareNode | LangGraphMiddlewareRefNode)[];
+  availableMemoryNodes?: (MemoryNode | LangGraphMemoryRefNode)[];
   connectedRoutes?: ConnectedRouteInfo[];
   connectedLLMId?: string | null;
   connectedToolIds?: string[];

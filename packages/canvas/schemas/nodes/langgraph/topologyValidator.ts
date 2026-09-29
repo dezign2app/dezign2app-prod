@@ -14,6 +14,9 @@ export interface LangGraphRefinementData {
   outputPorts: OutputPort[];
   customLlmNodes?: Array<{ id: string }>;
   customLlmRefNodes?: Array<{ id: string }>;
+  customToolRefNodes?: Array<{ id: string }>;
+  customMiddlewareRefNodes?: Array<{ id: string }>;
+  customMemoryRefNodes?: Array<{ id: string }>;
   outputChannels?: OutputChannel[];
   graphEdges: GraphEdge[];
 }
@@ -23,26 +26,29 @@ export function validateLangGraphTopology(
   ctx: z.RefinementCtx,
 ): void {
   const stepIds = new Set(data.graphSteps.map((s) => s.id));
-  const toolIds = new Set(
-    data.toolDefinitions
+  const toolIds = new Set([
+    ...data.toolDefinitions
       .map((t) => t.toolId || t.id)
       .filter((id): id is string => Boolean(id)),
-  );
-  const middlewareIds = new Set(
-    data.middlewareDefinitions
+    ...(data.customToolRefNodes?.map((t) => t.id) || []),
+  ]);
+  const middlewareIds = new Set([
+    ...data.middlewareDefinitions
       .map((m) => m.middlewareId || m.id)
       .filter((id): id is string => Boolean(id)),
-  );
+    ...(data.customMiddlewareRefNodes?.map((m) => m.id) || []),
+  ]);
   const agentIds = new Set(
     data.agentDefinitions
       .map((a) => a.agentId || a.id)
       .filter((id): id is string => Boolean(id)),
   );
-  const memoryIds = new Set(
-    data.memoryDefinitions
+  const memoryIds = new Set([
+    ...data.memoryDefinitions
       .map((m) => m.memoryId || m.id)
       .filter((id): id is string => Boolean(id)),
-  );
+    ...(data.customMemoryRefNodes?.map((m) => m.id) || []),
+  ]);
   const portIds = new Set(data.outputPorts.map((p) => p.id));
   const customLlmIds = new Set([
     ...(data.customLlmNodes?.map((l) => l.id) || []),

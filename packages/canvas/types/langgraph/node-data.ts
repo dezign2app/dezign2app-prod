@@ -179,6 +179,27 @@ export interface LangGraphLLMRefNodeData extends Record<string, unknown> {
   onDeleteLLMRef?: () => void;
 }
 
+export interface LangGraphToolRefNodeData extends Record<string, unknown> {
+  label: string;
+  refId: string;
+  toolRef?: string;
+  onDeleteToolRef?: () => void;
+}
+
+export interface LangGraphMiddlewareRefNodeData extends Record<string, unknown> {
+  label: string;
+  refId: string;
+  middlewareRef?: string;
+  onDeleteMiddlewareRef?: () => void;
+}
+
+export interface LangGraphMemoryRefNodeData extends Record<string, unknown> {
+  label: string;
+  refId: string;
+  memoryRef?: string;
+  onDeleteMemoryRef?: () => void;
+}
+
 export interface ToolNodeData extends Record<string, unknown> {
   label: string;
   toolId: string;

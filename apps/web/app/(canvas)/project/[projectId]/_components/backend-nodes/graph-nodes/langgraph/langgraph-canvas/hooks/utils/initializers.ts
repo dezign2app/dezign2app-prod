@@ -13,6 +13,9 @@ import type {
   OutputNode,
   LangGraphLLMNode,
   LangGraphLLMRefNode,
+  LangGraphToolRefNode,
+  LangGraphMiddlewareRefNode,
+  LangGraphMemoryRefNode,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
@@ -22,9 +25,12 @@ import {
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_TOOL,
+  LANGGRAPH_CANVAS_NODE_TOOL_REF,
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+  LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_MEMORY,
+  LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
@@ -115,6 +121,51 @@ export function buildInitialNodes(
       },
     };
     result.push(customRefNode);
+  });
+
+  const savedCustomToolRefs = data.customToolRefNodes || [];
+  savedCustomToolRefs.forEach((tRef) => {
+    const customToolRefNode: LangGraphToolRefNode = {
+      id: tRef.id,
+      type: LANGGRAPH_CANVAS_NODE_TOOL_REF,
+      position: tRef.position || { x: 340, y: 160 },
+      data: {
+        label: tRef.label || "Tool Ref",
+        refId: tRef.id,
+        toolRef: tRef.toolRef,
+      },
+    };
+    result.push(customToolRefNode);
+  });
+
+  const savedCustomMiddlewareRefs = data.customMiddlewareRefNodes || [];
+  savedCustomMiddlewareRefs.forEach((mRef) => {
+    const customMiddlewareRefNode: LangGraphMiddlewareRefNode = {
+      id: mRef.id,
+      type: LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
+      position: mRef.position || { x: 340, y: 220 },
+      data: {
+        label: mRef.label || "Middleware Ref",
+        refId: mRef.id,
+        middlewareRef: mRef.middlewareRef,
+      },
+    };
+    result.push(customMiddlewareRefNode);
+  });
+
+  const savedCustomMemoryRefs = data.customMemoryRefNodes || [];
+  savedCustomMemoryRefs.forEach((memRef) => {
+    const customMemoryRefNode: LangGraphMemoryRefNode = {
+      id: memRef.id,
+      type: LANGGRAPH_CANVAS_NODE_MEMORY_REF,
+      position: memRef.position || { x: 340, y: 280 },
+      data: {
+        label: memRef.label || "Memory Ref",
+        refId: memRef.id,
+        memoryRef: memRef.memoryRef,
+      },
+    };
+    result.push(customMemoryRefNode);
   });
 
   const savedTools = data.toolDefinitions || [];
@@ -341,16 +392,22 @@ export function buildInitialEdges(
         const isToolSource =
           e.sourceHandle === HANDLE_TOOL_OUT ||
           e.source.startsWith("tool_") ||
-          (data.toolDefinitions || []).some((t) => t.id === e.source);
+          e.source.startsWith("tool_ref_") ||
+          (data.toolDefinitions || []).some((t) => t.id === e.source) ||
+          ((data as any).customToolRefNodes || []).some((c: any) => c.id === e.source);
         const isMiddlewareSource =
           e.sourceHandle === HANDLE_MIDDLEWARE_OUT ||
           e.source.startsWith("mw_") ||
-          (data.middlewareDefinitions || []).some((m) => m.id === e.source);
+          e.source.startsWith("mw_ref_") ||
+          (data.middlewareDefinitions || []).some((m) => m.id === e.source) ||
+          ((data as any).customMiddlewareRefNodes || []).some((c: any) => c.id === e.source);
         const isMemorySource =
           e.sourceHandle === HANDLE_MEMORY_OUT ||
           e.source.startsWith("mem_") ||
+          e.source.startsWith("mem_ref_") ||
           e.source.startsWith("db_") ||
-          (data.memoryDefinitions || []).some((m) => m.id === e.source);
+          (data.memoryDefinitions || []).some((m) => m.id === e.source) ||
+          ((data as any).customMemoryRefNodes || []).some((c: any) => c.id === e.source);
 
         const sourceStep = steps.find((s) => s.id === e.source);
         const routerBranch = sourceStep?.routerConfig?.branches?.find(

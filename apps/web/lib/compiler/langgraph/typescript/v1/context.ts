@@ -14,6 +14,10 @@ import {
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
   LANGGRAPH_CANVAS_NODE_MEMORY,
   LANGGRAPH_CANVAS_NODE_STEP,
+  LANGGRAPH_CANVAS_NODE_LLM_REF,
+  LANGGRAPH_CANVAS_NODE_TOOL_REF,
+  LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
+  LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   HANDLE_LLM_IN,
   HANDLE_TOOL_IN,
   HANDLE_MIDDLEWARE_IN,
@@ -58,18 +62,49 @@ export function buildContext(input: CompileLangGraphInput): CompileContext {
   const agentMiddlewareMap = new Map<string, string[]>();
   const agentMemoryMap = new Map<string, string[]>();
 
+  const resolveSourceId = (srcId: string): string => {
+    const srcNode = nodes.find((n) => n.id === srcId);
+    if (!srcNode) return srcId;
+    if (
+      srcNode.type === LANGGRAPH_CANVAS_NODE_LLM_REF &&
+      (srcNode.data as Record<string, unknown>)?.llmRef
+    ) {
+      return (srcNode.data as Record<string, unknown>).llmRef as string;
+    }
+    if (
+      srcNode.type === LANGGRAPH_CANVAS_NODE_TOOL_REF &&
+      (srcNode.data as Record<string, unknown>)?.toolRef
+    ) {
+      return (srcNode.data as Record<string, unknown>).toolRef as string;
+    }
+    if (
+      srcNode.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF &&
+      (srcNode.data as Record<string, unknown>)?.middlewareRef
+    ) {
+      return (srcNode.data as Record<string, unknown>).middlewareRef as string;
+    }
+    if (
+      srcNode.type === LANGGRAPH_CANVAS_NODE_MEMORY_REF &&
+      (srcNode.data as Record<string, unknown>)?.memoryRef
+    ) {
+      return (srcNode.data as Record<string, unknown>).memoryRef as string;
+    }
+    return srcId;
+  };
+
   for (const edge of edges) {
+    const resolvedSource = resolveSourceId(edge.source);
     if (edge.targetHandle === HANDLE_LLM_IN) {
-      agentLLMMap.set(edge.target, edge.source);
+      agentLLMMap.set(edge.target, resolvedSource);
     } else if (edge.targetHandle === HANDLE_TOOL_IN) {
       const existing = agentToolsMap.get(edge.target) || [];
-      agentToolsMap.set(edge.target, [...existing, edge.source]);
+      agentToolsMap.set(edge.target, [...existing, resolvedSource]);
     } else if (edge.targetHandle === HANDLE_MIDDLEWARE_IN) {
       const existing = agentMiddlewareMap.get(edge.target) || [];
-      agentMiddlewareMap.set(edge.target, [...existing, edge.source]);
+      agentMiddlewareMap.set(edge.target, [...existing, resolvedSource]);
     } else if (edge.targetHandle === HANDLE_MEMORY_IN) {
       const existing = agentMemoryMap.get(edge.target) || [];
-      agentMemoryMap.set(edge.target, [...existing, edge.source]);
+      agentMemoryMap.set(edge.target, [...existing, resolvedSource]);
     }
   }
 
