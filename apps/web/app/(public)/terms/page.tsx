@@ -111,15 +111,13 @@ export default function TermsPage() {
                 the end of your current billing period.
               </li>
               <li>
-                <strong className="text-gray-900">14-Day Refund Window:</strong>{" "}
-                If you are unsatisfied with your new paid subscription, you may
-                request a full refund within 14 days of your initial purchase
-                date by contacting our support team.
+                <strong className="text-gray-900">Refund:</strong>{" "}
+                Non refundable due to the nature of the service.
               </li>
               <li>
                 <strong className="text-gray-900">Support Response SLA:</strong>{" "}
-                Support inquiries regarding billing, refunds, or account access
-                will be addressed within 3 business days.
+                Support inquiries regarding billing, or account access will be
+                addressed within 3 business days.
               </li>
             </ul>
           </section>
