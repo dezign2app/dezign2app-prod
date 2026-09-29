@@ -40,11 +40,13 @@ export function useAgentResourceConnections({
   setNodes,
 }: UseAgentResourceConnectionsProps) {
   const availableLLMNodes = useMemo(() => {
-    return nodes.filter(
-      (n): n is LangGraphLLMNode | LangGraphLLMRefNode =>
-        n.type === LANGGRAPH_CANVAS_NODE_LLM ||
-        n.type === LANGGRAPH_CANVAS_NODE_LLM_REF,
+    const refs = nodes.filter(
+      (n): n is LangGraphLLMRefNode => n.type === LANGGRAPH_CANVAS_NODE_LLM_REF,
     );
+    const masters = nodes.filter(
+      (n): n is LangGraphLLMNode => n.type === LANGGRAPH_CANVAS_NODE_LLM,
+    );
+    return [...refs, ...masters];
   }, [nodes]);
 
   const availableToolNodes = useMemo(() => {

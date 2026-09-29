@@ -179,13 +179,23 @@ export function useLangGraphCanvasNode({
       return;
     }
 
-    // Check if there is an available master LLM or LLM Ref node on canvas to auto-connect
+    // Check if there is an available LLM Ref or master LLM node on canvas to auto-connect (prioritizing LLM Ref nodes)
     const allNodes = getNodes();
-    const availableLLM = allNodes.find(
-      (n): n is LangGraphLLMNode | LangGraphLLMRefNode =>
-        n.type === LANGGRAPH_CANVAS_NODE_LLM ||
-        n.type === LANGGRAPH_CANVAS_NODE_LLM_REF,
+    const llmRefNodes = allNodes.filter(
+      (n): n is LangGraphLLMRefNode => n.type === LANGGRAPH_CANVAS_NODE_LLM_REF,
     );
+    const unboundLLMRef = llmRefNodes.find(
+      (ref) =>
+        !currentEdges.some(
+          (e) => e.source === ref.id && e.sourceHandle === HANDLE_LLM_OUT,
+        ),
+    );
+    const availableLLM =
+      unboundLLMRef ||
+      llmRefNodes[0] ||
+      allNodes.find(
+        (n): n is LangGraphLLMNode => n.type === LANGGRAPH_CANVAS_NODE_LLM,
+      );
 
     if (availableLLM) {
       const newEdge: Edge = {
