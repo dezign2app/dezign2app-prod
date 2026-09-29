@@ -30,6 +30,7 @@ import type {
   CompileContext,
   LLMMeta,
   NodeMeta,
+  ToolMeta,
 } from "./types";
 import { toIdentifier, getProviderPackage } from "./utils";
 
@@ -39,9 +40,17 @@ export function buildContext(input: CompileLangGraphInput): CompileContext {
   const llmNodes = nodes.filter(
     (n) => n.type === LANGGRAPH_CANVAS_NODE_LLM,
   ) as Array<{ id: string; data: LangGraphLLMNodeData }>;
-  const toolNodes = nodes.filter(
-    (n) => n.type === LANGGRAPH_CANVAS_NODE_TOOL,
-  ) as Array<{ id: string; data: ToolNodeData }>;
+  const seenToolIds = new Set<string>();
+  const toolNodes = (
+    nodes.filter((n) => n.type === LANGGRAPH_CANVAS_NODE_TOOL) as Array<{
+      id: string;
+      data: ToolNodeData;
+    }>
+  ).filter((n) => {
+    if (seenToolIds.has(n.id)) return false;
+    seenToolIds.add(n.id);
+    return true;
+  });
   const agentNodes = nodes.filter(
     (n) =>
       n.type === LANGGRAPH_CANVAS_NODE_NODE ||
@@ -214,6 +223,30 @@ export function buildNodeMetaMap(ctx: CompileContext): Map<string, NodeMeta> {
         : base;
 
     map.set(stepNode.id, { fileName, exportName });
+  }
+
+  return map;
+}
+
+export function buildToolMetaMap(ctx: CompileContext): Map<string, ToolMeta> {
+  const map = new Map<string, ToolMeta>();
+  const used = new Set<string>();
+
+  for (const toolNode of ctx.toolNodes) {
+    if (map.has(toolNode.id)) continue;
+    const d = toolNode.data;
+    const raw = d.name || `tool_${toolNode.id}`;
+    let base = toIdentifier(raw);
+    if (!base) base = `tool_${toolNode.id}`;
+
+    let name = base;
+    let counter = 2;
+    while (used.has(name)) {
+      name = `${base}${counter}`;
+      counter++;
+    }
+    used.add(name);
+    map.set(toolNode.id, { varName: name });
   }
 
   return map;

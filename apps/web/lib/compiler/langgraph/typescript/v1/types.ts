@@ -54,6 +54,13 @@ export interface CompileLangGraphInput {
   routeEndpoints?: RouteEndpoint[];
   /** Test scenarios configured for this graph's StartNode. */
   testCases?: SimulationTestCase[];
+  /**
+   * Controls the output structure of the compiled files.
+   * - "app"     (default) — standalone runnable npm project (e.g. apps/chat)
+   * - "package" — reusable workspace package placed under packages/<name>
+   *               with proper "exports" field so other services can import it.
+   */
+  outputMode?: "app" | "package";
 }
 
 export interface LLMMeta {
@@ -64,6 +71,10 @@ export interface LLMMeta {
 export interface NodeMeta {
   fileName: string;
   exportName: string;
+}
+
+export interface ToolMeta {
+  varName: string;
 }
 
 export interface CompileContext {
