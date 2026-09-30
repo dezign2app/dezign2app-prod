@@ -9,7 +9,6 @@ import {
   NodeResourceBadges,
   LlmConfigPanel,
   StateUpdatesPanel,
-  MemoryConfigPanel,
   ResponseFormatPanel,
   EventStreamPanel,
 } from "./langgraph-canvas-node";
@@ -28,20 +27,15 @@ export const LangGraphCanvasNode = (props: NodeProps<CanvasNode>) => {
     boundLLMs,
     boundTools,
     boundMiddlewares,
-    boundMemories,
     llmConfig,
-    stateUpdatesConfig,
     streamConfig,
     responseFormat,
-    memoryConfig,
     stateUpdates,
     availableFields,
     updateAgentData,
     handleToggleLLMConfig,
-    handleToggleStateUpdates,
     handleToggleStreaming,
     handleToggleResponseFormat,
-    handleToggleMemory,
     handleToggleEvent,
   } = useLangGraphCanvasNode(props);
 
@@ -73,9 +67,7 @@ export const LangGraphCanvasNode = (props: NodeProps<CanvasNode>) => {
           boundLLMs={boundLLMs}
           boundTools={boundTools}
           boundMiddlewares={boundMiddlewares}
-          boundMemories={boundMemories}
           llmConfig={llmConfig}
-          memoryConfig={memoryConfig}
         />
 
         {/* Expand / Collapse Action Bar */}
@@ -113,17 +105,9 @@ export const LangGraphCanvasNode = (props: NodeProps<CanvasNode>) => {
             />
 
             <StateUpdatesPanel
-              stateUpdatesConfig={stateUpdatesConfig}
               stateUpdates={stateUpdates}
               availableFields={availableFields}
               availableStateChannels={data.availableStateChannels}
-              handleToggleStateUpdates={handleToggleStateUpdates}
-            />
-
-            <MemoryConfigPanel
-              memoryConfig={memoryConfig}
-              boundMemories={boundMemories}
-              handleToggleMemory={handleToggleMemory}
             />
 
             <ResponseFormatPanel

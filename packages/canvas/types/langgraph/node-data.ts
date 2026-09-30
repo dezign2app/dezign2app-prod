@@ -136,20 +136,20 @@ export interface UseLangGraphCanvasNodeReturn {
   boundLLMs: Edge[];
   boundTools: Edge[];
   boundMiddlewares: Edge[];
-  boundMemories: Edge[];
+  boundMemories?: Edge[];
   llmConfig: LLMConfigState;
-  stateUpdatesConfig: StateUpdatesConfigState;
+  stateUpdatesConfig?: StateUpdatesConfigState;
   streamConfig: LangGraphAgentStreamConfig;
   responseFormat: LangGraphAgentResponseFormatConfig;
-  memoryConfig: LangGraphAgentMemoryConfig;
+  memoryConfig?: LangGraphAgentMemoryConfig;
   stateUpdates: Array<{ channelKey: string; mode?: string; value?: string }>;
   availableFields: string[];
   updateAgentData: (changes: Partial<CanvasNodeData>) => void;
   handleToggleLLMConfig: (enabled: boolean) => void;
-  handleToggleStateUpdates: (enabled: boolean) => void;
+  handleToggleStateUpdates?: (enabled: boolean) => void;
   handleToggleStreaming: (enabled: boolean) => void;
   handleToggleResponseFormat: (enabled: boolean) => void;
-  handleToggleMemory: (enabled: boolean) => void;
+  handleToggleMemory?: (enabled: boolean) => void;
   handleToggleEvent: (eventId: string) => void;
 }
 

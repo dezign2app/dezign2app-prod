@@ -23,46 +23,35 @@ import type {
   LangGraphToolRefNode,
   MiddlewareNode,
   LangGraphMiddlewareRefNode,
-  MemoryNode,
-  LangGraphMemoryRefNode,
 } from "../../../types";
 
 interface AgentAttachedComponentsSectionProps {
   availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
   availableToolNodes?: (ToolNode | LangGraphToolRefNode)[];
   availableMiddlewareNodes?: (MiddlewareNode | LangGraphMiddlewareRefNode)[];
-  availableMemoryNodes?: (MemoryNode | LangGraphMemoryRefNode)[];
   connectedLLMId?: string | null;
   connectedToolIds?: string[];
   connectedMiddlewareIds?: string[];
-  connectedMemoryIds?: string[];
   onSelectLLM?: (llmId: string | null) => void;
   onToggleTool?: (toolId: string, connect: boolean) => void;
   onToggleMiddleware?: (mwId: string, connect: boolean) => void;
-  onToggleMemory?: (memId: string, connect: boolean) => void;
 }
 
 export function AgentAttachedComponentsSection({
   availableLLMNodes = [],
   availableToolNodes = [],
   availableMiddlewareNodes = [],
-  availableMemoryNodes = [],
   connectedLLMId = null,
   connectedToolIds = [],
   connectedMiddlewareIds = [],
-  connectedMemoryIds = [],
   onSelectLLM,
   onToggleTool,
   onToggleMiddleware,
-  onToggleMemory,
 }: AgentAttachedComponentsSectionProps) {
   const [isLlmOpen, setIsLlmOpen] = useState(Boolean(connectedLLMId));
   const [isToolsOpen, setIsToolsOpen] = useState(connectedToolIds.length > 0);
   const [isMiddlewareOpen, setIsMiddlewareOpen] = useState(
     connectedMiddlewareIds.length > 0,
-  );
-  const [isMemoryOpen, setIsMemoryOpen] = useState(
-    connectedMemoryIds.length > 0,
   );
 
   useEffect(() => {
@@ -76,10 +65,6 @@ export function AgentAttachedComponentsSection({
   useEffect(() => {
     setIsMiddlewareOpen(connectedMiddlewareIds.length > 0);
   }, [connectedMiddlewareIds.length]);
-
-  useEffect(() => {
-    setIsMemoryOpen(connectedMemoryIds.length > 0);
-  }, [connectedMemoryIds.length]);
 
   return (
     <div className="flex flex-col gap-3 p-3 bg-secondary/10 rounded-xl border border-border/50">
@@ -288,79 +273,12 @@ export function AgentAttachedComponentsSection({
           ))}
       </div>
 
-      {/* Memory / DB Nodes Multi-Selection */}
-      <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-secondary/20 border border-border/50">
-        <div
-          className="flex items-center justify-between cursor-pointer select-none"
-          onClick={() => setIsMemoryOpen((prev) => !prev)}
-        >
-          <div className="flex items-center gap-2">
-            <Database className="w-4 h-4 text-amber-500" />
-            <span className="text-xs font-semibold text-foreground">
-              Attach Memory / DB Nodes
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-mono text-muted-foreground font-bold">
-              {connectedMemoryIds.length} connected
-            </span>
-            {isMemoryOpen ? (
-              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-            )}
-          </div>
-        </div>
-        {isMemoryOpen &&
-          (availableMemoryNodes.length > 0 ? (
-            <div className="flex flex-col gap-1.5 mt-1 max-h-[160px] overflow-y-auto pr-1">
-              {availableMemoryNodes.map((mem) => {
-                const isConnected = connectedMemoryIds.includes(mem.id);
-                const isRef = mem.type === "langgraph_memory_ref";
-                const memSubtitle = isRef
-                  ? "referenced memory / db"
-                  : `checkpointer: ${(mem as MemoryNode).data.checkpointer || "memory"} (${(mem as MemoryNode).data.threadIdKey || "thread_id"})`;
-                return (
-                  <div
-                    key={mem.id}
-                    className="flex items-center justify-between p-1.5 rounded bg-background/60 border border-border/40 text-xs"
-                  >
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-mono font-medium text-foreground truncate flex items-center gap-1">
-                        {isRef && (
-                          <span className="text-[8px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-400 font-bold uppercase">
-                            REF
-                          </span>
-                        )}
-                        {(mem.data as { name?: string; label?: string }).name || mem.data.label}
-                      </span>
-                      <span className="text-[9px] text-muted-foreground font-mono">
-                        {memSubtitle}
-                      </span>
-                    </div>
-                    <Switch
-                      checked={isConnected}
-                      onCheckedChange={(c) => onToggleMemory?.(mem.id, c)}
-                      className="scale-75 origin-right"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-[10px] text-muted-foreground italic">
-              No Memory Nodes on canvas. Add a Memory node from toolbar to
-              connect.
-            </p>
-          ))}
-      </div>
-
       <div className="flex gap-2 p-2 rounded bg-secondary/20 border border-border/50 items-start text-[10px] text-muted-foreground leading-tight">
         <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
         <p>
           Selecting nodes or toggling switches automatically draws and updates
-          canvas edges to <code>llm_in</code>, <code>tool_in</code>,{" "}
-          <code>middleware_in</code>, and <code>memory_in</code>.
+          canvas edges to <code>llm_in</code>, <code>tool_in</code>, and{" "}
+          <code>middleware_in</code>.
         </p>
       </div>
     </div>
