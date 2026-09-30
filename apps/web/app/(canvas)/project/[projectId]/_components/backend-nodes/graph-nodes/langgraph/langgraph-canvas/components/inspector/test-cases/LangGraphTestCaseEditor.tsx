@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Play, Trash, Route, GitBranch } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../../../../common";
 import { Label } from "@workspace/ui/components/label";
 import {
   Select,
@@ -230,7 +230,7 @@ export const LangGraphTestCaseEditor = ({
         <Label className="text-xs font-mono text-muted-foreground">
           Test Case Name
         </Label>
-        <Input
+        <LocalInput
           className="h-7 text-xs bg-background font-medium"
           value={name}
           placeholder="Test Case Name"
@@ -360,7 +360,7 @@ export const LangGraphTestCaseEditor = ({
                     <Label className="text-xs font-mono text-muted-foreground w-24">
                       Status
                     </Label>
-                    <Input
+                    <LocalInput
                       type="number"
                       placeholder="200"
                       className="h-7 text-xs font-mono bg-background w-24"

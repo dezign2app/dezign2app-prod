@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import type { StateGlobalNode, LangGraphStateChannel } from "@workspace/canvas";
 import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../../common";
 import { Badge } from "@workspace/ui/components/badge";
 import {
   Select,
@@ -148,7 +148,7 @@ export const LangGraphCanvasStateNode = ({
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="flex items-center gap-1.5">
-                      <Input
+                      <LocalInput
                         className="h-7 text-xs font-mono font-semibold bg-background flex-1"
                         value={ch.key}
                         placeholder="field_name"

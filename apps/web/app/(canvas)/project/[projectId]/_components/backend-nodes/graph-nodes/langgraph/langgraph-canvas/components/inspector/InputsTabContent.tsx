@@ -1,7 +1,7 @@
 import React from "react";
 import { Plus, Trash, Sparkles, Globe, Sliders, ArrowRight } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../../../common";
 import { Label } from "@workspace/ui/components/label";
 import {
   Select,
@@ -56,7 +56,7 @@ function ChannelEditor({
     <div className="flex flex-col gap-2.5 p-3.5 rounded-xl border bg-card/50 shadow-sm text-xs">
       {/* Key + type + delete */}
       <div className="flex items-center gap-2">
-        <Input
+        <LocalInput
           className="h-7 text-xs font-mono font-medium bg-background flex-1"
           value={input.key}
           onChange={(e) => onChange(idx, { key: e.target.value })}
@@ -87,7 +87,7 @@ function ChannelEditor({
 
       {/* Description + required */}
       <div className="flex items-center gap-2">
-        <Input
+        <LocalInput
           className="h-7 text-xs bg-background/50 flex-1"
           value={input.description || ""}
           onChange={(e) => onChange(idx, { description: e.target.value })}

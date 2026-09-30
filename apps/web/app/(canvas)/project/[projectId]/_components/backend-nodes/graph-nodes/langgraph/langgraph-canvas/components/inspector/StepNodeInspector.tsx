@@ -1,7 +1,6 @@
 import React from "react";
 import { Brain, Plus, Zap, Trash } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import {
   Select,
@@ -11,7 +10,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { Switch } from "@workspace/ui/components/switch";
-import { LocalTextarea } from "../../../../common";
+import { LocalInput, LocalTextarea } from "../../../../common";
 import type { LangGraphStateChannel } from "@/types/canvas";
 import type { StepNodeData } from "@workspace/canvas";
 import { STEP_TYPE_ROUTER, STEP_TYPE_LLM_CALL } from "../../constants";
@@ -55,7 +54,7 @@ export function StepNodeInspector({
       {/* Label */}
       <div className="flex flex-col gap-1.5">
         <Label className="text-xs font-medium">Step Label</Label>
-        <Input
+        <LocalInput
           className="h-8 text-xs bg-background/50"
           value={selectedStepData.label}
           onChange={(e) => onUpdateStep({ label: e.target.value })}
@@ -220,7 +219,7 @@ export function StepNodeInspector({
                 </Button>
               </div>
 
-              <Input
+              <LocalInput
                 className="h-7 text-[11px] bg-background font-mono"
                 placeholder="Value / expression (e.g. state.messages + input)"
                 value={su.value || ""}

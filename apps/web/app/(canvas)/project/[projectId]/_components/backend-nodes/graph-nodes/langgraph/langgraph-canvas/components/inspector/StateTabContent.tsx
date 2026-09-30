@@ -1,7 +1,7 @@
 import React from "react";
 import { Plus, Trash2, Database, X } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../../../common";
 import { Label } from "@workspace/ui/components/label";
 import {
   Select,
@@ -118,7 +118,7 @@ export function StateTabContent({
                 <Label className="text-[10px] text-muted-foreground font-mono">
                   Field Key #{idx + 1}
                 </Label>
-                <Input
+                <LocalInput
                   className="h-7 text-xs font-mono font-medium bg-background"
                   placeholder="e.g. messages, user_query"
                   autoFocus={!ch.key}

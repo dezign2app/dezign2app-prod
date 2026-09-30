@@ -1,7 +1,6 @@
 import React from "react";
 import { Trash, Globe, Key, Code, Shield } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import {
   Select,
@@ -11,7 +10,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import type { LangGraphLLMNodeData } from "@workspace/canvas";
-import { LocalTextarea } from "../../../../common";
+import { LocalInput, LocalTextarea } from "../../../../common";
 import { LLM_PROVIDER_PRESETS } from "./constants";
 
 interface LLMNodeInspectorProps {
@@ -77,7 +76,7 @@ export function LLMNodeInspector({
       {/* Label */}
       <div className="flex flex-col gap-1.5">
         <Label className="text-xs font-medium">Node Label</Label>
-        <Input
+        <LocalInput
           className="h-8 text-xs bg-background/50"
           value={selectedLLMData.label || ""}
           onChange={(e) => onUpdateLLM?.({ label: e.target.value })}
@@ -136,7 +135,7 @@ export function LLMNodeInspector({
             </SelectContent>
           </Select>
         ) : (
-          <Input
+          <LocalInput
             className="h-8 text-xs bg-background/50 font-mono"
             placeholder="e.g. gpt-4o, claude-3-5-sonnet, llama3:8b"
             value={selectedLLMData.model || ""}
@@ -179,7 +178,7 @@ export function LLMNodeInspector({
                 <SelectItem value="PUT">PUT</SelectItem>
               </SelectContent>
             </Select>
-            <Input
+            <LocalInput
               className="h-8 text-xs bg-background/50 font-mono flex-1"
               placeholder="https://api.openai.com/v1/chat/completions"
               value={
@@ -202,7 +201,7 @@ export function LLMNodeInspector({
           <Shield className="w-3.5 h-3.5 text-muted-foreground" /> Secret API
           Key (Optional)
         </Label>
-        <Input
+        <LocalInput
           type="password"
           className="h-8 text-xs bg-background/50 font-mono"
           placeholder="Bearer sk-... or secret token"

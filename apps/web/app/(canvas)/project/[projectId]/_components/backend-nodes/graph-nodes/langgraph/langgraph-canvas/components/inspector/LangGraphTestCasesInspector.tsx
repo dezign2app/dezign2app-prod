@@ -3,7 +3,7 @@ import { useParams } from "next/navigation";
 import { useMutation } from "convex/react";
 import { Plus, Play, Sparkles } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../../../common";
 import { Label } from "@workspace/ui/components/label";
 import {
   Tabs,
@@ -317,7 +317,7 @@ export function LangGraphTestCasesInspector({
                     <Label className="text-xs font-mono text-muted-foreground">
                       Test Case Name
                     </Label>
-                    <Input
+                    <LocalInput
                       value={newTcName}
                       onChange={(e) => setNewTcName(e.target.value)}
                       placeholder="Enter test case name"

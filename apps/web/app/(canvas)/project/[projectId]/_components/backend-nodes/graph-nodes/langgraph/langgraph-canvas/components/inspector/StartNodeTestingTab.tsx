@@ -21,7 +21,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../../../common";
 import { Label } from "@workspace/ui/components/label";
 import {
   Tabs,
@@ -226,17 +226,22 @@ export function StartNodeTestingTab({
     toast.success(`Cleared checkpoints for ${threadId}`);
   };
 
-  const handleExecute = async () => {
+  const handleExecute = async (overrideMsg?: string | React.SyntheticEvent) => {
     if (isRunning) return;
     setIsRunning(true);
     setCurrentStepNode(null);
+
+    const explicitMsg =
+      typeof overrideMsg === "string" ? overrideMsg : undefined;
 
     // Merge chatMessage into inputValues
     const finalInputs = { ...inputValues };
     const msgChannel = inputChannels.find(
       (c) => c.key === "message" || c.key === "messages" || c.key === "prompt"
     );
-    const effectiveMsg = chatMessage.trim() || (msgChannel ? String(inputValues[msgChannel.key] ?? "").trim() : "");
+    const effectiveMsg =
+      (explicitMsg !== undefined ? explicitMsg : chatMessage).trim() ||
+      (msgChannel ? String(inputValues[msgChannel.key] ?? "").trim() : "");
     if (effectiveMsg) {
       finalInputs["messages"] = effectiveMsg;
       if (msgChannel) {
@@ -432,7 +437,7 @@ export function StartNodeTestingTab({
               size="sm"
               className="h-7 text-xs px-3 font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm gap-1.5"
               disabled={isRunning}
-              onClick={handleExecute}
+              onClick={() => handleExecute()}
             >
               {isRunning ? (
                 <>
@@ -567,7 +572,7 @@ export function StartNodeTestingTab({
             <Label className="text-[10px] text-muted-foreground font-mono">
               {provider.toUpperCase()} API Key (Stored in browser localStorage)
             </Label>
-            <Input
+            <LocalInput
               type="password"
               placeholder={`Enter ${provider} api key...`}
               value={apiKey}
@@ -692,7 +697,7 @@ export function StartNodeTestingTab({
                           </Label>
                           <span className="text-muted-foreground text-[9px]">({messageChannel.type})</span>
                         </div>
-                        <Input
+                        <LocalInput
                           placeholder="Type message to invoke graph..."
                           value={String(inputValues[messageChannel.key] ?? chatMessage ?? "")}
                           onChange={(e) => {
@@ -703,7 +708,7 @@ export function StartNodeTestingTab({
                           onKeyDown={(e) => {
                             if (e.key === "Enter" && !e.shiftKey) {
                               e.preventDefault();
-                              handleExecute();
+                              handleExecute((e.target as HTMLInputElement).value);
                             }
                           }}
                           className="h-8 text-xs bg-background font-mono"
@@ -715,14 +720,14 @@ export function StartNodeTestingTab({
                         <Label className="text-[10px] text-muted-foreground flex items-center gap-1 font-mono">
                           <MessageSquare className="w-3 h-3 text-primary" /> User Message / Prompt
                         </Label>
-                        <Input
+                        <LocalInput
                           placeholder="Type message to invoke graph..."
                           value={chatMessage}
                           onChange={(e) => setChatMessage(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" && !e.shiftKey) {
                               e.preventDefault();
-                              handleExecute();
+                              handleExecute((e.target as HTMLInputElement).value);
                             }
                           }}
                           className="h-8 text-xs bg-background"
@@ -737,7 +742,7 @@ export function StartNodeTestingTab({
                           <span className="text-foreground font-medium">{channel.key}</span>
                           <span className="text-muted-foreground text-[9px]">({channel.type})</span>
                         </div>
-                        <Input
+                        <LocalInput
                           placeholder={`Enter ${channel.type} value...`}
                           value={String(inputValues[channel.key] ?? "")}
                           onChange={(e) =>

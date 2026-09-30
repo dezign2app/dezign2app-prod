@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import type { StartNode, LangGraphInputChannel, LangGraphStateChannel } from "@workspace/canvas";
 import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../../common";
 import {
   Select,
   SelectContent,
@@ -51,7 +51,7 @@ function ChannelRow({ ch, idx, stateChannels, onUpdate, onDelete }: ChannelRowPr
       >
         {/* Key + type */}
         <div className="flex items-center gap-1">
-          <Input
+          <LocalInput
             className="h-6 text-[10px] font-mono bg-background flex-1 nodrag"
             value={ch.key}
             autoFocus
