@@ -106,7 +106,7 @@ export function StartNodeInspector({
         </div>
 
         {/* ── Tab 1: Inputs ── */}
-        <TabsContent value="inputs" className="flex-1 min-h-0 overflow-y-auto m-0 p-0">
+        <TabsContent value="inputs" className="flex-1 min-h-0 overflow-y-auto hide-scrollbar m-0 p-0">
           <InputsTabContent
             inputChannels={inputChannels}
             setInputChannels={setInputChannels}
@@ -128,7 +128,7 @@ export function StartNodeInspector({
         </TabsContent>
 
         {/* ── Tab 3: Test Cases (Simulation & Mocks) ── */}
-        <TabsContent value="test-cases" className="flex-1 min-h-0 overflow-y-auto m-0 p-0">
+        <TabsContent value="test-cases" className="flex-1 min-h-0 overflow-y-auto hide-scrollbar m-0 p-0">
           {graphNodeId && (
             <LangGraphTestCasesInspector
               graphNodeId={graphNodeId}

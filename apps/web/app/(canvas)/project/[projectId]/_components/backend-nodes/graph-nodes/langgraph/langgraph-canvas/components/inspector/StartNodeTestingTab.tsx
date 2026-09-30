@@ -15,6 +15,10 @@ import {
   Sparkles,
   Bot,
   Terminal,
+  Maximize2,
+  Minimize2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -111,6 +115,9 @@ export function StartNodeTestingTab({
   const [dbTables, setDbTables] = useState<Array<{ name: string; rows: unknown[] }>>([]);
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedResponse, setCopiedResponse] = useState(false);
+  const [isTraceExpanded, setIsTraceExpanded] = useState(false);
+  const [isInputCollapsed, setIsInputCollapsed] = useState(false);
+  const [expandedTraceNodes, setExpandedTraceNodes] = useState<Record<number, boolean>>({});
 
   // Load API keys and saved threads on mount
   useEffect(() => {
@@ -210,8 +217,15 @@ export function StartNodeTestingTab({
 
     // Merge chatMessage into inputValues
     const finalInputs = { ...inputValues };
-    if (chatMessage.trim()) {
-      finalInputs["messages"] = chatMessage.trim();
+    const msgChannel = inputChannels.find(
+      (c) => c.key === "message" || c.key === "messages" || c.key === "prompt"
+    );
+    const effectiveMsg = chatMessage.trim() || (msgChannel ? String(inputValues[msgChannel.key] ?? "").trim() : "");
+    if (effectiveMsg) {
+      finalInputs["messages"] = effectiveMsg;
+      if (msgChannel) {
+        finalInputs[msgChannel.key] = effectiveMsg;
+      }
     }
 
     // Reset store highlights
@@ -434,7 +448,7 @@ export function StartNodeTestingTab({
       </div>
 
       {/* ── Scrollable Body ── */}
-      <div className="flex-1 overflow-y-auto p-3.5 flex flex-col gap-3.5">
+      <div className="flex-1 overflow-y-auto hide-scrollbar p-3.5 flex flex-col gap-3.5">
         {/* Active Node Highlight Indicator */}
         {isRunning && currentStepNode && (
           <div className="flex items-center gap-2 p-2.5 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-400 animate-pulse">
@@ -465,7 +479,7 @@ export function StartNodeTestingTab({
                 <Copy className="w-2.5 h-2.5" /> Copy Error
               </Button>
             </div>
-            <p className="text-[11px] font-mono leading-relaxed bg-background/90 text-destructive p-2.5 rounded-lg border border-destructive/20 whitespace-pre-wrap select-text">
+            <p className="text-[11px] font-mono leading-relaxed bg-background/90 text-destructive p-2.5 rounded-lg border border-destructive/20 whitespace-pre-wrap select-text max-h-[180px] overflow-y-auto hide-scrollbar">
               {executionResult.error}
             </p>
           </div>
@@ -494,65 +508,125 @@ export function StartNodeTestingTab({
                 </Button>
               </div>
             </div>
-            <div className="text-xs leading-relaxed text-foreground bg-background/90 p-3 rounded-lg border border-border/60 select-text whitespace-pre-wrap font-sans max-h-[220px] overflow-y-auto">
+            <div className="text-xs leading-relaxed text-foreground bg-background/90 p-3 rounded-lg border border-border/60 select-text whitespace-pre-wrap font-sans max-h-[220px] overflow-y-auto hide-scrollbar">
               {executionResult.latestAssistantResponse}
             </div>
           </div>
         )}
 
         {/* ── Inputs Section ── */}
-        <div className="flex flex-col gap-2 p-3 rounded-xl border bg-card/60">
+        <div className="flex flex-col gap-2 p-3 rounded-xl border bg-card/60 transition-all">
           <div className="flex items-center justify-between pb-1 border-b border-border/40">
-            <span className="font-mono uppercase text-[10px] font-bold text-muted-foreground">
-              Input Payload
+            <span className="font-mono uppercase text-[10px] font-bold text-muted-foreground flex items-center gap-1.5">
+              <span>Input Payload</span>
+              <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">
+                {inputChannels.length} channels
+              </Badge>
             </span>
-            <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">
-              {inputChannels.length} channels
-            </Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 text-[10px] px-1 text-muted-foreground hover:text-foreground"
+              onClick={() => setIsInputCollapsed((v) => !v)}
+              title={isInputCollapsed ? "Show inputs" : "Hide inputs"}
+            >
+              {isInputCollapsed ? (
+                <span className="flex items-center gap-0.5 text-[9px]">
+                  <ChevronDown className="w-3 h-3" /> Show Inputs
+                </span>
+              ) : (
+                <span className="flex items-center gap-0.5 text-[9px]">
+                  <ChevronUp className="w-3 h-3" /> Hide Inputs
+                </span>
+              )}
+            </Button>
           </div>
 
-          {/* Quick Chat / Message input */}
-          <div className="flex flex-col gap-1">
-            <Label className="text-[10px] text-muted-foreground flex items-center gap-1 font-mono">
-              <MessageSquare className="w-3 h-3 text-primary" /> User Message / Prompt
-            </Label>
-            <Input
-              placeholder="Type message to invoke graph..."
-              value={chatMessage}
-              onChange={(e) => setChatMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleExecute();
-                }
-              }}
-              className="h-8 text-xs bg-background"
-            />
-          </div>
+          {!isInputCollapsed && (
+            <>
+              {(() => {
+                const messageChannel = inputChannels.find(
+                  (c) => c.key === "message" || c.key === "messages" || c.key === "prompt"
+                );
+                const otherChannels = inputChannels.filter((c) => c.key !== messageChannel?.key);
 
-          {/* Dynamic input channel fields */}
-          {inputChannels.filter((c) => c.key !== "messages").map((channel) => (
-            <div key={channel.key} className="flex flex-col gap-1 pt-1">
-              <div className="flex items-center justify-between text-[10px] font-mono">
-                <span className="text-foreground font-medium">{channel.key}</span>
-                <span className="text-muted-foreground text-[9px]">({channel.type})</span>
-              </div>
-              <Input
-                placeholder={`Enter ${channel.type} value...`}
-                value={String(inputValues[channel.key] ?? "")}
-                onChange={(e) =>
-                  setInputValues((prev) => ({
-                    ...prev,
-                    [channel.key]:
-                      channel.type === "number"
-                        ? Number(e.target.value) || 0
-                        : e.target.value,
-                  }))
-                }
-                className="h-7 text-xs font-mono bg-background"
-              />
-            </div>
-          ))}
+                return (
+                  <>
+                    {messageChannel ? (
+                      /* Configured message/prompt channel */
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-[10px] font-mono">
+                          <Label className="text-[10px] text-muted-foreground flex items-center gap-1 font-mono">
+                            <MessageSquare className="w-3 h-3 text-primary" /> {messageChannel.key}
+                          </Label>
+                          <span className="text-muted-foreground text-[9px]">({messageChannel.type})</span>
+                        </div>
+                        <Input
+                          placeholder="Type message to invoke graph..."
+                          value={String(inputValues[messageChannel.key] ?? chatMessage ?? "")}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setChatMessage(val);
+                            setInputValues((prev) => ({ ...prev, [messageChannel.key]: val }));
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              handleExecute();
+                            }
+                          }}
+                          className="h-8 text-xs bg-background font-mono"
+                        />
+                      </div>
+                    ) : inputChannels.length === 0 ? (
+                      /* Fallback default chat input when no channels defined */
+                      <div className="flex flex-col gap-1">
+                        <Label className="text-[10px] text-muted-foreground flex items-center gap-1 font-mono">
+                          <MessageSquare className="w-3 h-3 text-primary" /> User Message / Prompt
+                        </Label>
+                        <Input
+                          placeholder="Type message to invoke graph..."
+                          value={chatMessage}
+                          onChange={(e) => setChatMessage(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              handleExecute();
+                            }
+                          }}
+                          className="h-8 text-xs bg-background"
+                        />
+                      </div>
+                    ) : null}
+
+                    {/* Remaining non-message dynamic channels */}
+                    {otherChannels.map((channel) => (
+                      <div key={channel.key} className="flex flex-col gap-1 pt-1">
+                        <div className="flex items-center justify-between text-[10px] font-mono">
+                          <span className="text-foreground font-medium">{channel.key}</span>
+                          <span className="text-muted-foreground text-[9px]">({channel.type})</span>
+                        </div>
+                        <Input
+                          placeholder={`Enter ${channel.type} value...`}
+                          value={String(inputValues[channel.key] ?? "")}
+                          onChange={(e) =>
+                            setInputValues((prev) => ({
+                              ...prev,
+                              [channel.key]:
+                                channel.type === "number"
+                                  ? Number(e.target.value) || 0
+                                  : e.target.value,
+                            }))
+                          }
+                          className="h-7 text-xs font-mono bg-background"
+                        />
+                      </div>
+                    ))}
+                  </>
+                );
+              })()}
+            </>
+          )}
         </div>
 
         {/* ── Results Tabs ── */}
@@ -581,18 +655,48 @@ export function StartNodeTestingTab({
             <TabsContent value="trace" className="flex flex-col gap-2 pt-2 m-0">
               {executionResult ? (
                 <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
-                    <span>Path: {executionResult.visitedNodes.join(" → ")}</span>
-                    <span>{executionResult.totalDurationMs}ms</span>
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1 pb-0.5">
+                    <span className="font-mono truncate max-w-[240px]" title={executionResult.visitedNodes.join(" → ")}>
+                      Path: {executionResult.visitedNodes.join(" → ")}
+                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-mono">{executionResult.totalDurationMs}ms</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 text-[10px] px-1.5 gap-1 text-muted-foreground hover:text-foreground"
+                        onClick={() => setIsTraceExpanded((v) => !v)}
+                        title={isTraceExpanded ? "Collapse trace view" : "Expand trace view"}
+                      >
+                        {isTraceExpanded ? (
+                          <>
+                            <Minimize2 className="w-3 h-3" />
+                            <span>Collapse</span>
+                          </>
+                        ) : (
+                          <>
+                            <Maximize2 className="w-3 h-3" />
+                            <span>Expand</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
 
-                  <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto">
+                  <div
+                    className={`flex flex-col gap-1.5 overflow-y-auto hide-scrollbar transition-all duration-200 ${
+                      isTraceExpanded
+                        ? "min-h-[460px] max-h-[750px]"
+                        : "min-h-[300px] max-h-[500px]"
+                    }`}
+                  >
                     {executionResult.trace.map((t, idx) => {
                       const isFailed = t.status === "failed";
+                      const isNodeExpanded = expandedTraceNodes[idx] ?? isTraceExpanded;
                       return (
                         <div
                           key={idx}
-                          className={`p-2 rounded-lg border flex flex-col gap-1 text-[11px] ${
+                          className={`p-2.5 rounded-lg border flex flex-col gap-1.5 text-[11px] ${
                             isFailed
                               ? "bg-destructive/10 border-destructive/30 text-destructive"
                               : "bg-background/80 border-border"
@@ -607,13 +711,33 @@ export function StartNodeTestingTab({
                               />
                               {t.label}
                             </span>
-                            <span className="text-[9px] text-muted-foreground font-mono">
-                              {t.nodeId}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[9px] text-muted-foreground font-mono">
+                                {t.nodeId}
+                              </span>
+                              {Boolean(t.output) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(JSON.stringify(t.output, null, 2));
+                                    toast.success(`Copied output for ${t.label}`);
+                                  }}
+                                  title="Copy node output"
+                                  className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                                >
+                                  <Copy className="w-2.5 h-2.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                           {Boolean(t.output) && (
                             <pre
-                              className={`text-[9px] font-mono p-1.5 rounded overflow-x-auto max-h-[100px] ${
+                              className={`text-[9px] font-mono p-2 rounded overflow-auto hide-scrollbar transition-all ${
+                                isNodeExpanded
+                                  ? "max-h-[380px]"
+                                  : "max-h-[260px]"
+                              } ${
                                 isFailed
                                   ? "bg-destructive/20 text-destructive border border-destructive/30"
                                   : "text-muted-foreground bg-muted/30"
@@ -652,7 +776,11 @@ export function StartNodeTestingTab({
                       Copy JSON
                     </Button>
                   </div>
-                  <pre className="p-2.5 rounded-lg bg-background border font-mono text-[10px] text-foreground max-h-[240px] overflow-y-auto">
+                  <pre
+                    className={`p-2.5 rounded-lg bg-background border font-mono text-[10px] text-foreground overflow-y-auto hide-scrollbar transition-all ${
+                      isTraceExpanded ? "max-h-[600px]" : "max-h-[380px]"
+                    }`}
+                  >
                     {JSON.stringify(executionResult.finalState, null, 2)}
                   </pre>
                 </div>
@@ -666,7 +794,11 @@ export function StartNodeTestingTab({
             {/* 3. Checkpoints Tab */}
             <TabsContent value="checkpoints" className="flex flex-col gap-2 pt-2 m-0">
               {checkpoints.length > 0 ? (
-                <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto">
+                <div
+                  className={`flex flex-col gap-1.5 overflow-y-auto hide-scrollbar transition-all ${
+                    isTraceExpanded ? "max-h-[600px]" : "max-h-[380px]"
+                  }`}
+                >
                   {checkpoints.map((cp, idx) => (
                     <div
                       key={cp.id}
@@ -705,7 +837,11 @@ export function StartNodeTestingTab({
                           {tbl.rows.length} rows
                         </Badge>
                       </div>
-                      <pre className="p-1.5 rounded bg-muted/30 font-mono text-[9px] max-h-[140px] overflow-y-auto">
+                      <pre
+                        className={`p-1.5 rounded bg-muted/30 font-mono text-[9px] overflow-y-auto hide-scrollbar transition-all ${
+                          isTraceExpanded ? "max-h-[380px]" : "max-h-[240px]"
+                        }`}
+                      >
                         {JSON.stringify(tbl.rows, null, 2)}
                       </pre>
                     </div>

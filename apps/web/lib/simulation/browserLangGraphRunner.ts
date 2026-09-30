@@ -398,7 +398,13 @@ export async function executeBrowserLangGraph(
 
           let msgs: GraphChatMessage[] = extractMessages(state.messages);
           if (msgs.length === 0) {
-            msgs = [{ role: "user", content: JSON.stringify(state) }];
+            if (typeof state.message === "string" && state.message.trim()) {
+              msgs = [{ role: "user", content: state.message.trim() }];
+            } else if (typeof state.prompt === "string" && state.prompt.trim()) {
+              msgs = [{ role: "user", content: state.prompt.trim() }];
+            } else {
+              msgs = [{ role: "user", content: JSON.stringify(state) }];
+            }
           }
 
           const responseText = await callBrowserLLM({
