@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { GitBranch, Variable, Code2, Plus, Trash } from "lucide-react";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../../../common";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -132,7 +132,7 @@ export function RouterNodeInspector({
       <div className="flex flex-col gap-3 text-xs">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs font-medium">Route Label</Label>
-          <Input
+          <LocalInput
             className="h-8 text-xs bg-background/50"
             placeholder="Route Label (e.g. If success)"
             value={activeBranch.label || ""}
@@ -204,7 +204,7 @@ export function RouterNodeInspector({
             ) : null}
 
             {(showCustomInput || availableChannels.length === 0) && (
-              <Input
+              <LocalInput
                 className="h-8 text-xs bg-background/50 font-mono"
                 placeholder="e.g. intent, messages, or messages[-1].content"
                 value={activeBranch.field || ""}
@@ -260,7 +260,7 @@ export function RouterNodeInspector({
 
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Target Value</Label>
-            <Input
+            <LocalInput
               className="h-8 text-xs bg-background/50 font-mono"
               placeholder="e.g. success, support, true, 100"
               value={activeBranch.value || ""}

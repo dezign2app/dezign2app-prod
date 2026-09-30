@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Check, Trash, Pencil } from "lucide-react";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../../../../common";
 import type { SimulationTestCase } from "@workspace/canvas";
 
 export const TestCaseAccordionHeader = ({
@@ -39,7 +39,7 @@ export const TestCaseAccordionHeader = ({
         className="flex items-center gap-1.5 flex-1 mr-2"
         onClick={(e) => e.stopPropagation()}
       >
-        <Input
+        <LocalInput
           value={nameInput}
           onChange={(e) => setNameInput(e.target.value)}
           onKeyDown={(e) => {

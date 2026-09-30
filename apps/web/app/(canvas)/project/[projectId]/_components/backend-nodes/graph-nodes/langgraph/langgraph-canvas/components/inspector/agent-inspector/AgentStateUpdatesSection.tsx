@@ -1,7 +1,7 @@
 import React from "react";
 import { Zap, Plus, Trash } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../../../../common";
 import { Switch } from "@workspace/ui/components/switch";
 import {
   Select,
@@ -149,7 +149,7 @@ export function AgentStateUpdatesSection({
                 </Button>
               </div>
 
-              <Input
+              <LocalInput
                 className="h-7 text-[11px] bg-background font-mono"
                 placeholder="Value / expression (e.g. state.messages + input)"
                 value={su.value || ""}
