@@ -26,7 +26,7 @@ interface UseCanvasNodeSyncProps {
   stateChannels: LangGraphStateChannel[];
   setSelectedNodeId: React.Dispatch<React.SetStateAction<string | null>>;
   setActiveSideTab: React.Dispatch<
-    React.SetStateAction<"inspector" | "inputs" | "state" | "memory">
+    React.SetStateAction<"inspector" | "inputs" | "state" | "memory" | "testing">
   >;
   handleAddChannel: () => void;
   handleUpdateChannel?: (
@@ -80,6 +80,10 @@ export function useCanvasNodeSync({
               onOpenInputsTab: () => {
                 setSelectedNodeId(NODE_ID_START);
                 setActiveSideTab("inputs");
+              },
+              onOpenTestingTab: () => {
+                setSelectedNodeId(NODE_ID_START);
+                setActiveSideTab("testing");
               },
             },
           };

@@ -58,8 +58,7 @@ describe("compileMonorepo: LangGraph Package Compilation & Service Integration",
           name: "Return Response",
           type: "return_response",
           enabled: true,
-          responseStatusCode: 200,
-          responsePayload: "agentResult",
+          statusCode: 200,
         },
       ],
     };
@@ -70,6 +69,8 @@ describe("compileMonorepo: LangGraph Package Compilation & Service Integration",
       target: langGraphNode.id,
       sourceHandle: `endpoint-out-${endpoint.id}`,
       targetHandle: "langgraph-in",
+      type: "connection",
+      fractionalIndex: "a0",
     };
 
     const result = compileMonorepo(

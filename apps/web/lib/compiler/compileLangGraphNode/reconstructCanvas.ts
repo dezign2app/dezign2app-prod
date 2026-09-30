@@ -327,19 +327,13 @@ export function reconstructNodes(
     }
   });
 
-  const graphEdges: LangGraphEdgeConfig[] = data.graphEdges || [];
-  const hasEndTarget = graphEdges.some((e) =>
-    e.targets?.some((t) => t.kind === TARGET_KIND_END || t.id === "END"),
-  );
-  if (
-    (hasEndTarget || data.endNodePosition) &&
-    !reconstructedNodes.some((n) => n.type === LANGGRAPH_CANVAS_NODE_END)
-  ) {
+  if (!reconstructedNodes.some((n) => n.type === LANGGRAPH_CANVAS_NODE_END)) {
     reconstructedNodes.push({
       id: NODE_ID_END,
       type: LANGGRAPH_CANVAS_NODE_END,
       position: data.endNodePosition || { x: 750, y: 320 },
       data: { label: "END State" },
+      deletable: false,
     });
   }
 
