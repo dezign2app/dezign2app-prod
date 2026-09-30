@@ -55,10 +55,12 @@ export function buildInitialNodes(
   const steps: LangGraphStepConfig[] = data.graphSteps || [];
 
   const statePos = data.stateNodePosition || { x: 100, y: 60 };
-  const checkpointerPos = data.checkpointerNodePosition || {
-    x: statePos.x,
-    y: statePos.y + 240,
-  };
+  const checkpointerPos =
+    data.memoryDefinitions?.[0]?.position ||
+    data.checkpointerNodePosition || {
+      x: statePos.x,
+      y: statePos.y + 240,
+    };
 
   const result: LangGraphCanvasNode[] = [
     {

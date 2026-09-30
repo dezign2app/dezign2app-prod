@@ -143,7 +143,7 @@ export function getNodeDimensions(node: LayoutNode): {
       return { width: 180, height: 70 };
     case "state_global":
     case "STATE_GLOBAL":
-      return { width: 300, height: 160 };
+      return { width: 300, height: 200 };
     case "langgraph":
     case "langgraph_agent":
     case "langgraph_node":
@@ -156,7 +156,7 @@ export function getNodeDimensions(node: LayoutNode): {
     case "langgraph_middleware":
       return { width: 280, height: 160 };
     case "langgraph_memory":
-      return { width: 280, height: 160 };
+      return { width: 300, height: 240 };
     case "langgraph_llm_ref":
     case "langgraph_tool_ref":
     case "langgraph_middleware_ref":

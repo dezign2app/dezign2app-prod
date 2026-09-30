@@ -25,14 +25,39 @@ const LANGGRAPH_HEAD_HANDLES = new Set([
 
 // ─── Definition node type groups ─────────────────────────────────────────────
 // Each group becomes its own vertical column on the left side.
-// Columns are ordered: State | Tool | LLM | Middleware | Memory
-type DefColumnId = "state" | "tool" | "llm" | "middleware" | "memory";
+// The State column contains StateStoreNode(s) and LangGraphCanvasMemoryNode(s),
+// where LangGraphCanvasMemoryNode is always aligned directly below the StateStoreNode.
+// Subsequent columns are ordered: Tool | LLM | Middleware
+export type DefColumnId = "state" | "tool" | "llm" | "middleware";
 
-function getDefColumn(node: LayoutNode): DefColumnId | null {
+export function isStateStoreNode(node: LayoutNode): boolean {
   const type = node.type || "";
   const id   = node.id   || "";
+  return (
+    id === "STATE_GLOBAL" ||
+    type === "state_global" ||
+    type === "STATE_GLOBAL" ||
+    type === "state_store" ||
+    type === "StateStoreNode"
+  );
+}
 
-  if (id === "STATE_GLOBAL" || type === "state_global" || type === "STATE_GLOBAL")
+export function isMemoryNode(node: LayoutNode): boolean {
+  const type = node.type || "";
+  const id   = node.id   || "";
+  return (
+    type !== "langgraph_memory_ref" &&
+    (id === "CHECKPOINTER" ||
+      type === "langgraph_memory" ||
+      type === "memory" ||
+      type === "LangGraphCanvasMemoryNode")
+  );
+}
+
+export function getDefColumn(node: LayoutNode): DefColumnId | null {
+  const type = node.type || "";
+
+  if (isStateStoreNode(node) || isMemoryNode(node))
     return "state";
   if (type === "langgraph_tool" || type === "tool")
     return "tool";
@@ -40,18 +65,16 @@ function getDefColumn(node: LayoutNode): DefColumnId | null {
     return "llm";
   if (type === "langgraph_middleware" || type === "middleware")
     return "middleware";
-  if (type === "langgraph_memory" || type === "memory")
-    return "memory";
 
   return null; // not a definition node → belongs in topology
 }
 
-function isLangGraphDefinitionNode(node: LayoutNode): boolean {
+export function isLangGraphDefinitionNode(node: LayoutNode): boolean {
   return getDefColumn(node) !== null;
 }
 
 // Ordered column list (left → right)
-const DEF_COLUMN_ORDER: DefColumnId[] = ["state", "tool", "llm", "middleware", "memory"];
+export const DEF_COLUMN_ORDER: DefColumnId[] = ["state", "tool", "llm", "middleware"];
 
 export function performLangGraphLayout({
   nodes,
@@ -69,7 +92,6 @@ export function performLangGraphLayout({
     tool:       [],
     llm:        [],
     middleware: [],
-    memory:     [],
   };
 
   const defNodeIdSet = new Set<string>();
@@ -98,12 +120,28 @@ export function performLangGraphLayout({
     const colNodes = columnBuckets[colId];
     if (colNodes.length === 0) return; // skip empty columns
 
-    // Sort nodes in this column by their existing y-position so order is stable
-    colNodes.sort(
-      (a, b) =>
-        (a.position?.y ?? 0) - (b.position?.y ?? 0) ||
-        a.id.localeCompare(b.id),
-    );
+    // For the state column: StateStoreNode(s) must always come first at the top,
+    // and LangGraphCanvasMemoryNode(s) must always be placed directly below them.
+    if (colId === "state") {
+      colNodes.sort((a, b) => {
+        const aIsState = isStateStoreNode(a);
+        const bIsState = isStateStoreNode(b);
+        if (aIsState !== bIsState) {
+          return aIsState ? -1 : 1; // StateStoreNode always comes before MemoryNode
+        }
+        return (
+          (a.position?.y ?? 0) - (b.position?.y ?? 0) ||
+          a.id.localeCompare(b.id)
+        );
+      });
+    } else {
+      // Sort nodes in this column by their existing y-position so order is stable
+      colNodes.sort(
+        (a, b) =>
+          (a.position?.y ?? 0) - (b.position?.y ?? 0) ||
+          a.id.localeCompare(b.id),
+      );
+    }
 
     // Calculate the column width (widest node in this column)
     const colWidth = Math.max(...colNodes.map((n) => getNodeDimensions(n).width));
