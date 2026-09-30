@@ -10,7 +10,11 @@ import { PaywallModal } from "@/components/paywall-modal";
 
 import "./global.css";
 
-const ubuntu = Ubuntu({ variable: "--font-sans", weight: ["300", "400"] });
+const ubuntu = Ubuntu({
+  variable: "--font-sans",
+  subsets: ["latin"],
+  weight: ["300", "400"],
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

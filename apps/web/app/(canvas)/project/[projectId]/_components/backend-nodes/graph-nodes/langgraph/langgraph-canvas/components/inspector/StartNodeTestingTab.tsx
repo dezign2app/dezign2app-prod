@@ -93,6 +93,13 @@ export function StartNodeTestingTab({
   graphLabel = "LangGraph Agent",
 }: StartNodeTestingTabProps) {
   // Execution state
+  const [executionMode, setExecutionMode] = useState<"server" | "browser">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("dezign2app_lg_exec_mode");
+      if (saved === "browser" || saved === "server") return saved;
+    }
+    return "server";
+  });
   const [isRunning, setIsRunning] = useState(false);
   const [threadId, setThreadId] = useState("session-1");
   const [knownThreads, setKnownThreads] = useState<string[]>(["session-1"]);
@@ -203,6 +210,15 @@ export function StartNodeTestingTab({
   };
 
   const handleClearThread = async () => {
+    if (executionMode === "server") {
+      try {
+        await fetch("/api/langgraph/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "clear", threadId }),
+        });
+      } catch {}
+    }
     await clearBrowserThread(threadId);
     setCheckpoints([]);
     setExecutionResult(null);
@@ -237,31 +253,79 @@ export function StartNodeTestingTab({
     });
 
     try {
-      const result = await executeBrowserLangGraph({
-        nodes,
-        edges,
-        stateChannels,
-        inputChannels,
-        memoryConfig,
-        inputValues: finalInputs,
-        threadId,
-        provider,
-        apiKey: apiKey.trim() || undefined,
-        modelName,
-        onStepStart: (nodeId) => {
-          setCurrentStepNode(nodeId);
-          useSimulationStore.setState((prev) => ({
-            currentNodeId: nodeId,
-            activeNodeIds: Array.from(new Set([...prev.activeNodeIds, nodeId])),
-          }));
-        },
-        onStepEnd: (_nodeId, _name, _delta) => {
-          // step finished
-        },
-        onCheckpoint: (cp) => {
-          setCheckpoints((prev) => [...prev, cp]);
-        },
-      });
+      let result: BrowserExecutionResult & { checkpoints?: BrowserCheckpoint[] };
+
+      if (executionMode === "server") {
+        // Execute real Node.js StateGraph via Next.js backend API
+        const res = await fetch("/api/langgraph/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nodes,
+            edges,
+            stateChannels,
+            inputChannels,
+            memoryConfig,
+            inputValues: finalInputs,
+            threadId,
+            provider,
+            apiKey: apiKey.trim() || undefined,
+            modelName,
+          }),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Server returned HTTP ${res.status}: ${errText}`);
+        }
+
+        result = await res.json();
+
+        // Animate executed steps smoothly on the canvas
+        if (Array.isArray(result.trace)) {
+          for (const step of result.trace) {
+            const stepNodeId = step.nodeId;
+            if (stepNodeId) {
+              setCurrentStepNode(stepNodeId);
+              useSimulationStore.setState((prev) => ({
+                currentNodeId: stepNodeId,
+                activeNodeIds: Array.from(new Set([...prev.activeNodeIds, stepNodeId])),
+              }));
+              await new Promise((r) => setTimeout(r, 100));
+            }
+          }
+        }
+
+        if (Array.isArray(result.checkpoints) && result.checkpoints.length > 0) {
+          setCheckpoints(result.checkpoints);
+        }
+      } else {
+        // Client-side in-browser simulation runner fallback
+        result = await executeBrowserLangGraph({
+          nodes,
+          edges,
+          stateChannels,
+          inputChannels,
+          memoryConfig,
+          inputValues: finalInputs,
+          threadId,
+          provider,
+          apiKey: apiKey.trim() || undefined,
+          modelName,
+          onStepStart: (nodeId) => {
+            setCurrentStepNode(nodeId);
+            useSimulationStore.setState((prev) => ({
+              currentNodeId: nodeId,
+              activeNodeIds: Array.from(new Set([...prev.activeNodeIds, nodeId])),
+            }));
+          },
+          onStepEnd: (_nodeId, _name, _delta) => {},
+          onCheckpoint: (cp) => {
+            setCheckpoints((prev) => [...prev, cp]);
+          },
+        });
+        await loadCheckpoints(threadId);
+      }
 
       setExecutionResult(result);
       useSimulationStore.setState({
@@ -269,14 +333,16 @@ export function StartNodeTestingTab({
         currentNodeId: undefined,
       });
 
-      // Reload fresh checkpoints and DB
-      await loadCheckpoints(threadId);
       await loadDbTables();
 
       if (result.error) {
         toast.error(`Execution error: ${result.error}`);
       } else {
-        toast.success(`Graph completed in ${result.totalDurationMs}ms (in-browser)`);
+        toast.success(
+          `Graph completed in ${result.totalDurationMs}ms (${
+            executionMode === "server" ? "Node.js @langchain/langgraph" : "in-browser"
+          })`,
+        );
       }
       setChatMessage("");
     } catch (err) {
@@ -319,13 +385,35 @@ export function StartNodeTestingTab({
       <div className="p-3.5 border-b border-border/60 bg-background/50 flex flex-col gap-2.5 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <div
+              className={`p-1.5 rounded-lg border ${
+                executionMode === "server"
+                  ? "bg-primary/10 text-primary border-primary/20"
+                  : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+              }`}
+            >
               <Play className="w-3.5 h-3.5" />
             </div>
             <div>
-              <h3 className="font-bold text-foreground text-xs">In-Browser Testing</h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-bold text-foreground text-xs">
+                  {executionMode === "server" ? "Generated LangGraph Code" : "In-Browser Preview"}
+                </h3>
+                <Badge
+                  variant="outline"
+                  className={`text-[8.5px] px-1 py-0 h-3.5 font-mono ${
+                    executionMode === "server"
+                      ? "bg-primary/15 text-primary border-primary/30"
+                      : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                  }`}
+                >
+                  {executionMode === "server" ? "Node.js v1.4" : "Browser"}
+                </Badge>
+              </div>
               <p className="text-[10px] text-muted-foreground">
-                Actual LLM calls · 0 external servers
+                {executionMode === "server"
+                  ? "Running official @langchain/langgraph StateGraph"
+                  : "Actual LLM calls · Client-side preview"}
               </p>
             </div>
           </div>
@@ -358,6 +446,49 @@ export function StartNodeTestingTab({
                 </>
               )}
             </Button>
+          </div>
+        </div>
+
+        {/* ── Runtime Engine Switcher ── */}
+        <div className="flex items-center justify-between p-1 bg-muted/40 rounded-lg border border-border/50 text-[10px]">
+          <span className="text-muted-foreground font-mono text-[9px] px-1.5 uppercase font-semibold">
+            Execution Engine:
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setExecutionMode("server");
+                if (typeof window !== "undefined") {
+                  localStorage.setItem("dezign2app_lg_exec_mode", "server");
+                }
+                toast.info("Switched to Generated LangGraph (Node.js runtime)");
+              }}
+              className={`px-2 py-0.5 rounded text-[10px] transition-all font-medium ${
+                executionMode === "server"
+                  ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              ⚡ Generated Code (Node.js)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setExecutionMode("browser");
+                if (typeof window !== "undefined") {
+                  localStorage.setItem("dezign2app_lg_exec_mode", "browser");
+                }
+                toast.info("Switched to Browser Preview");
+              }}
+              className={`px-2 py-0.5 rounded text-[10px] transition-all font-medium ${
+                executionMode === "browser"
+                  ? "bg-background text-foreground font-semibold shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              🌐 Browser Preview
+            </button>
           </div>
         </div>
 
