@@ -2,7 +2,7 @@ import React, { useState, useCallback } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
 import {
   Zap, Plus, Trash2, ChevronDown, Sparkles,
-  ArrowRight, Globe, Sliders, ChevronsRight,
+  ArrowRight, Globe, Sliders, ChevronsRight, Play,
 } from "lucide-react";
 import type { StartNode, LangGraphInputChannel, LangGraphStateChannel } from "@workspace/canvas";
 import { Button } from "@workspace/ui/components/button";
@@ -196,6 +196,7 @@ export const LangGraphCanvasStartNode = ({
   const onUpdateInputChannel  = data.onUpdateInputChannel;
   const onDeleteInputChannel  = data.onDeleteInputChannel;
   const onOpenInputsTab       = data.onOpenInputsTab;
+  const onOpenTestingTab      = data.onOpenTestingTab;
 
   // Split by source
   const requestVars = allChannels.filter((c) => c.source === "request" || (!c.source && suggestedParams?.some((s) => s.key === c.key)));
@@ -253,6 +254,25 @@ export const LangGraphCanvasStartNode = ({
             )}
           </p>
         </div>
+
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-6 text-[10px] px-2 py-0 font-semibold gap-1 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300 nodrag shrink-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onOpenTestingTab) {
+              onOpenTestingTab();
+            } else {
+              onOpenInputsTab?.();
+            }
+          }}
+          title="Open in-browser testing playground"
+        >
+          <Play className="w-2.5 h-2.5 fill-current" />
+          <span>Test</span>
+        </Button>
+
         <ChevronDown className={cn(
           "w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform duration-200",
           collapsed && "rotate-180",

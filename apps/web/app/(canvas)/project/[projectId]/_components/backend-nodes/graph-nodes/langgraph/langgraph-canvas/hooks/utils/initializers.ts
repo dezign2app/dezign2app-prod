@@ -314,18 +314,13 @@ export function buildInitialNodes(
     }
   });
 
-  const hasEndTarget = (data.graphEdges || []).some((e) =>
-    e.targets?.some((t) => t.kind === TARGET_KIND_END || t.id === "END"),
-  );
-  if (
-    (hasEndTarget || data.endNodePosition) &&
-    !result.some((n) => n.type === LANGGRAPH_CANVAS_NODE_END)
-  ) {
+  if (!result.some((n) => n.type === LANGGRAPH_CANVAS_NODE_END)) {
     result.push({
       id: NODE_ID_END,
       type: LANGGRAPH_CANVAS_NODE_END,
       position: data.endNodePosition || { x: 750, y: 320 },
       data: { label: "END State" },
+      deletable: false,
     });
   }
 

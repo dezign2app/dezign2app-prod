@@ -19,12 +19,15 @@ import type {
   LangGraphMiddlewareRefNode,
   MemoryNode,
   LangGraphMemoryRefNode,
+  LangGraphCanvasNode,
+  LangGraphCanvasEdge,
 } from "@workspace/canvas";
 import { InspectorTabContent } from "./inspector/InspectorTabContent";
 import { LangGraphTestCasesInspector } from "./inspector/LangGraphTestCasesInspector";
 import { StateTabContent } from "./inspector/StateTabContent";
 import { InputsTabContent } from "./inspector/InputsTabContent";
 import { MemoryTabContent } from "./inspector/MemoryTabContent";
+import { StartNodeInspector } from "./inspector/StartNodeInspector";
 
 import type { ConnectedRouteInfo } from "../../LangGraphNode";
 import type { SimulationTestCase } from "@workspace/canvas";
@@ -32,8 +35,11 @@ import type { SimulationTestCase } from "@workspace/canvas";
 export interface InspectorSidebarProps {
   selectedNodeId?: string | null;
   onClose?: () => void;
-  activeSideTab?: "inspector" | "inputs" | "state" | "memory";
-  setActiveSideTab?: (tab: "inspector" | "inputs" | "state" | "memory") => void;
+  activeSideTab?: "inspector" | "inputs" | "state" | "memory" | "testing";
+  setActiveSideTab?: (tab: "inspector" | "inputs" | "state" | "memory" | "testing") => void;
+  nodes?: LangGraphCanvasNode[];
+  edges?: LangGraphCanvasEdge[];
+  graphLabel?: string;
   selectedStepData: StepNodeData | null;
   selectedLLMData?: LangGraphLLMNodeData | null;
   selectedToolData?: ToolNodeData | null;
@@ -136,6 +142,9 @@ export function InspectorSidebar({
   memoryConfig,
   setMemoryConfig,
   suggestedParams,
+  nodes = [],
+  edges = [],
+  graphLabel,
 }: InspectorSidebarProps) {
   const [width, setWidth] = useState(340);
   const [isResizing, setIsResizing] = useState(false);
@@ -170,7 +179,13 @@ export function InspectorSidebar({
   const isStateSelected =
     selectedNodeId === "STATE_GLOBAL" || activeSideTab === "state";
   const isInputsSelected = activeSideTab === "inputs";
+  const isTestingSelected = activeSideTab === "testing";
   const isMemorySelected = activeSideTab === "memory";
+  const isStartSelected =
+    selectedNodeId === "START" ||
+    isInputsSelected ||
+    isTestingSelected ||
+    Boolean(selectedStartData);
 
   const hasSelectedNode = Boolean(
     selectedStepData ||
@@ -182,7 +197,7 @@ export function InspectorSidebar({
     selectedOutputData ||
     selectedStartData ||
     isStateSelected ||
-    isInputsSelected ||
+    isStartSelected ||
     isMemorySelected,
   );
 
@@ -213,13 +228,24 @@ export function InspectorSidebar({
             onClose={onClose}
           />
         </div>
-      ) : isInputsSelected && setInputChannels ? (
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <InputsTabContent
+      ) : isStartSelected && setInputChannels ? (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <StartNodeInspector
             inputChannels={inputChannels}
             setInputChannels={setInputChannels}
-            suggestedParams={suggestedParams}
             stateChannels={stateChannels}
+            suggestedParams={suggestedParams}
+            nodes={nodes}
+            edges={edges}
+            memoryConfig={memoryConfig}
+            graphLabel={graphLabel}
+            graphNodeId={graphNodeId}
+            graphSteps={graphSteps}
+            graphEdges={graphEdges}
+            graphNodeLabels={graphNodeLabels}
+            connectedRoutes={connectedRoutes}
+            onRunTestCase={onRunTestCase}
+            defaultTab={isTestingSelected ? "testing" : "inputs"}
           />
         </div>
       ) : isMemorySelected && setMemoryConfig && memoryConfig ? (
@@ -228,21 +254,6 @@ export function InspectorSidebar({
             memoryConfig={memoryConfig}
             setMemoryConfig={setMemoryConfig}
           />
-        </div>
-      ) : selectedStartData ? (
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {graphNodeId && (
-            <LangGraphTestCasesInspector
-              graphNodeId={graphNodeId}
-              inputChannels={inputChannels}
-              stateChannels={stateChannels}
-              graphSteps={graphSteps}
-              graphEdges={graphEdges}
-              graphNodeLabels={graphNodeLabels}
-              connectedRoutes={connectedRoutes}
-              onRunTestCase={onRunTestCase}
-            />
-          )}
         </div>
       ) : (
         <InspectorTabContent

@@ -26,6 +26,7 @@ import { Terminal } from "../../../terminal/Terminal";
 import { CompilerDialog } from "../../../compiler";
 import { compileLangGraph } from "@/lib/compiler";
 import { simulateLangGraphTestCase } from "@/lib/simulation/runtime";
+import { executeBrowserLangGraph } from "@/lib/simulation/browserLangGraphRunner";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import type { SimulationTestCase } from "@workspace/canvas";
 import type {
@@ -309,6 +310,69 @@ export function LangGraphStudioView({
   }, [nodes, activeNodeIds, currentNodeId]);
 
   const runGraphTestCase = async (testCase: SimulationTestCase) => {
+    // If the test case has explicit mock overrides configured, simulate with those mocks.
+    // Otherwise, execute using the real in-browser execution runner!
+    const hasCustomMocks = testCase.mocks && Object.keys(testCase.mocks).length > 0;
+    if (!hasCustomMocks) {
+      const execResult = await executeBrowserLangGraph({
+        nodes,
+        edges,
+        stateChannels,
+        inputChannels,
+        memoryConfig,
+        inputValues: {
+          ...(testCase.initialState ?? {}),
+          ...((testCase.request?.body as Record<string, unknown> | undefined) ?? {}),
+        },
+        threadId: `test-${testCase.id}`,
+        provider: "groq",
+        modelName: "openai/gpt-oss-120b",
+      });
+
+      const assertions = [
+        {
+          name: "execution error check",
+          passed: !execResult.error,
+          detail: execResult.error,
+        },
+        {
+          name: "expected status",
+          passed:
+            testCase.expectedStatus === undefined ||
+            testCase.expectedStatus === (execResult.error ? 500 : 200),
+          detail:
+            testCase.expectedStatus === undefined
+              ? undefined
+              : `Expected ${testCase.expectedStatus}, received ${execResult.error ? 500 : 200}`,
+        },
+        {
+          name: "expected graph path",
+          passed:
+            testCase.expectedPath === undefined ||
+            JSON.stringify(testCase.expectedPath) ===
+              JSON.stringify(execResult.visitedNodes),
+          detail:
+            testCase.expectedPath === undefined
+              ? undefined
+              : `Expected ${JSON.stringify(testCase.expectedPath)}, received ${JSON.stringify(execResult.visitedNodes)}`,
+        },
+      ];
+
+      const passed = assertions.every((a) => a.passed);
+      const res = {
+        status: execResult.error ? 500 : 200,
+        statusText: execResult.error ? "Execution Failed" : "OK",
+        headers: { "x-runtime": "browser-real" },
+        body: execResult.finalState,
+        trace: execResult.trace,
+        testCaseId: testCase.id,
+        testCaseName: testCase.name,
+        assertions,
+      };
+      useSimulationStore.getState().start(res.trace);
+      return res;
+    }
+
     const graphEdges = edges
       .filter(
         (edge) =>
@@ -523,6 +587,9 @@ export function LangGraphStudioView({
           memoryConfig={memoryConfig}
           setMemoryConfig={setMemoryConfig}
           suggestedParams={suggestedParams}
+          nodes={nodes}
+          edges={edges}
+          graphLabel={node.data.label}
         />
       </div>
 

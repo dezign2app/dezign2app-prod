@@ -55,7 +55,7 @@ export function useLangGraphCanvasState({
   );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [activeSideTab, setActiveSideTab] = useState<
-    "inspector" | "inputs" | "state" | "memory"
+    "inspector" | "inputs" | "state" | "memory" | "testing"
   >("inspector");
   const [showCompileModal, setShowCompileModal] = useState(false);
 

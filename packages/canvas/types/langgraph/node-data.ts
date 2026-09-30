@@ -284,6 +284,8 @@ export interface StartNodeData extends Record<string, unknown> {
   onDeleteInputChannel?: (index: number) => void;
   /** Opens the Inputs tab in the inspector sidebar */
   onOpenInputsTab?: () => void;
+  /** Opens the Testing tab in the inspector sidebar */
+  onOpenTestingTab?: () => void;
   /** Derived from connected endpoint – shown as "suggested" fields */
   suggestedParams?: Array<{ key: string; type: LangGraphInputChannel["type"]; description?: string; required?: boolean }>;
   /** Available state channels for mapping dropdowns */
