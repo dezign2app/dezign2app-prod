@@ -26,8 +26,11 @@ import { Terminal } from "../../../terminal/Terminal";
 import { CompilerDialog } from "../../../compiler";
 import { compileLangGraph } from "@/lib/compiler";
 import { simulateLangGraphTestCase } from "@/lib/simulation/runtime";
-import { executeBrowserLangGraph } from "@/lib/simulation/browserLangGraphRunner";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
+import {
+  executeBrowserLangGraph,
+  type BrowserExecutionResult,
+} from "@/lib/simulation/browserLangGraphRunner";
 import type { SimulationTestCase } from "@workspace/canvas";
 import type {
   LangGraphCanvasNode,
@@ -331,20 +334,51 @@ export function LangGraphStudioView({
     // Otherwise, execute using the real in-browser execution runner!
     const hasCustomMocks = testCase.mocks && Object.keys(testCase.mocks).length > 0;
     if (!hasCustomMocks) {
-      const execResult = await executeBrowserLangGraph({
-        nodes,
-        edges,
-        stateChannels,
-        inputChannels,
-        memoryConfig,
-        inputValues: {
-          ...(testCase.initialState ?? {}),
-          ...((testCase.request?.body as Record<string, unknown> | undefined) ?? {}),
-        },
-        threadId: `test-${testCase.id}`,
-        provider: "groq",
-        modelName: "openai/gpt-oss-120b",
-      });
+      const combinedInputs: Record<string, boolean | number | string | null | undefined> = {};
+      if (testCase.initialState) {
+        Object.assign(combinedInputs, testCase.initialState);
+      }
+      if (testCase.request?.body && typeof testCase.request.body === "object") {
+        Object.assign(combinedInputs, testCase.request.body);
+      }
+
+      let execResult: BrowserExecutionResult | undefined;
+      try {
+        const response = await fetch("/api/langgraph/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nodes,
+            edges,
+            stateChannels,
+            inputChannels,
+            memoryConfig,
+            inputValues: combinedInputs,
+            threadId: `test-${testCase.id}`,
+            provider: "groq",
+            modelName: "openai/gpt-oss-120b",
+          }),
+        });
+        if (response.ok) {
+          execResult = await response.json();
+        }
+      } catch {
+        // fallback to in-browser execution
+      }
+
+      if (!execResult) {
+        execResult = await executeBrowserLangGraph({
+          nodes,
+          edges,
+          stateChannels,
+          inputChannels,
+          memoryConfig,
+          inputValues: combinedInputs,
+          threadId: `test-${testCase.id}`,
+          provider: "groq",
+          modelName: "openai/gpt-oss-120b",
+        });
+      }
 
       const assertions = [
         {
