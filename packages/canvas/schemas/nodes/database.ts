@@ -26,6 +26,9 @@ export const databaseTableDefinitionSchema = z.object({
   tableRef: z.string().optional(),
   columns: z.array(databaseTableColumnSchema).optional(),
   fields: z.array(databaseTableColumnSchema).optional(),
+  systemBadge: z.string().optional(),
+  readOnly: z.boolean().optional(),
+  isReadOnly: z.boolean().optional(),
 });
 
 export const databaseDataSchema = baseNodeDataSchema.extend({

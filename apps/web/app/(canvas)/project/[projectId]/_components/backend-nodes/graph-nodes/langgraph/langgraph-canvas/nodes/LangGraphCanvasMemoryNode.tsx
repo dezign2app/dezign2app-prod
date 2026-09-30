@@ -1,6 +1,6 @@
 import React from "react";
 import { NodeProps, useReactFlow } from "@xyflow/react";
-import { Database, HardDrive, Key, Layers, AlertTriangle } from "lucide-react";
+import { Database, HardDrive, Key, Layers, AlertTriangle, Plus, ExternalLink } from "lucide-react";
 import { Switch } from "@workspace/ui/components/switch";
 import {
   Select,
@@ -13,6 +13,11 @@ import type { MemoryNode, LangGraphCanvasNode } from "@workspace/canvas";
 import { LANGGRAPH_CANVAS_NODE_MEMORY } from "../constants";
 import { LocalInput } from "../../../common";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import {
+  checkCheckpointerTablesStatus,
+  provisionCheckpointerTables,
+} from "../utils/checkpointerTables";
+import { toast } from "sonner";
 
 export const LangGraphCanvasMemoryNode = ({
   id,
@@ -21,6 +26,10 @@ export const LangGraphCanvasMemoryNode = ({
 }: NodeProps<MemoryNode>) => {
   const { setNodes } = useReactFlow<LangGraphCanvasNode>();
   const allCanvasNodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
+  const addNode = useBackendCanvasStore((s) => s.addNode);
+  const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const addEdge = useBackendCanvasStore((s) => s.addEdge);
 
   const postgresNodes = React.useMemo(
     () => allCanvasNodes.filter((n) => n?.type === "database" && n.data?.dbEngine === "postgres"),
@@ -39,6 +48,23 @@ export const LangGraphCanvasMemoryNode = ({
   const checkpointerType = data.checkpointer || "postgres";
   const threadIdKey = data.threadIdKey || "thread_id";
 
+  const tableStatus = React.useMemo(
+    () =>
+      checkCheckpointerTablesStatus(
+        allCanvasNodes,
+        edges,
+        isEnabled,
+        checkpointerType,
+        data.checkpointerConnectionId,
+      ),
+    [allCanvasNodes, edges, isEnabled, checkpointerType, data.checkpointerConnectionId],
+  );
+
+  const hasTableError =
+    isEnabled &&
+    (checkpointerType === "postgres" || checkpointerType === "redis") &&
+    !tableStatus.areTablesCreated;
+
   const updateMemoryData = (changes: Partial<typeof data>) => {
     setNodes((nds) =>
       nds.map((n) =>
@@ -56,12 +82,48 @@ export const LangGraphCanvasMemoryNode = ({
     }
   };
 
+  const handleCreateMissingTables = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!tableStatus.configuredNodeId) {
+      toast.error(
+        `Please select a ${checkpointerType === "postgres" ? "PostgreSQL database" : "Redis instance"} first.`,
+      );
+      return;
+    }
+
+    const created = provisionCheckpointerTables({
+      linkedNodeId: tableStatus.configuredNodeId,
+      checkpointerType,
+      nodes: allCanvasNodes,
+      edges,
+      addNode,
+      updateNode,
+      addEdge,
+    });
+
+    if (created > 0) {
+      toast.success(
+        `Created ${created} LangGraph checkpointer ${checkpointerType === "postgres" ? "table" : "schema"}${created > 1 ? "s" : ""} in SchemaView!`,
+      );
+      if (data.checkpointerConnectionId !== tableStatus.configuredNodeId) {
+        updateMemoryData({ checkpointerConnectionId: tableStatus.configuredNodeId });
+        data.onUpdateMemoryConfig?.({ checkpointerNodeId: tableStatus.configuredNodeId });
+      }
+    } else {
+      toast.info("All LangGraph checkpointer tables already exist in SchemaView.");
+    }
+  };
+
   return (
     <div
       className={`rounded-xl bg-card/95 backdrop-blur-md border-2 w-[300px] p-3 flex flex-col gap-2.5 transition-all duration-200 shadow-xl relative cursor-pointer ${
-        selected
-          ? "ring-4 ring-amber-500/20 shadow-amber-500/10 scale-105 border-amber-500"
-          : "border-amber-500/60 hover:border-amber-500/90"
+        hasTableError
+          ? selected
+            ? "ring-4 ring-destructive/25 shadow-destructive/15 scale-105 border-destructive"
+            : "border-destructive/80 hover:border-destructive shadow-destructive/10"
+          : selected
+            ? "ring-4 ring-amber-500/20 shadow-amber-500/10 scale-105 border-amber-500"
+            : "border-amber-500/60 hover:border-amber-500/90"
       }`}
       onClick={() => {
         data.onOpenMemoryTab?.();
@@ -70,19 +132,37 @@ export const LangGraphCanvasMemoryNode = ({
       {/* Node Header */}
       <div className="flex items-center justify-between border-b border-border/50 pb-2">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
+          <div
+            className={`p-1.5 rounded-lg shrink-0 border ${
+              hasTableError
+                ? "bg-destructive/15 text-destructive border-destructive/30"
+                : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+            }`}
+          >
             <Database className="w-4 h-4" />
           </div>
-          <div className="flex flex-col">
-            <span className="font-bold text-xs text-foreground tracking-wide flex items-center gap-1.5">
+          <div className="flex flex-col min-w-0">
+            <span className="font-bold text-xs text-foreground tracking-wide flex items-center gap-1.5 flex-wrap">
               Checkpointer
               {isEnabled && (
-                <span className="text-[9px] px-1 py-0.2 rounded font-mono font-bold bg-amber-500/15 text-amber-500 uppercase">
+                <span
+                  className={`text-[9px] px-1 py-0.2 rounded font-mono font-bold uppercase ${
+                    hasTableError
+                      ? "bg-destructive/15 text-destructive"
+                      : "bg-amber-500/15 text-amber-500"
+                  }`}
+                >
                   {checkpointerType}
                 </span>
               )}
+              {hasTableError && (
+                <span className="text-[8px] font-mono px-1 py-0.2 rounded font-semibold bg-destructive/20 text-destructive flex items-center gap-0.5 shrink-0">
+                  <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                  SCHEMA ERROR
+                </span>
+              )}
             </span>
-            <span className="text-[9px] font-mono text-muted-foreground">
+            <span className="text-[9px] font-mono text-muted-foreground truncate">
               {isEnabled
                 ? checkpointerType === "postgres"
                   ? "PostgresSaver (persisted)"
@@ -96,7 +176,7 @@ export const LangGraphCanvasMemoryNode = ({
 
         {/* Toggle Button to Enable or Disable Checkpointing */}
         <div
-          className="flex items-center gap-1.5 nodrag"
+          className="flex items-center gap-1.5 nodrag shrink-0 ml-1"
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
@@ -273,6 +353,59 @@ export const LangGraphCanvasMemoryNode = ({
             </div>
           )}
 
+          {/* Error Banner when tables are not created on SchemaView */}
+          {hasTableError && (
+            <div
+              className="flex flex-col gap-2 p-2.5 rounded-lg bg-destructive/15 border border-destructive/35 text-destructive shadow-sm nodrag animate-in fade-in slide-in-from-top-1 duration-150"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-2">
+                <div className="p-1 rounded bg-destructive/20 text-destructive shrink-0 mt-0.5">
+                  <AlertTriangle className="w-3.5 h-3.5 animate-pulse" />
+                </div>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] font-bold leading-tight">
+                      Tables Missing in SchemaView
+                    </span>
+                    {!tableStatus.isMissingStorage && (
+                      <span className="text-[8px] font-mono font-semibold px-1 py-0.2 rounded bg-destructive/25 text-destructive shrink-0">
+                        {tableStatus.existingTables.length}/{tableStatus.expectedCount}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[9.5px] text-destructive/90 leading-tight">
+                    {tableStatus.errorMessage}
+                  </span>
+                </div>
+              </div>
+
+              {!tableStatus.isMissingStorage && (
+                <div className="flex items-center gap-2 pt-1.5 border-t border-destructive/20">
+                  <button
+                    type="button"
+                    onClick={handleCreateMissingTables}
+                    className="flex-1 py-1.5 px-2.5 rounded-md bg-red-500 hover:bg-red-600 text-white font-bold text-[10.5px] flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 border border-red-500"
+                    title={`Create required LangGraph ${checkpointerType === "postgres" ? "tables" : "schemas"} in SchemaView`}
+                  >
+                    <Plus className="w-3.5 h-3.5 shrink-0 text-white stroke-[2.5]" />
+                    <span className="text-white font-bold tracking-tight">Create in SchemaView</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => data.onOpenMemoryTab?.()}
+                    className="py-1.5 px-2.5 rounded-md bg-secondary/80 hover:bg-secondary text-foreground hover:text-foreground font-semibold text-[10.5px] flex items-center gap-1 transition-colors cursor-pointer border border-border/60"
+                    title="Open Memory Inspector Tab"
+                  >
+                    <span>Config</span>
+                    <ExternalLink className="w-3 h-3 shrink-0 text-muted-foreground" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Thread / Session ID Field */}
           <div className="flex flex-col gap-1">
             <span className="text-[9px] font-semibold text-muted-foreground uppercase flex items-center gap-1">
@@ -296,3 +429,4 @@ export const LangGraphCanvasMemoryNode = ({
     </div>
   );
 };
+

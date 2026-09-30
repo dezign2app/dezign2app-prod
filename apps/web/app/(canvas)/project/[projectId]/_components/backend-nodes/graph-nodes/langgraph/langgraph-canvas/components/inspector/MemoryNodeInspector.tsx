@@ -23,6 +23,14 @@ import type { MemoryNodeData } from "@workspace/canvas";
 import { LocalInput } from "../../../../common";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useShallow } from "zustand/react/shallow";
+import {
+  checkCheckpointerTablesStatus,
+  provisionCheckpointerTables,
+} from "../../utils/checkpointerTables";
+import { CheckpointerTablesList } from "./CheckpointerTablesList";
+import { toast } from "sonner";
+import { Button } from "@workspace/ui/components/button";
+import { Plus } from "lucide-react";
 
 interface MemoryNodeInspectorProps {
   selectedMemoryData: MemoryNodeData;
@@ -36,6 +44,11 @@ export function MemoryNodeInspector({
   onUpdateMemory,
 }: MemoryNodeInspectorProps) {
   const allCanvasNodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
+  const addNode = useBackendCanvasStore((s) => s.addNode);
+  const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const addEdge = useBackendCanvasStore((s) => s.addEdge);
+
   const postgresNodes = React.useMemo(
     () => allCanvasNodes.filter((n) => n?.type === "database" && n.data?.dbEngine === "postgres"),
     [allCanvasNodes],
@@ -50,6 +63,48 @@ export function MemoryNodeInspector({
   const checkpointer = selectedMemoryData.checkpointer || "memory";
   const threadIdKey = selectedMemoryData.threadIdKey || "thread_id";
   const threadScope = selectedMemoryData.threadScope || "session";
+
+  const isEnabled = selectedMemoryData.enabled !== false;
+  const tableStatus = React.useMemo(
+    () =>
+      checkCheckpointerTablesStatus(
+        allCanvasNodes,
+        edges,
+        isEnabled,
+        checkpointer,
+        selectedMemoryData.checkpointerConnectionId,
+      ),
+    [allCanvasNodes, edges, isEnabled, checkpointer, selectedMemoryData.checkpointerConnectionId],
+  );
+
+  const handleCreateInspectorTables = () => {
+    if (!tableStatus.configuredNodeId) {
+      toast.error(`Please select a ${checkpointer === "postgres" ? "PostgreSQL database" : "Redis instance"} first.`);
+      return;
+    }
+
+    const created = provisionCheckpointerTables({
+      linkedNodeId: tableStatus.configuredNodeId,
+      checkpointerType: checkpointer,
+      nodes: allCanvasNodes,
+      edges,
+      addNode,
+      updateNode,
+      addEdge,
+    });
+
+    if (created > 0) {
+      toast.success(
+        `Provisioned & synced LangGraph checkpointer ${checkpointer === "postgres" ? "tables" : "schemas"} with foreign key mappings and indexes in SchemaView!`,
+      );
+      if (selectedMemoryData.checkpointerConnectionId !== tableStatus.configuredNodeId) {
+        onUpdateMemory({ checkpointerConnectionId: tableStatus.configuredNodeId });
+      }
+    } else {
+      toast.info("All LangGraph checkpointer tables are up to date.");
+    }
+  };
+
 
   return (
     <div className="flex flex-col gap-6">
@@ -249,6 +304,18 @@ export function MemoryNodeInspector({
               )}
             </div>
           )}
+
+          {/* Tables Status & Provisioning List */}
+          {isEnabled &&
+            (checkpointer === "postgres" || checkpointer === "redis") &&
+            !tableStatus.isMissingStorage && (
+              <CheckpointerTablesList
+                checkpointerType={checkpointer}
+                existingTables={tableStatus.existingTables}
+                linkedNodeId={tableStatus.configuredNodeId}
+                onCreateTables={handleCreateInspectorTables}
+              />
+            )}
         </div>
       </div>
 

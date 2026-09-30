@@ -284,6 +284,9 @@ export const entityDataSchema = baseNodeDataSchema
       .optional(),
     dbOperations: z.array(dbOperationFunctionSchema).optional(),
     databaseId: z.string().optional(),
+    systemBadge: z.string().optional(),
+    readOnly: z.boolean().optional(),
+    isReadOnly: z.boolean().optional(),
   })
   .strict();
 
@@ -295,5 +298,8 @@ export const entityDataInputSchema = baseNodeDataSchema.extend({
   embeddingModel: z.string().optional(),
   dimensions: z.number().optional(),
   metric: z.enum(["Cosine", "Dot Product", "Euclidean"]).optional(),
+  systemBadge: z.string().optional(),
+  readOnly: z.boolean().optional(),
+  isReadOnly: z.boolean().optional(),
   columns: z.array(entityColumnInputSchema),
 });
