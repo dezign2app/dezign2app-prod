@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Select,
   SelectContent,
@@ -7,79 +7,535 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { Switch } from "@workspace/ui/components/switch";
-import { TabsContent } from "@workspace/ui/components/tabs";
-import type { LangGraphMemoryConfig } from "@/types/canvas";
+import { Button } from "@workspace/ui/components/button";
+import { Badge } from "@workspace/ui/components/badge";
+import type { LangGraphMemoryConfig, BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useShallow } from "zustand/react/shallow";
+import {
+  Database,
+  DatabaseZap,
+  Server,
+  Layers,
+  AlertTriangle,
+  CheckCircle2,
+  Table2,
+  Plus,
+  Lock,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
 
 interface MemoryTabContentProps {
   memoryConfig: LangGraphMemoryConfig;
   setMemoryConfig: React.Dispatch<React.SetStateAction<LangGraphMemoryConfig>>;
+  onClose?: () => void;
 }
+
+const LANGGRAPH_TABLE_DEFINITIONS = [
+  {
+    name: "langgraph_checkpoints",
+    description: "LangGraph state checkpoints indexed by thread and run namespace",
+    columns: [
+      { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "parent_checkpoint_id", type: "TEXT", isNotNull: false },
+      { name: "type", type: "TEXT", isNotNull: false },
+      { name: "checkpoint", type: "JSON", isNotNull: true },
+      { name: "metadata", type: "JSON", isNotNull: true },
+    ],
+  },
+  {
+    name: "langgraph_checkpoint_writes",
+    description: "Pending channel writes and delta operations per graph step",
+    columns: [
+      { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "task_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "idx", type: "INTEGER", isPrimaryKey: true, isNotNull: true },
+      { name: "channel", type: "TEXT", isNotNull: true },
+      { name: "type", type: "TEXT", isNotNull: false },
+      { name: "blob", type: "JSON", isNotNull: true },
+    ],
+  },
+  {
+    name: "langgraph_checkpoint_blobs",
+    description: "Serialized large-state blobs and message buffers",
+    columns: [
+      { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "channel", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "version", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+      { name: "type", type: "TEXT", isNotNull: false },
+      { name: "blob", type: "JSON", isNotNull: true },
+    ],
+  },
+  {
+    name: "langgraph_checkpoint_migrations",
+    description: "Database migration tracker for LangGraph schema versions",
+    columns: [
+      { name: "v", type: "INTEGER", isPrimaryKey: true, isNotNull: true },
+    ],
+  },
+];
 
 export function MemoryTabContent({
   memoryConfig,
   setMemoryConfig,
+  onClose,
 }: MemoryTabContentProps) {
-  const entities = useBackendCanvasStore(
-    useShallow((s) =>
-      s.nodes.filter(
-        (n) => n?.type === "entity" && n.data?.dbType !== "vector",
-      ),
-    ),
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const addNode = useBackendCanvasStore((s) => s.addNode);
+  const addEdge = useBackendCanvasStore((s) => s.addEdge);
+
+  const postgresDatabaseNodes = useMemo(
+    () => nodes.filter((n) => n?.type === "database" && n.data?.dbEngine === "postgres"),
+    [nodes],
   );
 
+  const redisNodes = useMemo(
+    () =>
+      nodes.filter(
+        (n) => n?.type === "redis_instance" || (n?.type === "database" && n.data?.dbEngine === "redis"),
+      ),
+    [nodes],
+  );
+
+  const currentEngine = memoryConfig.checkpointer || "memory";
+  const linkedNodeId = memoryConfig.checkpointerNodeId;
+  const linkedNode = useMemo(
+    () => nodes.find((n) => n.id === linkedNodeId),
+    [nodes, linkedNodeId],
+  );
+
+  // Check if LangGraph tables exist under the linked database
+  const existingLangGraphTables = useMemo(() => {
+    if (!linkedNodeId) return [];
+    return nodes.filter(
+      (n) =>
+        n.type === "entity" &&
+        n.data?.databaseId === linkedNodeId &&
+        (n.data?.systemBadge === "langgraph" ||
+          LANGGRAPH_TABLE_DEFINITIONS.some((def) => def.name === n.data?.label || def.name === n.data?.tableName)),
+    );
+  }, [nodes, linkedNodeId]);
+
+  const isEnabled = memoryConfig.enabled !== false;
+  const hasMissingLinkedDb =
+    isEnabled &&
+    (currentEngine === "postgres" || currentEngine === "redis") &&
+    (!linkedNodeId || !linkedNode);
+
+  const handleCreateTables = () => {
+    if (!linkedNodeId || !linkedNode) {
+      toast.error("Please select a PostgreSQL database first.");
+      return;
+    }
+
+    const dbPos = linkedNode.position || { x: 200, y: 200 };
+    let createdCount = 0;
+
+    LANGGRAPH_TABLE_DEFINITIONS.forEach((tableDef, idx) => {
+      // Check if table already exists under this database
+      const alreadyExists = nodes.some(
+        (n) =>
+          n.type === "entity" &&
+          n.data?.databaseId === linkedNodeId &&
+          (n.data?.label === tableDef.name || n.data?.tableName === tableDef.name),
+      );
+
+      if (alreadyExists) return;
+
+      const tableId = crypto.randomUUID();
+      const colOffset = (idx % 2) * 320;
+      const rowOffset = Math.floor(idx / 2) * 260 + 260;
+
+      addNode({
+        id: tableId,
+        type: "entity",
+        position: { x: dbPos.x + colOffset, y: dbPos.y + rowOffset },
+        data: {
+          label: tableDef.name,
+          tableName: tableDef.name,
+          description: tableDef.description,
+          dbType: "relational",
+          systemBadge: "langgraph",
+          readOnly: true,
+          databaseId: linkedNodeId,
+          columns: tableDef.columns,
+        },
+      });
+
+      addEdge({
+        id: `edge-${linkedNodeId}-${tableId}`,
+        source: linkedNodeId,
+        target: tableId,
+        sourceHandle: "database-source",
+        targetHandle: "database-entity-target",
+        type: "database-connection",
+      });
+
+      createdCount++;
+    });
+
+    if (createdCount > 0) {
+      toast.success(
+        `Created ${createdCount} LangGraph table${createdCount > 1 ? "s" : ""} in SchemaView!`,
+      );
+    } else {
+      toast.info("All 4 LangGraph checkpointer tables already exist.");
+    }
+  };
+
   return (
-    <TabsContent
-      value="memory"
-      className="flex-1 min-h-0 p-4 overflow-y-auto m-0 flex flex-col gap-4"
-    >
-      <div className="flex flex-col gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="flex-1 min-h-0 p-4 overflow-y-auto hide-scrollbar m-0 flex flex-col gap-5">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-border/50 pb-3">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
+            <Database className="w-4 h-4" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-bold text-xs text-foreground tracking-wide">
+              Graph Checkpointer
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              Configure graph state persistence & memory saver
+            </span>
+          </div>
+        </div>
+        {onClose && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            onClick={onClose}
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
+
+      {/* Enable / Disable Checkpoint Toggle Card */}
+      <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/30 border border-border/50">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+            <Database className="w-3.5 h-3.5 text-amber-500" />
+            Graph State Checkpointing
+          </span>
+          <span className="text-[10px] text-muted-foreground">
+            {isEnabled
+              ? "Persist graph state snapshots and turns across sessions"
+              : "Disabled: Graph state lives only in-memory for current turn"}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono font-bold text-muted-foreground">
+            {isEnabled ? "ON" : "OFF"}
+          </span>
+          <Switch
+            checked={isEnabled}
+            onCheckedChange={(checked) =>
+              setMemoryConfig((prev) => ({ ...prev, enabled: checked }))
+            }
+          />
+        </div>
+      </div>
+
+      {!isEnabled && (
+        <div className="p-3 rounded-xl bg-secondary/15 border border-border/30 text-center flex flex-col gap-1">
+          <span className="text-xs font-semibold text-muted-foreground">
+            Checkpointing is currently turned off
+          </span>
+          <span className="text-[11px] text-muted-foreground/70">
+            The graph will compile without state persistence. To enable PostgreSQL, Redis, or In-Memory checkpointing, switch the toggle above ON.
+          </span>
+        </div>
+      )}
+
+      {/* Engine Selection */}
+      <div className={`flex flex-col gap-2 ${!isEnabled ? "opacity-40 pointer-events-none" : ""}`}>
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+          <Layers className="w-3.5 h-3.5 text-primary" />
           Checkpointer Engine
         </span>
         <Select
-          value={memoryConfig.checkpointer || "memory"}
-          onValueChange={(v: string) =>
-            setMemoryConfig({
-              ...memoryConfig,
-              checkpointer: v as LangGraphMemoryConfig["checkpointer"],
-            })
+          value={currentEngine}
+          onValueChange={(v: string) => {
+            const nextEngine = v as LangGraphMemoryConfig["checkpointer"];
+            if (nextEngine === "memory") {
+              setMemoryConfig((prev) => ({
+                ...prev,
+                checkpointer: "memory",
+                checkpointerNodeId: undefined,
+                checkpointerEnvVar: undefined,
+              }));
+            } else if (nextEngine === "postgres") {
+              const defaultPg = postgresDatabaseNodes[0];
+              setMemoryConfig((prev) => ({
+                ...prev,
+                checkpointer: "postgres",
+                checkpointerNodeId: defaultPg?.id,
+                checkpointerEnvVar:
+                  defaultPg?.data?.connectionStringEnv || "POSTGRES_CHECKPOINTER_CONN_STRING",
+              }));
+            } else if (nextEngine === "redis") {
+              const defaultRedis = redisNodes[0];
+              setMemoryConfig((prev) => ({
+                ...prev,
+                checkpointer: "redis",
+                checkpointerNodeId: defaultRedis?.id,
+                checkpointerEnvVar:
+                  defaultRedis?.data?.connectionStringEnv || "REDIS_CHECKPOINTER_URL",
+              }));
+            }
+          }}
+        >
+          <SelectTrigger className="h-9 text-xs bg-background/50 font-medium">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="memory">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">In-Memory</span>
+                <span className="text-muted-foreground text-[11px]">(MemorySaver)</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="postgres">
+              <div className="flex items-center gap-2">
+                <Database className="w-3.5 h-3.5 text-sky-500" />
+                <span className="font-semibold">PostgreSQL</span>
+                <span className="text-muted-foreground text-[11px]">(PostgresSaver)</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="redis">
+              <div className="flex items-center gap-2">
+                <DatabaseZap className="w-3.5 h-3.5 text-red-500" />
+                <span className="font-semibold">Redis</span>
+                <span className="text-muted-foreground text-[11px]">(RedisSaver)</span>
+              </div>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <span className="text-[11px] text-muted-foreground">
+          {currentEngine === "postgres"
+            ? "Production checkpointer using PostgreSQL. Checkpoints and writes are persisted across sessions."
+            : currentEngine === "redis"
+              ? "Fast in-memory key-value checkpointer using Redis instances."
+              : "Ephemeral in-memory checkpointer. Resets whenever graph execution restarts."}
+        </span>
+      </div>
+
+      {/* Missing Linked Database Warning Banner */}
+      {hasMissingLinkedDb && (
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-destructive/15 border border-destructive/30 text-destructive text-xs leading-relaxed">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="flex flex-col gap-0.5">
+            <span className="font-bold">Database Required</span>
+            <span>
+              {currentEngine === "postgres"
+                ? postgresDatabaseNodes.length === 0
+                  ? "No PostgreSQL databases exist in SchemaView. Please create a Database node with engine set to 'postgres' in SchemaView."
+                  : "Please select a PostgreSQL database from SchemaView to persist checkpoints."
+                : redisNodes.length === 0
+                  ? "No Redis instances exist in SchemaView. Please create a Redis Instance in SchemaView."
+                  : "Please select a Redis instance from SchemaView."}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* PostgreSQL Database Picker */}
+      {currentEngine === "postgres" && (
+        <div className="flex flex-col gap-3 p-3.5 rounded-xl border bg-card/60 backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Database className="w-3.5 h-3.5 text-sky-500" />
+              Linked PostgreSQL Database
+            </span>
+            {linkedNode && linkedNode.data?.dbEngine === "postgres" && (
+              <Badge variant="outline" className="text-[10px] text-sky-500 border-sky-500/30 bg-sky-500/10">
+                postgres
+              </Badge>
+            )}
+          </div>
+
+          <Select
+            value={linkedNode?.data?.dbEngine === "postgres" ? linkedNodeId || "none" : "none"}
+            onValueChange={(val: string) => {
+              if (val === "none") {
+                setMemoryConfig((prev) => ({
+                  ...prev,
+                  checkpointerNodeId: undefined,
+                }));
+              } else {
+                const targetDb = postgresDatabaseNodes.find((d) => d.id === val);
+                const envName =
+                  targetDb?.data?.connectionStringEnv ||
+                  `${(targetDb?.data?.label || "POSTGRES").toUpperCase().replace(/[^A-Z0-9]/g, "_")}_CONN_STRING`;
+                setMemoryConfig((prev) => ({
+                  ...prev,
+                  checkpointerNodeId: val,
+                  checkpointerEnvVar: envName,
+                }));
+              }
+            }}
+          >
+            <SelectTrigger className="h-8 text-xs bg-background/50">
+              <SelectValue placeholder="Select PostgreSQL database..." />
+            </SelectTrigger>
+            <SelectContent>
+              {postgresDatabaseNodes.length === 0 ? (
+                <SelectItem value="none" disabled>
+                  No PostgreSQL databases found in SchemaView
+                </SelectItem>
+              ) : (
+                postgresDatabaseNodes.map((db) => (
+                  <SelectItem key={db.id} value={db.id}>
+                    <div className="flex items-center gap-2">
+                      <Database className="w-3.5 h-3.5 text-sky-500" />
+                      <span>{db.data?.label || "PostgreSQL Database"}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        (postgres)
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+
+          {/* Table Provisioning Status & Action */}
+          <div className="pt-2 border-t flex flex-col gap-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground flex items-center gap-1.5">
+                <Table2 className="w-3.5 h-3.5" />
+                SchemaView Tables:
+              </span>
+              {existingLangGraphTables.length === 4 ? (
+                <span className="text-[11px] font-semibold text-emerald-500 flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  All 4 Tables Provisioned
+                </span>
+              ) : (
+                <span className="text-[11px] font-medium text-amber-500">
+                  {existingLangGraphTables.length} / 4 tables present
+                </span>
+              )}
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCreateTables}
+              disabled={!linkedNodeId}
+              className="h-8 text-xs gap-1.5 font-semibold text-sky-600 dark:text-sky-400 border-sky-500/30 hover:bg-sky-500/10"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Create LangGraph Tables in SchemaView
+            </Button>
+            <span className="text-[10px] text-muted-foreground">
+              Provisions <code className="font-mono text-[10px]">langgraph_checkpoints</code>,{" "}
+              <code className="font-mono text-[10px]">langgraph_checkpoint_writes</code>,{" "}
+              <code className="font-mono text-[10px]">langgraph_checkpoint_blobs</code>, and{" "}
+              <code className="font-mono text-[10px]">langgraph_checkpoint_migrations</code> with [LangGraph 🔒] badge.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Redis Instance Picker */}
+      {currentEngine === "redis" && (
+        <div className="flex flex-col gap-3 p-3.5 rounded-xl border bg-card/60 backdrop-blur-sm">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <DatabaseZap className="w-3.5 h-3.5 text-red-500" />
+            Linked Redis Instance
+          </span>
+
+          <Select
+            value={linkedNodeId || "none"}
+            onValueChange={(val: string) => {
+              if (val === "none") {
+                setMemoryConfig((prev) => ({
+                  ...prev,
+                  checkpointerNodeId: undefined,
+                }));
+              } else {
+                const targetRedis = redisNodes.find((d) => d.id === val);
+                setMemoryConfig((prev) => ({
+                  ...prev,
+                  checkpointerNodeId: val,
+                  checkpointerEnvVar: targetRedis?.data?.connectionStringEnv || "REDIS_CHECKPOINTER_URL",
+                }));
+              }
+            }}
+          >
+            <SelectTrigger className="h-8 text-xs bg-background/50">
+              <SelectValue placeholder="Select Redis instance..." />
+            </SelectTrigger>
+            <SelectContent>
+              {redisNodes.length === 0 ? (
+                <SelectItem value="none" disabled>
+                  No Redis instances found in SchemaView
+                </SelectItem>
+              ) : (
+                redisNodes.map((inst) => (
+                  <SelectItem key={inst.id} value={inst.id}>
+                    <div className="flex items-center gap-2">
+                      <span>{inst.data?.label || "Redis Instance"}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        (port: {String(inst.data?.port || 6379)})
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {/* Thread Scope */}
+      <div className="flex flex-col gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Thread Scope
+        </span>
+        <Select
+          value={memoryConfig.threadScope || "session"}
+          onValueChange={(v: "session" | "user" | "global") =>
+            setMemoryConfig((prev) => ({ ...prev, threadScope: v }))
           }
         >
           <SelectTrigger className="h-8 text-xs bg-background/50">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="memory">In-Memory (MemorySaver)</SelectItem>
-            {entities.map((e) => (
-              <SelectItem key={e.id} value={e.data?.label || e.id}>
-                {e.data?.label || "Untitled Table"} (Schema Entity)
-              </SelectItem>
-            ))}
+            <SelectItem value="session">Session (Per Conversation)</SelectItem>
+            <SelectItem value="user">User (Shared across sessions)</SelectItem>
+            <SelectItem value="global">Global (Singleton shared state)</SelectItem>
           </SelectContent>
         </Select>
-        <span className="text-xs text-muted-foreground">
-          Persistence engine for graph checkpointing.
-        </span>
       </div>
 
+      {/* Auto-Summarize Switch */}
       <div className="flex items-center justify-between rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
         <div className="flex flex-col gap-0.5">
           <span className="text-sm font-semibold text-foreground">
             Auto-Summarize
           </span>
           <span className="text-xs text-muted-foreground">
-            Compress history to save tokens
+            Compress history when message count exceeds threshold
           </span>
         </div>
         <Switch
           checked={memoryConfig.autoSummarize ?? true}
           onCheckedChange={(c) =>
-            setMemoryConfig({ ...memoryConfig, autoSummarize: c })
+            setMemoryConfig((prev) => ({ ...prev, autoSummarize: c }))
           }
         />
       </div>
-    </TabsContent>
+    </div>
   );
 }

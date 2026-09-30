@@ -5,17 +5,24 @@ import {
   type LangGraphCanvasNode,
   type LangGraphCanvasEdge,
   type StateGlobalNode,
+  type MemoryNode,
+  type LangGraphMemoryConfig,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
   LANGGRAPH_CANVAS_NODE_START,
   LANGGRAPH_CANVAS_NODE_STATE_GLOBAL,
+  LANGGRAPH_CANVAS_NODE_MEMORY,
+  LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_TOOL,
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
   NODE_ID_START,
   NODE_ID_STATE_GLOBAL,
+  NODE_ID_CHECKPOINTER,
+  HANDLE_MEMORY_IN,
+  HANDLE_MEMORY_OUT,
 } from "../constants";
 
 interface UseCanvasNodeSyncProps {
@@ -24,6 +31,8 @@ interface UseCanvasNodeSyncProps {
   setEdges: React.Dispatch<React.SetStateAction<LangGraphCanvasEdge[]>>;
   inputChannels: LangGraphInputChannel[];
   stateChannels: LangGraphStateChannel[];
+  memoryConfig?: LangGraphMemoryConfig;
+  setMemoryConfig?: React.Dispatch<React.SetStateAction<LangGraphMemoryConfig>>;
   setSelectedNodeId: React.Dispatch<React.SetStateAction<string | null>>;
   setActiveSideTab: React.Dispatch<
     React.SetStateAction<"inspector" | "inputs" | "state" | "memory" | "testing">
@@ -48,6 +57,8 @@ export function useCanvasNodeSync({
   setEdges,
   inputChannels,
   stateChannels,
+  memoryConfig,
+  setMemoryConfig,
   setSelectedNodeId,
   setActiveSideTab,
   handleAddChannel,
@@ -207,8 +218,42 @@ export function useCanvasNodeSync({
             },
           };
         }
+        if (
+          n.id === NODE_ID_CHECKPOINTER ||
+          n.type === LANGGRAPH_CANVAS_NODE_MEMORY
+        ) {
+          return {
+            ...n,
+            type: LANGGRAPH_CANVAS_NODE_MEMORY,
+            data: {
+              ...n.data,
+              label: "Graph Checkpointer",
+              name: "Graph Checkpointer",
+              enabled: memoryConfig?.enabled !== false,
+              checkpointer: memoryConfig?.checkpointer || "postgres",
+              checkpointerConnectionId: memoryConfig?.checkpointerNodeId,
+              threadIdKey: "thread_id",
+              threadScope: memoryConfig?.threadScope || "session",
+              autoSummarize: memoryConfig?.autoSummarize ?? true,
+              onOpenMemoryTab: () => {
+                setSelectedNodeId(n.id);
+                setActiveSideTab("memory");
+              },
+              onToggleEnabled: (checked: boolean) => {
+                setMemoryConfig?.((prev) => ({ ...prev, enabled: checked }));
+              },
+              onUpdateMemoryConfig: (changes: Partial<LangGraphMemoryConfig>) => {
+                setMemoryConfig?.((prev) => ({ ...prev, ...changes }));
+              },
+            },
+            deletable: false,
+          };
+        }
         return n;
       });
+
+      // Filter out any legacy memory ref nodes
+      updated = updated.filter((n) => n.type !== LANGGRAPH_CANVAS_NODE_MEMORY_REF);
 
       if (!hasStateGlobal) {
         const stateNode: StateGlobalNode = {
@@ -232,11 +277,63 @@ export function useCanvasNodeSync({
         updated = [stateNode, ...updated];
       }
 
+      const hasCheckpointer = updated.some(
+        (n) => n.id === NODE_ID_CHECKPOINTER || n.type === LANGGRAPH_CANVAS_NODE_MEMORY,
+      );
+
+      if (!hasCheckpointer) {
+        const stateNode = updated.find((n) => n.id === NODE_ID_STATE_GLOBAL);
+        const checkpointerPos = {
+          x: stateNode?.position?.x ?? 100,
+          y: (stateNode?.position?.y ?? 60) + 240,
+        };
+        const checkpointerNode: MemoryNode = {
+          id: NODE_ID_CHECKPOINTER,
+          type: LANGGRAPH_CANVAS_NODE_MEMORY,
+          position: checkpointerPos,
+          data: {
+            label: "Graph Checkpointer",
+            name: "Graph Checkpointer",
+            enabled: memoryConfig?.enabled !== false,
+            checkpointer: memoryConfig?.checkpointer || "postgres",
+            checkpointerConnectionId: memoryConfig?.checkpointerNodeId,
+            threadIdKey: "thread_id",
+            threadScope: memoryConfig?.threadScope || "session",
+            autoSummarize: memoryConfig?.autoSummarize ?? true,
+            onOpenMemoryTab: () => {
+              setSelectedNodeId(NODE_ID_CHECKPOINTER);
+              setActiveSideTab("memory");
+            },
+            onToggleEnabled: (checked: boolean) => {
+              setMemoryConfig?.((prev) => ({ ...prev, enabled: checked }));
+            },
+            onUpdateMemoryConfig: (changes: Partial<LangGraphMemoryConfig>) => {
+              setMemoryConfig?.((prev) => ({ ...prev, ...changes }));
+            },
+          },
+          deletable: false,
+        };
+        updated = [...updated, checkpointerNode];
+      }
+
+      // Clean up legacy memory edges without valid handles
+      setEdges((edges) =>
+        edges.filter(
+          (edge) =>
+            edge.targetHandle !== HANDLE_MEMORY_IN &&
+            edge.sourceHandle !== HANDLE_MEMORY_OUT &&
+            !edge.source.startsWith("mem_") &&
+            edge.source !== NODE_ID_CHECKPOINTER,
+        ),
+      );
+
       return updated;
     });
   }, [
     inputChannels,
     stateChannels,
+    memoryConfig,
+    setMemoryConfig,
     suggestedParams,
     handleAddChannel,
     handleUpdateChannel,

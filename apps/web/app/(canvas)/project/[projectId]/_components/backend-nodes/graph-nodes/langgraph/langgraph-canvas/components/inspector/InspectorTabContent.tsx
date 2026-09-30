@@ -1,6 +1,5 @@
 import React from "react";
 import { Sparkles } from "lucide-react";
-import { TabsContent } from "@workspace/ui/components/tabs";
 import type {
   LangGraphStateChannel,
   StepNodeData,

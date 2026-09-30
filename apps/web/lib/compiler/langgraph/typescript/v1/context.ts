@@ -142,7 +142,11 @@ export function buildContext(input: CompileLangGraphInput): CompileContext {
     stepNodes,
     memoryNodes,
     middlewareNodes,
-    hasMemory: memoryNodes.length > 0 || !!input.memoryConfig?.checkpointer,
+    hasMemory:
+      input.memoryConfig?.enabled !== false &&
+      (memoryNodes.length > 0 ||
+        (!!input.memoryConfig?.checkpointer &&
+          input.memoryConfig.checkpointer !== "none")),
     hasTools: toolNodes.length > 0,
     hasHumanInLoop,
     usesMessages,
@@ -283,6 +287,15 @@ export function buildDependencies(ctx: CompileContext): Record<string, string> {
   // Add express when routes are connected
   if (ctx.input.routeEndpoints && ctx.input.routeEndpoints.length > 0) {
     deps["express"] = "^4.21.2";
+  }
+
+  // Checkpointer persistence dependencies
+  if (ctx.input.memoryConfig?.checkpointer === "postgres") {
+    deps["@langchain/langgraph-checkpoint-postgres"] = "^1.0.0";
+    deps["pg"] = "^8.13.1";
+  } else if (ctx.input.memoryConfig?.checkpointer === "redis") {
+    deps["@langchain/langgraph-checkpoint-redis"] = "^1.0.0";
+    deps["ioredis"] = "^5.4.1";
   }
 
   return deps;

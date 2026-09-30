@@ -180,7 +180,10 @@ export function InspectorSidebar({
     selectedNodeId === "STATE_GLOBAL" || activeSideTab === "state";
   const isInputsSelected = activeSideTab === "inputs";
   const isTestingSelected = activeSideTab === "testing";
-  const isMemorySelected = activeSideTab === "memory";
+  const isMemorySelected =
+    selectedNodeId === "CHECKPOINTER" ||
+    selectedNodeId === "MEMORY" ||
+    activeSideTab === "memory";
   const isStartSelected =
     selectedNodeId === "START" ||
     isInputsSelected ||
@@ -253,6 +256,7 @@ export function InspectorSidebar({
           <MemoryTabContent
             memoryConfig={memoryConfig}
             setMemoryConfig={setMemoryConfig}
+            onClose={onClose}
           />
         </div>
       ) : (

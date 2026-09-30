@@ -226,6 +226,8 @@ export function useLangGraphCanvasState({
     setEdges,
     inputChannels,
     stateChannels,
+    memoryConfig,
+    setMemoryConfig,
     setSelectedNodeId,
     setActiveSideTab,
     handleAddChannel,

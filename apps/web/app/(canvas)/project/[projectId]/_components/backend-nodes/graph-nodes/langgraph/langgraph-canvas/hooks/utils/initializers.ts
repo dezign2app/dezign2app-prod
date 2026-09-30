@@ -43,6 +43,7 @@ import {
   NODE_ID_START,
   NODE_ID_END,
   NODE_ID_STATE_GLOBAL,
+  NODE_ID_CHECKPOINTER,
   makePortNodeId,
   TARGET_KIND_PORT,
   TARGET_KIND_END,
@@ -53,11 +54,17 @@ export function buildInitialNodes(
 ): LangGraphCanvasNode[] {
   const steps: LangGraphStepConfig[] = data.graphSteps || [];
 
+  const statePos = data.stateNodePosition || { x: 100, y: 60 };
+  const checkpointerPos = data.checkpointerNodePosition || {
+    x: statePos.x,
+    y: statePos.y + 240,
+  };
+
   const result: LangGraphCanvasNode[] = [
     {
       id: NODE_ID_STATE_GLOBAL,
       type: LANGGRAPH_CANVAS_NODE_STATE_GLOBAL,
-      position: data.stateNodePosition || { x: 100, y: 60 },
+      position: statePos,
       data: {
         label: "Global Graph State",
         stateChannels: data.stateChannels || [
@@ -72,9 +79,25 @@ export function buildInitialNodes(
       deletable: false,
     },
     {
+      id: NODE_ID_CHECKPOINTER,
+      type: LANGGRAPH_CANVAS_NODE_MEMORY,
+      position: checkpointerPos,
+      data: {
+        label: "Graph Checkpointer",
+        name: "Graph Checkpointer",
+        enabled: data.memoryConfig?.enabled !== false,
+        checkpointer: data.memoryConfig?.checkpointer || "postgres",
+        checkpointerConnectionId: data.memoryConfig?.checkpointerNodeId,
+        threadIdKey: "thread_id",
+        threadScope: data.memoryConfig?.threadScope || "session",
+        autoSummarize: data.memoryConfig?.autoSummarize ?? true,
+      },
+      deletable: false,
+    },
+    {
       id: NODE_ID_START,
       type: LANGGRAPH_CANVAS_NODE_START,
-      position: data.startNodePosition || { x: 100, y: 320 },
+      position: data.startNodePosition || { x: 100, y: 560 },
       data: { label: "INPUT State", inputChannels: data.inputChannels || [] },
       deletable: false,
     },
@@ -152,21 +175,6 @@ export function buildInitialNodes(
     result.push(customMiddlewareRefNode);
   });
 
-  const savedCustomMemoryRefs = data.customMemoryRefNodes || [];
-  savedCustomMemoryRefs.forEach((memRef) => {
-    const customMemoryRefNode: LangGraphMemoryRefNode = {
-      id: memRef.id,
-      type: LANGGRAPH_CANVAS_NODE_MEMORY_REF,
-      position: memRef.position || { x: 340, y: 280 },
-      data: {
-        label: memRef.label || "Memory Ref",
-        refId: memRef.id,
-        memoryRef: memRef.memoryRef,
-      },
-    };
-    result.push(customMemoryRefNode);
-  });
-
   const savedTools = data.toolDefinitions || [];
   savedTools.forEach((toolDef) => {
     const toolId = toolDef.id || toolDef.toolId || `tool_${Date.now()}`;
@@ -218,26 +226,6 @@ export function buildInitialNodes(
       },
     };
     result.push(mwNode);
-  });
-
-  const savedMemories = data.memoryDefinitions || [];
-  savedMemories.forEach((memDef) => {
-    const memNode: MemoryNode = {
-      id: memDef.id || memDef.memoryId || `mem_${Date.now()}`,
-      type: LANGGRAPH_CANVAS_NODE_MEMORY,
-      position: memDef.position || { x: 340, y: 320 },
-      data: {
-        label: memDef.name,
-        memoryId: memDef.id || memDef.memoryId || `mem_${Date.now()}`,
-        name: memDef.name,
-        checkpointer: memDef.checkpointer || "memory",
-        threadIdKey: memDef.threadIdKey || "thread_id",
-        threadScope: memDef.threadScope || "session",
-        autoSummarize: memDef.autoSummarize ?? true,
-        saveMessages: memDef.saveMessages ?? true,
-      },
-    };
-    result.push(memNode);
   });
 
   const savedAgents = data.agentDefinitions || [];
@@ -546,19 +534,6 @@ export function buildInitialEdges(
         targetHandle: HANDLE_MIDDLEWARE_IN,
         animated: true,
         style: { stroke: "#a855f7", strokeWidth: 2, strokeDasharray: "4 4" },
-      });
-    });
-
-    (ag.memory || []).forEach((memId) => {
-      if (!initialNodeIds.has(memId)) return;
-      resourceEdges.push({
-        id: `edge_${memId}_${agId}`,
-        source: memId,
-        target: agId,
-        sourceHandle: HANDLE_MEMORY_OUT,
-        targetHandle: HANDLE_MEMORY_IN,
-        animated: true,
-        style: { stroke: "#f59e0b", strokeWidth: 2, strokeDasharray: "4 4" },
       });
     });
 

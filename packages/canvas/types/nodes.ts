@@ -113,6 +113,8 @@ export interface BaseNodeData {
   // Shared visual / misc
   authentication?: string;
   tags?: string[];
+  systemBadge?: string;
+  readOnly?: boolean;
   // Transformer node properties
   functionName?: string;
   scope?: "global" | "local";

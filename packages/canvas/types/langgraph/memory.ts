@@ -1,6 +1,10 @@
 export type LangGraphMemoryConfig = {
-  checkpointer?: "memory" | "redis" | "postgres" | "convex" | string;
+  enabled?: boolean;
+  checkpointer: "memory" | "postgres" | "redis" | "convex" | string;
+  checkpointerNodeId?: string;
+  checkpointerEnvVar?: string;
   checkpointerConnectionId?: string;
+  threadIdKey?: string;
   threadScope?: "session" | "user" | "global";
   autoSummarize?: boolean;
   maxWindowMessages?: number;
@@ -17,8 +21,10 @@ export type LangGraphMemoryConfig = {
 export interface LangGraphMemoryDefinition {
   id?: string;
   memoryId?: string;
-  name: string;
+  name?: string;
+  enabled?: boolean;
   checkpointer: string;
+  checkpointerConnectionId?: string;
   threadIdKey?: string;
   threadScope?: "session" | "user" | "global";
   autoSummarize?: boolean;

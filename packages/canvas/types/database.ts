@@ -85,6 +85,8 @@ export interface CanvasEntityNodeData {
   isSchemaGroup?: boolean;
   variant?: string;
   dbType?: "relational" | "document" | "vector" | "redis" | "key-value";
+  systemBadge?: string;
+  readOnly?: boolean;
   /** Column definitions stored as part of the node. */
   columns?: CanvasEntityColumn[];
   indexes?: {

@@ -10,7 +10,7 @@ import {
   MarkerType,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Layout } from "lucide-react";
+import { Layout, AlertTriangle } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import type { BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -222,6 +222,23 @@ export function LangGraphStudioView({
       ),
     [nodes],
   );
+  const allCanvasNodes = useBackendCanvasStore((s) => s.nodes);
+  const checkpointerMissingError = useMemo(() => {
+    if (!memoryConfig || memoryConfig.enabled === false || memoryConfig.checkpointer === "memory") return null;
+    const isPg = memoryConfig.checkpointer === "postgres";
+    const isRedis = memoryConfig.checkpointer === "redis";
+    if (!isPg && !isRedis) return null;
+
+    if (!memoryConfig.checkpointerNodeId) {
+      return `No ${isPg ? "PostgreSQL database" : "Redis instance"} linked from SchemaView. Please link one in the Memory tab.`;
+    }
+    const target = allCanvasNodes.find((n) => n.id === memoryConfig.checkpointerNodeId);
+    if (!target) {
+      return `Linked ${isPg ? "database" : "Redis instance"} was deleted or not found in SchemaView. Please re-link in Memory tab.`;
+    }
+    return null;
+  }, [memoryConfig, allCanvasNodes]);
+
   const activeNodeIds = useSimulationStore((s) => s.activeNodeIds);
   const activeEdgeIds = useSimulationStore((s) => s.activeEdgeIds);
   const currentNodeId = useSimulationStore((s) => s.currentNodeId);
@@ -434,6 +451,24 @@ export function LangGraphStudioView({
         terminalOpen={terminalOpen}
         onToggleTerminal={toggleTerminal}
       />
+
+      {/* Checkpointer Configuration Warning Banner */}
+      {checkpointerMissingError && (
+        <div className="bg-destructive/15 border-b border-destructive/30 px-4 py-2 flex items-center justify-between text-xs text-destructive font-medium backdrop-blur-sm z-20">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{checkpointerMissingError}</span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 text-[11px] px-2.5 py-0 border-destructive/40 text-destructive hover:bg-destructive/20"
+            onClick={() => setActiveSideTab("memory")}
+          >
+            Configure Memory
+          </Button>
+        </div>
+      )}
 
       {/* Main Workspace */}
       <div className="flex-1 min-h-0 flex overflow-hidden">

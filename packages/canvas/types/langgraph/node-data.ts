@@ -6,7 +6,10 @@ import type {
 } from "./channels";
 import type { StateUpdateMode } from "./tools";
 import type { LangGraphStepConfig } from "./steps";
-import type { LangGraphMemoryDefinition } from "./memory";
+import type {
+  LangGraphMemoryConfig,
+  LangGraphMemoryDefinition,
+} from "./memory";
 import type { LangGraphMiddlewareDefinition } from "./middleware";
 import type {
   LangGraphAgentDefinition,
@@ -85,6 +88,10 @@ export interface MemoryNodeData
   extends LangGraphMemoryDefinition,
     Record<string, unknown> {
   label: string;
+  enabled?: boolean;
+  onOpenMemoryTab?: () => void;
+  onToggleEnabled?: (enabled: boolean) => void;
+  onUpdateMemoryConfig?: (changes: Partial<LangGraphMemoryConfig>) => void;
   onDeleteMemory?: () => void;
   onOpenInspector?: () => void;
   onSelectNode?: () => void;
