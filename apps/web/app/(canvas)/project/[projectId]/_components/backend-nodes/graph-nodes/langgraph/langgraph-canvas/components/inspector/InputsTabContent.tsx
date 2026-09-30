@@ -180,7 +180,7 @@ export function InputsTabContent({
   };
 
   return (
-    <div className="flex flex-col gap-4 p-4 overflow-y-auto">
+    <div className="flex flex-col gap-4 p-4 overflow-y-auto hide-scrollbar">
 
       {/* ── Section 1: Incoming Request Variables ── */}
       <div className="flex flex-col gap-2">

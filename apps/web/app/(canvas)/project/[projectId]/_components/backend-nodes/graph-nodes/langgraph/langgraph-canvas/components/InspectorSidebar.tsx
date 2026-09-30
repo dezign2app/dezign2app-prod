@@ -221,7 +221,7 @@ export function InspectorSidebar({
       />
 
       {isStateSelected && setStateChannels ? (
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto hide-scrollbar">
           <StateTabContent
             stateChannels={stateChannels}
             setStateChannels={setStateChannels}

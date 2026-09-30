@@ -49,7 +49,7 @@ export function StateTabContent({
   };
 
   return (
-    <div className="flex-1 min-h-0 p-4 overflow-y-auto m-0 flex flex-col gap-4">
+    <div className="flex-1 min-h-0 p-4 overflow-y-auto hide-scrollbar m-0 flex flex-col gap-4">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border/50 pb-3">
         <div className="flex items-center gap-2">
