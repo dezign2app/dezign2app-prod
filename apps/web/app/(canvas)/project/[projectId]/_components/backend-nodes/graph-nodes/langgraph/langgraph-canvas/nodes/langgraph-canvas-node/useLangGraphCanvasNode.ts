@@ -5,7 +5,6 @@ import type {
   LangGraphCanvasNodeUnion,
   LangGraphAgentStreamConfig,
   LangGraphAgentResponseFormatConfig,
-  LangGraphAgentMemoryConfig,
   UseLangGraphCanvasNodeReturn,
   LangGraphLLMNode,
   LangGraphLLMRefNode,
@@ -19,7 +18,6 @@ import {
   HANDLE_LLM_OUT,
   HANDLE_TOOL_IN,
   HANDLE_MIDDLEWARE_IN,
-  HANDLE_MEMORY_IN,
   DEFAULT_EVENT_STREAM_SIGNATURE,
   DEFAULT_STREAM_TRANSFORMERS,
   DEFAULT_SELECTED_STREAM_EVENTS,
@@ -84,9 +82,6 @@ export function useLangGraphCanvasNode({
   const boundMiddlewares = edges.filter(
     (e) => e.target === id && e.targetHandle === HANDLE_MIDDLEWARE_IN,
   );
-  const boundMemories = edges.filter(
-    (e) => e.target === id && e.targetHandle === HANDLE_MEMORY_IN,
-  );
 
   const llmConfig = {
     enabled:
@@ -107,10 +102,6 @@ export function useLangGraphCanvasNode({
       DEFAULT_LLM_TEMPERATURE,
   };
 
-  const stateUpdatesConfig = {
-    enabled: data.stateUpdatesConfig?.enabled !== false,
-  };
-
   const streamConfig: LangGraphAgentStreamConfig = data.streamConfig || {
     enabled: false,
     version: "v3",
@@ -127,15 +118,6 @@ export function useLangGraphCanvasNode({
       schemaJson: "",
       handleErrorMode: "default",
     };
-
-  const memoryConfig: LangGraphAgentMemoryConfig = data.memoryConfig || {
-    enabled: true,
-    checkpointer: "memory",
-    threadIdKey: "thread_id",
-    threadScope: "session",
-    autoSummarize: true,
-    saveMessages: true,
-  };
 
   const stateUpdates = data.stateUpdates || [];
   const availableFields = (data.availableStateChannels || []).map((c) => c.key);
@@ -264,15 +246,6 @@ export function useLangGraphCanvasNode({
     });
   };
 
-  const handleToggleStateUpdates = (enabled: boolean) => {
-    updateAgentData({
-      stateUpdatesConfig: {
-        ...stateUpdatesConfig,
-        enabled,
-      },
-    });
-  };
-
   const updateStreamConfig = (changes: Partial<LangGraphAgentStreamConfig>) => {
     const updated: LangGraphAgentStreamConfig = {
       version: "v3",
@@ -300,30 +273,12 @@ export function useLangGraphCanvasNode({
     updateAgentData({ responseFormat: updated });
   };
 
-  const updateMemoryConfig = (changes: Partial<LangGraphAgentMemoryConfig>) => {
-    const updated: LangGraphAgentMemoryConfig = {
-      enabled: true,
-      checkpointer: "memory",
-      threadIdKey: "thread_id",
-      threadScope: "session",
-      autoSummarize: true,
-      saveMessages: true,
-      ...memoryConfig,
-      ...changes,
-    };
-    updateAgentData({ memoryConfig: updated });
-  };
-
   const handleToggleStreaming = (enabled: boolean) => {
     updateStreamConfig({ enabled });
   };
 
   const handleToggleResponseFormat = (enabled: boolean) => {
     updateResponseFormat({ enabled });
-  };
-
-  const handleToggleMemory = (enabled: boolean) => {
-    updateMemoryConfig({ enabled });
   };
 
   const handleToggleEvent = (eventId: string) => {
@@ -358,20 +313,15 @@ export function useLangGraphCanvasNode({
     boundLLMs,
     boundTools,
     boundMiddlewares,
-    boundMemories,
     llmConfig,
-    stateUpdatesConfig,
     streamConfig,
     responseFormat,
-    memoryConfig,
     stateUpdates,
     availableFields,
     updateAgentData,
     handleToggleLLMConfig,
-    handleToggleStateUpdates,
     handleToggleStreaming,
     handleToggleResponseFormat,
-    handleToggleMemory,
     handleToggleEvent,
   };
 }

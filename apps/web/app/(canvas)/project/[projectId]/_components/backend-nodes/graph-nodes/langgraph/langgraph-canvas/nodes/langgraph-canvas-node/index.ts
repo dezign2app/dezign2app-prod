@@ -4,6 +4,5 @@ export * from "./NodeHeader";
 export * from "./NodeResourceBadges";
 export * from "./LlmConfigPanel";
 export * from "./StateUpdatesPanel";
-export * from "./MemoryConfigPanel";
 export * from "./ResponseFormatPanel";
 export * from "./EventStreamPanel";

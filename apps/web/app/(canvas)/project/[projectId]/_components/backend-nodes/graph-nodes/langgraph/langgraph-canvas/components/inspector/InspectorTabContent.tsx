@@ -139,15 +139,12 @@ export function InspectorTabContent({
           availableLLMNodes={availableLLMNodes}
           availableToolNodes={availableToolNodes}
           availableMiddlewareNodes={availableMiddlewareNodes}
-          availableMemoryNodes={availableMemoryNodes}
           connectedLLMId={connectedLLMId}
           connectedToolIds={connectedToolIds}
           connectedMiddlewareIds={connectedMiddlewareIds}
-          connectedMemoryIds={connectedMemoryIds}
           onSelectLLM={onSelectLLM}
           onToggleTool={onToggleTool}
           onToggleMiddleware={onToggleMiddleware}
-          onToggleMemory={onToggleMemory}
           stateChannels={stateChannels}
         />
       ) : selectedStepData ? (
