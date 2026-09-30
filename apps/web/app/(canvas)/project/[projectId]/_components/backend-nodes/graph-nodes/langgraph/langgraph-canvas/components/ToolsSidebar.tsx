@@ -90,18 +90,6 @@ export const TOOL_PALETTE_ITEMS: ToolPaletteItem[] = [
     icon: Link2,
   },
   {
-    type: LANGGRAPH_CANVAS_NODE_MEMORY,
-    label: "Memory / DB Config",
-    desc: "Save chat history & state checkpoints per session",
-    icon: Database,
-  },
-  {
-    type: LANGGRAPH_CANVAS_NODE_MEMORY_REF,
-    label: "Memory / DB Ref",
-    desc: "Reference an existing Memory configuration across nodes",
-    icon: Link2,
-  },
-  {
     type: LANGGRAPH_CANVAS_NODE_OUTPUT,
     label: "Output Channel",
     desc: "Emit SSE, WebSocket, Event, or Webhook output",

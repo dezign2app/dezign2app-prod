@@ -182,6 +182,23 @@ export const LangGraphNode = ({
     maxWindowMessages: 10,
   };
 
+  const allCanvasNodes = useBackendCanvasStore((s) => s.nodes);
+  const checkpointerMissingError = React.useMemo(() => {
+    if (!memoryConfig || memoryConfig.enabled === false || memoryConfig.checkpointer === "memory") return null;
+    const isPg = memoryConfig.checkpointer === "postgres";
+    const isRedis = memoryConfig.checkpointer === "redis";
+    if (!isPg && !isRedis) return null;
+
+    if (!memoryConfig.checkpointerNodeId) {
+      return `No ${isPg ? "PostgreSQL database" : "Redis"} linked in Memory`;
+    }
+    const target = allCanvasNodes.find((n) => n.id === memoryConfig.checkpointerNodeId);
+    if (!target) {
+      return `Linked ${isPg ? "database" : "Redis instance"} missing`;
+    }
+    return null;
+  }, [memoryConfig, allCanvasNodes]);
+
   return (
     <div
       className={cn(
@@ -189,7 +206,7 @@ export const LangGraphNode = ({
         selected
           ? "border-primary ring-4 ring-primary/20 shadow-primary/10"
           : "border-border hover:border-border/80",
-        hasPipelineError &&
+        (hasPipelineError || Boolean(checkpointerMissingError)) &&
           "border-destructive/80 ring-4 ring-destructive/20 shadow-destructive/10",
       )}
       onDoubleClick={handleOpenEditor}
@@ -204,7 +221,12 @@ export const LangGraphNode = ({
         placeholder="Enter agent name..."
         selected={selected}
         badges={
-          hasPipelineError ? (
+          checkpointerMissingError ? (
+            <span className="text-[7px] font-medium px-1 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse">
+              <AlertTriangle size={8} />
+              No DB
+            </span>
+          ) : hasPipelineError ? (
             <span className="text-[7px] font-medium px-1 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse">
               <AlertTriangle size={8} />
               Unmapped
@@ -224,7 +246,14 @@ export const LangGraphNode = ({
         }
       />
 
-      {hasPipelineError && (
+      {checkpointerMissingError && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/15 border-b border-destructive/30 text-[11px] text-destructive leading-tight font-medium">
+          <AlertTriangle size={12} className="shrink-0" />
+          <span>{checkpointerMissingError}</span>
+        </div>
+      )}
+
+      {hasPipelineError && !checkpointerMissingError && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[11px] text-destructive leading-tight">
           <AlertTriangle size={12} className="shrink-0" />
           <span className="font-medium">Missing required input mapping</span>

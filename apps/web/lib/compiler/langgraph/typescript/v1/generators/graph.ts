@@ -33,8 +33,15 @@ export function buildGraphFile(
     if (meta) nodeExports.push(meta.exportName);
   }
 
+  const isEnabled = ctx.input.memoryConfig?.enabled !== false;
+  const isPostgres = isEnabled && ctx.input.memoryConfig?.checkpointer === "postgres";
+  const isRedis = isEnabled && ctx.input.memoryConfig?.checkpointer === "redis";
+  const usesMemorySaver = isEnabled && ctx.hasMemory && !isPostgres && !isRedis;
+
   const imports = [
-    `import { StateGraph, START, END${ctx.hasMemory ? ", MemorySaver" + (ctxMemoryNeedsStore(ctx) ? ", MemoryStore" : "") : ""} } from "@langchain/langgraph";`,
+    `import { StateGraph, START, END${usesMemorySaver ? ", MemorySaver" + (ctxMemoryNeedsStore(ctx) ? ", MemoryStore" : "") : ""} } from "@langchain/langgraph";`,
+    isPostgres ? `import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";` : "",
+    isRedis ? `import { RedisSaver } from "@langchain/langgraph-checkpoint-redis";` : "",
     `import { ${schemaName} } from "./state.js";`,
     nodeExports.length > 0
       ? `import { ${nodeExports.join(", ")} } from "./nodes/index.js";`
@@ -72,7 +79,27 @@ export function buildGraphFile(
   const lastLine = lines[lines.length - 1];
   lines[lines.length - 1] = lastLine + ";";
 
-  if (ctx.hasMemory) {
+  if (isPostgres) {
+    const envVar =
+      ctx.input.memoryConfig?.checkpointerEnvVar || "POSTGRES_CHECKPOINTER_CONN_STRING";
+    lines.push(``);
+    lines.push(`const checkpointer = PostgresSaver.fromConnString(`);
+    lines.push(`  process.env.${envVar} ?? ""`);
+    lines.push(`);`);
+    lines.push(`// Ensure checkpointer tables exist in PostgreSQL`);
+    lines.push(`await checkpointer.setup();`);
+    lines.push(``);
+    lines.push(`export const ${graphVarName} = ${builderVarName}.compile({ checkpointer });`);
+  } else if (isRedis) {
+    const envVar =
+      ctx.input.memoryConfig?.checkpointerEnvVar || "REDIS_CHECKPOINTER_URL";
+    lines.push(``);
+    lines.push(`const checkpointer = new RedisSaver({`);
+    lines.push(`  url: process.env.${envVar} ?? "redis://localhost:6379",`);
+    lines.push(`});`);
+    lines.push(``);
+    lines.push(`export const ${graphVarName} = ${builderVarName}.compile({ checkpointer });`);
+  } else if (ctx.hasMemory) {
     lines.push(``);
     lines.push(`const checkpointer = new MemorySaver();`);
     if (ctxMemoryNeedsStore(ctx)) {

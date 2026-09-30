@@ -258,4 +258,100 @@ describe("compileLangGraph Compiler Fixes", () => {
     expect(fileMap.has("src/server.ts")).toBe(false);
     expect(fileMap.has("src/express.d.ts")).toBe(false);
   });
+
+  it("compiles graph with PostgresSaver checkpointer", () => {
+    const input: CompileLangGraphInput = {
+      graphLabel: "postgres-agent",
+      stateChannels: [
+        { key: "messages", type: "messages", reducer: "add_messages" },
+      ],
+      inputChannels: [],
+      memoryConfig: {
+        checkpointer: "postgres",
+        checkpointerNodeId: "db_node_1",
+        checkpointerEnvVar: "CUSTOM_POSTGRES_URL",
+      },
+      nodes: [
+        {
+          id: "node_1",
+          type: LANGGRAPH_CANVAS_NODE_NODE,
+          position: { x: 0, y: 0 },
+          data: { name: "responder", label: "responder" },
+        },
+      ],
+      edges: [
+        {
+          id: "e1",
+          source: NODE_ID_START,
+          target: "node_1",
+        },
+      ],
+    };
+
+    const files = compileLangGraph(input);
+    const fileMap = new Map(files.map((f) => [f.filename, f.content]));
+
+    // graph.ts should import and configure PostgresSaver with await checkpointer.setup()
+    const graphFile = fileMap.get("src/graph.ts");
+    expect(graphFile).toBeDefined();
+    expect(graphFile).toContain(`import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";`);
+    expect(graphFile).toContain(`process.env.CUSTOM_POSTGRES_URL`);
+    expect(graphFile).toContain(`await checkpointer.setup();`);
+    expect(graphFile).toContain(`.compile({ checkpointer })`);
+
+    // package.json should include postgres checkpointer and pg dependencies
+    const pkgJson = JSON.parse(fileMap.get("package.json") || "{}");
+    expect(pkgJson.dependencies["@langchain/langgraph-checkpoint-postgres"]).toBeDefined();
+    expect(pkgJson.dependencies["pg"]).toBeDefined();
+
+    // .env.example should contain the connection string var
+    const envFile = fileMap.get(".env.example");
+    expect(envFile).toContain("CUSTOM_POSTGRES_URL=postgresql://");
+  });
+
+  it("compiles graph with RedisSaver checkpointer", () => {
+    const input: CompileLangGraphInput = {
+      graphLabel: "redis-agent",
+      stateChannels: [
+        { key: "messages", type: "messages", reducer: "add_messages" },
+      ],
+      inputChannels: [],
+      memoryConfig: {
+        checkpointer: "redis",
+        checkpointerNodeId: "redis_node_1",
+        checkpointerEnvVar: "CUSTOM_REDIS_URL",
+      },
+      nodes: [
+        {
+          id: "node_1",
+          type: LANGGRAPH_CANVAS_NODE_NODE,
+          position: { x: 0, y: 0 },
+          data: { name: "responder", label: "responder" },
+        },
+      ],
+      edges: [
+        {
+          id: "e1",
+          source: NODE_ID_START,
+          target: "node_1",
+        },
+      ],
+    };
+
+    const files = compileLangGraph(input);
+    const fileMap = new Map(files.map((f) => [f.filename, f.content]));
+
+    const graphFile = fileMap.get("src/graph.ts");
+    expect(graphFile).toBeDefined();
+    expect(graphFile).toContain(`import { RedisSaver } from "@langchain/langgraph-checkpoint-redis";`);
+    expect(graphFile).toContain(`process.env.CUSTOM_REDIS_URL`);
+    expect(graphFile).toContain(`.compile({ checkpointer })`);
+
+    const pkgJson = JSON.parse(fileMap.get("package.json") || "{}");
+    expect(pkgJson.dependencies["@langchain/langgraph-checkpoint-redis"]).toBeDefined();
+    expect(pkgJson.dependencies["ioredis"]).toBeDefined();
+
+    const envFile = fileMap.get(".env.example");
+    expect(envFile).toContain("CUSTOM_REDIS_URL=redis://");
+  });
 });

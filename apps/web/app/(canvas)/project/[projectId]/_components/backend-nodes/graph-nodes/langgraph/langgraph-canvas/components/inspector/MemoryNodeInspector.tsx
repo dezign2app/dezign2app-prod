@@ -8,6 +8,7 @@ import {
   Sparkles,
   MessageSquare,
   Settings,
+  AlertTriangle,
 } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import {
@@ -34,12 +35,17 @@ export function MemoryNodeInspector({
   onDeleteMemory,
   onUpdateMemory,
 }: MemoryNodeInspectorProps) {
-  const entities = useBackendCanvasStore(
-    useShallow((s) =>
-      s.nodes.filter(
-        (n) => n?.type === "entity" && n.data?.dbType !== "vector",
+  const allCanvasNodes = useBackendCanvasStore((s) => s.nodes);
+  const postgresNodes = React.useMemo(
+    () => allCanvasNodes.filter((n) => n?.type === "database" && n.data?.dbEngine === "postgres"),
+    [allCanvasNodes],
+  );
+  const redisNodes = React.useMemo(
+    () =>
+      allCanvasNodes.filter(
+        (n) => n?.type === "redis_instance" || (n?.type === "database" && n.data?.dbEngine === "redis"),
       ),
-    ),
+    [allCanvasNodes],
   );
   const checkpointer = selectedMemoryData.checkpointer || "memory";
   const threadIdKey = selectedMemoryData.threadIdKey || "thread_id";
@@ -100,34 +106,149 @@ export function MemoryNodeInspector({
           />
         </div>
 
+        {/* Enable / Disable Checkpointer Toggle */}
+        <div className="flex items-center justify-between p-2.5 rounded-lg bg-background/60 border border-border/40">
+          <div className="flex flex-col">
+            <span className="text-xs font-semibold text-foreground">
+              Enable Checkpointing
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              Persist graph state snapshots across turns
+            </span>
+          </div>
+          <Switch
+            checked={selectedMemoryData.enabled !== false}
+            onCheckedChange={(c) => onUpdateMemory({ enabled: c })}
+          />
+        </div>
+
         {/* Checkpointer Engine */}
-        <div className="flex flex-col gap-2">
+        <div className={`flex flex-col gap-2 ${selectedMemoryData.enabled === false ? "opacity-40 pointer-events-none" : ""}`}>
           <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
             <Layers className="w-3.5 h-3.5 text-amber-500" />
             Checkpointer Engine
           </Label>
           <Select
             value={checkpointer}
-            onValueChange={(val: string) =>
-              onUpdateMemory({ checkpointer: val })
-            }
+            onValueChange={(val: string) => {
+              if (val === "postgres") {
+                const defaultPg = postgresNodes[0];
+                onUpdateMemory({
+                  checkpointer: "postgres",
+                  checkpointerConnectionId: defaultPg?.id,
+                });
+              } else if (val === "redis") {
+                const defaultRedis = redisNodes[0];
+                onUpdateMemory({
+                  checkpointer: "redis",
+                  checkpointerConnectionId: defaultRedis?.id,
+                });
+              } else {
+                onUpdateMemory({ checkpointer: val });
+              }
+            }}
           >
             <SelectTrigger className="h-7 text-xs bg-background font-mono">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="memory">In-Memory (MemorySaver)</SelectItem>
-              {entities.map((e) => (
-                <SelectItem key={e.id} value={e.data?.label || e.id}>
-                  {e.data?.label || "Untitled Table"} (Schema Entity)
-                </SelectItem>
-              ))}
+              <SelectItem value="postgres">PostgreSQL (PostgresSaver)</SelectItem>
+              <SelectItem value="redis">Redis (RedisSaver)</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-[10px] text-muted-foreground leading-tight">
             Persists state snapshots and message history across turns for
             agents.
           </p>
+
+          {/* Linked Database for PostgreSQL */}
+          {checkpointer === "postgres" && (
+            <div className="flex flex-col gap-1.5 mt-2 p-2.5 rounded-lg border border-sky-500/20 bg-sky-500/5">
+              <Label className="text-[11px] font-semibold text-sky-600 dark:text-sky-400 flex items-center gap-1.5">
+                <Database className="w-3 h-3" />
+                Linked PostgreSQL Database
+              </Label>
+              <Select
+                value={
+                  selectedMemoryData.checkpointerConnectionId &&
+                  postgresNodes.some((p) => p.id === selectedMemoryData.checkpointerConnectionId)
+                    ? String(selectedMemoryData.checkpointerConnectionId)
+                    : (postgresNodes[0]?.id || "none")
+                }
+                onValueChange={(val: string) =>
+                  onUpdateMemory({ checkpointerConnectionId: val === "none" ? undefined : val })
+                }
+              >
+                <SelectTrigger className="h-7 text-xs bg-background font-mono">
+                  <SelectValue placeholder="Select Database..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {postgresNodes.length === 0 ? (
+                    <SelectItem value="none" disabled>
+                      No PostgreSQL database in SchemaView
+                    </SelectItem>
+                  ) : (
+                    postgresNodes.map((db) => (
+                      <SelectItem key={db.id} value={db.id}>
+                        {db.data?.label || "PostgreSQL DB"} (postgres)
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              {postgresNodes.length === 0 && (
+                <div className="flex items-center gap-1.5 text-[10px] text-amber-500 font-medium mt-1">
+                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                  <span>No PostgreSQL database found in SchemaView. Please add one.</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Linked Redis Instance */}
+          {checkpointer === "redis" && (
+            <div className="flex flex-col gap-1.5 mt-2 p-2.5 rounded-lg border border-red-500/20 bg-red-500/5">
+              <Label className="text-[11px] font-semibold text-red-600 dark:text-red-400 flex items-center gap-1.5">
+                <HardDrive className="w-3 h-3" />
+                Linked Redis Instance
+              </Label>
+              <Select
+                value={
+                  selectedMemoryData.checkpointerConnectionId &&
+                  redisNodes.some((r) => r.id === selectedMemoryData.checkpointerConnectionId)
+                    ? String(selectedMemoryData.checkpointerConnectionId)
+                    : (redisNodes[0]?.id || "none")
+                }
+                onValueChange={(val: string) =>
+                  onUpdateMemory({ checkpointerConnectionId: val === "none" ? undefined : val })
+                }
+              >
+                <SelectTrigger className="h-7 text-xs bg-background font-mono">
+                  <SelectValue placeholder="Select Redis..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {redisNodes.length === 0 ? (
+                    <SelectItem value="none" disabled>
+                      No Redis in SchemaView
+                    </SelectItem>
+                  ) : (
+                    redisNodes.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.data?.label || "Redis Instance"}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              {redisNodes.length === 0 && (
+                <div className="flex items-center gap-1.5 text-[10px] text-amber-500 font-medium mt-1">
+                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                  <span>No Redis instance found in SchemaView. Please add one.</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

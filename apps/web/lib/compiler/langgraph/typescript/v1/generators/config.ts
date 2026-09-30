@@ -62,8 +62,19 @@ export function buildEnvExample(ctx: CompileContext): string {
     .filter(Boolean)
     .filter((v, i, a) => a.indexOf(v) === i);
 
-  if (envVars.length === 0) return "";
-  return envVars.map((v) => `${v}=your_api_key_here`).join("\n");
+  const lines = envVars.map((v) => `${v}=your_api_key_here`);
+
+  if (ctx.input.memoryConfig?.checkpointer === "postgres") {
+    const envVar =
+      ctx.input.memoryConfig.checkpointerEnvVar || "POSTGRES_CHECKPOINTER_CONN_STRING";
+    lines.push(`${envVar}=postgresql://user:password@localhost:5432/dbname`);
+  } else if (ctx.input.memoryConfig?.checkpointer === "redis") {
+    const envVar =
+      ctx.input.memoryConfig.checkpointerEnvVar || "REDIS_CHECKPOINTER_URL";
+    lines.push(`${envVar}=redis://localhost:6379`);
+  }
+
+  return lines.join("\n");
 }
 
 export function buildReadme(

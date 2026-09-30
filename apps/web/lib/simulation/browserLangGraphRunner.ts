@@ -96,6 +96,7 @@ export async function executeBrowserLangGraph(
     edges,
     stateChannels,
     inputChannels,
+    memoryConfig,
     inputValues,
     threadId,
     provider = "groq",
@@ -105,6 +106,12 @@ export async function executeBrowserLangGraph(
     onStepEnd,
     onCheckpoint,
   } = params;
+
+  if (memoryConfig?.checkpointer && memoryConfig.checkpointer !== "memory") {
+    console.warn(
+      `[sim] ${memoryConfig.checkpointer} checkpointer not supported directly in browser preview — using in-browser IndexedDB / MemorySaver fallback`,
+    );
+  }
 
   const trace: SimulationTraceEntry[] = [];
   const visitedNodes: string[] = [];

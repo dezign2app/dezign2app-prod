@@ -1,10 +1,11 @@
 import React, { useRef } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Table2, Trash, Settings, Sparkles } from "lucide-react";
+import { Database, Table2, Trash, Settings, Sparkles, Lock } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { createTypesNodeFromEntity } from "@/lib/stores/backendCanvas/packageTypesSync";
 import { getOutOfSyncDerivedTypesNodes } from "@/lib/stores/backendCanvas/node";
 import { cn } from "@workspace/ui/lib/utils";
+import { Badge } from "@workspace/ui/components/badge";
 import {
   Select,
   SelectContent,
@@ -155,27 +156,47 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         }
         placeholder={isVector ? "Enter vector collection name..." : "Enter table name..."}
         selected={selected}
-        onSave={handleSaveName}
+        onSave={data.readOnly ? undefined : handleSaveName}
+        badges={
+          data.systemBadge ? (
+            <Badge
+              variant="outline"
+              className="text-[9px] px-1.5 py-0 font-mono bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30 flex items-center gap-1 uppercase"
+            >
+              <Lock size={9} />
+              <span>{data.systemBadge}</span>
+            </Badge>
+          ) : undefined
+        }
         rightElement={
-          <div className="flex items-center gap-0.5 mr-1">
+          data.readOnly ? (
             <div
-              className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-secondary text-muted-foreground hover:text-amber-500 transition-all cursor-pointer"
-              title="Generate / Sync TypesNode"
-              onClick={(e: React.MouseEvent<HTMLDivElement>) => {
-                e.stopPropagation();
-                createTypesNodeFromEntity(id);
-              }}
+              className="flex items-center text-muted-foreground mr-1.5 p-1"
+              title="System-managed table (Read-only)"
             >
-              <Sparkles size={14} />
+              <Lock size={13} className="text-sky-500" />
             </div>
-            <div
-              className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-all cursor-pointer"
-              title="DB Operation Functions"
-              onClick={openSettings}
-            >
-              <Settings size={14} />
+          ) : (
+            <div className="flex items-center gap-0.5 mr-1">
+              <div
+                className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-secondary text-muted-foreground hover:text-amber-500 transition-all cursor-pointer"
+                title="Generate / Sync TypesNode"
+                onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+                  e.stopPropagation();
+                  createTypesNodeFromEntity(id);
+                }}
+              >
+                <Sparkles size={14} />
+              </div>
+              <div
+                className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+                title="DB Operation Functions"
+                onClick={openSettings}
+              >
+                <Settings size={14} />
+              </div>
             </div>
-          </div>
+          )
         }
       />
 
@@ -224,7 +245,13 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
               }
             }}
           >
-            <SelectTrigger className="h-5 text-[10px] font-semibold bg-background/60 hover:bg-background border-border/40 px-1.5 py-0 shadow-none">
+            <SelectTrigger
+              disabled={data.readOnly}
+              className={cn(
+                "h-5 text-[10px] font-semibold bg-background/60 hover:bg-background border-border/40 px-1.5 py-0 shadow-none",
+                data.readOnly && "opacity-70 cursor-not-allowed",
+              )}
+            >
               <SelectValue placeholder="Unattached" />
             </SelectTrigger>
             <SelectContent>
@@ -243,8 +270,12 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       {/* Description */}
       <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
         <Textarea
-          className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
-          placeholder="description"
+          readOnly={data.readOnly}
+          className={cn(
+            "min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50",
+            data.readOnly && "cursor-default",
+          )}
+          placeholder={data.readOnly ? "System-managed entity" : "description"}
           value={data.description || ""}
           onChange={(e) =>
             updateNode(id, { data: { ...data, description: e.target.value } })

@@ -151,6 +151,7 @@ export interface CanvasLangGraphNodeData {
   mcpServerConnections?: McpServerConnection[];
   startNodePosition?: { x: number; y: number };
   stateNodePosition?: { x: number; y: number };
+  checkpointerNodePosition?: { x: number; y: number };
   endNodePosition?: { x: number; y: number };
   endNodes?: {
     id: string;

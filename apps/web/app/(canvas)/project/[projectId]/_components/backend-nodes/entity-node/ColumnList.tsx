@@ -81,16 +81,18 @@ export const ColumnList = ({
             </span>
           )}
         </div>
-        <div
-          className="opacity-0 group-hover:opacity-100 cursor-pointer text-muted-foreground hover:text-foreground transition-all p-0.5"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleAdd();
-          }}
-          title="Add Column"
-        >
-          <Plus size={12} />
-        </div>
+        {!data?.readOnly && (
+          <div
+            className="opacity-0 group-hover:opacity-100 cursor-pointer text-muted-foreground hover:text-foreground transition-all p-0.5"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAdd();
+            }}
+            title="Add Column"
+          >
+            <Plus size={12} />
+          </div>
+        )}
       </div>
       {!isCollapsed && (
         <div className="flex flex-col">

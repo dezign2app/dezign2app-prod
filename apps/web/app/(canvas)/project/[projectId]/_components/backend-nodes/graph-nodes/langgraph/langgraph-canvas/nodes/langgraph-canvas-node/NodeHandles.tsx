@@ -14,12 +14,12 @@ import {
 export const NodeHandles: React.FC = () => {
   return (
     <>
-      {/* Target Handles for LLM, Tools, Middleware, Memory */}
+      {/* Target Handles for LLM, Tools, Middleware */}
       <Handle
         type="target"
         position={Position.Top}
         id={HANDLE_LLM_IN}
-        style={{ left: "12.5%" }}
+        style={{ left: "16.6%" }}
         isValidConnection={(connection: Connection) =>
           connection.sourceHandle === HANDLE_LLM_OUT ||
           Boolean(connection.source?.startsWith("llm_"))
@@ -31,7 +31,7 @@ export const NodeHandles: React.FC = () => {
         type="target"
         position={Position.Top}
         id={HANDLE_TOOL_IN}
-        style={{ left: "37.5%" }}
+        style={{ left: "50%" }}
         isValidConnection={(connection: Connection) =>
           connection.sourceHandle === HANDLE_TOOL_OUT ||
           Boolean(connection.source?.startsWith("tool_"))
@@ -43,28 +43,13 @@ export const NodeHandles: React.FC = () => {
         type="target"
         position={Position.Top}
         id={HANDLE_MIDDLEWARE_IN}
-        style={{ left: "62.5%" }}
+        style={{ left: "83.3%" }}
         isValidConnection={(connection: Connection) =>
           connection.sourceHandle === HANDLE_MIDDLEWARE_OUT ||
           Boolean(connection.source?.startsWith("mw_"))
         }
         className="!bg-purple-500 !w-3.5 !h-3.5 !border-2 !border-background hover:!scale-125 transition-transform !-top-[7px]"
         title="Connect Middleware (middleware_out)"
-      />
-      <Handle
-        type="target"
-        position={Position.Top}
-        id={HANDLE_MEMORY_IN}
-        style={{ left: "87.5%" }}
-        isValidConnection={(connection: Connection) =>
-          connection.sourceHandle === HANDLE_MEMORY_OUT ||
-          Boolean(
-            connection.source?.startsWith("mem_") ||
-              connection.source?.startsWith("db_"),
-          )
-        }
-        className="!bg-amber-500 !w-3.5 !h-3.5 !border-2 !border-background hover:!scale-125 transition-transform !-top-[7px]"
-        title="Connect Memory / DB Ref Node (memory_out)"
       />
 
       {/* Execution Flow Handles */}

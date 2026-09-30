@@ -100,6 +100,7 @@ export const HANDLE_OUTPUT_OUT = "output_out" as const;
 export const NODE_ID_START = "START" as const;
 export const NODE_ID_END = "END" as const;
 export const NODE_ID_STATE_GLOBAL = "STATE_GLOBAL" as const;
+export const NODE_ID_CHECKPOINTER = "CHECKPOINTER" as const;
 
 // ─── ID Prefixes ──────────────────────────────────────────────────────────────
 export const NODE_ID_PREFIX_PORT = "port_" as const;
@@ -110,6 +111,7 @@ export function isReservedNodeId(id: string | null | undefined): boolean {
   return (
     id === NODE_ID_START ||
     id === NODE_ID_STATE_GLOBAL ||
+    id === NODE_ID_CHECKPOINTER ||
     id.startsWith(NODE_ID_PREFIX_PORT)
   );
 }
