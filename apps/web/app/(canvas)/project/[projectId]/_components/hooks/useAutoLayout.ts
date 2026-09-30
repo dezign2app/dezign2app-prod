@@ -189,7 +189,11 @@ export function useAutoLayout(options?: UseAutoLayoutOptions) {
             n.type === "langgraph_agent" ||
             n.type === "langgraph_node" ||
             n.type === "start" ||
-            n.id === "START",
+            n.id === "START" ||
+            n.id === "STATE_GLOBAL" ||
+            n.id === "CHECKPOINTER" ||
+            n.type === "state_global" ||
+            n.type === "langgraph_memory",
         );
 
       if (isSchemaView) {
