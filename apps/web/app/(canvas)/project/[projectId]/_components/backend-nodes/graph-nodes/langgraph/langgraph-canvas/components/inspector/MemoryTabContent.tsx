@@ -32,54 +32,15 @@ interface MemoryTabContentProps {
   onClose?: () => void;
 }
 
-const LANGGRAPH_TABLE_DEFINITIONS = [
-  {
-    name: "langgraph_checkpoints",
-    description: "LangGraph state checkpoints indexed by thread and run namespace",
-    columns: [
-      { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "parent_checkpoint_id", type: "TEXT", isNotNull: false },
-      { name: "type", type: "TEXT", isNotNull: false },
-      { name: "checkpoint", type: "JSON", isNotNull: true },
-      { name: "metadata", type: "JSON", isNotNull: true },
-    ],
-  },
-  {
-    name: "langgraph_checkpoint_writes",
-    description: "Pending channel writes and delta operations per graph step",
-    columns: [
-      { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "task_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "idx", type: "INTEGER", isPrimaryKey: true, isNotNull: true },
-      { name: "channel", type: "TEXT", isNotNull: true },
-      { name: "type", type: "TEXT", isNotNull: false },
-      { name: "blob", type: "JSON", isNotNull: true },
-    ],
-  },
-  {
-    name: "langgraph_checkpoint_blobs",
-    description: "Serialized large-state blobs and message buffers",
-    columns: [
-      { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "channel", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "version", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      { name: "type", type: "TEXT", isNotNull: false },
-      { name: "blob", type: "JSON", isNotNull: true },
-    ],
-  },
-  {
-    name: "langgraph_checkpoint_migrations",
-    description: "Database migration tracker for LangGraph schema versions",
-    columns: [
-      { name: "v", type: "INTEGER", isPrimaryKey: true, isNotNull: true },
-    ],
-  },
-];
+import {
+  LANGGRAPH_POSTGRES_TABLE_DEFINITIONS,
+  LANGGRAPH_REDIS_SCHEMA_DEFINITIONS,
+  provisionCheckpointerTables,
+  getExistingCheckpointerTables,
+} from "../../utils/checkpointerTables";
+import { CheckpointerTablesList } from "./CheckpointerTablesList";
+
+export const LANGGRAPH_TABLE_DEFINITIONS = LANGGRAPH_POSTGRES_TABLE_DEFINITIONS;
 
 export function MemoryTabContent({
   memoryConfig,
@@ -87,7 +48,9 @@ export function MemoryTabContent({
   onClose,
 }: MemoryTabContentProps) {
   const nodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
   const addNode = useBackendCanvasStore((s) => s.addNode);
+  const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const addEdge = useBackendCanvasStore((s) => s.addEdge);
 
   const postgresDatabaseNodes = useMemo(
@@ -110,17 +73,11 @@ export function MemoryTabContent({
     [nodes, linkedNodeId],
   );
 
-  // Check if LangGraph tables exist under the linked database
+  // Check if LangGraph tables exist under the linked database / redis instance
   const existingLangGraphTables = useMemo(() => {
     if (!linkedNodeId) return [];
-    return nodes.filter(
-      (n) =>
-        n.type === "entity" &&
-        n.data?.databaseId === linkedNodeId &&
-        (n.data?.systemBadge === "langgraph" ||
-          LANGGRAPH_TABLE_DEFINITIONS.some((def) => def.name === n.data?.label || def.name === n.data?.tableName)),
-    );
-  }, [nodes, linkedNodeId]);
+    return getExistingCheckpointerTables(nodes, edges, currentEngine, linkedNodeId);
+  }, [nodes, edges, currentEngine, linkedNodeId]);
 
   const isEnabled = memoryConfig.enabled !== false;
   const hasMissingLinkedDb =
@@ -130,64 +87,33 @@ export function MemoryTabContent({
 
   const handleCreateTables = () => {
     if (!linkedNodeId || !linkedNode) {
-      toast.error("Please select a PostgreSQL database first.");
+      toast.error(
+        currentEngine === "redis"
+          ? "Please select a Redis instance first."
+          : "Please select a PostgreSQL database first.",
+      );
       return;
     }
 
-    const dbPos = linkedNode.position || { x: 200, y: 200 };
-    let createdCount = 0;
-
-    LANGGRAPH_TABLE_DEFINITIONS.forEach((tableDef, idx) => {
-      // Check if table already exists under this database
-      const alreadyExists = nodes.some(
-        (n) =>
-          n.type === "entity" &&
-          n.data?.databaseId === linkedNodeId &&
-          (n.data?.label === tableDef.name || n.data?.tableName === tableDef.name),
-      );
-
-      if (alreadyExists) return;
-
-      const tableId = crypto.randomUUID();
-      const colOffset = (idx % 2) * 320;
-      const rowOffset = Math.floor(idx / 2) * 260 + 260;
-
-      addNode({
-        id: tableId,
-        type: "entity",
-        position: { x: dbPos.x + colOffset, y: dbPos.y + rowOffset },
-        data: {
-          label: tableDef.name,
-          tableName: tableDef.name,
-          description: tableDef.description,
-          dbType: "relational",
-          systemBadge: "langgraph",
-          readOnly: true,
-          databaseId: linkedNodeId,
-          columns: tableDef.columns,
-        },
-      });
-
-      addEdge({
-        id: `edge-${linkedNodeId}-${tableId}`,
-        source: linkedNodeId,
-        target: tableId,
-        sourceHandle: "database-source",
-        targetHandle: "database-entity-target",
-        type: "database-connection",
-      });
-
-      createdCount++;
+    const createdCount = provisionCheckpointerTables({
+      linkedNodeId,
+      checkpointerType: currentEngine,
+      nodes,
+      edges,
+      addNode,
+      updateNode,
+      addEdge,
     });
 
     if (createdCount > 0) {
       toast.success(
-        `Created ${createdCount} LangGraph table${createdCount > 1 ? "s" : ""} in SchemaView!`,
+        `Provisioned & synced LangGraph ${currentEngine === "redis" ? "schemas" : "tables"} with foreign key mappings and indexes in SchemaView!`,
       );
     } else {
-      toast.info("All 4 LangGraph checkpointer tables already exist.");
+      toast.info(`All LangGraph checkpointer ${currentEngine === "redis" ? "schemas" : "tables"} are up to date.`);
     }
   };
+
 
   return (
     <div className="flex-1 min-h-0 p-4 overflow-y-auto hide-scrollbar m-0 flex flex-col gap-5">
@@ -408,41 +334,12 @@ export function MemoryTabContent({
           </Select>
 
           {/* Table Provisioning Status & Action */}
-          <div className="pt-2 border-t flex flex-col gap-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground flex items-center gap-1.5">
-                <Table2 className="w-3.5 h-3.5" />
-                SchemaView Tables:
-              </span>
-              {existingLangGraphTables.length === 4 ? (
-                <span className="text-[11px] font-semibold text-emerald-500 flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  All 4 Tables Provisioned
-                </span>
-              ) : (
-                <span className="text-[11px] font-medium text-amber-500">
-                  {existingLangGraphTables.length} / 4 tables present
-                </span>
-              )}
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCreateTables}
-              disabled={!linkedNodeId}
-              className="h-8 text-xs gap-1.5 font-semibold text-sky-600 dark:text-sky-400 border-sky-500/30 hover:bg-sky-500/10"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Create LangGraph Tables in SchemaView
-            </Button>
-            <span className="text-[10px] text-muted-foreground">
-              Provisions <code className="font-mono text-[10px]">langgraph_checkpoints</code>,{" "}
-              <code className="font-mono text-[10px]">langgraph_checkpoint_writes</code>,{" "}
-              <code className="font-mono text-[10px]">langgraph_checkpoint_blobs</code>, and{" "}
-              <code className="font-mono text-[10px]">langgraph_checkpoint_migrations</code> with [LangGraph 🔒] badge.
-            </span>
-          </div>
+          <CheckpointerTablesList
+            checkpointerType="postgres"
+            existingTables={existingLangGraphTables}
+            linkedNodeId={linkedNodeId}
+            onCreateTables={handleCreateTables}
+          />
         </div>
       )}
 
@@ -494,6 +391,14 @@ export function MemoryTabContent({
               )}
             </SelectContent>
           </Select>
+
+          {/* Redis Schema Provisioning Status & Action */}
+          <CheckpointerTablesList
+            checkpointerType="redis"
+            existingTables={existingLangGraphTables}
+            linkedNodeId={linkedNodeId}
+            onCreateTables={handleCreateTables}
+          />
         </div>
       )}
 

@@ -16,6 +16,7 @@ import {
   edgeDataSchema,
   stateStoreNodeDataSchema,
   databaseDataSchema,
+  entityDataSchema,
 } from "@workspace/canvas/schemas";
 
 describe("Convex canvasValidators exact schema", () => {
@@ -990,6 +991,60 @@ describe("Convex canvasValidators exact schema", () => {
     expect(backendEdgeDataValidator.fields.actionId).toBeDefined();
     expect(backendEdgeDataValidator.fields.storageNodeId).toBeDefined();
     expect(backendEdgeDataValidator.fields.refNodeId).toBeDefined();
+  });
+
+  it("validates LangGraph checkpointer relational entity table with systemBadge and readOnly in Convex & Zod schemas", () => {
+    // Exact payload reported in user's Convex upsertBackendNode error
+    const userPayload = {
+      columns: [
+        { isNotNull: true, isPrimaryKey: true, name: "thread_id", type: "TEXT" },
+        { isNotNull: true, isPrimaryKey: true, name: "checkpoint_ns", type: "TEXT" },
+        { isNotNull: true, isPrimaryKey: true, name: "checkpoint_id", type: "TEXT" },
+        { isNotNull: false, name: "parent_checkpoint_id", type: "TEXT" },
+        { isNotNull: false, name: "type", type: "TEXT" },
+        { isNotNull: true, name: "checkpoint", type: "JSON" },
+        { isNotNull: true, name: "metadata", type: "JSON" },
+      ],
+      databaseId: "5731d649-04ec-4eaf-bb35-f8179a371c1c",
+      dbType: "relational" as const,
+      description: "LangGraph state checkpoints indexed by thread and run namespace",
+      label: "langgraph_checkpoints",
+      position: { x: 85.0, y: 320.0 },
+      readOnly: true,
+      systemBadge: "langgraph",
+      tableName: "langgraph_checkpoints",
+    };
+
+    const parsed = entityDataSchema.safeParse(userPayload);
+    expect(parsed.success).toBe(true);
+
+    // Verify convex validator fields on backendEntityDataValidator
+    expect(backendEntityDataValidator.fields.systemBadge).toBeDefined();
+    expect(backendEntityDataValidator.fields.readOnly).toBeDefined();
+    expect(backendEntityDataValidator.fields.isReadOnly).toBeDefined();
+  });
+
+  it("validates LangGraph checkpointer redis_schema node with systemBadge and readOnly", () => {
+    const redisSchemaPayload = {
+      columns: [
+        { name: "checkpoint", type: "JSON", isNotNull: true },
+        { name: "metadata", type: "JSON", isNotNull: true },
+        { name: "parent_checkpoint_id", type: "TEXT", isNotNull: false },
+      ],
+      databaseId: "redis-instance-123",
+      dbType: "redis" as const,
+      redisDataStructure: "hash" as const,
+      keyTemplate: "checkpoint:{thread_id}:{checkpoint_ns}:{checkpoint_id}",
+      description: "LangGraph state checkpoints hash map indexed by thread and run namespace",
+      label: "langgraph_checkpoints",
+      position: { x: 85.0, y: 320.0 },
+      readOnly: true,
+      systemBadge: "langgraph",
+      tableName: "langgraph_checkpoints",
+    };
+
+    const parsed = entityDataSchema.safeParse(redisSchemaPayload);
+    expect(parsed.success).toBe(true);
   });
 });
 

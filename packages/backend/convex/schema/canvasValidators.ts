@@ -960,6 +960,8 @@ export const backendNodeDataValidator = v.union(
     isInstalled: v.optional(v.boolean()),
     installError: v.optional(v.string()),
     isReadOnly: v.optional(v.boolean()),
+    readOnly: v.optional(v.boolean()),
+    systemBadge: v.optional(v.string()),
     stackOrder: v.optional(v.number()),
     storageNodeId: v.optional(v.string()),
     storageProvider: v.optional(v.string()),

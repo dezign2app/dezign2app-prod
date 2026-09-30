@@ -33,6 +33,9 @@ export const baseNodeDataSchema = z.object({
   pageSourceCode: z.string().optional(),
   aiEditing: z.boolean().optional(),
   envVars: z.array(envVarItemSchema).optional(),
+  systemBadge: z.string().optional(),
+  readOnly: z.boolean().optional(),
+  isReadOnly: z.boolean().optional(),
 });
 
 export const resourceItemSchema = z.object({
