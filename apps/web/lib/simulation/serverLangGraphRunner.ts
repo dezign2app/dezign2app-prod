@@ -32,6 +32,7 @@ import type {
 } from "@workspace/canvas";
 import { evaluateRouterBranch } from "./langgraph";
 import type { SimulationTraceEntry } from "./types";
+import { formatStreamingBatch, type StreamBatchItem } from "./streamFormatter";
 
 export interface CheckpointerConnectionConfig {
   host?: string;
@@ -64,6 +65,19 @@ export interface ServerExecutionCheckpoint {
   stepName: string;
   state: Record<string, unknown>;
   timestamp: number;
+}
+
+export interface ServerLLMStreamBatch {
+  index: number;
+  delta: string;
+  content: string;
+  timestamp: string;
+  raw?: unknown;
+}
+
+export interface ServerLLMResult {
+  text: string;
+  streamBatches: ServerLLMStreamBatch[];
 }
 
 export interface ServerExecutionResult {
@@ -328,6 +342,8 @@ export async function executeServerLangGraph(
 
   const trace: SimulationTraceEntry[] = [];
   const visitedNodes: string[] = [];
+  const nodeStreamBatchesMap = new Map<string, StreamBatchItem[]>();
+  const nodeLlmRequestMap = new Map<string, unknown>();
   let latestAssistantResponse: string | undefined;
 
   // 1. Build Dynamic Annotation Schema for @langchain/langgraph StateGraph
@@ -356,12 +372,12 @@ export async function executeServerLangGraph(
       });
     } else if (ch.type === "number") {
       schemaSpec[ch.key] = Annotation<number>({
-        reducer: (_, y) => (y !== undefined ? Number(y) : 0),
+        reducer: (x, y) => (y !== undefined ? Number(y) : (x !== undefined ? Number(x) : 0)),
         default: () => Number(ch.defaultValue) || 0,
       });
     } else if (ch.type === "boolean") {
       schemaSpec[ch.key] = Annotation<boolean>({
-        reducer: (_, y) => Boolean(y),
+        reducer: (x, y) => (y !== undefined ? Boolean(y) : (x !== undefined ? Boolean(x) : false)),
         default: () => Boolean(ch.defaultValue),
       });
     } else if (ch.type === "object" || ch.type === "json") {
@@ -371,7 +387,7 @@ export async function executeServerLangGraph(
       });
     } else {
       schemaSpec[ch.key] = Annotation<string>({
-        reducer: (_, y) => (y !== undefined ? String(y) : ""),
+        reducer: (x, y) => (y !== undefined ? String(y) : String(x ?? "")),
         default: () => String(ch.defaultValue ?? ""),
       });
     }
@@ -508,7 +524,8 @@ export async function executeServerLangGraph(
                 : undefined);
 
         const responseFormat = agentData.responseFormat;
-        const responseText = await callServerLLM({
+        const streamEnabled = agentData.streamConfig?.enabled !== false;
+        const { text: responseText, streamBatches } = await callServerLLM({
           provider: effectiveProvider,
           apiKey: effectiveApiKey,
           modelName: effectiveModel,
@@ -516,6 +533,7 @@ export async function executeServerLangGraph(
           messages,
           customUrl: llmData?.url || llmData?.baseUrl,
           responseFormat,
+          streamEnabled,
         });
 
         latestAssistantResponse = responseText;
@@ -536,6 +554,35 @@ export async function executeServerLangGraph(
         } else {
           outputDelta.messages = [new AIMessage(responseText)];
           outputDelta.response = responseText;
+        }
+
+        outputDelta.llmRequest = {
+          provider: effectiveProvider,
+          model: effectiveModel,
+          stream: streamEnabled,
+          systemPrompt,
+          messageCount: messages.length,
+        };
+        nodeLlmRequestMap.set(node.id, outputDelta.llmRequest);
+
+        if (streamBatches && streamBatches.length > 0) {
+          const runId = `run_${threadId.slice(0, 8)}_${Math.random().toString(36).slice(2, 6)}`;
+          const stripEmpty = agentData.streamConfig?.envelope?.stripEmptyDeltas !== false;
+          const filtered = streamBatches.filter((b) => (stripEmpty ? Boolean(b.delta) : true));
+          const formattedBatches: StreamBatchItem[] = filtered.map((b, newIdx) => ({
+            ...b,
+            index: newIdx,
+            formatted: formatStreamingBatch({
+              batch: b,
+              nodeName,
+              runId,
+              streamConfig: agentData.streamConfig,
+            }),
+          }));
+
+          nodeStreamBatchesMap.set(node.id, formattedBatches);
+          outputDelta.streamBatches = formattedBatches;
+          outputDelta.streamBatchCount = formattedBatches.length;
         }
 
         for (const update of agentData.stateUpdates || []) {
@@ -596,7 +643,7 @@ export async function executeServerLangGraph(
             msgs = [{ role: "user", content: JSON.stringify(state) }];
           }
 
-          const responseText = await callServerLLM({
+          const { text: responseText, streamBatches } = await callServerLLM({
             provider: effectiveProvider,
             apiKey: effectiveApiKey,
             modelName: effectiveModel,
@@ -609,6 +656,24 @@ export async function executeServerLangGraph(
           const outKey = stepData.stepId || node.id || "response";
           outputDelta[outKey] = responseText;
           outputDelta.messages = [new AIMessage(responseText)];
+          if (streamBatches && streamBatches.length > 0) {
+            const runId = `run_${threadId.slice(0, 8)}_${Math.random().toString(36).slice(2, 6)}`;
+            const filtered = streamBatches.filter((b) => Boolean(b.delta));
+            const formattedBatches: StreamBatchItem[] = filtered.map((b, newIdx) => ({
+              ...b,
+              index: newIdx,
+              formatted: formatStreamingBatch({
+                batch: b,
+                nodeName,
+                runId,
+                streamConfig: undefined,
+              }),
+            }));
+
+            nodeStreamBatchesMap.set(node.id, formattedBatches);
+            outputDelta.streamBatches = formattedBatches;
+            outputDelta.streamBatchCount = formattedBatches.length;
+          }
         }
 
         // B2: Tool Node Step
@@ -805,6 +870,10 @@ export async function executeServerLangGraph(
     }
   }
 
+  if (Object.keys(initialState).length === 0) {
+    initialState.messages = [];
+  }
+
   // Record START trace
   visitedNodes.push("START");
   trace.push({
@@ -818,6 +887,7 @@ export async function executeServerLangGraph(
   });
 
   // 7. Execute official LangGraph streaming run
+  const accumulatedState: Record<string, unknown> = clone(initialState);
   try {
     const stream = await compiledGraph.stream(initialState, {
       configurable: { thread_id: threadId },
@@ -838,6 +908,27 @@ export async function executeServerLangGraph(
               serializedDelta[key] = value;
             }
           }
+        }
+
+        Object.assign(accumulatedState, serializedDelta);
+
+        // Attach streaming batches captured during execution
+        const nodeBatches = nodeStreamBatchesMap.get(nodeId) || [];
+        if (nodeBatches.length > 0) {
+          serializedDelta.streamBatches = nodeBatches;
+          serializedDelta.streamBatchCount = nodeBatches.length;
+        }
+
+        const nodeObj = nodes.find((n) => n.id === nodeId);
+        const isAgent = nodeObj?.type === "langgraph_agent" || nodeObj?.type === "langgraph_node";
+        const agentData = isAgent ? (nodeObj?.data as AgentNodeData) : undefined;
+        if (agentData?.streamConfig) {
+          serializedDelta.streamConfig = agentData.streamConfig;
+        }
+
+        const llmReq = nodeLlmRequestMap.get(nodeId);
+        if (llmReq) {
+          serializedDelta.llmRequest = llmReq;
         }
 
         trace.push({
@@ -881,7 +972,7 @@ export async function executeServerLangGraph(
   }
 
   // 8. Extract final state snapshot & checkpoints from official StateGraph checkpointer
-  let finalState: Record<string, unknown> = {};
+  let finalState: Record<string, unknown> = { ...accumulatedState };
   const checkpoints: ServerExecutionCheckpoint[] = [];
 
   if (isMemoryEnabled && checkpointer) {
@@ -890,7 +981,8 @@ export async function executeServerLangGraph(
         configurable: { thread_id: threadId },
       });
       if (stateSnapshot?.values) {
-        finalState = serializeStateValues(stateSnapshot.values);
+        const snapVals = serializeStateValues(stateSnapshot.values);
+        finalState = { ...accumulatedState, ...snapVals };
       }
 
       for await (const stateItem of compiledGraph.getStateHistory({
@@ -907,8 +999,8 @@ export async function executeServerLangGraph(
           timestamp: stateItem.createdAt ? new Date(stateItem.createdAt).getTime() : Date.now(),
         });
       }
-    } catch {
-      // fallback
+    } catch (err) {
+      console.error("GETSTATE ERROR:", err);
     }
   }
 
@@ -954,8 +1046,9 @@ async function callServerLLM(args: {
   messages: Array<{ role: string; content: string }>;
   customUrl?: string;
   responseFormat?: LangGraphAgentResponseFormatConfig;
-}): Promise<string> {
-  const { provider, apiKey, modelName, systemPrompt, messages, customUrl, responseFormat } = args;
+  streamEnabled?: boolean;
+}): Promise<ServerLLMResult> {
+  const { provider, apiKey, modelName, systemPrompt, messages, customUrl, responseFormat, streamEnabled = true } = args;
 
   const isStructured = Boolean(responseFormat?.enabled);
   const schemaStr = responseFormat?.schemaJson?.trim();
@@ -967,7 +1060,7 @@ async function callServerLLM(args: {
     }\nDo not include any conversational preamble, explanations, markdown backticks, or any text other than the JSON object itself.`;
   }
 
-  // 1. Groq (uses groq-sdk or fetch)
+  // 1. Groq (streaming)
   if (provider === "groq") {
     const key = apiKey || process.env.GROQ_API_KEY;
     if (!key) {
@@ -981,14 +1074,70 @@ async function callServerLLM(args: {
         content: m.content,
       })),
     ];
-    const completion = await groq.chat.completions.create({
-      model: modelName || "openai/gpt-oss-120b",
-      messages: promptMessages,
-      temperature: isStructured ? 0.2 : 0.7,
-      stream: false,
-      ...(isStructured ? { response_format: { type: "json_object" as const } } : {}),
-    });
-    return "choices" in completion ? completion.choices[0]?.message?.content || "" : "";
+
+    if (!streamEnabled) {
+      const completion = await groq.chat.completions.create({
+        model: modelName || "openai/gpt-oss-120b",
+        messages: promptMessages,
+        temperature: isStructured ? 0.2 : 0.7,
+        stream: false,
+        ...(isStructured ? { response_format: { type: "json_object" as const } } : {}),
+      });
+      const text = "choices" in completion ? completion.choices[0]?.message?.content || "" : "";
+      return { text, streamBatches: [] };
+    }
+
+    try {
+      const stream = await groq.chat.completions.create({
+        model: modelName || "openai/gpt-oss-120b",
+        messages: promptMessages,
+        temperature: isStructured ? 0.2 : 0.7,
+        stream: true,
+        ...(isStructured ? { response_format: { type: "json_object" as const } } : {}),
+      });
+
+      const streamBatches: ServerLLMStreamBatch[] = [];
+      let fullText = "";
+      let idx = 0;
+
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content || "";
+        if (delta) {
+          fullText += delta;
+        }
+        streamBatches.push({
+          index: idx++,
+          delta,
+          content: fullText,
+          timestamp: new Date().toISOString(),
+          raw: chunk.choices[0],
+        });
+      }
+
+      return { text: fullText, streamBatches };
+    } catch {
+      // Fallback to non-streaming if stream mode encountered an issue
+      const completion = await groq.chat.completions.create({
+        model: modelName || "openai/gpt-oss-120b",
+        messages: promptMessages,
+        temperature: isStructured ? 0.2 : 0.7,
+        stream: false,
+        ...(isStructured ? { response_format: { type: "json_object" as const } } : {}),
+      });
+      const text = "choices" in completion ? completion.choices[0]?.message?.content || "" : "";
+      return {
+        text,
+        streamBatches: [
+          {
+            index: 0,
+            delta: text,
+            content: text,
+            timestamp: new Date().toISOString(),
+            raw: "choices" in completion ? completion.choices[0] : completion,
+          },
+        ],
+      };
+    }
   }
 
   // 2. OpenAI & Anthropic & Custom HTTP
@@ -1030,11 +1179,13 @@ async function callServerLLM(args: {
               role: m.role === "assistant" ? "assistant" : "user",
               content: m.content,
             })),
+            stream: streamEnabled,
           }
         : {
             model: modelName,
             messages: promptMessages,
             temperature: isStructured ? 0.2 : 0.7,
+            stream: streamEnabled,
             ...(isStructured
               ? { response_format: { type: "json_object" } }
               : {}),
@@ -1046,9 +1197,93 @@ async function callServerLLM(args: {
     throw new Error(`${provider.toUpperCase()} API returned HTTP ${res.status}: ${await res.text()}`);
   }
 
-  const json = await res.json();
-  if (provider === "anthropic") {
-    return json.content?.[0]?.text || "";
+  if (!streamEnabled) {
+    const json = await res.json();
+    const content =
+      provider === "anthropic"
+        ? json.content?.[0]?.text || ""
+        : json.choices?.[0]?.message?.content || "";
+    return { text: content, streamBatches: [] };
   }
-  return json.choices?.[0]?.message?.content || "";
+
+  const streamBatches: ServerLLMStreamBatch[] = [];
+  let fullText = "";
+  let idx = 0;
+
+  if (res.body) {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === "data: [DONE]") continue;
+
+          if (trimmed.startsWith("data: ")) {
+            const dataStr = trimmed.slice(6).trim();
+            try {
+              const parsed = JSON.parse(dataStr);
+              let delta = "";
+              if (provider === "anthropic") {
+                if (parsed.type === "content_block_delta") {
+                  delta = parsed.delta?.text || "";
+                }
+              } else {
+                delta = parsed.choices?.[0]?.delta?.content || "";
+              }
+              if (delta) {
+                fullText += delta;
+              }
+              streamBatches.push({
+                index: idx++,
+                delta,
+                content: fullText,
+                timestamp: new Date().toISOString(),
+                raw: parsed,
+              });
+            } catch {
+              // ignore non-json SSE lines
+            }
+          }
+        }
+      }
+    } catch {
+      // Stream reading ended
+    }
+  }
+
+  // Fallback if reader didn't yield batches (e.g. non-streaming endpoint response)
+  if (!fullText && streamBatches.length === 0) {
+    try {
+      const json = await res.json();
+      const content =
+        provider === "anthropic"
+          ? json.content?.[0]?.text || ""
+          : json.choices?.[0]?.message?.content || "";
+      return {
+        text: content,
+        streamBatches: [
+          {
+            index: 0,
+            delta: content,
+            content,
+            timestamp: new Date().toISOString(),
+            raw: json,
+          },
+        ],
+      };
+    } catch {
+      // return as-is
+    }
+  }
+
+  return { text: fullText, streamBatches };
 }

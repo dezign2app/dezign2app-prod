@@ -94,9 +94,13 @@ export const EventStreamPanel: React.FC<EventStreamPanelProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-[9px] font-mono text-muted-foreground pt-1 opacity-80 border-t border-cyan-500/10">
-            <span>
-              Configure signature & transformer logic in Inspector sidebar →
+          <div className="flex items-center justify-between text-[9px] font-mono pt-1 border-t border-cyan-500/15">
+            <span className="text-cyan-600 dark:text-cyan-400 font-semibold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 inline-block animate-pulse" />
+              Mode: {streamConfig.transformer?.mode?.replace("_", " ").toUpperCase() || "STANDARD SSE"}
+            </span>
+            <span className="text-muted-foreground hover:text-cyan-500 transition-colors">
+              Inspector →
             </span>
           </div>
         </div>

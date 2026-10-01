@@ -22,8 +22,8 @@ import {
   HANDLE_MIDDLEWARE_IN,
   HANDLE_STATE_IN,
   HANDLE_STATE_OUT,
-  DEFAULT_EVENT_STREAM_SIGNATURE,
-  DEFAULT_STREAM_TRANSFORMERS,
+  DEFAULT_STREAM_ENVELOPE,
+  DEFAULT_STREAM_TRANSFORMER_MODE,
   DEFAULT_SELECTED_STREAM_EVENTS,
   DEFAULT_LLM_PROVIDER,
   DEFAULT_LLM_MODEL,
@@ -121,8 +121,10 @@ export function useLangGraphCanvasNode({
     enabled: false,
     version: "v3",
     selectedEvents: DEFAULT_SELECTED_STREAM_EVENTS,
-    eventSignature: DEFAULT_EVENT_STREAM_SIGNATURE,
-    customTransformers: DEFAULT_STREAM_TRANSFORMERS,
+    envelope: DEFAULT_STREAM_ENVELOPE,
+    transformer: {
+      mode: DEFAULT_STREAM_TRANSFORMER_MODE,
+    },
   };
 
   const responseFormat: LangGraphAgentResponseFormatConfig =
@@ -285,8 +287,10 @@ export function useLangGraphCanvasNode({
     const updated: LangGraphAgentStreamConfig = {
       version: "v3",
       selectedEvents: DEFAULT_SELECTED_STREAM_EVENTS,
-      eventSignature: DEFAULT_EVENT_STREAM_SIGNATURE,
-      customTransformers: DEFAULT_STREAM_TRANSFORMERS,
+      envelope: DEFAULT_STREAM_ENVELOPE,
+      transformer: {
+        mode: DEFAULT_STREAM_TRANSFORMER_MODE,
+      },
       ...streamConfig,
       ...changes,
     };
