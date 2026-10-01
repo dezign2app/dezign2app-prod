@@ -243,7 +243,10 @@ export function buildInitialNodes(
         name: agDef.name,
         systemPrompt: agDef.systemPrompt,
         modelConfig: agDef.modelConfig,
+        llmConfig: agDef.llmConfig,
+        stateUpdatesConfig: agDef.stateUpdatesConfig,
         streamConfig: agDef.streamConfig,
+        responseFormat: agDef.responseFormat,
         memoryConfig: agDef.memoryConfig,
         stateUpdates: agDef.stateUpdates || [],
         availableStateChannels: data.stateChannels || [

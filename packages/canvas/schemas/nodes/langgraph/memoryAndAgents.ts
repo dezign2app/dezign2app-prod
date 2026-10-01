@@ -43,20 +43,66 @@ export const agentMemoryConfigSchema = z
   .optional();
 export type AgentMemoryConfig = z.infer<typeof agentMemoryConfigSchema>;
 
-export const agentDefinitionSchema = z.object({
-  id: z.string().optional(),
-  agentId: z.string().optional(),
-  name: z.string(),
-  systemPrompt: z.string().optional(),
-  modelConfig: z.record(z.unknown()).optional(),
-  llmNodeId: z.string().optional(),
-  streamConfig: streamConfigSchema,
-  memoryConfig: agentMemoryConfigSchema,
-  tools: z.array(z.string()).optional().default([]),
-  middleware: z.array(z.string()).optional().default([]),
-  memory: z.array(z.string()).optional().default([]),
-  position: z.object({ x: z.number(), y: z.number() }).optional(),
-});
+export const agentResponseFormatConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    strategy: z.enum(["auto", "provider", "tool"]).optional().default("auto"),
+    schemaType: z
+      .enum(["json_schema", "custom"])
+      .optional()
+      .default("json_schema"),
+    schemaJson: z.string().optional().default(""),
+    toolMessageContent: z.string().optional(),
+    handleErrorMode: z
+      .enum(["default", "custom_message", "disabled"])
+      .optional()
+      .default("default"),
+    customErrorMessage: z.string().optional(),
+  })
+  .optional();
+export type AgentResponseFormatConfig = z.infer<
+  typeof agentResponseFormatConfigSchema
+>;
+
+export const agentDefinitionSchema = z
+  .object({
+    id: z.string().optional(),
+    agentId: z.string().optional(),
+    name: z.string(),
+    systemPrompt: z.string().optional(),
+    modelConfig: z.record(z.unknown()).optional(),
+    llmConfig: z
+      .object({
+        enabled: z.boolean().optional(),
+        provider: z.string().optional(),
+        model: z.string().optional(),
+        temperature: z.number().optional(),
+      })
+      .optional(),
+    stateUpdatesConfig: z
+      .object({
+        enabled: z.boolean().optional(),
+      })
+      .optional(),
+    llmNodeId: z.string().optional(),
+    streamConfig: streamConfigSchema,
+    responseFormat: agentResponseFormatConfigSchema,
+    memoryConfig: agentMemoryConfigSchema,
+    stateUpdates: z
+      .array(
+        z.object({
+          channelKey: z.string(),
+          mode: z.enum(["replace", "append", "merge", "custom"]).optional(),
+          value: z.string().optional(),
+        }),
+      )
+      .optional(),
+    tools: z.array(z.string()).optional().default([]),
+    middleware: z.array(z.string()).optional().default([]),
+    memory: z.array(z.string()).optional().default([]),
+    position: z.object({ x: z.number(), y: z.number() }).optional(),
+  })
+  .passthrough();
 export type AgentDefinition = z.infer<typeof agentDefinitionSchema>;
 
 export const vectorStoreConfigSchema = z.object({

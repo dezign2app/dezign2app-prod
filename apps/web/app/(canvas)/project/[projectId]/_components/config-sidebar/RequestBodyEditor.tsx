@@ -224,6 +224,7 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
                     className="h-7 text-xs flex-1 nodrag bg-background font-mono border-none shadow-none focus-visible:ring-1 placeholder:font-sans"
                     placeholder="fieldName"
                     value={f.name || ""}
+                    onChange={(e) => updateField(f.id, { name: e.target.value })}
                     onBlur={(e) => updateField(f.id, { name: e.target.value })}
                   />
 
@@ -398,7 +399,12 @@ export const RequestBodyEditor: React.FC<RequestBodyEditorProps> = ({
                       className="h-6 text-[10px] pl-2.5 pr-6 w-full nodrag bg-transparent border-none shadow-none text-muted-foreground placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:bg-secondary/30 rounded"
                       placeholder="Add a description..."
                       value={f.description || ""}
-                      onBlur={(e) => updateField(f.id, { description: e.target.value })}
+                      onChange={(e) =>
+                        updateField(f.id, { description: e.target.value })
+                      }
+                      onBlur={(e) =>
+                        updateField(f.id, { description: e.target.value })
+                      }
                     />
                     <Button
                       type="button"

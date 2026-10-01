@@ -8,6 +8,7 @@ import type {
   LangGraphLLMNodeData,
   ToolNodeData,
   AgentNodeData,
+  LangGraphAgentResponseFormatConfig,
 } from "@workspace/canvas";
 import { evaluateRouterBranch } from "./langgraph";
 import {
@@ -315,6 +316,7 @@ export async function executeBrowserLangGraph(
         }
 
         // Call the real LLM endpoint directly in the browser
+        const responseFormat = agentData.responseFormat;
         const responseText = await callBrowserLLM({
           provider: effectiveProvider,
           apiKey: effectiveApiKey,
@@ -322,13 +324,34 @@ export async function executeBrowserLangGraph(
           systemPrompt,
           messages,
           customUrl: llmData?.url || llmData?.baseUrl,
+          responseFormat,
         });
 
         latestAssistantResponse = responseText;
-        const newMessages = [...messages, { role: "assistant", content: responseText }];
-        state.messages = newMessages;
-        outputDelta.messages = newMessages;
-        outputDelta.response = responseText;
+        if (responseFormat?.enabled) {
+          let parsed: Record<string, unknown> | null = null;
+          try {
+            let clean = responseText.trim();
+            if (clean.startsWith("```")) {
+              clean = clean.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+            }
+            parsed = JSON.parse(clean);
+          } catch {
+            parsed = { raw: responseText };
+          }
+          state.structuredResponse = parsed;
+          outputDelta.structuredResponse = parsed;
+          const formattedContent = JSON.stringify(parsed, null, 2);
+          const newMessages = [...messages, { role: "assistant", content: formattedContent }];
+          state.messages = newMessages;
+          outputDelta.messages = newMessages;
+          outputDelta.response = formattedContent;
+        } else {
+          const newMessages = [...messages, { role: "assistant", content: responseText }];
+          state.messages = newMessages;
+          outputDelta.messages = newMessages;
+          outputDelta.response = responseText;
+        }
 
         // Apply stateUpdates configured on agent
         for (const update of agentData.stateUpdates || []) {
@@ -684,18 +707,29 @@ async function callBrowserLLM(args: {
   systemPrompt: string;
   messages: GraphChatMessage[];
   customUrl?: string;
+  responseFormat?: LangGraphAgentResponseFormatConfig;
 }): Promise<string> {
-  const { provider, apiKey, modelName, systemPrompt, messages, customUrl } = args;
+  const { provider, apiKey, modelName, systemPrompt, messages, customUrl, responseFormat } = args;
 
   if (messages.length === 0) {
     throw new Error(`Cannot invoke ${provider.toUpperCase()}: No messages or prompt provided.`);
+  }
+
+  const isStructured = Boolean(responseFormat?.enabled);
+  const schemaStr = responseFormat?.schemaJson?.trim();
+
+  let effectiveSystemPrompt = systemPrompt;
+  if (isStructured) {
+    effectiveSystemPrompt += `\n\nCRITICAL INSTRUCTION: You must respond ONLY with a valid JSON object matching this schema or structure:\n${
+      schemaStr || '{"aiResponse": "string"}'
+    }\nDo not include any conversational preamble, explanations, markdown backticks, or any text other than the JSON object itself.`;
   }
 
   // 1. Custom / Local LLM (Ollama, local vLLM, etc.)
   if (customUrl || provider === "custom") {
     const url = customUrl || "http://localhost:11434/v1/chat/completions";
     const promptMessages = [
-      { role: "system", content: systemPrompt },
+      { role: "system", content: effectiveSystemPrompt },
       ...messages.map((m) => ({ role: m.role, content: m.content })),
     ];
     let res: Response;
@@ -709,7 +743,7 @@ async function callBrowserLLM(args: {
         body: JSON.stringify({
           model: modelName,
           messages: promptMessages,
-          temperature: 0.7,
+          temperature: isStructured ? 0.2 : 0.7,
         }),
       });
     } catch (netErr: unknown) {
@@ -742,7 +776,7 @@ async function callBrowserLLM(args: {
         : "https://api.openai.com/v1/chat/completions";
 
     const promptMessages = [
-      { role: "system", content: systemPrompt },
+      { role: "system", content: effectiveSystemPrompt },
       ...messages.map((m) => ({ role: m.role, content: m.content })),
     ];
 
@@ -757,7 +791,8 @@ async function callBrowserLLM(args: {
         body: JSON.stringify({
           model: modelName,
           messages: promptMessages,
-          temperature: 0.7,
+          temperature: isStructured ? 0.2 : 0.7,
+          ...(isStructured ? { response_format: { type: "json_object" } } : {}),
         }),
       });
     } catch (netErr: unknown) {

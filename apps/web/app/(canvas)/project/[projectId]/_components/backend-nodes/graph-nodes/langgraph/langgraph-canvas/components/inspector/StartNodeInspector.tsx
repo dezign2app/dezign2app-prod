@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Sliders, Play, Sparkles } from "lucide-react";
+import { Sliders, Play, Sparkles, X } from "lucide-react";
+import { Button } from "@workspace/ui/components/button";
 import {
   Tabs,
   TabsContent,
@@ -50,6 +51,7 @@ export interface StartNodeInspectorProps {
     testCase: SimulationTestCase,
   ) => Promise<SimulationTestCaseResult | void> | SimulationTestCaseResult | void;
   defaultTab?: "inputs" | "testing" | "test-cases";
+  onClose?: () => void;
 }
 
 export function StartNodeInspector({
@@ -68,6 +70,7 @@ export function StartNodeInspector({
   connectedRoutes = [],
   onRunTestCase,
   defaultTab = "inputs",
+  onClose,
 }: StartNodeInspectorProps) {
   const [activeTab, setActiveTab] = useState<string>(defaultTab);
 
@@ -79,8 +82,8 @@ export function StartNodeInspector({
         onValueChange={setActiveTab}
         className="flex-1 flex flex-col h-full min-h-0"
       >
-        <div className="px-3 pt-3 pb-2 border-b border-border/60 bg-muted/20 shrink-0">
-          <TabsList className="w-full grid grid-cols-3 h-8 p-1 bg-muted/60">
+        <div className="px-3 pt-3 pb-2 border-b border-border/60 bg-muted/20 shrink-0 flex items-center gap-2">
+          <TabsList className="flex-1 grid grid-cols-3 h-8 p-1 bg-muted/60">
             <TabsTrigger
               value="inputs"
               className="text-xs flex items-center gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground font-semibold"
@@ -103,6 +106,17 @@ export function StartNodeInspector({
               <span>Test Cases</span>
             </TabsTrigger>
           </TabsList>
+          {onClose && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0 rounded-md"
+              onClick={onClose}
+              title="Close inspector (Esc)"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          )}
         </div>
 
         {/* ── Tab 1: Inputs ── */}

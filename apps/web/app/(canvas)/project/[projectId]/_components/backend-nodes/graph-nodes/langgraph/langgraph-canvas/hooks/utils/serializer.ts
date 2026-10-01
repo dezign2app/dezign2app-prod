@@ -271,8 +271,12 @@ export function buildGraphData({
         modelConfig: resolvedModelConfig || {
           ...(n.data.modelConfig || {}),
         },
+        llmConfig: n.data.llmConfig,
+        stateUpdatesConfig: n.data.stateUpdatesConfig,
         streamConfig: n.data.streamConfig,
+        responseFormat: n.data.responseFormat,
         memoryConfig: n.data.memoryConfig,
+        stateUpdates: n.data.stateUpdates,
         tools: edges
           .filter((e) => e.target === n.id && e.targetHandle === HANDLE_TOOL_IN)
           .map((e) => e.source),

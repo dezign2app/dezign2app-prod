@@ -6,7 +6,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@workspace/ui/components/sheet";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, X } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { EndpointConfig } from "./config-sidebar/EndpointConfig";
@@ -112,11 +112,25 @@ export const ConfigSidebar = () => {
     }
   };
 
+  // Compute effective width: default to ~28% of screen width (clamped nicely on desktop)
+  const effectiveWidth = React.useMemo(() => {
+    if (typeof window !== "undefined") {
+      const target28vw = Math.round(window.innerWidth * 0.28);
+      // If width is unassigned or less than 25% of viewport on desktop, default to 28%
+      if (!width || (window.innerWidth >= 1280 && width < window.innerWidth * 0.25)) {
+        return Math.max(540, target28vw);
+      }
+    }
+    return width || 540;
+  }, [width]);
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current) return;
       const newWidth = window.innerWidth - e.clientX;
-      if (newWidth > 320 && newWidth < 800) {
+      const minW = Math.max(360, Math.round(window.innerWidth * 0.18));
+      const maxW = Math.min(1200, Math.round(window.innerWidth * 0.50));
+      if (newWidth >= minW && newWidth <= maxW) {
         setWidth(newWidth);
       }
     };
@@ -129,7 +143,7 @@ export const ConfigSidebar = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
-  }, []);
+  }, [setWidth]);
 
   const open = activeConfigItem !== null;
 
@@ -152,21 +166,38 @@ export const ConfigSidebar = () => {
     >
       <SheetContent
         hideOverlay
+        showCloseButton={false}
         onPointerDownOutside={(e) => {
           e.preventDefault();
         }}
         onInteractOutside={(e) => {
           e.preventDefault();
         }}
-        className="overflow-hidden p-0 bg-background/80 backdrop-blur-xl border-l border-border/50 shadow-2xl transition-none flex flex-col"
-        style={{ maxWidth: "100vw", width: width }}
+        className="p-0 bg-background/80 backdrop-blur-xl border-l border-border/50 shadow-2xl transition-none flex flex-col"
+        style={{ maxWidth: "100vw", width: effectiveWidth }}
       >
+        {/* Resize handle */}
         <div
           className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-primary/20 z-50 transition-colors"
           onMouseDown={() => {
             isDragging.current = true;
           }}
         />
+
+        {/* Close button — on the resize handle edge, translated left so it sits on the handle */}
+        <button
+          type="button"
+          className="absolute top-3.5 left-0 -translate-x-3.5 w-7 h-7 rounded-full bg-background/90 hover:bg-destructive/15 text-muted-foreground hover:text-destructive border border-border/50 shadow-md flex items-center justify-center transition-all cursor-pointer z-[60] hover:scale-110 active:scale-95"
+          onClick={() => {
+            cleanupIfUnconfigured(activeConfigItem);
+            setActiveConfigItem(null);
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          title="Close sidebar (Esc)"
+          aria-label="Close config sidebar"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
 
         <div className="flex-1 overflow-y-auto p-6 sm:p-8">
           <SheetHeader className="hidden">
