@@ -173,13 +173,14 @@ describe("syncTestEnv via Compiler", () => {
       name: "/simple-chat",
       type: "POST",
       requestBody: {
-        fields: [{ name: "message", type: "string", required: true }],
+        id: "schema-simple-chat",
+        fields: [{ id: "field-message", name: "message", type: "string", required: true }],
       },
       pipelineSteps: [
         {
           id: "step-chat-1",
           name: "chat",
-          type: "langgraph",
+          type: "langgraph_invoke",
           enabled: true,
           outputVariable: "chatResult",
         },
@@ -204,10 +205,14 @@ describe("syncTestEnv via Compiler", () => {
 
     const profileConfigs = generateConfigFiles(
       dummyServiceNode,
+      "profile",
+      "Profile",
+      "8080",
+      true,
       [ep, healthEp, simpleChatEp],
       [],
       [dummyServiceNode, dummyStorageNode],
-      [{ id: "e-srv-storage", source: dummyServiceNode.id, target: dummyStorageNode.id }],
+      [{ id: "e-srv-storage", source: dummyServiceNode.id, target: dummyStorageNode.id } as any],
     );
     const pkgFile = profileConfigs.find((f) => f.filename === "package.json");
     if (pkgFile) {
@@ -412,7 +417,7 @@ describe("syncTestEnv via Compiler", () => {
       undefined,
       undefined,
       { fields: [{ name: "message", type: "string", required: true }] },
-      { name: "send message", type: "click" },
+      { id: "act-send-message", name: "send message", event: "click" },
       simpleChatEp,
       "profile",
       undefined,
