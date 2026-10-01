@@ -98,12 +98,20 @@ export const useSidebarStore = create<SidebarState>()(
           return { aiPanelWidth: clamped, pageAiPanelWidth: clamped };
         }),
 
-      // Config Sidebar defaults
-      configSidebarWidth: 540,
+      // Config Sidebar defaults (28-30% of screen width on modern displays)
+      configSidebarWidth:
+        typeof window !== "undefined"
+          ? Math.max(540, Math.min(840, Math.round(window.innerWidth * 0.28)))
+          : 560,
       setConfigSidebarWidth: (width) =>
         set((state) => {
-          const val = typeof width === "function" ? width(state.configSidebarWidth) : width;
-          return { configSidebarWidth: Math.max(320, Math.min(900, val)) };
+          const val =
+            typeof width === "function" ? width(state.configSidebarWidth) : width;
+          const maxVal =
+            typeof window !== "undefined"
+              ? Math.min(1200, Math.round(window.innerWidth * 0.5))
+              : 1000;
+          return { configSidebarWidth: Math.max(340, Math.min(maxVal, val)) };
         }),
 
       // Terminal defaults

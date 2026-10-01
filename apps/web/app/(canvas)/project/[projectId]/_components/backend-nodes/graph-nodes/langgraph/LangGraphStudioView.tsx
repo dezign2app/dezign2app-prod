@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   ReactFlow,
@@ -135,6 +135,11 @@ export function LangGraphStudioView({
   } = useLangGraphCanvasState({ node, updateNode, onClose });
 
   const [outputMode, setOutputMode] = useState<"app" | "package">("app");
+
+  const handleCloseInspector = useCallback(() => {
+    setSelectedNodeId(null);
+    setActiveSideTab("inspector");
+  }, [setSelectedNodeId, setActiveSideTab]);
 
   const { handleLayout } = useLangGraphAutoLayout({ nodes, edges, onNodesChange });
 
@@ -458,14 +463,24 @@ export function LangGraphStudioView({
       className="flex flex-col h-screen w-screen bg-background text-foreground outline-none overflow-hidden"
       tabIndex={0}
       onKeyDown={(e) => {
-        e.stopPropagation();
-        const activeEl = document.activeElement as HTMLElement | null;
-        if (
-          activeEl &&
-          (activeEl.tagName === "INPUT" ||
-            activeEl.tagName === "TEXTAREA" ||
-            activeEl.isContentEditable)
-        ) {
+        const target = e.target;
+        const isEditingInput =
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          (target instanceof HTMLElement && target.isContentEditable);
+
+        if (e.key === "Escape") {
+          e.preventDefault();
+          if (target instanceof HTMLElement) {
+            target.blur();
+          }
+          if (selectedNodeId) {
+            handleCloseInspector();
+          }
+          return;
+        }
+
+        if (isEditingInput) {
           return;
         }
 
@@ -501,7 +516,10 @@ export function LangGraphStudioView({
             size="sm"
             variant="outline"
             className="h-6 text-[11px] px-2.5 py-0 border-destructive/40 text-destructive hover:bg-destructive/20"
-            onClick={() => setActiveSideTab("memory")}
+            onClick={() => {
+              setSelectedNodeId("CHECKPOINTER");
+              setActiveSideTab("memory");
+            }}
           >
             Configure Memory
           </Button>
@@ -554,7 +572,7 @@ export function LangGraphStudioView({
               else setActiveSideTab("inspector");
             }}
             onPaneClick={() => {
-              setSelectedNodeId(null);
+              handleCloseInspector();
               setEdges((eds) => eds.map((e) => ({ ...e, selected: false })));
             }}
             fitView
@@ -603,7 +621,7 @@ export function LangGraphStudioView({
         {/* Right Inspector Sidebar */}
         <InspectorSidebar
           selectedNodeId={selectedNodeId}
-          onClose={() => setSelectedNodeId(null)}
+          onClose={handleCloseInspector}
           activeSideTab={activeSideTab}
           setActiveSideTab={setActiveSideTab}
           selectedStepData={selectedStepData}

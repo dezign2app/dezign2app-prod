@@ -1,5 +1,6 @@
 import React from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, X } from "lucide-react";
+import { Button } from "@workspace/ui/components/button";
 import type {
   LangGraphStateChannel,
   StepNodeData,
@@ -60,6 +61,7 @@ interface InspectorTabContentProps {
   onUpdateMemory?: (changes: Partial<MemoryNodeData>) => void;
   onUpdateOutput?: (changes: Partial<OutputNodeData>) => void;
   stateChannels: LangGraphStateChannel[];
+  onClose?: () => void;
 }
 
 export function InspectorTabContent({
@@ -94,9 +96,26 @@ export function InspectorTabContent({
   onUpdateMemory,
   onUpdateOutput,
   stateChannels,
+  onClose,
 }: InspectorTabContentProps) {
   return (
     <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
+      {onClose && (
+        <div className="flex items-center justify-between pb-2.5 border-b border-border/40 shrink-0">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Node Configuration
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-md"
+            onClick={onClose}
+            title="Close inspector (Esc)"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
       {selectedLLMData ? (
         <LLMNodeInspector
           selectedLLMData={selectedLLMData}

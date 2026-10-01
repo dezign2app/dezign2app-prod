@@ -100,6 +100,11 @@ export function AgentNodeInspector({
 
       {/* ─── 4. Structured Output / Response Format ────────────────────────────── */}
       <AgentStructuredOutputSection
+        key={
+          selectedAgentData.agentId ||
+          (selectedAgentData as { id?: string }).id ||
+          "agent-structured-output"
+        }
         rfConfig={rfConfig}
         updateResponseFormat={updateResponseFormat}
       />
