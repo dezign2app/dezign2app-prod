@@ -1,12 +1,46 @@
 import { z } from "zod";
 
+export const streamEnvelopeConfigSchema = z
+  .object({
+    includeEvent: z.boolean().optional().default(true),
+    includeAgent: z.boolean().optional().default(true),
+    includeRunId: z.boolean().optional().default(true),
+    includeTimestamp: z.boolean().optional().default(true),
+    includeDelta: z.boolean().optional().default(true),
+    includeContent: z.boolean().optional().default(true),
+    includeTool: z.boolean().optional().default(true),
+    includeInputs: z.boolean().optional().default(false),
+    includeOutput: z.boolean().optional().default(true),
+    includeUsage: z.boolean().optional().default(false),
+    flattenPayload: z.boolean().optional().default(false),
+    stripEmptyDeltas: z.boolean().optional().default(true),
+  })
+  .optional();
+
+export const streamTransformerConfigSchema = z
+  .object({
+    mode: z
+      .enum([
+        "standard_sse",
+        "ai_sdk",
+        "openai_chunk",
+        "minimal",
+        "full_trace",
+        "custom",
+      ])
+      .optional()
+      .default("standard_sse"),
+    customCode: z.string().optional(),
+  })
+  .optional();
+
 export const streamConfigSchema = z
   .object({
     enabled: z.boolean().optional().default(false),
     version: z.string().optional().default("v3"),
     selectedEvents: z.array(z.string()).optional(),
-    eventSignature: z.string().optional(),
-    customTransformers: z.string().optional(),
+    envelope: streamEnvelopeConfigSchema,
+    transformer: streamTransformerConfigSchema,
   })
   .optional();
 

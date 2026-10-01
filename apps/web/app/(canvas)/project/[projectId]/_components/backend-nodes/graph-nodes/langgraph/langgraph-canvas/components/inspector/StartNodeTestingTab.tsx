@@ -19,6 +19,7 @@ import {
   Minimize2,
   ChevronDown,
   ChevronUp,
+  Radio,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { LocalInput } from "../../../../common";
@@ -126,6 +127,9 @@ export function StartNodeTestingTab({
   const [isTraceExpanded, setIsTraceExpanded] = useState(false);
   const [isInputCollapsed, setIsInputCollapsed] = useState(false);
   const [expandedTraceNodes, setExpandedTraceNodes] = useState<Record<number, boolean>>({});
+  const [traceNodeViews, setTraceNodeViews] = useState<Record<number, "output" | "batches" | "req" | "raw">>({});
+  const [batchFormatViews, setBatchFormatViews] = useState<Record<number, "event" | "delta" | "raw">>({});
+  const [expandedBatchRaw, setExpandedBatchRaw] = useState<Record<string, boolean>>({});
 
   // Load API keys and saved threads on mount
   useEffect(() => {
@@ -919,24 +923,53 @@ export function StartNodeTestingTab({
                     {executionResult.trace.map((t, idx) => {
                       const isFailed = t.status === "failed";
                       const isNodeExpanded = expandedTraceNodes[idx] ?? isTraceExpanded;
+                      const outputObj = (t.output && typeof t.output === "object" ? t.output : null) as Record<string, unknown> | null;
+                      const streamBatches = (outputObj?.streamBatches || []) as Array<{
+                        index: number;
+                        delta: string;
+                        content: string;
+                        timestamp: string;
+                        formatted?: unknown;
+                        raw?: unknown;
+                      }>;
+                      const hasBatches = streamBatches.length > 0;
+                      const activeView = traceNodeViews[idx] || (hasBatches ? "batches" : "output");
+                      const activeFormat = batchFormatViews[idx] || "event";
+
+                      // Helper to extract clean output text / object
+                      const cleanOutput = outputObj
+                        ? outputObj.response || outputObj.structuredResponse || outputObj.messages || outputObj
+                        : t.output;
+
                       return (
                         <div
                           key={idx}
-                          className={`p-2.5 rounded-lg border flex flex-col gap-1.5 text-[11px] ${
+                          className={`p-2.5 rounded-lg border flex flex-col gap-2 text-[11px] ${
                             isFailed
                               ? "bg-destructive/10 border-destructive/30 text-destructive"
                               : "bg-background/80 border-border"
                           }`}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-semibold text-foreground flex items-center gap-1.5">
-                              <span
-                                className={`h-1.5 w-1.5 rounded-full ${
-                                  isFailed ? "bg-destructive" : "bg-emerald-400"
-                                }`}
-                              />
-                              {t.label}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-semibold text-foreground flex items-center gap-1.5">
+                                <span
+                                  className={`h-1.5 w-1.5 rounded-full ${
+                                    isFailed ? "bg-destructive" : "bg-emerald-400"
+                                  }`}
+                                />
+                                {t.label}
+                              </span>
+                              {hasBatches && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[8.5px] px-1.5 py-0 h-4 font-mono bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30 flex items-center gap-1"
+                                >
+                                  <Radio className="w-2.5 h-2.5 animate-pulse text-cyan-500" />
+                                  <span>{streamBatches.length} Stream Batches</span>
+                                </Badge>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1.5">
                               <span className="text-[9px] text-muted-foreground font-mono">
                                 {t.nodeId}
@@ -957,7 +990,255 @@ export function StartNodeTestingTab({
                               )}
                             </div>
                           </div>
-                          {Boolean(t.output) && (
+
+                          {/* Sub-view switcher tabs if node has stream batches */}
+                          {hasBatches && (
+                            <div className="flex items-center justify-between bg-muted/40 p-1 rounded-md border border-border/40 text-[9.5px] font-mono gap-1.5 flex-wrap">
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setTraceNodeViews((prev) => ({
+                                      ...prev,
+                                      [idx]: "batches",
+                                    }))
+                                  }
+                                  className={`px-2 py-0.5 rounded transition-all font-medium ${
+                                    activeView === "batches"
+                                      ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 font-semibold"
+                                      : "text-muted-foreground hover:text-foreground"
+                                  }`}
+                                >
+                                  ⚡ Stream Batches ({streamBatches.length})
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setTraceNodeViews((prev) => ({
+                                      ...prev,
+                                      [idx]: "output",
+                                    }))
+                                  }
+                                  className={`px-2 py-0.5 rounded transition-all font-medium ${
+                                    activeView === "output"
+                                      ? "bg-background text-foreground font-semibold shadow-xs"
+                                      : "text-muted-foreground hover:text-foreground"
+                                  }`}
+                                >
+                                  Final Output
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setTraceNodeViews((prev) => ({
+                                      ...prev,
+                                      [idx]: "req",
+                                    }))
+                                  }
+                                  className={`px-2 py-0.5 rounded transition-all font-medium ${
+                                    activeView === "req"
+                                      ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 font-semibold"
+                                      : "text-muted-foreground hover:text-foreground"
+                                  }`}
+                                >
+                                  AI Request
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setTraceNodeViews((prev) => ({
+                                      ...prev,
+                                      [idx]: "raw",
+                                    }))
+                                  }
+                                  className={`px-2 py-0.5 rounded transition-all font-medium ${
+                                    activeView === "raw"
+                                      ? "bg-background text-foreground font-semibold shadow-xs"
+                                      : "text-muted-foreground hover:text-foreground"
+                                  }`}
+                                >
+                                  Raw JSON
+                                </button>
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                {activeView === "batches" && (
+                                  <div className="flex items-center gap-0.5 bg-background p-0.5 rounded border border-border/50 text-[8.5px]">
+                                    <button
+                                      type="button"
+                                      onClick={() => setBatchFormatViews((prev) => ({ ...prev, [idx]: "event" }))}
+                                      className={`px-1.5 py-0.5 rounded transition-colors ${
+                                        activeFormat === "event"
+                                          ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 font-semibold"
+                                          : "text-muted-foreground hover:text-foreground"
+                                      }`}
+                                    >
+                                      Configured Event
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setBatchFormatViews((prev) => ({ ...prev, [idx]: "delta" }))}
+                                      className={`px-1.5 py-0.5 rounded transition-colors ${
+                                        activeFormat === "delta"
+                                          ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 font-semibold"
+                                          : "text-muted-foreground hover:text-foreground"
+                                      }`}
+                                    >
+                                      Delta
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setBatchFormatViews((prev) => ({ ...prev, [idx]: "raw" }))}
+                                      className={`px-1.5 py-0.5 rounded transition-colors ${
+                                        activeFormat === "raw"
+                                          ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 font-semibold"
+                                          : "text-muted-foreground hover:text-foreground"
+                                      }`}
+                                    >
+                                      Raw Chunk
+                                    </button>
+                                  </div>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const exportBatches = streamBatches.map((b) =>
+                                      activeFormat === "delta"
+                                        ? b.delta
+                                        : activeFormat === "raw"
+                                          ? b.raw
+                                          : (b.formatted ?? b)
+                                    );
+                                    navigator.clipboard.writeText(
+                                      JSON.stringify(exportBatches, null, 2)
+                                    );
+                                    toast.success(`Copied all ${streamBatches.length} streaming event batches`);
+                                  }}
+                                  className="text-[8.5px] text-muted-foreground hover:text-cyan-500 px-1 py-0.5 underline flex items-center gap-1"
+                                >
+                                  <Copy className="w-2.5 h-2.5" /> Copy Batches
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* View 1: Stream Batches Timeline */}
+                          {hasBatches && activeView === "batches" && (
+                            <div className="flex flex-col gap-2 max-h-[380px] overflow-y-auto p-1.5 bg-muted/20 rounded-md border border-border/40 hide-scrollbar">
+                              {/* Full Accumulated Stream Preview */}
+                              <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-black/40 border border-cyan-500/30">
+                                <div className="flex items-center justify-between text-[9px] text-muted-foreground font-mono">
+                                  <span className="font-bold text-cyan-400 flex items-center gap-1">
+                                    <Sparkles className="w-3 h-3 text-cyan-400" />
+                                    Complete Streamed Response ({streamBatches.length} tokens streamed)
+                                  </span>
+                                  <span className="text-[8px] text-emerald-400 font-medium">
+                                    Native AI SSE Stream (Unbroken)
+                                  </span>
+                                </div>
+                                <div className="text-[10px] font-mono text-cyan-100 whitespace-pre-wrap select-text p-2 rounded bg-background/80 border border-border/40 max-h-[140px] overflow-y-auto hide-scrollbar leading-relaxed">
+                                  {streamBatches[streamBatches.length - 1]?.content || (cleanOutput && typeof cleanOutput === "string" ? cleanOutput : "")}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between text-[9px] text-muted-foreground px-1 font-mono pt-1">
+                                <span className="font-semibold uppercase text-muted-foreground">
+                                  Individual Event Chunks ({streamBatches.length})
+                                </span>
+                                <span className="text-[8px] italic">
+                                  Sub-word BPE token deltas received from AI socket
+                                </span>
+                              </div>
+                              {streamBatches.map((batch) => {
+                                const key = `${idx}_${batch.index}`;
+                                const isRawOpen = expandedBatchRaw[key];
+                                const eventData = batch.formatted || {
+                                  event: "on_chat_model_stream",
+                                  agent: t.label,
+                                  data: { delta: batch.delta, content: batch.content },
+                                };
+
+                                return (
+                                  <div
+                                    key={batch.index}
+                                    className="flex flex-col gap-1 p-1.5 rounded bg-background/90 border border-border/50 text-[10px] font-mono hover:border-cyan-500/40 transition-colors"
+                                  >
+                                    <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="font-bold text-cyan-600 dark:text-cyan-400">
+                                          Batch #{batch.index + 1}
+                                        </span>
+                                        {Boolean(batch.delta) && (
+                                          <span className="text-[8px] text-muted-foreground/80 px-1 py-0 bg-muted rounded">
+                                            {batch.delta.length} chars
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-mono text-[8.5px]">
+                                          {batch.timestamp
+                                            ? new Date(batch.timestamp).toLocaleTimeString([], {
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                                second: "2-digit",
+                                                fractionalSecondDigits: 3,
+                                              })
+                                            : ""}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const itemToCopy =
+                                              activeFormat === "delta"
+                                                ? batch.delta
+                                                : activeFormat === "raw"
+                                                  ? batch.raw
+                                                  : eventData;
+                                            navigator.clipboard.writeText(
+                                              typeof itemToCopy === "string"
+                                                ? itemToCopy
+                                                : JSON.stringify(itemToCopy, null, 2)
+                                            );
+                                            toast.success(`Copied batch #${batch.index + 1}`);
+                                          }}
+                                          className="text-muted-foreground hover:text-cyan-500 p-0.5 rounded"
+                                          title="Copy this chunk"
+                                        >
+                                          <Copy className="w-2.5 h-2.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Format Display: Configured Event / Delta / Raw */}
+                                    {activeFormat === "event" ? (
+                                      <pre className="p-1.5 rounded bg-black/60 text-[8.5px] font-mono text-cyan-300 overflow-x-auto max-h-[160px] border border-cyan-500/25 selection:bg-cyan-900">
+                                        {typeof eventData === "string"
+                                          ? eventData
+                                          : JSON.stringify(eventData, null, 2)}
+                                      </pre>
+                                    ) : activeFormat === "delta" ? (
+                                      <div className="p-1 rounded bg-muted/40 text-foreground font-mono text-[9.5px] whitespace-pre-wrap break-all border border-border/30">
+                                        {batch.delta || (
+                                          <span className="text-muted-foreground/60 italic font-sans text-[9px]">
+                                            (empty delta)
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <pre className="p-1.5 rounded bg-black/40 text-[8.5px] font-mono text-cyan-200 overflow-x-auto max-h-[140px] border border-cyan-500/20">
+                                        {JSON.stringify(batch.raw || batch, null, 2)}
+                                      </pre>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* View 2: Clean Final Output */}
+                          {(!hasBatches || activeView === "output") && Boolean(t.output) && (
                             <pre
                               className={`text-[9px] font-mono p-2 rounded overflow-auto hide-scrollbar transition-all ${
                                 isNodeExpanded
@@ -968,6 +1249,41 @@ export function StartNodeTestingTab({
                                   ? "bg-destructive/20 text-destructive border border-destructive/30"
                                   : "text-muted-foreground bg-muted/30"
                               }`}
+                            >
+                              {typeof cleanOutput === "string"
+                                ? cleanOutput
+                                : JSON.stringify(cleanOutput, null, 2)}
+                            </pre>
+                          )}
+
+                          {/* View 3: AI Request Inspection */}
+                          {activeView === "req" && (
+                            <pre
+                              className={`text-[9px] font-mono p-2.5 rounded overflow-auto hide-scrollbar transition-all ${
+                                isNodeExpanded ? "max-h-[380px]" : "max-h-[260px]"
+                              } text-cyan-300 bg-black/60 border border-cyan-500/20`}
+                            >
+                              {JSON.stringify(
+                                outputObj?.llmRequest || {
+                                  provider,
+                                  model: modelName,
+                                  stream: true,
+                                  status: "Streaming enabled via agent streamConfig",
+                                },
+                                null,
+                                2
+                              )}
+                            </pre>
+                          )}
+
+                          {/* View 4: Complete Raw JSON */}
+                          {activeView === "raw" && (
+                            <pre
+                              className={`text-[9px] font-mono p-2 rounded overflow-auto hide-scrollbar transition-all ${
+                                isNodeExpanded
+                                  ? "max-h-[380px]"
+                                  : "max-h-[260px]"
+                              } text-muted-foreground bg-muted/30`}
                             >
                               {JSON.stringify(t.output, null, 2)}
                             </pre>

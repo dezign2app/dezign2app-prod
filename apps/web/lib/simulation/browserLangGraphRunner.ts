@@ -17,6 +17,7 @@ import {
   BrowserCheckpoint,
 } from "./indexedDBCheckpointer";
 import type { SimulationTraceEntry } from "./types";
+import { formatStreamingBatch, type StreamBatchItem } from "./streamFormatter";
 
 export interface BrowserExecutionParams {
   nodes: LangGraphCanvasNode[];
@@ -37,6 +38,19 @@ export interface BrowserExecutionParams {
     durationMs: number,
   ) => void;
   onCheckpoint?: (checkpoint: BrowserCheckpoint) => void;
+}
+
+export interface BrowserLLMStreamBatch {
+  index: number;
+  delta: string;
+  content: string;
+  timestamp: string;
+  raw?: unknown;
+}
+
+export interface BrowserLLMResult {
+  text: string;
+  streamBatches: BrowserLLMStreamBatch[];
 }
 
 export interface BrowserExecutionResult {
@@ -317,7 +331,8 @@ export async function executeBrowserLangGraph(
 
         // Call the real LLM endpoint directly in the browser
         const responseFormat = agentData.responseFormat;
-        const responseText = await callBrowserLLM({
+        const streamEnabled = agentData.streamConfig?.enabled !== false;
+        const { text: responseText, streamBatches } = await callBrowserLLM({
           provider: effectiveProvider,
           apiKey: effectiveApiKey,
           modelName: effectiveModel,
@@ -325,6 +340,7 @@ export async function executeBrowserLangGraph(
           messages,
           customUrl: llmData?.url || llmData?.baseUrl,
           responseFormat,
+          streamEnabled,
         });
 
         latestAssistantResponse = responseText;
@@ -351,6 +367,28 @@ export async function executeBrowserLangGraph(
           state.messages = newMessages;
           outputDelta.messages = newMessages;
           outputDelta.response = responseText;
+        }
+
+        if (streamBatches && streamBatches.length > 0) {
+          const runId = `run_${threadId.slice(0, 8)}_${Math.random().toString(36).slice(2, 6)}`;
+          const stripEmpty = agentData.streamConfig?.envelope?.stripEmptyDeltas !== false;
+          const filtered = streamBatches.filter((b) => (stripEmpty ? Boolean(b.delta) : true));
+          const formattedBatches: StreamBatchItem[] = filtered.map((b, newIdx) => ({
+            ...b,
+            index: newIdx,
+            formatted: formatStreamingBatch({
+              batch: b,
+              nodeName,
+              runId,
+              streamConfig: agentData.streamConfig,
+            }),
+          }));
+
+          outputDelta.streamBatches = formattedBatches;
+          outputDelta.streamBatchCount = formattedBatches.length;
+          if (agentData?.streamConfig) {
+            outputDelta.streamConfig = agentData.streamConfig;
+          }
         }
 
         // Apply stateUpdates configured on agent
@@ -437,7 +475,7 @@ export async function executeBrowserLangGraph(
             }
           }
 
-          const responseText = await callBrowserLLM({
+          const { text: responseText, streamBatches } = await callBrowserLLM({
             provider: effectiveProvider,
             apiKey: effectiveApiKey,
             modelName: effectiveModel,
@@ -455,6 +493,23 @@ export async function executeBrowserLangGraph(
             outputDelta.messages = updated;
           } else {
             state[outKey] = responseText;
+          }
+          if (streamBatches && streamBatches.length > 0) {
+            const runId = `run_${threadId.slice(0, 8)}_${Math.random().toString(36).slice(2, 6)}`;
+            const filtered = streamBatches.filter((b) => Boolean(b.delta));
+            const formattedBatches: StreamBatchItem[] = filtered.map((b, newIdx) => ({
+              ...b,
+              index: newIdx,
+              formatted: formatStreamingBatch({
+                batch: b,
+                nodeName,
+                runId,
+                streamConfig: undefined,
+              }),
+            }));
+
+            outputDelta.streamBatches = formattedBatches;
+            outputDelta.streamBatchCount = formattedBatches.length;
           }
         }
 
@@ -708,8 +763,9 @@ async function callBrowserLLM(args: {
   messages: GraphChatMessage[];
   customUrl?: string;
   responseFormat?: LangGraphAgentResponseFormatConfig;
-}): Promise<string> {
-  const { provider, apiKey, modelName, systemPrompt, messages, customUrl, responseFormat } = args;
+  streamEnabled?: boolean;
+}): Promise<BrowserLLMResult> {
+  const { provider, apiKey, modelName, systemPrompt, messages, customUrl, responseFormat, streamEnabled = true } = args;
 
   if (messages.length === 0) {
     throw new Error(`Cannot invoke ${provider.toUpperCase()}: No messages or prompt provided.`);
@@ -724,6 +780,10 @@ async function callBrowserLLM(args: {
       schemaStr || '{"aiResponse": "string"}'
     }\nDo not include any conversational preamble, explanations, markdown backticks, or any text other than the JSON object itself.`;
   }
+
+  const streamBatches: BrowserLLMStreamBatch[] = [];
+  let fullText = "";
+  let idx = 0;
 
   // 1. Custom / Local LLM (Ollama, local vLLM, etc.)
   if (customUrl || provider === "custom") {
@@ -744,6 +804,7 @@ async function callBrowserLLM(args: {
           model: modelName,
           messages: promptMessages,
           temperature: isStructured ? 0.2 : 0.7,
+          stream: true,
         }),
       });
     } catch (netErr: unknown) {
@@ -756,13 +817,52 @@ async function callBrowserLLM(args: {
       const errText = await res.text();
       throw new Error(`Custom LLM endpoint (${url}) returned HTTP ${res.status}: ${errText}`);
     }
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (typeof content === "string") return content;
-    if (data.choices?.[0]?.message?.tool_calls) {
-      return JSON.stringify(data.choices[0].message.tool_calls, null, 2);
+
+    if (res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed === "data: [DONE]") continue;
+            if (trimmed.startsWith("data: ")) {
+              try {
+                const parsed = JSON.parse(trimmed.slice(6));
+                const delta = parsed.choices?.[0]?.delta?.content || "";
+                if (delta) fullText += delta;
+                streamBatches.push({
+                  index: idx++,
+                  delta,
+                  content: fullText,
+                  timestamp: new Date().toISOString(),
+                  raw: parsed.choices?.[0],
+                });
+              } catch {}
+            }
+          }
+        }
+      } catch {}
     }
-    throw new Error(`Custom LLM at ${url} returned response with no message content.`);
+
+    if (!fullText && streamBatches.length === 0) {
+      try {
+        const data = await res.json();
+        const content = data.choices?.[0]?.message?.content || "";
+        return {
+          text: content,
+          streamBatches: [{ index: 0, delta: content, content, timestamp: new Date().toISOString(), raw: data }],
+        };
+      } catch {}
+    }
+
+    return { text: fullText, streamBatches };
   }
 
   // 2. Groq & OpenAI (OpenAI-compatible chat completions)
@@ -792,6 +892,7 @@ async function callBrowserLLM(args: {
           model: modelName,
           messages: promptMessages,
           temperature: isStructured ? 0.2 : 0.7,
+          stream: streamEnabled,
           ...(isStructured ? { response_format: { type: "json_object" } } : {}),
         }),
       });
@@ -812,13 +913,60 @@ async function callBrowserLLM(args: {
       throw new Error(`${provider.toUpperCase()} API error (${res.status}): ${errMsg}`);
     }
 
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (typeof content === "string") return content;
-    if (data.choices?.[0]?.message?.tool_calls) {
-      return JSON.stringify(data.choices[0].message.tool_calls, null, 2);
+    if (!streamEnabled) {
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content || "";
+      return {
+        text: content,
+        streamBatches: [],
+      };
     }
-    throw new Error(`${provider.toUpperCase()} returned an empty completion response.`);
+
+    if (res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed === "data: [DONE]") continue;
+            if (trimmed.startsWith("data: ")) {
+              try {
+                const parsed = JSON.parse(trimmed.slice(6));
+                const delta = parsed.choices?.[0]?.delta?.content || "";
+                if (delta) fullText += delta;
+                streamBatches.push({
+                  index: idx++,
+                  delta,
+                  content: fullText,
+                  timestamp: new Date().toISOString(),
+                  raw: parsed.choices?.[0],
+                });
+              } catch {}
+            }
+          }
+        }
+      } catch {}
+    }
+
+    if (!fullText && streamBatches.length === 0) {
+      try {
+        const data = await res.json();
+        const content = data.choices?.[0]?.message?.content || "";
+        return {
+          text: content,
+          streamBatches: [{ index: 0, delta: content, content, timestamp: new Date().toISOString(), raw: data }],
+        };
+      } catch {}
+    }
+
+    return { text: fullText, streamBatches };
   }
 
   // 3. Anthropic Messages API
@@ -844,6 +992,7 @@ async function callBrowserLLM(args: {
             content: m.content,
           })),
           max_tokens: 1024,
+          stream: true,
         }),
       });
     } catch (netErr: unknown) {
@@ -863,10 +1012,51 @@ async function callBrowserLLM(args: {
       throw new Error(`Anthropic API error (${res.status}): ${errMsg}`);
     }
 
-    const data = await res.json();
-    const content = data.content?.[0]?.text;
-    if (typeof content === "string") return content;
-    throw new Error(`Anthropic returned an empty completion response.`);
+    if (res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed === "data: [DONE]") continue;
+            if (trimmed.startsWith("data: ")) {
+              try {
+                const parsed = JSON.parse(trimmed.slice(6));
+                const delta = parsed.type === "content_block_delta" ? parsed.delta?.text || "" : "";
+                if (delta) fullText += delta;
+                streamBatches.push({
+                  index: idx++,
+                  delta,
+                  content: fullText,
+                  timestamp: new Date().toISOString(),
+                  raw: parsed,
+                });
+              } catch {}
+            }
+          }
+        }
+      } catch {}
+    }
+
+    if (!fullText && streamBatches.length === 0) {
+      try {
+        const data = await res.json();
+        const content = data.content?.[0]?.text || "";
+        return {
+          text: content,
+          streamBatches: [{ index: 0, delta: content, content, timestamp: new Date().toISOString(), raw: data }],
+        };
+      } catch {}
+    }
+
+    return { text: fullText, streamBatches };
   }
 
   throw new Error(`Unsupported LLM provider: "${provider}". Please choose Groq, OpenAI, or Anthropic.`);

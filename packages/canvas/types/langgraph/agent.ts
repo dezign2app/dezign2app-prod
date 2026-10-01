@@ -28,12 +28,40 @@ export type LangGraphEventStreamType =
   | "stream.subagents"
   | "stream.extensions";
 
+export type LangGraphStreamTransformerMode =
+  | "standard_sse"
+  | "ai_sdk"
+  | "openai_chunk"
+  | "minimal"
+  | "full_trace"
+  | "custom";
+
+export interface LangGraphStreamEnvelopeConfig {
+  includeEvent?: boolean;
+  includeAgent?: boolean;
+  includeRunId?: boolean;
+  includeTimestamp?: boolean;
+  includeDelta?: boolean;
+  includeContent?: boolean;
+  includeTool?: boolean;
+  includeInputs?: boolean;
+  includeOutput?: boolean;
+  includeUsage?: boolean;
+  flattenPayload?: boolean;
+  stripEmptyDeltas?: boolean;
+}
+
+export interface LangGraphStreamTransformerConfig {
+  mode?: LangGraphStreamTransformerMode;
+  customCode?: string;
+}
+
 export interface LangGraphAgentStreamConfig {
   enabled?: boolean;
   version?: "v3" | "v2" | string;
-  selectedEvents?: string[];
-  eventSignature?: string;
-  customTransformers?: string;
+  selectedEvents?: (LangGraphEventStreamType | string)[];
+  envelope?: LangGraphStreamEnvelopeConfig;
+  transformer?: LangGraphStreamTransformerConfig;
 }
 
 export interface LangGraphAgentResponseFormatConfig {

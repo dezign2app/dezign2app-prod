@@ -187,36 +187,72 @@ export {
 };
 
 // ─── Event Stream Defaults & Constants ─────────────────────────────────────────
-export const DEFAULT_EVENT_STREAM_SIGNATURE = JSON.stringify(
-  {
-    event: "{{event}}",
-    agent: "{{agent_name}}",
-    run_id: "{{run_id}}",
-    timestamp: "{{timestamp}}",
-    data: {
-      delta: "{{delta}}",
-      content: "{{content}}",
-      tool: "{{tool_name}}",
-      inputs: "{{inputs}}",
-      output: "{{output}}",
-      usage: "{{usage}}",
-    },
-  },
-  null,
-  2,
-);
+export const DEFAULT_STREAM_ENVELOPE = {
+  includeEvent: true,
+  includeAgent: true,
+  includeRunId: true,
+  includeTimestamp: true,
+  includeDelta: true,
+  includeContent: true,
+  includeTool: true,
+  includeInputs: false,
+  includeOutput: true,
+  includeUsage: false,
+  flattenPayload: false,
+  stripEmptyDeltas: true,
+};
 
-export const DEFAULT_STREAM_TRANSFORMERS = `// LangChain streamEvents (version: "v3") transformer configuration
-// Enables frontend-friendly SSE projections
+export const DEFAULT_STREAM_TRANSFORMER_MODE = "standard_sse" as const;
+
+export const DEFAULT_CUSTOM_TRANSFORMER_CODE = `// Custom LangChain streamEvents (v3) transformer
 export async function* customEventStreamTransformer(eventStream) {
   for await (const event of eventStream) {
     yield {
       event: event.event,
       timestamp: new Date().toISOString(),
-      payload: event.data
+      payload: event.data,
     };
   }
 }`;
+
+export const STREAM_TRANSFORMER_PRESETS = [
+  {
+    id: "standard_sse" as const,
+    label: "Standard SSE",
+    badge: "Recommended",
+    description: "Standard Server-Sent Events with event envelope and structured payload",
+  },
+  {
+    id: "ai_sdk" as const,
+    label: "Vercel AI SDK",
+    badge: "AI SDK UI",
+    description: "Data-stream protocol compatible with useChat and useCompletion hooks",
+  },
+  {
+    id: "openai_chunk" as const,
+    label: "OpenAI Delta Format",
+    badge: "OpenAI Chunk",
+    description: "Mirrors chat completion chunks with choices[].delta structure",
+  },
+  {
+    id: "minimal" as const,
+    label: "Minimal Token Delta",
+    badge: "High Throughput",
+    description: "Ultra-lean payload with only token text deltas and tool updates",
+  },
+  {
+    id: "full_trace" as const,
+    label: "Full Trace & Telemetry",
+    badge: "Observability",
+    description: "Complete execution lifecycle with node IDs, tool I/O, and token usage metrics",
+  },
+  {
+    id: "custom" as const,
+    label: "Custom Generator",
+    badge: "Advanced",
+    description: "Define a bespoke async generator stream transformer in TypeScript/Python",
+  },
+] as const;
 
 export const STREAM_EVENT_TYPES = [
   {
