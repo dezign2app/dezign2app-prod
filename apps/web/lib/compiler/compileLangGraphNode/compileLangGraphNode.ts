@@ -19,6 +19,8 @@ export function compileLangGraphNode(
     testCases?: SimulationTestCase[];
     outputMode?: "app" | "package";
     packageName?: string;
+    dbPackageName?: string;
+    redisPackageName?: string;
   },
 ): CompiledServiceResult {
   const serviceName = node.data?.label || "LangGraph Service";
@@ -29,6 +31,12 @@ export function compileLangGraphNode(
   }
   if (context?.packageName) {
     input.packageName = context.packageName;
+  }
+  if (context?.dbPackageName) {
+    input.dbPackageName = context.dbPackageName;
+  }
+  if (context?.redisPackageName) {
+    input.redisPackageName = context.redisPackageName;
   }
 
   // Resolve connected route callers from the main canvas edge graph

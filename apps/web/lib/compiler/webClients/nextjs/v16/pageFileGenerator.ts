@@ -600,59 +600,78 @@ export function generatePageAndComponentFiles({
         }
 
         // 3. Connected service endpoint has a storage step or edge to a storage node
-        if (!storageConfig && link?.targetNodeId) {
-          const serviceStorageEdge = allEdges.find(
-            (e) =>
-              (e.source === link.targetNodeId || e.target === link.targetNodeId) &&
-              allNodes.some(
-                (n) =>
-                  STORAGE_NODE_TYPES.has(n.type as string) &&
-                  (n.id === e.source || n.id === e.target) &&
-                  n.id !== link.targetNodeId,
-              ),
+        if (!storageConfig && link?.endpoint && link.targetNodeId) {
+          const hasStorageStep = (link.endpoint.pipelineSteps || []).some(
+            (s: { type?: string; functionRef?: { name?: string; importPath?: string } }) =>
+              s.type === "storage_operation" ||
+              s.type === "storage" ||
+              s.functionRef?.importPath?.includes("/storage") ||
+              s.functionRef?.name?.toLowerCase().includes("upload"),
           );
-          if (serviceStorageEdge) {
-            const sId =
-              serviceStorageEdge.source === link.targetNodeId
-                ? serviceStorageEdge.target
-                : serviceStorageEdge.source;
-            const sNode = allNodes.find((n) => n.id === sId);
-            if (sNode) {
-              const underlyingStorageId =
-                sNode.type === "storage" ? sNode.id : sNode.data?.storageNodeId;
-              const underlyingNode =
-                (underlyingStorageId
-                  ? allNodes.find((n) => n.id === underlyingStorageId)
-                  : undefined) || sNode;
-              const preferredBucket = sNode.data?.bucketId || sNode.data?.bucketName;
-              storageConfig = extractBucketConfig(underlyingNode, preferredBucket);
+          if (hasStorageStep) {
+            const serviceStorageEdge = allEdges.find(
+              (e) =>
+                (e.source === link.targetNodeId || e.target === link.targetNodeId) &&
+                allNodes.some(
+                  (n) =>
+                    STORAGE_NODE_TYPES.has(n.type as string) &&
+                    (n.id === e.source || n.id === e.target) &&
+                    n.id !== link.targetNodeId,
+                ),
+            );
+            if (serviceStorageEdge) {
+              const sId =
+                serviceStorageEdge.source === link.targetNodeId
+                  ? serviceStorageEdge.target
+                  : serviceStorageEdge.source;
+              const sNode = allNodes.find((n) => n.id === sId);
+              if (sNode) {
+                const underlyingStorageId =
+                  sNode.type === "storage" ? sNode.id : sNode.data?.storageNodeId;
+                const underlyingNode =
+                  (underlyingStorageId
+                    ? allNodes.find((n) => n.id === underlyingStorageId)
+                    : undefined) || sNode;
+                const preferredBucket = sNode.data?.bucketId || sNode.data?.bucketName;
+                storageConfig = extractBucketConfig(underlyingNode, preferredBucket);
+              }
             }
           }
         }
 
-        // 4. Fallback from page-level or endpoint-level flags
+        // 4. Fallback from event-level or endpoint-level upload flags
         if (!storageConfig) {
-          const evtAny = evt as any;
-          const epAny = link?.endpoint as any;
-          if (
-            evtAny?.storageNodeId ||
-            evtAny?.uploadBucketId ||
-            node.data?.uploadBucketId ||
-            node.data?.connectedStorageNodeId ||
-            epAny?.connectedStorageNodeId
-          ) {
+          const evtAny = evt as {
+            eventType?: string;
+            actionType?: string;
+            storageNodeId?: string;
+            uploadBucketId?: string;
+            storageOperationBinding?: { bucketId?: string };
+            uploadMaxFileSizeMb?: number;
+            uploadAcceptedMimeTypes?: string;
+          };
+          const epAny = link?.endpoint as {
+            connectedStorageNodeId?: string;
+            uploadMaxFileSizeMb?: number;
+            uploadAcceptedMimeTypes?: string;
+          } | undefined;
+          const isUploadEvent =
+            evt.eventType === "fileUpload" ||
+            evtAny?.actionType === "upload" ||
+            Boolean(evtAny?.storageNodeId) ||
+            Boolean(evtAny?.uploadBucketId) ||
+            Boolean(evtAny?.storageOperationBinding);
+          if (isUploadEvent || epAny?.connectedStorageNodeId) {
             const bucketId =
               evtAny?.uploadBucketId ||
-              node.data?.uploadBucketId ||
-              (evtAny?.storageOperationBinding as any)?.bucketId;
+              evtAny?.storageOperationBinding?.bucketId;
             const sNodeId =
               evtAny?.storageNodeId ||
-              node.data?.connectedStorageNodeId ||
               epAny?.connectedStorageNodeId;
             const sNode = sNodeId ? allNodes.find((n) => n.id === sNodeId) : undefined;
             if (sNode) {
               storageConfig = extractBucketConfig(sNode, bucketId);
-            } else {
+            } else if (isUploadEvent) {
               storageConfig = {
                 maxSizeMb:
                   node.data?.uploadMaxFileSizeMb ??

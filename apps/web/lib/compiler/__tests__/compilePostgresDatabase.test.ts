@@ -119,6 +119,21 @@ describe("compilePostgresDatabase", () => {
     expect(helper!.content).not.toContain("randomUUID");
   });
 
+  it("should correctly compile tables with single numeric primary key and no writable columns", () => {
+    const migrationEntity = makeEntityNode("ent-migration", "langgraph_checkpoint_migrations", [
+      { name: "v", type: "number", isPrimaryKey: true },
+    ]);
+    const result = compilePostgresDatabase([migrationEntity], []);
+    const helper = result.files.find((f) => f.filename === "helpers/langgraphCheckpointMigration.ts");
+    expect(helper).toBeDefined();
+    const code = helper!.content;
+    expect(code).not.toContain("{ id }");
+    expect(code).toContain("v?: number");
+    expect(code).toContain("DEFAULT VALUES");
+    expect(code).toContain("const row = res.rows[0];");
+    expect(code).toContain("return row;");
+  });
+
   it("should handle multiple entity tables", () => {
     const productEntity = makeEntityNode("ent-product", "Product", [
       { name: "id", type: "string", isPrimaryKey: true },
@@ -142,8 +157,8 @@ describe("compilePostgresDatabase", () => {
     expect(code).not.toContain("as unknown as");
     expect(code).not.toContain("as Order");
     expect(code).not.toContain("as any");
-    expect(code).not.toContain("unknown");
-    expect(code).toContain("return res.rows[0];");
+    expect(code).toContain("const row = res.rows[0];");
+    expect(code).toContain("return row;");
     expect(code).toContain("return res.rows[0] || null;");
   });
 });

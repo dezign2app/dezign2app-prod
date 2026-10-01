@@ -287,12 +287,13 @@ ${hasQueryParams ? `    const search = new URLSearchParams();
     setIsSubmitting(true);
     try {
       const finalUrl = computeFinalUrl();
-${hasBodyFields || hasRawJson ? `      let payloadBody: ${componentName}RequestBody | undefined = undefined;\n` : ""}${hasBodyFields ? `      // Form fields payload
-      payloadBody = { ...bodyFields } as ${componentName}RequestBody;
+${hasBodyFields || hasRawJson ? `      let payloadBody: Record<string, string | number | boolean | null | undefined> | undefined = undefined;\n` : ""}${hasBodyFields ? `      // Form fields payload
+      payloadBody = { ...bodyFields };
 ` : ""}${hasRawJson ? `      // Raw JSON payload
       if (rawJsonBody.trim()) {
         try {
-          payloadBody = JSON.parse(rawJsonBody) as ${componentName}RequestBody;
+          const parsed = JSON.parse(rawJsonBody);
+          payloadBody = typeof parsed === "object" && parsed !== null ? parsed : undefined;
           setJsonError(null);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -429,7 +430,7 @@ ${bodyFields.filter((f) => Boolean(f && f.name && f.name.trim())).map((f) => {
                 <Textarea
                   className="min-h-[60px] text-xs font-mono bg-background"
                   ${placeholderAttr}
-                  value={typeof bodyFields["${f.name}"] === "object" ? JSON.stringify(bodyFields["${f.name}"]) : bodyFields["${f.name}"] ?? ""}
+                  value={typeof bodyFields["${f.name}"] === "object" ? JSON.stringify(bodyFields["${f.name}"]) : (bodyFields["${f.name}"] !== undefined && bodyFields["${f.name}"] !== null ? String(bodyFields["${f.name}"]) : "")}
                   onChange={(e) => {
                     const text = e.target.value;
                     try {
@@ -450,7 +451,7 @@ ${bodyFields.filter((f) => Boolean(f && f.name && f.name.trim())).map((f) => {
                   type="${f.type === "number" ? "number" : "text"}"
                   className="h-8 text-xs bg-background font-mono"
                   placeholder="${escapeJsxAttr(f.description || f.defaultValue || f.name)}"
-                  value={bodyFields["${f.name}"] ?? ""}
+                  value={bodyFields["${f.name}"] !== undefined && bodyFields["${f.name}"] !== null ? String(bodyFields["${f.name}"]) : ""}
                   required={${Boolean(f.required)}}
                   onChange={(e) =>
                     setBodyFields((prev) => ({

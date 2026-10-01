@@ -157,12 +157,14 @@ export function isServiceConnectedToStorage(
   // 3. Endpoint pipeline steps referencing storage operations
   const hasStoragePipelineStep = serviceEndpoints.some((ep) =>
     ep.pipelineSteps?.some(
-      (s: any) =>
+      (s: { type?: string; storageNodeId?: string; bucketId?: string; functionRef?: { importPath?: string } }) =>
         s.type === "storage_operation" ||
+        s.type === "storage" ||
+        (s.functionRef?.importPath && s.functionRef.importPath.includes("storage")) ||
         (s.storageNodeId && storageNodeIds.has(s.storageNodeId)) ||
         (s.bucketId &&
           storageNodes.some((sn) =>
-            (sn.data?.buckets || []).some((b: any) => b.id === s.bucketId || b.name === s.bucketId),
+            (sn.data?.buckets || []).some((b: { id?: string; name?: string }) => b.id === s.bucketId || b.name === s.bucketId),
           )),
     ),
   );

@@ -902,16 +902,21 @@ export function generateDefaultDbOperationsForEngine(
     .map((c) => (c.isPrimaryKey ? "_id" : `${toVarName(c.name)} ?? null`))
     .join(", ");
 
-  const destructuredFields = insertColList.map((c) => toVarName(c.name)).join(", ") || "id";
+  const destructuredFields = insertColList.map((c) => toVarName(c.name)).join(", ") || pkVarName;
   const createDestructuredParam = `{ ${destructuredFields} }`;
 
   const setClauses = writableCols.map((c, i) => `"${c.name}" = $${i + 2}`).join(", ");
   const updateDestructured = writableCols.map((c) => toVarName(c.name)).join(", ");
   const updateArgVals = writableCols.map((c) => `${toVarName(c.name)} ?? null`).join(", ");
 
-  const createCode = isStringPk
-    ? `export async function create${pascalSingular}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}> {\n  const _id = ${pkVarName} || randomUUID();\n  const res = await query<${pascal}>(\n    'INSERT INTO "${tableName}" (${insertColNames}) VALUES (${insertParams}) RETURNING *',\n    [${insertArgVals}]\n  );\n  return res.rows[0];\n}`
-    : `export async function create${pascalSingular}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}> {\n  const res = await query<${pascal}>(\n    'INSERT INTO "${tableName}" (${insertColNames}) VALUES (${insertParams}) RETURNING *',\n    [${insertArgVals}]\n  );\n  return res.rows[0];\n}`;
+  let createCode: string;
+  if (writableCols.length === 0 && !isStringPk) {
+    createCode = `export async function create${pascalSingular}({ ${pkVarName} }: Create${pascal}Data = {}): Promise<${pascal}> {\n  const res = ${pkVarName} !== undefined\n    ? await query<${pascal}>(\n        'INSERT INTO "${tableName}" ("${pkColName}") VALUES ($1) RETURNING *',\n        [${pkVarName}]\n      )\n    : await query<${pascal}>(\n        'INSERT INTO "${tableName}" DEFAULT VALUES RETURNING *',\n        []\n      );\n  const row = res.rows[0];\n  if (!row) {\n    throw new Error("Failed to insert record into ${tableName}");\n  }\n  return row;\n}`;
+  } else if (isStringPk) {
+    createCode = `export async function create${pascalSingular}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}> {\n  const _id = ${pkVarName} || randomUUID();\n  const res = await query<${pascal}>(\n    'INSERT INTO "${tableName}" (${insertColNames}) VALUES (${insertParams}) RETURNING *',\n    [${insertArgVals}]\n  );\n  const row = res.rows[0];\n  if (!row) {\n    throw new Error("Failed to insert record into ${tableName}");\n  }\n  return row;\n}`;
+  } else {
+    createCode = `export async function create${pascalSingular}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}> {\n  const res = await query<${pascal}>(\n    'INSERT INTO "${tableName}" (${insertColNames}) VALUES (${insertParams}) RETURNING *',\n    [${insertArgVals}]\n  );\n  const row = res.rows[0];\n  if (!row) {\n    throw new Error("Failed to insert record into ${tableName}");\n  }\n  return row;\n}`;
+  }
 
   const updateCode = writableCols.length > 0
     ? `export async function update${pascalSingular}(${pkVarName}: ${pkType}, { ${updateDestructured} }: Update${pascal}Data): Promise<${pascal} | null> {\n  const res = await query<${pascal}>(\n    'UPDATE "${tableName}" SET ${setClauses} WHERE "${pkColName}" = $1 RETURNING *',\n    [${pkVarName}, ${updateArgVals}]\n  );\n  return res.rows[0] || null;\n}`
@@ -1026,11 +1031,15 @@ export function generateDefaultDbOperationsForEngine(
     const opId = `auto-fetch-by-${colList.join("-")}-${tableName}`;
     if (ops.some((o) => o.id === opId)) return;
 
-    const paramList = colList.map((c) => ({ name: toVarName(c), type: "string", required: true }));
+    const paramList = colList.map((c) => {
+      const colObj = columns.find((col) => toSqlIdentifier(col.name, "col") === toSqlIdentifier(c, "col"));
+      const colType = colObj ? sqlColumnToTsType(colObj.type) : "string";
+      return { name: toVarName(c), type: colType, required: true };
+    });
     const returnType = isUnique ? `Promise<${pascal} | null>` : `Promise<${pascal}[]>`;
     const where = colList.map((c, i) => `"${toSqlIdentifier(c, "col")}" = $${i + 1}`).join(" AND ");
     const args = colList.map((c) => toVarName(c)).join(", ");
-    const paramSig = colList.map((c) => `${toVarName(c)}: string`).join(", ");
+    const paramSig = paramList.map((p) => `${p.name}: ${p.type}`).join(", ");
 
     const indexCode = isUnique
       ? `export async function ${fnName}(${paramSig}): ${returnType} {\n  const res = await query<${pascal}>('SELECT * FROM "${tableName}" WHERE ${where} LIMIT 1', [${args}]);\n  return res.rows[0] || null;\n}`

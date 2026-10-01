@@ -20,7 +20,11 @@ export async function POST(req: NextRequest) {
       "threadId" in body &&
       typeof body.threadId === "string"
     ) {
-      clearServerThread(body.threadId);
+      await clearServerThread(
+        body.threadId,
+        body.memoryConfig,
+        body.checkpointerConnection,
+      );
       return NextResponse.json({ success: true, message: `Cleared server thread ${body.threadId}` });
     }
 
@@ -37,6 +41,7 @@ export async function POST(req: NextRequest) {
       stateChannels: Array.isArray(body.stateChannels) ? body.stateChannels : [],
       inputChannels: Array.isArray(body.inputChannels) ? body.inputChannels : [],
       memoryConfig: body.memoryConfig,
+      checkpointerConnection: body.checkpointerConnection,
       inputValues: body.inputValues && typeof body.inputValues === "object" ? body.inputValues : {},
       threadId: typeof body.threadId === "string" ? body.threadId : "default",
       provider: body.provider,

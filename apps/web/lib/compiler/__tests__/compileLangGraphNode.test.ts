@@ -349,7 +349,7 @@ describe("compileLangGraph Compiler Fixes", () => {
 
     const pkgJson = JSON.parse(fileMap.get("package.json") || "{}");
     expect(pkgJson.dependencies["@langchain/langgraph-checkpoint-redis"]).toBeDefined();
-    expect(pkgJson.dependencies["ioredis"]).toBeDefined();
+    expect(pkgJson.dependencies["redis"]).toBeDefined();
 
     const envFile = fileMap.get(".env.example");
     expect(envFile).toContain("CUSTOM_REDIS_URL=redis://");
