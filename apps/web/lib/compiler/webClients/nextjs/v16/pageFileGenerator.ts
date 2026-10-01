@@ -656,7 +656,9 @@ export function generatePageAndComponentFiles({
             uploadAcceptedMimeTypes?: string;
           } | undefined;
           const isUploadEvent =
-            evt.eventType === "fileUpload" ||
+            evtType === "fileUpload" ||
+            evt.event === "fileUpload" ||
+            evtAny?.eventType === "fileUpload" ||
             evtAny?.actionType === "upload" ||
             Boolean(evtAny?.storageNodeId) ||
             Boolean(evtAny?.uploadBucketId) ||
