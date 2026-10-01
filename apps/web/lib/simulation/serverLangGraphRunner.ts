@@ -28,6 +28,7 @@ import type {
   LangGraphLLMNodeData,
   ToolNodeData,
   AgentNodeData,
+  LangGraphAgentResponseFormatConfig,
 } from "@workspace/canvas";
 import { evaluateRouterBranch } from "./langgraph";
 import type { SimulationTraceEntry } from "./types";
@@ -376,6 +377,17 @@ export async function executeServerLangGraph(
     }
   }
 
+  // Auto-register structuredResponse channel if any agent node has structured output enabled
+  const hasStructuredOutput = nodes.some(
+    (n) => (n.data as AgentNodeData)?.responseFormat?.enabled,
+  );
+  if (hasStructuredOutput && !schemaSpec["structuredResponse"]) {
+    schemaSpec["structuredResponse"] = Annotation<Record<string, unknown> | null>({
+      reducer: (_, y) => y,
+      default: () => null,
+    });
+  }
+
   const GraphState = Annotation.Root(
     schemaSpec as Parameters<typeof Annotation.Root>[0],
   );
@@ -495,6 +507,7 @@ export async function executeServerLangGraph(
                 ? process.env.ANTHROPIC_API_KEY
                 : undefined);
 
+        const responseFormat = agentData.responseFormat;
         const responseText = await callServerLLM({
           provider: effectiveProvider,
           apiKey: effectiveApiKey,
@@ -502,11 +515,28 @@ export async function executeServerLangGraph(
           systemPrompt,
           messages,
           customUrl: llmData?.url || llmData?.baseUrl,
+          responseFormat,
         });
 
         latestAssistantResponse = responseText;
-        outputDelta.messages = [new AIMessage(responseText)];
-        outputDelta.response = responseText;
+        if (responseFormat?.enabled) {
+          let parsed: Record<string, unknown> | null = null;
+          try {
+            let clean = responseText.trim();
+            if (clean.startsWith("```")) {
+              clean = clean.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+            }
+            parsed = JSON.parse(clean);
+          } catch {
+            parsed = { raw: responseText };
+          }
+          outputDelta.structuredResponse = parsed;
+          outputDelta.messages = [new AIMessage(JSON.stringify(parsed, null, 2))];
+          outputDelta.response = JSON.stringify(parsed);
+        } else {
+          outputDelta.messages = [new AIMessage(responseText)];
+          outputDelta.response = responseText;
+        }
 
         for (const update of agentData.stateUpdates || []) {
           let val: unknown = update.value;
@@ -923,8 +953,19 @@ async function callServerLLM(args: {
   systemPrompt: string;
   messages: Array<{ role: string; content: string }>;
   customUrl?: string;
+  responseFormat?: LangGraphAgentResponseFormatConfig;
 }): Promise<string> {
-  const { provider, apiKey, modelName, systemPrompt, messages, customUrl } = args;
+  const { provider, apiKey, modelName, systemPrompt, messages, customUrl, responseFormat } = args;
+
+  const isStructured = Boolean(responseFormat?.enabled);
+  const schemaStr = responseFormat?.schemaJson?.trim();
+
+  let effectiveSystemPrompt = systemPrompt;
+  if (isStructured) {
+    effectiveSystemPrompt += `\n\nCRITICAL INSTRUCTION: You must respond ONLY with a valid JSON object matching this schema or structure:\n${
+      schemaStr || '{"aiResponse": "string"}'
+    }\nDo not include any conversational preamble, explanations, markdown backticks, or any text other than the JSON object itself.`;
+  }
 
   // 1. Groq (uses groq-sdk or fetch)
   if (provider === "groq") {
@@ -934,7 +975,7 @@ async function callServerLLM(args: {
     }
     const groq = new Groq({ apiKey: key });
     const promptMessages = [
-      { role: "system" as const, content: systemPrompt },
+      { role: "system" as const, content: effectiveSystemPrompt },
       ...messages.map((m) => ({
         role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
         content: m.content,
@@ -943,9 +984,11 @@ async function callServerLLM(args: {
     const completion = await groq.chat.completions.create({
       model: modelName || "openai/gpt-oss-120b",
       messages: promptMessages,
-      temperature: 0.7,
+      temperature: isStructured ? 0.2 : 0.7,
+      stream: false,
+      ...(isStructured ? { response_format: { type: "json_object" as const } } : {}),
     });
-    return completion.choices[0]?.message?.content || "";
+    return "choices" in completion ? completion.choices[0]?.message?.content || "" : "";
   }
 
   // 2. OpenAI & Anthropic & Custom HTTP
@@ -958,7 +1001,7 @@ async function callServerLLM(args: {
         : "http://localhost:11434/v1/chat/completions");
 
   const promptMessages = [
-    { role: "system", content: systemPrompt },
+    { role: "system", content: effectiveSystemPrompt },
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
 
@@ -982,7 +1025,7 @@ async function callServerLLM(args: {
         ? {
             model: modelName,
             max_tokens: 2048,
-            system: systemPrompt,
+            system: effectiveSystemPrompt,
             messages: messages.map((m) => ({
               role: m.role === "assistant" ? "assistant" : "user",
               content: m.content,
@@ -991,7 +1034,10 @@ async function callServerLLM(args: {
         : {
             model: modelName,
             messages: promptMessages,
-            temperature: 0.7,
+            temperature: isStructured ? 0.2 : 0.7,
+            ...(isStructured
+              ? { response_format: { type: "json_object" } }
+              : {}),
           },
     ),
   });
