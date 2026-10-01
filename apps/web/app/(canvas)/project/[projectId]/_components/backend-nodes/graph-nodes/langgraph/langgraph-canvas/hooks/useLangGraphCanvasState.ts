@@ -5,6 +5,7 @@ import {
   type LangGraphStateChannel,
   type LangGraphInputChannel,
   type LangGraphMemoryConfig,
+  type LangGraphCustomReducer,
   type LangGraphCanvasNode,
   type LangGraphCanvasEdge,
 } from "@workspace/canvas";
@@ -44,6 +45,9 @@ export function useLangGraphCanvasState({
         defaultValue: [],
       },
     ],
+  );
+  const [customReducers, setCustomReducers] = useState<LangGraphCustomReducer[]>(
+    data.customReducers || [],
   );
   const [memoryConfig, setMemoryConfig] = useState<LangGraphMemoryConfig>(
     data.memoryConfig || {
@@ -110,6 +114,58 @@ export function useLangGraphCanvasState({
       };
       return [...prev.slice(0, index + 1), copy, ...prev.slice(index + 1)];
     });
+  }, []);
+
+  const handleAddCustomReducer = useCallback((reducer: LangGraphCustomReducer) => {
+    setCustomReducers((prev) => {
+      if (prev.some((r) => r.name === reducer.name)) return prev;
+      return [...prev, reducer];
+    });
+  }, []);
+
+  const handleUpdateCustomReducer = useCallback(
+    (idOrName: string, changes: Partial<LangGraphCustomReducer>) => {
+      setCustomReducers((prev) => {
+        const target = prev.find(
+          (r) => r.id === idOrName || r.name === idOrName,
+        );
+        if (!target) return prev;
+        const oldName = target.name;
+        const newName = changes.name ?? oldName;
+        const newCode = changes.code ?? target.code;
+
+        // If the reducer name or code changed, sync any channels using this reducer
+        setStateChannels((prevChannels) =>
+          prevChannels.map((c) =>
+            c.reducer === oldName
+              ? {
+                  ...c,
+                  reducer: newName,
+                  customReducerCode: newCode,
+                }
+              : c,
+          ),
+        );
+
+        return prev.map((r) =>
+          r.id === idOrName || r.name === idOrName ? { ...r, ...changes } : r,
+        );
+      });
+    },
+    [],
+  );
+
+  const handleDeleteCustomReducer = useCallback((idOrName: string) => {
+    setCustomReducers((prev) =>
+      prev.filter((r) => r.id !== idOrName && r.name !== idOrName),
+    );
+    setStateChannels((prev) =>
+      prev.map((c) =>
+        c.reducer === idOrName
+          ? { ...c, reducer: "replace", customReducerCode: undefined }
+          : c,
+      ),
+    );
   }, []);
 
   // ── Input channel CRUD handlers ──
@@ -226,6 +282,7 @@ export function useLangGraphCanvasState({
     setEdges,
     inputChannels,
     stateChannels,
+    customReducers,
     memoryConfig,
     setMemoryConfig,
     setSelectedNodeId,
@@ -234,6 +291,9 @@ export function useLangGraphCanvasState({
     handleUpdateChannel,
     handleDeleteChannel,
     handleDuplicateChannel,
+    handleAddCustomReducer,
+    handleUpdateCustomReducer,
+    handleDeleteCustomReducer,
     handleAddInputChannel,
     handleAddSuggestedChannel,
     handleUpdateInputChannel,
@@ -296,6 +356,7 @@ export function useLangGraphCanvasState({
     edges,
     inputChannels,
     stateChannels,
+    customReducers,
     memoryConfig,
   });
 
@@ -358,6 +419,11 @@ export function useLangGraphCanvasState({
     updateSelectedAgent,
     updateSelectedMemory,
     updateSelectedOutput,
+    customReducers,
+    setCustomReducers,
+    handleAddCustomReducer,
+    handleUpdateCustomReducer,
+    handleDeleteCustomReducer,
     handleAddChannel,
     handleUpdateChannel,
     handleDeleteChannel,

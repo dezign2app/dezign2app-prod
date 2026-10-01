@@ -190,13 +190,17 @@ export const safePipelineStepSchema = z.object({
   loopBody: z.array(z.any()).optional(),
 
   // push_to_client fields
-  clientDeliveryProtocol: z.enum(["SSE", "WEBSOCKET", "WEBRTC", "API_PUSH"]).optional(),
+  clientDeliveryProtocol: z
+    .enum(["SSE", "WEBSOCKET", "WEBRTC", "API_PUSH"])
+    .optional(),
   clientDeliveryTargetWebAppId: z.string().optional(),
   clientDeliveryTargetPageId: z.string().optional(),
   clientDeliveryPageRefNodeId: z.string().optional(),
   clientDeliveryEventName: z.string().optional(),
   clientDeliveryRoom: z.string().optional(),
-  clientDeliveryMediaMode: z.enum(["data", "audio", "video", "audio-video"]).optional(),
+  clientDeliveryMediaMode: z
+    .enum(["data", "audio", "video", "audio-video"])
+    .optional(),
   clientDeliveryEnableDataChannel: z.boolean().optional(),
   clientDeliveryEnableAudio: z.boolean().optional(),
   clientDeliveryEnableMic: z.boolean().optional(),
@@ -217,7 +221,9 @@ export const safePipelineStepSchema = z.object({
   langGraphStreamingEnabled: z.boolean().optional(),
   langGraphStreamingProtocol: z.enum(["sse", "websocket"]).optional(),
   langGraphStreamingFields: z.array(z.string()).optional(),
-  langGraphOutputMode: z.enum(["full_state", "specific_fields", "last_message"]).optional(),
+  langGraphOutputMode: z
+    .enum(["full_state", "specific_fields", "last_message"])
+    .optional(),
   langGraphOutputFields: z.array(z.string()).optional(),
 });
 
@@ -233,7 +239,15 @@ const safePublishedEventSchema = z.object({
   brokerNodeId: z.string().optional(),
   messagingResourceId: z.string().optional(),
   resourceType: z.string().optional(),
-  payloadSchema: z.object({ id: z.string(), fields: z.array(z.any()).optional(), rawJson: z.string().optional(), mode: z.string().optional(), requestBodyMode: z.string().optional() }).optional(),
+  payloadSchema: z
+    .object({
+      id: z.string(),
+      fields: z.array(z.any()).optional(),
+      rawJson: z.string().optional(),
+      mode: z.string().optional(),
+      requestBodyMode: z.string().optional(),
+    })
+    .optional(),
   version: z.string().optional(),
   category: z.string().optional(),
   delivery: z.string().optional(),
@@ -242,7 +256,13 @@ const safePublishedEventSchema = z.object({
   deprecated: z.boolean().optional(),
   replacementEventId: z.string().optional(),
   targetNodeId: z.string().optional(),
-  metadata: z.object({ createdAt: z.number().optional(), updatedAt: z.number().optional(), createdByAI: z.boolean().optional() }).optional(),
+  metadata: z
+    .object({
+      createdAt: z.number().optional(),
+      updatedAt: z.number().optional(),
+      createdByAI: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 const safeEndpointSchema = endpointSchema
@@ -418,9 +438,7 @@ export const backendRequestBodyValidator = v.object({
   id: v.optional(v.string()),
   fields: v.optional(v.array(backendParameterValidator)),
   rawJson: v.optional(v.string()),
-  mode: v.optional(
-    v.union(v.literal("field_builder"), v.literal("raw_json")),
-  ),
+  mode: v.optional(v.union(v.literal("field_builder"), v.literal("raw_json"))),
   requestBodyMode: v.optional(
     v.union(v.literal("field_builder"), v.literal("raw_json")),
   ),
@@ -435,13 +453,25 @@ export const webPageSimulationCaseValidator = v.object({
       headers: v.optional(v.record(v.string(), v.string())),
       params: v.optional(v.record(v.string(), v.string())),
       body: v.optional(
-        v.union(v.string(), v.number(), v.boolean(), v.null(), v.record(v.string(), v.string())),
+        v.union(
+          v.string(),
+          v.number(),
+          v.boolean(),
+          v.null(),
+          v.record(v.string(), v.string()),
+        ),
       ),
     }),
   ),
   expectedStatus: v.optional(v.number()),
   expectedBody: v.optional(
-    v.union(v.string(), v.number(), v.boolean(), v.null(), v.record(v.string(), v.string())),
+    v.union(
+      v.string(),
+      v.number(),
+      v.boolean(),
+      v.null(),
+      v.record(v.string(), v.string()),
+    ),
   ),
   enabled: v.optional(v.boolean()),
 });
@@ -587,7 +617,11 @@ export const pageSectionConvexValidator = v.object({
   name: v.string(),
   renderMode: v.optional(v.union(v.literal("server"), v.literal("client"))),
   loadStrategy: v.optional(
-    v.union(v.literal("eager"), v.literal("dynamic"), v.literal("dynamic-no-ssr")),
+    v.union(
+      v.literal("eager"),
+      v.literal("dynamic"),
+      v.literal("dynamic-no-ssr"),
+    ),
   ),
   actions: v.array(webPageEventConvexValidator),
   states: v.optional(
@@ -670,7 +704,9 @@ export const realtimeConnectionConvexValidator = v.object({
   sourceServiceLabel: v.optional(v.string()),
   sourceEventId: v.optional(v.string()),
   sourceItemName: v.optional(v.string()),
-  sourceItemType: v.optional(v.union(v.literal("endpoint"), v.literal("event"))),
+  sourceItemType: v.optional(
+    v.union(v.literal("endpoint"), v.literal("event")),
+  ),
   storeActionBinding: v.optional(storeActionBindingConvexValidator),
   storeActionBindings: v.optional(v.array(storeActionBindingConvexValidator)),
 });
@@ -775,6 +811,7 @@ export const langgraphConvexDataValidator = v.object({
   inputChannels: v.optional(v.array(v.any())),
   outputChannels: v.optional(v.array(v.any())),
   stateChannels: v.optional(v.array(v.any())),
+  customReducers: v.optional(v.array(v.any())),
   outputPorts: v.optional(v.array(v.any())),
   tools: v.optional(v.array(v.any())),
   customLlmNodes: v.optional(v.array(v.any())),
@@ -782,6 +819,7 @@ export const langgraphConvexDataValidator = v.object({
   customToolRefNodes: v.optional(v.array(v.any())),
   customMiddlewareRefNodes: v.optional(v.array(v.any())),
   customMemoryRefNodes: v.optional(v.array(v.any())),
+  customStateReducerRefNodes: v.optional(v.array(v.any())),
   toolDefinitions: v.optional(v.array(v.any())),
   middlewareDefinitions: v.optional(v.array(v.any())),
   agentDefinitions: v.optional(v.array(v.any())),
@@ -791,6 +829,9 @@ export const langgraphConvexDataValidator = v.object({
   memoryConfig: v.optional(v.any()),
   startNodePosition: v.optional(v.object({ x: v.number(), y: v.number() })),
   stateNodePosition: v.optional(v.object({ x: v.number(), y: v.number() })),
+  checkpointerNodePosition: v.optional(
+    v.object({ x: v.number(), y: v.number() }),
+  ),
   endNodePosition: v.optional(v.object({ x: v.number(), y: v.number() })),
   endNodes: v.optional(v.array(v.any())),
 });
@@ -1007,4 +1048,3 @@ export const backendStorageOperationRefDataValidator = zodToConvex(
 
 export const backendStorageBucketRefDataValidator =
   backendStorageOperationRefDataValidator;
-

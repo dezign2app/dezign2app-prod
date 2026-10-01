@@ -13,14 +13,40 @@ export type LangGraphStateChannel = {
     | "append"
     | "replace"
     | "merge_object"
-    | "concat_array";
+    | "concat_array"
+    | (string & {});
   defaultValue?:
     | string
     | number
     | boolean
     | Record<string, unknown>
     | unknown[];
+  customReducerCode?: string;
 };
+
+export interface LangGraphCustomReducer {
+  id: string;
+  name: string;
+  code: string;
+  description?: string;
+}
+
+export function isLangGraphChannelType(
+  val: string,
+): val is LangGraphStateChannel["type"] {
+  switch (val) {
+    case "messages":
+    case "string":
+    case "json":
+    case "number":
+    case "boolean":
+    case "array":
+    case "object":
+      return true;
+    default:
+      return false;
+  }
+}
 
 export type LangGraphInputChannel = {
   key: string;

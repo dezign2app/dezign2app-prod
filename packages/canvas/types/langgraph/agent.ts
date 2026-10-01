@@ -3,6 +3,7 @@ import type {
   LangGraphStateChannel,
   LangGraphOutputPort,
   OutputChannelConfig,
+  LangGraphCustomReducer,
 } from "./channels";
 import type {
   McpServerConnection,
@@ -120,6 +121,7 @@ export interface CanvasLangGraphNodeData {
   description?: string;
   inputChannels?: LangGraphInputChannel[];
   stateChannels?: LangGraphStateChannel[];
+  customReducers?: LangGraphCustomReducer[];
   graphSteps?: LangGraphStepConfig[];
   graphEdges?: LangGraphEdgeConfig[];
   outputPorts?: LangGraphOutputPort[];

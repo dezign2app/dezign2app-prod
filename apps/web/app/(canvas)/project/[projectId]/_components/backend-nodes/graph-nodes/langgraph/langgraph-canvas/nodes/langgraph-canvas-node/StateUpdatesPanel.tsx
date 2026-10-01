@@ -40,17 +40,39 @@ export const StateUpdatesPanel: React.FC<StateUpdatesPanelProps> = ({
               const matchedChannel = availableStateChannels.find(
                 (c) => c.key === su.channelKey,
               );
+              const mode = su.mode || "set";
+              const modeBadgeStyle =
+                mode === "append"
+                  ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                  : mode === "overwrite"
+                    ? "bg-red-500/20 text-red-300 border-red-500/30"
+                    : mode === "untracked"
+                      ? "bg-purple-500/20 text-purple-300 border-purple-500/30"
+                      : "bg-slate-500/20 text-slate-300 border-slate-500/30";
+
+              const modeTooltip =
+                mode === "append"
+                  ? "ReducedValue: calls channel reducer"
+                  : mode === "overwrite"
+                    ? "Overwrite: bypasses reducer to replace value"
+                    : mode === "untracked"
+                      ? "UntrackedValue: not saved to checkpoints"
+                      : "Standard assignment";
+
               return (
                 <div
                   key={idx}
-                  className="flex flex-col gap-0.5 bg-amber-500/10 px-2 py-1 rounded text-[10px] font-mono border border-amber-500/20"
+                  className="flex flex-col gap-0.5 bg-amber-500/10 px-2 py-1.5 rounded text-[10px] font-mono border border-amber-500/20"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-amber-400 font-bold truncate max-w-[140px]">
                       {su.channelKey}
                     </span>
-                    <span className="text-[9px] text-muted-foreground uppercase px-1 rounded bg-secondary/50 font-semibold">
-                      {su.mode || "set"}
+                    <span
+                      className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-bold border ${modeBadgeStyle}`}
+                      title={modeTooltip}
+                    >
+                      {mode}
                     </span>
                   </div>
                   {su.value ? (

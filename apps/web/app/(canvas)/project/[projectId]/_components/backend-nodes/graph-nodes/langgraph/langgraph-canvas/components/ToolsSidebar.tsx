@@ -10,6 +10,7 @@ import {
   Radio,
   HelpCircle,
   Link2,
+  GitMerge,
 } from "lucide-react";
 import type { LangGraphCanvasNodeAddType } from "@workspace/canvas";
 import {
@@ -24,6 +25,7 @@ import {
   LANGGRAPH_CANVAS_NODE_MEMORY,
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
+  LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
   STEP_TYPE_ROUTER,
 } from "../constants";
 
@@ -94,6 +96,12 @@ export const TOOL_PALETTE_ITEMS: ToolPaletteItem[] = [
     label: "Output Channel",
     desc: "Emit SSE, WebSocket, Event, or Webhook output",
     icon: Radio,
+  },
+  {
+    type: LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
+    label: "State Reducer Ref",
+    desc: "Attach to node to mutate state channels (append, overwrite, set)",
+    icon: GitMerge,
   },
 ];
 

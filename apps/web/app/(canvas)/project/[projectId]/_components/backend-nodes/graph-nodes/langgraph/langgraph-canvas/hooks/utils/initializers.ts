@@ -77,6 +77,7 @@ export function buildInitialNodes(
             defaultValue: [],
           },
         ],
+        customReducers: data.customReducers || [],
       },
       deletable: false,
     },

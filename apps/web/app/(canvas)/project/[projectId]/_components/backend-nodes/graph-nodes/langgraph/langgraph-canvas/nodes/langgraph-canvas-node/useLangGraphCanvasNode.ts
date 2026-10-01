@@ -8,16 +8,20 @@ import type {
   UseLangGraphCanvasNodeReturn,
   LangGraphLLMNode,
   LangGraphLLMRefNode,
+  LangGraphStateReducerRefNode,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
+  LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
   HANDLE_TOOL_IN,
   HANDLE_MIDDLEWARE_IN,
+  HANDLE_STATE_IN,
+  HANDLE_STATE_OUT,
   DEFAULT_EVENT_STREAM_SIGNATURE,
   DEFAULT_STREAM_TRANSFORMERS,
   DEFAULT_SELECTED_STREAM_EVENTS,
@@ -25,6 +29,12 @@ import {
   DEFAULT_LLM_MODEL,
   DEFAULT_LLM_TEMPERATURE,
 } from "../../constants";
+
+function isStateReducerRefNode(
+  node: LangGraphCanvasNodeUnion | undefined,
+): node is LangGraphStateReducerRefNode {
+  return node?.type === LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF;
+}
 
 export function useLangGraphCanvasNode({
   id,
@@ -82,6 +92,11 @@ export function useLangGraphCanvasNode({
   const boundMiddlewares = edges.filter(
     (e) => e.target === id && e.targetHandle === HANDLE_MIDDLEWARE_IN,
   );
+  const boundStateReducers = edges.filter(
+    (e) =>
+      e.target === id &&
+      (e.targetHandle === HANDLE_STATE_IN || e.sourceHandle === HANDLE_STATE_OUT),
+  );
 
   const llmConfig = {
     enabled:
@@ -119,7 +134,27 @@ export function useLangGraphCanvasNode({
       handleErrorMode: "default",
     };
 
-  const stateUpdates = data.stateUpdates || [];
+  const allNodes = getNodes();
+  const connectedStateUpdates = boundStateReducers.map((edge) => {
+    const srcNode = allNodes.find((n) => n.id === edge.source);
+    if (isStateReducerRefNode(srcNode)) {
+      return {
+        channelKey: srcNode.data.targetChannelKey || "messages",
+        mode: srcNode.data.mode || "append",
+        value: srcNode.data.customValue,
+      };
+    }
+    return {
+      channelKey: "messages",
+      mode: "append",
+      value: undefined,
+    };
+  });
+
+  const stateUpdates =
+    connectedStateUpdates.length > 0
+      ? connectedStateUpdates
+      : data.stateUpdates || [];
   const availableFields = (data.availableStateChannels || []).map((c) => c.key);
 
   const handleToggleLLMConfig = (enabled: boolean) => {
@@ -313,6 +348,7 @@ export function useLangGraphCanvasNode({
     boundLLMs,
     boundTools,
     boundMiddlewares,
+    boundStateReducers,
     llmConfig,
     streamConfig,
     responseFormat,
