@@ -11,6 +11,7 @@ import type {
   LangGraphStateChannel,
   LangGraphMemoryConfig,
   LangGraphRouterBranch,
+  LangGraphCustomReducer,
 } from "@/types/canvas";
 import {
   ensureLangGraphDataReachability,
@@ -69,6 +70,7 @@ export interface BuildGraphDataParams {
   edges: LangGraphCanvasEdge[];
   inputChannels: LangGraphInputChannel[];
   stateChannels: LangGraphStateChannel[];
+  customReducers?: LangGraphCustomReducer[];
   memoryConfig: LangGraphMemoryConfig;
   data: BackendNode["data"];
 }
@@ -78,6 +80,7 @@ export function buildGraphData({
   edges,
   inputChannels,
   stateChannels,
+  customReducers,
   memoryConfig,
   data,
 }: BuildGraphDataParams): BackendNode["data"] {
@@ -458,6 +461,7 @@ export function buildGraphData({
     outputChannels,
     inputChannels,
     stateChannels,
+    customReducers: customReducers || data.customReducers || [],
     memoryConfig,
     customLlmNodes,
     customLlmRefNodes,

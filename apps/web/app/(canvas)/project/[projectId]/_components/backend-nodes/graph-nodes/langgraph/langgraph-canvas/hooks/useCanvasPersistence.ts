@@ -5,6 +5,7 @@ import {
   type LangGraphStateChannel,
   type LangGraphInputChannel,
   type LangGraphMemoryConfig,
+  type LangGraphCustomReducer,
   type LangGraphCanvasNode,
   type LangGraphCanvasEdge,
   ensureLangGraphDataReachability,
@@ -19,6 +20,7 @@ interface UseCanvasPersistenceProps {
   edges: LangGraphCanvasEdge[];
   inputChannels: LangGraphInputChannel[];
   stateChannels: LangGraphStateChannel[];
+  customReducers?: LangGraphCustomReducer[];
   memoryConfig: LangGraphMemoryConfig;
 }
 
@@ -30,6 +32,7 @@ export function useCanvasPersistence({
   edges,
   inputChannels,
   stateChannels,
+  customReducers,
   memoryConfig,
 }: UseCanvasPersistenceProps) {
   const data = node.data;
@@ -41,10 +44,11 @@ export function useCanvasPersistence({
       edges,
       inputChannels,
       stateChannels,
+      customReducers,
       memoryConfig,
       data,
     });
-  }, [nodes, edges, inputChannels, stateChannels, memoryConfig, data]);
+  }, [nodes, edges, inputChannels, stateChannels, customReducers, memoryConfig, data]);
 
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">(
     "idle",
@@ -65,6 +69,7 @@ export function useCanvasPersistence({
             defaultValue: [],
           },
         ],
+        customReducers: data.customReducers || [],
         memoryConfig: data.memoryConfig || {
           checkpointer: "memory",
           threadScope: "session",
@@ -112,6 +117,7 @@ export function useCanvasPersistence({
     edges,
     inputChannels,
     stateChannels,
+    customReducers,
     memoryConfig,
     buildGraphData,
     node.id,

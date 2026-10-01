@@ -25,6 +25,7 @@ import {
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   LANGGRAPH_CANVAS_NODE_MEMORY,
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
+  LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
   HANDLE_TOOL_IN,
@@ -33,6 +34,8 @@ import {
   HANDLE_MIDDLEWARE_OUT,
   HANDLE_MEMORY_IN,
   HANDLE_MEMORY_OUT,
+  HANDLE_STATE_IN,
+  HANDLE_STATE_OUT,
   DEFAULT_LLM_PROVIDER,
   DEFAULT_LLM_MODEL,
 } from "../constants";
@@ -175,6 +178,16 @@ export function useCanvasConnections({
       if (isMemorySource && !isMemoryTarget) return false;
       if (isMemoryTarget && !isMemorySource) return false;
 
+      const isStateReducerSource =
+        connection.sourceHandle === HANDLE_STATE_OUT ||
+        sourceNode?.type === LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF ||
+        connection.source?.startsWith("state_ref_") ||
+        connection.source?.startsWith("reducer_ref_");
+      const isStateReducerTarget = connection.targetHandle === HANDLE_STATE_IN;
+
+      if (isStateReducerSource && !isStateReducerTarget) return false;
+      if (isStateReducerTarget && !isStateReducerSource) return false;
+
       return true;
     },
     [nodes],
@@ -204,6 +217,13 @@ export function useCanvasConnections({
             params.source?.startsWith("mem_") ||
             params.source?.startsWith("db_"),
           );
+        const isStateReducer =
+          params.sourceHandle === HANDLE_STATE_OUT ||
+          params.targetHandle === HANDLE_STATE_IN ||
+          Boolean(
+            params.source?.startsWith("state_ref_") ||
+            params.source?.startsWith("reducer_ref_"),
+          );
 
         const sourceNode = nodes.find(
           (n): n is StepNode =>
@@ -221,7 +241,9 @@ export function useCanvasConnections({
               ? HANDLE_MIDDLEWARE_OUT
               : isMemory
                 ? HANDLE_MEMORY_OUT
-                : params.sourceHandle;
+                : isStateReducer
+                  ? HANDLE_STATE_OUT
+                  : params.sourceHandle;
         const targetHandle = isLLM
           ? HANDLE_LLM_IN
           : isTool
@@ -230,7 +252,9 @@ export function useCanvasConnections({
               ? HANDLE_MIDDLEWARE_IN
               : isMemory
                 ? HANDLE_MEMORY_IN
-                : params.targetHandle;
+                : isStateReducer
+                  ? HANDLE_STATE_IN
+                  : params.targetHandle;
 
         const fieldStr = routerBranch?.field
           ? routerBranch.field.startsWith("state.")
@@ -252,9 +276,11 @@ export function useCanvasConnections({
               ? { stroke: "#a855f7", strokeWidth: 2, strokeDasharray: "4 4" }
               : isMemory
                 ? { stroke: "#f59e0b", strokeWidth: 2, strokeDasharray: "4 4" }
-                : routerBranch
-                  ? { stroke: "#38bdf8", strokeWidth: 2 }
-                  : { stroke: "#a1a1aa", strokeWidth: 2 };
+                : isStateReducer
+                  ? { stroke: "#f59e0b", strokeWidth: 2, strokeDasharray: "4 4" }
+                  : routerBranch
+                    ? { stroke: "#38bdf8", strokeWidth: 2 }
+                    : { stroke: "#a1a1aa", strokeWidth: 2 };
 
         const labelStyle = routerBranch
           ? { fill: "#bae6fd", fontSize: 10, fontWeight: "bold" }

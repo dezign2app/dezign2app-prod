@@ -16,6 +16,7 @@ import {
   LANGGRAPH_CANVAS_NODE_MEMORY,
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
+  LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
 } from "../../constants";
 import type {
   LangGraphLLMNodeData,
@@ -33,6 +34,7 @@ import type {
   MemoryNodeData,
   LangGraphMemoryRefNodeData,
   OutputNodeData,
+  LangGraphStateReducerRefNodeData,
 } from "./node-data";
 import type { LangGraphStepConfig } from "./steps";
 
@@ -122,6 +124,12 @@ export type OutputNode = Node<
 > &
   BaseCanvasNodeProps;
 
+export type LangGraphStateReducerRefNode = Node<
+  LangGraphStateReducerRefNodeData,
+  typeof LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF
+> &
+  BaseCanvasNodeProps;
+
 export type LangGraphCanvasEdge = Edge & {
   selected?: boolean;
 };
@@ -141,7 +149,8 @@ export type LangGraphCanvasNodeUnion =
   | CanvasNode
   | MemoryNode
   | LangGraphMemoryRefNode
-  | OutputNode;
+  | OutputNode
+  | LangGraphStateReducerRefNode;
 
 export type LangGraphCanvasNode = LangGraphCanvasNodeUnion;
 
@@ -163,4 +172,5 @@ export type LangGraphCanvasNodeAddType =
   | typeof LANGGRAPH_CANVAS_NODE_MEMORY
   | typeof LANGGRAPH_CANVAS_NODE_MEMORY_REF
   | typeof LANGGRAPH_CANVAS_NODE_END
-  | typeof LANGGRAPH_CANVAS_NODE_OUTPUT;
+  | typeof LANGGRAPH_CANVAS_NODE_OUTPUT
+  | typeof LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF;

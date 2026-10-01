@@ -87,6 +87,10 @@ export function LangGraphStudioView({
     setInputChannels,
     stateChannels,
     setStateChannels,
+    customReducers,
+    handleAddCustomReducer,
+    handleUpdateCustomReducer,
+    handleDeleteCustomReducer,
     memoryConfig,
     setMemoryConfig,
     selectedNodeId,
@@ -653,6 +657,10 @@ export function LangGraphStudioView({
           setInputChannels={setInputChannels}
           stateChannels={stateChannels}
           setStateChannels={setStateChannels}
+          customReducers={customReducers}
+          onAddCustomReducer={handleAddCustomReducer}
+          onUpdateCustomReducer={handleUpdateCustomReducer}
+          onDeleteCustomReducer={handleDeleteCustomReducer}
           memoryConfig={memoryConfig}
           setMemoryConfig={setMemoryConfig}
           suggestedParams={suggestedParams}

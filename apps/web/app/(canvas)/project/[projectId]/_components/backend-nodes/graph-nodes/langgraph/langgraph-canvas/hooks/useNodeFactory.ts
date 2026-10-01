@@ -15,6 +15,7 @@ import type {
   CanvasNode,
   OutputNode,
   StepNode,
+  LangGraphStateReducerRefNode,
   LangGraphCanvasNodeAddType,
   LangGraphStateChannel,
 } from "@workspace/canvas";
@@ -32,6 +33,7 @@ import {
   LANGGRAPH_CANVAS_NODE_MEMORY,
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
+  LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
   DEFAULT_MIDDLEWARE_TYPE,
   LLM_PROVIDERS,
   LLM_PROVIDER_PRESETS,
@@ -69,6 +71,8 @@ function getNodeDimensions(type: LangGraphCanvasNodeAddType): {
     case LANGGRAPH_CANVAS_NODE_MEMORY_REF:
     case LANGGRAPH_CANVAS_NODE_OUTPUT:
       return { width: 280, height: 140 };
+    case LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF:
+      return { width: 260, height: 160 };
     case STEP_TYPE_ROUTER:
       return { width: 260, height: 120 };
     case LANGGRAPH_CANVAS_NODE_NODE:
@@ -540,6 +544,38 @@ export function useNodeFactory({
         });
         setSelectedNodeId(outId);
         setActiveSideTab("inspector");
+        return;
+      }
+
+      if (type === LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF) {
+        const refId = `state_ref_${Date.now().toString(36).slice(-4)}`;
+        const firstChannel = stateChannels[0]?.key || "messages";
+
+        setNodes((nds) => {
+          const position = getCenterPosition(type, nds);
+          const newStateReducerRefNode: LangGraphStateReducerRefNode = {
+            id: refId,
+            type: LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
+            position,
+            data: {
+              label: label || `Mutate: ${firstChannel}`,
+              refId,
+              targetChannelKey: firstChannel,
+              mode: "append",
+              onDeleteStateReducerRef: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== refId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== refId && edge.target !== refId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === refId ? null : curr));
+              },
+            },
+          };
+          return [...nds, newStateReducerRefNode];
+        });
+        setSelectedNodeId(refId);
         return;
       }
 

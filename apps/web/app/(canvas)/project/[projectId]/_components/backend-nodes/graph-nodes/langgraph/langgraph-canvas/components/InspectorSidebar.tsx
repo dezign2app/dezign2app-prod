@@ -3,6 +3,7 @@ import type {
   LangGraphStateChannel,
   LangGraphInputChannel,
   LangGraphMemoryConfig,
+  LangGraphCustomReducer,
   LangGraphStepConfig,
   StepNodeData,
   LangGraphLLMNodeData,
@@ -90,6 +91,13 @@ export interface InspectorSidebarProps {
   setStateChannels?: React.Dispatch<
     React.SetStateAction<LangGraphStateChannel[]>
   >;
+  customReducers?: LangGraphCustomReducer[];
+  onAddCustomReducer?: (reducer: LangGraphCustomReducer) => void;
+  onUpdateCustomReducer?: (
+    idOrName: string,
+    changes: Partial<LangGraphCustomReducer>,
+  ) => void;
+  onDeleteCustomReducer?: (idOrName: string) => void;
   memoryConfig?: LangGraphMemoryConfig;
   setMemoryConfig?: React.Dispatch<React.SetStateAction<LangGraphMemoryConfig>>;
 }
@@ -137,6 +145,10 @@ export function InspectorSidebar({
   onUpdateOutput,
   stateChannels,
   setStateChannels,
+  customReducers,
+  onAddCustomReducer,
+  onUpdateCustomReducer,
+  onDeleteCustomReducer,
   inputChannels = [],
   setInputChannels,
   memoryConfig,
@@ -228,6 +240,10 @@ export function InspectorSidebar({
           <StateTabContent
             stateChannels={stateChannels}
             setStateChannels={setStateChannels}
+            customReducers={customReducers}
+            onAddCustomReducer={onAddCustomReducer}
+            onUpdateCustomReducer={onUpdateCustomReducer}
+            onDeleteCustomReducer={onDeleteCustomReducer}
             onClose={onClose}
           />
         </div>

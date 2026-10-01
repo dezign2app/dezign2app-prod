@@ -27,6 +27,7 @@ export const LangGraphCanvasNode = (props: NodeProps<CanvasNode>) => {
     boundLLMs,
     boundTools,
     boundMiddlewares,
+    boundStateReducers,
     llmConfig,
     streamConfig,
     responseFormat,
@@ -67,6 +68,7 @@ export const LangGraphCanvasNode = (props: NodeProps<CanvasNode>) => {
           boundLLMs={boundLLMs}
           boundTools={boundTools}
           boundMiddlewares={boundMiddlewares}
+          boundStateReducers={boundStateReducers}
           llmConfig={llmConfig}
         />
 

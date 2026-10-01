@@ -31,14 +31,16 @@ export const langgraphDataSchema = baseNodeDataSchema
       .array(
         z.object({
           key: z.string(),
-          type: z.enum(["messages", "string", "json", "number", "boolean"]),
-          reducer: z.enum([
-            "add_messages",
-            "append",
-            "replace",
-            "merge_object",
-            "concat_array",
+          type: z.enum([
+            "messages",
+            "string",
+            "json",
+            "number",
+            "boolean",
+            "array",
+            "object",
           ]),
+          reducer: z.string(),
           defaultValue: z
             .union([
               z.string(),
@@ -49,6 +51,7 @@ export const langgraphDataSchema = baseNodeDataSchema
               z.record(z.unknown()),
             ])
             .optional(),
+          customReducerCode: z.string().optional(),
         }),
       )
       .default([
@@ -155,8 +158,33 @@ export const langgraphDataSchema = baseNodeDataSchema
       )
       .optional()
       .default([]),
+    customReducers: z
+      .array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          code: z.string(),
+          description: z.string().optional(),
+        }),
+      )
+      .optional()
+      .default([]),
+    customStateReducerRefNodes: z
+      .array(
+        z.object({
+          id: z.string(),
+          label: z.string().optional(),
+          reducerRef: z.string().optional(),
+          position: z.object({ x: z.number(), y: z.number() }).optional(),
+        }),
+      )
+      .optional()
+      .default([]),
     startNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),
     stateNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),
+    checkpointerNodePosition: z
+      .object({ x: z.number(), y: z.number() })
+      .optional(),
     endNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),
     endNodes: z
       .array(

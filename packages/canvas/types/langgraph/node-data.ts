@@ -3,6 +3,7 @@ import type {
   LangGraphStateChannel,
   LangGraphInputChannel,
   OutputChannelConfig,
+  LangGraphCustomReducer,
 } from "./channels";
 import type { StateUpdateMode } from "./tools";
 import type { LangGraphStepConfig } from "./steps";
@@ -137,6 +138,7 @@ export interface UseLangGraphCanvasNodeReturn {
   boundTools: Edge[];
   boundMiddlewares: Edge[];
   boundMemories?: Edge[];
+  boundStateReducers?: Edge[];
   llmConfig: LLMConfigState;
   stateUpdatesConfig?: StateUpdatesConfigState;
   streamConfig: LangGraphAgentStreamConfig;
@@ -205,6 +207,15 @@ export interface LangGraphMemoryRefNodeData extends Record<string, unknown> {
   refId: string;
   memoryRef?: string;
   onDeleteMemoryRef?: () => void;
+}
+
+export interface LangGraphStateReducerRefNodeData extends Record<string, unknown> {
+  label: string;
+  refId: string;
+  targetChannelKey?: string;
+  mode?: "append" | "set" | "overwrite" | "untracked";
+  customValue?: string;
+  onDeleteStateReducerRef?: () => void;
 }
 
 export interface ToolNodeData extends Record<string, unknown> {
@@ -311,6 +322,7 @@ export interface PortNodeData extends Record<string, unknown> {
 export interface StateGlobalNodeData extends Record<string, unknown> {
   label: string;
   stateChannels: LangGraphStateChannel[];
+  customReducers?: LangGraphCustomReducer[];
   onOpenStateTab?: () => void;
   onAddChannel?: () => void;
   onUpdateChannel?: (
@@ -319,6 +331,12 @@ export interface StateGlobalNodeData extends Record<string, unknown> {
   ) => void;
   onDeleteChannel?: (index: number) => void;
   onDuplicateChannel?: (index: number) => void;
+  onAddCustomReducer?: (reducer: LangGraphCustomReducer) => void;
+  onUpdateCustomReducer?: (
+    idOrName: string,
+    changes: Partial<LangGraphCustomReducer>,
+  ) => void;
+  onDeleteCustomReducer?: (id: string) => void;
 }
 
 export interface OutputNodeData

@@ -86,6 +86,7 @@ export const LANGGRAPH_CANVAS_NODE_AGENT = "langgraph_agent" as const;
 export const LANGGRAPH_CANVAS_NODE_MEMORY = "langgraph_memory" as const;
 export const LANGGRAPH_CANVAS_NODE_MEMORY_REF = "langgraph_memory_ref" as const;
 export const LANGGRAPH_CANVAS_NODE_OUTPUT = "langgraph_output" as const;
+export const LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF = "langgraph_state_reducer_ref" as const;
 
 export const HANDLE_MIDDLEWARE_IN = "middleware_in" as const;
 export const HANDLE_MIDDLEWARE_OUT = "middleware_out" as const;
@@ -95,6 +96,9 @@ export const HANDLE_MEMORY_OUT = "memory_out" as const;
 
 export const HANDLE_OUTPUT_IN = "output_in" as const;
 export const HANDLE_OUTPUT_OUT = "output_out" as const;
+
+export const HANDLE_STATE_IN = "state_in" as const;
+export const HANDLE_STATE_OUT = "state_out" as const;
 
 // ─── Reserved LangGraph Canvas Node IDs ─────────────────────────────────────────────
 export const NODE_ID_START = "START" as const;

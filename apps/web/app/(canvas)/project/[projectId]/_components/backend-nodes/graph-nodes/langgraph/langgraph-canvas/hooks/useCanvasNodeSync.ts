@@ -7,6 +7,7 @@ import {
   type StateGlobalNode,
   type MemoryNode,
   type LangGraphMemoryConfig,
+  type LangGraphCustomReducer,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
@@ -44,6 +45,13 @@ interface UseCanvasNodeSyncProps {
   ) => void;
   handleDeleteChannel?: (index: number) => void;
   handleDuplicateChannel?: (index: number) => void;
+  customReducers?: LangGraphCustomReducer[];
+  handleAddCustomReducer?: (reducer: LangGraphCustomReducer) => void;
+  handleUpdateCustomReducer?: (
+    idOrName: string,
+    changes: Partial<LangGraphCustomReducer>,
+  ) => void;
+  handleDeleteCustomReducer?: (idOrName: string) => void;
   // Input channel callbacks (for StartNode inline editing)
   handleAddInputChannel?: () => void;
   handleAddSuggestedChannel?: (channel: LangGraphInputChannel) => void;
@@ -57,6 +65,7 @@ export function useCanvasNodeSync({
   setEdges,
   inputChannels,
   stateChannels,
+  customReducers,
   memoryConfig,
   setMemoryConfig,
   setSelectedNodeId,
@@ -65,6 +74,9 @@ export function useCanvasNodeSync({
   handleUpdateChannel,
   handleDeleteChannel,
   handleDuplicateChannel,
+  handleAddCustomReducer,
+  handleUpdateCustomReducer,
+  handleDeleteCustomReducer,
   handleAddInputChannel,
   handleAddSuggestedChannel,
   handleUpdateInputChannel,
@@ -108,6 +120,7 @@ export function useCanvasNodeSync({
             data: {
               ...n.data,
               stateChannels,
+              customReducers,
               onOpenStateTab: () => {
                 setSelectedNodeId(NODE_ID_STATE_GLOBAL);
                 setActiveSideTab("state");
@@ -116,6 +129,9 @@ export function useCanvasNodeSync({
               onUpdateChannel: handleUpdateChannel,
               onDeleteChannel: handleDeleteChannel,
               onDuplicateChannel: handleDuplicateChannel,
+              onAddCustomReducer: handleAddCustomReducer,
+              onUpdateCustomReducer: handleUpdateCustomReducer,
+              onDeleteCustomReducer: handleDeleteCustomReducer,
             },
           };
         }
@@ -263,6 +279,7 @@ export function useCanvasNodeSync({
           data: {
             label: "Global Graph State",
             stateChannels,
+            customReducers,
             onOpenStateTab: () => {
               setSelectedNodeId(NODE_ID_STATE_GLOBAL);
               setActiveSideTab("state");
@@ -271,6 +288,9 @@ export function useCanvasNodeSync({
             onUpdateChannel: handleUpdateChannel,
             onDeleteChannel: handleDeleteChannel,
             onDuplicateChannel: handleDuplicateChannel,
+            onAddCustomReducer: handleAddCustomReducer,
+            onUpdateCustomReducer: handleUpdateCustomReducer,
+            onDeleteCustomReducer: handleDeleteCustomReducer,
           },
           deletable: false,
         };
@@ -332,6 +352,7 @@ export function useCanvasNodeSync({
   }, [
     inputChannels,
     stateChannels,
+    customReducers,
     memoryConfig,
     setMemoryConfig,
     suggestedParams,
@@ -339,6 +360,9 @@ export function useCanvasNodeSync({
     handleUpdateChannel,
     handleDeleteChannel,
     handleDuplicateChannel,
+    handleAddCustomReducer,
+    handleUpdateCustomReducer,
+    handleDeleteCustomReducer,
     handleAddInputChannel,
     handleAddSuggestedChannel,
     handleUpdateInputChannel,
