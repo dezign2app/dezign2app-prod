@@ -63,6 +63,10 @@ export interface CompileLangGraphInput {
   outputMode?: "app" | "package";
   /** Optional override for package.json name when in package mode. */
   packageName?: string;
+  /** Name of the linked database workspace package (e.g. "@workspace/db" or "@workspace/db-postgres"). */
+  dbPackageName?: string;
+  /** Name of the linked Redis workspace package (e.g. "@workspace/redis"). */
+  redisPackageName?: string;
 }
 
 export interface LLMMeta {

@@ -312,7 +312,8 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     // Page should include trigger handler and Output Log since there is an active API endpoint
     const pageFile = result.files.find((f: CompiledFile) => f.filename.endsWith("page.tsx"));
     expect(pageFile?.content).toContain("handleTriggerAction");
-    expect(pageFile?.content).toContain("requestBody?: unknown");
+    expect(pageFile?.content).toContain("requestBody?: Record<string, string | number | boolean | null | undefined>");
+    expect(pageFile?.content).not.toContain("requestBody?: unknown");
     expect(pageFile?.content).not.toContain("requestBody?: JSONValue");
     expect(pageFile?.content).toContain("Output Log");
     expect(pageFile?.content).toContain('import { executeApiAction } from "@/lib/api-client";');
@@ -767,8 +768,9 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     expect(content).toContain("queryParams");
     expect(content).toContain("setQueryParams");
 
-    // 2. Should strongly type requestBody as the canonical endpoint body type (which is never for GET)
-    expect(content).toContain("requestBody?: GetConversationsActionRequestBody");
+    // 2. Should export canonical endpoint body type and strongly type onTrigger requestBody
+    expect(content).toContain("export type GetConversationsActionRequestBody = ConversationServiceGetApiConversationsBody;");
+    expect(content).toContain("requestBody?: Record<string, string | number | boolean | null | undefined>");
     expect(content).not.toContain("requestBody?: unknown");
 
     // 3. Should NOT declare payloadBody as unknown or pass unknown payloadBody to onTrigger

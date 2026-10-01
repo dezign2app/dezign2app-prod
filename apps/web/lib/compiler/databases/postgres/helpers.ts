@@ -60,6 +60,26 @@ export function generateInlinePostgresOp(
         `}`
       );
     case "create": {
+      if (writableCols.length === 0 && !isStringPk) {
+        return (
+          `export async function ${effectiveName}({ ${pkVarName} }: Create${pascal}Data = {}): Promise<${pascal}> {\n` +
+          `  const res = ${pkVarName} !== undefined\n` +
+          `    ? await query<${pascal}>(\n` +
+          `        'INSERT INTO "${tableName}" ("${pkColName}") VALUES ($1) RETURNING *',\n` +
+          `        [${pkVarName}]\n` +
+          `      )\n` +
+          `    : await query<${pascal}>(\n` +
+          `        'INSERT INTO "${tableName}" DEFAULT VALUES RETURNING *',\n` +
+          `        []\n` +
+          `      );\n` +
+          `  const row = res.rows[0];\n` +
+          `  if (!row) {\n` +
+          `    throw new Error("Failed to insert record into ${tableName}");\n` +
+          `  }\n` +
+          `  return row;\n` +
+          `}`
+        );
+      }
       const insertCols = writableCols.map((c) => `"${c.name}"`).join(", ");
       const insertParams = writableCols
         .map((_, i) => `$${isStringPk ? i + 2 : i + 1}`)
@@ -67,7 +87,7 @@ export function generateInlinePostgresOp(
       const destructuredFields = [
         ...(isStringPk ? [pkVarName] : []),
         ...writableCols.map((c) => toVarName(c.name)),
-      ].join(", ") || "id";
+      ].join(", ") || pkVarName;
       const insertArgVals = writableCols
         .map((c) => `${toVarName(c.name)} ?? null`)
         .join(", ");
@@ -79,7 +99,11 @@ export function generateInlinePostgresOp(
           `    'INSERT INTO "${tableName}" ("${pkColName}"${insertCols ? `, ${insertCols}` : ""}) VALUES ($1${insertParams ? `, ${insertParams}` : ""}) RETURNING *',\n` +
           `    [_id${insertArgVals ? `, ${insertArgVals}` : ""}]\n` +
           `  );\n` +
-          `  return res.rows[0];\n` +
+          `  const row = res.rows[0];\n` +
+          `  if (!row) {\n` +
+          `    throw new Error("Failed to insert record into ${tableName}");\n` +
+          `  }\n` +
+          `  return row;\n` +
           `}`
         );
       }
@@ -89,7 +113,11 @@ export function generateInlinePostgresOp(
         `    'INSERT INTO "${tableName}" (${insertCols}) VALUES (${insertParams}) RETURNING *',\n` +
         `    [${insertArgVals}]\n` +
         `  );\n` +
-        `  return res.rows[0];\n` +
+        `  const row = res.rows[0];\n` +
+        `  if (!row) {\n` +
+        `    throw new Error("Failed to insert record into ${tableName}");\n` +
+        `  }\n` +
+        `  return row;\n` +
         `}`
       );
     }
@@ -201,11 +229,7 @@ export function generatePostgresTableHelpers(
       return `  ${toVarName(c.name)}${opt}: ${toTsType(c.type)};`;
     })
     .join("\n");
-  if (isStringPk) {
-    code += `export interface Create${pascal}Data {\n  ${pkVarName}?: ${pkTsType};\n${createFields}\n}\n\n`;
-  } else {
-    code += `export interface Create${pascal}Data {\n${createFields || `  ${pkVarName}?: ${pkTsType};`}\n}\n\n`;
-  }
+  code += `export interface Create${pascal}Data {\n  ${pkVarName}?: ${pkTsType};\n${createFields ? `${createFields}\n` : ""}}\n\n`;
 
   code += `export type Update${pascal}Data = Partial<Create${pascal}Data>;\n\n`;
 

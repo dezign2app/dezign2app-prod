@@ -38,10 +38,15 @@ export function buildGraphFile(
   const isRedis = isEnabled && ctx.input.memoryConfig?.checkpointer === "redis";
   const usesMemorySaver = isEnabled && ctx.hasMemory && !isPostgres && !isRedis;
 
+  const hasDbPkg = isPostgres && Boolean(ctx.input.dbPackageName) && ctx.input.outputMode === "package";
+  const hasRedisPkg = isRedis && Boolean(ctx.input.redisPackageName) && ctx.input.outputMode === "package";
+
   const imports = [
     `import { StateGraph, START, END${usesMemorySaver ? ", MemorySaver" + (ctxMemoryNeedsStore(ctx) ? ", MemoryStore" : "") : ""} } from "@langchain/langgraph";`,
     isPostgres ? `import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";` : "",
     isRedis ? `import { RedisSaver } from "@langchain/langgraph-checkpoint-redis";` : "",
+    hasDbPkg ? `import { pool } from "${ctx.input.dbPackageName}";` : "",
+    hasRedisPkg ? `import { REDIS_CONFIG } from "${ctx.input.redisPackageName}";` : "",
     `import { ${schemaName} } from "./state.js";`,
     nodeExports.length > 0
       ? `import { ${nodeExports.join(", ")} } from "./nodes/index.js";`
@@ -80,25 +85,45 @@ export function buildGraphFile(
   lines[lines.length - 1] = lastLine + ";";
 
   if (isPostgres) {
-    const envVar =
-      ctx.input.memoryConfig?.checkpointerEnvVar || "POSTGRES_CHECKPOINTER_CONN_STRING";
-    lines.push(``);
-    lines.push(`const checkpointer = PostgresSaver.fromConnString(`);
-    lines.push(`  process.env.${envVar} ?? ""`);
-    lines.push(`);`);
-    lines.push(`// Ensure checkpointer tables exist in PostgreSQL`);
-    lines.push(`await checkpointer.setup();`);
-    lines.push(``);
-    lines.push(`export const ${graphVarName} = ${builderVarName}.compile({ checkpointer });`);
+    if (hasDbPkg) {
+      lines.push(``);
+      lines.push(`const checkpointer = new PostgresSaver(pool);`);
+      lines.push(`// Ensure checkpointer tables exist in PostgreSQL`);
+      lines.push(`await checkpointer.setup();`);
+      lines.push(``);
+      lines.push(`export const ${graphVarName} = ${builderVarName}.compile({ checkpointer });`);
+    } else {
+      const envVar =
+        ctx.input.memoryConfig?.checkpointerEnvVar || "POSTGRES_CHECKPOINTER_CONN_STRING";
+      lines.push(``);
+      lines.push(`const checkpointer = PostgresSaver.fromConnString(`);
+      lines.push(`  process.env.${envVar} || process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/postgres"`);
+      lines.push(`);`);
+      lines.push(`// Ensure checkpointer tables exist in PostgreSQL`);
+      lines.push(`await checkpointer.setup();`);
+      lines.push(``);
+      lines.push(`export const ${graphVarName} = ${builderVarName}.compile({ checkpointer });`);
+    }
   } else if (isRedis) {
-    const envVar =
-      ctx.input.memoryConfig?.checkpointerEnvVar || "REDIS_CHECKPOINTER_URL";
-    lines.push(``);
-    lines.push(`const checkpointer = new RedisSaver({`);
-    lines.push(`  url: process.env.${envVar} ?? "redis://localhost:6379",`);
-    lines.push(`});`);
-    lines.push(``);
-    lines.push(`export const ${graphVarName} = ${builderVarName}.compile({ checkpointer });`);
+    if (hasRedisPkg) {
+      lines.push(``);
+      lines.push(`const redisUrl =`);
+      lines.push(`  process.env[REDIS_CONFIG.connectionEnv] ||`);
+      lines.push(`  process.env.REDIS_URL ||`);
+      lines.push(`  \`redis://\${REDIS_CONFIG.defaultHost}:\${REDIS_CONFIG.defaultPort}\`;`);
+      lines.push(`const checkpointer = await RedisSaver.fromUrl(redisUrl);`);
+      lines.push(``);
+      lines.push(`export const ${graphVarName} = ${builderVarName}.compile({ checkpointer });`);
+    } else {
+      const envVar =
+        ctx.input.memoryConfig?.checkpointerEnvVar || "REDIS_CHECKPOINTER_URL";
+      lines.push(``);
+      lines.push(`const checkpointer = await RedisSaver.fromUrl(`);
+      lines.push(`  process.env.${envVar} || process.env.REDIS_URL || "redis://localhost:6379"`);
+      lines.push(`);`);
+      lines.push(``);
+      lines.push(`export const ${graphVarName} = ${builderVarName}.compile({ checkpointer });`);
+    }
   } else if (ctx.hasMemory) {
     lines.push(``);
     lines.push(`const checkpointer = new MemorySaver();`);

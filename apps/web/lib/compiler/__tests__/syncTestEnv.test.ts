@@ -13,7 +13,11 @@ import { generateSectionComponent } from "../webClients/nextjs/v16/sectionGenera
 import { generatePageCode } from "../webClients/nextjs/v16/pageGenerators";
 import { generateEndpointRouteHandler } from "../generators/routeGenerator";
 import { generateServiceRouteTypes } from "../generators/typesGenerator/serviceRoutesGenerator";
+import { generateConfigFiles } from "../generators/configGenerator";
 import { BackendNode, Endpoint } from "@workspace/canvas/types";
+import { compilePostgresDatabase } from "../databases/postgres";
+import { LANGGRAPH_POSTGRES_TABLE_DEFINITIONS } from "../../../app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/utils/checkpointerTables";
+import { generateEventComponent } from "../webClients/nextjs/v16/eventGenerators";
 
 const TEST_ENV_DIR = "C:/Users/subha/Downloads/test env";
 
@@ -162,12 +166,62 @@ describe("syncTestEnv via Compiler", () => {
       type: "GET",
       summary: "Health check",
     };
-    const typesRes = generateServiceRouteTypes([dummyServiceNode], [ep, healthEp]);
+
+    const simpleChatEp: Endpoint & { nodeId: string } = {
+      id: "ep-simple-chat",
+      nodeId: "service-profile",
+      name: "/simple-chat",
+      type: "POST",
+      requestBody: {
+        fields: [{ name: "message", type: "string", required: true }],
+      },
+      pipelineSteps: [
+        {
+          id: "step-chat-1",
+          name: "chat",
+          type: "langgraph",
+          enabled: true,
+          outputVariable: "chatResult",
+        },
+        {
+          id: "step-ret",
+          name: "Return Response",
+          type: "return_response",
+          enabled: true,
+          statusCode: 201,
+        },
+      ],
+    };
+
+    const typesRes = generateServiceRouteTypes([dummyServiceNode], [ep, healthEp, simpleChatEp]);
     for (const f of typesRes.files) {
       const targetTypePath = path.join(TEST_ENV_DIR, "packages/types", f.filename);
       if (fs.existsSync(path.dirname(targetTypePath))) {
         fs.writeFileSync(targetTypePath, f.content, "utf-8");
         console.log("Updated via compiler:", targetTypePath);
+      }
+    }
+
+    const profileConfigs = generateConfigFiles(
+      dummyServiceNode,
+      [ep, healthEp, simpleChatEp],
+      [],
+      [dummyServiceNode, dummyStorageNode],
+      [{ id: "e-srv-storage", source: dummyServiceNode.id, target: dummyStorageNode.id }],
+    );
+    const pkgFile = profileConfigs.find((f) => f.filename === "package.json");
+    if (pkgFile) {
+      const targetPkg = path.join(TEST_ENV_DIR, "apps/profile/package.json");
+      if (fs.existsSync(path.dirname(targetPkg))) {
+        const existing = JSON.parse(fs.readFileSync(targetPkg, "utf-8"));
+        const generated = JSON.parse(pkgFile.content);
+        const mergedDeps = {
+          ...existing.dependencies,
+          ...generated.dependencies,
+          "@workspace/storage": "workspace:*",
+        };
+        fs.writeFileSync(targetPkg, JSON.stringify({ ...existing, dependencies: mergedDeps }, null, 2), "utf-8");
+        console.log("Updated via compiler:", targetPkg);
       }
     }
 
@@ -295,6 +349,110 @@ describe("syncTestEnv via Compiler", () => {
     if (fs.existsSync(path.dirname(targetNotFoundPagePath))) {
       fs.writeFileSync(targetNotFoundPagePath, notFoundPageCode, "utf-8");
       console.log("Updated via compiler:", targetNotFoundPagePath);
+    }
+
+    // 7. Generate and Sync Database Package (packages/db/primary-sqlite-db)
+    const userEntity: BackendNode = {
+      id: "ent-user",
+      type: "entity",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "user",
+        columns: [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "name", type: "string" },
+          { name: "test", type: "string" },
+        ],
+      },
+    };
+
+    const lgEntities: BackendNode[] = LANGGRAPH_POSTGRES_TABLE_DEFINITIONS.map(
+      (def, idx) => ({
+        id: `ent-lg-${idx}`,
+        type: "entity",
+        position: { x: 100 * idx, y: 100 * idx },
+        fractionalIndex: `b${idx}`,
+        data: {
+          label: def.name,
+          columns: def.columns.map((c) => ({
+            name: c.name,
+            type: c.type,
+            isPrimaryKey: Boolean(c.isPrimaryKey),
+            isNotNull: Boolean(c.isNotNull),
+          })),
+          indexes: def.indexes || [],
+        },
+      }),
+    );
+
+    const compiledDb = compilePostgresDatabase([userEntity, ...lgEntities], [], {
+      packageName: "@workspace/db-primary-sqlite-db",
+    });
+
+    for (const f of compiledDb.files) {
+      const targetPath = path.join(TEST_ENV_DIR, "packages/db/primary-sqlite-db", f.filename);
+      if (fs.existsSync(path.dirname(targetPath))) {
+        fs.writeFileSync(targetPath, f.content, "utf-8");
+        console.log("Updated via compiler:", targetPath);
+      }
+    }
+
+    // 8. Generate and Sync SendMessageAction and MainSection for profile
+
+    const sendMsgActionCode = generateEventComponent(
+      "send message",
+      "click",
+      "http://localhost:8080/simple-chat",
+      "POST",
+      "SendMessageAction",
+      undefined,
+      undefined,
+      false,
+      undefined,
+      undefined,
+      { fields: [{ name: "message", type: "string", required: true }] },
+      { name: "send message", type: "click" },
+      simpleChatEp,
+      "profile",
+      undefined,
+    );
+
+    const targetSendMsgPath = path.join(
+      TEST_ENV_DIR,
+      "apps/web/app/(public)/profile/_components/main-section/SendMessageAction.tsx",
+    );
+    if (fs.existsSync(path.dirname(targetSendMsgPath))) {
+      fs.writeFileSync(targetSendMsgPath, sendMsgActionCode, "utf-8");
+      console.log("Updated via compiler:", targetSendMsgPath);
+    }
+
+    const mainSecCode = generateSectionComponent(
+      {
+        id: "sec-main",
+        name: "Main Section",
+        actions: [],
+      },
+      "MainSection",
+      [
+        {
+          componentName: "SendMessageAction",
+          eventName: "send message",
+          eventType: "click",
+          url: "http://localhost:8080/simple-chat",
+          method: "POST",
+          endpoint: simpleChatEp,
+        },
+      ],
+    );
+
+    const targetMainSecPath = path.join(
+      TEST_ENV_DIR,
+      "apps/web/app/(public)/profile/_components/main-section/MainSection.tsx",
+    );
+    if (fs.existsSync(path.dirname(targetMainSecPath))) {
+      fs.writeFileSync(targetMainSecPath, mainSecCode, "utf-8");
+      console.log("Updated via compiler:", targetMainSecPath);
     }
   });
 });

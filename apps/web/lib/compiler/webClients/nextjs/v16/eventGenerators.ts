@@ -60,18 +60,42 @@ export function generateEventComponent(
   const typeDefs = generateTypeDefinitions(componentName, params, endpointLink);
 
   // 4A. Storage Upload Component — rendered when a StorageRef node is connected
-  const hasStorageConnection =
-    Boolean(storageConfig) ||
-    Boolean((eventItem as any)?.storageNodeId) ||
-    Boolean((endpoint as any)?.connectedStorageNodeId) ||
-    Boolean((eventItem as any)?.uploadBucketId);
+  const evtAny = eventItem as {
+    storageNodeId?: string;
+    uploadBucketId?: string;
+    storageOperationBinding?: { bucketId?: string };
+    uploadMaxFileSizeMb?: number;
+    uploadAcceptedMimeTypes?: string;
+  } | undefined;
+  const epAny = endpoint as {
+    connectedStorageNodeId?: string;
+    uploadMaxFileSizeMb?: number;
+    uploadAcceptedMimeTypes?: string;
+  } | undefined;
+
+  const isExplicitUpload =
+    eventType === "fileUpload" ||
+    Boolean(evtAny?.storageNodeId) ||
+    Boolean(evtAny?.uploadBucketId) ||
+    Boolean(evtAny?.storageOperationBinding) ||
+    Boolean(
+      (endpoint?.pipelineSteps || []).some(
+        (s: { type?: string; functionRef?: { name?: string; importPath?: string } }) =>
+          s.type === "storage_operation" ||
+          s.type === "storage" ||
+          s.functionRef?.importPath?.includes("/storage") ||
+          s.functionRef?.name?.toLowerCase().includes("upload"),
+      ),
+    );
+
+  const hasStorageConnection = Boolean(storageConfig) || isExplicitUpload;
 
   if (hasStorageConnection) {
     const resolvedStorageConfig: StorageUploadConfig = storageConfig ?? {
-      maxSizeMb: (eventItem as any)?.uploadMaxFileSizeMb ?? (endpoint as any)?.uploadMaxFileSizeMb ?? 10,
+      maxSizeMb: evtAny?.uploadMaxFileSizeMb ?? epAny?.uploadMaxFileSizeMb ?? 10,
       acceptedMimeTypes:
-        (eventItem as any)?.uploadAcceptedMimeTypes ??
-        (endpoint as any)?.uploadAcceptedMimeTypes ??
+        evtAny?.uploadAcceptedMimeTypes ??
+        epAny?.uploadAcceptedMimeTypes ??
         "image/jpeg,image/png,image/webp,image/gif",
       showPreview: true,
     };

@@ -39,6 +39,7 @@ import {
 import { Badge } from "@workspace/ui/components/badge";
 import { toast } from "sonner";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   executeBrowserLangGraph,
   BrowserExecutionResult,
@@ -209,13 +210,57 @@ export function StartNodeTestingTab({
     toast.success(`Started new memory thread: ${newTid}`);
   };
 
+  const resolveCheckpointerConnection = () => {
+    if (!memoryConfig || memoryConfig.enabled === false) return undefined;
+    const engine = memoryConfig.checkpointer || "memory";
+    if (engine !== "postgres" && engine !== "redis") return undefined;
+
+    const allNodes = useBackendCanvasStore.getState().nodes;
+    const targetId = memoryConfig.checkpointerNodeId;
+    const targetNode = targetId
+      ? allNodes.find((n) => n.id === targetId)
+      : allNodes.find((n) =>
+          engine === "postgres"
+            ? n?.type === "database" && n.data?.dbEngine === "postgres"
+            : n?.type === "redis_instance" || (n?.type === "database" && n.data?.dbEngine === "redis")
+        );
+
+    if (!targetNode?.data) {
+      return {
+        host: "localhost",
+        port: engine === "postgres" ? 5432 : 6379,
+        database: engine === "postgres" ? "postgres" : undefined,
+        user: engine === "postgres" ? "postgres" : undefined,
+        password: engine === "postgres" ? "postgres" : undefined,
+        connectionStringEnv: memoryConfig.checkpointerEnvVar,
+      };
+    }
+
+    const d = targetNode.data;
+    return {
+      host: d.host || "localhost",
+      port: Number(d.port) || (engine === "postgres" ? 5432 : 6379),
+      database: d.database || (engine === "postgres" ? "postgres" : undefined),
+      user: d.user || d.username || (engine === "postgres" ? "postgres" : undefined),
+      password: d.password,
+      connectionString: d.connectionString,
+      connectionStringEnv: d.connectionStringEnv || memoryConfig.checkpointerEnvVar,
+    };
+  };
+
   const handleClearThread = async () => {
     if (executionMode === "server") {
       try {
+        const checkpointerConnection = resolveCheckpointerConnection();
         await fetch("/api/langgraph/execute", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "clear", threadId }),
+          body: JSON.stringify({
+            action: "clear",
+            threadId,
+            memoryConfig,
+            checkpointerConnection,
+          }),
         });
       } catch {}
     }
@@ -261,6 +306,7 @@ export function StartNodeTestingTab({
       let result: BrowserExecutionResult & { checkpoints?: BrowserCheckpoint[] };
 
       if (executionMode === "server") {
+        const checkpointerConnection = resolveCheckpointerConnection();
         // Execute real Node.js StateGraph via Next.js backend API
         const res = await fetch("/api/langgraph/execute", {
           method: "POST",
@@ -271,6 +317,7 @@ export function StartNodeTestingTab({
             stateChannels,
             inputChannels,
             memoryConfig,
+            checkpointerConnection,
             inputValues: finalInputs,
             threadId,
             provider,
@@ -414,6 +461,22 @@ export function StartNodeTestingTab({
                 >
                   {executionMode === "server" ? "Node.js v1.4" : "Browser"}
                 </Badge>
+                {memoryConfig?.enabled !== false && memoryConfig?.checkpointer === "postgres" && (
+                  <Badge
+                    variant="outline"
+                    className="text-[8.5px] px-1 py-0 h-3.5 font-mono bg-sky-500/15 text-sky-400 border-sky-500/30"
+                  >
+                    PostgresSaver
+                  </Badge>
+                )}
+                {memoryConfig?.enabled !== false && memoryConfig?.checkpointer === "redis" && (
+                  <Badge
+                    variant="outline"
+                    className="text-[8.5px] px-1 py-0 h-3.5 font-mono bg-red-500/15 text-red-400 border-red-500/30"
+                  >
+                    RedisSaver
+                  </Badge>
+                )}
               </div>
               <p className="text-[10px] text-muted-foreground">
                 {executionMode === "server"
@@ -496,6 +559,33 @@ export function StartNodeTestingTab({
             </button>
           </div>
         </div>
+
+        {/* ── Browser Mode Storage Notice ── */}
+        {executionMode === "browser" &&
+          memoryConfig?.enabled !== false &&
+          (memoryConfig?.checkpointer === "postgres" || memoryConfig?.checkpointer === "redis") && (
+            <div className="flex items-center justify-between p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400 text-[10px] animate-in fade-in">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">
+                  {memoryConfig.checkpointer === "postgres" ? "PostgreSQL" : "Redis"} checkpointer requires the Node.js runtime.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setExecutionMode("server");
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem("dezign2app_lg_exec_mode", "server");
+                  }
+                  toast.info("Switched to Generated LangGraph (Node.js runtime)");
+                }}
+                className="text-primary hover:underline font-semibold text-[9.5px] shrink-0 ml-1"
+              >
+                Switch to Node.js ↗
+              </button>
+            </div>
+          )}
 
         {/* ── Thread & Memory Config ── */}
         <div className="grid grid-cols-2 gap-2 pt-1">

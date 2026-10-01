@@ -135,4 +135,132 @@ describe("compileMonorepo: LangGraph Package Compilation & Service Integration",
     expect(rootTsconfig).toBeDefined();
     expect(rootTsconfig!.content).toContain("packages/langgraph/SupportAgent");
   });
+
+  it("imports pool from @workspace/db when LangGraph node has checkpointer: 'postgres'", () => {
+    const dbNode: BackendNode = {
+      id: "db-pg-1",
+      type: "database",
+      position: { x: 100, y: 100 },
+      fractionalIndex: "a0",
+      data: {
+        label: "PrimaryDb",
+        dbEngine: "postgres",
+      },
+    };
+
+    const entityNode: BackendNode = {
+      id: "ent-users",
+      type: "entity",
+      position: { x: 100, y: 300 },
+      fractionalIndex: "a1",
+      data: {
+        label: "users",
+        databaseId: dbNode.id,
+        columns: [{ name: "id", type: "string", isPrimaryKey: true }],
+      },
+    };
+
+    const langGraphNode: BackendNode = {
+      id: "agent-pg",
+      type: "langgraph",
+      position: { x: 400, y: 100 },
+      fractionalIndex: "a2",
+      data: {
+        label: "PgAgent",
+        memoryConfig: {
+          enabled: true,
+          checkpointer: "postgres",
+          checkpointerNodeId: dbNode.id,
+        },
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages", defaultValue: [] },
+        ],
+      },
+    };
+
+    const result = compileMonorepo(
+      [dbNode, entityNode, langGraphNode],
+      [],
+      [],
+      [],
+      [],
+      "Test Pg Checkpointer Monorepo",
+    );
+
+    // 1. packages/langgraph/PgAgent/package.json MUST depend on the database workspace package
+    const lgPkgJson = result.files.find(
+      (f: CompiledFile) => f.filename === "packages/langgraph/PgAgent/package.json",
+    );
+    expect(lgPkgJson).toBeDefined();
+    const parsedPkg = JSON.parse(lgPkgJson!.content);
+    expect(parsedPkg.dependencies["@workspace/db"]).toBe("workspace:*");
+    expect(parsedPkg.dependencies["@langchain/langgraph-checkpoint-postgres"]).toBeDefined();
+
+    // 2. packages/langgraph/PgAgent/src/graph.ts MUST import pool from the database package
+    const lgGraphFile = result.files.find(
+      (f: CompiledFile) => f.filename === "packages/langgraph/PgAgent/src/graph.ts",
+    );
+    expect(lgGraphFile).toBeDefined();
+    expect(lgGraphFile!.content).toContain('import { pool } from "@workspace/db";');
+    expect(lgGraphFile!.content).toContain("const checkpointer = new PostgresSaver(pool);");
+    expect(lgGraphFile!.content).toContain("await checkpointer.setup();");
+  });
+
+  it("imports REDIS_CONFIG from @workspace/redis when LangGraph node has checkpointer: 'redis'", () => {
+    const redisNode: BackendNode = {
+      id: "redis-1",
+      type: "redis_instance",
+      position: { x: 100, y: 100 },
+      fractionalIndex: "a0",
+      data: {
+        label: "RedisCache",
+        host: "localhost",
+        port: 6379,
+      },
+    };
+
+    const langGraphNode: BackendNode = {
+      id: "agent-redis",
+      type: "langgraph",
+      position: { x: 400, y: 100 },
+      fractionalIndex: "a1",
+      data: {
+        label: "RedisAgent",
+        memoryConfig: {
+          enabled: true,
+          checkpointer: "redis",
+          checkpointerNodeId: redisNode.id,
+        },
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages", defaultValue: [] },
+        ],
+      },
+    };
+
+    const result = compileMonorepo(
+      [redisNode, langGraphNode],
+      [],
+      [],
+      [],
+      [],
+      "Test Redis Checkpointer Monorepo",
+    );
+
+    // 1. packages/langgraph/RedisAgent/package.json MUST depend on the redis workspace package
+    const lgPkgJson = result.files.find(
+      (f: CompiledFile) => f.filename === "packages/langgraph/RedisAgent/package.json",
+    );
+    expect(lgPkgJson).toBeDefined();
+    const parsedPkg = JSON.parse(lgPkgJson!.content);
+    expect(parsedPkg.dependencies["@workspace/rediscache"]).toBe("workspace:*");
+    expect(parsedPkg.dependencies["@langchain/langgraph-checkpoint-redis"]).toBeDefined();
+
+    // 2. packages/langgraph/RedisAgent/src/graph.ts MUST import REDIS_CONFIG and use RedisSaver.fromUrl
+    const lgGraphFile = result.files.find(
+      (f: CompiledFile) => f.filename === "packages/langgraph/RedisAgent/src/graph.ts",
+    );
+    expect(lgGraphFile).toBeDefined();
+    expect(lgGraphFile!.content).toContain('import { REDIS_CONFIG } from "@workspace/rediscache";');
+    expect(lgGraphFile!.content).toContain("const checkpointer = await RedisSaver.fromUrl(redisUrl);");
+  });
 });

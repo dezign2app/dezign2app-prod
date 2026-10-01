@@ -314,6 +314,28 @@ export function compileSharedPackages(
     const folderPath = `packages/langgraph/${folderName}`;
     langGraphPackageFolders.push(folderPath);
 
+    // Resolve DB package name if memoryConfig uses postgres
+    let dbPackageName: string | undefined;
+    if (lgNode.data?.memoryConfig?.checkpointer === "postgres") {
+      const linkedDbNodeId = lgNode.data.memoryConfig.checkpointerNodeId;
+      const targetDb =
+        nodes.find((n) => n.id === linkedDbNodeId) ||
+        nodes.find((n) => n.type === "database" && n.data?.dbEngine === "postgres");
+      if (targetDb) {
+        const matchPkg = compiledDb.packages?.find((p) => p.dbEngine === "postgres");
+        dbPackageName = matchPkg?.packageName || "@workspace/db";
+      } else {
+        dbPackageName = "@workspace/db";
+      }
+    }
+
+    // Resolve Redis package name if memoryConfig uses redis
+    let redisPackageName: string | undefined;
+    if (lgNode.data?.memoryConfig?.checkpointer === "redis") {
+      const matchRedis = compiledRedis.packages?.[0];
+      redisPackageName = matchRedis?.packageName || "@workspace/redis";
+    }
+
     const lgResult = compileLangGraphNode(lgNode, {
       edges,
       nodes,
@@ -322,6 +344,8 @@ export function compileSharedPackages(
       testCases,
       outputMode: "package",
       packageName,
+      dbPackageName,
+      redisPackageName,
     });
 
     lgResult.files.forEach((f) => {
