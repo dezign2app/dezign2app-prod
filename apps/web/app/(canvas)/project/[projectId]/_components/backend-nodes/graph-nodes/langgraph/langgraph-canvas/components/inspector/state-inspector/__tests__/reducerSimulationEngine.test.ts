@@ -6,6 +6,10 @@ import {
   executeReducer,
   simulateStateTransition,
   buildInitialState,
+  getPresetsForChannel,
+  getDefaultPresetValueForChannel,
+  formatPresetValue,
+  getPlaygroundPresetsForReducer,
 } from "../utils/reducerSimulationEngine";
 import type { LangGraphStateChannel, LangGraphCustomReducer } from "@/types/canvas";
 
@@ -186,4 +190,83 @@ describe("reducerSimulationEngine", () => {
       expect(res.unmatchedPayloadKeys).toContain("unknown_field");
     });
   });
+
+  describe("Channel Presets by Type", () => {
+    it("should return string presets for string state channel", () => {
+      const presets = getPresetsForChannel({
+        key: "message",
+        type: "string",
+        reducer: "updateMessage",
+      });
+      expect(presets.length).toBeGreaterThan(0);
+      expect(presets[0]?.value).toBe("Hello! State transition test.");
+      expect(typeof presets[0]?.value).toBe("string");
+    });
+
+    it("should return number presets for number state channel", () => {
+      const presets = getPresetsForChannel({
+        key: "count",
+        type: "number",
+        reducer: "replace",
+      });
+      expect(presets.length).toBeGreaterThan(0);
+      expect(presets[0]?.value).toBe(1);
+      expect(typeof presets[0]?.value).toBe("number");
+    });
+
+    it("should return boolean presets for boolean state channel", () => {
+      const presets = getPresetsForChannel({
+        key: "is_active",
+        type: "boolean",
+        reducer: "replace",
+      });
+      expect(presets.length).toBeGreaterThan(0);
+      expect(presets[0]?.value).toBe(true);
+    });
+
+    it("should return message list presets for messages channel", () => {
+      const presets = getPresetsForChannel({
+        key: "messages",
+        type: "messages",
+        reducer: "add_messages",
+      });
+      expect(presets.length).toBeGreaterThan(0);
+      expect(Array.isArray(presets[0]?.value)).toBe(true);
+    });
+
+    it("should format string, number, and json presets correctly", () => {
+      expect(formatPresetValue("Hello")).toBe('"Hello"');
+      expect(formatPresetValue(42)).toBe("42");
+      expect(formatPresetValue(true)).toBe("true");
+      expect(formatPresetValue({ a: 1 })).toBe(JSON.stringify({ a: 1 }, null, 2));
+    });
+
+    it("should generate playground presets for custom string reducer", () => {
+      const customChannels: LangGraphStateChannel[] = [
+        {
+          key: "message",
+          type: "string",
+          reducer: "updateMessage",
+        },
+      ];
+      const customReducers: LangGraphCustomReducer[] = [
+        {
+          id: "r1",
+          name: "updateMessage",
+          code: "(prev, next) => (prev ? `${prev}\\n${next}` : next)",
+          targetField: "message",
+        },
+      ];
+
+      const presets = getPlaygroundPresetsForReducer(
+        "updateMessage",
+        customChannels,
+        customReducers,
+      );
+      expect(presets.length).toBeGreaterThan(0);
+      expect(typeof presets[0]?.prev).toBe("string");
+      expect(typeof presets[0]?.next).toBe("string");
+    });
+  });
 });
+

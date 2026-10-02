@@ -21,6 +21,10 @@ import type {
   LangGraphStateChannel,
   LangGraphCustomReducer,
 } from "@/types/canvas";
+import {
+  getPresetsForChannel,
+  formatPresetValue,
+} from "../../utils/reducerSimulationEngine";
 
 export interface SimulateNodeOutputCardProps {
   stateChannels: LangGraphStateChannel[];
@@ -137,6 +141,65 @@ export function SimulateNodeOutputCard({
     return custom?.code || activeSingleChannel.customReducerCode || null;
   }, [activeSingleChannel, customReducers]);
 
+  const channelPresets = useMemo(() => {
+    return getPresetsForChannel(activeSingleChannel);
+  }, [activeSingleChannel]);
+
+  const dynamicPresets = useMemo(() => {
+    const list: Array<{
+      label: string;
+      description: string;
+      payload: Record<string, unknown>;
+    }> = [];
+
+    // Full state turn simulation preset (updates each channel)
+    if (stateChannels.length > 1) {
+      const fullTurnPayload: Record<string, unknown> = {};
+      for (const ch of stateChannels) {
+        const presets = getPresetsForChannel(ch);
+        fullTurnPayload[ch.key] = presets[0]?.value ?? "";
+      }
+      list.push({
+        label: "Simulate Full Turn",
+        description: "Updates all state channels with default values",
+        payload: fullTurnPayload,
+      });
+    }
+
+    // Channel specific presets
+    for (const ch of stateChannels) {
+      const presets = getPresetsForChannel(ch);
+      const first = presets[0];
+      if (first) {
+        list.push({
+          label: `${ch.key}: ${first.label}`,
+          description: `Update ${ch.key} (${ch.type}): ${first.description}`,
+          payload: { [ch.key]: first.value },
+        });
+      }
+    }
+
+    // If messages channel exists, include dedup preset
+    const messagesCh = stateChannels.find((c) => c.type === "messages");
+    if (messagesCh) {
+      list.push({
+        label: "Update Message (Dedup)",
+        description: "Edits existing message matching same ID",
+        payload: {
+          [messagesCh.key]: [
+            {
+              id: "msg-sim-1",
+              role: "assistant",
+              content: "Stream finished: Final synthesized result.",
+            },
+          ],
+        },
+      });
+    }
+
+    return list.length > 0 ? list : STATE_UPDATE_PRESETS;
+  }, [stateChannels]);
+
   return (
     <div className="flex flex-col gap-2.5 p-3 rounded-lg bg-card border border-border/70 shadow-sm">
       <div className="flex items-center justify-between gap-2">
@@ -202,12 +265,12 @@ export function SimulateNodeOutputCard({
           <span className="text-[10px] text-muted-foreground font-semibold">
             Quick Presets:
           </span>
-          {STATE_UPDATE_PRESETS.map((preset) => (
+          {dynamicPresets.map((preset) => (
             <button
               key={preset.label}
               type="button"
               onClick={() => onLoadStateUpdatePreset(preset.payload)}
-              className="text-[10px] px-2 py-0.5 rounded-full bg-secondary/50 hover:bg-secondary text-secondary-foreground border border-border/50 hover:border-emerald-500/40 transition-colors"
+              className="text-[10px] px-2 py-0.5 rounded-full bg-secondary/50 hover:bg-secondary text-secondary-foreground border border-border/50 hover:border-emerald-500/40 transition-colors cursor-pointer"
               title={preset.description}
             >
               {preset.label}
@@ -274,6 +337,30 @@ export function SimulateNodeOutputCard({
             </div>
           )}
 
+          {/* Preset Test Bodies for this channel */}
+          {channelPresets.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap p-2 rounded-md bg-muted/20 border border-border/40">
+              <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1 shrink-0">
+                <Sparkles className="w-3 h-3 text-emerald-400" />
+                Preset Test Bodies ({activeSingleChannel?.type || "string"}):
+              </span>
+              {channelPresets.map((preset, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => {
+                    setSingleUpdateVal(formatPresetValue(preset.value));
+                    setPayloadError(null);
+                  }}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-secondary/60 hover:bg-emerald-500/20 text-secondary-foreground hover:text-emerald-300 border border-border/50 hover:border-emerald-500/40 transition-colors font-mono cursor-pointer"
+                  title={preset.description}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
@@ -294,9 +381,14 @@ export function SimulateNodeOutputCard({
             </div>
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-semibold text-emerald-400">
-                  2. Incoming Channel Update (next):
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-semibold text-emerald-400">
+                    2. Incoming Channel Update (next):
+                  </span>
+                  <span className="text-[9px] font-mono text-emerald-300 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                    {activeSingleChannel?.type || "string"}
+                  </span>
+                </div>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -304,9 +396,11 @@ export function SimulateNodeOutputCard({
                   onClick={() => {
                     try {
                       const parsed = JSON.parse(singleUpdateVal);
-                      setSingleUpdateVal(JSON.stringify(parsed, null, 2));
+                      setSingleUpdateVal(formatPresetValue(parsed));
                     } catch {
-                      // ignore if not valid JSON
+                      if (activeSingleChannel?.type === "string") {
+                        setSingleUpdateVal(JSON.stringify(singleUpdateVal));
+                      }
                     }
                   }}
                   title="Format JSON"
@@ -321,7 +415,19 @@ export function SimulateNodeOutputCard({
                   setPayloadError(null);
                 }}
                 rows={3}
-                placeholder='e.g. 1, "add", or {"message": "add"}'
+                placeholder={
+                  activeSingleChannel?.type === "string"
+                    ? 'e.g. "Updated text content"'
+                    : activeSingleChannel?.type === "number"
+                      ? "e.g. 1, 5, or -1"
+                      : activeSingleChannel?.type === "boolean"
+                        ? "e.g. true or false"
+                        : activeSingleChannel?.type === "messages"
+                          ? '[{"role": "assistant", "content": "..."}]'
+                          : activeSingleChannel?.type === "array"
+                            ? '["item_1", "item_2"]'
+                            : '{"key": "value"}'
+                }
                 className="h-20 w-full text-xs font-mono bg-background p-2 rounded border border-border focus:border-emerald-500 focus:outline-none resize-y text-foreground"
               />
             </div>

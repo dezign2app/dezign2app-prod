@@ -8,6 +8,10 @@ import {
   simulateStateTransition,
   executeReducer,
   REDUCER_PRESETS,
+  getPresetsForChannel,
+  getDefaultPresetValueForChannel,
+  formatPresetValue,
+  getPlaygroundPresetsForReducer,
   type StateSimulationStep,
   type ChannelSimulationResult,
   type ReducerExecutionResult,
@@ -67,51 +71,32 @@ export function useStateSimulationManager({
   });
   const [singleUpdateVal, setSingleUpdateVal] = useState<string>(() => {
     const first = stateChannels[0];
-    if (first?.type === "number") return "1";
-    if (first?.type === "boolean") return "true";
-    if (first?.type === "messages") {
-      return JSON.stringify(
-        [
-          {
-            id: `msg-${Date.now()}`,
-            role: "assistant",
-            content: "Hello! State transition test.",
-          },
-        ],
-        null,
-        2,
-      );
-    }
-    return '"updated"';
+    const defaultVal = getDefaultPresetValueForChannel(first);
+    return formatPresetValue(defaultVal);
   });
+
+  // Sync singleChannelKey & singleUpdateVal if channels list updates
+  useEffect(() => {
+    if (stateChannels.length > 0) {
+      const active = stateChannels.find((c) => c.key === singleChannelKey);
+      if (!active) {
+        const first = stateChannels[0];
+        if (first) {
+          setSingleChannelKey(first.key);
+          const defaultVal = getDefaultPresetValueForChannel(first);
+          setSingleUpdateVal(formatPresetValue(defaultVal));
+        }
+      }
+    }
+  }, [stateChannels, singleChannelKey]);
+
   const [rawPayloadInput, setRawPayloadInput] = useState(() => {
     const firstChannel = stateChannels[0];
-    if (firstChannel?.key === "messages") {
-      return JSON.stringify(
-        {
-          messages: [
-            {
-              id: "msg-sim-1",
-              role: "assistant",
-              content: "Hello! State transition test.",
-            },
-          ],
-        },
-        null,
-        2,
-      );
-    }
     if (firstChannel) {
+      const defaultVal = getDefaultPresetValueForChannel(firstChannel);
       return JSON.stringify(
         {
-          [firstChannel.key]:
-            firstChannel.type === "number"
-              ? 1
-              : firstChannel.type === "boolean"
-                ? true
-                : firstChannel.type === "array"
-                  ? ["test_item"]
-                  : "updated_val",
+          [firstChannel.key]: defaultVal,
         },
         null,
         2,
@@ -126,7 +111,9 @@ export function useStateSimulationManager({
     Array<{ key: string; valueStr: string }>
   >(() => {
     const first = stateChannels[0];
-    return first ? [{ key: first.key, valueStr: "" }] : [];
+    if (!first) return [];
+    const defaultVal = getDefaultPresetValueForChannel(first);
+    return [{ key: first.key, valueStr: formatPresetValue(defaultVal) }];
   });
 
   // Step History (Time Travel)
@@ -193,15 +180,19 @@ export function useStateSimulationManager({
 
   // Initial playground prev & next inputs based on selected reducer
   const defaultPreset = useMemo(() => {
-    const presets = REDUCER_PRESETS[selectedReducer];
+    const presets = getPlaygroundPresetsForReducer(
+      selectedReducer,
+      stateChannels,
+      customReducers,
+    );
     return presets?.[0] || null;
-  }, [selectedReducer]);
+  }, [selectedReducer, stateChannels, customReducers]);
 
   const [prevInput, setPrevInput] = useState<string>(() =>
-    defaultPreset ? JSON.stringify(defaultPreset.prev, null, 2) : '""',
+    defaultPreset ? formatPresetValue(defaultPreset.prev) : '""',
   );
   const [nextInput, setNextInput] = useState<string>(() =>
-    defaultPreset ? JSON.stringify(defaultPreset.next, null, 2) : '""',
+    defaultPreset ? formatPresetValue(defaultPreset.next) : '""',
   );
 
   const [playgroundResult, setPlaygroundResult] =
@@ -476,18 +467,22 @@ export function useStateSimulationManager({
       setTestingSubMode("playground");
 
       // Load first preset for this reducer if available
-      const presets = REDUCER_PRESETS[reducerName];
+      const presets = getPlaygroundPresetsForReducer(
+        reducerName,
+        stateChannels,
+        customReducers,
+      );
       const firstPreset = presets?.[0];
       if (firstPreset) {
-        setPrevInput(JSON.stringify(firstPreset.prev, null, 2));
-        setNextInput(JSON.stringify(firstPreset.next, null, 2));
+        setPrevInput(formatPresetValue(firstPreset.prev));
+        setNextInput(formatPresetValue(firstPreset.next));
       } else {
         // If no preset, provide current graph state as prev
         setPrevInput(JSON.stringify(simulatedState, null, 2));
         setNextInput(JSON.stringify(1, null, 2));
       }
     },
-    [simulatedState],
+    [simulatedState, stateChannels, customReducers],
   );
 
   const handleApplyPlaygroundPreset = useCallback(
@@ -507,23 +502,15 @@ export function useStateSimulationManager({
       const ch = stateChannels.find((c) => c.key === channelKey);
       if (!ch) return;
 
-      let defaultVal: unknown;
-      if (ch.type === "number") defaultVal = 1;
-      else if (ch.type === "boolean") defaultVal = true;
-      else if (ch.type === "messages") {
-        defaultVal = [
-          {
-            id: `msg-${Date.now()}`,
-            role: "assistant",
-            content: "Simulated message update",
-          },
-        ];
-      } else if (ch.type === "array") defaultVal = ["new_item"];
-      else if (ch.type === "object") defaultVal = { updated_field: "value" };
-      else defaultVal = "updated value";
+      setSingleChannelKey(channelKey);
 
+      const presets = getPresetsForChannel(ch);
+      const defaultVal = presets[0]?.value ?? getDefaultPresetValueForChannel(ch);
+      const formattedVal = formatPresetValue(defaultVal);
+
+      setSingleUpdateVal(formattedVal);
       setRawPayloadInput(JSON.stringify({ [ch.key]: defaultVal }, null, 2));
-      setFormRows([{ key: ch.key, valueStr: JSON.stringify(defaultVal) }]);
+      setFormRows([{ key: ch.key, valueStr: formattedVal }]);
       setPayloadError(null);
     },
     [stateChannels],
