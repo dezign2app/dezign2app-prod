@@ -69,14 +69,17 @@ export function buildInitialNodes(
       position: statePos,
       data: {
         label: "Global Graph State",
-        stateChannels: data.stateChannels || [
-          {
-            key: "messages",
-            type: "messages",
-            reducer: "add_messages",
-            defaultValue: [],
-          },
-        ],
+        stateChannels:
+          data.stateChannels && data.stateChannels.length > 0
+            ? data.stateChannels
+            : [
+                {
+                  key: "messages",
+                  type: "messages",
+                  reducer: "add_messages",
+                  defaultValue: [],
+                },
+              ],
         customReducers: data.customReducers || [],
       },
       deletable: false,

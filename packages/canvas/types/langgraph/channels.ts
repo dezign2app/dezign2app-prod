@@ -29,6 +29,7 @@ export interface LangGraphCustomReducer {
   name: string;
   code: string;
   description?: string;
+  targetField?: string;
 }
 
 export function isLangGraphChannelType(

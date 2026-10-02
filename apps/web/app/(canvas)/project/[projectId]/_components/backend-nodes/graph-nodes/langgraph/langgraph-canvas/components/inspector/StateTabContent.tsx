@@ -11,6 +11,8 @@ import {
   ChevronRight,
   Info,
   Pencil,
+  Link2,
+  Lock,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { LocalInput, LocalTextarea } from "../../../../common";
@@ -23,6 +25,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
+import {
+  Combobox,
+  ComboboxInput,
+  ComboboxContent,
+  ComboboxList,
+  ComboboxItem,
+  ComboboxEmpty,
+} from "@workspace/ui/components/combobox";
 import type { LangGraphStateChannel, LangGraphCustomReducer } from "@/types/canvas";
 import { isLangGraphChannelType } from "@workspace/canvas";
 
@@ -50,7 +60,7 @@ const BUILT_IN_REDUCERS = [
   },
   {
     name: "add_messages",
-    label: "add_messages (dedup/append)",
+    label: "add_messages (chat history dedup/append)",
     desc: "LangGraph ID-based dedup and message history append",
     typeHint: "messages",
   },
@@ -83,33 +93,17 @@ export function StateTabContent({
   onDeleteCustomReducer,
   onClose,
 }: StateTabContentProps) {
-  // Discover any custom reducers initialized from state channels or passed externally
+  // Only explicitly defined shared custom reducers passed externally
   const customReducers = React.useMemo(() => {
-    const builtInNames = new Set(BUILT_IN_REDUCERS.map((r) => r.name));
-    const list: LangGraphCustomReducer[] = [...(externalCustomReducers || [])];
-    stateChannels.forEach((ch) => {
-      if (
-        ch.reducer &&
-        !builtInNames.has(ch.reducer) &&
-        !list.some((r) => r.name === ch.reducer)
-      ) {
-        list.push({
-          id: `custom_${ch.reducer}`,
-          name: ch.reducer,
-          code:
-            ch.customReducerCode ||
-            "(prev, next) => Array.isArray(prev) ? [...prev, ...next] : next",
-          description: `Custom reducer function for ${ch.key}`,
-        });
-      }
-    });
-    return list;
-  }, [externalCustomReducers, stateChannels]);
+    return [...(externalCustomReducers || [])];
+  }, [externalCustomReducers]);
 
   const [isAddingReducer, setIsAddingReducer] = useState(false);
   const [newReducerName, setNewReducerName] = useState("");
   const [newReducerCode, setNewReducerCode] = useState("(prev, next) => Array.isArray(prev) ? [...prev, ...next] : next");
   const [newReducerDesc, setNewReducerDesc] = useState("");
+  const [newTargetField, setNewTargetField] = useState("");
+  const [newTargetFieldInput, setNewTargetFieldInput] = useState("");
   const [showReducersSection, setShowReducersSection] = useState(true);
 
   // Edit custom reducer state
@@ -117,12 +111,60 @@ export function StateTabContent({
   const [editReducerName, setEditReducerName] = useState("");
   const [editReducerCode, setEditReducerCode] = useState("");
   const [editReducerDesc, setEditReducerDesc] = useState("");
+  const [editTargetField, setEditTargetField] = useState("");
+  const [editTargetFieldInput, setEditTargetFieldInput] = useState("");
+
+  const availableFieldKeys = React.useMemo(() => {
+    return stateChannels
+      .map((c) => c.key)
+      .filter((k): k is string => Boolean(k && k.trim()));
+  }, [stateChannels]);
+
+  const handleSelectNewTargetField = (fieldKey: string) => {
+    setNewTargetField(fieldKey);
+    setNewTargetFieldInput(fieldKey);
+
+    // If reducer name is empty or default, suggest one based on fieldKey
+    if (!newReducerName || newReducerName.endsWith("_reducer") || newReducerName === "custom_reducer") {
+      setNewReducerName(`${fieldKey}_reducer`);
+    }
+
+    // Auto-suggest template code according to the channel type
+    const channel = stateChannels.find((c) => c.key === fieldKey);
+    if (channel) {
+      if (channel.type === "array" || channel.type === "messages") {
+        setNewReducerCode(
+          "(prev, next) => [...(Array.isArray(prev) ? prev : []), ...(Array.isArray(next) ? next : [next])]",
+        );
+      } else if (channel.type === "number") {
+        setNewReducerCode("(prev, next) => (prev || 0) + (next || 0)");
+      } else if (channel.type === "object" || channel.type === "json") {
+        setNewReducerCode(
+          "(prev, next) => ({ ...(prev || {}), ...(next || {}) })",
+        );
+      } else if (channel.type === "string") {
+        setNewReducerCode(
+          "(prev, next) => (prev ? `${prev}\\n${next}` : next)",
+        );
+      }
+    }
+  };
 
   const handleStartEditCustomReducer = (reducer: LangGraphCustomReducer) => {
     setEditingReducerId(reducer.id);
     setEditReducerName(reducer.name);
     setEditReducerCode(reducer.code);
     setEditReducerDesc(reducer.description || "");
+
+    const tiedChannel = stateChannels.find(
+      (c) =>
+        c.key === reducer.targetField ||
+        c.reducer === reducer.name ||
+        c.reducer === reducer.id,
+    );
+    const initialTarget = reducer.targetField || tiedChannel?.key || "";
+    setEditTargetField(initialTarget);
+    setEditTargetFieldInput(initialTarget);
   };
 
   const handleCancelEditCustomReducer = () => {
@@ -130,34 +172,86 @@ export function StateTabContent({
     setEditReducerName("");
     setEditReducerCode("");
     setEditReducerDesc("");
+    setEditTargetField("");
+    setEditTargetFieldInput("");
   };
 
   const handleSaveEditCustomReducer = (reducerId: string) => {
     const trimmedName = editReducerName.trim().replace(/\s+/g, "_");
     if (!trimmedName) return;
 
+    const trimmedTarget = editTargetField.trim();
+    const code = editReducerCode.trim() || "(prev, next) => next";
+
     if (onUpdateCustomReducer) {
       onUpdateCustomReducer(reducerId, {
         name: trimmedName,
-        code: editReducerCode.trim() || "(prev, next) => next",
+        code,
         description: editReducerDesc.trim() || undefined,
+        targetField: trimmedTarget || undefined,
       });
-    } else {
-      // Fallback local update
-      setStateChannels((prev) =>
-        prev.map((c) =>
-          c.reducer === editReducerName || c.reducer === reducerId
-            ? {
-                ...c,
-                reducer: trimmedName,
-                customReducerCode: editReducerCode.trim() || "(prev, next) => next",
-              }
-            : c,
-        ),
-      );
     }
 
+    // Synchronize channels:
+    // Tie the target channel to this reducer, and update any channels that referenced the old name
+    setStateChannels((prev) => {
+      let foundTarget = false;
+      const updated = prev.map((c) => {
+        if (trimmedTarget && c.key === trimmedTarget) {
+          foundTarget = true;
+          return {
+            ...c,
+            reducer: trimmedName,
+            customReducerCode: code,
+          };
+        }
+        if (c.reducer === editReducerName || c.reducer === reducerId) {
+          if (trimmedTarget && c.key !== trimmedTarget) {
+            return {
+              ...c,
+              reducer: "replace",
+              customReducerCode: undefined,
+            };
+          }
+          return {
+            ...c,
+            reducer: trimmedName,
+            customReducerCode: code,
+          };
+        }
+        return c;
+      });
+
+      if (trimmedTarget && !foundTarget) {
+        updated.push({
+          key: trimmedTarget,
+          type: "string",
+          reducer: trimmedName,
+          customReducerCode: code,
+          defaultValue: "",
+        });
+      }
+
+      return updated;
+    });
+
     setEditingReducerId(null);
+    setEditReducerName("");
+    setEditReducerCode("");
+    setEditReducerDesc("");
+    setEditTargetField("");
+    setEditTargetFieldInput("");
+  };
+
+  const handleAddDefaultMessagesChannel = () => {
+    if (stateChannels.some((c) => c.key === "messages")) return;
+    const defaultMessagesChannel: LangGraphStateChannel = {
+      key: "messages",
+      type: "messages",
+      reducer: "add_messages",
+      defaultValue: [],
+    };
+    setStateChannels([defaultMessagesChannel, ...stateChannels]);
   };
 
   const handleAddField = () => {
@@ -171,6 +265,7 @@ export function StateTabContent({
   };
 
   const handleDeleteField = (index: number) => {
+    if (stateChannels[index]?.key === "messages") return;
     setStateChannels(stateChannels.filter((_, i) => i !== index));
   };
 
@@ -187,20 +282,56 @@ export function StateTabContent({
     const trimmedName = newReducerName.trim().replace(/\s+/g, "_");
     if (!trimmedName) return;
 
+    const trimmedTarget = newTargetField.trim();
+    const code = newReducerCode.trim() || "(prev, next) => next";
+
     const newReducer: LangGraphCustomReducer = {
       id: `custom_${Date.now().toString(36)}`,
       name: trimmedName,
-      code: newReducerCode.trim() || "(prev, next) => next",
+      code,
       description: newReducerDesc.trim() || undefined,
+      targetField: trimmedTarget || undefined,
     };
 
     if (onAddCustomReducer) {
       onAddCustomReducer(newReducer);
     }
+
+    // Automatically tie the target state channel to this custom reducer
+    if (trimmedTarget) {
+      setStateChannels((prev) => {
+        const channelExists = prev.some((c) => c.key === trimmedTarget);
+        if (channelExists) {
+          return prev.map((c) =>
+            c.key === trimmedTarget
+              ? {
+                  ...c,
+                  reducer: trimmedName,
+                  customReducerCode: code,
+                }
+              : c,
+          );
+        } else {
+          return [
+            ...prev,
+            {
+              key: trimmedTarget,
+              type: "array",
+              reducer: trimmedName,
+              customReducerCode: code,
+              defaultValue: "",
+            },
+          ];
+        }
+      });
+    }
+
     setIsAddingReducer(false);
     setNewReducerName("");
     setNewReducerCode("(prev, next) => Array.isArray(prev) ? [...prev, ...next] : next");
     setNewReducerDesc("");
+    setNewTargetField("");
+    setNewTargetFieldInput("");
   };
 
   const handleDeleteCustomReducer = (reducerName: string) => {
@@ -270,39 +401,85 @@ export function StateTabContent({
             <span className="text-xs font-semibold text-foreground">
               No State Channels Defined
             </span>
-            <span className="text-[11px] text-muted-foreground max-w-[220px]">
-              State channels hold shared data accessible across all nodes in the graph.
+            <span className="text-[11px] text-muted-foreground max-w-[240px]">
+              State channels hold shared data across graph nodes. Add a default chat history channel or custom fields.
             </span>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs mt-2 gap-1.5"
-              onClick={handleAddField}
-            >
-              <Plus className="w-3.5 h-3.5" /> Add State Field
-            </Button>
+            <div className="flex items-center gap-2 mt-2">
+              <Button
+                size="sm"
+                className="h-7 text-xs gap-1.5 bg-[#006ddd] hover:bg-[#006ddd]/90 text-white font-semibold cursor-pointer shadow-sm"
+                onClick={handleAddDefaultMessagesChannel}
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Default messages (Chat History)
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1.5 cursor-pointer"
+                onClick={handleAddField}
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Field
+              </Button>
+            </div>
           </div>
         ) : (
-          stateChannels.map((ch, idx) => {
+          <>
+            {!stateChannels.some((c) => c.key === "messages") && (
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-xs">
+                <div className="flex items-center gap-2 text-blue-300">
+                  <Database className="w-4 h-4 text-blue-400 shrink-0" />
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-foreground">Chat History Channel</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      LangGraph uses <code className="font-mono text-blue-300 font-semibold">messages</code> with <code className="font-mono text-blue-300 font-semibold">add_messages</code> reducer to persist chat turns.
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-6 text-[10px] bg-blue-600 hover:bg-blue-700 text-white font-semibold gap-1 shrink-0 cursor-pointer"
+                  onClick={handleAddDefaultMessagesChannel}
+                >
+                  <Plus className="w-3 h-3" /> Add messages State
+                </Button>
+              </div>
+            )}
+            {stateChannels.map((ch, idx) => {
             const isCustom = !BUILT_IN_REDUCERS.some((r) => r.name === ch.reducer);
+            const isBuiltin = ch.key === "messages";
 
             return (
               <div
                 key={idx}
-                className="flex flex-col gap-3 p-3 rounded-xl border border-border/60 bg-card/60 shadow-sm backdrop-blur-sm text-xs"
+                className={`flex flex-col gap-3 p-3 rounded-xl border border-border/60 bg-card/60 shadow-sm backdrop-blur-sm text-xs ${
+                  isBuiltin ? "border-blue-500/30 bg-blue-500/[0.03]" : ""
+                }`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex flex-col gap-1 flex-1">
-                    <Label className="text-[10px] text-muted-foreground font-mono">
-                      Field Key #{idx + 1}
-                    </Label>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] text-muted-foreground font-mono">
+                        Field Key #{idx + 1}
+                      </Label>
+                      {isBuiltin && (
+                        <div className="flex items-center gap-1 text-[9px] text-blue-400 font-mono">
+                          <Lock className="w-2.5 h-2.5" />
+                          <span>Built-in Chat State</span>
+                        </div>
+                      )}
+                    </div>
                     <LocalInput
-                      className="h-7 text-xs font-mono font-medium bg-background"
+                      className={`h-7 text-xs font-mono font-medium bg-background ${
+                        isBuiltin ? "cursor-not-allowed opacity-80" : ""
+                      }`}
                       placeholder="e.g. messages, user_query"
-                      autoFocus={!ch.key}
+                      autoFocus={!ch.key && !isBuiltin}
+                      disabled={isBuiltin}
                       value={ch.key}
                       onChange={(e) => {
-                        handleUpdateField(idx, { key: e.target.value });
+                        if (!isBuiltin) {
+                          handleUpdateField(idx, { key: e.target.value });
+                        }
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
@@ -311,17 +488,19 @@ export function StateTabContent({
                       }}
                     />
                   </div>
-                  <div className="self-end pb-0.5">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
-                      onClick={() => handleDeleteField(idx)}
-                      title="Delete state field"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
+                  {!isBuiltin && (
+                    <div className="self-end pb-0.5">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 cursor-pointer"
+                        onClick={() => handleDeleteField(idx)}
+                        title="Delete state field"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/40">
@@ -329,6 +508,7 @@ export function StateTabContent({
                     <Label className="text-[10px] text-muted-foreground">Type</Label>
                     <Select
                       value={ch.type}
+                      disabled={isBuiltin}
                       onValueChange={(v) => {
                         if (isLangGraphChannelType(v)) {
                           const defaultReducer =
@@ -343,7 +523,7 @@ export function StateTabContent({
                         }
                       }}
                     >
-                      <SelectTrigger className="h-7 text-xs bg-background font-mono">
+                      <SelectTrigger className={`h-7 text-xs bg-background font-mono ${isBuiltin ? "cursor-not-allowed opacity-80" : ""}`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -368,16 +548,20 @@ export function StateTabContent({
                       )}
                     </div>
                     <Select
-                      value={ch.reducer}
+                      disabled={isBuiltin}
+                      value={isBuiltin ? "add_messages" : (ch.reducer === "add_message" ? "add_messages" : ch.reducer)}
                       onValueChange={(v) => {
                         const matchedCustom = customReducers.find((r) => r.name === v);
                         handleUpdateField(idx, {
                           reducer: v,
-                          customReducerCode: matchedCustom?.code,
+                          customReducerCode:
+                            v === "custom"
+                              ? (ch.customReducerCode || "(prev, next) => next")
+                              : matchedCustom?.code,
                         });
                       }}
                     >
-                      <SelectTrigger className="h-7 text-xs bg-background font-mono">
+                      <SelectTrigger className={`h-7 text-xs bg-background font-mono ${isBuiltin ? "cursor-not-allowed opacity-80" : ""}`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="font-mono text-xs">
@@ -390,14 +574,21 @@ export function StateTabContent({
                           </SelectItem>
                         ))}
 
+                        <div className="px-2 py-1 text-[10px] font-bold text-purple-400 uppercase border-t border-border/40 mt-1">
+                          Developer Defined
+                        </div>
+                        <SelectItem value="custom" className="text-purple-300 font-semibold">
+                          custom (developer defined inline)
+                        </SelectItem>
+
                         {customReducers.length > 0 && (
                           <>
-                            <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase border-t border-border/40 mt-1">
+                            <div className="px-2 py-1 text-[10px] font-bold text-purple-400 uppercase border-t border-border/40 mt-1">
                               Custom Reducers
                             </div>
                             {customReducers.map((r) => (
                               <SelectItem key={r.id} value={r.name}>
-                                {r.name} (custom)
+                                {r.name} {r.targetField ? `(tied to ${r.targetField})` : "(custom)"}
                               </SelectItem>
                             ))}
                           </>
@@ -407,16 +598,44 @@ export function StateTabContent({
                   </div>
                 </div>
 
-                {isCustom && ch.customReducerCode && (
-                  <div className="p-1.5 rounded bg-secondary/40 border border-purple-500/20 text-[9px] font-mono text-muted-foreground">
-                    <span className="text-purple-400 font-bold block mb-0.5">Reducer implementation:</span>
-                    <code className="text-purple-300 block truncate">{ch.customReducerCode}</code>
+                {isCustom && (
+                  <div className="flex flex-col gap-1.5 p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/30">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] font-bold text-purple-300 flex items-center gap-1.5">
+                        <Code2 className="w-3.5 h-3.5 text-purple-400" />
+                        Custom Reducer for <span className="font-mono text-foreground font-semibold">"{ch.key || "unnamed"}"</span>
+                      </Label>
+                      <span className="text-[9px] text-muted-foreground font-mono">
+                        (prev, next) =&gt; combined
+                      </span>
+                    </div>
+                    <LocalInput
+                      value={ch.customReducerCode ?? "(prev, next) => next"}
+                      onChange={(e) =>
+                        handleUpdateField(idx, {
+                          customReducerCode: e.target.value,
+                        })
+                      }
+                      className="font-mono text-xs bg-background h-8 border-purple-500/30 text-purple-200 placeholder:text-muted-foreground"
+                      placeholder="(prev, next) => Array.isArray(prev) ? [...prev, ...next] : next"
+                    />
+                    <p className="text-[9px] text-muted-foreground leading-tight">
+                      Developer-defined merge function executed whenever this field receives an update.
+                    </p>
+                  </div>
+                )}
+
+                {(ch.type === "messages" || ch.reducer === "add_messages") && (
+                  <div className="p-1.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-sans text-muted-foreground flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                    <span>Chat history channel: <code className="font-mono text-blue-300 font-semibold">add_messages</code> automatically deduplicates by message ID &amp; appends.</span>
                   </div>
                 )}
               </div>
             );
-          })
-        )}
+          })}
+        </>
+      )}
       </div>
 
       {/* Reducer Functions Section */}
@@ -434,7 +653,7 @@ export function StateTabContent({
               variant="outline"
               className="text-[9px] px-1.5 py-0 h-4 text-purple-400 border-purple-500/30 font-mono"
             >
-              {BUILT_IN_REDUCERS.length + customReducers.length} total
+              {customReducers.length} custom
             </Badge>
           </div>
           <div className="flex items-center gap-1">
@@ -460,24 +679,101 @@ export function StateTabContent({
 
         {showReducersSection && (
           <div className="flex flex-col gap-2">
-            <div className="text-[10px] text-muted-foreground flex items-center gap-1 px-1">
-              <Info className="w-3 h-3 text-purple-400 shrink-0" />
-              <span>Reducers merge incoming node updates into state channels.</span>
+            <div className="text-[10px] text-muted-foreground flex items-start gap-1 px-1">
+              <Info className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
+              <span>Custom merge functions tied to your state channels. Control how concurrent node updates merge into specific state variables.</span>
             </div>
 
             {/* Custom Reducer Creation Form */}
             {isAddingReducer && (
-              <div className="flex flex-col gap-2 p-3 rounded-xl border border-purple-500/40 bg-purple-500/5 shadow-md">
+              <div className="flex flex-col gap-2.5 p-3 rounded-xl border border-purple-500/40 bg-purple-500/5 shadow-md">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
                     <Code2 className="w-3.5 h-3.5" /> Define Custom Reducer
                   </span>
                   <button
-                    onClick={() => setIsAddingReducer(false)}
+                    onClick={() => {
+                      setIsAddingReducer(false);
+                      setNewTargetField("");
+                      setNewTargetFieldInput("");
+                    }}
                     className="text-muted-foreground hover:text-foreground text-xs"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
+                </div>
+
+                {/* Target State Variable (Combobox) */}
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[10px] text-muted-foreground font-mono flex items-center gap-1">
+                      <Link2 className="w-3 h-3 text-purple-400" />
+                      Target State Variable to Update
+                    </Label>
+                    <span className="text-[9px] text-muted-foreground">Select or type variable</span>
+                  </div>
+                  <Combobox
+                    items={availableFieldKeys}
+                    value={newTargetField}
+                    onValueChange={(val) => {
+                      if (typeof val === "string" && val.trim()) {
+                        handleSelectNewTargetField(val.trim());
+                      }
+                    }}
+                    inputValue={newTargetFieldInput}
+                    onInputValueChange={(text) => {
+                      setNewTargetFieldInput(text);
+                      setNewTargetField(text);
+                      if (text && (!newReducerName || newReducerName.endsWith("_reducer") || newReducerName === "custom_reducer")) {
+                        setNewReducerName(`${text.trim()}_reducer`);
+                      }
+                    }}
+                  >
+                    <ComboboxInput
+                      placeholder="Search state variable (e.g. messages, scores)..."
+                      className="h-7 text-xs font-mono bg-background w-full"
+                      autoFocus
+                    />
+                    <ComboboxContent
+                      className="w-[300px] p-0 shadow-2xl border border-border/80 bg-popover text-popover-foreground rounded-xl z-50 overflow-hidden"
+                      align="start"
+                      sideOffset={4}
+                    >
+                      <ComboboxEmpty className="py-2.5 px-3 text-xs text-muted-foreground text-center">
+                        {availableFieldKeys.length === 0
+                          ? "No state channels yet. Type a variable name."
+                          : "No matching channels. Type to use custom variable."}
+                      </ComboboxEmpty>
+                      <ComboboxList className="max-h-56 overflow-y-auto no-scrollbar p-1 bg-popover text-popover-foreground hide-scrollbar">
+                        {(fieldKey: string) => {
+                          const ch = stateChannels.find((c) => c.key === fieldKey);
+                          return (
+                            <ComboboxItem
+                              key={fieldKey}
+                              value={fieldKey}
+                              className="flex items-center justify-between py-1.5 px-2 text-xs font-mono cursor-pointer rounded-md gap-2"
+                            >
+                              <div className="flex items-center gap-1.5 truncate">
+                                <Database className="w-3 h-3 text-blue-400 shrink-0" />
+                                <span className="font-semibold text-foreground truncate">{fieldKey}</span>
+                              </div>
+                              {ch?.type && (
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-muted-foreground font-mono shrink-0">
+                                  {ch.type}
+                                </Badge>
+                              )}
+                            </ComboboxItem>
+                          );
+                        }}
+                      </ComboboxList>
+                    </ComboboxContent>
+                  </Combobox>
+                  {newTargetField && (
+                    <span className="text-[9px] text-purple-300/90 font-mono flex items-center gap-1 pl-0.5">
+                      <Check className="w-2.5 h-2.5 text-purple-400" />
+                      Will tie this reducer directly to <span className="font-bold text-foreground">"{newTargetField}"</span> channel
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-1">
@@ -489,7 +785,6 @@ export function StateTabContent({
                     placeholder="e.g. sum_scores, dedup_append"
                     value={newReducerName}
                     onChange={(e) => setNewReducerName(e.target.value)}
-                    autoFocus
                   />
                 </div>
 
@@ -499,6 +794,21 @@ export function StateTabContent({
                       Reducer Function Body (JavaScript)
                     </Label>
                     <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewReducerCode("(prev, next) => [...(Array.isArray(prev) ? prev : []), ...(Array.isArray(next) ? next : [next])]");
+                          setNewTargetField("messages");
+                          setNewTargetFieldInput("messages");
+                          if (!newReducerName || newReducerName.endsWith("_reducer")) {
+                            setNewReducerName("add_messages");
+                          }
+                        }}
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 font-mono transition-colors cursor-pointer"
+                        title="Chat history dedup & append"
+                      >
+                        +chat (messages)
+                      </button>
                       <button
                         type="button"
                         onClick={() => setNewReducerCode("(prev, next) => [...(Array.isArray(prev) ? prev : []), ...(Array.isArray(next) ? next : [next])]")}
@@ -551,21 +861,75 @@ export function StateTabContent({
                     size="sm"
                     variant="ghost"
                     className="h-6 text-xs text-muted-foreground hover:text-foreground"
-                    onClick={() => setIsAddingReducer(false)}
+                    onClick={() => {
+                      setIsAddingReducer(false);
+                      setNewTargetField("");
+                      setNewTargetFieldInput("");
+                    }}
                   >
                     Cancel
                   </Button>
                   <Button
                     size="sm"
-                    className="h-6 text-xs bg-purple-600 hover:bg-purple-700 text-white font-semibold gap-1"
+                    className="h-6 text-xs bg-purple-600 hover:bg-purple-700 text-white font-semibold gap-1 cursor-pointer"
                     onClick={handleCreateCustomReducer}
                     disabled={!newReducerName.trim()}
                   >
-                    <Check className="w-3 h-3" /> Save Reducer
+                    <Check className="w-3 h-3" /> Save &amp; Tie Reducer
                   </Button>
                 </div>
               </div>
             )}
+
+            {/* Core Chat History Reducer Function Card */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 px-1">
+                Chat History Reducer (Core)
+              </span>
+              <div className="flex flex-col gap-1.5 p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-xs font-mono shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-bold text-blue-300">add_messages</span>
+                    <Badge variant="secondary" className="text-[8px] h-3.5 px-1 bg-blue-500/20 text-blue-300 border-0">
+                      chat history
+                    </Badge>
+                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-500/20 border border-blue-500/30 text-blue-200 text-[10px] font-sans">
+                      <Link2 className="w-3 h-3 text-blue-400" />
+                      <span className="text-muted-foreground text-[9px]">Tied to:</span>
+                      <span className="font-mono font-semibold text-blue-100">messages</span>
+                      <span className="text-[8px] px-1 py-0 rounded bg-blue-500/30 text-blue-200 font-mono">
+                        messages
+                      </span>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="text-[9px] px-1.5 py-0.5 border-blue-500/30 text-blue-300 font-sans">
+                    Built-in
+                  </Badge>
+                </div>
+                <code className="text-[9px] text-blue-200/90 line-clamp-3 whitespace-pre-wrap font-mono bg-background/50 px-2 py-1.5 rounded-lg border border-blue-500/20">
+                  {"(prev, next) => Array.isArray(prev) ? [...prev, ...(Array.isArray(next) ? next : [next])] : next"}
+                </code>
+                <div className="flex items-center justify-between text-[9px] text-muted-foreground font-sans">
+                  <span>Deduplicates incoming messages by ID and appends conversation history.</span>
+                  {!customReducers.some((r) => r.name === "add_message" || r.name === "add_messages") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingReducer(true);
+                        setNewReducerName("add_messages");
+                        setNewTargetField("messages");
+                        setNewTargetFieldInput("messages");
+                        setNewReducerCode("(prev, next) => [...(Array.isArray(prev) ? prev : []), ...(Array.isArray(next) ? next : [next])]");
+                        setNewReducerDesc("Custom chat history deduplication and append function");
+                      }}
+                      className="text-blue-400 hover:text-blue-300 font-semibold cursor-pointer underline underline-offset-2 ml-2 shrink-0"
+                    >
+                      Customize as custom reducer
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
 
             {/* Custom Reducers List */}
             {customReducers.length > 0 && (
@@ -575,12 +939,19 @@ export function StateTabContent({
                 </span>
                 {customReducers.map((r) => {
                   const isEditing = editingReducerId === r.id;
+                  const tiedChannel = stateChannels.find(
+                    (c) =>
+                      c.key === r.targetField ||
+                      c.reducer === r.name ||
+                      c.reducer === r.id,
+                  );
+                  const targetFieldName = r.targetField || tiedChannel?.key;
 
                   if (isEditing) {
                     return (
                       <div
                         key={r.id}
-                        className="flex flex-col gap-2 p-2.5 rounded-xl border border-purple-500/50 bg-purple-500/10 shadow-sm"
+                        className="flex flex-col gap-2.5 p-2.5 rounded-xl border border-purple-500/50 bg-purple-500/10 shadow-sm"
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-bold text-purple-300 flex items-center gap-1">
@@ -594,6 +965,75 @@ export function StateTabContent({
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
+
+                        {/* Target State Variable (Combobox) */}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[9px] text-muted-foreground font-mono flex items-center gap-1">
+                              <Link2 className="w-3 h-3 text-purple-400" />
+                              Target State Variable to Update
+                            </Label>
+                            <span className="text-[8px] text-muted-foreground">Select or type variable</span>
+                          </div>
+                          <Combobox
+                            items={availableFieldKeys}
+                            value={editTargetField}
+                            onValueChange={(val) => {
+                              if (typeof val === "string" && val.trim()) {
+                                setEditTargetField(val.trim());
+                                setEditTargetFieldInput(val.trim());
+                              }
+                            }}
+                            inputValue={editTargetFieldInput}
+                            onInputValueChange={(text) => {
+                              setEditTargetFieldInput(text);
+                              setEditTargetField(text);
+                            }}
+                          >
+                            <ComboboxInput
+                              placeholder="Search state variable..."
+                              className="h-7 text-xs font-mono bg-background w-full"
+                            />
+                            <ComboboxContent
+                              className="w-[300px] p-0 shadow-2xl border border-border/80 bg-popover text-popover-foreground rounded-xl z-50 overflow-hidden"
+                              align="start"
+                              sideOffset={4}
+                            >
+                              <ComboboxEmpty className="py-2.5 px-3 text-xs text-muted-foreground text-center">
+                                No matching channels. Type to use custom variable.
+                              </ComboboxEmpty>
+                              <ComboboxList className="max-h-56 overflow-y-auto no-scrollbar p-1 bg-popover text-popover-foreground hide-scrollbar">
+                                {(fieldKey: string) => {
+                                  const ch = stateChannels.find((c) => c.key === fieldKey);
+                                  return (
+                                    <ComboboxItem
+                                      key={fieldKey}
+                                      value={fieldKey}
+                                      className="flex items-center justify-between py-1.5 px-2 text-xs font-mono cursor-pointer rounded-md gap-2"
+                                    >
+                                      <div className="flex items-center gap-1.5 truncate">
+                                        <Database className="w-3 h-3 text-blue-400 shrink-0" />
+                                        <span className="font-semibold text-foreground truncate">{fieldKey}</span>
+                                      </div>
+                                      {ch?.type && (
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-muted-foreground font-mono shrink-0">
+                                          {ch.type}
+                                        </Badge>
+                                      )}
+                                    </ComboboxItem>
+                                  );
+                                }}
+                              </ComboboxList>
+                            </ComboboxContent>
+                          </Combobox>
+                          {editTargetField && (
+                            <span className="text-[9px] text-purple-300/90 font-mono flex items-center gap-1 pl-0.5">
+                              <Check className="w-2.5 h-2.5 text-purple-400" />
+                              Tied to state variable <span className="font-bold text-foreground">"{editTargetField}"</span>
+                            </span>
+                          )}
+                        </div>
+
                         <div className="flex flex-col gap-1">
                           <Label className="text-[9px] text-muted-foreground font-mono">
                             Reducer Name
@@ -682,16 +1122,32 @@ export function StateTabContent({
                   return (
                     <div
                       key={r.id}
-                      className="flex flex-col gap-1 p-2 rounded-lg bg-purple-500/10 border border-purple-500/25 text-xs font-mono"
+                      className="flex flex-col gap-1.5 p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/25 text-xs font-mono"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-bold text-purple-300">{r.name}</span>
                           <Badge variant="secondary" className="text-[8px] h-3.5 px-1 bg-purple-500/20 text-purple-300 border-0">
                             custom
                           </Badge>
+                          {targetFieldName ? (
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-500/15 border border-blue-500/30 text-blue-300 text-[10px] font-sans">
+                              <Link2 className="w-3 h-3 text-blue-400" />
+                              <span className="text-muted-foreground text-[9px]">Tied to:</span>
+                              <span className="font-mono font-semibold text-blue-200">{targetFieldName}</span>
+                              {tiedChannel?.type && (
+                                <span className="text-[8px] px-1 py-0 rounded bg-blue-500/20 text-blue-300 font-mono">
+                                  {tiedChannel.type}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="flex items-center gap-1 text-[9px] text-muted-foreground font-sans px-1">
+                              <Link2 className="w-2.5 h-2.5 opacity-50" /> Unassigned
+                            </span>
+                          )}
                         </div>
-                        <div className="flex items-center gap-0.5">
+                        <div className="flex items-center gap-0.5 shrink-0">
                           <button
                             type="button"
                             onClick={() => handleStartEditCustomReducer(r)}
@@ -722,28 +1178,11 @@ export function StateTabContent({
               </div>
             )}
 
-            {/* Built-in Reducers Preview */}
-            <div className="flex flex-col gap-1.5 pt-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-1">
-                Standard Built-ins
-              </span>
-              <div className="grid grid-cols-1 gap-1">
-                {BUILT_IN_REDUCERS.map((r) => (
-                  <div
-                    key={r.name}
-                    className="flex items-center justify-between p-1.5 rounded-lg bg-secondary/30 border border-border/40 text-[10px] font-mono"
-                  >
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-bold text-foreground">{r.name}</span>
-                      <span className="text-[9px] text-muted-foreground truncate">{r.desc}</span>
-                    </div>
-                    <Badge variant="outline" className="text-[8px] h-3.5 px-1 shrink-0 text-muted-foreground font-mono">
-                      {r.typeHint}
-                    </Badge>
-                  </div>
-                ))}
+            {customReducers.length === 0 && !isAddingReducer && (
+              <div className="p-3 text-center text-muted-foreground text-xs border border-dashed border-border/50 rounded-lg bg-secondary/10">
+                No custom reducers defined yet. Use &ldquo;Add Custom Reducer&rdquo; or configure inline custom reducers directly on your fields above.
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>
