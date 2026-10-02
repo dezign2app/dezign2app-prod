@@ -5,7 +5,7 @@ import type {
   OutputChannelConfig,
   LangGraphCustomReducer,
 } from "./channels";
-import type { StateUpdateMode } from "./tools";
+import type { StateUpdateMode, LangGraphStateUpdateItem } from "./tools";
 import type { LangGraphStepConfig } from "./steps";
 import type {
   LangGraphMemoryConfig,
@@ -112,11 +112,7 @@ export interface CanvasNodeData
   stateUpdatesConfig?: {
     enabled?: boolean;
   };
-  stateUpdates?: {
-    channelKey: string;
-    mode?: StateUpdateMode;
-    value?: string;
-  }[];
+  stateUpdates?: LangGraphStateUpdateItem[];
   availableStateChannels?: LangGraphStateChannel[];
   onDeleteAgent?: () => void;
   onOpenInspector?: () => void;

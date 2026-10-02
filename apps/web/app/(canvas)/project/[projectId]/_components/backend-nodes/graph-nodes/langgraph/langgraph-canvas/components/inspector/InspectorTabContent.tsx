@@ -3,6 +3,7 @@ import { Sparkles, X } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import type {
   LangGraphStateChannel,
+  LangGraphCustomReducer,
   StepNodeData,
   LangGraphLLMNodeData,
   ToolNodeData,
@@ -19,6 +20,7 @@ import type {
   MemoryNode,
   LangGraphMemoryRefNode,
   OutputNode,
+  LangGraphCanvasNode,
 } from "@workspace/canvas";
 import { LLMNodeInspector } from "./LLMNodeInspector";
 import { StepNodeInspector } from "./StepNodeInspector";
@@ -43,11 +45,18 @@ interface InspectorTabContentProps {
   availableToolNodes?: (ToolNode | LangGraphToolRefNode)[];
   availableMiddlewareNodes?: (MiddlewareNode | LangGraphMiddlewareRefNode)[];
   availableMemoryNodes?: (MemoryNode | LangGraphMemoryRefNode)[];
+  masterToolNodes?: ToolNode[];
+  masterMiddlewareNodes?: MiddlewareNode[];
+  nodes?: LangGraphCanvasNode[];
   connectedRoutes?: ConnectedRouteInfo[];
   connectedLLMId?: string | null;
   connectedToolIds?: string[];
   connectedMiddlewareIds?: string[];
   connectedMemoryIds?: string[];
+  onAddToolRef?: (masterToolId: string) => void;
+  onRemoveToolRef?: (toolRefId: string) => void;
+  onAddMiddlewareRef?: (masterMwId: string) => void;
+  onRemoveMiddlewareRef?: (mwRefId: string) => void;
   onSelectLLM?: (llmId: string | null) => void;
   onToggleTool?: (toolId: string, connect: boolean) => void;
   onToggleMiddleware?: (mwId: string, connect: boolean) => void;
@@ -61,6 +70,7 @@ interface InspectorTabContentProps {
   onUpdateMemory?: (changes: Partial<MemoryNodeData>) => void;
   onUpdateOutput?: (changes: Partial<OutputNodeData>) => void;
   stateChannels: LangGraphStateChannel[];
+  customReducers?: LangGraphCustomReducer[];
   onClose?: () => void;
 }
 
@@ -78,11 +88,18 @@ export function InspectorTabContent({
   availableToolNodes,
   availableMiddlewareNodes,
   availableMemoryNodes,
+  masterToolNodes,
+  masterMiddlewareNodes,
+  nodes,
   connectedRoutes = [],
   connectedLLMId,
   connectedToolIds,
   connectedMiddlewareIds,
   connectedMemoryIds,
+  onAddToolRef,
+  onRemoveToolRef,
+  onAddMiddlewareRef,
+  onRemoveMiddlewareRef,
   onSelectLLM,
   onToggleTool,
   onToggleMiddleware,
@@ -96,6 +113,7 @@ export function InspectorTabContent({
   onUpdateMemory,
   onUpdateOutput,
   stateChannels,
+  customReducers,
   onClose,
 }: InspectorTabContentProps) {
   return (
@@ -158,13 +176,21 @@ export function InspectorTabContent({
           availableLLMNodes={availableLLMNodes}
           availableToolNodes={availableToolNodes}
           availableMiddlewareNodes={availableMiddlewareNodes}
+          masterToolNodes={masterToolNodes}
+          masterMiddlewareNodes={masterMiddlewareNodes}
+          nodes={nodes}
           connectedLLMId={connectedLLMId}
           connectedToolIds={connectedToolIds}
           connectedMiddlewareIds={connectedMiddlewareIds}
           onSelectLLM={onSelectLLM}
           onToggleTool={onToggleTool}
+          onAddToolRef={onAddToolRef}
+          onRemoveToolRef={onRemoveToolRef}
           onToggleMiddleware={onToggleMiddleware}
+          onAddMiddlewareRef={onAddMiddlewareRef}
+          onRemoveMiddlewareRef={onRemoveMiddlewareRef}
           stateChannels={stateChannels}
+          customReducers={customReducers}
         />
       ) : selectedStepData ? (
         <StepNodeInspector

@@ -9,6 +9,22 @@ export type McpServerConnection = {
 export type ToolSource = "inline" | "mcp_server" | "api_endpoint";
 export type ToolReturnType = "string" | "object" | "content_blocks" | "command";
 export type StateUpdateMode = "set" | "append" | "expression";
+export type StateUpdateSource =
+  | "structured_field"
+  | "structured_full"
+  | "message_content"
+  | "message_object"
+  | "tool_output"
+  | "expression"
+  | "literal";
+
+export interface LangGraphStateUpdateItem {
+  channelKey: string;
+  source?: StateUpdateSource;
+  schemaField?: string;
+  mode?: StateUpdateMode;
+  value?: string;
+}
 export type StoreOperation = "get" | "put" | "delete" | "list";
 
 export type LangGraphToolDefinition = {

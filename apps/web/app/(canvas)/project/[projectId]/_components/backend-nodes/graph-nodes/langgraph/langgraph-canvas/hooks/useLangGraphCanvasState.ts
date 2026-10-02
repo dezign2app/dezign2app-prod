@@ -305,6 +305,7 @@ export function useLangGraphCanvasState({
   const { onNodesChange, onEdgesChange, isValidConnection, onConnect } =
     useCanvasConnections({
       nodes,
+      edges,
       setNodes,
       setEdges,
     });
@@ -341,11 +342,17 @@ export function useLangGraphCanvasState({
     availableToolNodes,
     availableMiddlewareNodes,
     availableMemoryNodes,
+    masterToolNodes,
+    masterMiddlewareNodes,
     handleSelectLLMForAgent,
     handleToggleToolForAgent,
     handleToggleMiddlewareForAgent,
     handleToggleMemoryForAgent,
-  } = useAgentResourceConnections({ nodes, setEdges, setNodes });
+    handleAddToolRefForAgent,
+    handleRemoveToolRefForAgent,
+    handleAddMiddlewareRefForAgent,
+    handleRemoveMiddlewareRefForAgent,
+  } = useAgentResourceConnections({ nodes, edges, setEdges, setNodes });
 
   // ── Persistence & Auto-Save ──
   const { saveStatus, handleSave } = useCanvasPersistence({
@@ -435,10 +442,16 @@ export function useLangGraphCanvasState({
     availableToolNodes,
     availableMiddlewareNodes,
     availableMemoryNodes,
+    masterToolNodes,
+    masterMiddlewareNodes,
     handleSelectLLMForAgent,
     handleToggleToolForAgent,
     handleToggleMiddlewareForAgent,
     handleToggleMemoryForAgent,
+    handleAddToolRefForAgent,
+    handleRemoveToolRefForAgent,
+    handleAddMiddlewareRefForAgent,
+    handleRemoveMiddlewareRefForAgent,
     showCompileModal,
     setShowCompileModal,
     suggestedParams,

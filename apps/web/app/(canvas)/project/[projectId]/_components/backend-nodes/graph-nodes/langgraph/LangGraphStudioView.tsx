@@ -125,10 +125,16 @@ export function LangGraphStudioView({
     availableToolNodes,
     availableMiddlewareNodes,
     availableMemoryNodes,
+    masterToolNodes,
+    masterMiddlewareNodes,
     handleSelectLLMForAgent,
     handleToggleToolForAgent,
     handleToggleMiddlewareForAgent,
     handleToggleMemoryForAgent,
+    handleAddToolRefForAgent,
+    handleRemoveToolRefForAgent,
+    handleAddMiddlewareRefForAgent,
+    handleRemoveMiddlewareRefForAgent,
     showCompileModal,
     setShowCompileModal,
     suggestedParams,
@@ -648,6 +654,8 @@ export function LangGraphStudioView({
           connectedToolIds={connectedToolIds}
           connectedMiddlewareIds={connectedMiddlewareIds}
           connectedMemoryIds={connectedMemoryIds}
+          masterToolNodes={masterToolNodes}
+          masterMiddlewareNodes={masterMiddlewareNodes}
           onSelectLLM={(llmId) =>
             selectedNodeId && handleSelectLLMForAgent(selectedNodeId, llmId)
           }
@@ -655,9 +663,23 @@ export function LangGraphStudioView({
             selectedNodeId &&
             handleToggleToolForAgent(selectedNodeId, toolId, connect)
           }
+          onAddToolRef={(masterToolId) =>
+            selectedNodeId &&
+            handleAddToolRefForAgent(selectedNodeId, masterToolId)
+          }
+          onRemoveToolRef={(toolRefId) =>
+            handleRemoveToolRefForAgent(toolRefId)
+          }
           onToggleMiddleware={(mwId, connect) =>
             selectedNodeId &&
             handleToggleMiddlewareForAgent(selectedNodeId, mwId, connect)
+          }
+          onAddMiddlewareRef={(masterMwId) =>
+            selectedNodeId &&
+            handleAddMiddlewareRefForAgent(selectedNodeId, masterMwId)
+          }
+          onRemoveMiddlewareRef={(mwRefId) =>
+            handleRemoveMiddlewareRefForAgent(mwRefId)
           }
           onToggleMemory={(memId, connect) =>
             selectedNodeId &&
