@@ -59,7 +59,31 @@ export function useStateSimulationManager({
   const [rawStateError, setRawStateError] = useState<string | null>(null);
 
   // Incoming Node State Update payload
-  const [payloadMode, setPayloadMode] = useState<"json" | "form">("json");
+  const [payloadMode, setPayloadMode] = useState<"single" | "json" | "form">(
+    "single",
+  );
+  const [singleChannelKey, setSingleChannelKey] = useState<string>(() => {
+    return stateChannels[0]?.key || "";
+  });
+  const [singleUpdateVal, setSingleUpdateVal] = useState<string>(() => {
+    const first = stateChannels[0];
+    if (first?.type === "number") return "1";
+    if (first?.type === "boolean") return "true";
+    if (first?.type === "messages") {
+      return JSON.stringify(
+        [
+          {
+            id: `msg-${Date.now()}`,
+            role: "assistant",
+            content: "Hello! State transition test.",
+          },
+        ],
+        null,
+        2,
+      );
+    }
+    return '"updated"';
+  });
   const [rawPayloadInput, setRawPayloadInput] = useState(() => {
     const firstChannel = stateChannels[0];
     if (firstChannel?.key === "messages") {
@@ -132,10 +156,29 @@ export function useStateSimulationManager({
         : stateChannels[0]?.reducer || "replace"),
   );
 
-  const matchedCustomReducer = useMemo(
-    () => customReducers.find((r) => r.name === selectedReducer || r.id === selectedReducer),
-    [customReducers, selectedReducer],
-  );
+  const matchedCustomReducer = useMemo(() => {
+    const fromCustom = customReducers.find(
+      (r) => r.name === selectedReducer || r.id === selectedReducer,
+    );
+    if (fromCustom) return fromCustom;
+
+    // Check if any state channel has this custom reducer name
+    const fromChannel = stateChannels.find((c) => c.reducer === selectedReducer);
+    if (fromChannel) {
+      return {
+        id: `channel-reducer-${fromChannel.key}`,
+        name: fromChannel.reducer,
+        targetField: fromChannel.key,
+        code:
+          fromChannel.customReducerCode ||
+          (fromChannel.type === "number"
+            ? "(prev, next) => (prev ?? 0) + (next ?? 1)"
+            : "(prev, next) => next"),
+        description: `Reducer assigned to "${fromChannel.key}" channel`,
+      } as LangGraphCustomReducer;
+    }
+    return undefined;
+  }, [customReducers, selectedReducer, stateChannels]);
 
   const [customPlaygroundCode, setCustomPlaygroundCode] = useState<string>(
     matchedCustomReducer?.code || "(prev, next) => next",
@@ -238,7 +281,20 @@ export function useStateSimulationManager({
   const handleApplyUpdate = useCallback(() => {
     let payload: Record<string, unknown> = {};
 
-    if (payloadMode === "json") {
+    if (payloadMode === "single") {
+      if (!singleChannelKey) {
+        setPayloadError("Please select a channel to update.");
+        return;
+      }
+      let parsedVal: unknown;
+      try {
+        parsedVal = JSON.parse(singleUpdateVal);
+      } catch {
+        parsedVal = singleUpdateVal;
+      }
+      payload = { [singleChannelKey]: parsedVal };
+      setPayloadError(null);
+    } else if (payloadMode === "json") {
       try {
         const parsed = JSON.parse(rawPayloadInput);
         if (
@@ -305,6 +361,8 @@ export function useStateSimulationManager({
     setActiveStepId(newStep.id);
   }, [
     payloadMode,
+    singleChannelKey,
+    singleUpdateVal,
     rawPayloadInput,
     formRows,
     stateChannels,
@@ -391,6 +449,7 @@ export function useStateSimulationManager({
       effectiveCode,
       parsedPrev,
       parsedNext,
+      simulatedState,
     );
 
     setPlaygroundResult(res);
@@ -400,6 +459,7 @@ export function useStateSimulationManager({
     selectedReducer,
     matchedCustomReducer,
     customPlaygroundCode,
+    simulatedState,
   ]);
 
   // Auto-run playground whenever inputs or selected reducer changes
@@ -421,9 +481,13 @@ export function useStateSimulationManager({
       if (firstPreset) {
         setPrevInput(JSON.stringify(firstPreset.prev, null, 2));
         setNextInput(JSON.stringify(firstPreset.next, null, 2));
+      } else {
+        // If no preset, provide current graph state as prev
+        setPrevInput(JSON.stringify(simulatedState, null, 2));
+        setNextInput(JSON.stringify(1, null, 2));
       }
     },
-    [],
+    [simulatedState],
   );
 
   const handleApplyPlaygroundPreset = useCallback(
@@ -432,6 +496,37 @@ export function useStateSimulationManager({
       setNextInput(JSON.stringify(preset.next, null, 2));
     },
     [],
+  );
+
+  const handleLoadStateIntoPlaygroundPrev = useCallback(() => {
+    setPrevInput(JSON.stringify(simulatedState, null, 2));
+  }, [simulatedState]);
+
+  const handleSelectChannelToSimulate = useCallback(
+    (channelKey: string) => {
+      const ch = stateChannels.find((c) => c.key === channelKey);
+      if (!ch) return;
+
+      let defaultVal: unknown;
+      if (ch.type === "number") defaultVal = 1;
+      else if (ch.type === "boolean") defaultVal = true;
+      else if (ch.type === "messages") {
+        defaultVal = [
+          {
+            id: `msg-${Date.now()}`,
+            role: "assistant",
+            content: "Simulated message update",
+          },
+        ];
+      } else if (ch.type === "array") defaultVal = ["new_item"];
+      else if (ch.type === "object") defaultVal = { updated_field: "value" };
+      else defaultVal = "updated value";
+
+      setRawPayloadInput(JSON.stringify({ [ch.key]: defaultVal }, null, 2));
+      setFormRows([{ key: ch.key, valueStr: JSON.stringify(defaultVal) }]);
+      setPayloadError(null);
+    },
+    [stateChannels],
   );
 
   return {
@@ -465,6 +560,11 @@ export function useStateSimulationManager({
     lastSimulationResult,
     handleApplyUpdate,
     handleLoadStateUpdatePreset,
+    handleSelectChannelToSimulate,
+    singleChannelKey,
+    setSingleChannelKey,
+    singleUpdateVal,
+    setSingleUpdateVal,
 
     // Reducer Playground
     selectedReducer,
@@ -480,5 +580,6 @@ export function useStateSimulationManager({
     handleRunPlayground,
     handleSelectReducerForTesting,
     handleApplyPlaygroundPreset,
+    handleLoadStateIntoPlaygroundPrev,
   };
 }

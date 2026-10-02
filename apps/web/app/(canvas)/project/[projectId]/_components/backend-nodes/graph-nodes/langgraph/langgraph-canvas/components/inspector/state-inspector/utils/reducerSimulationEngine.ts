@@ -142,6 +142,7 @@ export function executeReducer(
   customCode: string | undefined,
   prev: unknown,
   next: unknown,
+  state?: Record<string, unknown>,
 ): ReducerExecutionResult {
   const startTime = performance.now();
 
@@ -157,20 +158,31 @@ export function executeReducer(
         };
       }
 
-      // Execute safely in sandbox
+      // Execute safely in sandbox (passes prev, next, and full graph state as 3rd arg)
       const fn = new Function(
         "prev",
         "next",
+        "state",
         `"use strict";
         const customFn = (${code});
         if (typeof customFn === "function") {
-          return customFn(prev, next);
+          return customFn(prev, next, state);
         }
         return customFn;`,
       );
 
-      const res = fn(prev, next);
+      const res = fn(prev, next, state);
       const durationMs = performance.now() - startTime;
+
+      if (typeof res === "number" && isNaN(res)) {
+        return {
+          success: false,
+          error:
+            "Reducer returned NaN. Check arithmetic on undefined properties (e.g. prev.count or prev.message).",
+          durationMs,
+        };
+      }
+
       return { success: true, result: res, durationMs };
     }
 
@@ -339,6 +351,7 @@ export function simulateStateTransition({
       effectiveCode,
       prevValue,
       updateValue,
+      currentState,
     );
 
     if (exec.success) {
