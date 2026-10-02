@@ -1,7 +1,9 @@
 export * from "./constants";
 export * from "./types";
+export * from "./utils/reducerSimulationEngine";
 export * from "./hooks/useStateChannelsManager";
 export * from "./hooks/useCustomReducersManager";
+export * from "./hooks/useStateSimulationManager";
 export * from "./components/StateTabHeader";
 export * from "./components/StateChannelsSection";
 export * from "./components/StateChannelsEmpty";
@@ -14,3 +16,4 @@ export * from "./components/EditCustomReducerForm";
 export * from "./components/CoreChatHistoryCard";
 export * from "./components/CustomReducerItem";
 export * from "./components/TargetVariableCombobox";
+export * from "./components/StateTestingTab";

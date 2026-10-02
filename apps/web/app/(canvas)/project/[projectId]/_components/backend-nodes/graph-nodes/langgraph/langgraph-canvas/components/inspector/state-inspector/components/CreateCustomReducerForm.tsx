@@ -41,7 +41,7 @@ export function CreateCustomReducerForm({
   onCancel,
 }: CreateCustomReducerFormProps) {
   return (
-    <div className="flex flex-col gap-2.5 p-3 rounded-xl border border-purple-500/40 bg-purple-500/5 shadow-md">
+    <div id="create-custom-reducer-form" className="flex flex-col gap-2.5 p-3 rounded-xl border border-purple-500/40 bg-purple-500/5 shadow-md">
       <div className="flex items-center justify-between">
         <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
           <Code2 className="w-3.5 h-3.5" /> Define Custom Reducer

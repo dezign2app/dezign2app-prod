@@ -1,18 +1,20 @@
 import React from "react";
-import { Link2 } from "lucide-react";
+import { Link2, Play } from "lucide-react";
 import { Badge } from "@workspace/ui/components/badge";
 
 interface CoreChatHistoryCardProps {
   hasCustomAddMessages: boolean;
   onCustomize: () => void;
+  onTest?: () => void;
 }
 
 export function CoreChatHistoryCard({
   hasCustomAddMessages,
   onCustomize,
+  onTest,
 }: CoreChatHistoryCardProps) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div id="core-chat-history-card" className="flex flex-col gap-1.5">
       <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 px-1">
         Chat History Reducer (Core)
       </span>
@@ -37,12 +39,24 @@ export function CoreChatHistoryCard({
               </span>
             </div>
           </div>
-          <Badge
-            variant="outline"
-            className="text-[9px] px-1.5 py-0.5 border-blue-500/30 text-blue-300 font-sans"
-          >
-            Built-in
-          </Badge>
+          <div className="flex items-center gap-1">
+            {onTest && (
+              <button
+                type="button"
+                onClick={onTest}
+                className="text-emerald-400 hover:text-emerald-300 font-semibold cursor-pointer text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30"
+                title="Test add_messages in Reducer Playground"
+              >
+                <Play className="w-2.5 h-2.5 fill-current" /> Test
+              </button>
+            )}
+            <Badge
+              variant="outline"
+              className="text-[9px] px-1.5 py-0.5 border-blue-500/30 text-blue-300 font-sans"
+            >
+              Built-in
+            </Badge>
+          </div>
         </div>
         <code className="text-[9px] text-blue-200/90 line-clamp-3 whitespace-pre-wrap font-mono bg-background/50 px-2 py-1.5 rounded-lg border border-blue-500/20">
           {"(prev, next) => Array.isArray(prev) ? [...prev, ...(Array.isArray(next) ? next : [next])] : next"}

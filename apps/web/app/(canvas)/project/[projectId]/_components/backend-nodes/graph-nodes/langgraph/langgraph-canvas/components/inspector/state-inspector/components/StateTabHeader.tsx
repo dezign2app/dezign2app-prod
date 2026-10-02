@@ -1,5 +1,4 @@
-import React from "react";
-import { Database, Plus, X } from "lucide-react";
+import { Database, Plus, X, FlaskConical } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 
 interface StateTabHeaderProps {
@@ -7,6 +6,7 @@ interface StateTabHeaderProps {
   reducerCount: number;
   onAddField: () => void;
   onClose?: () => void;
+  onOpenTesting?: () => void;
 }
 
 export function StateTabHeader({
@@ -14,6 +14,7 @@ export function StateTabHeader({
   reducerCount,
   onAddField,
   onClose,
+  onOpenTesting,
 }: StateTabHeaderProps) {
   return (
     <div className="flex items-center justify-between border-b border-border/50 pb-3">
@@ -32,6 +33,17 @@ export function StateTabHeader({
       </div>
 
       <div className="flex items-center gap-1.5">
+        {onOpenTesting && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs border-emerald-500/30 text-emerald-400 gap-1 font-semibold hover:border-emerald-500/60 hover:bg-emerald-500/10"
+            onClick={onOpenTesting}
+            title="Open Reducer & State Testing Sandbox"
+          >
+            <FlaskConical className="w-3.5 h-3.5" /> Test State
+          </Button>
+        )}
         <Button
           size="sm"
           variant="outline"
@@ -55,3 +67,4 @@ export function StateTabHeader({
     </div>
   );
 }
+

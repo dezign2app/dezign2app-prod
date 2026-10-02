@@ -1,5 +1,5 @@
 import React from "react";
-import { Trash2, Code2, Lock } from "lucide-react";
+import { Trash2, Code2, Lock, Play, ArrowDown } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
 import {
@@ -23,6 +23,9 @@ interface StateChannelItemProps {
     changes: Partial<LangGraphStateChannel>,
   ) => void;
   onDeleteField: (index: number) => void;
+  onTestChannel?: (channelKey: string, reducerName: string) => void;
+  onStartEditCustomReducer?: (reducer: LangGraphCustomReducer) => void;
+  onAddCustomReducerForField?: (fieldKey: string) => void;
 }
 
 export function StateChannelItem({
@@ -31,9 +34,16 @@ export function StateChannelItem({
   customReducers,
   onUpdateField,
   onDeleteField,
+  onTestChannel,
+  onStartEditCustomReducer,
+  onAddCustomReducerForField,
 }: StateChannelItemProps) {
   const isCustom = !BUILT_IN_REDUCERS.some((r) => r.name === ch.reducer);
   const isBuiltin = ch.key === "messages";
+  const matchedCustom = customReducers.find(
+    (r) => r.name === ch.reducer || r.id === ch.reducer || r.targetField === ch.key,
+  );
+
 
   return (
     <div
@@ -74,8 +84,19 @@ export function StateChannelItem({
             }}
           />
         </div>
-        {!isBuiltin && (
-          <div className="self-end pb-0.5">
+        <div className="self-end pb-0.5 flex items-center gap-0.5">
+          {onTestChannel && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 shrink-0 cursor-pointer"
+              onClick={() => onTestChannel(ch.key, ch.reducer)}
+              title={`Test ${ch.key} reducer in testing tab`}
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+            </Button>
+          )}
+          {!isBuiltin && (
             <Button
               variant="ghost"
               size="icon"
@@ -85,8 +106,8 @@ export function StateChannelItem({
             >
               <Trash2 className="w-3.5 h-3.5" />
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/40">
@@ -130,99 +151,117 @@ export function StateChannelItem({
           <div className="flex items-center justify-between">
             <Label className="text-[10px] text-muted-foreground">Reducer</Label>
             {isCustom && (
-              <span className="text-[9px] text-purple-400 font-mono font-bold">
+              <span className="text-[9px] text-purple-400 font-mono font-semibold">
                 custom
               </span>
             )}
           </div>
-          <Select
-            disabled={isBuiltin}
-            value={
-              isBuiltin
-                ? "add_messages"
-                : ch.reducer === "add_message"
-                  ? "add_messages"
-                  : ch.reducer
-            }
-            onValueChange={(v) => {
-              const matchedCustom = customReducers.find((r) => r.name === v);
-              onUpdateField(idx, {
-                reducer: v,
-                customReducerCode:
-                  v === "custom"
-                    ? ch.customReducerCode || "(prev, next) => next"
-                    : matchedCustom?.code,
-              });
-            }}
-          >
-            <SelectTrigger
-              className={`h-7 text-xs bg-background font-mono ${isBuiltin ? "cursor-not-allowed opacity-80" : ""}`}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="font-mono text-xs">
-              <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase">
-                Built-in Reducers
-              </div>
-              {BUILT_IN_REDUCERS.map((r) => (
-                <SelectItem key={r.name} value={r.name}>
-                  {r.label}
-                </SelectItem>
-              ))}
-
-              <div className="px-2 py-1 text-[10px] font-bold text-purple-400 uppercase border-t border-border/40 mt-1">
-                Developer Defined
-              </div>
-              <SelectItem value="custom" className="text-purple-300 font-semibold">
-                custom (developer defined inline)
-              </SelectItem>
-
-              {customReducers.length > 0 && (
-                <>
-                  <div className="px-2 py-1 text-[10px] font-bold text-purple-400 uppercase border-t border-border/40 mt-1">
-                    Custom Reducers
+          <div className="flex items-center gap-1">
+            <div className="flex-1 min-w-0">
+              <Select
+                disabled={isBuiltin}
+                value={
+                  isBuiltin
+                    ? "add_messages"
+                    : ch.reducer === "add_message"
+                      ? "add_messages"
+                      : ch.reducer
+                }
+                onValueChange={(v) => {
+                  if (v === "__CREATE_NEW_CUSTOM__") {
+                    onAddCustomReducerForField?.(ch.key);
+                    return;
+                  }
+                  const matched = customReducers.find((r) => r.name === v);
+                  onUpdateField(idx, {
+                    reducer: v,
+                    customReducerCode: matched?.code || ch.customReducerCode,
+                  });
+                }}
+              >
+                <SelectTrigger
+                  className={`h-7 text-xs bg-background font-mono ${isBuiltin ? "cursor-not-allowed opacity-80" : ""}`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="font-mono text-xs">
+                  <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase">
+                    Built-in Reducers
                   </div>
-                  {customReducers.map((r) => (
-                    <SelectItem key={r.id} value={r.name}>
-                      {r.name} {r.targetField ? `(tied to ${r.targetField})` : "(custom)"}
+                  {BUILT_IN_REDUCERS.map((r) => (
+                    <SelectItem key={r.name} value={r.name}>
+                      {r.label}
                     </SelectItem>
                   ))}
-                </>
-              )}
-            </SelectContent>
-          </Select>
+
+                  {customReducers.length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-[10px] font-bold text-purple-400 uppercase border-t border-border/40 mt-1">
+                        Custom Reducers
+                      </div>
+                      {customReducers.map((r) => (
+                        <SelectItem key={r.id} value={r.name} className="text-purple-300">
+                          {r.name} {r.targetField ? `(tied to ${r.targetField})` : "(custom)"}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+
+                  {onAddCustomReducerForField && (
+                    <SelectItem
+                      value="__CREATE_NEW_CUSTOM__"
+                      className="text-purple-400 font-semibold cursor-pointer border-t border-border/30 mt-1"
+                    >
+                      + Add Custom Reducer...
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {isCustom && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  if (matchedCustom && onStartEditCustomReducer) {
+                    onStartEditCustomReducer(matchedCustom);
+                  } else if (onAddCustomReducerForField) {
+                    onAddCustomReducerForField(ch.key);
+                  }
+                }}
+                className="h-7 w-7 text-purple-400 hover:text-purple-200 hover:bg-purple-500/20 shrink-0 rounded-md border border-purple-500/30 cursor-pointer"
+                title={
+                  matchedCustom
+                    ? `Edit '${matchedCustom.name}' reducer in the section below`
+                    : "Configure custom reducer in the section below"
+                }
+              >
+                <ArrowDown className="w-3.5 h-3.5" />
+              </Button>
+            )}
+
+            {(ch.reducer === "add_messages" || ch.reducer === "add_message") && !isCustom && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  const el =
+                    document.getElementById("core-chat-history-card") ||
+                    document.getElementById("reducers-section");
+                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+                className="h-7 w-7 text-blue-400 hover:text-blue-200 hover:bg-blue-500/20 shrink-0 rounded-md border border-blue-500/30 cursor-pointer"
+                title="View core chat history reducer in the section below"
+              >
+                <ArrowDown className="w-3.5 h-3.5" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
-
-      {isCustom && (
-        <div className="flex flex-col gap-1.5 p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/30">
-          <div className="flex items-center justify-between">
-            <Label className="text-[10px] font-bold text-purple-300 flex items-center gap-1.5">
-              <Code2 className="w-3.5 h-3.5 text-purple-400" />
-              Custom Reducer for{" "}
-              <span className="font-mono text-foreground font-semibold">
-                "{ch.key || "unnamed"}"
-              </span>
-            </Label>
-            <span className="text-[9px] text-muted-foreground font-mono">
-              (prev, next) =&gt; combined
-            </span>
-          </div>
-          <LocalInput
-            value={ch.customReducerCode ?? "(prev, next) => next"}
-            onChange={(e) =>
-              onUpdateField(idx, {
-                customReducerCode: e.target.value,
-              })
-            }
-            className="font-mono text-xs bg-background h-8 border-purple-500/30 text-purple-200 placeholder:text-muted-foreground"
-            placeholder="(prev, next) => Array.isArray(prev) ? [...prev, ...next] : next"
-          />
-          <p className="text-[9px] text-muted-foreground leading-tight">
-            Developer-defined merge function executed whenever this field receives an update.
-          </p>
-        </div>
-      )}
 
       {(ch.type === "messages" || ch.reducer === "add_messages") && (
         <div className="p-1.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-sans text-muted-foreground flex items-center gap-1.5">
