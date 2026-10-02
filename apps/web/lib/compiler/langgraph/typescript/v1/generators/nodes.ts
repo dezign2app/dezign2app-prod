@@ -68,7 +68,23 @@ export function buildAgentNodeFile(
   for (const su of stateUpdates) {
     if (su.channelKey === "messages") continue;
     const key = toCamelCase(su.channelKey);
-    const val = su.value ? `${su.value}` : `state.${key}`;
+    let val: string;
+    if (su.source === "structured_field" || su.schemaField) {
+      const fieldKey = su.schemaField || su.value;
+      val = `response?.${fieldKey}`;
+    } else if (su.source === "structured_full") {
+      val = `response`;
+    } else if (su.source === "message_content") {
+      val = `typeof response?.content === "string" ? response.content : JSON.stringify(response?.content ?? "")`;
+    } else if (su.source === "message_object") {
+      val = `response`;
+    } else if (su.source === "expression") {
+      val = su.value || `state.${key}`;
+    } else if (su.source === "literal") {
+      val = JSON.stringify(su.value ?? "");
+    } else {
+      val = su.value ? `${su.value}` : `state.${key}`;
+    }
     returnEntries.push(`    ${key}: ${val},`);
   }
 

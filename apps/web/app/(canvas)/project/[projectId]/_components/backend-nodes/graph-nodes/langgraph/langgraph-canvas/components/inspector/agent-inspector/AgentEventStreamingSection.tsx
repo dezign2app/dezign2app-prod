@@ -270,11 +270,15 @@ function generateSamplePreview(
 interface AgentEventStreamingSectionProps {
   selectedAgentData: AgentNodeData;
   onUpdateAgent: (changes: Partial<AgentNodeData>) => void;
+  embedded?: boolean;
+  hideHeader?: boolean;
 }
 
 export function AgentEventStreamingSection({
   selectedAgentData,
   onUpdateAgent,
+  embedded = false,
+  hideHeader = false,
 }: AgentEventStreamingSectionProps) {
   const [previewTab, setPreviewTab] = useState<"token" | "tool" | "state">("token");
   const [copied, setCopied] = useState(false);
@@ -382,52 +386,60 @@ export function AgentEventStreamingSection({
   };
 
   return (
-    <div className="flex flex-col gap-4 p-3 bg-cyan-950/10 dark:bg-cyan-950/20 rounded-xl border border-cyan-500/30">
+    <div
+      className={
+        embedded
+          ? "flex flex-col gap-4"
+          : "flex flex-col gap-4 p-3 bg-cyan-950/10 dark:bg-cyan-950/20 rounded-xl border border-cyan-500/30"
+      }
+    >
       {/* ─── Header & Toggle Switch ─────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div
-            className={`p-1.5 rounded-md border transition-colors ${
-              isEnabled
-                ? "bg-cyan-500/20 border-cyan-500/40 text-cyan-500 animate-pulse"
-                : "bg-secondary/30 border-border text-muted-foreground"
-            }`}
-          >
-            <Radio className="w-4 h-4" />
+      {!hideHeader && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div
+              className={`p-1.5 rounded-md border transition-colors ${
+                isEnabled
+                  ? "bg-cyan-500/20 border-cyan-500/40 text-cyan-500 animate-pulse"
+                  : "bg-secondary/30 border-border text-muted-foreground"
+              }`}
+            >
+              <Radio className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                Event Streaming
+                {isEnabled && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 font-mono font-semibold">
+                    v3 Active
+                  </span>
+                )}
+              </h3>
+              <p className="text-[10px] font-mono text-muted-foreground">
+                streamEvents(..., version="v3")
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-              Event Streaming
-              {isEnabled && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 font-mono font-semibold">
-                  v3 Active
-                </span>
-              )}
-            </h3>
-            <p className="text-[10px] font-mono text-muted-foreground">
-              streamEvents(..., version="v3")
-            </p>
-          </div>
-        </div>
 
-        <Switch
-          checked={isEnabled}
-          onCheckedChange={(enabled) => {
-            onUpdateAgent({
-              streamConfig: {
-                version: "v3",
-                selectedEvents: DEFAULT_SELECTED_STREAM_EVENTS,
-                envelope: DEFAULT_STREAM_ENVELOPE,
-                transformer: {
-                  mode: DEFAULT_STREAM_TRANSFORMER_MODE,
+          <Switch
+            checked={isEnabled}
+            onCheckedChange={(enabled) => {
+              onUpdateAgent({
+                streamConfig: {
+                  version: "v3",
+                  selectedEvents: DEFAULT_SELECTED_STREAM_EVENTS,
+                  envelope: DEFAULT_STREAM_ENVELOPE,
+                  transformer: {
+                    mode: DEFAULT_STREAM_TRANSFORMER_MODE,
+                  },
+                  ...streamConfig,
+                  enabled,
                 },
-                ...streamConfig,
-                enabled,
-              },
-            });
-          }}
-        />
-      </div>
+              });
+            }}
+          />
+        </div>
+      )}
 
       {isEnabled && (
         <div className="flex flex-col gap-4 pt-2 border-t border-cyan-500/20">

@@ -393,19 +393,60 @@ export async function executeBrowserLangGraph(
 
         // Apply stateUpdates configured on agent
         for (const update of agentData.stateUpdates || []) {
-          let val: unknown = update.value;
-          if (typeof val === "string") {
-            try {
-              val = JSON.parse(val);
-            } catch {
-              // Keep plain string
+          let val: unknown;
+          if (update.source === "structured_field" || update.schemaField) {
+            const fieldKey = update.schemaField || update.value;
+            const parsedObj = outputDelta.structuredResponse as
+              | Record<string, unknown>
+              | undefined;
+            val = fieldKey && parsedObj ? parsedObj[fieldKey] : undefined;
+          } else if (update.source === "structured_full") {
+            val = outputDelta.structuredResponse;
+          } else if (update.source === "message_content") {
+            val = latestAssistantResponse;
+          } else if (update.source === "message_object") {
+            const msgs = (outputDelta as Record<string, unknown>).messages;
+            val = Array.isArray(msgs) && msgs.length > 0 ? msgs[msgs.length - 1] : undefined;
+          } else {
+            val = update.value;
+            if (typeof val === "string") {
+              try {
+                val = JSON.parse(val);
+              } catch {
+                // Keep plain string
+              }
             }
           }
-          if (update.mode === "append" && Array.isArray(state[update.channelKey])) {
+
+          if (val === undefined) continue;
+
+          const targetChannel = stateChannels.find(
+            (c) => c.key === update.channelKey,
+          );
+          const channelReducer = targetChannel?.reducer;
+
+          if (
+            (update.mode === "append" ||
+              channelReducer === "append" ||
+              channelReducer === "concat_array") &&
+            Array.isArray(state[update.channelKey])
+          ) {
             state[update.channelKey] = [
               ...(state[update.channelKey] as unknown[]),
-              val,
+              ...(Array.isArray(val) ? val : [val]),
             ];
+          } else if (
+            (channelReducer === "merge_object" ||
+              targetChannel?.type === "object") &&
+            typeof state[update.channelKey] === "object" &&
+            typeof val === "object" &&
+            state[update.channelKey] !== null &&
+            val !== null
+          ) {
+            state[update.channelKey] = {
+              ...(state[update.channelKey] as Record<string, unknown>),
+              ...(val as Record<string, unknown>),
+            };
           } else {
             state[update.channelKey] = val;
           }

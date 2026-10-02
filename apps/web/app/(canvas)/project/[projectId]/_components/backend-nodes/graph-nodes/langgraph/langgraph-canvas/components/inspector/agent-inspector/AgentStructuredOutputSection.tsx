@@ -78,7 +78,7 @@ function schemaFieldsToJsonSchema(fields: Parameter[]): string {
   );
 }
 
-function parseSchemaJsonToFields(schemaJson?: string): {
+export function parseSchemaJsonToFields(schemaJson?: string): {
   fields: Parameter[];
   rawText: string;
 } {
@@ -183,11 +183,15 @@ interface AgentStructuredOutputSectionProps {
   updateResponseFormat: (
     changes: Partial<LangGraphAgentResponseFormatConfig>,
   ) => void;
+  embedded?: boolean;
+  hideHeader?: boolean;
 }
 
 export function AgentStructuredOutputSection({
   rfConfig,
   updateResponseFormat,
+  embedded = false,
+  hideHeader = false,
 }: AgentStructuredOutputSectionProps) {
   const [editorMode, setEditorMode] = useState<RequestBodyMode>("field_builder");
 
@@ -254,36 +258,44 @@ export function AgentStructuredOutputSection({
   );
 
   return (
-    <div className="flex flex-col gap-4 p-3 bg-secondary/10 rounded-xl border border-border/50">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div
-            className={`p-1.5 rounded-md border ${
-              rfConfig.enabled
-                ? "bg-primary/10 border-primary/30 text-primary"
-                : "bg-secondary/30 border-border text-muted-foreground"
-            }`}
-          >
-            <FileJson className="w-4 h-4" />
+    <div
+      className={
+        embedded
+          ? "flex flex-col gap-4"
+          : "flex flex-col gap-4 p-3 bg-secondary/10 rounded-xl border border-border/50"
+      }
+    >
+      {!hideHeader && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div
+              className={`p-1.5 rounded-md border ${
+                rfConfig.enabled
+                  ? "bg-primary/10 border-primary/30 text-primary"
+                  : "bg-secondary/30 border-border text-muted-foreground"
+              }`}
+            >
+              <FileJson className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                Structured Output
+              </h3>
+              <p className="text-[10px] font-mono text-muted-foreground">
+                createAgent({`{ responseFormat: ... }`})
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-              Structured Output
-            </h3>
-            <p className="text-[10px] font-mono text-muted-foreground">
-              createAgent({`{ responseFormat: ... }`})
-            </p>
-          </div>
-        </div>
 
-        <Switch
-          checked={Boolean(rfConfig.enabled)}
-          onCheckedChange={(enabled) => updateResponseFormat({ enabled })}
-        />
-      </div>
+          <Switch
+            checked={Boolean(rfConfig.enabled)}
+            onCheckedChange={(enabled) => updateResponseFormat({ enabled })}
+          />
+        </div>
+      )}
 
       {rfConfig.enabled && (
-        <div className="flex flex-col gap-4 pt-2 border-t border-border/50">
+        <div className={hideHeader ? "flex flex-col gap-4" : "flex flex-col gap-4 pt-2 border-t border-border/50"}>
           {/* Strategy Choice: Provider vs Tool vs Auto */}
           <div className="flex flex-col gap-2">
             <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">

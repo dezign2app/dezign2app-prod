@@ -586,15 +586,33 @@ export async function executeServerLangGraph(
         }
 
         for (const update of agentData.stateUpdates || []) {
-          let val: unknown = update.value;
-          if (typeof val === "string") {
-            try {
-              val = JSON.parse(val);
-            } catch {
-              // plain text
+          let val: unknown;
+          if (update.source === "structured_field" || update.schemaField) {
+            const fieldKey = update.schemaField || update.value;
+            const parsedObj = outputDelta.structuredResponse as
+              | Record<string, unknown>
+              | undefined;
+            val = fieldKey && parsedObj ? parsedObj[fieldKey] : undefined;
+          } else if (update.source === "structured_full") {
+            val = outputDelta.structuredResponse;
+          } else if (update.source === "message_content") {
+            val = latestAssistantResponse;
+          } else if (update.source === "message_object") {
+            const msgs = (outputDelta as Record<string, unknown>).messages;
+            val = Array.isArray(msgs) && msgs.length > 0 ? msgs[0] : undefined;
+          } else {
+            val = update.value;
+            if (typeof val === "string") {
+              try {
+                val = JSON.parse(val);
+              } catch {
+                // plain text
+              }
             }
           }
-          outputDelta[update.channelKey] = val;
+          if (val !== undefined) {
+            outputDelta[update.channelKey] = val;
+          }
         }
       }
 

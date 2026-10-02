@@ -42,12 +42,14 @@ import {
 
 interface UseCanvasConnectionsProps {
   nodes: LangGraphCanvasNode[];
+  edges?: LangGraphCanvasEdge[];
   setNodes: React.Dispatch<React.SetStateAction<LangGraphCanvasNode[]>>;
   setEdges: React.Dispatch<React.SetStateAction<LangGraphCanvasEdge[]>>;
 }
 
 export function useCanvasConnections({
   nodes,
+  edges,
   setNodes,
   setEdges,
 }: UseCanvasConnectionsProps) {
@@ -169,6 +171,71 @@ export function useCanvasConnections({
       if (isLLMSource && !isLLMTarget) return false;
       if (isLLMTarget && !isLLMSource) return false;
 
+      const targetNode = nodes.find((n) => n.id === connection.target);
+      const isAgentOrStepTarget =
+        targetNode?.type === LANGGRAPH_CANVAS_NODE_NODE ||
+        targetNode?.type === LANGGRAPH_CANVAS_NODE_AGENT ||
+        targetNode?.type === LANGGRAPH_CANVAS_NODE_STEP;
+
+      // Only ToolRef nodes can connect to Agent/Step tool_in
+      if (isAgentOrStepTarget && connection.targetHandle === HANDLE_TOOL_IN) {
+        const isToolRefSource =
+          sourceNode?.type === LANGGRAPH_CANVAS_NODE_TOOL_REF ||
+          Boolean(connection.source?.startsWith("tool_ref_"));
+        if (!isToolRefSource) return false;
+
+        // Restrict: Cannot attach the same master tool twice to the same agent
+        if (edges) {
+          const sourceMasterId =
+            sourceNode?.type === LANGGRAPH_CANVAS_NODE_TOOL_REF
+              ? (sourceNode.data as { toolRef?: string })?.toolRef
+              : sourceNode?.id;
+
+          const alreadyAttached = edges.some((e) => {
+            if (e.target !== connection.target || e.targetHandle !== HANDLE_TOOL_IN) return false;
+            const existingNode = nodes.find((n) => n.id === e.source);
+            const existingMasterId =
+              existingNode?.type === LANGGRAPH_CANVAS_NODE_TOOL_REF
+                ? (existingNode.data as { toolRef?: string })?.toolRef
+                : existingNode?.id;
+            return existingMasterId === sourceMasterId;
+          });
+
+          if (alreadyAttached) return false;
+        }
+      }
+
+      // Only MiddlewareRef nodes can connect to Agent/Step middleware_in
+      if (
+        isAgentOrStepTarget &&
+        connection.targetHandle === HANDLE_MIDDLEWARE_IN
+      ) {
+        const isMiddlewareRefSource =
+          sourceNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF ||
+          Boolean(connection.source?.startsWith("mw_ref_"));
+        if (!isMiddlewareRefSource) return false;
+
+        // Restrict: Cannot attach the same master middleware twice to the same agent
+        if (edges) {
+          const sourceMasterId =
+            sourceNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF
+              ? (sourceNode.data as { middlewareRef?: string })?.middlewareRef
+              : sourceNode?.id;
+
+          const alreadyAttached = edges.some((e) => {
+            if (e.target !== connection.target || e.targetHandle !== HANDLE_MIDDLEWARE_IN) return false;
+            const existingNode = nodes.find((n) => n.id === e.source);
+            const existingMasterId =
+              existingNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF
+                ? (existingNode.data as { middlewareRef?: string })?.middlewareRef
+                : existingNode?.id;
+            return existingMasterId === sourceMasterId;
+          });
+
+          if (alreadyAttached) return false;
+        }
+      }
+
       if (isToolSource && !isToolTarget) return false;
       if (isToolTarget && !isToolSource) return false;
 
@@ -190,7 +257,7 @@ export function useCanvasConnections({
 
       return true;
     },
-    [nodes],
+    [nodes, edges],
   );
 
   const onConnect = useCallback(
@@ -210,6 +277,46 @@ export function useCanvasConnections({
           params.sourceHandle === HANDLE_MIDDLEWARE_OUT ||
           params.targetHandle === HANDLE_MIDDLEWARE_IN ||
           Boolean(params.source?.startsWith("mw_"));
+
+        if (isTool) {
+          const srcNode = nodes.find((n) => n.id === params.source);
+          const srcMasterId =
+            srcNode?.type === LANGGRAPH_CANVAS_NODE_TOOL_REF
+              ? (srcNode.data as { toolRef?: string })?.toolRef
+              : srcNode?.id;
+
+          const alreadyAttached = eds.some((e) => {
+            if (e.target !== params.target || e.targetHandle !== HANDLE_TOOL_IN) return false;
+            const existingNode = nodes.find((n) => n.id === e.source);
+            const existingMasterId =
+              existingNode?.type === LANGGRAPH_CANVAS_NODE_TOOL_REF
+                ? (existingNode.data as { toolRef?: string })?.toolRef
+                : existingNode?.id;
+            return existingMasterId === srcMasterId;
+          });
+
+          if (alreadyAttached) return eds;
+        }
+
+        if (isMiddleware) {
+          const srcNode = nodes.find((n) => n.id === params.source);
+          const srcMasterId =
+            srcNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF
+              ? (srcNode.data as { middlewareRef?: string })?.middlewareRef
+              : srcNode?.id;
+
+          const alreadyAttached = eds.some((e) => {
+            if (e.target !== params.target || e.targetHandle !== HANDLE_MIDDLEWARE_IN) return false;
+            const existingNode = nodes.find((n) => n.id === e.source);
+            const existingMasterId =
+              existingNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF
+                ? (existingNode.data as { middlewareRef?: string })?.middlewareRef
+                : existingNode?.id;
+            return existingMasterId === srcMasterId;
+          });
+
+          if (alreadyAttached) return eds;
+        }
         const isMemory =
           params.sourceHandle === HANDLE_MEMORY_OUT ||
           params.targetHandle === HANDLE_MEMORY_IN ||

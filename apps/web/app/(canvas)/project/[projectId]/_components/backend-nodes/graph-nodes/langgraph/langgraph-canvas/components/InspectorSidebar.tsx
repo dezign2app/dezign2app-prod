@@ -72,6 +72,12 @@ export interface InspectorSidebarProps {
   connectedToolIds?: string[];
   connectedMiddlewareIds?: string[];
   connectedMemoryIds?: string[];
+  masterToolNodes?: ToolNode[];
+  masterMiddlewareNodes?: MiddlewareNode[];
+  onAddToolRef?: (masterToolId: string) => void;
+  onRemoveToolRef?: (toolRefId: string) => void;
+  onAddMiddlewareRef?: (masterMwId: string) => void;
+  onRemoveMiddlewareRef?: (mwRefId: string) => void;
   onSelectLLM?: (llmId: string | null) => void;
   onToggleTool?: (toolId: string, connect: boolean) => void;
   onToggleMiddleware?: (mwId: string, connect: boolean) => void;
@@ -132,6 +138,12 @@ export function InspectorSidebar({
   connectedToolIds,
   connectedMiddlewareIds,
   connectedMemoryIds,
+  masterToolNodes,
+  masterMiddlewareNodes,
+  onAddToolRef,
+  onRemoveToolRef,
+  onAddMiddlewareRef,
+  onRemoveMiddlewareRef,
   onSelectLLM,
   onToggleTool,
   onToggleMiddleware,
@@ -348,6 +360,9 @@ export function InspectorSidebar({
           availableToolNodes={availableToolNodes}
           availableMiddlewareNodes={availableMiddlewareNodes}
           availableMemoryNodes={availableMemoryNodes}
+          masterToolNodes={masterToolNodes}
+          masterMiddlewareNodes={masterMiddlewareNodes}
+          nodes={nodes}
           connectedRoutes={connectedRoutes}
           connectedLLMId={connectedLLMId}
           connectedToolIds={connectedToolIds}
@@ -355,7 +370,11 @@ export function InspectorSidebar({
           connectedMemoryIds={connectedMemoryIds}
           onSelectLLM={onSelectLLM}
           onToggleTool={onToggleTool}
+          onAddToolRef={onAddToolRef}
+          onRemoveToolRef={onRemoveToolRef}
           onToggleMiddleware={onToggleMiddleware}
+          onAddMiddlewareRef={onAddMiddlewareRef}
+          onRemoveMiddlewareRef={onRemoveMiddlewareRef}
           onToggleMemory={onToggleMemory}
           onDeleteStep={onDeleteStep}
           onUpdateStep={onUpdateStep}
@@ -366,6 +385,7 @@ export function InspectorSidebar({
           onUpdateMemory={onUpdateMemory}
           onUpdateOutput={onUpdateOutput}
           stateChannels={stateChannels}
+          customReducers={customReducers}
           onClose={onClose}
         />
       )}
