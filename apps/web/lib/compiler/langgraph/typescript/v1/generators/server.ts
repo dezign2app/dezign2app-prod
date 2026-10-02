@@ -86,7 +86,7 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
       })();
 
       const threadIdLine = hasMemory
-        ? `\n    const threadId = (typeof req.body === "object" && req.body !== null && "thread_id" in req.body && typeof req.body.thread_id === "string") ? req.body.thread_id : (typeof req.headers["x-thread-id"] === "string" ? req.headers["x-thread-id"] : "default");`
+        ? `\n    const threadId = (typeof req.body === "object" && req.body !== null && "thread_id" in req.body && typeof req.body.thread_id === "string") ? req.body.thread_id : (typeof req.headers["x-thread-id"] === "string" ? req.headers["x-thread-id"] : crypto.randomUUID());`
         : "";
 
       const configLine = hasMemory
@@ -118,7 +118,7 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
     try {${threadIdLine}
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
+      res.setHeader("Connection", "keep-alive");${hasMemory ? `\n      res.setHeader("X-Thread-Id", threadId);\n      res.write(\`data: \${JSON.stringify({ type: "session", thread_id: threadId })}\\n\\n\`);` : ""}
 
       const state: Partial<${toPascalCase(ctx.graphId)}StateUpdateType> = ${stateInit};${preInvokeBlock}
       const streamOptions = { streamMode: "messages"${configLine ? `, ${configLine.replace(/^, /, "")}` : ""} };
@@ -167,7 +167,7 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
       const state: Partial<${toPascalCase(ctx.graphId)}StateUpdateType> = ${stateInit};${preInvokeBlock}
       
       // Async background execution: acknowledge caller immediately with 202 Accepted
-      res.status(202).json({ ok: true, status: "processing"${hasMemory ? `, threadId` : ""} });
+      res.status(202).json({ ok: true, status: "processing"${hasMemory ? `, thread_id: threadId` : ""} });
 
       // Run graph asynchronously with promise rejection handling
       ${graphVarName}.invoke(state${configLine}).then((result) => {${postInvokeBlock}
@@ -200,7 +200,7 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
     try {${threadIdLine}
       const state: Partial<${toPascalCase(ctx.graphId)}StateUpdateType> = ${stateInit};${preInvokeBlock}
       const result = await ${graphVarName}.invoke(state${configLine});${postInvokeBlock}
-      res.json({ ok: true, result: ${resultExpr} });
+      res.json({ ok: true, ${hasMemory ? `thread_id: threadId, ` : ""}result: ${resultExpr} });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("[${route.method} ${normalizedRoutePath}] error:", message);
@@ -217,7 +217,7 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
 
   return `import "dotenv/config";
 import express, { type Request, type Response } from "express";
-import { ${graphVarName} } from "./graph.js";
+${hasMemory ? `import crypto from "node:crypto";\n` : ""}import { ${graphVarName} } from "./graph.js";
 import type { ${toPascalCase(ctx.graphId)}StateUpdateType } from "./state.js";
 
 /**
@@ -237,7 +237,29 @@ ${portEnvLine}
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ ok: true, agent: ${JSON.stringify(agentLabel)} });
 });
-
+${hasMemory ? `
+// ── Thread State & History ───────────────────────────────────────────────────
+app.get("/api/threads/:threadId/history", async (req: Request, res: Response) => {
+  try {
+    const { threadId } = req.params;
+    const snapshot = await ${graphVarName}.getState({ configurable: { thread_id: threadId } });
+    const messages = (snapshot.values && typeof snapshot.values === "object" && "messages" in snapshot.values)
+      ? (snapshot.values as Record<string, unknown>).messages
+      : [];
+    res.json({
+      ok: true,
+      thread_id: threadId,
+      state: snapshot.values || {},
+      messages: messages || [],
+      next: snapshot.next || [],
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[GET /api/threads/:threadId/history] error:", message);
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+` : ""}
 // ── Agent routes ──────────────────────────────────────────────────────────────
 ${routeHandlers}
 

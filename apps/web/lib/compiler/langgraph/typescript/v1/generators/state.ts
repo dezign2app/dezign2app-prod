@@ -37,6 +37,30 @@ export function buildStateFile(ctx: CompileContext): string {
       continue;
     }
 
+    if (ch.reducer === "custom" || ch.customReducerCode) {
+      const typeMap: Record<string, string> = {
+        string: "string",
+        number: "number",
+        boolean: "boolean",
+        array: "unknown[]",
+        object: "Record<string, unknown>",
+        json: "Record<string, unknown>",
+        messages: "BaseMessage[]",
+      };
+      const tsType = typeMap[ch.type] || "unknown";
+      const customFn = (ch.customReducerCode || "(prev, next) => next").trim();
+      const defaultVal =
+        ch.defaultValue !== undefined && ch.defaultValue !== ""
+          ? JSON.stringify(ch.defaultValue)
+          : undefined;
+      channelLines.push(
+        `  ${field}: Annotation<${tsType}>({
+    reducer: ${customFn},${defaultVal !== undefined ? `\n    default: () => ${defaultVal},` : ""}
+  }),`,
+      );
+      continue;
+    }
+
     if (ch.type === "string") {
       if (ch.reducer === "append") {
         channelLines.push(

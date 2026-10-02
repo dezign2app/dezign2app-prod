@@ -37,14 +37,19 @@ export function useLangGraphCanvasState({
     data.inputChannels || [],
   );
   const [stateChannels, setStateChannels] = useState<LangGraphStateChannel[]>(
-    data.stateChannels || [
-      {
-        key: "messages",
-        type: "messages",
-        reducer: "add_messages",
-        defaultValue: [],
-      },
-    ],
+    () => {
+      if (data.stateChannels && data.stateChannels.length > 0) {
+        return data.stateChannels;
+      }
+      return [
+        {
+          key: "messages",
+          type: "messages",
+          reducer: "add_messages",
+          defaultValue: [],
+        },
+      ];
+    },
   );
   const [customReducers, setCustomReducers] = useState<LangGraphCustomReducer[]>(
     data.customReducers || [],
@@ -101,7 +106,10 @@ export function useLangGraphCanvasState({
   );
 
   const handleDeleteChannel = useCallback((index: number) => {
-    setStateChannels((prev) => prev.filter((_, i) => i !== index));
+    setStateChannels((prev) => {
+      if (prev[index]?.key === "messages") return prev;
+      return prev.filter((_, i) => i !== index);
+    });
   }, []);
 
   const handleDuplicateChannel = useCallback((index: number) => {
@@ -121,6 +129,19 @@ export function useLangGraphCanvasState({
       if (prev.some((r) => r.name === reducer.name)) return prev;
       return [...prev, reducer];
     });
+    if (reducer.targetField) {
+      setStateChannels((prevChannels) =>
+        prevChannels.map((c) =>
+          c.key === reducer.targetField
+            ? {
+                ...c,
+                reducer: reducer.name,
+                customReducerCode: reducer.code,
+              }
+            : c,
+        ),
+      );
+    }
   }, []);
 
   const handleUpdateCustomReducer = useCallback(
@@ -134,17 +155,25 @@ export function useLangGraphCanvasState({
         const newName = changes.name ?? oldName;
         const newCode = changes.code ?? target.code;
 
-        // If the reducer name or code changed, sync any channels using this reducer
+        // If the reducer name, code, or targetField changed, sync channels
         setStateChannels((prevChannels) =>
-          prevChannels.map((c) =>
-            c.reducer === oldName
-              ? {
-                  ...c,
-                  reducer: newName,
-                  customReducerCode: newCode,
-                }
-              : c,
-          ),
+          prevChannels.map((c) => {
+            if (changes.targetField && c.key === changes.targetField) {
+              return {
+                ...c,
+                reducer: newName,
+                customReducerCode: newCode,
+              };
+            }
+            if (c.reducer === oldName) {
+              return {
+                ...c,
+                reducer: newName,
+                customReducerCode: newCode,
+              };
+            }
+            return c;
+          }),
         );
 
         return prev.map((r) =>

@@ -354,4 +354,89 @@ describe("compileLangGraph Compiler Fixes", () => {
     const envFile = fileMap.get(".env.example");
     expect(envFile).toContain("CUSTOM_REDIS_URL=redis://");
   });
+
+  it("compiles server.ts with auto thread_id resolution, response thread_id, and history endpoint when memory is configured", () => {
+    const input: CompileLangGraphInput = {
+      graphLabel: "memory-chat-agent",
+      stateChannels: [
+        { key: "messages", type: "messages", reducer: "add_messages" },
+      ],
+      inputChannels: [],
+      memoryConfig: {
+        checkpointer: "memory",
+      },
+      routeEndpoints: [
+        {
+          path: "/chat",
+          method: "POST",
+          kind: "endpoint",
+          responseExecutionMode: "sync",
+        },
+      ],
+      nodes: [
+        {
+          id: "node_1",
+          type: LANGGRAPH_CANVAS_NODE_NODE,
+          position: { x: 0, y: 0 },
+          data: { name: "bot", label: "bot" },
+        },
+      ],
+      edges: [
+        {
+          id: "e1",
+          source: NODE_ID_START,
+          target: "node_1",
+        },
+      ],
+    };
+
+    const files = compileLangGraph(input);
+    const fileMap = new Map(files.map((f) => [f.filename, f.content]));
+
+    const serverFile = fileMap.get("src/server.ts");
+    expect(serverFile).toBeDefined();
+    expect(serverFile).toContain(`import crypto from "node:crypto";`);
+    expect(serverFile).toContain(`crypto.randomUUID()`);
+    expect(serverFile).toContain(`thread_id: threadId`);
+    expect(serverFile).toContain(`/api/threads/:threadId/history`);
+  });
+
+  it("compiles developer-defined custom reducer code directly into field Annotation in state.ts", () => {
+    const input: CompileLangGraphInput = {
+      graphLabel: "custom-reducer-agent",
+      stateChannels: [
+        {
+          key: "highScore",
+          type: "number",
+          reducer: "custom",
+          customReducerCode: "(prev, next) => Math.max(prev ?? 0, next ?? 0)",
+          defaultValue: 0,
+        },
+      ],
+      inputChannels: [],
+      nodes: [
+        {
+          id: "node_1",
+          type: LANGGRAPH_CANVAS_NODE_NODE,
+          position: { x: 0, y: 0 },
+          data: { name: "scorer", label: "scorer" },
+        },
+      ],
+      edges: [
+        {
+          id: "e1",
+          source: NODE_ID_START,
+          target: "node_1",
+        },
+      ],
+    };
+
+    const files = compileLangGraph(input);
+    const fileMap = new Map(files.map((f) => [f.filename, f.content]));
+
+    const stateFile = fileMap.get("src/state.ts");
+    expect(stateFile).toBeDefined();
+    expect(stateFile).toContain(`highScore: Annotation<number>({`);
+    expect(stateFile).toContain(`reducer: (prev, next) => Math.max(prev ?? 0, next ?? 0)`);
+  });
 });

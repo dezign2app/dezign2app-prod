@@ -360,6 +360,27 @@ export async function executeServerLangGraph(
   }
 
   for (const ch of effectiveChannels) {
+    if (
+      ch.customReducerCode &&
+      (ch.reducer === "custom" ||
+        !["replace", "add_messages", "append", "concat_array", "merge_object"].includes(ch.reducer))
+    ) {
+      try {
+        const fn = new Function(
+          "prev",
+          "next",
+          `return (${ch.customReducerCode})(prev, next);`,
+        );
+        schemaSpec[ch.key] = Annotation<unknown>({
+          reducer: (x, y) => fn(x, y),
+          default: () => ch.defaultValue,
+        });
+        continue;
+      } catch (err) {
+        console.warn(`[simulation] Failed to evaluate custom reducer for ${ch.key}:`, err);
+      }
+    }
+
     if (ch.key === "messages" || ch.type === "messages") {
       schemaSpec[ch.key] = Annotation<BaseMessage[]>({
         reducer: addMessages,
