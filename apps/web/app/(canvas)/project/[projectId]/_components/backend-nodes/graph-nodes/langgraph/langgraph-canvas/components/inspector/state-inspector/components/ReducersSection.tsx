@@ -45,6 +45,7 @@ interface ReducersSectionProps {
   // Delete & customize
   onDeleteCustomReducer: (reducerName: string) => void;
   onOpenCustomizeChatHistory: () => void;
+  onTestReducer?: (reducerName: string) => void;
 }
 
 export function ReducersSection({
@@ -83,13 +84,14 @@ export function ReducersSection({
   onSaveEditCustomReducer,
   onDeleteCustomReducer,
   onOpenCustomizeChatHistory,
+  onTestReducer,
 }: ReducersSectionProps) {
   const hasCustomAddMessages = customReducers.some(
     (r) => r.name === "add_message" || r.name === "add_messages",
   );
 
   return (
-    <div className="flex flex-col gap-2.5 border-t border-border/50 pt-3">
+    <div id="reducers-section" className="flex flex-col gap-2.5 border-t border-border/50 pt-3">
       <ReducersSectionHeader
         customReducerCount={customReducers.length}
         showReducersSection={showReducersSection}
@@ -130,6 +132,7 @@ export function ReducersSection({
           <CoreChatHistoryCard
             hasCustomAddMessages={hasCustomAddMessages}
             onCustomize={onOpenCustomizeChatHistory}
+            onTest={() => onTestReducer?.("add_messages")}
           />
 
           {/* Custom Reducers List */}
@@ -154,6 +157,7 @@ export function ReducersSection({
                   onCancelEdit={onCancelEditCustomReducer}
                   onSaveEdit={onSaveEditCustomReducer}
                   onDelete={onDeleteCustomReducer}
+                  onTest={onTestReducer}
                   onSelectEditTargetField={(val) => {
                     setEditTargetField(val);
                     setEditTargetFieldInput(val);

@@ -14,4 +14,6 @@ export interface StateTabContentProps {
   ) => void;
   onDeleteCustomReducer?: (idOrName: string) => void;
   onClose?: () => void;
+  defaultTab?: "channels" | "testing";
+  initialSelectedReducer?: string;
 }

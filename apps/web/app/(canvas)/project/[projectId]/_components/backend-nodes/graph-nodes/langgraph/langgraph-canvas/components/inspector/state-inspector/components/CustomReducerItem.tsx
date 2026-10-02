@@ -1,5 +1,5 @@
 import React from "react";
-import { Pencil, Trash2, Link2 } from "lucide-react";
+import { Pencil, Trash2, Link2, Play } from "lucide-react";
 import { Badge } from "@workspace/ui/components/badge";
 import { EditCustomReducerForm } from "./EditCustomReducerForm";
 import type { LangGraphCustomReducer, LangGraphStateChannel } from "@/types/canvas";
@@ -23,6 +23,7 @@ interface CustomReducerItemProps {
   onEditReducerNameChange: (val: string) => void;
   onEditReducerCodeChange: (val: string) => void;
   onEditReducerDescChange: (val: string) => void;
+  onTest?: (reducerName: string) => void;
 }
 
 export function CustomReducerItem({
@@ -44,6 +45,7 @@ export function CustomReducerItem({
   onEditReducerNameChange,
   onEditReducerCodeChange,
   onEditReducerDescChange,
+  onTest,
 }: CustomReducerItemProps) {
   if (isEditing) {
     return (
@@ -105,6 +107,16 @@ export function CustomReducerItem({
           )}
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
+          {onTest && (
+            <button
+              type="button"
+              onClick={() => onTest(r.name)}
+              className="text-muted-foreground hover:text-emerald-400 p-1 rounded transition-colors cursor-pointer"
+              title="Test custom reducer in playground"
+            >
+              <Play className="w-3 h-3 fill-current" />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onStartEdit(r)}
