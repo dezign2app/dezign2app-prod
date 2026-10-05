@@ -124,10 +124,12 @@ export function InspectorTabContent({
             Node Configuration
           </span>
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-md"
             onClick={onClose}
+            onMouseDown={(e) => e.stopPropagation()}
             title="Close inspector (Esc)"
           >
             <X className="w-4 h-4" />

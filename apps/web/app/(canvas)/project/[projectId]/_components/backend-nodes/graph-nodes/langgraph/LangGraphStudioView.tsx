@@ -149,7 +149,35 @@ export function LangGraphStudioView({
   const handleCloseInspector = useCallback(() => {
     setSelectedNodeId(null);
     setActiveSideTab("inspector");
-  }, [setSelectedNodeId, setActiveSideTab]);
+    setNodes((nds) =>
+      nds.map((n) => (n.selected ? { ...n, selected: false } : n)),
+    );
+    setEdges((eds) =>
+      eds.map((e) => (e.selected ? { ...e, selected: false } : e)),
+    );
+  }, [setSelectedNodeId, setActiveSideTab, setNodes, setEdges]);
+
+  const handleSelectionChange = useCallback(
+    ({
+      nodes: selNodes,
+      edges: selEdges,
+    }: {
+      nodes: LangGraphCanvasNode[];
+      edges: LangGraphCanvasEdge[];
+    }) => {
+      if (selEdges.length > 0 && selNodes.length === 0) {
+        setSelectedNodeId(null);
+      } else if (selNodes.length > 0) {
+        const activeNode = selNodes[0];
+        if (activeNode) {
+          setSelectedNodeId((prev) =>
+            prev === activeNode.id ? prev : activeNode.id,
+          );
+        }
+      }
+    },
+    [setSelectedNodeId],
+  );
 
   const { handleLayout, panToFlow } = useLangGraphAutoLayout({
     nodes,
@@ -597,29 +625,8 @@ export function LangGraphStudioView({
               else if (n.id === "STATE_GLOBAL") setActiveSideTab("state");
               else setActiveSideTab("inspector");
             }}
-            onPaneClick={() => {
-              handleCloseInspector();
-              setNodes((nds) =>
-                nds.map((n) => (n.selected ? { ...n, selected: false } : n)),
-              );
-              setEdges((eds) => eds.map((e) => ({ ...e, selected: false })));
-            }}
-            onSelectionChange={({
-              nodes: selNodes,
-              edges: selEdges,
-            }: {
-              nodes: LangGraphCanvasNode[];
-              edges: LangGraphCanvasEdge[];
-            }) => {
-              if (selEdges.length > 0 && selNodes.length === 0) {
-                setSelectedNodeId(null);
-              } else if (selNodes.length > 0) {
-                const activeNode = selNodes[0];
-                if (activeNode && activeNode.id !== selectedNodeId) {
-                  setSelectedNodeId(activeNode.id);
-                }
-              }
-            }}
+            onPaneClick={handleCloseInspector}
+            onSelectionChange={handleSelectionChange}
             fitView
             fitViewOptions={useMemo(() => {
               const flowNodes = getLangGraphFlowNodes(nodes, edges);
