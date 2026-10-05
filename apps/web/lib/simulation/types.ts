@@ -8,6 +8,27 @@ export type SimulationRequest = {
   body: unknown;
 };
 
+export type SimulationStepLogLevel =
+  | "info"
+  | "step"
+  | "config"
+  | "llm"
+  | "tool"
+  | "middleware"
+  | "router"
+  | "state"
+  | "warn"
+  | "error";
+
+export type SimulationStepLogEntry = {
+  timestamp: number;
+  level: SimulationStepLogLevel;
+  message: string;
+  nodeId?: string;
+  nodeLabel?: string;
+  details?: unknown;
+};
+
 export type SimulationTraceEntry = {
   id: string;
   kind:
@@ -25,6 +46,7 @@ export type SimulationTraceEntry = {
   input?: unknown;
   output?: unknown;
   detail?: string;
+  logs?: SimulationStepLogEntry[];
 };
 
 export type SimulationResult = {

@@ -8,6 +8,7 @@ import type {
 import type {
   McpServerConnection,
   StateUpdateMode,
+  LangGraphStateUpdateItem,
   LangGraphToolDefinition,
 } from "./tools";
 import type { LangGraphStepConfig, LangGraphEdgeConfig } from "./steps";
@@ -104,11 +105,7 @@ export interface LangGraphAgentDefinition {
   streamConfig?: LangGraphAgentStreamConfig;
   responseFormat?: LangGraphAgentResponseFormatConfig;
   memoryConfig?: LangGraphAgentMemoryConfig;
-  stateUpdates?: {
-    channelKey: string;
-    mode?: StateUpdateMode;
-    value?: string;
-  }[];
+  stateUpdates?: LangGraphStateUpdateItem[];
   tools?: string[]; // Bound tool IDs
   middleware?: string[]; // Bound middleware IDs
   memory?: string[]; // Bound memory / checkpointer / db_ref IDs

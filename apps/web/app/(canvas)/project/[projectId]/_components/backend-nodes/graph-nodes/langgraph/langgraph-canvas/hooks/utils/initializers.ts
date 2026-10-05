@@ -104,7 +104,21 @@ export function buildInitialNodes(
       id: NODE_ID_START,
       type: LANGGRAPH_CANVAS_NODE_START,
       position: data.startNodePosition || { x: 100, y: 560 },
-      data: { label: "INPUT State", inputChannels: data.inputChannels || [] },
+      data: {
+        label: "INPUT State",
+        inputChannels: data.inputChannels || [],
+        stateChannels:
+          data.stateChannels && data.stateChannels.length > 0
+            ? data.stateChannels
+            : [
+                {
+                  key: "messages",
+                  type: "messages",
+                  reducer: "add_messages",
+                  defaultValue: [],
+                },
+              ],
+      },
       deletable: false,
     },
   ];

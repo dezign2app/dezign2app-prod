@@ -242,6 +242,51 @@ export function useLangGraphCanvasState({
     ]);
   }, []);
 
+  const handleAutoMapStateChannels = useCallback(() => {
+    setInputChannels((prev) => {
+      const validStateKeys = new Set(
+        stateChannels.map((s) => s.key?.trim()).filter(Boolean),
+      );
+      return prev.map((ch) => {
+        if (ch.stateChannelKey && validStateKeys.has(ch.stateChannelKey)) {
+          return ch;
+        }
+        if (validStateKeys.has(ch.key)) {
+          return { ...ch, stateChannelKey: ch.key };
+        }
+        if (
+          ["query", "prompt", "message", "user_message", "input"].includes(
+            ch.key.toLowerCase(),
+          ) &&
+          validStateKeys.has("messages")
+        ) {
+          return { ...ch, stateChannelKey: "messages" };
+        }
+        return ch;
+      });
+    });
+  }, [stateChannels]);
+
+  const handleMapStateToInput = useCallback(
+    (stateKey: string, inputChannelIdOrKey?: string) => {
+      setInputChannels((prev) => {
+        return prev.map((ch) => {
+          const isTarget =
+            Boolean(inputChannelIdOrKey) &&
+            (ch.id === inputChannelIdOrKey || ch.key === inputChannelIdOrKey);
+          if (isTarget) {
+            return { ...ch, stateChannelKey: stateKey };
+          }
+          if (ch.stateChannelKey === stateKey && !isTarget) {
+            return { ...ch, stateChannelKey: undefined };
+          }
+          return ch;
+        });
+      });
+    },
+    [],
+  );
+
   // ── Derive suggested params from connected ServiceNode endpoints ──
   const allEdges = useBackendCanvasStore((s) => s.edges);
   const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
@@ -343,6 +388,8 @@ export function useLangGraphCanvasState({
     handleAddSuggestedChannel,
     handleUpdateInputChannel,
     handleDeleteInputChannel,
+    handleAutoMapStateChannels,
+    handleMapStateToInput,
     suggestedParams,
   });
 

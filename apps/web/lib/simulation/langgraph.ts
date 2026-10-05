@@ -2,17 +2,150 @@ import type { BackendNode, SimulationTestCase } from "@/types/canvas";
 import type { SimulationTestCaseResult, SimulationTraceEntry } from "./types";
 import { clone, getPath } from "./utils";
 
+export function resolveRouterFieldValue(
+  field: string,
+  state: Record<string, unknown>,
+): unknown {
+  const cleanField = field.replace(/^state\./, "");
+  // 1. Direct path in state
+  let val = getPath(state, cleanField);
+  if (val !== undefined && val !== null) return val;
+
+  // 2. Structured response
+  if (state.structuredResponse && typeof state.structuredResponse === "object") {
+    val = getPath(state.structuredResponse, cleanField);
+    if (val !== undefined && val !== null) return val;
+  }
+
+  // 3. Search in state.messages for JSON content in recent messages
+  if (Array.isArray(state.messages) && state.messages.length > 0) {
+    for (let i = state.messages.length - 1; i >= 0; i--) {
+      const msg = state.messages[i];
+      if (typeof msg?.content === "string") {
+        const parsed = extractJsonFromText(msg.content);
+        if (parsed) {
+          val = resolveStructuredFieldValue(cleanField, parsed);
+          if (val !== undefined && val !== null) return val;
+        }
+      }
+    }
+  }
+
+  // 4. In state.response (stringified JSON)
+  if (typeof state.response === "string") {
+    const parsed = extractJsonFromText(state.response);
+    if (parsed) {
+      val = resolveStructuredFieldValue(cleanField, parsed);
+      if (val !== undefined && val !== null) return val;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Robustly extracts a JSON object from text, handling markdown code fences,
+ * preamble / postamble text, and single-string values.
+ */
+export function extractJsonFromText(text: string): Record<string, unknown> | null {
+  if (!text || typeof text !== "string") return null;
+  const clean = text.trim();
+
+  // 1. Direct parse
+  try {
+    const direct = JSON.parse(clean);
+    if (typeof direct === "object" && direct !== null && !Array.isArray(direct)) {
+      return direct as Record<string, unknown>;
+    }
+  } catch {}
+
+  // 2. Fenced code block (```json ... ``` or ``` ... ```)
+  const codeBlockMatch = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    try {
+      const parsed = JSON.parse(codeBlockMatch[1].trim());
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {}
+  }
+
+  // 3. Outer { and } substring extraction
+  const firstBrace = clean.indexOf("{");
+  const lastBrace = clean.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      const substring = clean.slice(firstBrace, lastBrace + 1);
+      const parsed = JSON.parse(substring);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+/**
+ * Resolves a field value from structured output object or fallback text.
+ * Strips prefix like "state." or "structuredResponse.", searches case-insensitively,
+ * and falls back gracefully.
+ */
+export function resolveStructuredFieldValue(
+  targetKey: string,
+  structuredObj?: Record<string, unknown> | null,
+  rawText?: string
+): unknown {
+  const cleanKey = targetKey
+    .replace(/^state\./, "")
+    .replace(/^structuredResponse\./, "")
+    .trim();
+
+  if (structuredObj && typeof structuredObj === "object") {
+    // 1. Direct key
+    if (cleanKey in structuredObj && structuredObj[cleanKey] !== undefined) {
+      return structuredObj[cleanKey];
+    }
+    // 2. Nested path via getPath
+    const nested = getPath(structuredObj, cleanKey);
+    if (nested !== undefined) return nested;
+
+    // 3. Case-insensitive key match
+    const lowerKey = cleanKey.toLowerCase();
+    for (const [k, v] of Object.entries(structuredObj)) {
+      if (k.toLowerCase() === lowerKey) return v;
+    }
+
+    // 4. Single-key extraction (if schema has 1 property and object has 1 non-raw property)
+    const validKeys = Object.keys(structuredObj).filter((k) => k !== "raw");
+    if (validKeys.length === 1 && validKeys[0]) {
+      return structuredObj[validKeys[0]];
+    }
+  }
+
+  // 5. Fallback from raw text if it wasn't a full JSON object
+  if (rawText) {
+    const trimmed = rawText.trim().replace(/^["']|["']$/g, "");
+    if (trimmed.length < 120 && !trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+      return trimmed;
+    }
+  }
+
+  return undefined;
+}
+
 export function evaluateRouterBranch(
-  branch: { field: string; operator: string; value?: string },
+  branch: { field: string; operator: string; value?: string; isDefault?: boolean },
   state: Record<string, unknown>,
 ): boolean {
-  const actual = getPath(state, branch.field.replace(/^state\./, ""));
+  if (branch.isDefault) return true;
+  const actual = resolveRouterFieldValue(branch.field, state);
   const expected = branch.value;
   switch (branch.operator) {
     case "eq":
-      return String(actual) === String(expected);
+      return String(actual).toLowerCase() === String(expected).toLowerCase();
     case "neq":
-      return String(actual) !== String(expected);
+      return String(actual).toLowerCase() !== String(expected).toLowerCase();
     case "gt":
       return Number(actual) > Number(expected);
     case "gte":
@@ -24,7 +157,7 @@ export function evaluateRouterBranch(
     case "contains":
       return Array.isArray(actual)
         ? actual.includes(expected)
-        : String(actual ?? "").includes(String(expected ?? ""));
+        : String(actual ?? "").toLowerCase().includes(String(expected ?? "").toLowerCase());
     case "is_not_null":
       return actual !== null && actual !== undefined;
     default:

@@ -304,6 +304,12 @@ export interface StartNodeData extends Record<string, unknown> {
   suggestedParams?: Array<{ key: string; type: LangGraphInputChannel["type"]; description?: string; required?: boolean }>;
   /** Available state channels for mapping dropdowns */
   stateChannels?: LangGraphStateChannel[];
+  /** Auto-maps inputs to state channels by matching names or common aliases */
+  onAutoMapStateChannels?: () => void;
+  /** Maps a state channel to a specific input channel (or unmaps if undefined) */
+  onMapStateToInput?: (stateKey: string, inputChannelIdOrKey?: string) => void;
+  /** Opens the State tab in the inspector sidebar */
+  onOpenStateTab?: () => void;
 }
 
 export interface EndNodeData extends Record<string, unknown> {

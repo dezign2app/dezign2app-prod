@@ -1,43 +1,22 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
-  Play,
-  RotateCcw,
-  Loader2,
-  Key,
-  Plus,
-  MessageSquare,
-  Check,
-  Copy,
   Activity,
   AlertCircle,
   Sparkles,
-  Bot,
+  Check,
+  Copy,
   Terminal,
-  Maximize2,
-  Minimize2,
-  ChevronDown,
-  ChevronUp,
-  Radio,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import { LocalInput } from "../../../../common";
-import { Label } from "@workspace/ui/components/label";
+import { Badge } from "@workspace/ui/components/badge";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@workspace/ui/components/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
-import { Badge } from "@workspace/ui/components/badge";
 import { toast } from "sonner";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -52,39 +31,24 @@ import {
   BrowserCheckpoint,
 } from "@/lib/simulation/indexedDBCheckpointer";
 import { getSimulationTable } from "@/lib/simulation/database";
-import type {
-  LangGraphCanvasNode,
-  LangGraphCanvasEdge,
-  LangGraphStateChannel,
-  LangGraphInputChannel,
-  LangGraphMemoryConfig,
-} from "@workspace/canvas";
+import type { SimulationStepLogEntry, SimulationStepLogLevel } from "@/lib/simulation/types";
 
-export interface StartNodeTestingTabProps {
-  nodes: LangGraphCanvasNode[];
-  edges: LangGraphCanvasEdge[];
-  stateChannels: LangGraphStateChannel[];
-  inputChannels: LangGraphInputChannel[];
-  memoryConfig?: LangGraphMemoryConfig;
-  graphLabel?: string;
-}
-
-const PROVIDER_MODELS: Record<string, Array<{ id: string; label: string }>> = {
-  groq: [
-    { id: "openai/gpt-oss-120b", label: "OpenAI GPT-OSS 120B (Groq LPU)" },
-    { id: "openai/gpt-oss-20b", label: "OpenAI GPT-OSS 20B (Groq Fast)" },
-    { id: "qwen/qwen3.8-27b", label: "Qwen 3.8 27B (Groq)" },
-    { id: "allam-2-7b", label: "Allam 2 7B (Groq)" },
-  ],
-  openai: [
-    { id: "gpt-4o-mini", label: "GPT-4o Mini" },
-    { id: "gpt-4o", label: "GPT-4o" },
-  ],
-  anthropic: [
-    { id: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
-    { id: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku" },
-  ],
-};
+import {
+  StartNodeTestingTabProps,
+  ExecutionMode,
+  LLMProvider,
+  ActiveSubTab,
+  TraceViewMode,
+  BatchFormatMode,
+  PROVIDER_MODELS,
+  TestingHeaderToolbar,
+  TestingInputsSection,
+  TestingTraceTab,
+  TestingLogsTab,
+  TestingStateTab,
+  TestingCheckpointsTab,
+  TestingDbTab,
+} from "./testing-tab";
 
 export function StartNodeTestingTab({
   nodes,
@@ -92,10 +56,9 @@ export function StartNodeTestingTab({
   stateChannels,
   inputChannels,
   memoryConfig,
-  graphLabel = "LangGraph Agent",
 }: StartNodeTestingTabProps) {
   // Execution state
-  const [executionMode, setExecutionMode] = useState<"server" | "browser">(() => {
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("dezign2app_lg_exec_mode");
       if (saved === "browser" || saved === "server") return saved;
@@ -105,10 +68,10 @@ export function StartNodeTestingTab({
   const [isRunning, setIsRunning] = useState(false);
   const [threadId, setThreadId] = useState("session-1");
   const [knownThreads, setKnownThreads] = useState<string[]>(["session-1"]);
-  const [activeSubTab, setActiveSubTab] = useState<"trace" | "state" | "checkpoints" | "db">("trace");
+  const [activeSubTab, setActiveSubTab] = useState<ActiveSubTab>("trace");
 
   // LLM Config
-  const [provider, setProvider] = useState<"groq" | "openai" | "anthropic">("groq");
+  const [provider, setProvider] = useState<LLMProvider>("groq");
   const [modelName, setModelName] = useState<string>("openai/gpt-oss-120b");
   const [apiKey, setApiKey] = useState("");
   const [showKeyInput, setShowKeyInput] = useState(false);
@@ -127,9 +90,16 @@ export function StartNodeTestingTab({
   const [isTraceExpanded, setIsTraceExpanded] = useState(false);
   const [isInputCollapsed, setIsInputCollapsed] = useState(false);
   const [expandedTraceNodes, setExpandedTraceNodes] = useState<Record<number, boolean>>({});
-  const [traceNodeViews, setTraceNodeViews] = useState<Record<number, "output" | "batches" | "req" | "raw">>({});
-  const [batchFormatViews, setBatchFormatViews] = useState<Record<number, "event" | "delta" | "raw">>({});
+  const [traceNodeViews, setTraceNodeViews] = useState<Record<number, TraceViewMode>>({});
+  const [batchFormatViews, setBatchFormatViews] = useState<Record<number, BatchFormatMode>>({});
   const [expandedBatchRaw, setExpandedBatchRaw] = useState<Record<string, boolean>>({});
+
+  // Logs viewer state
+  const [logSearchQuery, setLogSearchQuery] = useState("");
+  const [logLevelFilter, setLogLevelFilter] = useState<string>("all");
+  const [logNodeFilter, setLogNodeFilter] = useState<string>("all");
+  const [expandedLogDetails, setExpandedLogDetails] = useState<Record<string, boolean>>({});
+  const [copiedAllLogs, setCopiedAllLogs] = useState(false);
 
   // Load API keys and saved threads on mount
   useEffect(() => {
@@ -192,7 +162,7 @@ export function StartNodeTestingTab({
     }
   };
 
-  const handleProviderChange = (val: typeof provider) => {
+  const handleProviderChange = (val: LLMProvider) => {
     setProvider(val);
     const newDefaultModel = PROVIDER_MODELS[val]?.[0]?.id || "";
     setModelName(newDefaultModel);
@@ -387,6 +357,7 @@ export function StartNodeTestingTab({
       useSimulationStore.setState({
         status: result.error ? "failed" : "completed",
         currentNodeId: undefined,
+        trace: result.trace,
       });
 
       await loadDbTables();
@@ -435,247 +406,104 @@ export function StartNodeTestingTab({
     toast.success("Response copied to clipboard");
   };
 
+  // Consolidated execution logs across all steps configured in LangGraph
+  const allLogs = useMemo<SimulationStepLogEntry[]>(() => {
+    if (!executionResult) return [];
+    if (executionResult.logs && executionResult.logs.length > 0) {
+      return executionResult.logs;
+    }
+    const fromTrace = executionResult.trace.flatMap((t) => t.logs || []);
+    if (fromTrace.length > 0) return fromTrace;
+    return executionResult.trace.map((t) => ({
+      timestamp: Date.now(),
+      level: (t.status === "failed" ? "error" : "step") as SimulationStepLogLevel,
+      message: `Step "${t.label}" (${t.nodeId}) executed with status: ${t.status}`,
+      nodeId: t.nodeId,
+      nodeLabel: t.label,
+      details: t.output,
+    }));
+  }, [executionResult]);
+
+  const allLogNodes = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const log of allLogs) {
+      if (log.nodeId) {
+        map.set(log.nodeId, log.nodeLabel || log.nodeId);
+      }
+    }
+    for (const n of nodes) {
+      map.set(n.id, (n.data as { label?: string })?.label || n.id);
+    }
+    return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
+  }, [allLogs, nodes]);
+
+  const filteredLogs = useMemo(() => {
+    return allLogs.filter((log) => {
+      if (logLevelFilter !== "all" && log.level !== logLevelFilter) return false;
+      if (logNodeFilter !== "all" && log.nodeId !== logNodeFilter) return false;
+      if (logSearchQuery.trim()) {
+        const q = logSearchQuery.toLowerCase();
+        const matchMsg = log.message.toLowerCase().includes(q);
+        const matchLabel = log.nodeLabel?.toLowerCase().includes(q);
+        const matchNode = log.nodeId?.toLowerCase().includes(q);
+        const matchDetails = log.details ? JSON.stringify(log.details).toLowerCase().includes(q) : false;
+        if (!matchMsg && !matchLabel && !matchNode && !matchDetails) return false;
+      }
+      return true;
+    });
+  }, [allLogs, logLevelFilter, logNodeFilter, logSearchQuery]);
+
+  const logStats = useMemo(() => {
+    const errorCount = allLogs.filter((l) => l.level === "error").length;
+    const warnCount = allLogs.filter((l) => l.level === "warn").length;
+    const llmCount = allLogs.filter((l) => l.level === "llm").length;
+    const toolCount = allLogs.filter((l) => l.level === "tool").length;
+    const stepCount = allLogs.filter((l) => l.level === "step").length;
+    const configCount = allLogs.filter((l) => l.level === "config").length;
+    const stateCount = allLogs.filter((l) => l.level === "state").length;
+    return { errorCount, warnCount, llmCount, toolCount, stepCount, configCount, stateCount };
+  }, [allLogs]);
+
+  const handleCopyAllLogs = () => {
+    if (allLogs.length === 0) return;
+    const formatted = allLogs
+      .map((l) => {
+        const time = new Date(l.timestamp).toISOString();
+        const node = l.nodeLabel ? `[${l.nodeLabel}]` : l.nodeId ? `[${l.nodeId}]` : "";
+        const lvl = l.level.toUpperCase().padEnd(10);
+        const details = l.details ? `\nDetails: ${JSON.stringify(l.details, null, 2)}` : "";
+        return `${time} | ${lvl} | ${node} ${l.message}${details}`;
+      })
+      .join("\n\n");
+    navigator.clipboard.writeText(formatted);
+    setCopiedAllLogs(true);
+    toast.success(`Copied ${allLogs.length} logs to clipboard`);
+    setTimeout(() => setCopiedAllLogs(false), 2000);
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden text-xs bg-card/40">
       {/* ── Top Header Toolbar ── */}
-      <div className="p-3.5 border-b border-border/60 bg-background/50 flex flex-col gap-2.5 shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div
-              className={`p-1.5 rounded-lg border ${
-                executionMode === "server"
-                  ? "bg-primary/10 text-primary border-primary/20"
-                  : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-              }`}
-            >
-              <Play className="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h3 className="font-bold text-foreground text-xs">
-                  {executionMode === "server" ? "Generated LangGraph Code" : "In-Browser Preview"}
-                </h3>
-                <Badge
-                  variant="outline"
-                  className={`text-[8.5px] px-1 py-0 h-3.5 font-mono ${
-                    executionMode === "server"
-                      ? "bg-primary/15 text-primary border-primary/30"
-                      : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                  }`}
-                >
-                  {executionMode === "server" ? "Node.js v1.4" : "Browser"}
-                </Badge>
-                {memoryConfig?.enabled !== false && memoryConfig?.checkpointer === "postgres" && (
-                  <Badge
-                    variant="outline"
-                    className="text-[8.5px] px-1 py-0 h-3.5 font-mono bg-sky-500/15 text-sky-400 border-sky-500/30"
-                  >
-                    PostgresSaver
-                  </Badge>
-                )}
-                {memoryConfig?.enabled !== false && memoryConfig?.checkpointer === "redis" && (
-                  <Badge
-                    variant="outline"
-                    className="text-[8.5px] px-1 py-0 h-3.5 font-mono bg-red-500/15 text-red-400 border-red-500/30"
-                  >
-                    RedisSaver
-                  </Badge>
-                )}
-              </div>
-              <p className="text-[10px] text-muted-foreground">
-                {executionMode === "server"
-                  ? "Running official @langchain/langgraph StateGraph"
-                  : "Actual LLM calls · Client-side preview"}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-[10px] px-2 text-muted-foreground hover:text-foreground"
-              onClick={handleClearThread}
-              title="Clear checkpoints for active thread"
-            >
-              <RotateCcw className="w-3 h-3 mr-1" /> Clear
-            </Button>
-            <Button
-              size="sm"
-              className="h-7 text-xs px-3 font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm gap-1.5"
-              disabled={isRunning}
-              onClick={() => handleExecute()}
-            >
-              {isRunning ? (
-                <>
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>Running...</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3 h-3 fill-current" />
-                  <span>Run Graph</span>
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* ── Runtime Engine Switcher ── */}
-        <div className="flex items-center justify-between p-1 bg-muted/40 rounded-lg border border-border/50 text-[10px]">
-          <span className="text-muted-foreground font-mono text-[9px] px-1.5 uppercase font-semibold">
-            Execution Engine:
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                setExecutionMode("server");
-                if (typeof window !== "undefined") {
-                  localStorage.setItem("dezign2app_lg_exec_mode", "server");
-                }
-                toast.info("Switched to Generated LangGraph (Node.js runtime)");
-              }}
-              className={`px-2 py-0.5 rounded text-[10px] transition-all font-medium ${
-                executionMode === "server"
-                  ? "bg-primary text-primary-foreground font-semibold shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              ⚡ Generated Code (Node.js)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setExecutionMode("browser");
-                if (typeof window !== "undefined") {
-                  localStorage.setItem("dezign2app_lg_exec_mode", "browser");
-                }
-                toast.info("Switched to Browser Preview");
-              }}
-              className={`px-2 py-0.5 rounded text-[10px] transition-all font-medium ${
-                executionMode === "browser"
-                  ? "bg-background text-foreground font-semibold shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              🌐 Browser Preview
-            </button>
-          </div>
-        </div>
-
-        {/* ── Browser Mode Storage Notice ── */}
-        {executionMode === "browser" &&
-          memoryConfig?.enabled !== false &&
-          (memoryConfig?.checkpointer === "postgres" || memoryConfig?.checkpointer === "redis") && (
-            <div className="flex items-center justify-between p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400 text-[10px] animate-in fade-in">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">
-                  {memoryConfig.checkpointer === "postgres" ? "PostgreSQL" : "Redis"} checkpointer requires the Node.js runtime.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setExecutionMode("server");
-                  if (typeof window !== "undefined") {
-                    localStorage.setItem("dezign2app_lg_exec_mode", "server");
-                  }
-                  toast.info("Switched to Generated LangGraph (Node.js runtime)");
-                }}
-                className="text-primary hover:underline font-semibold text-[9.5px] shrink-0 ml-1"
-              >
-                Switch to Node.js ↗
-              </button>
-            </div>
-          )}
-
-        {/* ── Thread & Memory Config ── */}
-        <div className="grid grid-cols-2 gap-2 pt-1">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span className="font-mono uppercase font-semibold">Thread ID (Memory)</span>
-              <button
-                onClick={handleNewThread}
-                className="text-primary hover:underline flex items-center gap-0.5 text-[9px]"
-              >
-                <Plus className="w-2.5 h-2.5" /> New
-              </button>
-            </div>
-            <Select value={threadId} onValueChange={setThreadId}>
-              <SelectTrigger className="h-7 text-xs bg-background/80 font-mono">
-                <SelectValue placeholder="Thread ID" />
-              </SelectTrigger>
-              <SelectContent>
-                {knownThreads.map((t) => (
-                  <SelectItem key={t} value={t} className="font-mono text-xs">
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span className="font-mono uppercase font-semibold">LLM Provider</span>
-              <button
-                onClick={() => setShowKeyInput(!showKeyInput)}
-                className="text-muted-foreground hover:text-foreground flex items-center gap-0.5 text-[9px]"
-              >
-                <Key className="w-2.5 h-2.5" /> {showKeyInput ? "Hide Key" : "API Key"}
-              </button>
-            </div>
-            <Select value={provider} onValueChange={handleProviderChange}>
-              <SelectTrigger className="h-7 text-xs bg-background/80 font-medium">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="groq">Groq (Ultra-fast LPU)</SelectItem>
-                <SelectItem value="openai">OpenAI</SelectItem>
-                <SelectItem value="anthropic">Anthropic Claude</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Model selection */}
-        <div className="flex flex-col gap-1 pt-0.5">
-          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-            <span className="font-mono uppercase font-semibold">Active Model</span>
-            <span className="text-[9px] text-emerald-400 font-mono font-medium">Live In-Browser API</span>
-          </div>
-          <Select value={modelName} onValueChange={setModelName}>
-            <SelectTrigger className="h-7 text-xs bg-background/80 font-mono">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PROVIDER_MODELS[provider]?.map((m) => (
-                <SelectItem key={m.id} value={m.id} className="text-xs font-mono">
-                  {m.label} ({m.id})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* API Key Drawer */}
-        {showKeyInput && (
-          <div className="p-2.5 rounded-lg border border-primary/20 bg-primary/5 flex flex-col gap-1.5 animate-in fade-in duration-200">
-            <Label className="text-[10px] text-muted-foreground font-mono">
-              {provider.toUpperCase()} API Key (Stored in browser localStorage)
-            </Label>
-            <LocalInput
-              type="password"
-              placeholder={`Enter ${provider} api key...`}
-              value={apiKey}
-              onChange={(e) => handleSaveApiKey(e.target.value)}
-              className="h-7 text-xs font-mono bg-background"
-            />
-          </div>
-        )}
-      </div>
+      <TestingHeaderToolbar
+        executionMode={executionMode}
+        setExecutionMode={setExecutionMode}
+        memoryConfig={memoryConfig}
+        isRunning={isRunning}
+        handleClearThread={handleClearThread}
+        handleExecute={handleExecute}
+        threadId={threadId}
+        setThreadId={setThreadId}
+        knownThreads={knownThreads}
+        handleNewThread={handleNewThread}
+        provider={provider}
+        handleProviderChange={handleProviderChange}
+        modelName={modelName}
+        setModelName={setModelName}
+        apiKey={apiKey}
+        handleSaveApiKey={handleSaveApiKey}
+        showKeyInput={showKeyInput}
+        setShowKeyInput={setShowKeyInput}
+      />
 
       {/* ── Scrollable Body ── */}
       <div className="flex-1 overflow-y-auto hide-scrollbar p-3.5 flex flex-col gap-3.5">
@@ -745,119 +573,16 @@ export function StartNodeTestingTab({
         )}
 
         {/* ── Inputs Section ── */}
-        <div className="flex flex-col gap-2 p-3 rounded-xl border bg-card/60 transition-all">
-          <div className="flex items-center justify-between pb-1 border-b border-border/40">
-            <span className="font-mono uppercase text-[10px] font-bold text-muted-foreground flex items-center gap-1.5">
-              <span>Input Payload</span>
-              <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">
-                {inputChannels.length} channels
-              </Badge>
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-5 text-[10px] px-1 text-muted-foreground hover:text-foreground"
-              onClick={() => setIsInputCollapsed((v) => !v)}
-              title={isInputCollapsed ? "Show inputs" : "Hide inputs"}
-            >
-              {isInputCollapsed ? (
-                <span className="flex items-center gap-0.5 text-[9px]">
-                  <ChevronDown className="w-3 h-3" /> Show Inputs
-                </span>
-              ) : (
-                <span className="flex items-center gap-0.5 text-[9px]">
-                  <ChevronUp className="w-3 h-3" /> Hide Inputs
-                </span>
-              )}
-            </Button>
-          </div>
-
-          {!isInputCollapsed && (
-            <>
-              {(() => {
-                const messageChannel = inputChannels.find(
-                  (c) => c.key === "message" || c.key === "messages" || c.key === "prompt"
-                );
-                const otherChannels = inputChannels.filter((c) => c.key !== messageChannel?.key);
-
-                return (
-                  <>
-                    {messageChannel ? (
-                      /* Configured message/prompt channel */
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between text-[10px] font-mono">
-                          <Label className="text-[10px] text-muted-foreground flex items-center gap-1 font-mono">
-                            <MessageSquare className="w-3 h-3 text-primary" /> {messageChannel.key}
-                          </Label>
-                          <span className="text-muted-foreground text-[9px]">({messageChannel.type})</span>
-                        </div>
-                        <LocalInput
-                          placeholder="Type message to invoke graph..."
-                          value={String(inputValues[messageChannel.key] ?? chatMessage ?? "")}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setChatMessage(val);
-                            setInputValues((prev) => ({ ...prev, [messageChannel.key]: val }));
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                              e.preventDefault();
-                              handleExecute((e.target as HTMLInputElement).value);
-                            }
-                          }}
-                          className="h-8 text-xs bg-background font-mono"
-                        />
-                      </div>
-                    ) : inputChannels.length === 0 ? (
-                      /* Fallback default chat input when no channels defined */
-                      <div className="flex flex-col gap-1">
-                        <Label className="text-[10px] text-muted-foreground flex items-center gap-1 font-mono">
-                          <MessageSquare className="w-3 h-3 text-primary" /> User Message / Prompt
-                        </Label>
-                        <LocalInput
-                          placeholder="Type message to invoke graph..."
-                          value={chatMessage}
-                          onChange={(e) => setChatMessage(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                              e.preventDefault();
-                              handleExecute((e.target as HTMLInputElement).value);
-                            }
-                          }}
-                          className="h-8 text-xs bg-background"
-                        />
-                      </div>
-                    ) : null}
-
-                    {/* Remaining non-message dynamic channels */}
-                    {otherChannels.map((channel) => (
-                      <div key={channel.key} className="flex flex-col gap-1 pt-1">
-                        <div className="flex items-center justify-between text-[10px] font-mono">
-                          <span className="text-foreground font-medium">{channel.key}</span>
-                          <span className="text-muted-foreground text-[9px]">({channel.type})</span>
-                        </div>
-                        <LocalInput
-                          placeholder={`Enter ${channel.type} value...`}
-                          value={String(inputValues[channel.key] ?? "")}
-                          onChange={(e) =>
-                            setInputValues((prev) => ({
-                              ...prev,
-                              [channel.key]:
-                                channel.type === "number"
-                                  ? Number(e.target.value) || 0
-                                  : e.target.value,
-                            }))
-                          }
-                          className="h-7 text-xs font-mono bg-background"
-                        />
-                      </div>
-                    ))}
-                  </>
-                );
-              })()}
-            </>
-          )}
-        </div>
+        <TestingInputsSection
+          inputChannels={inputChannels}
+          inputValues={inputValues}
+          setInputValues={setInputValues}
+          chatMessage={chatMessage}
+          setChatMessage={setChatMessage}
+          handleExecute={handleExecute}
+          isInputCollapsed={isInputCollapsed}
+          setIsInputCollapsed={setIsInputCollapsed}
+        />
 
         {/* ── Results Tabs ── */}
         <div className="flex flex-col gap-2">
@@ -866,9 +591,18 @@ export function StartNodeTestingTab({
             onValueChange={(val) => setActiveSubTab(val as typeof activeSubTab)}
             className="w-full"
           >
-            <TabsList className="w-full grid grid-cols-4 h-7 p-0.5 bg-muted/60">
+            <TabsList className="w-full grid grid-cols-5 h-7 p-0.5 bg-muted/60">
               <TabsTrigger value="trace" className="text-[10px] py-1">
                 Trace ({executionResult?.visitedNodes.length || 0})
+              </TabsTrigger>
+              <TabsTrigger value="logs" className="text-[10px] py-1 flex items-center justify-center gap-1">
+                <Terminal className="w-2.5 h-2.5 text-blue-400" />
+                <span>Logs</span>
+                {allLogs.length > 0 && (
+                  <span className="text-[8.5px] px-1 py-0 rounded bg-blue-500/20 text-blue-300 font-mono font-semibold">
+                    {allLogs.length}
+                  </span>
+                )}
               </TabsTrigger>
               <TabsTrigger value="state" className="text-[10px] py-1">
                 State
@@ -883,517 +617,72 @@ export function StartNodeTestingTab({
 
             {/* 1. Trace Tab */}
             <TabsContent value="trace" className="flex flex-col gap-2 pt-2 m-0">
-              {executionResult ? (
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1 pb-0.5">
-                    <span className="font-mono truncate max-w-[240px]" title={executionResult.visitedNodes.join(" → ")}>
-                      Path: {executionResult.visitedNodes.join(" → ")}
-                    </span>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="font-mono">{executionResult.totalDurationMs}ms</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 text-[10px] px-1.5 gap-1 text-muted-foreground hover:text-foreground"
-                        onClick={() => setIsTraceExpanded((v) => !v)}
-                        title={isTraceExpanded ? "Collapse trace view" : "Expand trace view"}
-                      >
-                        {isTraceExpanded ? (
-                          <>
-                            <Minimize2 className="w-3 h-3" />
-                            <span>Collapse</span>
-                          </>
-                        ) : (
-                          <>
-                            <Maximize2 className="w-3 h-3" />
-                            <span>Expand</span>
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div
-                    className={`flex flex-col gap-1.5 overflow-y-auto hide-scrollbar transition-all duration-200 ${
-                      isTraceExpanded
-                        ? "min-h-[460px] max-h-[750px]"
-                        : "min-h-[300px] max-h-[500px]"
-                    }`}
-                  >
-                    {executionResult.trace.map((t, idx) => {
-                      const isFailed = t.status === "failed";
-                      const isNodeExpanded = expandedTraceNodes[idx] ?? isTraceExpanded;
-                      const outputObj = (t.output && typeof t.output === "object" ? t.output : null) as Record<string, unknown> | null;
-                      const streamBatches = (outputObj?.streamBatches || []) as Array<{
-                        index: number;
-                        delta: string;
-                        content: string;
-                        timestamp: string;
-                        formatted?: unknown;
-                        raw?: unknown;
-                      }>;
-                      const hasBatches = streamBatches.length > 0;
-                      const activeView = traceNodeViews[idx] || (hasBatches ? "batches" : "output");
-                      const activeFormat = batchFormatViews[idx] || "event";
-
-                      // Helper to extract clean output text / object
-                      const cleanOutput = outputObj
-                        ? outputObj.response || outputObj.structuredResponse || outputObj.messages || outputObj
-                        : t.output;
-
-                      return (
-                        <div
-                          key={idx}
-                          className={`p-2.5 rounded-lg border flex flex-col gap-2 text-[11px] ${
-                            isFailed
-                              ? "bg-destructive/10 border-destructive/30 text-destructive"
-                              : "bg-background/80 border-border"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-semibold text-foreground flex items-center gap-1.5">
-                                <span
-                                  className={`h-1.5 w-1.5 rounded-full ${
-                                    isFailed ? "bg-destructive" : "bg-emerald-400"
-                                  }`}
-                                />
-                                {t.label}
-                              </span>
-                              {hasBatches && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[8.5px] px-1.5 py-0 h-4 font-mono bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30 flex items-center gap-1"
-                                >
-                                  <Radio className="w-2.5 h-2.5 animate-pulse text-cyan-500" />
-                                  <span>{streamBatches.length} Stream Batches</span>
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[9px] text-muted-foreground font-mono">
-                                {t.nodeId}
-                              </span>
-                              {Boolean(t.output) && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigator.clipboard.writeText(JSON.stringify(t.output, null, 2));
-                                    toast.success(`Copied output for ${t.label}`);
-                                  }}
-                                  title="Copy node output"
-                                  className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
-                                >
-                                  <Copy className="w-2.5 h-2.5" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Sub-view switcher tabs if node has stream batches */}
-                          {hasBatches && (
-                            <div className="flex items-center justify-between bg-muted/40 p-1 rounded-md border border-border/40 text-[9.5px] font-mono gap-1.5 flex-wrap">
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setTraceNodeViews((prev) => ({
-                                      ...prev,
-                                      [idx]: "batches",
-                                    }))
-                                  }
-                                  className={`px-2 py-0.5 rounded transition-all font-medium ${
-                                    activeView === "batches"
-                                      ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 font-semibold"
-                                      : "text-muted-foreground hover:text-foreground"
-                                  }`}
-                                >
-                                  ⚡ Stream Batches ({streamBatches.length})
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setTraceNodeViews((prev) => ({
-                                      ...prev,
-                                      [idx]: "output",
-                                    }))
-                                  }
-                                  className={`px-2 py-0.5 rounded transition-all font-medium ${
-                                    activeView === "output"
-                                      ? "bg-background text-foreground font-semibold shadow-xs"
-                                      : "text-muted-foreground hover:text-foreground"
-                                  }`}
-                                >
-                                  Final Output
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setTraceNodeViews((prev) => ({
-                                      ...prev,
-                                      [idx]: "req",
-                                    }))
-                                  }
-                                  className={`px-2 py-0.5 rounded transition-all font-medium ${
-                                    activeView === "req"
-                                      ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 font-semibold"
-                                      : "text-muted-foreground hover:text-foreground"
-                                  }`}
-                                >
-                                  AI Request
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setTraceNodeViews((prev) => ({
-                                      ...prev,
-                                      [idx]: "raw",
-                                    }))
-                                  }
-                                  className={`px-2 py-0.5 rounded transition-all font-medium ${
-                                    activeView === "raw"
-                                      ? "bg-background text-foreground font-semibold shadow-xs"
-                                      : "text-muted-foreground hover:text-foreground"
-                                  }`}
-                                >
-                                  Raw JSON
-                                </button>
-                              </div>
-
-                              <div className="flex items-center gap-1.5">
-                                {activeView === "batches" && (
-                                  <div className="flex items-center gap-0.5 bg-background p-0.5 rounded border border-border/50 text-[8.5px]">
-                                    <button
-                                      type="button"
-                                      onClick={() => setBatchFormatViews((prev) => ({ ...prev, [idx]: "event" }))}
-                                      className={`px-1.5 py-0.5 rounded transition-colors ${
-                                        activeFormat === "event"
-                                          ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 font-semibold"
-                                          : "text-muted-foreground hover:text-foreground"
-                                      }`}
-                                    >
-                                      Configured Event
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setBatchFormatViews((prev) => ({ ...prev, [idx]: "delta" }))}
-                                      className={`px-1.5 py-0.5 rounded transition-colors ${
-                                        activeFormat === "delta"
-                                          ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 font-semibold"
-                                          : "text-muted-foreground hover:text-foreground"
-                                      }`}
-                                    >
-                                      Delta
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setBatchFormatViews((prev) => ({ ...prev, [idx]: "raw" }))}
-                                      className={`px-1.5 py-0.5 rounded transition-colors ${
-                                        activeFormat === "raw"
-                                          ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 font-semibold"
-                                          : "text-muted-foreground hover:text-foreground"
-                                      }`}
-                                    >
-                                      Raw Chunk
-                                    </button>
-                                  </div>
-                                )}
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const exportBatches = streamBatches.map((b) =>
-                                      activeFormat === "delta"
-                                        ? b.delta
-                                        : activeFormat === "raw"
-                                          ? b.raw
-                                          : (b.formatted ?? b)
-                                    );
-                                    navigator.clipboard.writeText(
-                                      JSON.stringify(exportBatches, null, 2)
-                                    );
-                                    toast.success(`Copied all ${streamBatches.length} streaming event batches`);
-                                  }}
-                                  className="text-[8.5px] text-muted-foreground hover:text-cyan-500 px-1 py-0.5 underline flex items-center gap-1"
-                                >
-                                  <Copy className="w-2.5 h-2.5" /> Copy Batches
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* View 1: Stream Batches Timeline */}
-                          {hasBatches && activeView === "batches" && (
-                            <div className="flex flex-col gap-2 max-h-[380px] overflow-y-auto p-1.5 bg-muted/20 rounded-md border border-border/40 hide-scrollbar">
-                              {/* Full Accumulated Stream Preview */}
-                              <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-black/40 border border-cyan-500/30">
-                                <div className="flex items-center justify-between text-[9px] text-muted-foreground font-mono">
-                                  <span className="font-bold text-cyan-400 flex items-center gap-1">
-                                    <Sparkles className="w-3 h-3 text-cyan-400" />
-                                    Complete Streamed Response ({streamBatches.length} tokens streamed)
-                                  </span>
-                                  <span className="text-[8px] text-emerald-400 font-medium">
-                                    Native AI SSE Stream (Unbroken)
-                                  </span>
-                                </div>
-                                <div className="text-[10px] font-mono text-cyan-100 whitespace-pre-wrap select-text p-2 rounded bg-background/80 border border-border/40 max-h-[140px] overflow-y-auto hide-scrollbar leading-relaxed">
-                                  {streamBatches[streamBatches.length - 1]?.content || (cleanOutput && typeof cleanOutput === "string" ? cleanOutput : "")}
-                                </div>
-                              </div>
-
-                              <div className="flex items-center justify-between text-[9px] text-muted-foreground px-1 font-mono pt-1">
-                                <span className="font-semibold uppercase text-muted-foreground">
-                                  Individual Event Chunks ({streamBatches.length})
-                                </span>
-                                <span className="text-[8px] italic">
-                                  Sub-word BPE token deltas received from AI socket
-                                </span>
-                              </div>
-                              {streamBatches.map((batch) => {
-                                const key = `${idx}_${batch.index}`;
-                                const isRawOpen = expandedBatchRaw[key];
-                                const eventData = batch.formatted || {
-                                  event: "on_chat_model_stream",
-                                  agent: t.label,
-                                  data: { delta: batch.delta, content: batch.content },
-                                };
-
-                                return (
-                                  <div
-                                    key={batch.index}
-                                    className="flex flex-col gap-1 p-1.5 rounded bg-background/90 border border-border/50 text-[10px] font-mono hover:border-cyan-500/40 transition-colors"
-                                  >
-                                    <div className="flex items-center justify-between text-[9px] text-muted-foreground">
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="font-bold text-cyan-600 dark:text-cyan-400">
-                                          Batch #{batch.index + 1}
-                                        </span>
-                                        {Boolean(batch.delta) && (
-                                          <span className="text-[8px] text-muted-foreground/80 px-1 py-0 bg-muted rounded">
-                                            {batch.delta.length} chars
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-mono text-[8.5px]">
-                                          {batch.timestamp
-                                            ? new Date(batch.timestamp).toLocaleTimeString([], {
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                                second: "2-digit",
-                                                fractionalSecondDigits: 3,
-                                              })
-                                            : ""}
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            const itemToCopy =
-                                              activeFormat === "delta"
-                                                ? batch.delta
-                                                : activeFormat === "raw"
-                                                  ? batch.raw
-                                                  : eventData;
-                                            navigator.clipboard.writeText(
-                                              typeof itemToCopy === "string"
-                                                ? itemToCopy
-                                                : JSON.stringify(itemToCopy, null, 2)
-                                            );
-                                            toast.success(`Copied batch #${batch.index + 1}`);
-                                          }}
-                                          className="text-muted-foreground hover:text-cyan-500 p-0.5 rounded"
-                                          title="Copy this chunk"
-                                        >
-                                          <Copy className="w-2.5 h-2.5" />
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {/* Format Display: Configured Event / Delta / Raw */}
-                                    {activeFormat === "event" ? (
-                                      <pre className="p-1.5 rounded bg-black/60 text-[8.5px] font-mono text-cyan-300 overflow-x-auto max-h-[160px] border border-cyan-500/25 selection:bg-cyan-900">
-                                        {typeof eventData === "string"
-                                          ? eventData
-                                          : JSON.stringify(eventData, null, 2)}
-                                      </pre>
-                                    ) : activeFormat === "delta" ? (
-                                      <div className="p-1 rounded bg-muted/40 text-foreground font-mono text-[9.5px] whitespace-pre-wrap break-all border border-border/30">
-                                        {batch.delta || (
-                                          <span className="text-muted-foreground/60 italic font-sans text-[9px]">
-                                            (empty delta)
-                                          </span>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <pre className="p-1.5 rounded bg-black/40 text-[8.5px] font-mono text-cyan-200 overflow-x-auto max-h-[140px] border border-cyan-500/20">
-                                        {JSON.stringify(batch.raw || batch, null, 2)}
-                                      </pre>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-
-                          {/* View 2: Clean Final Output */}
-                          {(!hasBatches || activeView === "output") && Boolean(t.output) && (
-                            <pre
-                              className={`text-[9px] font-mono p-2 rounded overflow-auto hide-scrollbar transition-all ${
-                                isNodeExpanded
-                                  ? "max-h-[380px]"
-                                  : "max-h-[260px]"
-                              } ${
-                                isFailed
-                                  ? "bg-destructive/20 text-destructive border border-destructive/30"
-                                  : "text-muted-foreground bg-muted/30"
-                              }`}
-                            >
-                              {typeof cleanOutput === "string"
-                                ? cleanOutput
-                                : JSON.stringify(cleanOutput, null, 2)}
-                            </pre>
-                          )}
-
-                          {/* View 3: AI Request Inspection */}
-                          {activeView === "req" && (
-                            <pre
-                              className={`text-[9px] font-mono p-2.5 rounded overflow-auto hide-scrollbar transition-all ${
-                                isNodeExpanded ? "max-h-[380px]" : "max-h-[260px]"
-                              } text-cyan-300 bg-black/60 border border-cyan-500/20`}
-                            >
-                              {JSON.stringify(
-                                outputObj?.llmRequest || {
-                                  provider,
-                                  model: modelName,
-                                  stream: true,
-                                  status: "Streaming enabled via agent streamConfig",
-                                },
-                                null,
-                                2
-                              )}
-                            </pre>
-                          )}
-
-                          {/* View 4: Complete Raw JSON */}
-                          {activeView === "raw" && (
-                            <pre
-                              className={`text-[9px] font-mono p-2 rounded overflow-auto hide-scrollbar transition-all ${
-                                isNodeExpanded
-                                  ? "max-h-[380px]"
-                                  : "max-h-[260px]"
-                              } text-muted-foreground bg-muted/30`}
-                            >
-                              {JSON.stringify(t.output, null, 2)}
-                            </pre>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center p-6 border rounded-xl border-dashed text-muted-foreground text-[11px]">
-                  Click <strong>Run Graph</strong> to test in your browser.
-                </div>
-              )}
+              <TestingTraceTab
+                executionResult={executionResult}
+                isTraceExpanded={isTraceExpanded}
+                setIsTraceExpanded={setIsTraceExpanded}
+                nodes={nodes}
+                edges={edges}
+                expandedTraceNodes={expandedTraceNodes}
+                setExpandedTraceNodes={setExpandedTraceNodes}
+                traceNodeViews={traceNodeViews}
+                setTraceNodeViews={setTraceNodeViews}
+                batchFormatViews={batchFormatViews}
+                setBatchFormatViews={setBatchFormatViews}
+                expandedBatchRaw={expandedBatchRaw}
+                expandedLogDetails={expandedLogDetails}
+                setExpandedLogDetails={setExpandedLogDetails}
+                provider={provider}
+                modelName={modelName}
+              />
             </TabsContent>
 
-            {/* 2. Final State Tab */}
+            {/* 2. Logs Tab (All Steps Configured in LangGraph Node) */}
+            <TabsContent value="logs" className="flex flex-col gap-2 pt-2 m-0">
+              <TestingLogsTab
+                allLogs={allLogs}
+                filteredLogs={filteredLogs}
+                allLogNodes={allLogNodes}
+                logStats={logStats}
+                logSearchQuery={logSearchQuery}
+                setLogSearchQuery={setLogSearchQuery}
+                logNodeFilter={logNodeFilter}
+                setLogNodeFilter={setLogNodeFilter}
+                logLevelFilter={logLevelFilter}
+                setLogLevelFilter={setLogLevelFilter}
+                copiedAllLogs={copiedAllLogs}
+                handleCopyAllLogs={handleCopyAllLogs}
+                expandedLogDetails={expandedLogDetails}
+                setExpandedLogDetails={setExpandedLogDetails}
+                isTraceExpanded={isTraceExpanded}
+              />
+            </TabsContent>
+
+            {/* 3. Final State Tab */}
             <TabsContent value="state" className="flex flex-col gap-2 pt-2 m-0">
-              {executionResult?.finalState ? (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10px] text-muted-foreground">
-                      Active State Channels
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 text-[10px] px-2 gap-1"
-                      onClick={copyStateJson}
-                    >
-                      {copiedKey ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      Copy JSON
-                    </Button>
-                  </div>
-                  <pre
-                    className={`p-2.5 rounded-lg bg-background border font-mono text-[10px] text-foreground overflow-y-auto hide-scrollbar transition-all ${
-                      isTraceExpanded ? "max-h-[600px]" : "max-h-[380px]"
-                    }`}
-                  >
-                    {JSON.stringify(executionResult.finalState, null, 2)}
-                  </pre>
-                </div>
-              ) : (
-                <div className="text-center p-6 border rounded-xl border-dashed text-muted-foreground text-[11px]">
-                  No state recorded yet.
-                </div>
-              )}
+              <TestingStateTab
+                finalState={executionResult?.finalState}
+                isTraceExpanded={isTraceExpanded}
+                copiedKey={copiedKey}
+                copyStateJson={copyStateJson}
+              />
             </TabsContent>
 
-            {/* 3. Checkpoints Tab */}
+            {/* 4. Checkpoints Tab */}
             <TabsContent value="checkpoints" className="flex flex-col gap-2 pt-2 m-0">
-              {checkpoints.length > 0 ? (
-                <div
-                  className={`flex flex-col gap-1.5 overflow-y-auto hide-scrollbar transition-all ${
-                    isTraceExpanded ? "max-h-[600px]" : "max-h-[380px]"
-                  }`}
-                >
-                  {checkpoints.map((cp, idx) => (
-                    <div
-                      key={cp.id}
-                      className="p-2 rounded-lg border bg-background/80 flex flex-col gap-1 text-[10px]"
-                    >
-                      <div className="flex items-center justify-between font-mono">
-                        <span className="text-primary font-bold">
-                          Turn #{idx + 1} — {cp.stepName}
-                        </span>
-                        <span className="text-muted-foreground text-[9px]">
-                          {new Date(cp.timestamp).toLocaleTimeString()}
-                        </span>
-                      </div>
-                      <div className="text-[9px] text-muted-foreground">
-                        State keys: {Object.keys(cp.state).join(", ") || "(empty)"}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center p-6 border rounded-xl border-dashed text-muted-foreground text-[11px]">
-                  No checkpoints for thread <code>{threadId}</code>.
-                </div>
-              )}
+              <TestingCheckpointsTab
+                checkpoints={checkpoints}
+                threadId={threadId}
+                isTraceExpanded={isTraceExpanded}
+              />
             </TabsContent>
 
-            {/* 4. DB Tables Tab */}
+            {/* 5. DB Tables Tab */}
             <TabsContent value="db" className="flex flex-col gap-2 pt-2 m-0">
-              {dbTables.length > 0 ? (
-                <div className="flex flex-col gap-2">
-                  {dbTables.map((tbl) => (
-                    <div key={tbl.name} className="flex flex-col gap-1 border rounded-lg p-2 bg-background/80">
-                      <div className="flex items-center justify-between font-mono text-[10px]">
-                        <span className="font-bold text-foreground">Table: {tbl.name}</span>
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
-                          {tbl.rows.length} rows
-                        </Badge>
-                      </div>
-                      <pre
-                        className={`p-1.5 rounded bg-muted/30 font-mono text-[9px] overflow-y-auto hide-scrollbar transition-all ${
-                          isTraceExpanded ? "max-h-[380px]" : "max-h-[240px]"
-                        }`}
-                      >
-                        {JSON.stringify(tbl.rows, null, 2)}
-                      </pre>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center p-6 border rounded-xl border-dashed text-muted-foreground text-[11px]">
-                  No simulation tables populated yet.
-                </div>
-              )}
+              <TestingDbTab
+                dbTables={dbTables}
+                isTraceExpanded={isTraceExpanded}
+              />
             </TabsContent>
           </Tabs>
         </div>

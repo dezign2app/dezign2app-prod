@@ -17,6 +17,8 @@ import {
   LangGraphConditionalRoutes,
   LangGraphStepToolsBadge,
 } from "./langgraph-step";
+import { useSimulationStore } from "@/lib/stores/simulationStore";
+import { Terminal } from "lucide-react";
 
 const DEFAULT_STEP_LABEL = "Graph Step";
 
@@ -28,6 +30,11 @@ export const LangGraphStepNode = ({
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
+
+  const isSimulating = useSimulationStore((s) => s.currentNodeId === id);
+  const isVisited = useSimulationStore((s) => s.activeNodeIds.includes(id));
+  const simTraceEntry = useSimulationStore((s) => s.trace.find((t) => t.nodeId === id));
+
   const [isEditingName, setIsEditingName] = useState(!data.label);
   const [nameValue, setNameValue] = useState(data.label || "");
 
@@ -179,6 +186,43 @@ export const LangGraphStepNode = ({
       )}
 
       {stepType !== STEP_TYPE_ROUTER && <LangGraphStepToolsBadge data={data} />}
+
+      {/* Simulation status & logs indicator */}
+      {(isSimulating || isVisited || simTraceEntry) && (
+        <div className="flex items-center justify-between px-2 py-1 rounded bg-black/40 border border-border/40 text-[9px] font-mono mt-0.5">
+          <div className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                "w-1.5 h-1.5 rounded-full shrink-0",
+                isSimulating
+                  ? "bg-amber-400 animate-ping"
+                  : simTraceEntry?.status === "failed"
+                    ? "bg-red-400"
+                    : "bg-emerald-400 shadow-xs shadow-emerald-400"
+              )}
+            />
+            <span
+              className={cn(
+                "font-medium",
+                isSimulating
+                  ? "text-amber-300"
+                  : simTraceEntry?.status === "failed"
+                    ? "text-red-300"
+                    : "text-emerald-300"
+              )}
+            >
+              {isSimulating ? "Running..." : simTraceEntry?.status === "failed" ? "Failed" : "Simulated"}
+            </span>
+          </div>
+
+          {simTraceEntry?.logs && simTraceEntry.logs.length > 0 && (
+            <span className="text-[8px] text-muted-foreground flex items-center gap-0.5">
+              <Terminal className="w-2.5 h-2.5 text-blue-400" />
+              {simTraceEntry.logs.length} logs
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 };

@@ -57,6 +57,8 @@ interface UseCanvasNodeSyncProps {
   handleAddSuggestedChannel?: (channel: LangGraphInputChannel) => void;
   handleUpdateInputChannel?: (index: number, changes: Partial<LangGraphInputChannel>) => void;
   handleDeleteInputChannel?: (index: number) => void;
+  handleAutoMapStateChannels?: () => void;
+  handleMapStateToInput?: (stateKey: string, inputChannelIdOrKey?: string) => void;
   suggestedParams?: Array<{ key: string; type: LangGraphInputChannel["type"]; description?: string; required?: boolean }>;
 }
 
@@ -81,6 +83,8 @@ export function useCanvasNodeSync({
   handleAddSuggestedChannel,
   handleUpdateInputChannel,
   handleDeleteInputChannel,
+  handleAutoMapStateChannels,
+  handleMapStateToInput,
   suggestedParams,
 }: UseCanvasNodeSyncProps) {
   useEffect(() => {
@@ -100,9 +104,15 @@ export function useCanvasNodeSync({
               onAddSuggestedChannel: handleAddSuggestedChannel,
               onUpdateInputChannel: handleUpdateInputChannel,
               onDeleteInputChannel: handleDeleteInputChannel,
+              onAutoMapStateChannels: handleAutoMapStateChannels,
+              onMapStateToInput: handleMapStateToInput,
               onOpenInputsTab: () => {
                 setSelectedNodeId(NODE_ID_START);
                 setActiveSideTab("inputs");
+              },
+              onOpenStateTab: () => {
+                setSelectedNodeId(NODE_ID_STATE_GLOBAL);
+                setActiveSideTab("state");
               },
               onOpenTestingTab: () => {
                 setSelectedNodeId(NODE_ID_START);
@@ -367,6 +377,8 @@ export function useCanvasNodeSync({
     handleAddSuggestedChannel,
     handleUpdateInputChannel,
     handleDeleteInputChannel,
+    handleAutoMapStateChannels,
+    handleMapStateToInput,
     setNodes,
     setEdges,
     setSelectedNodeId,
