@@ -572,3 +572,325 @@ export const REDUCER_PRESETS: Record<
     },
   ],
 };
+
+/**
+ * Type definition for state channel test presets.
+ */
+export interface ChannelTestPreset {
+  label: string;
+  description: string;
+  value: unknown;
+}
+
+/**
+ * Channel type-specific presets for incoming state update payloads.
+ */
+export const CHANNEL_TYPE_PRESETS: Record<
+  "string" | "number" | "boolean" | "messages" | "array" | "object" | "json",
+  ChannelTestPreset[]
+> = {
+  string: [
+    {
+      label: "Updated Text",
+      description: "Standard string response or message",
+      value: "Hello! State transition test.",
+    },
+    {
+      label: "Append Chunk",
+      description: "Additional follow-up response chunk",
+      value: "Stream finished: Final synthesized result.",
+    },
+    {
+      label: "Multiline Log",
+      description: "Multi-line string payload",
+      value: "Step 1: Analyzed input\nStep 2: Executed tool\nStep 3: State updated",
+    },
+    {
+      label: "Empty String",
+      description: "Reset or clear string channel",
+      value: "",
+    },
+  ],
+  number: [
+    {
+      label: "+1 (Increment)",
+      description: "Increment integer by 1",
+      value: 1,
+    },
+    {
+      label: "+5 (Step)",
+      description: "Increase count by 5",
+      value: 5,
+    },
+    {
+      label: "-1 (Decrement)",
+      description: "Decrease count by 1",
+      value: -1,
+    },
+    {
+      label: "0 (Reset)",
+      description: "Reset number to 0",
+      value: 0,
+    },
+    {
+      label: "100",
+      description: "Set number to 100",
+      value: 100,
+    },
+  ],
+  boolean: [
+    {
+      label: "true",
+      description: "Set boolean flag to true",
+      value: true,
+    },
+    {
+      label: "false",
+      description: "Set boolean flag to false",
+      value: false,
+    },
+  ],
+  messages: [
+    {
+      label: "Assistant Message",
+      description: "Appends assistant message to chat history",
+      value: [
+        {
+          id: "msg-assistant-1",
+          role: "assistant",
+          content: "I have processed your query and updated graph state.",
+        },
+      ],
+    },
+    {
+      label: "User Query",
+      description: "Appends user message to chat history",
+      value: [
+        {
+          id: "msg-user-1",
+          role: "user",
+          content: "Could you summarize the results?",
+        },
+      ],
+    },
+    {
+      label: "Update Message (Dedup)",
+      description: "Replaces existing message matching same ID",
+      value: [
+        {
+          id: "msg-sim-1",
+          role: "assistant",
+          content: "Stream finished: Final synthesized result.",
+        },
+      ],
+    },
+    {
+      label: "Tool Result",
+      description: "Appends tool call output message",
+      value: [
+        {
+          id: "msg-tool-1",
+          role: "tool",
+          name: "search",
+          content: "Found 3 matching documents.",
+        },
+      ],
+    },
+  ],
+  array: [
+    {
+      label: "Append Item",
+      description: "Appends single element to array",
+      value: ["new_item"],
+    },
+    {
+      label: "Multiple Items",
+      description: "Appends multiple elements to array",
+      value: ["item_alpha", "item_beta"],
+    },
+    {
+      label: "Object Record",
+      description: "Appends structured object to array",
+      value: [{ id: 1, status: "completed" }],
+    },
+    {
+      label: "Empty Array",
+      description: "Resets array to empty",
+      value: [],
+    },
+  ],
+  object: [
+    {
+      label: "Status & Timestamp",
+      description: "Standard metadata with status and timestamp",
+      value: {
+        status: "success",
+        lastNode: "agent_executor",
+        timestamp: new Date().toISOString(),
+      },
+    },
+    {
+      label: "Nested Config",
+      description: "Nested configuration dictionary",
+      value: {
+        config: { timeout: 5000, retry: true },
+        active: true,
+      },
+    },
+    {
+      label: "Empty Object",
+      description: "Resets object to empty",
+      value: {},
+    },
+  ],
+  json: [
+    {
+      label: "Status & Timestamp",
+      description: "Standard metadata with status and timestamp",
+      value: {
+        status: "success",
+        lastNode: "agent_executor",
+        timestamp: new Date().toISOString(),
+      },
+    },
+    {
+      label: "Nested Config",
+      description: "Nested configuration dictionary",
+      value: {
+        config: { timeout: 5000, retry: true },
+        active: true,
+      },
+    },
+    {
+      label: "Empty Object",
+      description: "Resets object to empty",
+      value: {},
+    },
+  ],
+};
+
+/**
+ * Gets the test presets appropriate for a channel's type and reducer.
+ */
+export function getPresetsForChannel(
+  channel?: LangGraphStateChannel,
+): ChannelTestPreset[] {
+  if (!channel) return CHANNEL_TYPE_PRESETS.string;
+  const channelType = channel.type as keyof typeof CHANNEL_TYPE_PRESETS;
+  const byType = CHANNEL_TYPE_PRESETS[channelType];
+  if (byType && byType.length > 0) {
+    return byType;
+  }
+  return CHANNEL_TYPE_PRESETS.string;
+}
+
+/**
+ * Returns default incoming test value matching a channel's type.
+ */
+export function getDefaultPresetValueForChannel(
+  channel?: LangGraphStateChannel,
+): unknown {
+  const presets = getPresetsForChannel(channel);
+  return presets[0]?.value ?? "";
+}
+
+/**
+ * Formats a preset value for editing in textareas (valid JSON / string format).
+ */
+export function formatPresetValue(val: unknown): string {
+  if (typeof val === "string") {
+    return JSON.stringify(val);
+  }
+  if (typeof val === "number" || typeof val === "boolean") {
+    return String(val);
+  }
+  return JSON.stringify(val, null, 2);
+}
+
+/**
+ * Retrieves unit-test scenario presets for a reducer, dynamically fallback to
+ * channel type if it's a custom developer reducer.
+ */
+export function getPlaygroundPresetsForReducer(
+  reducerName: string,
+  stateChannels: LangGraphStateChannel[] = [],
+  customReducers: LangGraphCustomReducer[] = [],
+): Array<{ label: string; description: string; prev: unknown; next: unknown }> {
+  if (REDUCER_PRESETS[reducerName]) {
+    return REDUCER_PRESETS[reducerName];
+  }
+
+  // Find channel associated with this reducer
+  const channel = stateChannels.find(
+    (c) =>
+      c.reducer === reducerName ||
+      c.key ===
+        customReducers.find(
+          (r) => r.name === reducerName || r.id === reducerName,
+        )?.targetField,
+  );
+
+  const channelType = (channel?.type || "string") as keyof typeof CHANNEL_TYPE_PRESETS;
+  const channelKey = channel?.key || "field";
+  const typePresets =
+    CHANNEL_TYPE_PRESETS[channelType] ?? CHANNEL_TYPE_PRESETS.string;
+
+  if (channelType === "string") {
+    return [
+      {
+        label: "Append Text",
+        description: "Appends follow-up text to existing string",
+        prev: "Initial response",
+        next: "Follow-up chunk",
+      },
+      {
+        label: "From Empty State",
+        description: "Updates empty initial string",
+        prev: "",
+        next: "Hello! State transition test.",
+      },
+      {
+        label: "Multiline Update",
+        description: "Adds a new line to existing string",
+        prev: "Line 1: Completed",
+        next: "Line 2: New output",
+      },
+    ];
+  }
+
+  if (channelType === "number") {
+    return [
+      {
+        label: "Increment (+1)",
+        description: "Increments previous counter by 1",
+        prev: 0,
+        next: 1,
+      },
+      {
+        label: "Step (+5)",
+        description: "Increments existing counter by 5",
+        prev: 10,
+        next: 5,
+      },
+      {
+        label: "Reset to Zero",
+        description: "Resets counter",
+        prev: 42,
+        next: 0,
+      },
+    ];
+  }
+
+  return typePresets.map((tp, idx) => ({
+    label: tp.label,
+    description: tp.description,
+    prev:
+      idx === 0
+        ? getChannelDefaultValue(
+            channel || { key: channelKey, type: channelType, reducer: "replace" },
+          )
+        : tp.value,
+    next: tp.value,
+  }));
+}
+

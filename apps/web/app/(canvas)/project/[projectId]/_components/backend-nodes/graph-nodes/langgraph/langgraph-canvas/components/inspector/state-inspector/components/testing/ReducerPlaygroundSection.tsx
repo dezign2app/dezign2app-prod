@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Code2,
   CheckCircle2,
@@ -24,6 +24,8 @@ import type {
 import { BUILT_IN_REDUCERS } from "../../constants";
 import {
   REDUCER_PRESETS,
+  getPlaygroundPresetsForReducer,
+  formatPresetValue,
   type ReducerExecutionResult,
 } from "../../utils/reducerSimulationEngine";
 
@@ -71,6 +73,14 @@ export function ReducerPlaygroundSection({
   copiedKey,
   onCopy,
 }: ReducerPlaygroundSectionProps) {
+  const playgroundPresets = useMemo(() => {
+    return getPlaygroundPresetsForReducer(
+      selectedReducer,
+      stateChannels,
+      customReducers,
+    );
+  }, [selectedReducer, stateChannels, customReducers]);
+
   return (
     <div className="flex flex-col gap-3.5">
       {/* Reducer Selector Box */}
@@ -100,10 +110,14 @@ export function ReducerPlaygroundSection({
             if (matched) {
               setCustomPlaygroundCode(matched.code);
             }
-            const preset = REDUCER_PRESETS[val];
-            if (preset && preset[0]) {
-              setPrevInput(JSON.stringify(preset[0].prev, null, 2));
-              setNextInput(JSON.stringify(preset[0].next, null, 2));
+            const presets = getPlaygroundPresetsForReducer(
+              val,
+              stateChannels,
+              customReducers,
+            );
+            if (presets && presets[0]) {
+              setPrevInput(formatPresetValue(presets[0].prev));
+              setNextInput(formatPresetValue(presets[0].next));
             }
           }}
         >
@@ -184,17 +198,17 @@ export function ReducerPlaygroundSection({
         )}
 
         {/* Quick Presets for this reducer */}
-        {REDUCER_PRESETS[selectedReducer] && (
+        {playgroundPresets.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap pt-1">
             <span className="text-[10px] text-muted-foreground font-semibold">
               Test Scenarios:
             </span>
-            {REDUCER_PRESETS[selectedReducer].map((preset, idx) => (
+            {playgroundPresets.map((preset, idx) => (
               <button
                 key={idx}
                 type="button"
                 onClick={() => onApplyPlaygroundPreset(preset)}
-                className="text-[10px] px-2 py-0.5 rounded-full bg-secondary/50 hover:bg-secondary text-secondary-foreground border border-border/50 hover:border-purple-500/40 transition-colors"
+                className="text-[10px] px-2 py-0.5 rounded-full bg-secondary/50 hover:bg-secondary text-secondary-foreground border border-border/50 hover:border-purple-500/40 transition-colors cursor-pointer"
                 title={preset.description}
               >
                 {preset.label}

@@ -50,6 +50,7 @@ export function isLangGraphChannelType(
 }
 
 export type LangGraphInputChannel = {
+  id?: string;
   key: string;
   type:
     | "string"
