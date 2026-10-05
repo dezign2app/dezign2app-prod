@@ -148,7 +148,8 @@ export function InputsTabContent({
     (c) => c.source === "custom" || (!c.source && !suggestedParams.some((s) => s.key === c.key)),
   );
 
-  const globalIdx = (ch: LangGraphInputChannel) => inputChannels.indexOf(ch);
+  const globalIdx = (ch: LangGraphInputChannel) =>
+    inputChannels.findIndex((c) => (c.id && ch.id ? c.id === ch.id : c === ch));
 
   const handleChange = (idx: number, changes: Partial<LangGraphInputChannel>) => {
     setInputChannels((prev) => prev.map((c, i) => (i === idx ? { ...c, ...changes } : c)));
@@ -161,20 +162,39 @@ export function InputsTabContent({
   const handleAddCustom = () => {
     setInputChannels((prev) => [
       ...prev,
-      { key: `var_${prev.length + 1}`, type: "string", required: false, description: "", source: "custom" },
+      {
+        id: `input_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        key: `var_${prev.length + 1}`,
+        type: "string",
+        required: false,
+        description: "",
+        source: "custom",
+      },
     ]);
   };
 
   const handleAddSuggested = (s: SuggestedParam) => {
     setInputChannels((prev) => [
       ...prev,
-      { key: s.key, type: s.type, required: s.required ?? true, description: s.description || "", source: "request" },
+      {
+        id: `input_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        key: s.key,
+        type: s.type,
+        required: s.required ?? true,
+        description: s.description || "",
+        source: "request",
+      },
     ]);
   };
 
   const handleImportAll = () => {
     const toAdd = pendingSuggestions.map((s) => ({
-      key: s.key, type: s.type, required: s.required ?? true, description: s.description || "", source: "request" as const,
+      id: `input_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      key: s.key,
+      type: s.type,
+      required: s.required ?? true,
+      description: s.description || "",
+      source: "request" as const,
     }));
     setInputChannels((prev) => [...prev, ...toAdd]);
   };
@@ -235,7 +255,7 @@ export function InputsTabContent({
 
         {requestVars.map((ch) => (
           <ChannelEditor
-            key={ch.key + globalIdx(ch)}
+            key={ch.id || `req_${globalIdx(ch)}`}
             input={ch}
             idx={globalIdx(ch)}
             stateChannels={stateChannels}
@@ -273,7 +293,7 @@ export function InputsTabContent({
 
         {customVars.map((ch) => (
           <ChannelEditor
-            key={ch.key + globalIdx(ch)}
+            key={ch.id || `custom_${globalIdx(ch)}`}
             input={ch}
             idx={globalIdx(ch)}
             stateChannels={stateChannels}

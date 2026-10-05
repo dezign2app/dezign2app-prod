@@ -1,8 +1,8 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
 import {
   Zap, Plus, Trash2, ChevronDown, Sparkles,
-  ArrowRight, Globe, Sliders, ChevronsRight, Play,
+  ArrowRight, Globe, Sliders, ChevronsRight, Play, Check,
 } from "lucide-react";
 import type { StartNode, LangGraphInputChannel, LangGraphStateChannel } from "@workspace/canvas";
 import { Button } from "@workspace/ui/components/button";
@@ -39,13 +39,37 @@ interface ChannelRowProps {
 
 function ChannelRow({ ch, idx, stateChannels, onUpdate, onDelete }: ChannelRowProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
   const typeColor = TYPE_COLORS[ch.type as InputChannelType] || TYPE_COLORS.string;
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
+  useEffect(() => {
+    if (!isEditing) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (rowRef.current && rowRef.current.contains(e.target as Node)) {
+        return;
+      }
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest?.(
+          "[role='listbox'], [data-radix-popper-content-wrapper], [data-radix-focus-guard], [data-radix-select-viewport]",
+        )
+      ) {
+        return;
+      }
+      setIsEditing(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isEditing]);
+
   if (isEditing) {
     return (
       <div
+        ref={rowRef}
         className="flex flex-col gap-1 px-2.5 py-1.5 bg-secondary/40 border-b border-border/40 nodrag"
         onClick={stop}
       >
@@ -56,7 +80,11 @@ function ChannelRow({ ch, idx, stateChannels, onUpdate, onDelete }: ChannelRowPr
             value={ch.key}
             autoFocus
             onChange={(e) => onUpdate(idx, { key: e.target.value })}
-            onBlur={() => setIsEditing(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === "Escape") {
+                setIsEditing(false);
+              }
+            }}
             placeholder="field_key"
           />
           <Select
@@ -75,8 +103,18 @@ function ChannelRow({ ch, idx, stateChannels, onUpdate, onDelete }: ChannelRowPr
           <Button
             variant="ghost"
             size="icon"
+            className="h-6 w-6 text-muted-foreground hover:text-emerald-400 shrink-0 nodrag"
+            onClick={(e) => { stop(e); setIsEditing(false); }}
+            title="Done"
+          >
+            <Check className="w-3 h-3 text-emerald-400" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0 nodrag"
-            onMouseDown={(e) => { stop(e); onDelete(idx); setIsEditing(false); }}
+            onClick={(e) => { stop(e); onDelete(idx); setIsEditing(false); }}
+            title="Delete variable"
           >
             <Trash2 className="w-3 h-3" />
           </Button>
@@ -217,6 +255,7 @@ export const LangGraphCanvasStartNode = ({
   const handleAddSuggested = useCallback((e: React.MouseEvent, s: typeof pendingSuggestions[0]) => {
     stop(e);
     onAddSuggestedChannel?.({
+      id: `input_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       key: s.key,
       type: s.type,
       required: s.required ?? true,
@@ -226,7 +265,8 @@ export const LangGraphCanvasStartNode = ({
   }, [onAddSuggestedChannel]);
 
   // Find global index for a channel (request or custom list index → allChannels index)
-  const globalIdx = (ch: LangGraphInputChannel) => allChannels.findIndex((c) => c === ch);
+  const globalIdx = (ch: LangGraphInputChannel) =>
+    allChannels.findIndex((c) => (c.id && ch.id ? c.id === ch.id : c === ch));
 
   return (
     <div
@@ -300,7 +340,7 @@ export const LangGraphCanvasStartNode = ({
 
             {requestVars.map((ch) => (
               <ChannelRow
-                key={ch.key + globalIdx(ch)}
+                key={ch.id || `req_${globalIdx(ch)}`}
                 ch={ch}
                 idx={globalIdx(ch)}
                 stateChannels={stateChannels}
@@ -361,7 +401,7 @@ export const LangGraphCanvasStartNode = ({
             ) : (
               customVars.map((ch) => (
                 <ChannelRow
-                  key={ch.key + globalIdx(ch)}
+                  key={ch.id || `custom_${globalIdx(ch)}`}
                   ch={ch}
                   idx={globalIdx(ch)}
                   stateChannels={stateChannels}

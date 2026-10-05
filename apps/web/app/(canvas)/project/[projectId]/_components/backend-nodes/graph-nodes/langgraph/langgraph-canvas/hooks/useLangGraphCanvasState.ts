@@ -34,7 +34,13 @@ export function useLangGraphCanvasState({
   const data = node.data;
 
   const [inputChannels, setInputChannels] = useState<LangGraphInputChannel[]>(
-    data.inputChannels || [],
+    () =>
+      (data.inputChannels || []).map((ch, idx) => ({
+        ...ch,
+        id:
+          ch.id ||
+          `input_${idx}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      })),
   );
   const [stateChannels, setStateChannels] = useState<LangGraphStateChannel[]>(
     () => {
@@ -200,6 +206,7 @@ export function useLangGraphCanvasState({
   // ── Input channel CRUD handlers ──
   const handleAddInputChannel = useCallback(() => {
     const newChannel: LangGraphInputChannel = {
+      id: `input_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       key: `var_${inputChannels.length + 1}`,
       type: "string",
       required: false,
@@ -223,7 +230,16 @@ export function useLangGraphCanvasState({
   }, []);
 
   const handleAddSuggestedChannel = useCallback((channel: LangGraphInputChannel) => {
-    setInputChannels((prev) => [...prev, { ...channel, source: channel.source || "request" }]);
+    setInputChannels((prev) => [
+      ...prev,
+      {
+        ...channel,
+        id:
+          channel.id ||
+          `input_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        source: channel.source || "request",
+      },
+    ]);
   }, []);
 
   // ── Derive suggested params from connected ServiceNode endpoints ──
