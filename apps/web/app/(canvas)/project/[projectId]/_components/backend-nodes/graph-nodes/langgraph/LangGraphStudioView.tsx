@@ -15,7 +15,10 @@ import { Button } from "@workspace/ui/components/button";
 import type { BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
-import { useLangGraphAutoLayout } from "../../../hooks/useAutoLayout";
+import {
+  useLangGraphAutoLayout,
+  getLangGraphFlowNodes,
+} from "../../../hooks/useAutoLayout";
 import { langGraphCanvasNodeTypes } from "./langgraph-canvas/nodes";
 import { useLangGraphCanvasState } from "./langgraph-canvas/hooks/useLangGraphCanvasState";
 import { LangGraphCanvasHeader } from "./langgraph-canvas/components/LangGraphCanvasHeader";
@@ -147,7 +150,11 @@ export function LangGraphStudioView({
     setActiveSideTab("inspector");
   }, [setSelectedNodeId, setActiveSideTab]);
 
-  const { handleLayout } = useLangGraphAutoLayout({ nodes, edges, onNodesChange });
+  const { handleLayout, panToFlow } = useLangGraphAutoLayout({
+    nodes,
+    edges,
+    onNodesChange,
+  });
 
   const connectedLLMId = useMemo(() => {
     if (!selectedNodeId) return null;
@@ -582,7 +589,17 @@ export function LangGraphStudioView({
               setEdges((eds) => eds.map((e) => ({ ...e, selected: false })));
             }}
             fitView
-            fitViewOptions={{ padding: 0.2, maxZoom: 0.85 }}
+            fitViewOptions={useMemo(() => {
+              const flowNodes = getLangGraphFlowNodes(nodes, edges);
+              return {
+                padding: 0.2,
+                maxZoom: 0.85,
+                nodes:
+                  flowNodes.length > 0
+                    ? flowNodes.map((n) => ({ id: n.id }))
+                    : undefined,
+              };
+            }, [nodes, edges])}
             defaultEdgeOptions={{
               animated: true,
               style: { stroke: "#a1a1aa", strokeWidth: 2 },

@@ -19,6 +19,7 @@ import { useCanvasNodeSync } from "./useCanvasNodeSync";
 import { useCanvasConnections } from "./useCanvasConnections";
 import { useCanvasPersistence } from "./useCanvasPersistence";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { getLangGraphFlowNodes } from "../../../../../hooks/auto-layout/langGraphLayout";
 
 export interface UseLangGraphCanvasStateProps {
   node: BackendNode;
@@ -85,10 +86,19 @@ export function useLangGraphCanvasState({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      triggerFitView({ padding: 0.35, duration: 200, maxZoom: 0.85 });
+      const flowNodes = getLangGraphFlowNodes(initialNodes, initialEdges);
+      triggerFitView({
+        nodes:
+          flowNodes.length > 0
+            ? flowNodes.map((n) => ({ id: n.id }))
+            : undefined,
+        padding: 0.35,
+        duration: 200,
+        maxZoom: 0.85,
+      });
     }, 50);
     return () => clearTimeout(timer);
-  }, [triggerFitView]);
+  }, [triggerFitView, initialNodes, initialEdges]);
 
   const handleAddChannel = useCallback(() => {
     const newChannel: LangGraphStateChannel = {
