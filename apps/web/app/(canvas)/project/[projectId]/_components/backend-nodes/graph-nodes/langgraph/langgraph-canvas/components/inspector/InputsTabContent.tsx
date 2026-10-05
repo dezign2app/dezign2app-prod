@@ -117,12 +117,14 @@ function ChannelEditor({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__none__" className="text-xs text-muted-foreground">— no mapping —</SelectItem>
-            {stateChannels.map((sc) => (
-              <SelectItem key={sc.key} value={sc.key} className="text-xs font-mono">
-                {sc.key}
-                <span className="ml-1 text-[9px] text-muted-foreground opacity-70">({sc.type})</span>
-              </SelectItem>
-            ))}
+            {stateChannels
+              .filter((sc) => Boolean(sc.key?.trim()))
+              .map((sc) => (
+                <SelectItem key={sc.key} value={sc.key} className="text-xs font-mono">
+                  {sc.key}
+                  <span className="ml-1 text-[9px] text-muted-foreground opacity-70">({sc.type})</span>
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
       </div>

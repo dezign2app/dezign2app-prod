@@ -10,13 +10,18 @@ import type {
   AgentNodeData,
   LangGraphAgentResponseFormatConfig,
 } from "@workspace/canvas";
-import { evaluateRouterBranch } from "./langgraph";
+import {
+  evaluateRouterBranch,
+  resolveRouterFieldValue,
+  extractJsonFromText,
+  resolveStructuredFieldValue,
+} from "./langgraph";
 import {
   saveBrowserCheckpoint,
   getLatestBrowserCheckpoint,
   BrowserCheckpoint,
 } from "./indexedDBCheckpointer";
-import type { SimulationTraceEntry } from "./types";
+import type { SimulationTraceEntry, SimulationStepLogEntry } from "./types";
 import { formatStreamingBatch, type StreamBatchItem } from "./streamFormatter";
 
 export interface BrowserExecutionParams {
@@ -56,6 +61,7 @@ export interface BrowserLLMResult {
 export interface BrowserExecutionResult {
   finalState: Record<string, unknown>;
   trace: SimulationTraceEntry[];
+  logs?: SimulationStepLogEntry[];
   totalDurationMs: number;
   visitedNodes: string[];
   latestAssistantResponse?: string;
@@ -129,6 +135,7 @@ export async function executeBrowserLangGraph(
   }
 
   const trace: SimulationTraceEntry[] = [];
+  const allRunLogs: SimulationStepLogEntry[] = [];
   const visitedNodes: string[] = [];
   let latestAssistantResponse: string | undefined;
 
@@ -198,6 +205,25 @@ export async function executeBrowserLangGraph(
   }
 
   // Record START step
+  const startLogs: SimulationStepLogEntry[] = [
+    {
+      timestamp: Date.now(),
+      level: "step",
+      message: `Graph execution started (threadId: "${threadId}")`,
+      nodeId: "START",
+      nodeLabel: "START",
+    },
+    {
+      timestamp: Date.now(),
+      level: "state",
+      message: `Initialized graph state channels (${Object.keys(state).length} active: ${Object.keys(state).join(", ")})`,
+      nodeId: "START",
+      nodeLabel: "START",
+      details: clone(state),
+    },
+  ];
+  allRunLogs.push(...startLogs);
+
   const startTrace: SimulationTraceEntry = {
     id: `trace_${generateId()}`,
     kind: "step",
@@ -206,6 +232,7 @@ export async function executeBrowserLangGraph(
     nodeId: "START",
     input: clone(state),
     output: clone(state),
+    logs: startLogs,
   };
   trace.push(startTrace);
   visitedNodes.push("START");
@@ -243,6 +270,26 @@ export async function executeBrowserLangGraph(
     onStepStart?.(node.id, nodeName, clone(state));
     const stepStartTime = Date.now();
 
+    const stepLogs: SimulationStepLogEntry[] = [];
+    const addLog = (
+      level: SimulationStepLogEntry["level"],
+      message: string,
+      details?: unknown,
+    ) => {
+      const entry: SimulationStepLogEntry = {
+        timestamp: Date.now(),
+        level,
+        message,
+        nodeId: node.id,
+        nodeLabel: nodeName,
+        ...(details !== undefined ? { details } : {}),
+      };
+      stepLogs.push(entry);
+      allRunLogs.push(entry);
+    };
+
+    addLog("step", `Started execution of step "${nodeName}" (type: ${node.type || "step"})`);
+
     const nodeTrace: SimulationTraceEntry = {
       id: `trace_${generateId()}`,
       kind: "step",
@@ -250,6 +297,7 @@ export async function executeBrowserLangGraph(
       status: "completed",
       nodeId: node.id,
       input: clone(state),
+      logs: stepLogs,
     };
     trace.push(nodeTrace);
 
@@ -329,9 +377,161 @@ export async function executeBrowserLangGraph(
           );
         }
 
-        // Call the real LLM endpoint directly in the browser
+        // Extract connected tools (via edges and agent data)
+        const connectedTools: Array<{ id: string; name: string; source?: string }> = [];
+        const seenToolIds = new Set<string>();
+
+        const toolEdges = edges.filter(
+          (e) =>
+            e.target === node.id &&
+            (e.targetHandle === "tool_in" ||
+              e.targetHandle === "tools_in" ||
+              e.targetHandle?.includes("tool")),
+        );
+        for (const e of toolEdges) {
+          const tn = nodes.find((n) => n.id === e.source);
+          const tId = tn?.id || e.source;
+          if (!seenToolIds.has(tId)) {
+            seenToolIds.add(tId);
+            connectedTools.push({
+              id: tId,
+              name: (tn?.data as any)?.name || (tn?.data as any)?.label || "Tool",
+              source: (tn?.data as any)?.source,
+            });
+          }
+        }
+        if (Array.isArray(agentData.tools)) {
+          for (const item of agentData.tools) {
+            const tName = typeof item === "string" ? item : (item as any)?.name || (item as any)?.id;
+            const tId = typeof item === "string" ? item : (item as any)?.id || tName;
+            if (tId && !seenToolIds.has(tId)) {
+              seenToolIds.add(tId);
+              connectedTools.push({ id: tId, name: tName || "Tool" });
+            }
+          }
+        }
+
+        // Extract connected middleware
+        const connectedMiddleware: Array<{ id: string; name: string; type?: string }> = [];
+        const seenMwIds = new Set<string>();
+        const mwEdges = edges.filter(
+          (e) =>
+            e.target === node.id &&
+            (e.targetHandle === "middleware_in" ||
+              e.targetHandle?.includes("middleware")),
+        );
+        for (const e of mwEdges) {
+          const mn = nodes.find((n) => n.id === e.source);
+          const mId = mn?.id || e.source;
+          if (!seenMwIds.has(mId)) {
+            seenMwIds.add(mId);
+            connectedMiddleware.push({
+              id: mId,
+              name: (mn?.data as any)?.name || (mn?.data as any)?.label || "Middleware",
+              type: (mn?.data as any)?.middlewareType,
+            });
+          }
+        }
+        if (Array.isArray(agentData.middleware)) {
+          for (const item of agentData.middleware) {
+            const mName = typeof item === "string" ? item : (item as any)?.name || (item as any)?.id;
+            const mId = typeof item === "string" ? item : (item as any)?.id || mName;
+            if (mId && !seenMwIds.has(mId)) {
+              seenMwIds.add(mId);
+              connectedMiddleware.push({ id: mId, name: mName || "Middleware" });
+            }
+          }
+        }
+
+        if (connectedTools.length > 0) {
+          outputDelta.tools = connectedTools;
+        }
+        if (connectedMiddleware.length > 0) {
+          outputDelta.middleware = connectedMiddleware;
+        }
+
+        // ── CONFIG 1/5: IDENTITY & PROMPT ──
+        const agentName = agentData.name || agentData.label || nodeName;
+        addLog(
+          "config",
+          `[Config 1/5 - Identity & Prompt] Agent: "${agentName}" | System Prompt: "${systemPrompt.length > 90 ? systemPrompt.slice(0, 90) + "..." : systemPrompt}" (${systemPrompt.length} chars)`,
+          {
+            agentName,
+            systemPrompt,
+            agentId: agentData.agentId || node.id,
+          }
+        );
+
+        // ── CONFIG 2/5: MODEL & TOOLS ──
+        addLog(
+          "config",
+          `[Config 2/5 - Model & Tools] Model: ${effectiveProvider.toUpperCase()} / ${effectiveModel} | Tools: ${connectedTools.length > 0 ? connectedTools.map((t) => t.name).join(", ") : "None attached"} (${connectedTools.length}) | Middleware: ${connectedMiddleware.length > 0 ? connectedMiddleware.map((m) => m.name).join(", ") : "0 active"}`,
+          {
+            provider: effectiveProvider,
+            model: effectiveModel,
+            tools: connectedTools,
+            middleware: connectedMiddleware,
+          }
+        );
+
+        // ── CONFIG 3/5: STRUCTURED OUTPUT ──
         const responseFormat = agentData.responseFormat;
-        const streamEnabled = agentData.streamConfig?.enabled !== false;
+        const isStructured = Boolean(responseFormat?.enabled);
+        const schemaJsonStr = responseFormat?.schemaJson?.trim() || "";
+        let parsedSchemaFields: Array<{ name: string; type?: string; required?: boolean }> = [];
+        if (isStructured && schemaJsonStr) {
+          try {
+            const rawSchema = JSON.parse(schemaJsonStr);
+            if (rawSchema?.properties && typeof rawSchema.properties === "object") {
+              const reqs = Array.isArray(rawSchema.required) ? rawSchema.required : [];
+              parsedSchemaFields = Object.entries(rawSchema.properties).map(([k, def]: [string, any]) => ({
+                name: k,
+                type: def?.type || "string",
+                required: reqs.includes(k),
+              }));
+            }
+          } catch {}
+        }
+        addLog(
+          "config",
+          `[Config 3/5 - Structured Output] ${isStructured ? `Active (Strategy: ${responseFormat?.strategy || "auto"}, Schema: { ${parsedSchemaFields.map((f) => `${f.name}:${f.type}${f.required ? " [REQ]" : ""}`).join(", ") || "custom"} })` : "Disabled (Plain Text Output)"}`,
+          {
+            enabled: isStructured,
+            strategy: responseFormat?.strategy || "auto",
+            schemaFields: parsedSchemaFields,
+            schemaJson: responseFormat?.schemaJson,
+            toolMessageContent: responseFormat?.toolMessageContent,
+            handleErrorMode: responseFormat?.handleErrorMode,
+          }
+        );
+
+        // ── CONFIG 4/5: STATE UPDATES ──
+        const configuredUpdates = agentData.stateUpdates || [];
+        addLog(
+          "config",
+          `[Config 4/5 - State Updates] ${configuredUpdates.length} channel update(s) configured: ${configuredUpdates.map((u) => `${u.channelKey} <- ${u.source === "structured_field" ? `structuredResponse.${u.schemaField || u.value}` : u.source || "value"} [mode: ${u.mode || "replace"}]`).join(", ") || "None"}`,
+          {
+            stateUpdates: configuredUpdates,
+          }
+        );
+
+        // ── CONFIG 5/5: EVENT STREAMING ──
+        const streamConfig = agentData.streamConfig;
+        const isStreamActive = streamConfig?.enabled !== false;
+        const streamPreset =
+          ((streamConfig as Record<string, unknown> | undefined)?.preset as string) ||
+          "Standard SSE";
+        addLog(
+          "config",
+          `[Config 5/5 - Event Streaming] ${isStreamActive ? `Active (${streamConfig?.version || "v3"} - Preset: ${streamPreset})` : "Disabled"}`,
+          {
+            streamConfig,
+          }
+        );
+
+        // Call the real LLM endpoint directly in the browser
+        const streamEnabled = isStreamActive;
+        addLog("llm", `Calling LLM: ${effectiveProvider.toUpperCase()} / ${effectiveModel} (${messages.length} message(s))`);
         const { text: responseText, streamBatches } = await callBrowserLLM({
           provider: effectiveProvider,
           apiKey: effectiveApiKey,
@@ -344,16 +544,22 @@ export async function executeBrowserLangGraph(
         });
 
         latestAssistantResponse = responseText;
+        addLog("llm", `Received LLM response (${responseText.length} chars, ${streamBatches.length} streaming batch(es))`);
+
         if (responseFormat?.enabled) {
-          let parsed: Record<string, unknown> | null = null;
-          try {
-            let clean = responseText.trim();
-            if (clean.startsWith("```")) {
-              clean = clean.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+          let parsed: Record<string, unknown> | null = extractJsonFromText(responseText);
+          if (!parsed) {
+            const trimmedClean = responseText.trim().replace(/^["']|["']$/g, "");
+            if (
+              parsedSchemaFields.length === 1 &&
+              parsedSchemaFields[0]?.name &&
+              trimmedClean.length < 100 &&
+              !trimmedClean.startsWith("{")
+            ) {
+              parsed = { [parsedSchemaFields[0].name]: trimmedClean };
+            } else {
+              parsed = { raw: responseText };
             }
-            parsed = JSON.parse(clean);
-          } catch {
-            parsed = { raw: responseText };
           }
           state.structuredResponse = parsed;
           outputDelta.structuredResponse = parsed;
@@ -362,6 +568,7 @@ export async function executeBrowserLangGraph(
           state.messages = newMessages;
           outputDelta.messages = newMessages;
           outputDelta.response = formattedContent;
+          addLog("llm", `Structured Output Parsed: ${JSON.stringify(parsed)}`, { structuredResponse: parsed });
         } else {
           const newMessages = [...messages, { role: "assistant", content: responseText }];
           state.messages = newMessages;
@@ -392,14 +599,27 @@ export async function executeBrowserLangGraph(
         }
 
         // Apply stateUpdates configured on agent
+        const appliedStateUpdates: Array<{
+          channelKey: string;
+          previousValue: unknown;
+          newValue: unknown;
+          reducer: string;
+          source: string;
+          sourceField?: string;
+        }> = [];
+
         for (const update of agentData.stateUpdates || []) {
+          const rawFieldKey = update.schemaField || update.value || update.channelKey || "";
+          const cleanFieldKey = rawFieldKey.replace(/^structuredResponse\./, "").trim();
+
+          const parsedObj = outputDelta.structuredResponse as
+            | Record<string, unknown>
+            | undefined;
+
           let val: unknown;
+
           if (update.source === "structured_field" || update.schemaField) {
-            const fieldKey = update.schemaField || update.value;
-            const parsedObj = outputDelta.structuredResponse as
-              | Record<string, unknown>
-              | undefined;
-            val = fieldKey && parsedObj ? parsedObj[fieldKey] : undefined;
+            val = resolveStructuredFieldValue(rawFieldKey, parsedObj, latestAssistantResponse);
           } else if (update.source === "structured_full") {
             val = outputDelta.structuredResponse;
           } else if (update.source === "message_content") {
@@ -418,12 +638,27 @@ export async function executeBrowserLangGraph(
             }
           }
 
-          if (val === undefined) continue;
+          if (val === undefined) {
+            addLog(
+              "warn",
+              `State update for channel "${update.channelKey}" skipped: field "${cleanFieldKey}" not found in model output`,
+              {
+                update,
+                structuredResponse: outputDelta.structuredResponse,
+                response: latestAssistantResponse,
+              }
+            );
+            continue;
+          }
 
           const targetChannel = stateChannels.find(
             (c) => c.key === update.channelKey,
           );
-          const channelReducer = targetChannel?.reducer;
+          const channelReducer =
+            targetChannel?.reducer ||
+            (update.mode === "append" ? "append" : "replace");
+
+          const prevVal = state[update.channelKey];
 
           if (
             (update.mode === "append" ||
@@ -450,7 +685,29 @@ export async function executeBrowserLangGraph(
           } else {
             state[update.channelKey] = val;
           }
-          outputDelta[update.channelKey] = state[update.channelKey];
+
+          const newVal = state[update.channelKey];
+          outputDelta[update.channelKey] = newVal;
+
+          const record = {
+            channelKey: update.channelKey,
+            previousValue: prevVal,
+            newValue: newVal,
+            reducer: channelReducer,
+            source: update.source || "structured_field",
+            sourceField: cleanFieldKey,
+          };
+          appliedStateUpdates.push(record);
+
+          addLog(
+            "state",
+            `State Channel Mutated: "${update.channelKey}" = ${JSON.stringify(newVal)} (Reducer: ${channelReducer}, was: ${JSON.stringify(prevVal)})`,
+            record
+          );
+        }
+
+        if (appliedStateUpdates.length > 0) {
+          outputDelta.stateUpdates = appliedStateUpdates;
         }
       }
 
@@ -516,6 +773,7 @@ export async function executeBrowserLangGraph(
             }
           }
 
+          addLog("llm", `Executing ${stepData.stepType} step via ${effectiveProvider.toUpperCase()} (${effectiveModel})`);
           const { text: responseText, streamBatches } = await callBrowserLLM({
             provider: effectiveProvider,
             apiKey: effectiveApiKey,
@@ -526,6 +784,7 @@ export async function executeBrowserLangGraph(
           });
 
           latestAssistantResponse = responseText;
+          addLog("llm", `Received response from ${effectiveModel} (${responseText.length} chars)`);
           const outKey = stepData.stepId || node.id || "response";
           outputDelta[outKey] = responseText;
           if (Array.isArray(state.messages)) {
@@ -568,10 +827,13 @@ export async function executeBrowserLangGraph(
             );
           }
 
+          addLog("tool", `Invoking tool "${toolData.name || nodeName}" [source: ${toolData.source}]`);
+
           if (toolData.source === "api_endpoint") {
             if (!toolData.endpointUrl) {
               throw new Error(`Tool "${toolData.name || nodeName}" has no endpoint URL configured.`);
             }
+            addLog("tool", `POST request sent to ${toolData.endpointUrl}`);
             let res: Response;
             try {
               res = await fetch(toolData.endpointUrl, {
@@ -591,6 +853,7 @@ export async function executeBrowserLangGraph(
               );
             }
             const json = await res.json();
+            addLog("tool", `Tool "${toolData.name || nodeName}" returned HTTP ${res.status} (${JSON.stringify(json).length} bytes)`);
             const resKey = toolData.name || "tool_result";
             outputDelta[resKey] = json;
             state[resKey] = json;
@@ -601,6 +864,7 @@ export async function executeBrowserLangGraph(
                 ? state.messages[state.messages.length - 1]
                 : undefined;
               const result = await toolFn(lastMsg || state, state, clone);
+              addLog("tool", `Executed custom tool function body successfully`);
               const resKey = toolData.name || "tool_result";
               outputDelta[resKey] = result;
               state[resKey] = result;
@@ -625,13 +889,29 @@ export async function executeBrowserLangGraph(
           if (!stepData.customCode?.body || !stepData.customCode.body.trim()) {
             throw new Error(`Custom code step "${nodeName}" has an empty function body.`);
           }
+          addLog("step", `Executing custom code script for "${nodeName}"`);
           try {
-            const runner = new Function("state", "clone", stepData.customCode.body);
-            const res = await runner(state, clone);
+            const customConsole = {
+              log: (...args: unknown[]) => {
+                const msg = args.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join(" ");
+                addLog("info", `[console.log] ${msg}`);
+              },
+              warn: (...args: unknown[]) => {
+                const msg = args.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join(" ");
+                addLog("warn", `[console.warn] ${msg}`);
+              },
+              error: (...args: unknown[]) => {
+                const msg = args.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join(" ");
+                addLog("error", `[console.error] ${msg}`);
+              },
+            };
+            const runner = new Function("state", "clone", "console", stepData.customCode.body);
+            const res = await runner(state, clone, customConsole);
             if (res && typeof res === "object") {
               Object.assign(state, res);
               Object.assign(outputDelta, res);
             }
+            addLog("step", `Custom code block executed successfully`);
           } catch (codeErr: unknown) {
             throw new Error(
               `Custom code step "${nodeName}" error: ${codeErr instanceof Error ? codeErr.message : String(codeErr)}`
@@ -639,44 +919,229 @@ export async function executeBrowserLangGraph(
           }
         }
 
-        // B4: Router Step (Edge determination handled below)
+        // B4: Router Step
         else if (stepData.stepType === "router") {
-          outputDelta.router = { evaluated: true };
+          const branches = stepData.routerConfig?.branches || [];
+          const outgoing = flowEdges.filter((e) => e.source === currentNodeId);
+          addLog("router", `Evaluating ${branches.length} conditional route branch(es)`);
+
+          const evaluatedBranches = branches.map((b, bIdx) => {
+            const actualVal = resolveRouterFieldValue(b.field, state);
+            const isMatch = !b.isDefault && evaluateRouterBranch(b, state);
+            const edge = outgoing.find((e) => e.sourceHandle === b.id) || outgoing[0];
+            const targetNode = nodes.find((n) => n.id === edge?.target);
+            const targetLabel =
+              edge?.target === "END" || edge?.target?.startsWith("end_")
+                ? "END"
+                : (targetNode?.data as { label?: string })?.label || edge?.target || "END";
+            addLog(
+              "router",
+              `Route "${b.label || `Route ${bIdx + 1}`}": (${b.field || "state"} ${b.operator} ${b.value ?? ""}) -> ${isMatch ? "MATCHED" : "SKIPPED"} [state: ${JSON.stringify(actualVal)}]`
+            );
+            return {
+              id: b.id,
+              label: b.label || `Route ${bIdx + 1}`,
+              field: b.field,
+              operator: b.operator,
+              value: b.value,
+              isDefault: b.isDefault,
+              actualValue: actualVal,
+              matched: isMatch,
+              targetId: edge?.target,
+              targetLabel,
+            };
+          });
+
+          let matchedBranch = branches.find(
+            (b) => !b.isDefault && evaluateRouterBranch(b, state),
+          );
+          if (!matchedBranch) {
+            matchedBranch = branches.find((b) => b.isDefault);
+          }
+
+          const targetEdge = matchedBranch
+            ? outgoing.find((e) => e.sourceHandle === matchedBranch?.id) || outgoing[0]
+            : outgoing[0];
+
+          const targetNode = nodes.find((n) => n.id === targetEdge?.target);
+          const targetNodeLabel =
+            targetEdge?.target === "END" || targetEdge?.target?.startsWith("end_")
+              ? "END"
+              : (targetNode?.data as { label?: string })?.label || targetEdge?.target || "END";
+
+          const selectedRouteName =
+            matchedBranch?.label || (matchedBranch?.id ? `Route (${matchedBranch.id})` : "Default");
+          const conditionDesc = matchedBranch?.isDefault
+            ? "default (fallback)"
+            : matchedBranch
+              ? `${matchedBranch.field} ${matchedBranch.operator} ${matchedBranch.value ?? ""}`.trim()
+              : "none";
+
+          addLog("router", `Selected Route: "${selectedRouteName}" -> Proceeding to step "${targetNodeLabel}"`);
+
+          outputDelta.router = {
+            selectedRoute: selectedRouteName,
+            selectedBranchId: matchedBranch?.id,
+            condition: conditionDesc,
+            targetNodeId: targetEdge?.target,
+            targetNodeLabel,
+            evaluatedBranches,
+          };
         }
 
         // B5: Human Gate / Interrupt Step
         else if (stepData.stepType === "human_gate" || stepData.stepType === "interrupt") {
+          const pauseMsg =
+            stepData.humanGateConfig?.approvalPrompt ||
+            "Execution paused at human gate.";
+          addLog("warn", `Human Gate: ${pauseMsg}`);
           outputDelta.interrupt = {
-            message:
-              stepData.humanGateConfig?.approvalPrompt ||
-              "Execution paused at human gate.",
+            message: pauseMsg,
           };
         }
 
         // Apply stateUpdates
-        for (const update of stepData.stateUpdates || []) {
-          let val: unknown = update.value;
-          if (typeof val === "string") {
-            try {
-              val = JSON.parse(val);
-            } catch {
-              // plain text
+        const appliedStepStateUpdates: Array<{
+          channelKey: string;
+          previousValue: unknown;
+          newValue: unknown;
+          reducer: string;
+          source: string;
+          sourceField?: string;
+        }> = [];
+
+        for (const updateItem of stepData.stateUpdates || []) {
+          const update = updateItem as {
+            channelKey: string;
+            value?: string;
+            mode?: "set" | "append" | "expression" | string;
+            source?: string;
+            schemaField?: string;
+          };
+          const rawFieldKey = update.schemaField || update.value || update.channelKey || "";
+          const cleanFieldKey = rawFieldKey.replace(/^structuredResponse\./, "").trim();
+
+          const parsedObj = outputDelta.structuredResponse as
+            | Record<string, unknown>
+            | undefined;
+
+          let val: unknown;
+
+          if (update.source === "structured_field" || update.schemaField) {
+            val = resolveStructuredFieldValue(rawFieldKey, parsedObj, latestAssistantResponse);
+          } else if (update.source === "structured_full") {
+            val = outputDelta.structuredResponse;
+          } else if (update.source === "message_content") {
+            val = latestAssistantResponse;
+          } else {
+            val = update.value;
+            if (typeof val === "string") {
+              try {
+                val = JSON.parse(val);
+              } catch {
+                // plain text
+              }
             }
           }
-          if (update.mode === "append" && Array.isArray(state[update.channelKey])) {
+
+          if (val === undefined) continue;
+
+          const targetChannel = stateChannels.find(
+            (c) => c.key === update.channelKey,
+          );
+          const channelReducer =
+            targetChannel?.reducer ||
+            (update.mode === "append" ? "append" : "replace");
+
+          const prevVal = state[update.channelKey];
+
+          if (
+            (update.mode === "append" ||
+              channelReducer === "append" ||
+              channelReducer === "concat_array") &&
+            Array.isArray(state[update.channelKey])
+          ) {
             state[update.channelKey] = [
               ...(state[update.channelKey] as unknown[]),
-              val,
+              ...(Array.isArray(val) ? val : [val]),
             ];
+          } else if (
+            (channelReducer === "merge_object" ||
+              targetChannel?.type === "object") &&
+            typeof state[update.channelKey] === "object" &&
+            typeof val === "object" &&
+            state[update.channelKey] !== null &&
+            val !== null
+          ) {
+            state[update.channelKey] = {
+              ...(state[update.channelKey] as Record<string, unknown>),
+              ...(val as Record<string, unknown>),
+            };
           } else {
             state[update.channelKey] = val;
           }
-          outputDelta[update.channelKey] = state[update.channelKey];
+
+          const newVal = state[update.channelKey];
+          outputDelta[update.channelKey] = newVal;
+
+          const record = {
+            channelKey: update.channelKey,
+            previousValue: prevVal,
+            newValue: newVal,
+            reducer: channelReducer,
+            source: update.source || "custom",
+            sourceField: cleanFieldKey,
+          };
+          appliedStepStateUpdates.push(record);
+
+          addLog(
+            "state",
+            `State Channel Mutated: "${update.channelKey}" = ${JSON.stringify(newVal)} (Reducer: ${channelReducer}, was: ${JSON.stringify(prevVal)})`,
+            record
+          );
+        }
+
+        if (appliedStepStateUpdates.length > 0) {
+          outputDelta.stateUpdates = appliedStepStateUpdates;
         }
       }
 
+      // Attach generic connected tools and middleware metadata for any node
+      const connectedTools = edges
+        .filter((e) => e.target === node.id && (e.targetHandle === "tool_in" || e.targetHandle?.includes("tool")))
+        .map((e) => {
+          const tn = nodes.find((n) => n.id === e.source);
+          return {
+            id: tn?.id || e.source,
+            name: (tn?.data as any)?.name || (tn?.data as any)?.label || "Tool",
+            source: (tn?.data as any)?.source,
+          };
+        });
+
+      const connectedMiddleware = edges
+        .filter((e) => e.target === node.id && (e.targetHandle === "middleware_in" || e.targetHandle?.includes("middleware")))
+        .map((e) => {
+          const mn = nodes.find((n) => n.id === e.source);
+          return {
+            id: mn?.id || e.source,
+            name: (mn?.data as any)?.name || (mn?.data as any)?.label || "Middleware",
+            type: (mn?.data as any)?.middlewareType,
+          };
+        });
+
+      if (connectedTools.length > 0) {
+        outputDelta.tools = connectedTools;
+        addLog("tool", `Connected tools (${connectedTools.length}): ${connectedTools.map((t) => t.name).join(", ")}`);
+      }
+      if (connectedMiddleware.length > 0) {
+        outputDelta.middleware = connectedMiddleware;
+        addLog("middleware", `Connected middleware (${connectedMiddleware.length}): ${connectedMiddleware.map((m) => m.name).join(", ")}`);
+      }
+
       const durationMs = Date.now() - stepStartTime;
+      addLog("step", `Completed step "${nodeName}" in ${durationMs}ms`);
       nodeTrace.status = "completed";
+      nodeTrace.logs = stepLogs;
       nodeTrace.output = clone(outputDelta);
       onStepEnd?.(node.id, nodeName, clone(outputDelta), durationMs);
 
@@ -694,11 +1159,14 @@ export async function executeBrowserLangGraph(
     } catch (err: unknown) {
       nodeTrace.status = "failed";
       const errMsg = err instanceof Error ? err.message : String(err);
+      addLog("error", `Step "${nodeName}" failed: ${errMsg}`);
+      nodeTrace.logs = stepLogs;
       nodeTrace.output = { error: errMsg };
       onStepEnd?.(node.id, nodeName, { error: errMsg }, Date.now() - stepStartTime);
       return {
         finalState: state,
         trace,
+        logs: allRunLogs,
         totalDurationMs: Date.now() - startTime,
         visitedNodes,
         latestAssistantResponse,
@@ -710,46 +1178,9 @@ export async function executeBrowserLangGraph(
     const outgoing = flowEdges.filter((e) => e.source === currentNodeId);
     if (outgoing.length === 0) break;
 
-    const stepData = node.data as StepNodeData | undefined;
-    if (stepData?.stepType === "router" && stepData.routerConfig?.branches) {
-      const branches = stepData.routerConfig.branches;
-      let matchedBranch = branches.find(
-        (b) => !b.isDefault && evaluateRouterBranch(b, state),
-      );
-      if (!matchedBranch) {
-        matchedBranch = branches.find((b) => b.isDefault);
-      }
-
-      if (!matchedBranch) {
-        const errMsg = `Router "${nodeName}" found no matching branch condition for state: ${JSON.stringify(state)}, and no default branch is configured.`;
-        nodeTrace.status = "failed";
-        nodeTrace.output = { error: errMsg };
-        return {
-          finalState: state,
-          trace,
-          totalDurationMs: Date.now() - startTime,
-          visitedNodes,
-          latestAssistantResponse,
-          error: errMsg,
-        };
-      }
-
-      const targetEdge =
-        outgoing.find((e) => e.sourceHandle === matchedBranch?.id) || outgoing[0];
-      if (!targetEdge) {
-        const errMsg = `Router "${nodeName}" matched branch "${matchedBranch.label || matchedBranch.id}", but no outgoing edge is connected to it.`;
-        nodeTrace.status = "failed";
-        nodeTrace.output = { error: errMsg };
-        return {
-          finalState: state,
-          trace,
-          totalDurationMs: Date.now() - startTime,
-          visitedNodes,
-          latestAssistantResponse,
-          error: errMsg,
-        };
-      }
-      currentNodeId = targetEdge.target;
+    const routerInfo = (outputDelta.router as Record<string, unknown> | undefined);
+    if (routerInfo?.targetNodeId) {
+      currentNodeId = routerInfo.targetNodeId as string;
     } else {
       currentNodeId = outgoing[0]?.target;
     }
@@ -757,6 +1188,17 @@ export async function executeBrowserLangGraph(
 
   // END Step
   visitedNodes.push("END");
+  const endLogs: SimulationStepLogEntry[] = [
+    {
+      timestamp: Date.now(),
+      level: "step",
+      message: `Graph reached END. Visited ${visitedNodes.length} steps in ${Date.now() - startTime}ms.`,
+      nodeId: "END",
+      nodeLabel: "END",
+    },
+  ];
+  allRunLogs.push(...endLogs);
+
   const endTrace: SimulationTraceEntry = {
     id: `trace_${generateId()}`,
     kind: "step",
@@ -765,6 +1207,7 @@ export async function executeBrowserLangGraph(
     nodeId: "END",
     input: clone(state),
     output: clone(state),
+    logs: endLogs,
   };
   trace.push(endTrace);
   onStepStart?.("END", "END", clone(state));
@@ -785,6 +1228,7 @@ export async function executeBrowserLangGraph(
   return {
     finalState: state,
     trace,
+    logs: allRunLogs,
     totalDurationMs: Date.now() - startTime,
     visitedNodes,
     latestAssistantResponse,
