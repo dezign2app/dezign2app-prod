@@ -9,17 +9,22 @@ import type {
   LangGraphLLMNode,
   LangGraphLLMRefNode,
   LangGraphStateReducerRefNode,
+  MiddlewareNode,
+  LangGraphMiddlewareRefNode,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
+  LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+  LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
   HANDLE_TOOL_IN,
   HANDLE_MIDDLEWARE_IN,
+  HANDLE_MIDDLEWARE_OUT,
   HANDLE_STATE_IN,
   HANDLE_STATE_OUT,
   DEFAULT_STREAM_ENVELOPE,
@@ -30,6 +35,7 @@ import {
   DEFAULT_LLM_TEMPERATURE,
   DEFAULT_LLM_BASE_URL,
   DEFAULT_LLM_API_KEY_ENV,
+  DEFAULT_MIDDLEWARE_TYPE,
   LLM_PROVIDER_PRESETS,
   LLM_PROVIDERS,
 } from "../../constants";
@@ -121,6 +127,15 @@ export function useLangGraphCanvasNode({
       data.llmConfig?.temperature ??
       data.modelConfig?.temperature ??
       DEFAULT_LLM_TEMPERATURE,
+  };
+
+  const isMiddlewareEnabled =
+    data.middlewareConfig?.enabled !== undefined
+      ? Boolean(data.middlewareConfig.enabled)
+      : boundMiddlewares.length > 0;
+
+  const middlewareConfig = {
+    enabled: isMiddlewareEnabled,
   };
 
   const streamConfig: LangGraphAgentStreamConfig = data.streamConfig || {
@@ -372,6 +387,194 @@ export function useLangGraphCanvasNode({
     updateStreamConfig({ selectedEvents: updated });
   };
 
+  const handleToggleMiddlewareConfig = (enabled: boolean) => {
+    if (!enabled) {
+      const currentEdges = getEdges();
+      const boundMwEdges = currentEdges.filter(
+        (e) => e.target === id && e.targetHandle === HANDLE_MIDDLEWARE_IN,
+      );
+      const boundMwSourceIds = boundMwEdges.map((e) => e.source);
+
+      // Disconnect middleware edges targeting this node
+      setEdges((eds) =>
+        eds.filter(
+          (e) => !(e.target === id && e.targetHandle === HANDLE_MIDDLEWARE_IN),
+        ),
+      );
+
+      // Clean up attached middleware ref nodes if not used elsewhere
+      if (boundMwSourceIds.length > 0) {
+        setNodes((nds) =>
+          nds.filter((n) => {
+            if (!boundMwSourceIds.includes(n.id) || !n.id.startsWith("mw_ref")) {
+              return true;
+            }
+            const remainingEdges = currentEdges.filter(
+              (e) =>
+                !(e.target === id && e.targetHandle === HANDLE_MIDDLEWARE_IN),
+            );
+            return remainingEdges.some((e) => e.source === n.id);
+          }),
+        );
+      }
+
+      updateAgentData({
+        middlewareConfig: { enabled: false },
+      });
+      return;
+    }
+
+    // When enabling:
+    const currentEdges = getEdges();
+    const hasBound = currentEdges.some(
+      (e) => e.target === id && e.targetHandle === HANDLE_MIDDLEWARE_IN,
+    );
+
+    if (hasBound) {
+      updateAgentData({
+        middlewareConfig: { enabled: true },
+      });
+      return;
+    }
+
+    // If no bound middleware on this node, check if master middleware exists on canvas
+    const allNodes = getNodes();
+    let masterMw = allNodes.find(
+      (n): n is MiddlewareNode => n.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+    );
+
+    const agentNode = allNodes.find((n) => n.id === id);
+    const agentX = agentNode?.position?.x ?? 400;
+    const agentY = agentNode?.position?.y ?? 200;
+    const newNodesToAdd: LangGraphCanvasNodeUnion[] = [];
+
+    let masterId: string;
+    let masterLabel: string;
+
+    if (!masterMw) {
+      masterId = `mw_${Date.now().toString(36).slice(-4)}`;
+      masterLabel = "Logging & Tracing";
+      masterMw = {
+        id: masterId,
+        type: LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+        position: {
+          x: agentX - 340,
+          y: agentY + 240,
+        },
+        data: {
+          label: "Logging & Tracing",
+          name: "Logging & Tracing",
+          middlewareId: masterId,
+          type: DEFAULT_MIDDLEWARE_TYPE,
+          humanInTheLoopConfig: {
+            interruptOn: { writeFile: true },
+            approvalPrompt: "Requires approval before writing files...",
+          },
+          onDeleteMiddleware: () => {
+            setNodes((all) => all.filter((node) => node.id !== masterId));
+            setEdges((allEds) =>
+              allEds.filter(
+                (edge) => edge.source !== masterId && edge.target !== masterId,
+              ),
+            );
+          },
+        },
+      };
+      newNodesToAdd.push(masterMw);
+    } else {
+      masterId = masterMw.id;
+      masterLabel =
+        (masterMw.data as { name?: string; label?: string }).name ||
+        (masterMw.data as { label?: string }).label ||
+        "Middleware";
+    }
+
+    // Create the Middleware Ref node pointing to master middleware
+    const refId = `mw_ref_${Date.now().toString(36).slice(-4)}_${Math.random().toString(36).slice(2, 6)}`;
+    const newMwRefNode: LangGraphMiddlewareRefNode = {
+      id: refId,
+      type: LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
+      position: {
+        x: agentX - 320,
+        y: agentY + 160,
+      },
+      data: {
+        label: `${masterLabel} (Ref)`,
+        refId,
+        middlewareRef: masterId,
+        onDeleteMiddlewareRef: () => {
+          setNodes((all) => all.filter((n) => n.id !== refId));
+          setEdges((eds) =>
+            eds.filter((e) => e.source !== refId && e.target !== refId),
+          );
+        },
+      },
+    };
+    newNodesToAdd.push(newMwRefNode);
+
+    // Add nodes to canvas
+    setNodes((nds) => [...nds, ...newNodesToAdd]);
+
+    // Connect the Middleware Ref node to this agent node with an edge
+    const newEdge: Edge = {
+      id: `xy-edge__${refId}${HANDLE_MIDDLEWARE_OUT}-${id}${HANDLE_MIDDLEWARE_IN}`,
+      source: refId,
+      sourceHandle: HANDLE_MIDDLEWARE_OUT,
+      target: id,
+      targetHandle: HANDLE_MIDDLEWARE_IN,
+      animated: true,
+      style: { stroke: "#a855f7", strokeWidth: 2, strokeDasharray: "5 5" },
+    };
+    setEdges((eds) => [
+      ...eds.filter(
+        (e) => !(e.target === id && e.targetHandle === HANDLE_MIDDLEWARE_IN),
+      ),
+      newEdge,
+    ]);
+
+    updateAgentData({
+      middlewareConfig: { enabled: true },
+    });
+  };
+
+  const handleRemoveMiddleware = (sourceId: string) => {
+    setEdges((eds) =>
+      eds.filter(
+        (e) =>
+          !(
+            e.source === sourceId &&
+            e.target === id &&
+            e.targetHandle === HANDLE_MIDDLEWARE_IN
+          ),
+      ),
+    );
+    if (sourceId.startsWith("mw_ref")) {
+      const currentEdges = getEdges();
+      const remainingEdges = currentEdges.filter(
+        (e) =>
+          !(
+            e.source === sourceId &&
+            e.target === id &&
+            e.targetHandle === HANDLE_MIDDLEWARE_IN
+          ),
+      );
+      if (!remainingEdges.some((e) => e.source === sourceId)) {
+        setNodes((nds) => nds.filter((n) => n.id !== sourceId));
+      }
+    }
+    const remainingBound = edges.filter(
+      (e) =>
+        e.target === id &&
+        e.targetHandle === HANDLE_MIDDLEWARE_IN &&
+        e.source !== sourceId,
+    );
+    if (remainingBound.length === 0) {
+      updateAgentData({
+        middlewareConfig: { enabled: false },
+      });
+    }
+  };
+
   const handleNameSave = () => {
     setIsEditingName(false);
     let trimmed = nameValue.trim();
@@ -396,12 +599,16 @@ export function useLangGraphCanvasNode({
     boundMiddlewares,
     boundStateReducers,
     llmConfig,
+    middlewareConfig,
     streamConfig,
     responseFormat,
     stateUpdates,
     availableFields,
     updateAgentData,
     handleToggleLLMConfig,
+    handleToggleMiddlewareConfig,
+    handleRemoveMiddleware,
+    handleAddDefaultMiddleware: () => handleToggleMiddlewareConfig(true),
     handleToggleStreaming,
     handleToggleResponseFormat,
     handleToggleEvent,

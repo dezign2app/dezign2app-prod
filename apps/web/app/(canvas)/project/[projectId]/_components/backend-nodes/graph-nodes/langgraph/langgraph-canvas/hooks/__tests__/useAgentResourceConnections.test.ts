@@ -7,13 +7,19 @@ import type {
   LangGraphCanvasEdge,
   LangGraphLLMNode,
   CanvasNode,
+  MiddlewareNode,
+  LangGraphMiddlewareRefNode,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
   LANGGRAPH_CANVAS_NODE_NODE,
+  LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+  LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
+  HANDLE_MIDDLEWARE_IN,
+  HANDLE_MIDDLEWARE_OUT,
   DEFAULT_LLM_PROVIDER,
   DEFAULT_LLM_MODEL,
 } from "../../constants";
@@ -200,4 +206,66 @@ describe("LLM Ref Node Attachment Behavior", () => {
     expect(connectingEdge?.source).toBe(refNode?.id);
     expect(connectingEdge?.target).toBe("agent_node_1");
   });
+
+  it("automatically generates a Middleware Ref node and enables middlewareConfig on connect", () => {
+    const masterMw: MiddlewareNode = {
+      id: "mw_master_1",
+      type: LANGGRAPH_CANVAS_NODE_MIDDLEWARE,
+      position: { x: 100, y: 300 },
+      data: {
+        label: "Logging & Tracing",
+        name: "Logging & Tracing",
+        middlewareId: "mw_master_1",
+        type: "logging_tracing",
+      },
+    };
+
+    let nodes: LangGraphCanvasNode[] = [masterMw, agentNode];
+    let edges: LangGraphCanvasEdge[] = [];
+
+    const setNodes = vi.fn((updater) => {
+      nodes = typeof updater === "function" ? updater(nodes) : updater;
+    });
+    const setEdges = vi.fn((updater) => {
+      edges = typeof updater === "function" ? updater(edges) : updater;
+    });
+
+    const { result } = renderHook(() =>
+      useCanvasConnections({
+        nodes,
+        edges,
+        setNodes,
+        setEdges,
+      }),
+    );
+
+    act(() => {
+      result.current.onConnect({
+        source: "mw_master_1",
+        sourceHandle: HANDLE_MIDDLEWARE_OUT,
+        target: "agent_node_1",
+        targetHandle: HANDLE_MIDDLEWARE_IN,
+      });
+    });
+
+    // Should create a Middleware Ref node
+    const refNode = nodes.find(
+      (n) =>
+        n.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF &&
+        (n.data as { middlewareRef?: string }).middlewareRef === "mw_master_1",
+    );
+    expect(refNode).toBeDefined();
+    expect(refNode?.id).toMatch(/^mw_ref_/);
+
+    // The edge source should point to the generated ref node
+    expect(edges.length).toBeGreaterThan(0);
+    const connectingEdge = edges[0];
+    expect(connectingEdge?.source).toBe(refNode?.id);
+    expect(connectingEdge?.target).toBe("agent_node_1");
+
+    // Agent node middlewareConfig should be enabled
+    const updatedAgent = nodes.find((n) => n.id === "agent_node_1") as CanvasNode;
+    expect(updatedAgent.data.middlewareConfig?.enabled).toBe(true);
+  });
 });
+

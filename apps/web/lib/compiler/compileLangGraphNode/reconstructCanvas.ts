@@ -258,6 +258,7 @@ export function reconstructNodes(
         modelConfig:
           agDef.llmConfig?.enabled === false ? undefined : agDef.modelConfig,
         llmConfig: agDef.llmConfig || { enabled: false },
+        middlewareConfig: agDef.middlewareConfig,
         stateUpdatesConfig: agDef.stateUpdatesConfig,
         streamConfig: agDef.streamConfig,
         responseFormat: agDef.responseFormat,

@@ -9,6 +9,9 @@ interface NodeResourceBadgesProps {
   boundMiddlewares: Edge[];
   boundStateReducers?: Edge[];
   llmConfig: LLMConfigState;
+  middlewareConfig?: {
+    enabled?: boolean;
+  };
 }
 
 export const NodeResourceBadges: React.FC<NodeResourceBadgesProps> = ({
@@ -17,6 +20,7 @@ export const NodeResourceBadges: React.FC<NodeResourceBadgesProps> = ({
   boundMiddlewares,
   boundStateReducers = [],
   llmConfig,
+  middlewareConfig,
 }) => {
   return (
     <div className="grid grid-cols-4 gap-1.5 pb-1">
@@ -50,7 +54,11 @@ export const NodeResourceBadges: React.FC<NodeResourceBadgesProps> = ({
           Middleware
         </span>
         <span className="text-[10px] font-bold text-foreground font-mono truncate max-w-full">
-          {boundMiddlewares.length} active
+          {boundMiddlewares.length > 0
+            ? `${boundMiddlewares.length} active`
+            : Boolean(middlewareConfig?.enabled)
+              ? "Active"
+              : "Off"}
         </span>
       </div>
 

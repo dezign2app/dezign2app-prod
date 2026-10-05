@@ -494,6 +494,9 @@ export function useNodeFactory({
                 model: DEFAULT_LLM_MODEL,
                 temperature: DEFAULT_LLM_TEMPERATURE,
               },
+              middlewareConfig: {
+                enabled: false,
+              },
               modelConfig: undefined,
               tools: [],
               middleware: [],
@@ -610,6 +613,9 @@ export function useNodeFactory({
                     provider: DEFAULT_LLM_PROVIDER,
                     model: DEFAULT_LLM_MODEL,
                     temperature: DEFAULT_LLM_TEMPERATURE,
+                  },
+                  middlewareConfig: {
+                    enabled: false,
                   },
                   modelConfig: undefined,
                 }),

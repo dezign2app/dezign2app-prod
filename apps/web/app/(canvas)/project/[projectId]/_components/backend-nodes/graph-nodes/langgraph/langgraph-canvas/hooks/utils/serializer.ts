@@ -273,6 +273,7 @@ export function buildGraphData({
             ? undefined
             : resolvedModelConfig || (n.data.modelConfig ? { ...n.data.modelConfig } : undefined),
         llmConfig: n.data.llmConfig,
+        middlewareConfig: n.data.middlewareConfig,
         stateUpdatesConfig: n.data.stateUpdatesConfig,
         streamConfig: n.data.streamConfig,
         responseFormat: n.data.responseFormat,
