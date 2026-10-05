@@ -28,6 +28,10 @@ import {
   DEFAULT_LLM_PROVIDER,
   DEFAULT_LLM_MODEL,
   DEFAULT_LLM_TEMPERATURE,
+  DEFAULT_LLM_BASE_URL,
+  DEFAULT_LLM_API_KEY_ENV,
+  LLM_PROVIDER_PRESETS,
+  LLM_PROVIDERS,
 } from "../../constants";
 
 function isStateReducerRefNode(
@@ -98,13 +102,15 @@ export function useLangGraphCanvasNode({
       (e.targetHandle === HANDLE_STATE_IN || e.sourceHandle === HANDLE_STATE_OUT),
   );
 
+  const isLlmEnabled =
+    data.llmConfig?.enabled !== undefined
+      ? Boolean(data.llmConfig.enabled)
+      : boundLLMs.length > 0
+        ? true
+        : false;
+
   const llmConfig = {
-    enabled:
-      data.llmConfig?.enabled !== undefined
-        ? data.llmConfig.enabled
-        : data.modelConfig !== undefined
-          ? true
-          : true,
+    enabled: isLlmEnabled,
     provider:
       data.llmConfig?.provider ||
       data.modelConfig?.provider ||
@@ -161,12 +167,24 @@ export function useLangGraphCanvasNode({
 
   const handleToggleLLMConfig = (enabled: boolean) => {
     if (!enabled) {
+      const currentEdges = getEdges();
+      const boundLlmEdge = currentEdges.find(
+        (e) => e.target === id && e.targetHandle === HANDLE_LLM_IN,
+      );
+      const boundLlmSourceId = boundLlmEdge?.source;
+
       // Disconnect any existing LLM edge targeting this node
       setEdges((eds) =>
         eds.filter(
           (e) => !(e.target === id && e.targetHandle === HANDLE_LLM_IN),
         ),
       );
+
+      // If the bound node was an LLM Ref node, remove it from the canvas
+      if (boundLlmSourceId && boundLlmSourceId.startsWith("llm_ref")) {
+        setNodes((nds) => nds.filter((n) => n.id !== boundLlmSourceId));
+      }
+
       updateAgentData({
         llmConfig: {
           ...llmConfig,
@@ -198,87 +216,111 @@ export function useLangGraphCanvasNode({
       return;
     }
 
-    // Check if there is an available LLM Ref or master LLM node on canvas to auto-connect (prioritizing LLM Ref nodes)
+    // Check if there is an available master LLM node on canvas
     const allNodes = getNodes();
-    const llmRefNodes = allNodes.filter(
-      (n): n is LangGraphLLMRefNode => n.type === LANGGRAPH_CANVAS_NODE_LLM_REF,
+    let masterLLM = allNodes.find(
+      (n): n is LangGraphLLMNode => n.type === LANGGRAPH_CANVAS_NODE_LLM,
     );
-    const unboundLLMRef = llmRefNodes.find(
-      (ref) =>
-        !currentEdges.some(
-          (e) => e.source === ref.id && e.sourceHandle === HANDLE_LLM_OUT,
-        ),
-    );
-    const availableLLM =
-      unboundLLMRef ||
-      llmRefNodes[0] ||
-      allNodes.find(
-        (n): n is LangGraphLLMNode => n.type === LANGGRAPH_CANVAS_NODE_LLM,
-      );
 
-    if (availableLLM) {
-      const newEdge: Edge = {
-        id: `xy-edge__${availableLLM.id}${HANDLE_LLM_OUT}-${id}${HANDLE_LLM_IN}`,
-        source: availableLLM.id,
-        sourceHandle: HANDLE_LLM_OUT,
-        target: id,
-        targetHandle: HANDLE_LLM_IN,
-        animated: true,
-        style: { stroke: "#38bdf8", strokeWidth: 2, strokeDasharray: "5 5" },
+    const agentNode = allNodes.find((n) => n.id === id);
+    const agentX = agentNode?.position?.x ?? 400;
+    const agentY = agentNode?.position?.y ?? 200;
+    const newNodesToAdd: LangGraphCanvasNodeUnion[] = [];
+
+    let masterId: string;
+    let masterLabel: string;
+    let resolvedProvider: string = DEFAULT_LLM_PROVIDER;
+    let resolvedModel: string = DEFAULT_LLM_MODEL;
+    let resolvedTemp: number = DEFAULT_LLM_TEMPERATURE;
+
+    if (!masterLLM) {
+      masterId = `llm_${Date.now().toString(36).slice(-4)}`;
+      masterLabel = "LLM";
+      const defaultPreset =
+        LLM_PROVIDER_PRESETS[DEFAULT_LLM_PROVIDER] ??
+        LLM_PROVIDER_PRESETS[LLM_PROVIDERS.CUSTOM];
+      masterLLM = {
+        id: masterId,
+        type: LANGGRAPH_CANVAS_NODE_LLM,
+        position: {
+          x: agentX - 340,
+          y: Math.max(40, agentY - 220),
+        },
+        data: {
+          label: "LLM",
+          llmId: masterId,
+          provider: DEFAULT_LLM_PROVIDER,
+          baseUrl: defaultPreset?.defaultUrl ?? DEFAULT_LLM_BASE_URL,
+          model: defaultPreset?.defaultModel ?? DEFAULT_LLM_MODEL,
+          apiKeyHeader:
+            defaultPreset?.defaultApiKeyEnv ?? DEFAULT_LLM_API_KEY_ENV,
+          temperature: DEFAULT_LLM_TEMPERATURE,
+        },
       };
-      setEdges((eds) => [
-        ...eds.filter(
-          (e) => !(e.target === id && e.targetHandle === HANDLE_LLM_IN),
-        ),
-        newEdge,
-      ]);
-
-      let resolvedProvider: string | undefined;
-      let resolvedModel: string | undefined;
-      let resolvedTemp: number | undefined;
-
-      if (availableLLM.type === LANGGRAPH_CANVAS_NODE_LLM) {
-        resolvedProvider = availableLLM.data.provider;
-        resolvedModel = availableLLM.data.model;
-        resolvedTemp = availableLLM.data.temperature;
-      } else if (availableLLM.type === LANGGRAPH_CANVAS_NODE_LLM_REF) {
-        const masterId = availableLLM.data.llmRef;
-        const master = allNodes.find((n) => n.id === masterId);
-        if (master?.type === LANGGRAPH_CANVAS_NODE_LLM) {
-          resolvedProvider = master.data.provider;
-          resolvedModel = master.data.model;
-          resolvedTemp = master.data.temperature;
-        }
-      }
-
-      updateAgentData({
-        llmConfig: {
-          ...llmConfig,
-          enabled: true,
-          provider:
-            resolvedProvider || llmConfig.provider || DEFAULT_LLM_PROVIDER,
-          model: resolvedModel || llmConfig.model || DEFAULT_LLM_MODEL,
-          temperature: resolvedTemp ?? llmConfig.temperature,
-        },
-        modelConfig: {
-          provider: resolvedProvider || DEFAULT_LLM_PROVIDER,
-          model: resolvedModel || DEFAULT_LLM_MODEL,
-          temperature: resolvedTemp ?? DEFAULT_LLM_TEMPERATURE,
-        },
-      });
-      return;
+      newNodesToAdd.push(masterLLM);
+    } else {
+      masterId = masterLLM.id;
+      masterLabel = masterLLM.data.label || masterLLM.data.model || "LLM";
+      resolvedProvider = masterLLM.data.provider || DEFAULT_LLM_PROVIDER;
+      resolvedModel = masterLLM.data.model || DEFAULT_LLM_MODEL;
+      resolvedTemp = masterLLM.data.temperature ?? DEFAULT_LLM_TEMPERATURE;
     }
 
-    // No LLM on canvas yet, enable with default config
+    // Create the LLM Ref node pointing to master LLM
+    const refId = `llm_ref_${Date.now().toString(36).slice(-4)}_${Math.random().toString(36).slice(2, 6)}`;
+    const newLLMRefNode: LangGraphLLMRefNode = {
+      id: refId,
+      type: LANGGRAPH_CANVAS_NODE_LLM_REF,
+      position: {
+        x: agentX - 320,
+        y: agentY,
+      },
+      data: {
+        label: `${masterLabel} (Ref)`,
+        refId,
+        llmRef: masterId,
+        onDeleteLLMRef: () => {
+          setNodes((all) => all.filter((n) => n.id !== refId));
+          setEdges((eds) =>
+            eds.filter((e) => e.source !== refId && e.target !== refId),
+          );
+        },
+      },
+    };
+    newNodesToAdd.push(newLLMRefNode);
+
+    // Add nodes to canvas
+    setNodes((nds) => [...nds, ...newNodesToAdd]);
+
+    // Connect the LLM Ref node to this agent node with an edge
+    const newEdge: Edge = {
+      id: `xy-edge__${refId}${HANDLE_LLM_OUT}-${id}${HANDLE_LLM_IN}`,
+      source: refId,
+      sourceHandle: HANDLE_LLM_OUT,
+      target: id,
+      targetHandle: HANDLE_LLM_IN,
+      animated: true,
+      style: { stroke: "#38bdf8", strokeWidth: 2, strokeDasharray: "5 5" },
+    };
+    setEdges((eds) => [
+      ...eds.filter(
+        (e) => !(e.target === id && e.targetHandle === HANDLE_LLM_IN),
+      ),
+      newEdge,
+    ]);
+
     updateAgentData({
       llmConfig: {
         ...llmConfig,
         enabled: true,
+        provider: resolvedProvider,
+        model: resolvedModel,
+        temperature: resolvedTemp,
       },
-      modelConfig: data.modelConfig || {
-        provider: DEFAULT_LLM_PROVIDER,
-        model: DEFAULT_LLM_MODEL,
-        temperature: DEFAULT_LLM_TEMPERATURE,
+      modelConfig: {
+        provider: resolvedProvider,
+        model: resolvedModel,
+        temperature: resolvedTemp,
       },
     });
   };

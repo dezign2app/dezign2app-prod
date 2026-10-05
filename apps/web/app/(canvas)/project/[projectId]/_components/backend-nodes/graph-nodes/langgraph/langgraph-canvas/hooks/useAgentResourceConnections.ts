@@ -104,14 +104,85 @@ export function useAgentResourceConnections({
 
   const handleSelectLLMForAgent = useCallback(
     (agentId: string, llmId: string | null) => {
+      let actualSourceId = llmId;
+
+      // Find previously bound LLM edge targeting this agent
+      const prevLlmEdge = edges?.find(
+        (e) => e.target === agentId && e.targetHandle === HANDLE_LLM_IN,
+      );
+      const prevLlmSourceId = prevLlmEdge?.source;
+
+      if (llmId) {
+        const srcNode = nodes.find((n) => n.id === llmId);
+        if (srcNode?.type === LANGGRAPH_CANVAS_NODE_LLM) {
+          // If the agent already has a bound LLM Ref node, update it to point to this master
+          const prevSourceNode = prevLlmSourceId
+            ? nodes.find((n) => n.id === prevLlmSourceId)
+            : null;
+
+          if (
+            prevSourceNode?.type === LANGGRAPH_CANVAS_NODE_LLM_REF &&
+            setNodes
+          ) {
+            actualSourceId = prevSourceNode.id;
+            const masterLabel =
+              srcNode.data.label || srcNode.data.model || "LLM";
+            setNodes((nds) =>
+              nds.map((n) =>
+                n.id === prevSourceNode.id &&
+                n.type === LANGGRAPH_CANVAS_NODE_LLM_REF
+                  ? {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        llmRef: llmId,
+                        label: `${masterLabel} (Ref)`,
+                      },
+                    }
+                  : n,
+              ),
+            );
+          } else if (setNodes) {
+            // Otherwise, create a new LLM Ref node for this agent
+            const refId = `llm_ref_${Date.now().toString(36).slice(-4)}_${Math.random().toString(36).slice(2, 6)}`;
+            const agentNode = nodes.find((n) => n.id === agentId);
+            const baseX = agentNode ? agentNode.position.x - 320 : 200;
+            const baseY = agentNode ? agentNode.position.y : 200;
+            const masterLabel =
+              srcNode.data.label || srcNode.data.model || "LLM";
+
+            const newLLMRefNode: LangGraphLLMRefNode = {
+              id: refId,
+              type: LANGGRAPH_CANVAS_NODE_LLM_REF,
+              position: { x: baseX, y: baseY },
+              data: {
+                label: `${masterLabel} (Ref)`,
+                refId,
+                llmRef: llmId,
+                onDeleteLLMRef: () => {
+                  setNodes((all) => all.filter((n) => n.id !== refId));
+                  setEdges((allEds) =>
+                    allEds.filter(
+                      (e) => e.source !== refId && e.target !== refId,
+                    ),
+                  );
+                },
+              },
+            };
+            setNodes((nds) => [...nds, newLLMRefNode]);
+            actualSourceId = refId;
+          }
+        }
+      }
+
       setEdges((eds) => {
         const filtered = eds.filter(
           (e) => !(e.target === agentId && e.targetHandle === HANDLE_LLM_IN),
         );
-        if (!llmId) return filtered;
+        if (!actualSourceId) return filtered;
         const newEdge: LangGraphCanvasEdge = {
-          id: `xy-edge__${llmId}${HANDLE_LLM_OUT}-${agentId}${HANDLE_LLM_IN}`,
-          source: llmId,
+          id: `xy-edge__${actualSourceId}${HANDLE_LLM_OUT}-${agentId}${HANDLE_LLM_IN}`,
+          source: actualSourceId,
           sourceHandle: HANDLE_LLM_OUT,
           target: agentId,
           targetHandle: HANDLE_LLM_IN,
@@ -121,9 +192,21 @@ export function useAgentResourceConnections({
         return [...filtered, newEdge];
       });
 
+      // Cleanup previously attached LLM ref if it is no longer used
+      if (setNodes && (!actualSourceId || actualSourceId !== prevLlmSourceId)) {
+        if (prevLlmSourceId && prevLlmSourceId.startsWith("llm_ref")) {
+          const isUsedElsewhere = edges?.some(
+            (e) => e.source === prevLlmSourceId && e.target !== agentId,
+          );
+          if (!isUsedElsewhere) {
+            setNodes((nds) => nds.filter((n) => n.id !== prevLlmSourceId));
+          }
+        }
+      }
+
       // Tight coupling: update target node's llmConfig and modelConfig
       if (setNodes) {
-        if (!llmId) {
+        if (!actualSourceId) {
           setNodes((nds) =>
             nds.map((n) => {
               if (n.id === agentId) {
@@ -161,7 +244,7 @@ export function useAgentResourceConnections({
             }),
           );
         } else {
-          const srcNode = nodes.find((n) => n.id === llmId);
+          const srcNode = nodes.find((n) => n.id === actualSourceId || n.id === llmId);
           let resolvedProvider: string | undefined;
           let resolvedModel: string | undefined;
           let resolvedTemp: number | undefined;
@@ -247,7 +330,7 @@ export function useAgentResourceConnections({
         }
       }
     },
-    [nodes, setEdges, setNodes],
+    [nodes, edges, setEdges, setNodes],
   );
 
   const handleToggleToolForAgent = useCallback(
@@ -549,6 +632,20 @@ export function useAgentResourceConnections({
     [setNodes, setEdges],
   );
 
+  const handleAddLLMRefForAgent = useCallback(
+    (agentId: string, masterLLMId: string) => {
+      handleSelectLLMForAgent(agentId, masterLLMId);
+    },
+    [handleSelectLLMForAgent],
+  );
+
+  const handleRemoveLLMRefForAgent = useCallback(
+    (agentId: string) => {
+      handleSelectLLMForAgent(agentId, null);
+    },
+    [handleSelectLLMForAgent],
+  );
+
   return {
     availableLLMNodes,
     availableToolNodes,
@@ -557,6 +654,8 @@ export function useAgentResourceConnections({
     masterToolNodes,
     masterMiddlewareNodes,
     handleSelectLLMForAgent,
+    handleAddLLMRefForAgent,
+    handleRemoveLLMRefForAgent,
     handleToggleToolForAgent,
     handleToggleMiddlewareForAgent,
     handleToggleMemoryForAgent,

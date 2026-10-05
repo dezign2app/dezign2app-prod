@@ -255,8 +255,9 @@ export function reconstructNodes(
         agentId: agId,
         name: agDef.name || "Node",
         systemPrompt: agDef.systemPrompt,
-        modelConfig: agDef.modelConfig,
-        llmConfig: agDef.llmConfig,
+        modelConfig:
+          agDef.llmConfig?.enabled === false ? undefined : agDef.modelConfig,
+        llmConfig: agDef.llmConfig || { enabled: false },
         stateUpdatesConfig: agDef.stateUpdatesConfig,
         streamConfig: agDef.streamConfig,
         responseFormat: agDef.responseFormat,

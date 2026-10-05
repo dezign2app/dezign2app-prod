@@ -28,7 +28,7 @@ export const NodeResourceBadges: React.FC<NodeResourceBadgesProps> = ({
         <span className="text-[10px] font-bold text-foreground font-mono truncate max-w-full">
           {boundLLMs.length > 0
             ? "Bound"
-            : llmConfig.enabled !== false
+            : Boolean(llmConfig.enabled)
               ? "Default"
               : "Off"}
         </span>

@@ -268,9 +268,10 @@ export function buildGraphData({
         name: n.data.name || "Node",
         systemPrompt: n.data.systemPrompt,
         llmNodeId,
-        modelConfig: resolvedModelConfig || {
-          ...(n.data.modelConfig || {}),
-        },
+        modelConfig:
+          n.data.llmConfig?.enabled === false
+            ? undefined
+            : resolvedModelConfig || (n.data.modelConfig ? { ...n.data.modelConfig } : undefined),
         llmConfig: n.data.llmConfig,
         stateUpdatesConfig: n.data.stateUpdatesConfig,
         streamConfig: n.data.streamConfig,

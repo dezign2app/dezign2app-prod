@@ -84,6 +84,7 @@ export function LangGraphStudioView({
 
   const {
     nodes,
+    setNodes,
     edges,
     setEdges,
     inputChannels,
@@ -297,11 +298,14 @@ export function LangGraphStudioView({
 
       const isCurrent = currentEdgeId === edge.id;
       const isActive = activeEdgeIds.includes(edge.id);
+      const isSelected = Boolean(edge.selected);
       const strokeColor = isCurrent
         ? "#38bdf8"
         : isActive
           ? "#818cf8"
-          : edge.style?.stroke || "#a1a1aa";
+          : isSelected
+            ? "#38bdf8"
+            : edge.style?.stroke || "#a1a1aa";
 
       return {
         ...edge,
@@ -313,7 +317,9 @@ export function LangGraphStudioView({
             ? 3.5
             : isActive
               ? 2.5
-              : edge.style?.strokeWidth || 2,
+              : isSelected
+                ? 3
+                : edge.style?.strokeWidth || 2,
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
@@ -574,19 +580,45 @@ export function LangGraphStudioView({
             minZoom={0.01}
             maxZoom={3}
             onEdgeClick={(_: React.MouseEvent, edge: LangGraphCanvasEdge) => {
+              setSelectedNodeId(null);
+              setNodes((nds) =>
+                nds.map((n) => (n.selected ? { ...n, selected: false } : n)),
+              );
               setEdges((eds) =>
                 eds.map((e) => ({ ...e, selected: e.id === edge.id })),
               );
             }}
             onNodeClick={(_: React.MouseEvent, n: LangGraphCanvasNode) => {
               setSelectedNodeId(n.id);
+              setEdges((eds) =>
+                eds.map((e) => (e.selected ? { ...e, selected: false } : e)),
+              );
               if (n.id === "START") setActiveSideTab("inputs");
               else if (n.id === "STATE_GLOBAL") setActiveSideTab("state");
               else setActiveSideTab("inspector");
             }}
             onPaneClick={() => {
               handleCloseInspector();
+              setNodes((nds) =>
+                nds.map((n) => (n.selected ? { ...n, selected: false } : n)),
+              );
               setEdges((eds) => eds.map((e) => ({ ...e, selected: false })));
+            }}
+            onSelectionChange={({
+              nodes: selNodes,
+              edges: selEdges,
+            }: {
+              nodes: LangGraphCanvasNode[];
+              edges: LangGraphCanvasEdge[];
+            }) => {
+              if (selEdges.length > 0 && selNodes.length === 0) {
+                setSelectedNodeId(null);
+              } else if (selNodes.length > 0) {
+                const activeNode = selNodes[0];
+                if (activeNode && activeNode.id !== selectedNodeId) {
+                  setSelectedNodeId(activeNode.id);
+                }
+              }
             }}
             fitView
             fitViewOptions={useMemo(() => {

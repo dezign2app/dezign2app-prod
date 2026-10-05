@@ -12,6 +12,7 @@ import {
   type LangGraphCanvasEdge,
   type StepNode,
   type LangGraphRouterBranch,
+  type LangGraphLLMRefNode,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
@@ -397,9 +398,10 @@ export function useCanvasConnections({
           ? { fill: "#0c4a6e", rx: 4, ry: 4 }
           : undefined;
 
+        const srcNode = nodes.find((n) => n.id === params.source);
+
         // Auto-enable LLM execution on target node (tight coupling)
         if (isLLM) {
-          const srcNode = nodes.find((n) => n.id === params.source);
           let resolvedProvider: string | undefined;
           let resolvedModel: string | undefined;
           let resolvedTemp: number | undefined;
@@ -500,7 +502,6 @@ export function useCanvasConnections({
         }
 
         if (isTool) {
-          const srcNode = nodes.find((n) => n.id === params.source);
           if (srcNode?.type === LANGGRAPH_CANVAS_NODE_TOOL) {
             setNodes((nds) =>
               nds.map((n) => {
@@ -534,6 +535,40 @@ export function useCanvasConnections({
           return eds;
         }
 
+        let edgeSource = params.source;
+        if (
+          isLLM &&
+          srcNode?.type === LANGGRAPH_CANVAS_NODE_LLM &&
+          targetNode &&
+          targetNode.type !== LANGGRAPH_CANVAS_NODE_LLM_REF
+        ) {
+          const refId = `llm_ref_${Date.now().toString(36).slice(-4)}_${Math.random().toString(36).slice(2, 6)}`;
+          const masterLabel = srcNode.data.label || srcNode.data.model || "LLM";
+          const newLLMRefNode: LangGraphLLMRefNode = {
+            id: refId,
+            type: LANGGRAPH_CANVAS_NODE_LLM_REF,
+            position: {
+              x: targetNode.position.x - 320,
+              y: targetNode.position.y,
+            },
+            data: {
+              label: `${masterLabel} (Ref)`,
+              refId,
+              llmRef: srcNode.id,
+              onDeleteLLMRef: () => {
+                setNodes((all) => all.filter((n) => n.id !== refId));
+                setEdges((allEds) =>
+                  allEds.filter(
+                    (e) => e.source !== refId && e.target !== refId,
+                  ),
+                );
+              },
+            },
+          };
+          setNodes((nds) => [...nds, newLLMRefNode]);
+          edgeSource = refId;
+        }
+
         const filteredEds = isLLM
           ? eds.filter(
               (e) =>
@@ -544,6 +579,7 @@ export function useCanvasConnections({
         return addEdge(
           {
             ...params,
+            source: edgeSource,
             sourceHandle,
             targetHandle,
             animated: true,

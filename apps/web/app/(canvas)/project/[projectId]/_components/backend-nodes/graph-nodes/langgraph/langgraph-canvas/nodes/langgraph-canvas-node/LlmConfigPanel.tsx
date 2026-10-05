@@ -20,12 +20,14 @@ export const LlmConfigPanel: React.FC<LlmConfigPanelProps> = ({
   handleToggleLLMConfig,
   updateAgentData,
 }) => {
+  const isEnabled = Boolean(llmConfig.enabled);
+
   return (
     <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-sky-500/5 border border-sky-500/20 nodrag">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <div
-            className={`p-1 rounded shrink-0 ${llmConfig.enabled !== false ? "bg-sky-500/20 text-sky-500" : "bg-muted/30 text-muted-foreground"}`}
+            className={`p-1 rounded shrink-0 ${isEnabled ? "bg-sky-500/20 text-sky-500" : "bg-muted/30 text-muted-foreground"}`}
           >
             <Brain className="w-3.5 h-3.5" />
           </div>
@@ -36,14 +38,14 @@ export const LlmConfigPanel: React.FC<LlmConfigPanelProps> = ({
                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-600 dark:text-sky-400 font-mono font-semibold shrink-0">
                   {boundLLMs[0]?.source?.startsWith("llm_ref") ? "Bound Ref" : "Bound Edge"}
                 </span>
-              ) : llmConfig.enabled !== false ? (
+              ) : isEnabled ? (
                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-600 dark:text-sky-400 font-mono font-semibold shrink-0">
                   {llmConfig.provider || "default"}
                 </span>
               ) : null}
             </span>
             <span className="text-[9px] text-muted-foreground font-mono truncate">
-              {llmConfig.enabled !== false
+              {isEnabled
                 ? "Model execution enabled"
                 : "LLM config disabled"}
             </span>
@@ -57,14 +59,14 @@ export const LlmConfigPanel: React.FC<LlmConfigPanelProps> = ({
           onMouseDown={(e: React.MouseEvent) => e.stopPropagation()}
         >
           <Switch
-            checked={llmConfig.enabled !== false}
+            checked={isEnabled}
             onCheckedChange={handleToggleLLMConfig}
             className="scale-90"
           />
         </div>
       </div>
 
-      {llmConfig.enabled !== false && (
+      {isEnabled && (
         <div className="flex flex-col gap-1.5 mt-1 pt-2 border-t border-sky-500/20 nodrag">
           <span className="text-[9px] font-semibold text-muted-foreground uppercase">
             System Prompt
