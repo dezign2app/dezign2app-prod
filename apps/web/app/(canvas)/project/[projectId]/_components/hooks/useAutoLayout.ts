@@ -12,10 +12,10 @@ import {
 } from "./auto-layout/types";
 
 import { performSchemaLayout } from "./auto-layout/schemaLayout";
-import { performGraphLayout } from "./auto-layout/graphLayout";
+import { performGraphLayout, getGraphFlowNodes } from "./auto-layout/graphLayout";
 import { performLangGraphLayout, getLangGraphFlowNodes } from "./auto-layout/langGraphLayout";
 
-export { getLangGraphFlowNodes };
+export { getLangGraphFlowNodes, getGraphFlowNodes };
 
 export type {
   LayoutNode,
@@ -122,7 +122,42 @@ export function useGraphAutoLayout(options?: UseGraphAutoLayoutOptions) {
     [options?.nodes, options?.edges, options?.onNodesChange, fitView],
   );
 
-  return { handleLayout };
+  const panToFlow = useCallback(
+    (fitOptions?: { duration?: number; padding?: number; maxZoom?: number }) => {
+      const currentStore = useBackendCanvasStore.getState();
+      const nodes: LayoutNode[] =
+        options?.nodes ??
+        currentStore.nodes.filter(
+          (n) =>
+            n.type !== "group" &&
+            n.type !== "entity" &&
+            n.type !== "database" &&
+            n.type !== "redis_instance" &&
+            n.type !== "redis_schema",
+        );
+      const edges: LayoutEdge[] =
+        options?.edges ??
+        currentStore.edges.filter(
+          (e) =>
+            e.type !== "database-connection" &&
+            e.type !== "foreign-key" &&
+            e.type !== "transformer-reference" &&
+            e.type !== "storage-reference" &&
+            e.type !== "reference",
+        );
+      const flowNodes = getGraphFlowNodes(nodes, edges);
+      const targetNodes = flowNodes.length > 0 ? flowNodes : nodes;
+      fitView({
+        nodes: targetNodes.map((n) => ({ id: n.id })),
+        duration: fitOptions?.duration ?? 300,
+        padding: fitOptions?.padding ?? 0.2,
+        maxZoom: fitOptions?.maxZoom ?? 0.85,
+      });
+    },
+    [options?.nodes, options?.edges, fitView],
+  );
+
+  return { handleLayout, panToFlow };
 }
 
 /**

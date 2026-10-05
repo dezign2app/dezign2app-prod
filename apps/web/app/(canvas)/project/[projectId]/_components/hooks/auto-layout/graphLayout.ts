@@ -31,10 +31,141 @@ export interface PerformGraphLayoutOptions {
   nodes: LayoutNode[];
   edges: LayoutEdge[];
   onNodesChange?: (changes: PositionNodeChange[]) => void;
-  fitView: (options?: { duration?: number; padding?: number; maxZoom?: number }) => void;
+  fitView: (options?: { duration?: number; padding?: number; maxZoom?: number; nodes?: { id: string }[] }) => void;
   direction?: string;
   storeEndpoints?: EndpointWithNode[];
   storeEvents?: EventWithNode[];
+}
+
+/**
+ * Extracts only the connected flow nodes from start/entry to end/sink in GraphView.
+ * Ignores definition/auxiliary nodes (types, entity, database) and any disconnected nodes.
+ */
+export function getGraphFlowNodes(
+  nodes: LayoutNode[],
+  edges: LayoutEdge[] = [],
+): LayoutNode[] {
+  if (nodes.length === 0) return [];
+
+  // Exclude types, entity, database, redis, group nodes
+  const candidateNodes = nodes.filter(
+    (n) =>
+      n.type !== "types" &&
+      n.type !== "group" &&
+      n.type !== "entity" &&
+      n.type !== "database" &&
+      n.type !== "redis_instance" &&
+      n.type !== "redis_schema",
+  );
+  if (candidateNodes.length === 0) return [];
+
+  const candidateIdSet = new Set(candidateNodes.map((n) => n.id));
+
+  // Graph flow edges between candidates
+  const flowEdges = edges.filter(
+    (e) =>
+      candidateIdSet.has(e.source) &&
+      candidateIdSet.has(e.target) &&
+      e.type !== "database-connection" &&
+      e.type !== "foreign-key" &&
+      e.type !== "type-reference",
+  );
+
+  // If there are no flow edges at all, return all candidate nodes
+  if (flowEdges.length === 0) {
+    return candidateNodes;
+  }
+
+  // Count degrees in the flow graph
+  const inDegree = new Map<string, number>();
+  const outDegree = new Map<string, number>();
+  const undirectedAdj = new Map<string, string[]>();
+
+  candidateNodes.forEach((n) => {
+    inDegree.set(n.id, 0);
+    outDegree.set(n.id, 0);
+    undirectedAdj.set(n.id, []);
+  });
+
+  flowEdges.forEach((e) => {
+    inDegree.set(e.target, (inDegree.get(e.target) ?? 0) + 1);
+    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
+    undirectedAdj.get(e.source)?.push(e.target);
+    undirectedAdj.get(e.target)?.push(e.source);
+  });
+
+  // Disconnected nodes have total degree 0
+  const connectedNodeIds = new Set<string>();
+  candidateNodes.forEach((n) => {
+    const deg = (inDegree.get(n.id) ?? 0) + (outDegree.get(n.id) ?? 0);
+    if (deg > 0) {
+      connectedNodeIds.add(n.id);
+    }
+  });
+
+  if (connectedNodeIds.size === 0) {
+    return candidateNodes;
+  }
+
+  // Identify entry / start nodes:
+  // Explicit entry types (webApp, webPage, gateway) or nodes in connected components with inDegree === 0
+  const isExplicitStart = (n: LayoutNode) =>
+    n.type === "webApp" ||
+    n.type === "webPage" ||
+    n.type === "gateway" ||
+    n.type === "api_gateway" ||
+    n.type === "start" ||
+    n.type === "START";
+
+  const explicitStartNodes = candidateNodes.filter(
+    (n) => connectedNodeIds.has(n.id) && isExplicitStart(n),
+  );
+
+  const rootNodes = candidateNodes.filter(
+    (n) => connectedNodeIds.has(n.id) && (inDegree.get(n.id) ?? 0) === 0,
+  );
+
+  const startNodes =
+    explicitStartNodes.length > 0 ? explicitStartNodes : rootNodes;
+
+  const bfs = (
+    startIds: string[],
+    adjMap: Map<string, string[]>,
+  ): Set<string> => {
+    const visited = new Set<string>();
+    const queue = [...startIds];
+    startIds.forEach((id) => visited.add(id));
+
+    while (queue.length > 0) {
+      const curr = queue.shift()!;
+      const neighbors = adjMap.get(curr) || [];
+      for (const nbr of neighbors) {
+        if (!visited.has(nbr)) {
+          visited.add(nbr);
+          queue.push(nbr);
+        }
+      }
+    }
+    return visited;
+  };
+
+  // Traverse connected components from start/entry nodes
+  const startIds = startNodes.map((n) => n.id);
+  const flowConnected =
+    startIds.length > 0 ? bfs(startIds, undirectedAdj) : connectedNodeIds;
+
+  // Nodes to include: all nodes in the connected flow from start to end
+  const selectedNodeIds =
+    flowConnected.size > 0 ? flowConnected : connectedNodeIds;
+
+  const resultNodes: LayoutNode[] = [];
+  candidateNodes.forEach((n) => {
+    if (selectedNodeIds.has(n.id)) {
+      resultNodes.push(n);
+    }
+  });
+
+  return resultNodes.length > 0 ? resultNodes : candidateNodes;
 }
 
 export function performGraphLayout({
@@ -676,7 +807,20 @@ export function performGraphLayout({
     });
   }
 
+  const flowNodes = getGraphFlowNodes(nodes, edges);
+  const targetNodes =
+    flowNodes.length > 0
+      ? flowNodes
+      : graphNodes.length > 0
+        ? graphNodes
+        : nodes;
+
   setTimeout(() => {
-    fitView({ duration: 300, padding: 0.2, maxZoom: 0.85 });
+    fitView({
+      nodes: targetNodes.map((n) => ({ id: n.id })),
+      duration: 300,
+      padding: 0.2,
+      maxZoom: 0.85,
+    });
   }, 50);
 }

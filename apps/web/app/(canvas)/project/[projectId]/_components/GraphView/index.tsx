@@ -22,7 +22,7 @@ import {
 } from "../backend-nodes/CustomEdges";
 import { isValidConnection, WebAppZone } from "@workspace/canvas";
 import { useCanvasHandlers } from "../hooks/useCanvasHandlers";
-import { useGraphAutoLayout } from "../hooks/useAutoLayout";
+import { useGraphAutoLayout, getGraphFlowNodes } from "../hooks/useAutoLayout";
 import { TopToolbarPanel } from "./TopToolbarPanel";
 import { TestCaseDialogs } from "./TestCaseDialogs";
 import { sortZonePages } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/nodes/gateway/web-page";
@@ -206,21 +206,31 @@ export function GraphView({ projectId }: GraphViewProps) {
     });
   }, [graphEdges, nodes]);
 
-  const { handleLayout } = useGraphAutoLayout({
+  const { handleLayout, panToFlow } = useGraphAutoLayout({
     nodes: graphNodes,
     edges: graphEdges,
   });
+
+  const flowNodesToFit = React.useMemo(() => {
+    const flowNodes = getGraphFlowNodes(graphNodes, graphEdges);
+    return flowNodes.map((n) => ({ id: n.id }));
+  }, [graphNodes, graphEdges]);
 
   const hasFitted = useRef(false);
   useEffect(() => {
     if (graphNodes.length > 0 && !hasFitted.current) {
       hasFitted.current = true;
       const timer = setTimeout(() => {
-        fitView({ duration: 500, padding: 0.35, maxZoom: 0.65 });
+        fitView({
+          nodes: flowNodesToFit.length > 0 ? flowNodesToFit : undefined,
+          duration: 500,
+          padding: 0.35,
+          maxZoom: 0.65,
+        });
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [graphNodes.length, fitView]);
+  }, [graphNodes.length, flowNodesToFit, fitView]);
 
 
 
@@ -415,7 +425,14 @@ export function GraphView({ projectId }: GraphViewProps) {
         nodes={visualGraphNodes}
         edges={visualGraphEdges}
         fitView
-        fitViewOptions={{ padding: 0.35, maxZoom: 0.65 }}
+        fitViewOptions={React.useMemo(
+          () => ({
+            padding: 0.35,
+            maxZoom: 0.65,
+            nodes: flowNodesToFit.length > 0 ? flowNodesToFit : undefined,
+          }),
+          [flowNodesToFit],
+        )}
         elevateEdgesOnSelect={true}
         elevateNodesOnSelect={true}
         onNodesChange={handleNodesChange}
@@ -445,7 +462,14 @@ export function GraphView({ projectId }: GraphViewProps) {
         <Background gap={12} size={1} />
         <Controls
           position="bottom-left"
-          fitViewOptions={{ padding: 0.35, maxZoom: 0.65 }}
+          fitViewOptions={React.useMemo(
+            () => ({
+              padding: 0.35,
+              maxZoom: 0.65,
+              nodes: flowNodesToFit.length > 0 ? flowNodesToFit : undefined,
+            }),
+            [flowNodesToFit],
+          )}
           style={{
             bottom: terminalOpen ? `${terminalHeight + 14}px` : "16px",
             left: paletteOpen ? `${paletteWidth + 14}px` : "16px",
