@@ -112,6 +112,9 @@ export interface CanvasNodeData
   stateUpdatesConfig?: {
     enabled?: boolean;
   };
+  middlewareConfig?: {
+    enabled?: boolean;
+  };
   stateUpdates?: LangGraphStateUpdateItem[];
   availableStateChannels?: LangGraphStateChannel[];
   onDeleteAgent?: () => void;
@@ -136,6 +139,9 @@ export interface UseLangGraphCanvasNodeReturn {
   boundMemories?: Edge[];
   boundStateReducers?: Edge[];
   llmConfig: LLMConfigState;
+  middlewareConfig?: {
+    enabled?: boolean;
+  };
   stateUpdatesConfig?: StateUpdatesConfigState;
   streamConfig: LangGraphAgentStreamConfig;
   responseFormat: LangGraphAgentResponseFormatConfig;
@@ -144,6 +150,9 @@ export interface UseLangGraphCanvasNodeReturn {
   availableFields: string[];
   updateAgentData: (changes: Partial<CanvasNodeData>) => void;
   handleToggleLLMConfig: (enabled: boolean) => void;
+  handleToggleMiddlewareConfig?: (enabled: boolean) => void;
+  handleRemoveMiddleware?: (sourceId: string) => void;
+  handleAddDefaultMiddleware?: () => void;
   handleToggleStateUpdates?: (enabled: boolean) => void;
   handleToggleStreaming: (enabled: boolean) => void;
   handleToggleResponseFormat: (enabled: boolean) => void;

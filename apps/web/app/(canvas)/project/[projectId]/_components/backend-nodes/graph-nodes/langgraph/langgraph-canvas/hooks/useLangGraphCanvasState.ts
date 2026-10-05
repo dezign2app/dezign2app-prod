@@ -472,30 +472,79 @@ export function useLangGraphCanvasState({
   // ── Delete selected step ──
   const handleDeleteStep = () => {
     if (!selectedNodeId || isReservedNodeId(selectedNodeId)) return;
-    setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
-    setEdges((eds) =>
-      eds.filter(
-        (e) => e.source !== selectedNodeId && e.target !== selectedNodeId,
-      ),
-    );
+    const nodeId = selectedNodeId;
+    setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+    const edgesToRemove = edges
+      .filter((e) => e.source === nodeId || e.target === nodeId)
+      .map((e) => e.id);
+    if (edgesToRemove.length > 0) {
+      onEdgesChange(edgesToRemove.map((id) => ({ type: "remove", id })));
+    } else {
+      setEdges((eds) =>
+        eds.filter((e) => e.source !== nodeId && e.target !== nodeId),
+      );
+    }
     setSelectedNodeId(null);
   };
 
   const handleDeleteSelected = useCallback(() => {
-    if (selectedNodeId && !isReservedNodeId(selectedNodeId)) {
-      setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
-      setEdges((eds) =>
-        eds.filter(
-          (e) => e.source !== selectedNodeId && e.target !== selectedNodeId,
-        ),
-      );
-      setSelectedNodeId(null);
+    const selectedEdges = edges.filter((e) => e.selected);
+    const selectedNodes = nodes.filter((n) => n.selected);
+
+    // If an edge is selected and NO node is selected: only delete the selected edge(s)
+    if (selectedEdges.length > 0 && selectedNodes.length === 0) {
+      onEdgesChange(selectedEdges.map((e) => ({ type: "remove", id: e.id })));
+      return;
     }
-    setEdges((eds) => eds.filter((e) => !e.selected));
-  }, [selectedNodeId]);
+
+    // Determine nodes to delete
+    const nodesToDelete = new Set<string>();
+    for (const n of selectedNodes) {
+      if (!isReservedNodeId(n.id)) {
+        nodesToDelete.add(n.id);
+      }
+    }
+
+    // Fallback to selectedNodeId ONLY IF no edges are selected
+    if (
+      nodesToDelete.size === 0 &&
+      selectedNodeId &&
+      !isReservedNodeId(selectedNodeId) &&
+      selectedEdges.length === 0
+    ) {
+      nodesToDelete.add(selectedNodeId);
+    }
+
+    if (nodesToDelete.size > 0) {
+      setNodes((nds) => nds.filter((n) => !nodesToDelete.has(n.id)));
+      const edgeIdsToRemove = new Set(
+        edges
+          .filter(
+            (e) =>
+              nodesToDelete.has(e.source) ||
+              nodesToDelete.has(e.target) ||
+              e.selected,
+          )
+          .map((e) => e.id),
+      );
+
+      if (edgeIdsToRemove.size > 0) {
+        onEdgesChange(
+          Array.from(edgeIdsToRemove).map((id) => ({ type: "remove", id })),
+        );
+      }
+
+      if (selectedNodeId && nodesToDelete.has(selectedNodeId)) {
+        setSelectedNodeId(null);
+      }
+    } else if (selectedEdges.length > 0) {
+      onEdgesChange(selectedEdges.map((e) => ({ type: "remove", id: e.id })));
+    }
+  }, [edges, nodes, selectedNodeId, setNodes, onEdgesChange, setSelectedNodeId]);
 
   return {
     nodes,
+    setNodes,
     edges,
     setEdges,
     inputChannels,

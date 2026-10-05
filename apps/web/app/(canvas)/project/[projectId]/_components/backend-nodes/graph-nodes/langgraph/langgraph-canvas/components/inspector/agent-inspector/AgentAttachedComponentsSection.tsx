@@ -52,6 +52,7 @@ interface AgentAttachedComponentsSectionProps {
   onToggleTool?: (toolId: string, connect: boolean) => void;
   onToggleMiddleware?: (mwId: string, connect: boolean) => void;
   embedded?: boolean;
+  hideMiddleware?: boolean;
 }
 
 interface ToolComboboxOption {
@@ -95,6 +96,7 @@ export function AgentAttachedComponentsSection({
   onToggleTool,
   onToggleMiddleware,
   embedded = false,
+  hideMiddleware = false,
 }: AgentAttachedComponentsSectionProps) {
   const [isLlmOpen, setIsLlmOpen] = useState(Boolean(connectedLLMId));
   const [isToolsOpen, setIsToolsOpen] = useState(connectedToolIds.length > 0);
@@ -637,11 +639,12 @@ export function AgentAttachedComponentsSection({
       </div>
 
       {/* ─── 3. Middleware References Section (Combobox + Add Button) ────────── */}
-      <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-secondary/20 border border-border/50">
-        <div
-          className="flex items-center justify-between cursor-pointer select-none"
-          onClick={() => setIsMiddlewareOpen((prev) => !prev)}
-        >
+      {!hideMiddleware && (
+        <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-secondary/20 border border-border/50">
+          <div
+            className="flex items-center justify-between cursor-pointer select-none"
+            onClick={() => setIsMiddlewareOpen((prev) => !prev)}
+          >
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-purple-400" />
             <span className="text-xs font-semibold text-foreground">
@@ -835,13 +838,15 @@ export function AgentAttachedComponentsSection({
           </div>
         )}
       </div>
+      )}
 
       {/* Info Tip */}
       <div className="flex gap-2 p-2 rounded-lg bg-secondary/20 border border-border/50 items-start text-[10px] text-muted-foreground leading-tight">
         <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-sky-400" />
         <p>
-          Each attached tool or middleware creates a dedicated Reference node on the canvas. 
-          Agents connect strictly to Tool and Middleware References.
+          {hideMiddleware
+            ? "Each attached tool creates a dedicated Reference node on the canvas. Agents connect strictly to Tool References."
+            : "Each attached tool or middleware creates a dedicated Reference node on the canvas. Agents connect strictly to Tool and Middleware References."}
         </p>
       </div>
     </div>

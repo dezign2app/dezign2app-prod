@@ -102,6 +102,9 @@ export interface LangGraphAgentDefinition {
   stateUpdatesConfig?: {
     enabled?: boolean;
   };
+  middlewareConfig?: {
+    enabled?: boolean;
+  };
   streamConfig?: LangGraphAgentStreamConfig;
   responseFormat?: LangGraphAgentResponseFormatConfig;
   memoryConfig?: LangGraphAgentMemoryConfig;

@@ -8,6 +8,7 @@ import {
   NodeHeader,
   NodeResourceBadges,
   LlmConfigPanel,
+  MiddlewareConfigPanel,
   StateUpdatesPanel,
   ResponseFormatPanel,
   EventStreamPanel,
@@ -29,12 +30,16 @@ export const LangGraphCanvasNode = (props: NodeProps<CanvasNode>) => {
     boundMiddlewares,
     boundStateReducers,
     llmConfig,
+    middlewareConfig,
     streamConfig,
     responseFormat,
     stateUpdates,
     availableFields,
     updateAgentData,
     handleToggleLLMConfig,
+    handleToggleMiddlewareConfig,
+    handleRemoveMiddleware,
+    handleAddDefaultMiddleware,
     handleToggleStreaming,
     handleToggleResponseFormat,
     handleToggleEvent,
@@ -70,6 +75,7 @@ export const LangGraphCanvasNode = (props: NodeProps<CanvasNode>) => {
           boundMiddlewares={boundMiddlewares}
           boundStateReducers={boundStateReducers}
           llmConfig={llmConfig}
+          middlewareConfig={middlewareConfig}
         />
 
         {/* Expand / Collapse Action Bar */}
@@ -104,6 +110,16 @@ export const LangGraphCanvasNode = (props: NodeProps<CanvasNode>) => {
               systemPrompt={data.systemPrompt}
               handleToggleLLMConfig={handleToggleLLMConfig}
               updateAgentData={updateAgentData}
+            />
+
+            <MiddlewareConfigPanel
+              middlewareConfig={middlewareConfig}
+              boundMiddlewares={boundMiddlewares}
+              handleToggleMiddlewareConfig={
+                handleToggleMiddlewareConfig || (() => {})
+              }
+              handleRemoveMiddleware={handleRemoveMiddleware}
+              handleAddDefaultMiddleware={handleAddDefaultMiddleware}
             />
 
             <StateUpdatesPanel

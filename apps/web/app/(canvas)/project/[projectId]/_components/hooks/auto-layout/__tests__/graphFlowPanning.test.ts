@@ -100,7 +100,7 @@ describe("GraphView Auto Layout - Flow-focused Panning (Start to End)", () => {
     vi.useRealTimers();
 
     expect(fitView).toHaveBeenCalledTimes(1);
-    const fitViewArgs = fitView.mock.calls[0][0];
+    const fitViewArgs = fitView.mock.calls[0]![0];
 
     expect(fitViewArgs).toBeDefined();
     expect(fitViewArgs.nodes).toBeDefined();

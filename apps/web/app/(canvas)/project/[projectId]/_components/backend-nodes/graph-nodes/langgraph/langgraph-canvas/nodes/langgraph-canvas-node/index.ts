@@ -6,3 +6,4 @@ export * from "./LlmConfigPanel";
 export * from "./StateUpdatesPanel";
 export * from "./ResponseFormatPanel";
 export * from "./EventStreamPanel";
+export * from "./MiddlewareConfigPanel";

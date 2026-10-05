@@ -488,11 +488,16 @@ export function useNodeFactory({
               agentId: nodeId,
               name: label || "Node",
               systemPrompt: "System prompt / instructions for this node...",
-              modelConfig: {
+              llmConfig: {
+                enabled: false,
                 provider: DEFAULT_LLM_PROVIDER,
                 model: DEFAULT_LLM_MODEL,
                 temperature: DEFAULT_LLM_TEMPERATURE,
               },
+              middlewareConfig: {
+                enabled: false,
+              },
+              modelConfig: undefined,
               tools: [],
               middleware: [],
               onDeleteAgent: () => {
@@ -603,11 +608,16 @@ export function useNodeFactory({
                   },
                 }
               : {
-                  modelConfig: {
+                  llmConfig: {
+                    enabled: false,
                     provider: DEFAULT_LLM_PROVIDER,
                     model: DEFAULT_LLM_MODEL,
                     temperature: DEFAULT_LLM_TEMPERATURE,
                   },
+                  middlewareConfig: {
+                    enabled: false,
+                  },
+                  modelConfig: undefined,
                 }),
             stateUpdates: [],
             availableStateChannels: stateChannels,

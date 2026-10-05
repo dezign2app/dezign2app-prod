@@ -12,6 +12,8 @@ import {
   type LangGraphCanvasEdge,
   type StepNode,
   type LangGraphRouterBranch,
+  type LangGraphLLMRefNode,
+  type LangGraphMiddlewareRefNode,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
@@ -118,6 +120,56 @@ export function useCanvasConnections({
               }),
             );
           }
+
+          const removedMwTargets = removedEdges
+            .filter((e) => e.targetHandle === HANDLE_MIDDLEWARE_IN)
+            .map((e) => e.target);
+
+          if (removedMwTargets.length > 0) {
+            setNodes((nds) =>
+              nds.map((n) => {
+                if (removedMwTargets.includes(n.id)) {
+                  const hasRemaining = eds.some(
+                    (e) =>
+                      !removedEdgeIds.has(e.id) &&
+                      e.target === n.id &&
+                      e.targetHandle === HANDLE_MIDDLEWARE_IN,
+                  );
+                  if (!hasRemaining) {
+                    if (
+                      n.type === LANGGRAPH_CANVAS_NODE_NODE ||
+                      n.type === LANGGRAPH_CANVAS_NODE_AGENT
+                    ) {
+                      return {
+                        ...n,
+                        data: {
+                          ...n.data,
+                          middlewareConfig: {
+                            ...(n.data.middlewareConfig || {}),
+                            enabled: false,
+                          },
+                        },
+                      };
+                    }
+                    if (n.type === LANGGRAPH_CANVAS_NODE_STEP) {
+                      return {
+                        ...n,
+                        data: {
+                          ...n.data,
+                          middlewareConfig: {
+                            ...(n.data.middlewareConfig || {}),
+                            enabled: false,
+                          },
+                        },
+                      };
+                    }
+                  }
+                }
+                return n;
+              }),
+            );
+          }
+
           return applyEdgeChanges(changes, eds);
         });
         return;
@@ -212,7 +264,8 @@ export function useCanvasConnections({
       ) {
         const isMiddlewareRefSource =
           sourceNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF ||
-          Boolean(connection.source?.startsWith("mw_ref_"));
+          sourceNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE ||
+          Boolean(connection.source?.startsWith("mw_"));
         if (!isMiddlewareRefSource) return false;
 
         // Restrict: Cannot attach the same master middleware twice to the same agent
@@ -397,9 +450,10 @@ export function useCanvasConnections({
           ? { fill: "#0c4a6e", rx: 4, ry: 4 }
           : undefined;
 
+        const srcNode = nodes.find((n) => n.id === params.source);
+
         // Auto-enable LLM execution on target node (tight coupling)
         if (isLLM) {
-          const srcNode = nodes.find((n) => n.id === params.source);
           let resolvedProvider: string | undefined;
           let resolvedModel: string | undefined;
           let resolvedTemp: number | undefined;
@@ -500,7 +554,6 @@ export function useCanvasConnections({
         }
 
         if (isTool) {
-          const srcNode = nodes.find((n) => n.id === params.source);
           if (srcNode?.type === LANGGRAPH_CANVAS_NODE_TOOL) {
             setNodes((nds) =>
               nds.map((n) => {
@@ -525,13 +578,121 @@ export function useCanvasConnections({
           }
         }
 
+        if (isMiddleware) {
+          setNodes((nds) =>
+            nds.map((n) => {
+              if (
+                n.id === params.target &&
+                (n.type === LANGGRAPH_CANVAS_NODE_NODE ||
+                  n.type === LANGGRAPH_CANVAS_NODE_AGENT)
+              ) {
+                return {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    middlewareConfig: {
+                      ...(n.data.middlewareConfig || {}),
+                      enabled: true,
+                    },
+                  },
+                };
+              }
+              if (
+                n.id === params.target &&
+                n.type === LANGGRAPH_CANVAS_NODE_STEP
+              ) {
+                return {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    middlewareConfig: {
+                      ...(n.data.middlewareConfig || {}),
+                      enabled: true,
+                    },
+                  },
+                };
+              }
+              return n;
+            }),
+          );
+        }
+
         const targetNode = nodes.find((n) => n.id === params.target);
         if (
           (isLLM && targetNode?.type === LANGGRAPH_CANVAS_NODE_LLM_REF) ||
-          (isTool && targetNode?.type === LANGGRAPH_CANVAS_NODE_TOOL_REF)
+          (isTool && targetNode?.type === LANGGRAPH_CANVAS_NODE_TOOL_REF) ||
+          (isMiddleware && targetNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF)
         ) {
           // Reference edge is automatically managed by the Ref node's effect
           return eds;
+        }
+
+        let edgeSource = params.source;
+        if (
+          isLLM &&
+          srcNode?.type === LANGGRAPH_CANVAS_NODE_LLM &&
+          targetNode &&
+          targetNode.type !== LANGGRAPH_CANVAS_NODE_LLM_REF
+        ) {
+          const refId = `llm_ref_${Date.now().toString(36).slice(-4)}_${Math.random().toString(36).slice(2, 6)}`;
+          const masterLabel = srcNode.data.label || srcNode.data.model || "LLM";
+          const newLLMRefNode: LangGraphLLMRefNode = {
+            id: refId,
+            type: LANGGRAPH_CANVAS_NODE_LLM_REF,
+            position: {
+              x: targetNode.position.x - 320,
+              y: targetNode.position.y,
+            },
+            data: {
+              label: `${masterLabel} (Ref)`,
+              refId,
+              llmRef: srcNode.id,
+              onDeleteLLMRef: () => {
+                setNodes((all) => all.filter((n) => n.id !== refId));
+                setEdges((allEds) =>
+                  allEds.filter(
+                    (e) => e.source !== refId && e.target !== refId,
+                  ),
+                );
+              },
+            },
+          };
+          setNodes((nds) => [...nds, newLLMRefNode]);
+          edgeSource = refId;
+        } else if (
+          isMiddleware &&
+          srcNode?.type === LANGGRAPH_CANVAS_NODE_MIDDLEWARE &&
+          targetNode &&
+          targetNode.type !== LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF
+        ) {
+          const refId = `mw_ref_${Date.now().toString(36).slice(-4)}_${Math.random().toString(36).slice(2, 6)}`;
+          const masterLabel =
+            (srcNode.data as { name?: string; label?: string }).name ||
+            (srcNode.data as { label?: string }).label ||
+            "Middleware";
+          const newMwRefNode: LangGraphMiddlewareRefNode = {
+            id: refId,
+            type: LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
+            position: {
+              x: targetNode.position.x - 320,
+              y: targetNode.position.y + 160,
+            },
+            data: {
+              label: `${masterLabel} (Ref)`,
+              refId,
+              middlewareRef: srcNode.id,
+              onDeleteMiddlewareRef: () => {
+                setNodes((all) => all.filter((n) => n.id !== refId));
+                setEdges((allEds) =>
+                  allEds.filter(
+                    (e) => e.source !== refId && e.target !== refId,
+                  ),
+                );
+              },
+            },
+          };
+          setNodes((nds) => [...nds, newMwRefNode]);
+          edgeSource = refId;
         }
 
         const filteredEds = isLLM
@@ -544,6 +705,7 @@ export function useCanvasConnections({
         return addEdge(
           {
             ...params,
+            source: edgeSource,
             sourceHandle,
             targetHandle,
             animated: true,
