@@ -13,7 +13,9 @@ import {
 
 import { performSchemaLayout } from "./auto-layout/schemaLayout";
 import { performGraphLayout } from "./auto-layout/graphLayout";
-import { performLangGraphLayout } from "./auto-layout/langGraphLayout";
+import { performLangGraphLayout, getLangGraphFlowNodes } from "./auto-layout/langGraphLayout";
+
+export { getLangGraphFlowNodes };
 
 export type {
   LayoutNode,
@@ -133,6 +135,20 @@ export function useLangGraphAutoLayout(options?: UseLangGraphAutoLayoutOptions) 
   const edges: LayoutEdge[] = options?.edges ?? [];
   const onNodesChange = options?.onNodesChange;
 
+  const panToFlow = useCallback(
+    (fitOptions?: { duration?: number; padding?: number; maxZoom?: number }) => {
+      const flowNodes = getLangGraphFlowNodes(nodes, edges);
+      const targetNodes = flowNodes.length > 0 ? flowNodes : nodes;
+      fitView({
+        nodes: targetNodes.map((n) => ({ id: n.id })),
+        duration: fitOptions?.duration ?? 300,
+        padding: fitOptions?.padding ?? 0.2,
+        maxZoom: fitOptions?.maxZoom ?? 0.85,
+      });
+    },
+    [nodes, edges, fitView],
+  );
+
   const handleLayout = useCallback(
     (direction: string = "LR") => {
       performLangGraphLayout({
@@ -146,7 +162,7 @@ export function useLangGraphAutoLayout(options?: UseLangGraphAutoLayoutOptions) 
     [nodes, edges, onNodesChange, fitView],
   );
 
-  return { handleLayout };
+  return { handleLayout, panToFlow };
 }
 
 /**
