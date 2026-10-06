@@ -571,6 +571,7 @@ export const transformerHelperSchema = z.object({
   /** Section 3: Return - typed fields this function returns */
   returnSchema: z.array(transformerHelperFieldSchema),
   isAsync: z.boolean().optional().default(false),
+  importedTransformerIds: z.array(z.string()).optional(),
 });
 export type TransformerHelperDefinition = z.infer<typeof transformerHelperSchema>;
 
@@ -578,4 +579,5 @@ export const transformerHelperInputSchema = transformerHelperSchema.extend({
   id: z.string().optional(),
   inputSchema: z.array(transformerHelperFieldInputSchema).optional(),
   returnSchema: z.array(transformerHelperFieldInputSchema).optional(),
+  importedTransformerIds: z.array(z.string()).optional(),
 });

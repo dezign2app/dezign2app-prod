@@ -99,6 +99,92 @@ describe("Step Pipeline & Transformer Helpers", () => {
       const occurrences = (file?.content.match(/export function customTransformer/g) || []).length;
       expect(occurrences).toBe(1);
     });
+
+    it("generates imports for imported transformer dependencies", () => {
+      const nodes: BackendNode[] = [
+        {
+          id: "trans-slugify",
+          type: "transformer",
+          position: { x: 0, y: 0 },
+          fractionalIndex: "a0",
+          data: {
+            label: "slugify",
+            functionName: "slugify",
+            scope: "global",
+            code: "return { slug: input.name.toLowerCase() };",
+            inputSchema: [{ id: "1", name: "name", type: "string", required: true }],
+            returnSchema: [{ id: "2", name: "slug", type: "string", required: true }],
+          },
+        },
+        {
+          id: "trans-compose",
+          type: "transformer",
+          position: { x: 0, y: 0 },
+          fractionalIndex: "a1",
+          data: {
+            label: "createProductItem",
+            functionName: "createProductItem",
+            scope: "global",
+            importedTransformerIds: ["trans-slugify"],
+            code: "const { slug } = slugify({ name: input.title });\nreturn { id: slug, title: input.title };",
+            inputSchema: [{ id: "1", name: "title", type: "string", required: true }],
+            returnSchema: [
+              { id: "1", name: "id", type: "string", required: true },
+              { id: "2", name: "title", type: "string", required: true },
+            ],
+          },
+        },
+      ];
+      const result = compileTransformerHelpers(nodes);
+      const composeFile = result.files.find((f) => f.filename.includes("createProductItem.ts"));
+      expect(composeFile).toBeDefined();
+      expect(composeFile?.content).toContain('import { slugify } from "./slugify";');
+    });
+
+    it("warns on mutual circular dependency loops while preserving imports for valid recursion", () => {
+      const nodes: BackendNode[] = [
+        {
+          id: "trans-a",
+          type: "transformer",
+          position: { x: 0, y: 0 },
+          fractionalIndex: "a0",
+          data: {
+            label: "fnA",
+            functionName: "fnA",
+            scope: "global",
+            importedTransformerIds: ["trans-b"],
+            code: "return { resA: fnB({ val: input.val }).resB };",
+            inputSchema: [{ id: "1", name: "val", type: "string", required: true }],
+            returnSchema: [{ id: "2", name: "resA", type: "string", required: true }],
+          },
+        },
+        {
+          id: "trans-b",
+          type: "transformer",
+          position: { x: 0, y: 0 },
+          fractionalIndex: "a1",
+          data: {
+            label: "fnB",
+            functionName: "fnB",
+            scope: "global",
+            // Mutual recursion back to trans-a
+            importedTransformerIds: ["trans-a"],
+            code: "return { resB: fnA({ val: input.val }).resA };",
+            inputSchema: [{ id: "1", name: "val", type: "string", required: true }],
+            returnSchema: [{ id: "2", name: "resB", type: "string", required: true }],
+          },
+        },
+      ];
+      const result = compileTransformerHelpers(nodes);
+      const fileA = result.files.find((f) => f.filename.includes("fnA.ts"));
+      const fileB = result.files.find((f) => f.filename.includes("fnB.ts"));
+      expect(fileA).toBeDefined();
+      expect(fileB).toBeDefined();
+
+      // In Option A, imports are preserved so user-written mutual recursive functions can compile
+      expect(fileA?.content).toContain('import { fnB } from "./fnB";');
+      expect(fileB?.content).toContain('import { fnA } from "./fnA";');
+    });
   });
 
   describe("pipelineRenderer & endpointHandlerGenerator", () => {

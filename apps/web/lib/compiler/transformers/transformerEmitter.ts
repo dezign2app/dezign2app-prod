@@ -34,9 +34,15 @@ import { reconcileReturnSchema } from "./schemaReconciler";
  *
  * @debugTag transformer-emitter
  */
+export interface TransformerImportDeclaration {
+  name: string;
+  importPath: string;
+}
+
 export function generateTransformerFile(
   helper: TransformerHelperNodeData,
   importPath: string,
+  resolvedImports?: TransformerImportDeclaration[],
 ): CompiledFile {
   const fnName = toVarName(helper.name || "transform");
   const Pascal = toPascalCase(fnName);
@@ -122,11 +128,18 @@ export function generateTransformerFile(
       ? `{ ${inputParamNames.join(", ")} }: ${inputTypeName}`
       : `input: ${inputTypeName}`;
 
+  const importsStr =
+    resolvedImports && resolvedImports.length > 0
+      ? resolvedImports
+          .map((imp) => `import { ${imp.name} } from "${imp.importPath}";`)
+          .join("\n") + "\n\n"
+      : "";
+
   const content = hasFunctionDecl
     ? // Full declaration — use as-is after renaming
-      `${fnDescription}export interface ${inputTypeName} {\n${inputFields}\n}\n\nexport interface ${outputTypeName} {\n${outputFields}\n}\n\n${processedCode}\n`
+      `${importsStr}${fnDescription}export interface ${inputTypeName} {\n${inputFields}\n}\n\nexport interface ${outputTypeName} {\n${outputFields}\n}\n\n${processedCode}\n`
     : // Body-only — wrap in a generated declaration
-      `${fnDescription}export interface ${inputTypeName} {\n${inputFields}\n}\n\nexport interface ${outputTypeName} {\n${outputFields}\n}\n\nexport ${asyncKw}function ${fnName}(${paramSignature}): ${returnTypeAnnotation} {\n${body}\n}\n`;
+      `${importsStr}${fnDescription}export interface ${inputTypeName} {\n${inputFields}\n}\n\nexport interface ${outputTypeName} {\n${outputFields}\n}\n\nexport ${asyncKw}function ${fnName}(${paramSignature}): ${returnTypeAnnotation} {\n${body}\n}\n`;
 
   return {
     filename: `src/${fnName}.ts`,
