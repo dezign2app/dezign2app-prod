@@ -174,7 +174,7 @@ export function generateEndpointRouteHandler(
   const codeBlockText = (ep.body || ep.code || "").trim();
   const pipelineStepsEarly = ep.pipelineSteps;
   const hasStreamingStep = Array.isArray(pipelineStepsEarly) && pipelineStepsEarly.some(
-    (s) => s.type === "langgraph_invoke" && s.langGraphStreamingEnabled && s.enabled !== false,
+    (s) => s.type === "langgraph_invoke" && s.langGraphStreamingEnabled && (!s.langGraphStreamingProtocol || s.langGraphStreamingProtocol === "sse") && s.enabled !== false,
   );
 
   // 1. Preamble (imports, request/response context types, function header)
@@ -270,7 +270,7 @@ export function generateEndpointRouteHandler(
       (s) => s.type === "return_response" && s.enabled !== false,
     );
     const hasStreaming = pipelineSteps.some(
-      (s) => s.type === "langgraph_invoke" && s.langGraphStreamingEnabled && s.enabled !== false,
+      (s) => s.type === "langgraph_invoke" && s.langGraphStreamingEnabled && (!s.langGraphStreamingProtocol || s.langGraphStreamingProtocol === "sse") && s.enabled !== false,
     );
 
     if (!hasReturnStep && !hasStreaming && !autoEmittedStorage) {

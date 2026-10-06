@@ -29,6 +29,26 @@ function resolvePathAccessor(path: string, ctx: PipelineRenderContext): string {
   if (path.startsWith("event.")) {
     return `event.${path.slice(6)}`;
   }
+  if (path === "env" || path === "process.env") {
+    return "process.env";
+  }
+  if (path.startsWith("env.") || path.startsWith("process.env.")) {
+    const field = path.startsWith("process.env.") ? path.slice(12) : path.slice(4);
+    return `process.env.${field}`;
+  }
+  if (path.startsWith("inline:")) {
+    const val = path.slice(7).trim();
+    if (!val) return '""';
+    if (val.startsWith("`") || val.startsWith('"') || val.startsWith("'")) return val;
+    if (val.includes("${")) return `\`${val}\``;
+    return JSON.stringify(val);
+  }
+  if (path.startsWith("`") || path.startsWith('"') || path.startsWith("'")) {
+    return path;
+  }
+  if (path.includes("${")) {
+    return `\`${path}\``;
+  }
   if (path === "body") {
     return ctx.bodyVar;
   }
@@ -48,6 +68,9 @@ function resolvePathAccessor(path: string, ctx: PipelineRenderContext): string {
       const mappedVar = ctx.priorOutputs.get(first);
       return parts.length > 1 ? `${mappedVar}.${parts.slice(1).join(".")}` : (mappedVar || path);
     }
+  }
+  if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(path)) {
+    return JSON.stringify(path);
   }
   return `${ctx.bodyVar}?.${path}`;
 }
@@ -134,43 +157,173 @@ export function renderLangGraphInvokeStep(
     : "";
 
   if (langGraphStreamingEnabled) {
-    rawLines.push(`// --- LangGraph Streaming Invocation (${step.name}) ---`);
-    rawLines.push(`const agentState = ${stateInit};`);
-    rawLines.push(`res.setHeader("Content-Type", "text/event-stream");`);
-    rawLines.push(`res.setHeader("Cache-Control", "no-cache");`);
-    rawLines.push(`res.setHeader("Connection", "keep-alive");`);
-    rawLines.push(
-      `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
-    );
-    rawLines.push(`for await (const chunk of stream) {`);
-    rawLines.push(
-      `  const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];`,
-    );
-    rawLines.push(
-      `  const token = messageChunk?.content ?? (typeof chunk === "string" ? chunk : (chunk as { content?: string })?.content ?? chunk);`,
-    );
-    rawLines.push(
-      `  const nodeName = (metadata as { langgraph_node?: string } | undefined)?.langgraph_node;`,
-    );
-    if (langGraphStreamingFields.length > 0) {
-      const allowedFields = JSON.stringify(langGraphStreamingFields);
-      rawLines.push(`  if (${allowedFields}.includes(nodeName || "")) {`);
-      rawLines.push(`    if (token !== undefined && token !== "") {`);
+    const streamProtocol = step.langGraphStreamingProtocol || "sse";
+
+    if (streamProtocol === "sse") {
+      rawLines.push(`// --- LangGraph Streaming Invocation (${step.name}) via SSE ---`);
+      rawLines.push(`const agentState = ${stateInit};`);
+      rawLines.push(`res.setHeader("Content-Type", "text/event-stream");`);
+      rawLines.push(`res.setHeader("Cache-Control", "no-cache");`);
+      rawLines.push(`res.setHeader("Connection", "keep-alive");`);
       rawLines.push(
-        `      res.write(\`data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);`,
+        `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
       );
-      rawLines.push(`    }`);
-      rawLines.push(`  }`);
-    } else {
-      rawLines.push(`  if (token !== undefined && token !== "") {`);
+      rawLines.push(`for await (const chunk of stream) {`);
       rawLines.push(
-        `    res.write(\`data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);`,
+        `  const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];`,
       );
-      rawLines.push(`  }`);
+      rawLines.push(
+        `  const token = messageChunk?.content ?? (typeof chunk === "string" ? chunk : (chunk as { content?: string })?.content ?? chunk);`,
+      );
+      rawLines.push(
+        `  const nodeName = (metadata as { langgraph_node?: string } | undefined)?.langgraph_node;`,
+      );
+      if (langGraphStreamingFields.length > 0) {
+        const allowedFields = JSON.stringify(langGraphStreamingFields);
+        rawLines.push(`  if (${allowedFields}.includes(nodeName || "")) {`);
+        rawLines.push(`    if (token !== undefined && token !== "") {`);
+        rawLines.push(
+          `      res.write(\`data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);`,
+        );
+        rawLines.push(`    }`);
+        rawLines.push(`  }`);
+      } else {
+        rawLines.push(`  if (token !== undefined && token !== "") {`);
+        rawLines.push(
+          `    res.write(\`data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);`,
+        );
+        rawLines.push(`  }`);
+      }
+      rawLines.push(`}`);
+      rawLines.push(`res.write("data: [DONE]\\n\\n");`);
+      rawLines.push(`res.end();`);
+    } else if (streamProtocol === "websocket") {
+      const roomExpr = step.langGraphStreamingRoom
+        ? resolvePathAccessor(step.langGraphStreamingRoom, ctx)
+        : (threadIdExpr || `"default"`);
+
+      rawLines.push(`// --- LangGraph Streaming Invocation (${step.name}) via WebSocket ---`);
+      rawLines.push(`const agentState = ${stateInit};`);
+      rawLines.push(
+        `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
+      );
+      rawLines.push(`for await (const chunk of stream) {`);
+      rawLines.push(
+        `  const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];`,
+      );
+      rawLines.push(
+        `  const token = messageChunk?.content ?? (typeof chunk === "string" ? chunk : (chunk as { content?: string })?.content ?? chunk);`,
+      );
+      rawLines.push(
+        `  const nodeName = (metadata as { langgraph_node?: string } | undefined)?.langgraph_node;`,
+      );
+      if (langGraphStreamingFields.length > 0) {
+        const allowedFields = JSON.stringify(langGraphStreamingFields);
+        rawLines.push(`  if (${allowedFields}.includes(nodeName || "")) {`);
+        rawLines.push(`    if (token !== undefined && token !== "") {`);
+        rawLines.push(
+          `      wsBroadcast("agent_stream", { token, node: nodeName, done: false }, ${roomExpr});`,
+        );
+        rawLines.push(`    }`);
+        rawLines.push(`  }`);
+      } else {
+        rawLines.push(`  if (token !== undefined && token !== "") {`);
+        rawLines.push(
+          `    wsBroadcast("agent_stream", { token, node: nodeName, done: false }, ${roomExpr});`,
+        );
+        rawLines.push(`  }`);
+      }
+      rawLines.push(`}`);
+      rawLines.push(`wsBroadcast("agent_stream", { done: true }, ${roomExpr});`);
+      if (outputVariable) {
+        rawLines.push(`const ${outputVariable} = { streamed: true, protocol: "websocket", room: ${roomExpr} };`);
+      }
+    } else if (streamProtocol === "kafka") {
+      const topicExpr = JSON.stringify(step.langGraphStreamingKafkaTopic || `${toVarName(step.name || "agent")}-tokens`);
+      const keyExpr = step.langGraphStreamingKafkaKey
+        ? resolvePathAccessor(step.langGraphStreamingKafkaKey, ctx)
+        : (threadIdExpr || `"agent"`);
+
+      rawLines.push(`// --- LangGraph Streaming Invocation (${step.name}) to Kafka Topic ---`);
+      rawLines.push(`const agentState = ${stateInit};`);
+      rawLines.push(
+        `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
+      );
+      rawLines.push(`for await (const chunk of stream) {`);
+      rawLines.push(
+        `  const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];`,
+      );
+      rawLines.push(
+        `  const token = messageChunk?.content ?? (typeof chunk === "string" ? chunk : (chunk as { content?: string })?.content ?? chunk);`,
+      );
+      rawLines.push(
+        `  const nodeName = (metadata as { langgraph_node?: string } | undefined)?.langgraph_node;`,
+      );
+      if (langGraphStreamingFields.length > 0) {
+        const allowedFields = JSON.stringify(langGraphStreamingFields);
+        rawLines.push(`  if (${allowedFields}.includes(nodeName || "")) {`);
+        rawLines.push(`    if (token !== undefined && token !== "") {`);
+        rawLines.push(
+          `      await publishKafkaEvent(${topicExpr}, { token, node: nodeName, done: false }, ${keyExpr});`,
+        );
+        rawLines.push(`    }`);
+        rawLines.push(`  }`);
+      } else {
+        rawLines.push(`  if (token !== undefined && token !== "") {`);
+        rawLines.push(
+          `    await publishKafkaEvent(${topicExpr}, { token, node: nodeName, done: false }, ${keyExpr});`,
+        );
+        rawLines.push(`  }`);
+      }
+      rawLines.push(`}`);
+      rawLines.push(`await publishKafkaEvent(${topicExpr}, { done: true }, ${keyExpr});`);
+      if (outputVariable) {
+        rawLines.push(`const ${outputVariable} = { streamed: true, protocol: "kafka", topic: ${topicExpr} };`);
+      }
+    } else if (streamProtocol === "redis_stream") {
+      const rawRedisKey = step.langGraphStreamingRedisKey?.trim();
+      const streamKeyExpr = rawRedisKey
+        ? resolvePathAccessor(rawRedisKey, ctx)
+        : (threadIdExpr ? `\`stream:agent:\${${threadIdExpr}}\`` : `"stream:agent:default"`);
+
+      rawLines.push(`// --- LangGraph Streaming Invocation (${step.name}) to Redis Stream ---`);
+      rawLines.push(`const agentState = ${stateInit};`);
+      rawLines.push(`const redisClient = await getRedisClient();`);
+      rawLines.push(
+        `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
+      );
+      rawLines.push(`for await (const chunk of stream) {`);
+      rawLines.push(
+        `  const [messageChunk, metadata] = Array.isArray(chunk) ? chunk : [chunk, undefined];`,
+      );
+      rawLines.push(
+        `  const token = messageChunk?.content ?? (typeof chunk === "string" ? chunk : (chunk as { content?: string })?.content ?? chunk);`,
+      );
+      rawLines.push(
+        `  const nodeName = (metadata as { langgraph_node?: string } | undefined)?.langgraph_node;`,
+      );
+      if (langGraphStreamingFields.length > 0) {
+        const allowedFields = JSON.stringify(langGraphStreamingFields);
+        rawLines.push(`  if (${allowedFields}.includes(nodeName || "")) {`);
+        rawLines.push(`    if (token !== undefined && token !== "") {`);
+        rawLines.push(
+          `      await redisClient.xadd(${streamKeyExpr}, "*", "token", String(token), "node", String(nodeName || ""), "done", "false");`,
+        );
+        rawLines.push(`    }`);
+        rawLines.push(`  }`);
+      } else {
+        rawLines.push(`  if (token !== undefined && token !== "") {`);
+        rawLines.push(
+          `    await redisClient.xadd(${streamKeyExpr}, "*", "token", String(token), "node", String(nodeName || ""), "done", "false");`,
+        );
+        rawLines.push(`  }`);
+      }
+      rawLines.push(`}`);
+      rawLines.push(`await redisClient.xadd(${streamKeyExpr}, "*", "token", "", "done", "true");`);
+      if (outputVariable) {
+        rawLines.push(`const ${outputVariable} = { streamed: true, protocol: "redis_stream", streamKey: ${streamKeyExpr} };`);
+      }
     }
-    rawLines.push(`}`);
-    rawLines.push(`res.write("data: [DONE]\\n\\n");`);
-    rawLines.push(`res.end();`);
   } else {
     rawLines.push(`// --- LangGraph Invocation (${step.name}) ---`);
     rawLines.push(`const agentState = ${stateInit};`);

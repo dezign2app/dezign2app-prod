@@ -15,8 +15,9 @@ import {
   Flame,
   ArrowRight,
   Database,
+  Key,
 } from "lucide-react";
-import { BackendNode } from "@workspace/canvas/types";
+import { BackendNode, KafkaTopic, RedisStream } from "@workspace/canvas/types";
 import { Button } from "@workspace/ui/components/button";
 import { BufferedInput, LocalInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
@@ -59,7 +60,7 @@ function stepSourceToAccessor(
     return source.field ? `${varName}.${source.field}` : varName;
   }
   if (source.kind === "inline") {
-    return String(source.value ?? "");
+    return source.value !== undefined && source.value !== "" ? String(source.value) : "inline:";
   }
   return "";
 }
@@ -91,8 +92,17 @@ function accessorToStepSource(
   if (headerMatch) {
     return { kind: "req_headers", field: headerMatch[1] };
   }
-  if (trimmed.startsWith("env.") || trimmed.startsWith("process.env.")) {
-    const field = trimmed.startsWith("process.env.") ? trimmed.slice(12) : trimmed.slice(4);
+  if (
+    trimmed === "env" ||
+    trimmed === "process.env" ||
+    trimmed.startsWith("env.") ||
+    trimmed.startsWith("process.env.")
+  ) {
+    const field = trimmed.startsWith("process.env.")
+      ? trimmed.slice(12)
+      : trimmed.startsWith("env.")
+      ? trimmed.slice(4)
+      : "";
     return { kind: "env", field };
   }
   if (availableSources) {
@@ -109,6 +119,16 @@ function accessorToStepSource(
         }
       }
     }
+  }
+  if (
+    trimmed.startsWith("`") ||
+    trimmed.startsWith('"') ||
+    trimmed.startsWith("'") ||
+    trimmed.includes("${") ||
+    trimmed.startsWith("inline:")
+  ) {
+    const val = trimmed.startsWith("inline:") ? trimmed.slice(7).trim() : trimmed;
+    return { kind: "inline", value: val };
   }
   return { kind: "req_body", field: trimmed };
 }
@@ -135,6 +155,56 @@ export const LangGraphInvokeStepSection: React.FC<
   const availableAgents = useMemo(() => {
     return allNodes.filter((n) => n.type === "langgraph");
   }, [allNodes]);
+
+  // 1. Kafka Broker Nodes & Selected Broker
+  const kafkaBrokerNodes = useMemo(() => {
+    return allNodes.filter((n) => n.type === "kafka" || n.type === "eventstream");
+  }, [allNodes]);
+
+  const selectedKafkaBrokerNode = useMemo(() => {
+    if (step.langGraphStreamingKafkaNodeId) {
+      const found = kafkaBrokerNodes.find((n) => n.id === step.langGraphStreamingKafkaNodeId);
+      if (found) return found;
+    }
+    return kafkaBrokerNodes[0];
+  }, [kafkaBrokerNodes, step.langGraphStreamingKafkaNodeId]);
+
+  // Extract Kafka topics available on the selected Kafka broker
+  const availableKafkaTopics = useMemo(() => {
+    if (!selectedKafkaBrokerNode?.data?.topics) return [];
+    const topics: string[] = [];
+    selectedKafkaBrokerNode.data.topics.forEach((t: KafkaTopic) => {
+      const name = t.name || t.id;
+      if (name && !topics.includes(name)) topics.push(name);
+    });
+    return topics;
+  }, [selectedKafkaBrokerNode]);
+
+  // 2. Redis Nodes & Selected Redis Node
+  const redisNodes = useMemo(() => {
+    return allNodes.filter(
+      (n) => n.type === "redis-streams" || n.type === "redis-pubsub" || n.type === "redis-cache",
+    );
+  }, [allNodes]);
+
+  const selectedRedisNode = useMemo(() => {
+    if (step.langGraphStreamingRedisNodeId) {
+      const found = redisNodes.find((n) => n.id === step.langGraphStreamingRedisNodeId);
+      if (found) return found;
+    }
+    return redisNodes[0];
+  }, [redisNodes, step.langGraphStreamingRedisNodeId]);
+
+  // Extract Redis streams available on the selected Redis node
+  const availableRedisStreams = useMemo(() => {
+    if (!selectedRedisNode?.data?.streams) return [];
+    const streams: string[] = [];
+    selectedRedisNode.data.streams.forEach((s: RedisStream) => {
+      const name = s.name || s.id;
+      if (name && !streams.includes(name)) streams.push(name);
+    });
+    return streams;
+  }, [selectedRedisNode]);
 
   // Selected agent node
   const selectedAgentNode = useMemo(() => {
@@ -265,6 +335,63 @@ export const LangGraphInvokeStepSection: React.FC<
       inputBindings: nextBindings,
       langGraphStateMapping: nextMapping,
     });
+  };
+
+  const getArgBinding = (
+    argName: string,
+    fieldValue: string | undefined,
+    fallbackAccessor: string,
+  ): StepBinding => {
+    const existing = (step.inputBindings || []).find((b) => b.argName === argName);
+    if (existing) return existing;
+    if (fieldValue !== undefined && fieldValue !== "") {
+      return {
+        argName,
+        source: accessorToStepSource(fieldValue, availableSources),
+      };
+    }
+    return {
+      argName,
+      source: accessorToStepSource(fallbackAccessor, availableSources),
+    };
+  };
+
+  const handleArgBindingChange = (
+    argName: string,
+    updated: StepBinding,
+    fieldKey:
+      | "langGraphStreamingKafkaKey"
+      | "langGraphStreamingRoom"
+      | "langGraphStreamingRedisKey"
+      | "langGraphThreadIdSource",
+  ) => {
+    const currentBindings = step.inputBindings || [];
+    const otherBindings = currentBindings.filter((b) => b.argName !== argName);
+    const nextBindings: StepBinding[] = [
+      ...otherBindings,
+      { argName, source: updated.source },
+    ];
+    const accessor = stepSourceToAccessor(updated.source, availableSources);
+    onChange({
+      ...step,
+      inputBindings: nextBindings,
+      [fieldKey]: accessor,
+    });
+  };
+
+  const handleResetArgBinding = (
+    argName: string,
+    fieldKey:
+      | "langGraphStreamingKafkaKey"
+      | "langGraphStreamingRoom"
+      | "langGraphStreamingRedisKey"
+      | "langGraphThreadIdSource",
+  ) => {
+    const currentBindings = step.inputBindings || [];
+    const nextBindings = currentBindings.filter((b) => b.argName !== argName);
+    const nextStep = { ...step, inputBindings: nextBindings };
+    delete nextStep[fieldKey];
+    onChange(nextStep);
   };
 
   const handleRemoveMapping = (stateKey: string) => {
@@ -651,22 +778,12 @@ export const LangGraphInvokeStepSection: React.FC<
             <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
             <div className="min-w-0">
               <BindingSourceEditor
-                binding={{
-                  argName: "thread_id",
-                  source: accessorToStepSource(
-                    step.langGraphThreadIdSource || "body.thread_id",
-                    availableSources,
-                  ),
-                }}
+                binding={getArgBinding("thread_id", step.langGraphThreadIdSource, "body.thread_id")}
                 availableSources={availableSources}
                 serviceNodeId={serviceNodeId}
-                onChange={(updated) => {
-                  const accessor = stepSourceToAccessor(updated.source, availableSources);
-                  onChange({
-                    ...step,
-                    langGraphThreadIdSource: accessor,
-                  });
-                }}
+                onChange={(updated) =>
+                  handleArgBindingChange("thread_id", updated, "langGraphThreadIdSource")
+                }
               />
             </div>
             <div className="w-6" />
@@ -887,7 +1004,7 @@ export const LangGraphInvokeStepSection: React.FC<
               }`}
             />
             <Label className="text-xs font-bold text-foreground">
-              Response Streaming (SSE)
+              Real-time Response Streaming
             </Label>
           </div>
           <div className="flex items-center gap-2">
@@ -903,11 +1020,11 @@ export const LangGraphInvokeStepSection: React.FC<
 
         {isStreaming ? (
           <div className="flex flex-col gap-2.5 pt-2 border-t border-border/30">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground text-[11px]">
-                Delivery Protocol:
+            <div className="flex flex-col gap-1.5 text-xs">
+              <span className="text-muted-foreground text-[11px] font-medium">
+                Delivery Protocol & Destination:
               </span>
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1">
                 <Button
                   type="button"
                   size="sm"
@@ -920,7 +1037,7 @@ export const LangGraphInvokeStepSection: React.FC<
                   }
                   className="h-6 text-[10px] px-2.5"
                 >
-                  Server-Sent Events (SSE)
+                  Direct SSE
                 </Button>
                 <Button
                   type="button"
@@ -936,16 +1053,405 @@ export const LangGraphInvokeStepSection: React.FC<
                 >
                   WebSocket
                 </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={streamingProtocol === "kafka" ? "default" : "outline"}
+                  onClick={() =>
+                    onChange({
+                      ...step,
+                      langGraphStreamingProtocol: "kafka",
+                    })
+                  }
+                  className="h-6 text-[10px] px-2.5"
+                >
+                  Kafka Topic
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={streamingProtocol === "redis_stream" ? "default" : "outline"}
+                  onClick={() =>
+                    onChange({
+                      ...step,
+                      langGraphStreamingProtocol: "redis_stream",
+                    })
+                  }
+                  className="h-6 text-[10px] px-2.5"
+                >
+                  Redis Stream
+                </Button>
               </div>
             </div>
+
+            {/* Protocol-Specific Config */}
+            {streamingProtocol === "websocket" && (
+              <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-background/50 border border-border/40">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                    <Radio className="w-3 h-3 text-sky-400" />
+                    <span>WebSocket Room / Channel Mapping</span>
+                  </Label>
+                  <span className="text-[9px] text-muted-foreground font-mono">
+                    wsBroadcast Room
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider px-1">
+                  <span>Target Key</span>
+                  <span></span>
+                  <span>Source & Field</span>
+                  <span className="w-6 text-right"></span>
+                </div>
+
+                <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/60 p-1.5 rounded-lg border border-sky-500/20">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-mono font-bold text-sky-400 text-[11px] truncate bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+                      room_id
+                    </span>
+                    <span className="text-[9px] text-muted-foreground font-mono">string</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
+                  <div className="min-w-0">
+                    <BindingSourceEditor
+                      binding={getArgBinding(
+                        "room_id",
+                        step.langGraphStreamingRoom,
+                        step.langGraphThreadIdSource || "body.thread_id",
+                      )}
+                      availableSources={availableSources}
+                      serviceNodeId={serviceNodeId}
+                      onChange={(updated) =>
+                        handleArgBindingChange("room_id", updated, "langGraphStreamingRoom")
+                      }
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    {step.langGraphStreamingRoom || (step.inputBindings || []).some((b) => b.argName === "room_id") ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleResetArgBinding("room_id", "langGraphStreamingRoom")}
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                        title="Reset to default (thread_id)"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    ) : (
+                      <div className="w-6" />
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-[9.5px] text-muted-foreground leading-tight">
+                  Tokens are broadcasted to connected clients in this room. {step.langGraphStreamingRoom ? `Custom room: ${step.langGraphStreamingRoom}` : `Defaults to ${step.langGraphThreadIdSource || "body.thread_id"}`}.
+                </p>
+              </div>
+            )}
+
+            {streamingProtocol === "kafka" && (
+              <div className="flex flex-col gap-2.5 p-2.5 rounded-lg bg-background/50 border border-border/40">
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Kafka Broker Node Selector */}
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                      <Layers className="w-3 h-3 text-amber-400" />
+                      <span>Kafka Broker Node</span>
+                    </Label>
+                    {kafkaBrokerNodes.length > 0 ? (
+                      <Select
+                        value={selectedKafkaBrokerNode?.id || "__none__"}
+                        onValueChange={(val) => {
+                          const broker = kafkaBrokerNodes.find((n) => n.id === val);
+                          const firstTopic = broker?.data?.topics?.[0]?.name || broker?.data?.topics?.[0]?.id || "";
+                          onChange({
+                            ...step,
+                            langGraphStreamingKafkaNodeId: val,
+                            langGraphStreamingKafkaTopic: firstTopic || step.langGraphStreamingKafkaTopic || "",
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-xs bg-background">
+                          <SelectValue placeholder="Select Kafka Broker" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {kafkaBrokerNodes.map((b) => (
+                            <SelectItem key={b.id} value={b.id} className="text-xs">
+                              {b.data?.label || b.id}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground italic py-1">
+                        No Kafka broker node on canvas
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Kafka Topic Selector */}
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                      <Radio className="w-3 h-3 text-purple-400" />
+                      <span>Target Topic</span>
+                    </Label>
+                    {availableKafkaTopics.length > 0 ? (
+                      <Select
+                        value={step.langGraphStreamingKafkaTopic || availableKafkaTopics[0]}
+                        onValueChange={(val) =>
+                          onChange({
+                            ...step,
+                            langGraphStreamingKafkaTopic: val,
+                          })
+                        }
+                      >
+                        <SelectTrigger className="h-7 text-xs bg-background">
+                          <SelectValue placeholder="Select Topic" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableKafkaTopics.map((top) => (
+                            <SelectItem key={top} value={top} className="text-xs">
+                              {top}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <LocalInput
+                        value={step.langGraphStreamingKafkaTopic || ""}
+                        onChange={(e) =>
+                          onChange({
+                            ...step,
+                            langGraphStreamingKafkaTopic: e.target.value,
+                          })
+                        }
+                        placeholder="agent-response-tokens"
+                        className="h-7 text-xs bg-background"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* Partition Key Field Mapping */}
+                <div className="flex flex-col gap-1.5 mt-0.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                      <Key className="w-3 h-3 text-amber-400" />
+                      <span>Partition Key Mapping (ensures in-order delivery)</span>
+                    </Label>
+                    <span className="text-[9px] text-muted-foreground font-mono">
+                      Kafka Record Key
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider px-1">
+                    <span>Target Key</span>
+                    <span></span>
+                    <span>Source & Field</span>
+                    <span className="w-6 text-right"></span>
+                  </div>
+
+                  <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/60 p-1.5 rounded-lg border border-amber-500/20">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-mono font-bold text-amber-400 text-[11px] truncate bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                        partition_key
+                      </span>
+                      <span className="text-[9px] text-muted-foreground font-mono">string</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
+                    <div className="min-w-0">
+                      <BindingSourceEditor
+                        binding={getArgBinding(
+                          "partition_key",
+                          step.langGraphStreamingKafkaKey,
+                          step.langGraphThreadIdSource || "body.thread_id",
+                        )}
+                        availableSources={availableSources}
+                        serviceNodeId={serviceNodeId}
+                        onChange={(updated) =>
+                          handleArgBindingChange(
+                            "partition_key",
+                            updated,
+                            "langGraphStreamingKafkaKey",
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      {step.langGraphStreamingKafkaKey || (step.inputBindings || []).some((b) => b.argName === "partition_key") ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            handleResetArgBinding(
+                              "partition_key",
+                              "langGraphStreamingKafkaKey",
+                            )
+                          }
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          title="Reset to default (thread_id)"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      ) : (
+                        <div className="w-6" />
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="text-[9.5px] text-muted-foreground leading-tight">
+                    Tokens published with this key route to the same Kafka partition, guaranteeing ordering for consumers. {step.langGraphStreamingKafkaKey ? `Custom key: ${step.langGraphStreamingKafkaKey}` : `Defaults to ${step.langGraphThreadIdSource || "body.thread_id"}`}.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {streamingProtocol === "redis_stream" && (
+              <div className="flex flex-col gap-2.5 p-2.5 rounded-lg bg-background/50 border border-border/40">
+                <div className="flex flex-col gap-1">
+                  <Label className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                    <Database className="w-3 h-3 text-red-400" />
+                    <span>Redis Node</span>
+                  </Label>
+                  {redisNodes.length > 0 ? (
+                    <Select
+                      value={selectedRedisNode?.id || "__none__"}
+                      onValueChange={(val) => {
+                        const rNode = redisNodes.find((n) => n.id === val);
+                        const firstStream = rNode?.data?.streams?.[0]?.name || rNode?.data?.streams?.[0]?.id || "";
+                        onChange({
+                          ...step,
+                          langGraphStreamingRedisNodeId: val,
+                          langGraphStreamingRedisKey: firstStream || step.langGraphStreamingRedisKey || "",
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-xs bg-background">
+                        <SelectValue placeholder="Select Redis Node" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {redisNodes.map((rn) => (
+                          <SelectItem key={rn.id} value={rn.id} className="text-xs">
+                            {rn.data?.label || rn.id}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground italic py-1">
+                      No Redis node on canvas
+                    </span>
+                  )}
+                </div>
+
+                {/* Declared Redis streams quick-picker chips if node has streams */}
+                {availableRedisStreams.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9.5px] text-muted-foreground">Declared streams:</span>
+                    {availableRedisStreams.map((st) => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() =>
+                          onChange({
+                            ...step,
+                            langGraphStreamingRedisKey: st,
+                          })
+                        }
+                        className={`text-[9px] font-mono px-1.5 py-0.5 rounded border transition-colors ${
+                          step.langGraphStreamingRedisKey === st
+                            ? "border-red-500/60 bg-red-500/20 text-red-300 font-bold"
+                            : "border-border/60 bg-background/60 text-muted-foreground hover:bg-secondary/40"
+                        }`}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Redis Stream Key Field Mapping */}
+                <div className="flex flex-col gap-1.5 mt-0.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                      <Radio className="w-3 h-3 text-red-400" />
+                      <span>Stream Key Mapping (XADD destination)</span>
+                    </Label>
+                    <span className="text-[9px] text-muted-foreground font-mono">
+                      Redis Stream Key
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider px-1">
+                    <span>Target Key</span>
+                    <span></span>
+                    <span>Source & Field</span>
+                    <span className="w-6 text-right"></span>
+                  </div>
+
+                  <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/60 p-1.5 rounded-lg border border-red-500/20">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-mono font-bold text-red-400 text-[11px] truncate bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">
+                        stream_key
+                      </span>
+                      <span className="text-[9px] text-muted-foreground font-mono">string</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
+                    <div className="min-w-0">
+                      <BindingSourceEditor
+                        binding={getArgBinding(
+                          "stream_key",
+                          step.langGraphStreamingRedisKey,
+                          step.langGraphThreadIdSource
+                            ? `stream:agent:\${${step.langGraphThreadIdSource}}`
+                            : "stream:agent:default",
+                        )}
+                        availableSources={availableSources}
+                        serviceNodeId={serviceNodeId}
+                        onChange={(updated) =>
+                          handleArgBindingChange(
+                            "stream_key",
+                            updated,
+                            "langGraphStreamingRedisKey",
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      {step.langGraphStreamingRedisKey || (step.inputBindings || []).some((b) => b.argName === "stream_key") ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            handleResetArgBinding(
+                              "stream_key",
+                              "langGraphStreamingRedisKey",
+                            )
+                          }
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          title="Reset to default stream key"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      ) : (
+                        <div className="w-6" />
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="text-[9.5px] text-muted-foreground leading-tight">
+                    Tokens are pushed to this Redis stream via XADD. {step.langGraphStreamingRedisKey ? `Custom stream: ${step.langGraphStreamingRedisKey}` : `Defaults to stream:agent:\${${step.langGraphThreadIdSource || "body.thread_id"}}`}.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-col gap-1.5 mt-1">
               <span className="text-[11px] font-medium text-foreground">
                 Streamed State Channels
               </span>
               <p className="text-[10px] text-muted-foreground">
-                Click to filter which channel tokens are forwarded to the client
-                (empty = all tokens):
+                Click to filter which channel tokens are forwarded (empty = all tokens):
               </p>
               <div className="flex flex-wrap gap-1.5 mt-1">
                 {stateChannels.map((ch, idx) => {
@@ -972,8 +1478,14 @@ export const LangGraphInvokeStepSection: React.FC<
             <div className="flex items-center gap-1.5 p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg text-purple-200 text-[10px] mt-1">
               <Flame className="w-3.5 h-3.5 text-purple-400 shrink-0" />
               <span>
-                Tokens will be streamed in real-time as the agent generates
-                them (`graph.stream()`).
+                {streamingProtocol === "sse" &&
+                  "Tokens will stream in real-time to the caller over HTTP SSE (`res.write()`)."}
+                {streamingProtocol === "websocket" &&
+                  "Tokens will broadcast in real-time to connected WebSocket clients (`wsBroadcast()`)."}
+                {streamingProtocol === "kafka" &&
+                  "Tokens will stream in real-time to the Kafka topic (`publishKafkaEvent()`)."}
+                {streamingProtocol === "redis_stream" &&
+                  "Tokens will append in real-time to the Redis stream (`redis.xadd()`)."}
               </span>
             </div>
           </div>

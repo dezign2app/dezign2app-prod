@@ -408,7 +408,19 @@ export interface PipelineStep {
    */
   langGraphStreamingEnabled?: boolean;
   /** Streaming delivery protocol (only relevant when langGraphStreamingEnabled = true) */
-  langGraphStreamingProtocol?: "sse" | "websocket";
+  langGraphStreamingProtocol?: "sse" | "websocket" | "kafka" | "redis_stream";
+  /** Target Kafka broker node on canvas */
+  langGraphStreamingKafkaNodeId?: string;
+  /** Target Kafka topic for streaming chunks (when langGraphStreamingProtocol = "kafka") */
+  langGraphStreamingKafkaTopic?: string;
+  /** Key expression for Kafka messages (defaults to thread_id) */
+  langGraphStreamingKafkaKey?: string;
+  /** Target Redis node on canvas */
+  langGraphStreamingRedisNodeId?: string;
+  /** Target Redis stream key for streaming chunks (when langGraphStreamingProtocol = "redis_stream") */
+  langGraphStreamingRedisKey?: string;
+  /** Target WebSocket room or channel for streaming chunks (when langGraphStreamingProtocol = "websocket") */
+  langGraphStreamingRoom?: string;
   /** Which state channel keys to forward to the client as streaming chunks (empty = all) */
   langGraphStreamingFields?: string[];
   /** What the step exposes as its output variable */
@@ -513,7 +525,13 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     langGraphStateMapping: z.record(z.string()).optional(),
     langGraphThreadIdSource: z.string().optional(),
     langGraphStreamingEnabled: z.boolean().optional(),
-    langGraphStreamingProtocol: z.enum(["sse", "websocket"]).optional(),
+    langGraphStreamingProtocol: z.enum(["sse", "websocket", "kafka", "redis_stream"]).optional(),
+    langGraphStreamingKafkaNodeId: z.string().optional(),
+    langGraphStreamingKafkaTopic: z.string().optional(),
+    langGraphStreamingKafkaKey: z.string().optional(),
+    langGraphStreamingRedisNodeId: z.string().optional(),
+    langGraphStreamingRedisKey: z.string().optional(),
+    langGraphStreamingRoom: z.string().optional(),
     langGraphStreamingFields: z.array(z.string()).optional(),
     langGraphOutputMode: z.enum(["full_state", "specific_fields", "last_message"]).optional(),
     langGraphOutputFields: z.array(z.string()).optional(),
