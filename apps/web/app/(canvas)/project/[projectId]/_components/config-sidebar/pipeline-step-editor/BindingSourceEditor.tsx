@@ -231,7 +231,7 @@ export const BindingSourceEditor = ({
               <BufferedInput
                 ref={(el) => { inputRef.current = el; }}
                 className="h-7 text-xs font-mono bg-background/60 border-border/60 flex-1 pr-14"
-                placeholder="e.g. gpt-4o or Prompt: ${body.query}"
+                placeholder="e.g. chat:${body.thread_id}"
                 value={stringVal}
                 onCommit={(val) =>
                   onChange({ ...binding, source: { ...source, value: val } })

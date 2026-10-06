@@ -286,7 +286,7 @@ export function OutputNodeInspector({
             <span>Yield Stream to Endpoint</span>
           </div>
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            The graph yields chunks directly back to the API route that invokes this agent in <span className="text-foreground font-mono font-medium">PipelineStepEditor</span>. You don't need to configure SSE, WebSockets, or topics here—the endpoint handler streams chunks directly to the client.
+            The graph yields chunks directly back to the invoking API route in <span className="text-foreground font-mono font-medium">PipelineStepEditor</span>, where you configure the delivery destination (Direct SSE, WebSocket, Kafka Topic, or Redis Stream).
           </p>
         </div>
 

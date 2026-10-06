@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+  import { describe, it, expect } from "vitest";
 import { renderPipelineStep, renderPipeline } from "../generators/routeGenerator/pipelineRenderer";
 import { generateEndpointRouteHandler } from "../generators/routeGenerator/endpointHandlerGenerator";
 import { PipelineStep, Endpoint } from "@workspace/canvas/types";
@@ -54,6 +54,116 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       const code = lines.join("\n");
 
       expect(code).toContain('["agentNode","finalAnswer"].includes(nodeName || "")');
+    });
+
+    it("renders streaming via WebSocket with wsBroadcast", () => {
+      const step: PipelineStep = {
+        id: "step-agent-ws",
+        name: "WsAgent",
+        type: "langgraph_invoke",
+        outputVariable: "wsResult",
+        langGraphTargetNodeId: "agentWs",
+        langGraphStreamingEnabled: true,
+        langGraphStreamingProtocol: "websocket",
+        langGraphStreamingRoom: "chat-room-42",
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("await agentWsGraph.stream(");
+      expect(code).toContain('wsBroadcast("agent_stream", { token, node: nodeName, done: false }, "chat-room-42")');
+      expect(code).toContain('wsBroadcast("agent_stream", { done: true }, "chat-room-42")');
+      expect(code).toContain('const wsResult = { streamed: true, protocol: "websocket", room: "chat-room-42" }');
+    });
+
+    it("renders streaming to Kafka topic with publishKafkaEvent", () => {
+      const step: PipelineStep = {
+        id: "step-agent-kafka",
+        name: "KafkaAgent",
+        type: "langgraph_invoke",
+        outputVariable: "kafkaResult",
+        langGraphTargetNodeId: "agentKafka",
+        langGraphStreamingEnabled: true,
+        langGraphStreamingProtocol: "kafka",
+        langGraphStreamingKafkaTopic: "ai-tokens-stream",
+        langGraphThreadIdSource: "body.thread_id",
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("await agentKafkaGraph.stream(");
+      expect(code).toContain('await publishKafkaEvent("ai-tokens-stream", { token, node: nodeName, done: false }, body.thread_id)');
+      expect(code).toContain('await publishKafkaEvent("ai-tokens-stream", { done: true }, body.thread_id)');
+      expect(code).toContain('const kafkaResult = { streamed: true, protocol: "kafka", topic: "ai-tokens-stream" }');
+    });
+
+    it("renders streaming to Redis Stream with xadd", () => {
+      const step: PipelineStep = {
+        id: "step-agent-redis",
+        name: "RedisAgent",
+        type: "langgraph_invoke",
+        outputVariable: "redisResult",
+        langGraphTargetNodeId: "agentRedis",
+        langGraphStreamingEnabled: true,
+        langGraphStreamingProtocol: "redis_stream",
+        langGraphStreamingRedisKey: "stream:chat:123",
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("const redisClient = await getRedisClient()");
+      expect(code).toContain("await agentRedisGraph.stream(");
+      expect(code).toContain('await redisClient.xadd("stream:chat:123", "*", "token", String(token), "node", String(nodeName || ""), "done", "false")');
+      expect(code).toContain('await redisClient.xadd("stream:chat:123", "*", "token", "", "done", "true")');
+      expect(code).toContain('const redisResult = { streamed: true, protocol: "redis_stream", streamKey: "stream:chat:123" }');
+    });
+
+    it("renders dynamic field-mapped WebSocket room and Redis stream key", () => {
+      const wsStep: PipelineStep = {
+        id: "step-ws-dyn",
+        name: "WsDynAgent",
+        type: "langgraph_invoke",
+        langGraphTargetNodeId: "agentWs",
+        langGraphStreamingEnabled: true,
+        langGraphStreamingProtocol: "websocket",
+        langGraphStreamingRoom: "params.roomId",
+      };
+
+      const wsLines = renderPipelineStep(wsStep, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const wsCode = wsLines.join("\n");
+      expect(wsCode).toContain('wsBroadcast("agent_stream", { token, node: nodeName, done: false }, req.params.roomId)');
+
+      const redisStep: PipelineStep = {
+        id: "step-redis-dyn",
+        name: "RedisDynAgent",
+        type: "langgraph_invoke",
+        langGraphTargetNodeId: "agentRedis",
+        langGraphStreamingEnabled: true,
+        langGraphStreamingProtocol: "redis_stream",
+        langGraphStreamingRedisKey: "body.streamKey",
+      };
+
+      const redisLines = renderPipelineStep(redisStep, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const redisCode = redisLines.join("\n");
+      expect(redisCode).toContain('await redisClient.xadd(body.streamKey, "*", "token", String(token)');
     });
   });
 
@@ -225,3 +335,4 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
     });
   });
 });
+  

@@ -71,6 +71,35 @@ export function collectPipelineImports(
       } else {
         imports.set(importPath, new Set([graphName]));
       }
+
+      if (s.langGraphStreamingEnabled) {
+        const streamProtocol = s.langGraphStreamingProtocol || "sse";
+        if (streamProtocol === "websocket") {
+          const wsPath = "../lib";
+          const wsExisting = imports.get(wsPath);
+          if (wsExisting) {
+            wsExisting.add("wsBroadcast");
+          } else {
+            imports.set(wsPath, new Set(["wsBroadcast"]));
+          }
+        } else if (streamProtocol === "kafka") {
+          const kafkaPath = "@workspace/kafka";
+          const kafkaExisting = imports.get(kafkaPath);
+          if (kafkaExisting) {
+            kafkaExisting.add("publishKafkaEvent");
+          } else {
+            imports.set(kafkaPath, new Set(["publishKafkaEvent"]));
+          }
+        } else if (streamProtocol === "redis_stream") {
+          const redisPath = "@workspace/redis";
+          const redisExisting = imports.get(redisPath);
+          if (redisExisting) {
+            redisExisting.add("getRedisClient");
+          } else {
+            imports.set(redisPath, new Set(["getRedisClient"]));
+          }
+        }
+      }
     } else if (s.type === "push_to_client" && s.enabled !== false) {
       const protocol = s.clientDeliveryProtocol || "SSE";
       let fnName: string | null = null;
