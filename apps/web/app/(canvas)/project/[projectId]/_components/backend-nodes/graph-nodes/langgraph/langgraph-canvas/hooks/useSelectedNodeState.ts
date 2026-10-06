@@ -1,6 +1,8 @@
 import { useMemo } from "react";
+import { addEdge, MarkerType } from "@xyflow/react";
 import {
   LangGraphCanvasNode,
+  LangGraphCanvasEdge,
   StepNodeData,
   LangGraphLLMNodeData,
   ToolNodeData,
@@ -35,12 +37,14 @@ interface UseSelectedNodeStateProps {
   nodes: LangGraphCanvasNode[];
   selectedNodeId: string | null;
   setNodes: React.Dispatch<React.SetStateAction<LangGraphCanvasNode[]>>;
+  setEdges?: React.Dispatch<React.SetStateAction<LangGraphCanvasEdge[]>>;
 }
 
 export function useSelectedNodeState({
   nodes,
   selectedNodeId,
   setNodes,
+  setEdges,
 }: UseSelectedNodeStateProps) {
   const selectedStepData = useMemo((): StepNodeData | null => {
     const found = nodes.find(
@@ -132,12 +136,46 @@ export function useSelectedNodeState({
   const updateSelectedOutput = (changes: Partial<OutputNodeData>) => {
     if (!selectedNodeId) return;
     setNodes((nds) =>
-      nds.map((n) =>
-        n.id === selectedNodeId && n.type === LANGGRAPH_CANVAS_NODE_OUTPUT
-          ? { ...n, data: { ...n.data, ...changes } }
-          : n,
-      ),
+      nds.map((n) => {
+        if (n.id === selectedNodeId && n.type === LANGGRAPH_CANVAS_NODE_OUTPUT) {
+          const updatedNode: OutputNode = {
+            ...n,
+            type: LANGGRAPH_CANVAS_NODE_OUTPUT,
+            data: { ...n.data, ...changes },
+          };
+          return updatedNode;
+        }
+        return n;
+      }),
     );
+
+    if ("sourceStepId" in changes && setEdges) {
+      const targetNodeId = selectedNodeId;
+      const newSourceId = changes.sourceStepId;
+      setEdges((eds) => {
+        const filtered = eds.filter((e) => e.target !== targetNodeId);
+        if (newSourceId && typeof newSourceId === "string" && newSourceId.trim().length > 0) {
+          const edgeId = `edge_${newSourceId}_to_${targetNodeId}`;
+          const newEdge: LangGraphCanvasEdge = {
+            id: edgeId,
+            source: newSourceId,
+            sourceHandle: "out",
+            target: targetNodeId,
+            targetHandle: "in",
+            animated: true,
+            style: { stroke: "#a1a1aa", strokeWidth: 2 },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              width: 14,
+              height: 14,
+              color: "#a1a1aa",
+            },
+          };
+          return addEdge(newEdge, filtered);
+        }
+        return filtered;
+      });
+    }
   };
 
   const updateSelectedAgent = (changes: Partial<AgentNodeData>) => {

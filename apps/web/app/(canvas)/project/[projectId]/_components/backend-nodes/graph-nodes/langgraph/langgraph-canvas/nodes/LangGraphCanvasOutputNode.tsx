@@ -116,7 +116,7 @@ export const LangGraphCanvasOutputNode = ({
               </span>
             )}
             <span className="text-[10px] text-muted-foreground font-mono truncate">
-              {data.topicOrEventName || data.targetStateChannel || "Channel"}
+              Yields to Invoking Route
             </span>
           </div>
         </div>
@@ -140,32 +140,15 @@ export const LangGraphCanvasOutputNode = ({
       <div className="p-3 flex flex-col gap-2 nodrag text-xs">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-            Transport
+            Stream Exit
           </span>
-          <span
-            className={`text-[10px] font-mono px-2 py-0.5 rounded border font-semibold ${badgeInfo.color}`}
-          >
-            {badgeInfo.label}
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded border font-semibold bg-emerald-500/15 text-emerald-400 border-emerald-500/30 flex items-center gap-1">
+            <Radio className="w-2.5 h-2.5" /> Yields to Endpoint
           </span>
         </div>
-
-        {data.targetStateChannel && (
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="text-muted-foreground">Emits State Field:</span>
-            <span className="font-mono font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
-              {data.targetStateChannel}
-            </span>
-          </div>
-        )}
-
-        {data.topicOrEventName && (
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="text-muted-foreground">Topic / Event:</span>
-            <span className="font-mono font-semibold text-foreground truncate max-w-[140px]">
-              {data.topicOrEventName}
-            </span>
-          </div>
-        )}
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          Yields event stream directly back to the invoking API route in PipelineStepEditor.
+        </p>
       </div>
     </div>
   );

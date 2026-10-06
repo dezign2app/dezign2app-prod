@@ -169,6 +169,7 @@ export function InspectorTabContent({
           stateChannels={stateChannels}
           availableLLMNodes={availableLLMNodes}
           connectedRoutes={connectedRoutes}
+          nodes={nodes}
         />
       ) : selectedAgentData ? (
         <AgentNodeInspector

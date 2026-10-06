@@ -10,6 +10,7 @@ import {
   Info,
   Cpu,
   Link2,
+  CheckCircle2,
 } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import {
@@ -23,6 +24,7 @@ import type {
   OutputNodeData,
   LangGraphLLMNode,
   LangGraphLLMRefNode,
+  LangGraphCanvasNode,
 } from "@workspace/canvas";
 import type { LangGraphStateChannel } from "@/types/canvas";
 import type { ConnectedRouteInfo } from "../../../LangGraphNode";
@@ -35,6 +37,7 @@ interface OutputNodeInspectorProps {
   stateChannels?: LangGraphStateChannel[];
   availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
   connectedRoutes?: ConnectedRouteInfo[];
+  nodes?: LangGraphCanvasNode[];
 }
 
 function isOutputTransportType(val: string): val is OutputNodeData["type"] {
@@ -62,6 +65,56 @@ function isStreamContentMode(
   );
 }
 
+function getCanvasNodeLabel(node: LangGraphCanvasNode): string {
+  const data = node.data;
+  if (data && typeof data === "object") {
+    if ("name" in data && typeof data.name === "string" && data.name.trim().length > 0) {
+      return data.name;
+    }
+    if ("label" in data && typeof data.label === "string" && data.label.trim().length > 0) {
+      return data.label;
+    }
+  }
+  return node.id;
+}
+
+interface StepStreamInfo {
+  hasStreamConfig: boolean;
+  preset?: string;
+  selectedEventsCount?: number;
+}
+
+function getStepStreamInfo(node?: LangGraphCanvasNode): StepStreamInfo {
+  if (!node || typeof node.data !== "object" || node.data === null) {
+    return { hasStreamConfig: false };
+  }
+  const data = node.data;
+  if ("streamConfig" in data && data.streamConfig && typeof data.streamConfig === "object") {
+    const sc = data.streamConfig;
+    const isEnabled = !("enabled" in sc) || sc.enabled !== false;
+    if (isEnabled) {
+      const preset = "preset" in sc && typeof sc.preset === "string" ? sc.preset : "standard_sse";
+      const presetLabels: Record<string, string> = {
+        standard_sse: "Standard SSE",
+        ai_sdk: "Vercel AI SDK",
+        openai_chunk: "OpenAI Chunk",
+        minimal: "Minimal",
+        custom: "Custom",
+      };
+      let eventCount: number | undefined;
+      if ("selectedEvents" in sc && Array.isArray(sc.selectedEvents)) {
+        eventCount = sc.selectedEvents.length;
+      }
+      return {
+        hasStreamConfig: true,
+        preset: presetLabels[preset] || preset,
+        selectedEventsCount: eventCount,
+      };
+    }
+  }
+  return { hasStreamConfig: false };
+}
+
 export function OutputNodeInspector({
   selectedOutputData,
   onDeleteOutput,
@@ -69,10 +122,29 @@ export function OutputNodeInspector({
   stateChannels = [],
   availableLLMNodes = [],
   connectedRoutes = [],
+  nodes = [],
 }: OutputNodeInspectorProps) {
   const channelType = selectedOutputData.type || "sse";
   const contentMode = selectedOutputData.streamContentMode || "ai_node_tokens";
   const boundRouteIds = selectedOutputData.boundRouteIds || [];
+
+  const stepNodes = (nodes || []).filter(
+    (n) =>
+      n.type === "step" ||
+      n.type === "langgraph_node" ||
+      n.type === "langgraph_agent",
+  );
+
+  const connectedStep = (nodes || []).find(
+    (n) => n.id === selectedOutputData.sourceStepId,
+  );
+
+  const activeStep =
+    (nodes || []).find((n) => n.id === selectedOutputData.sourceStepId) ||
+    connectedStep ||
+    stepNodes[0];
+
+  const activeStepStreamInfo = getStepStreamInfo(activeStep);
 
   const toggleRouteBinding = (edgeId: string) => {
     if (boundRouteIds.includes(edgeId)) {
@@ -120,94 +192,37 @@ export function OutputNodeInspector({
         <div className="flex items-center gap-2 mb-1">
           <Sparkles className="w-4 h-4 text-primary" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            Output Transport
+            Stream Output Configuration
           </h3>
         </div>
 
         {/* Channel Name */}
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs font-semibold">Channel Label</Label>
+          <Label className="text-xs font-semibold">Stream Label</Label>
           <LocalInput
             value={selectedOutputData.name || selectedOutputData.label || ""}
             onChange={(e) =>
               onUpdateOutput({ name: e.target.value, label: e.target.value })
             }
-            placeholder="e.g. Real-Time AI Stream"
+            placeholder="e.g. Response Stream"
             className="bg-background text-xs h-8"
           />
         </div>
 
-        {/* Transport Type */}
+        {/* Source Execution Node */}
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs font-semibold">Transport Protocol</Label>
-          <Select
-            value={channelType}
-            onValueChange={(val) => {
-              if (isOutputTransportType(val)) {
-                onUpdateOutput({ type: val });
-              }
-            }}
-          >
-            <SelectTrigger className="bg-background text-xs h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="sse" className="text-xs">
-                📡 SSE Stream (text/event-stream)
-              </SelectItem>
-              <SelectItem value="websocket" className="text-xs">
-                🔌 WebSocket Push (Socket.io)
-              </SelectItem>
-              <SelectItem value="event" className="text-xs">
-                ⚡ Event Publisher (Kafka / RabbitMQ)
-              </SelectItem>
-              <SelectItem value="webhook" className="text-xs">
-                🌐 Webhook Dispatcher (HTTP POST)
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Payload Content Mode */}
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs font-semibold flex items-center gap-1">
-            <Cpu className="w-3.5 h-3.5 text-primary" />
-            <span>Streamed Content Mode</span>
-          </Label>
-          <Select
-            value={contentMode}
-            onValueChange={(val) => {
-              if (isStreamContentMode(val)) {
-                onUpdateOutput({ streamContentMode: val });
-              }
-            }}
-          >
-            <SelectTrigger className="bg-background text-xs h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ai_node_tokens" className="text-xs">
-                🤖 AI Node Tokens (Real-time LLM streamMode)
-              </SelectItem>
-              <SelectItem value="structured_output" className="text-xs">
-                📦 Structured Output Stream (Zod / JSON Schema)
-              </SelectItem>
-              <SelectItem value="step_output" className="text-xs">
-                ⚡ Target Step Output Payload
-              </SelectItem>
-              <SelectItem value="full_state" className="text-xs">
-                📊 Full Graph State Object
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Target AI Node / Step selection */}
-        {contentMode === "ai_node_tokens" && availableLLMNodes.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs font-semibold">
-              Source AI / LLM Node
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-semibold flex items-center gap-1.5">
+              <span>Source Execution Node</span>
             </Label>
+            {connectedStep && (
+              <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded flex items-center gap-1">
+                <CheckCircle2 className="w-2.5 h-2.5" /> Canvas Edge Connected
+              </span>
+            )}
+          </div>
+
+          {stepNodes.length > 0 ? (
             <Select
               value={selectedOutputData.sourceStepId || "__first__"}
               onValueChange={(val) =>
@@ -217,161 +232,84 @@ export function OutputNodeInspector({
               }
             >
               <SelectTrigger className="bg-background text-xs h-8 font-mono">
-                <SelectValue placeholder="First LLM Node (Default)" />
+                <SelectValue placeholder="First Step Node (Default)" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__first__" className="text-xs font-mono">
-                  Default / First AI Node
+                  Default / First Step Node
                 </SelectItem>
-                {availableLLMNodes.map((llm) => {
-                  const isRef = llm.type === "langgraph_llm_ref";
-                  const providerLabel: string =
-                    llm.type === "langgraph_llm"
-                      ? llm.data.provider || "custom"
-                      : "ref";
-                  return (
-                    <SelectItem
-                      key={llm.id}
-                      value={llm.id}
-                      className="text-xs font-mono"
-                    >
-                      {isRef
-                        ? `[REF] ${llm.data.label || llm.id}`
-                        : llm.data.label || llm.id}{" "}
-                      ({providerLabel})
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {/* Topic / Event Name */}
-        {(channelType === "event" ||
-          channelType === "websocket" ||
-          channelType === "webhook") && (
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs font-semibold">
-              Topic / Event / Endpoint Name
-            </Label>
-            <LocalInput
-              value={selectedOutputData.topicOrEventName || ""}
-              onChange={(e) =>
-                onUpdateOutput({ topicOrEventName: e.target.value })
-              }
-              placeholder={
-                channelType === "event"
-                  ? "e.g. ticket.resolved"
-                  : channelType === "websocket"
-                    ? "e.g. agent_progress"
-                    : "e.g. https://api.mycompany.com/webhook"
-              }
-              className="bg-background font-mono text-xs h-8"
-            />
-          </div>
-        )}
-
-        {/* State Field Selection (if state object mode) */}
-        {contentMode === "full_state" && (
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs font-semibold flex items-center gap-1">
-              <Layers className="w-3.5 h-3.5 text-primary" />
-              <span>Target State Channel</span>
-            </Label>
-            <Select
-              value={selectedOutputData.targetStateChannel || "__all__"}
-              onValueChange={(val) =>
-                onUpdateOutput({
-                  targetStateChannel: val === "__all__" ? undefined : val,
-                })
-              }
-            >
-              <SelectTrigger className="bg-background text-xs h-8 font-mono">
-                <SelectValue placeholder="All State Fields (Full Output)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__" className="text-xs font-mono">
-                  Full Graph State (All Fields)
-                </SelectItem>
-                {stateChannels
-                  .filter((ch) => Boolean(ch.key?.trim()))
-                  .map((ch) => (
-                    <SelectItem
-                      key={ch.key}
-                      value={ch.key}
-                      className="text-xs font-mono"
-                    >
-                      {ch.key} ({ch.type})
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {/* Bound Routes Section */}
-        {connectedRoutes.length > 0 && (
-          <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
-            <Label className="text-xs font-semibold flex items-center gap-1">
-              <Link2 className="w-3.5 h-3.5 text-primary" />
-              <span>Bound Incoming Routes</span>
-            </Label>
-            <p className="text-[10px] text-muted-foreground">
-              Select which entry points emit over this output channel (leave
-              empty for all routes):
-            </p>
-            <div className="flex flex-col gap-1.5 bg-background p-2 rounded-lg border border-border/50 max-h-32 overflow-y-auto">
-              {connectedRoutes.map((route) => {
-                const isBound = boundRouteIds.includes(route.edgeId);
-                return (
-                  <label
-                    key={route.edgeId}
-                    className="flex items-center justify-between text-xs cursor-pointer hover:bg-secondary/30 p-1 rounded transition-colors"
+                {stepNodes.map((s) => (
+                  <SelectItem
+                    key={s.id}
+                    value={s.id}
+                    className="text-xs font-mono"
                   >
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={isBound}
-                        onChange={() => toggleRouteBinding(route.edgeId)}
-                        className="rounded border-border text-primary focus:ring-primary accent-primary"
-                      />
-                      <span className="font-mono font-medium text-[11px] text-foreground">
-                        {route.method} {route.label}
-                      </span>
-                    </div>
-                    <span className="text-[9px] text-muted-foreground font-mono">
-                      {route.sourceNodeLabel}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                    {getCanvasNodeLabel(s)}
+                    {connectedStep && connectedStep.id === s.id
+                      ? " (Wired via Edge)"
+                      : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="text-[10px] text-muted-foreground bg-secondary/30 p-2 rounded border border-border/40">
+              Connect an arrow from your agent step to this Output Channel.
+            </span>
+          )}
 
-        {/* Description */}
+          {/* Active Event Projections Badge from the selected node */}
+          {activeStep && activeStepStreamInfo.hasStreamConfig && (
+            <div className="flex flex-col gap-1 p-2 rounded-lg bg-primary/10 border border-primary/20 mt-1">
+              <div className="flex items-center gap-1.5 text-primary text-[11px] font-medium">
+                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  Using Event Projections from {getCanvasNodeLabel(activeStep)}
+                </span>
+              </div>
+              <span className="text-[10px] text-muted-foreground leading-relaxed">
+                Inheriting {activeStepStreamInfo.preset} with{" "}
+                {activeStepStreamInfo.selectedEventsCount !== undefined
+                  ? `${activeStepStreamInfo.selectedEventsCount} active`
+                  : "all"}{" "}
+                projections and payload envelope configured directly on{" "}
+                {getCanvasNodeLabel(activeStep)}.
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Stream Yield Explanation Banner */}
+        <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs">
+          <div className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+            <Radio className="w-3.5 h-3.5 shrink-0" />
+            <span>Yield Stream to Endpoint</span>
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            The graph yields chunks directly back to the API route that invokes this agent in <span className="text-foreground font-mono font-medium">PipelineStepEditor</span>. You don't need to configure SSE, WebSockets, or topics here—the endpoint handler streams chunks directly to the client.
+          </p>
+        </div>
+
+        {/* Description / Notes */}
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs font-semibold">
-            Channel Notes / Description
+            Stream Notes / Description
           </Label>
           <LocalInput
             value={selectedOutputData.description || ""}
             onChange={(e) => onUpdateOutput({ description: e.target.value })}
-            placeholder="e.g. Streams AI response tokens for the /chat route"
+            placeholder="e.g. Yields AI assistant tokens to caller"
             className="bg-background text-xs h-8"
           />
         </div>
+      </div>
 
         <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground bg-secondary/30 p-2 rounded-lg border border-border/40 mt-1">
           <Info className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
           <span>
-            {contentMode === "ai_node_tokens"
-              ? "Streams incremental AI response tokens (streamMode: 'messages') from the AI node directly out to the caller."
-              : "Emits state updates for configured routes over this channel."}
+            Yields event stream chunks directly to the invoking API endpoint in PipelineStepEditor.
           </span>
         </div>
       </div>
-    </div>
   );
 }

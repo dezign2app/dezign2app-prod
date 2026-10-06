@@ -1,4 +1,5 @@
 import { BackendEdge, BackendNode, Endpoint } from "@/types/canvas";
+import type { OutputChannelConfig } from "@workspace/canvas";
 import { RouteEndpoint } from "../langgraph/typescript/v1";
 
 /** Resolve which canvas edges connect to this LangGraph node and what they represent. */
@@ -8,6 +9,7 @@ export function resolveRouteEndpoints(
   allNodes: BackendNode[],
   endpoints: Endpoint[],
   events: Array<{ id: string; name?: string; variant?: string }>,
+  outputChannels?: OutputChannelConfig[],
 ): RouteEndpoint[] {
   const incoming = edges.filter((e) => e.target === nodeId);
 
@@ -15,15 +17,58 @@ export function resolveRouteEndpoints(
     const sourceNode = allNodes.find((n) => n.id === edge.source);
     const sourceNodeLabel = sourceNode?.data?.label || edge.source;
     const payloadMapping = edge.data?.payloadMapping;
+
+    // Resolve the output channel bound to this edge (if any)
+    const boundChannel = (outputChannels || []).find(
+      (ch) => ch.boundRouteIds?.includes(edge.id),
+    );
+    const channelType = boundChannel?.type; // sse | websocket | event | webhook | rest
     const preInvokeLogicMode = edge.data?.preInvokeLogicMode;
     const preInvokePrompt = edge.data?.preInvokePrompt;
     const preInvokeCode = edge.data?.preInvokeCode;
-    const responseExecutionMode = edge.data?.responseExecutionMode;
-    const responseOutputMode = edge.data?.responseOutputMode;
-    const responseFields = edge.data?.responseFields;
+    // Edge-level user settings take precedence; output channel inference is a fallback
+    const resolvedExecutionMode: RouteEndpoint["responseExecutionMode"] =
+      edge.data?.responseExecutionMode ||
+      (channelType === "sse" || channelType === "websocket"
+        ? "stream"
+        : channelType === "rest"
+          ? "sync"
+          : channelType === "event" || channelType === "webhook"
+            ? "async_ack"
+            : undefined);
+
+    // For REST channels with a specific state channel, expose only that field
+    const resolvedResponseOutputMode: RouteEndpoint["responseOutputMode"] =
+      edge.data?.responseOutputMode ||
+      (channelType === "rest" && boundChannel?.targetStateChannel
+        ? "selected"
+        : undefined);
+    const resolvedResponseFields: string[] | undefined =
+      edge.data?.responseFields ||
+      (channelType === "rest" && boundChannel?.targetStateChannel
+        ? [boundChannel.targetStateChannel]
+        : undefined);
+
+    // For event/webhook channels, generate a post-invoke emit snippet
+    const channelPostInvokeCode: string | undefined = (() => {
+      if (!boundChannel) return undefined;
+      const topic = boundChannel.topicOrEventName || boundChannel.name;
+      const stateKey = boundChannel.targetStateChannel || "messages";
+      if (channelType === "event") {
+        return `// Emit output channel: ${boundChannel.name}\n// eventBus.emit(${JSON.stringify(topic)}, result?.[${JSON.stringify(stateKey)}] ?? result);`;
+      }
+      if (channelType === "webhook") {
+        return `// Deliver output channel: ${boundChannel.name}\n// await fetch(${JSON.stringify(topic)}, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: result?.[${JSON.stringify(stateKey)}] ?? result }) });`;
+      }
+      return undefined;
+    })();
+
+    const responseExecutionMode = resolvedExecutionMode;
+    const responseOutputMode = resolvedResponseOutputMode;
+    const responseFields = resolvedResponseFields;
     const postInvokeLogicMode = edge.data?.postInvokeLogicMode;
     const postInvokePrompt = edge.data?.postInvokePrompt;
-    const postInvokeCode = edge.data?.postInvokeCode;
+    const postInvokeCode = edge.data?.postInvokeCode ?? channelPostInvokeCode;
 
     if (edge.sourceHandle?.startsWith("endpoint-out-")) {
       const endpointId = edge.sourceHandle.replace("endpoint-out-", "");

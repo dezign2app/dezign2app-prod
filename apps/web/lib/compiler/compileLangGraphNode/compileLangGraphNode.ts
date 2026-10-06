@@ -47,12 +47,14 @@ export function compileLangGraphNode(
     context.edges &&
     context.edges.length > 0
   ) {
+    const outputChannels = node.data?.outputChannels ?? [];
     const routeEndpoints = resolveRouteEndpoints(
       node.id,
       context.edges,
       context.nodes ?? [],
       context.endpoints ?? [],
       context.events ?? [],
+      outputChannels,
     );
     input.routeEndpoints = routeEndpoints;
   }
