@@ -219,7 +219,7 @@ describe("compileMonorepo: LangGraph Package Compilation & Service Integration",
     expect(lgGraphFile).toBeDefined();
     expect(lgGraphFile!.content).toContain('import { pool } from "@workspace/db";');
     expect(lgGraphFile!.content).toContain("const checkpointer = new PostgresSaver(pool);");
-    expect(lgGraphFile!.content).toContain("await checkpointer.setup();");
+    expect(lgGraphFile!.content).toContain("void checkpointer.setup();");
   });
 
   it("imports REDIS_CONFIG from @workspace/redis when LangGraph node has checkpointer: 'redis'", () => {

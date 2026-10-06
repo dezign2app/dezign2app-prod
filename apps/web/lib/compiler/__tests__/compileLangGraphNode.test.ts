@@ -288,12 +288,12 @@ describe("compileLangGraph Compiler Fixes", () => {
     const files = compileLangGraph(input);
     const fileMap = new Map(files.map((f) => [f.filename, f.content]));
 
-    // graph.ts should import and configure PostgresSaver with await checkpointer.setup()
+    // graph.ts should import and configure PostgresSaver with void checkpointer.setup()
     const graphFile = fileMap.get("src/graph.ts");
     expect(graphFile).toBeDefined();
     expect(graphFile).toContain(`import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";`);
     expect(graphFile).toContain(`process.env.CUSTOM_POSTGRES_URL`);
-    expect(graphFile).toContain(`await checkpointer.setup();`);
+    expect(graphFile).toContain(`void checkpointer.setup();`);
     expect(graphFile).toContain(`.compile({ checkpointer })`);
 
     // package.json should include postgres checkpointer and pg dependencies

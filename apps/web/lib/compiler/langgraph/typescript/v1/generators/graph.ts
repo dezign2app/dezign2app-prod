@@ -89,7 +89,7 @@ export function buildGraphFile(
       lines.push(``);
       lines.push(`const checkpointer = new PostgresSaver(pool);`);
       lines.push(`// Ensure checkpointer tables exist in PostgreSQL`);
-      lines.push(`await checkpointer.setup();`);
+      lines.push(`void checkpointer.setup();`);
       lines.push(``);
       lines.push(`export const ${graphVarName} = ${builderVarName}.compile({ checkpointer });`);
     } else {
@@ -100,7 +100,7 @@ export function buildGraphFile(
       lines.push(`  process.env.${envVar} || process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/postgres"`);
       lines.push(`);`);
       lines.push(`// Ensure checkpointer tables exist in PostgreSQL`);
-      lines.push(`await checkpointer.setup();`);
+      lines.push(`void checkpointer.setup();`);
       lines.push(``);
       lines.push(`export const ${graphVarName} = ${builderVarName}.compile({ checkpointer });`);
     }
