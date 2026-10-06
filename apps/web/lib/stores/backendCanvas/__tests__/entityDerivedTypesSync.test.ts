@@ -259,4 +259,133 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
     expect(customAttr).toBeDefined();
     expect(customAttr?.isInherited).toBeFalsy();
   });
+
+  it("automatically generates companion TypesNode with schema types when table is created", () => {
+    const store = useBackendCanvasStore.getState();
+
+    // 1. Create a table via addTableNode
+    store.addTableNode();
+
+    const state = useBackendCanvasStore.getState();
+    const entityNode = state.nodes.find((n) => n.type === "entity")!;
+    expect(entityNode).toBeDefined();
+
+    const typesNode = state.nodes.find(
+      (n) => n.type === "types" && n.data?.sourceEntityId === entityNode.id,
+    )!;
+    expect(typesNode).toBeDefined();
+    expect(typesNode.data?.types?.[0]?.name).toBe("Entity");
+    expect(typesNode.data?.types?.[0]?.fields?.[0]?.name).toBe("id");
+
+    const edge = state.edges.find(
+      (e) => e.source === entityNode.id && e.target === typesNode.id,
+    );
+    expect(edge).toBeDefined();
+    expect(edge?.type).toBe("type-reference");
+    expect(edge?.data?.label).toBe("generates");
+  });
+
+  it("automatically generates companion TypesNodes for LangGraph checkpointer postgres tables", () => {
+    const store = useBackendCanvasStore.getState();
+
+    // Simulate adding langgraph checkpointer tables via store.addNode
+    const checkpointerTables = [
+      {
+        id: "tbl-lg-checkpoints",
+        type: "entity" as const,
+        position: { x: 200, y: 200 },
+        data: {
+          label: "langgraph_checkpoints",
+          tableName: "langgraph_checkpoints",
+          systemBadge: "langgraph" as const,
+          readOnly: true,
+          columns: [
+            { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+            { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+            { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+            { name: "checkpoint", type: "JSON", isNotNull: true },
+            { name: "metadata", type: "JSON", isNotNull: true },
+          ],
+        },
+      },
+      {
+        id: "tbl-lg-writes",
+        type: "entity" as const,
+        position: { x: 520, y: 200 },
+        data: {
+          label: "langgraph_checkpoint_writes",
+          tableName: "langgraph_checkpoint_writes",
+          systemBadge: "langgraph" as const,
+          readOnly: true,
+          columns: [
+            { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+            { name: "task_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+            { name: "channel", type: "TEXT", isNotNull: true },
+            { name: "blob", type: "JSON", isNotNull: true },
+          ],
+        },
+      },
+    ];
+
+    for (const tbl of checkpointerTables) {
+      store.addNode(tbl);
+    }
+
+    const state = useBackendCanvasStore.getState();
+
+    // Verify langgraph_checkpoints TypesNode was created
+    const checkpointsTypes = state.nodes.find(
+      (n) => n.type === "types" && n.data?.sourceEntityId === "tbl-lg-checkpoints",
+    );
+    expect(checkpointsTypes).toBeDefined();
+    expect(checkpointsTypes?.data?.label).toBe("LanggraphCheckpoints Types");
+    expect(checkpointsTypes?.data?.types?.[0]?.name).toBe("LanggraphCheckpoints");
+    expect(checkpointsTypes?.data?.types?.[0]?.fields).toHaveLength(5);
+
+    // Verify langgraph_checkpoint_writes TypesNode was created
+    const writesTypes = state.nodes.find(
+      (n) => n.type === "types" && n.data?.sourceEntityId === "tbl-lg-writes",
+    );
+    expect(writesTypes).toBeDefined();
+    expect(writesTypes?.data?.label).toBe("LanggraphCheckpointWrites Types");
+    expect(writesTypes?.data?.types?.[0]?.name).toBe("LanggraphCheckpointWrites");
+    expect(writesTypes?.data?.types?.[0]?.fields).toHaveLength(4);
+
+    // Verify "generates" edges exist
+    const checkpointsEdge = state.edges.find(
+      (e) => e.source === "tbl-lg-checkpoints" && e.target === checkpointsTypes?.id,
+    );
+    expect(checkpointsEdge).toBeDefined();
+    expect(checkpointsEdge?.type).toBe("type-reference");
+    expect(checkpointsEdge?.data?.label).toBe("generates");
+  });
+
+  it("automatically generates companion TypesNodes for LangGraph redis_schema nodes", () => {
+    const store = useBackendCanvasStore.getState();
+
+    store.addNode({
+      id: "schema-lg-redis",
+      type: "redis_schema",
+      position: { x: 200, y: 200 },
+      data: {
+        label: "langgraph_checkpoints",
+        tableName: "langgraph_checkpoints",
+        systemBadge: "langgraph",
+        readOnly: true,
+        columns: [
+          { name: "checkpoint", type: "JSON", isNotNull: true },
+          { name: "metadata", type: "JSON", isNotNull: true },
+        ],
+      },
+    });
+
+    const state = useBackendCanvasStore.getState();
+    const typesNode = state.nodes.find(
+      (n) => n.type === "types" && n.data?.sourceEntityId === "schema-lg-redis",
+    );
+    expect(typesNode).toBeDefined();
+    expect(typesNode?.data?.label).toBe("LanggraphCheckpoints Types");
+    expect(typesNode?.data?.types?.[0]?.name).toBe("LanggraphCheckpoints");
+    expect(typesNode?.data?.types?.[0]?.fields).toHaveLength(2);
+  });
 });

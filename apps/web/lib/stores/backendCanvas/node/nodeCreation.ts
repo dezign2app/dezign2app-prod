@@ -1,4 +1,4 @@
-import { BackendNode, BackendEdge } from "@/types/canvas";
+import { BackendNode, BackendEdge, CustomTypeItem } from "@/types/canvas";
 import {
   DEFAULT_LLM_PROVIDER,
   DEFAULT_LLM_MODEL,
@@ -12,6 +12,11 @@ import { generateKeyBetween } from "fractional-indexing";
 import { BackendCanvasState, EndpointWithNode } from "../types";
 import { getLastIndex } from "../utils";
 import { PreparedNodeResult, NodeCreationCanvasState } from "./types";
+import {
+  toPascalCase,
+  mapColumnsToTypeFields,
+  buildCompanionTypesNodeAndEdge,
+} from "./nodeEntitySync";
 
 /**
  * Prepares and allocates ports, default endpoints, child web pages, and fractional indices
@@ -298,6 +303,25 @@ export function prepareNodeForAddition(
     }
   }
 
+  // 7. Auto-generate companion TypesNode for entity or redis_schema node if not skipped
+  if (
+    (node.type === "entity" || node.type === "redis_schema") &&
+    !node.data?.skipTypesNode &&
+    !currentState.nodes.some(
+      (n) => n.type === "types" && n.data?.sourceEntityId === node.id,
+    )
+  ) {
+    const { typesNode, typesEdge } = buildCompanionTypesNodeAndEdge(
+      node,
+      nextNodes,
+      nextEdges,
+    );
+    nextNodes = [...nextNodes, typesNode];
+    nextPendingNodes = [...nextPendingNodes, typesNode];
+    nextEdges = [...nextEdges, typesEdge];
+    nextPendingEdges = [...nextPendingEdges, typesEdge];
+  }
+
   return {
     nodes: nextNodes,
     edges: nextEdges,
@@ -316,23 +340,20 @@ export function createTableNode(
   position: { x: number; y: number } | undefined,
   currentState: BackendCanvasState,
 ): { node: BackendNode; nextNodes: BackendNode[]; nextPendingNodes: BackendNode[] } {
-  const lastNodeIndex = getLastIndex(currentState.nodes);
-  const fractionalIndex = generateKeyBetween(lastNodeIndex, null);
-  const node: BackendNode = {
+  const nodeWithoutIndex: Omit<BackendNode, "fractionalIndex"> = {
     id: crypto.randomUUID(),
     type: "entity",
     position: position || { x: 100, y: 100 },
     parentId,
-    fractionalIndex,
     data: {
       label: "",
       columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
     },
     selected: true,
   };
-  const nextNodes = [...currentState.nodes.map((n) => ({ ...n, selected: false })), node];
-  const nextPendingNodes = [...currentState.pendingNodeUpserts, node];
-  return { node, nextNodes, nextPendingNodes };
+  const prepared = prepareNodeForAddition(nodeWithoutIndex, currentState);
+  const node = prepared.nodes.find((n) => n.id === nodeWithoutIndex.id)!;
+  return { node, nextNodes: prepared.nodes, nextPendingNodes: prepared.pendingNodes };
 }
 
 /**

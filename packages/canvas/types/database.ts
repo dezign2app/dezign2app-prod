@@ -87,6 +87,8 @@ export interface CanvasEntityNodeData {
   dbType?: "relational" | "document" | "vector" | "redis" | "key-value";
   systemBadge?: string;
   readOnly?: boolean;
+  /** Whether to bypass auto-generation of companion TypesNode. */
+  skipTypesNode?: boolean;
   /** Column definitions stored as part of the node. */
   columns?: CanvasEntityColumn[];
   indexes?: {

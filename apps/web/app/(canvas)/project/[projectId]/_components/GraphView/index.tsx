@@ -213,7 +213,9 @@ export function GraphView({ projectId }: GraphViewProps) {
 
   const flowNodesToFit = React.useMemo(() => {
     const flowNodes = getGraphFlowNodes(graphNodes, graphEdges);
-    return flowNodes.map((n) => ({ id: n.id }));
+    const typesNodes = graphNodes.filter((n) => n.type === "types");
+    const combined = [...flowNodes, ...typesNodes];
+    return combined.map((n) => ({ id: n.id }));
   }, [graphNodes, graphEdges]);
 
   const hasFitted = useRef(false);
@@ -466,9 +468,8 @@ export function GraphView({ projectId }: GraphViewProps) {
             () => ({
               padding: 0.35,
               maxZoom: 0.65,
-              nodes: flowNodesToFit.length > 0 ? flowNodesToFit : undefined,
             }),
-            [flowNodesToFit],
+            [],
           )}
           style={{
             bottom: terminalOpen ? `${terminalHeight + 14}px` : "16px",

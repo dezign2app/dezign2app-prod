@@ -113,14 +113,25 @@ export const createNodeSlice = (
 
   addTableNode: (parentId, position) => {
     get().pushHistorySnapshot("schema");
-    const { nextNodes, nextPendingNodes } = createTableNode(
+    const node: Omit<BackendNode, "fractionalIndex"> = {
+      id: crypto.randomUUID(),
+      type: "entity",
+      position: position || { x: 100, y: 100 },
       parentId,
-      position,
-      get(),
-    );
+      data: {
+        label: "",
+        columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
+      },
+      selected: true,
+    };
+    const prepared = prepareNodeForAddition(node, get());
     set({
-      nodes: nextNodes,
-      pendingNodeUpserts: nextPendingNodes,
+      nodes: prepared.nodes,
+      edges: prepared.edges,
+      endpoints: prepared.endpoints,
+      pendingNodeUpserts: prepared.pendingNodes,
+      pendingEdgeUpserts: prepared.pendingEdges,
+      pendingEndpointUpserts: prepared.pendingEndpoints,
     });
   },
 
