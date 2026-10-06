@@ -233,6 +233,22 @@ export function compileTransformerHelpers(
       content: `/**\n * Global Data Transformation Functions\n * Auto-generated — edit transformer definitions to regenerate.\n */\n${globalBarrelExports.join("\n")}\n`,
     });
 
+    // ✦ Collect custom dependencies from all global transformer helpers
+    const customDepsRecord: Record<string, string> = {};
+    const customDevDepsRecord: Record<string, string> = {
+      "@workspace/typescript-config": "workspace:*",
+      typescript: "^5.3.3",
+    };
+    globalHelpers.forEach((h) => {
+      (h.customDependencies || []).forEach((dep) => {
+        if (dep.isDev) {
+          customDevDepsRecord[dep.name] = dep.version || "latest";
+        } else {
+          customDepsRecord[dep.name] = dep.version || "latest";
+        }
+      });
+    });
+
     // ✦ emits: packages/transformers/package.json
     allFiles.push({
       filename: "packages/transformers/package.json",
@@ -250,10 +266,10 @@ export function compileTransformerHelpers(
             "./*": "./src/*.ts",
           },
           scripts: { build: "tsc", "check-types": "tsc --noEmit" },
-          devDependencies: {
-            "@workspace/typescript-config": "workspace:*",
-            typescript: "^5.3.3",
-          },
+          ...(Object.keys(customDepsRecord).length > 0
+            ? { dependencies: customDepsRecord }
+            : {}),
+          devDependencies: customDevDepsRecord,
         },
         null,
         2,

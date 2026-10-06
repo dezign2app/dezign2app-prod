@@ -38,7 +38,7 @@ import {
 
 interface NodePackageManagerProps {
   nodeId: string;
-  nodeType: "service" | "webApp" | "webPage";
+  nodeType: "service" | "webApp" | "webPage" | "transformer";
   customDependencies?: NodeDependencyItem[];
   onUpdateDependencies: (deps: NodeDependencyItem[]) => void;
   inferredDependencies?: { name: string; version: string; reason: string }[];
@@ -54,6 +54,55 @@ interface CuratedPreset {
     description: string;
   }[];
 }
+
+const TRANSFORMER_PRESETS: CuratedPreset[] = [
+  {
+    category: "Data & Manipulation",
+    items: [
+      { name: "lodash-es", version: "^4.17.21", description: "Modular ES utilities & object helpers" },
+      { name: "slugify", version: "^1.6.6", description: "String slugification utility" },
+      { name: "validator", version: "^13.12.0", description: "String validation and sanitization" },
+      { name: "deepmerge", version: "^4.3.1", description: "Deep merge objects & arrays" },
+    ],
+  },
+  {
+    category: "Dates & Numbers",
+    items: [
+      { name: "dayjs", version: "^1.11.10", description: "Fast 2kB date parsing and formatting" },
+      { name: "date-fns", version: "^3.6.0", description: "Modern modular date utility library" },
+      { name: "bignumber.js", version: "^9.1.2", description: "Arbitrary-precision decimal arithmetic" },
+      { name: "mathjs", version: "^12.4.1", description: "Extensive math library for JavaScript" },
+    ],
+  },
+  {
+    category: "Identifiers & Crypto",
+    items: [
+      { name: "uuid", version: "^9.0.1", description: "RFC4122 UUID generator" },
+      { name: "nanoid", version: "^5.0.6", description: "Compact URL-friendly unique ID generator" },
+      { name: "crypto-js", version: "^4.2.0", description: "Standard cryptographic algorithms in JS" },
+      { name: "hash-wasm", version: "^4.11.0", description: "Lightning fast hashing algorithms" },
+    ],
+  },
+  {
+    category: "Schema & Parsing",
+    items: [
+      { name: "zod", version: "^3.24.2", description: "TypeScript-first schema validation" },
+      { name: "papaparse", version: "^5.4.1", description: "Fast CSV parser" },
+      { name: "cheerio", version: "^1.0.0-rc.12", description: "Fast HTML/XML parsing" },
+      { name: "qs", version: "^6.12.0", description: "Query string parser with nested object support" },
+    ],
+  },
+  {
+    category: "Dev & Types",
+    items: [
+      { name: "@types/lodash-es", version: "^4.17.12", isDev: true, description: "Lodash ES types" },
+      { name: "@types/uuid", version: "^9.0.8", isDev: true, description: "UUID types" },
+      { name: "@types/validator", version: "^13.11.9", isDev: true, description: "Validator types" },
+      { name: "@types/crypto-js", version: "^4.2.2", isDev: true, description: "CryptoJS types" },
+      { name: "@types/papaparse", version: "^5.3.14", isDev: true, description: "PapaParse types" },
+    ],
+  },
+];
 
 const SERVICE_PRESETS: CuratedPreset[] = [
   {
@@ -203,7 +252,12 @@ export const NodePackageManager: React.FC<NodePackageManagerProps> = ({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingVersion, setEditingVersion] = useState("");
 
-  const presets = nodeType === "service" ? SERVICE_PRESETS : WEB_APP_PRESETS;
+  const presets =
+    nodeType === "transformer"
+      ? TRANSFORMER_PRESETS
+      : nodeType === "service"
+        ? SERVICE_PRESETS
+        : WEB_APP_PRESETS;
 
   // Search npm registry with debounce
   useEffect(() => {
@@ -471,7 +525,11 @@ export const NodePackageManager: React.FC<NodePackageManagerProps> = ({
             </span>
           </div>
           <Badge variant="outline" className="text-[10px] font-mono">
-            {nodeType === "service" ? "Microservice Scope" : "Web App Scope"}
+            {nodeType === "transformer"
+              ? "Transformer Helper Scope"
+              : nodeType === "service"
+                ? "Microservice Scope"
+                : "Web App Scope"}
           </Badge>
         </div>
 

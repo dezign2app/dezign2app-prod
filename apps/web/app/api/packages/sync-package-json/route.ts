@@ -7,7 +7,7 @@ export interface SyncPackageJsonRequestBody {
   name: string;
   version?: string;
   isDev?: boolean;
-  nodeType?: "service" | "webApp" | "webPage";
+  nodeType?: "service" | "webApp" | "webPage" | "transformer";
   outputDir?: string;
 }
 
@@ -30,7 +30,11 @@ interface PackageJsonShape {
 
 function findTargetPackageJson(nodeType?: string, outputDir?: string): string | null {
   if (outputDir && fs.existsSync(outputDir)) {
-    if (nodeType === "service") {
+    if (nodeType === "transformer") {
+      const transformerPkg = path.join(outputDir, "packages/transformers/package.json");
+      if (fs.existsSync(transformerPkg)) return transformerPkg;
+    }
+    if (nodeType === "service" || nodeType === "transformer") {
       const appsDir = path.join(outputDir, "apps");
       if (fs.existsSync(appsDir)) {
         try {
@@ -61,6 +65,20 @@ function findTargetPackageJson(nodeType?: string, outputDir?: string): string | 
   }
 
   const cwd = process.cwd();
+
+  if (nodeType === "transformer") {
+    const transformerCandidates = [
+      path.join(cwd, "packages/transformers/package.json"),
+      path.resolve(cwd, "../packages/transformers/package.json"),
+      path.resolve(cwd, "../../packages/transformers/package.json"),
+      path.join(cwd, "packages/backend/package.json"),
+      path.resolve(cwd, "../packages/backend/package.json"),
+      path.resolve(cwd, "../../packages/backend/package.json"),
+    ];
+    for (const cand of transformerCandidates) {
+      if (fs.existsSync(cand)) return cand;
+    }
+  }
 
   if (nodeType === "service") {
     const backendCandidates = [

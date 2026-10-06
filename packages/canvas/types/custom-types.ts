@@ -39,6 +39,7 @@ export interface CanvasTypesNodeData {
   scope?: "global" | "local";
   targetServiceId?: string;
   targetWebAppId?: string;
+  targetTransformerId?: string;
   definitionMode?: "visual" | "raw";
   rawTypeScript?: string;
   types?: CustomTypeItem[];

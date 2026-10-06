@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
 import { Shuffle, Settings, Trash, AlertTriangle } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
@@ -34,16 +34,16 @@ export const TransformerNode = ({
 
   const [isEditing, setIsEditing] = useState(!data.label && !data.functionName);
   const [name, setName] = useState(data.label || data.functionName || "");
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setName(data.label || data.functionName || "");
     if (!data.label && !data.functionName) {
       setIsEditing(true);
     }
   }, [data.label, data.functionName]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isEditing) {
       const focus = () => {
         if (inputRef.current) {
@@ -82,8 +82,8 @@ export const TransformerNode = ({
     setIsEditing(false);
   };
 
-  const handleOpenConfig = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleOpenConfig = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     setActiveConfigItem({
       id,
       nodeId: id,
@@ -111,6 +111,16 @@ export const TransformerNode = ({
       )}
       onDoubleClick={handleOpenConfig}
     >
+      {/* Types Reference Target Handle (Left) */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="types-in"
+        className="w-2.5 h-2.5 !bg-indigo-400 rounded-full border-2 border-background -left-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+        style={{ top: "18px" }}
+        title="Package Types / Custom Types Reference"
+      />
+
       <div className="flex items-center justify-between gap-3 w-full">
         {/* Icon + Label */}
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -191,14 +201,14 @@ export const TransformerNode = ({
         {/* Action Buttons: Gear (Settings) + Delete */}
         <div className="flex items-center gap-1 shrink-0">
           <button
-            className="p-1 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 transition-colors"
+            className="p-1 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 transition-colors cursor-pointer"
             onClick={handleOpenConfig}
-            title="Configure Transformer"
+            title="Configure Transformer Settings & Packages"
           >
             <Settings size={13} />
           </button>
           <button
-            className="p-1 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+            className="p-1 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
             onClick={handleDelete}
             title="Delete Node"
           >
@@ -224,3 +234,4 @@ export const TransformerNode = ({
     </div>
   );
 };
+

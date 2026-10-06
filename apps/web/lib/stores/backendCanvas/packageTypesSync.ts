@@ -137,7 +137,7 @@ export async function syncPackageToDiskPackageJson(params: {
   name: string;
   version?: string;
   isDev?: boolean;
-  nodeType?: "service" | "webApp" | "webPage";
+  nodeType?: "service" | "webApp" | "webPage" | "transformer";
   outputDir?: string;
 }): Promise<boolean> {
   try {
@@ -183,7 +183,8 @@ export function syncPackageTypesToCanvas(
         n.data?.label === "App Package Types" ||
         (n.data?.label?.endsWith("Package Types") && !n.data?.isPackageNode)) &&
       (n.data?.targetWebAppId === targetNodeId ||
-        n.data?.targetServiceId === targetNodeId),
+        n.data?.targetServiceId === targetNodeId ||
+        n.data?.targetTransformerId === targetNodeId),
   );
   legacyLumpedNodes.forEach((leg) => {
     store.deleteNode(leg.id);
@@ -202,7 +203,8 @@ export function syncPackageTypesToCanvas(
         n.type === "types" &&
         n.data?.packageName === trimmedPkg &&
         (n.data?.targetWebAppId === targetNodeId ||
-          n.data?.targetServiceId === targetNodeId),
+          n.data?.targetServiceId === targetNodeId ||
+          n.data?.targetTransformerId === targetNodeId),
     );
 
     if (existingPkgNode) {
@@ -230,7 +232,12 @@ export function syncPackageTypesToCanvas(
     syncPackageToDiskPackageJson({
       action: "add",
       name: trimmedPkg,
-      nodeType: targetNode.type === "webApp" ? "webApp" : "service",
+      nodeType:
+        targetNode.type === "webApp"
+          ? "webApp"
+          : targetNode.type === "transformer"
+            ? "transformer"
+            : "service",
       outputDir: resolvedOutputDir,
     });
 
@@ -255,7 +262,11 @@ export function syncPackageTypesToCanvas(
         packageName: trimmedPkg,
         packageSources: [trimmedPkg],
         targetWebAppId: targetNode.type === "webApp" ? targetNode.id : undefined,
-        targetServiceId: targetNode.type !== "webApp" ? targetNode.id : undefined,
+        targetServiceId:
+          targetNode.type !== "webApp" && targetNode.type !== "transformer"
+            ? targetNode.id
+            : undefined,
+        targetTransformerId: targetNode.type === "transformer" ? targetNode.id : undefined,
         isReadOnly: true,
         isInstalled: true, // Will be updated by async inspection
         types: [],

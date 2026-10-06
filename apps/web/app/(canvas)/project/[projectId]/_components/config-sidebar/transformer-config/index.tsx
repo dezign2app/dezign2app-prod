@@ -12,7 +12,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Shuffle } from "lucide-react";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@workspace/ui/components/tabs";
+import { Shuffle, Settings, Package } from "lucide-react";
+import { NodePackageManager } from "../NodePackageManager";
+import { NodeDependencyItem } from "@workspace/canvas";
 import { Parameter } from "@/types/canvas";
 import { toVarName, toPascalCase } from "@/lib/compiler/utils";
 import { RequestBodyMode } from "../RequestBodyEditor";
@@ -30,11 +38,13 @@ import { toast } from "sonner";
 export interface TransformerConfigProps {
   id: string;
   nodeId: string;
+  initialTab?: string;
 }
 
 export const TransformerConfig: React.FC<TransformerConfigProps> = ({
   id,
   nodeId,
+  initialTab,
 }) => {
   const rawNode = useBackendCanvasStore((s) =>
     s.nodes.find((n) => n.id === (nodeId || id)),
@@ -66,6 +76,15 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
   if (!node) return null;
 
   const data = node.data;
+  const customDependencies: NodeDependencyItem[] = data.customDependencies || [];
+  const [activeTab, setActiveTab] = React.useState<string>(initialTab || "logic");
+
+  React.useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
   const targetServiceNodes = allNodes.filter((n) => n.type === "service");
 
   // Inferred connected service if not explicitly set
@@ -205,6 +224,35 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
   const returnSchemaMode: RequestBodyMode =
     data.returnSchemaMode ??
     (data.returnSchemaRawJson ? "raw_json" : "field_builder");
+
+  const inferredDeps = React.useMemo(() => {
+    const deps: { name: string; version: string; reason: string }[] = [];
+    const code = data.code || "";
+    if (scope === "global") {
+      deps.push({
+        name: "@workspace/transformers",
+        version: "workspace:*",
+        reason: "Shared transformation utilities package",
+      });
+    }
+    if (code.includes("lodash") || code.includes("_.")) {
+      deps.push({ name: "lodash-es", version: "^4.17.21", reason: "Referenced in transformation logic" });
+    }
+    if (code.includes("dayjs")) {
+      deps.push({ name: "dayjs", version: "^1.11.10", reason: "Referenced in transformation logic" });
+    }
+    if (code.includes("zod") || code.includes("z.")) {
+      deps.push({ name: "zod", version: "^3.24.2", reason: "Referenced in transformation logic" });
+    }
+    return deps;
+  }, [data.code, scope]);
+
+  const inferredDevDeps = React.useMemo(() => {
+    return [
+      { name: "@workspace/typescript-config", version: "workspace:*", reason: "TypeScript configuration" },
+      { name: "typescript", version: "^5.3.3", reason: "TypeScript compiler" },
+    ];
+  }, []);
 
   const updateData = React.useCallback(
     (patch: Partial<typeof data>) => {
@@ -858,8 +906,27 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
         </span>
       </div>
 
-      {/* Row 1: Function Name & Scope */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Tabs: Config & Logic vs Packages */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="w-full grid grid-cols-2 p-1 bg-muted/50 rounded-lg">
+          <TabsTrigger value="logic" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-background">
+            <Settings className="w-3.5 h-3.5" />
+            Config & Logic
+          </TabsTrigger>
+          <TabsTrigger value="packages" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-background">
+            <Package className="w-3.5 h-3.5 text-primary" />
+            Packages
+            {customDependencies.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-primary/20 text-primary font-mono font-bold">
+                {customDependencies.length}
+              </span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="logic" className="space-y-6 pt-3">
+          {/* Row 1: Function Name & Scope */}
+          <div className="grid grid-cols-2 gap-4">
         {/* Function name */}
         <div className="flex flex-col gap-1.5 min-w-0">
           <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
@@ -1010,6 +1077,19 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
         onCreateTypeForField={handleCreateTypeForField}
         allNodes={allNodes}
       />
+        </TabsContent>
+
+        <TabsContent value="packages" className="pt-3">
+          <NodePackageManager
+            nodeId={node.id}
+            nodeType="transformer"
+            customDependencies={customDependencies}
+            onUpdateDependencies={(deps) => updateData({ customDependencies: deps })}
+            inferredDependencies={inferredDeps}
+            inferredDevDependencies={inferredDevDeps}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

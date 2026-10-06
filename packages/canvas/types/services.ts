@@ -46,6 +46,7 @@ export interface TransformerHelperNodeData {
 
   isAsync?: boolean;
   importedTransformerIds?: string[];
+  customDependencies?: NodeDependencyItem[];
 }
 
 /** Service / web-client node fields — endpoints, routing, CORS, etc. (canvas type). */
@@ -145,6 +146,7 @@ export interface CanvasTransformerNodeData {
   isAsync?: boolean;
   transformerHelpers?: TransformerHelperNodeData[];
   importedTransformerIds?: string[];
+  customDependencies?: NodeDependencyItem[];
 }
 
 /** Transformer reference node fields (canvas type). */

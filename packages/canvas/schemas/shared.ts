@@ -590,6 +590,20 @@ export const transformerHelperSchema = z.object({
   returnSchema: z.array(transformerHelperFieldSchema),
   isAsync: z.boolean().optional().default(false),
   importedTransformerIds: z.array(z.string()).optional(),
+  customDependencies: z
+    .array(
+      z
+        .object({
+          name: z.string(),
+          version: z.string().optional(),
+          isDev: z.boolean().optional(),
+          description: z.string().optional(),
+          category: z.string().optional(),
+          source: z.string().optional(),
+        })
+        .passthrough(),
+    )
+    .optional(),
 });
 export type TransformerHelperDefinition = z.infer<typeof transformerHelperSchema>;
 
@@ -598,4 +612,5 @@ export const transformerHelperInputSchema = transformerHelperSchema.extend({
   inputSchema: z.array(transformerHelperFieldInputSchema).optional(),
   returnSchema: z.array(transformerHelperFieldInputSchema).optional(),
   importedTransformerIds: z.array(z.string()).optional(),
+  customDependencies: z.array(z.any()).optional(),
 });
