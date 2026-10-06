@@ -415,6 +415,11 @@ export interface PipelineStep {
   langGraphOutputMode?: "full_state" | "specific_fields" | "last_message";
   /** State channel keys to include when outputMode = "specific_fields" */
   langGraphOutputFields?: string[];
+  /**
+   * Source expression for thread_id when invoking LangGraph agent with memory/checkpointer.
+   * Passed as config.configurable.thread_id to graph.invoke() or graph.stream().
+   */
+  langGraphThreadIdSource?: string;
 }
 
 export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
@@ -506,6 +511,7 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     // langgraph_invoke fields
     langGraphTargetNodeId: z.string().optional(),
     langGraphStateMapping: z.record(z.string()).optional(),
+    langGraphThreadIdSource: z.string().optional(),
     langGraphStreamingEnabled: z.boolean().optional(),
     langGraphStreamingProtocol: z.enum(["sse", "websocket"]).optional(),
     langGraphStreamingFields: z.array(z.string()).optional(),

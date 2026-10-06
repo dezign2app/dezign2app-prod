@@ -366,6 +366,13 @@ export function useCanvasStepSync({
             defaultMapping["messages"] = isConsumer ? "event.message" : "body.message";
           }
 
+          const memoryConfig = clg.node?.data?.memoryConfig;
+          const hasMemory = Boolean(
+            memoryConfig &&
+            memoryConfig.enabled !== false &&
+            memoryConfig.checkpointer,
+          );
+
           return {
             id: generateId(),
             name: agentLabel,
@@ -377,6 +384,13 @@ export function useCanvasStepSync({
             langGraphStreamingProtocol: "sse",
             langGraphOutputMode: "full_state",
             langGraphStateMapping: defaultMapping,
+            ...(hasMemory
+              ? {
+                  langGraphThreadIdSource: isConsumer
+                    ? "event.thread_id"
+                    : "body.thread_id",
+                }
+              : {}),
             inputBindings: [],
           };
         },

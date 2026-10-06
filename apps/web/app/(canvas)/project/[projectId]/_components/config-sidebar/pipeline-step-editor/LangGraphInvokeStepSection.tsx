@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Flame,
   ArrowRight,
+  Database,
 } from "lucide-react";
 import { BackendNode } from "@workspace/canvas/types";
 import { Button } from "@workspace/ui/components/button";
@@ -165,6 +166,16 @@ export const LangGraphInvokeStepSection: React.FC<
     }
     return [{ key: "messages", type: "BaseMessage[]" }];
   }, [selectedAgentNode]);
+
+  const rawMemoryConfig = selectedAgentNode?.data?.memoryConfig;
+  const memoryConfig = rawMemoryConfig ?? {
+    checkpointer: "memory",
+    enabled: true,
+  };
+  const hasMemory = useMemo(() => {
+    if (rawMemoryConfig && rawMemoryConfig.enabled === false) return false;
+    return Boolean(memoryConfig.checkpointer);
+  }, [rawMemoryConfig, memoryConfig]);
 
   const mapping: Record<string, string> = useMemo(() => {
     return step.langGraphStateMapping || {};
@@ -411,10 +422,57 @@ export const LangGraphInvokeStepSection: React.FC<
       }
     });
 
+    let nextThreadIdSource = step.langGraphThreadIdSource;
+    if (hasMemory && !nextThreadIdSource) {
+      let matchedThreadSource: StepSource | null = null;
+      for (const src of availableSources) {
+        if (src.kind === "inline") continue;
+        const found = src.paths.find((p) => {
+          const l = p.path.toLowerCase();
+          return (
+            l === "thread_id" ||
+            l === "threadid" ||
+            l === "x-thread-id" ||
+            l === "conversation_id" ||
+            l === "session_id"
+          );
+        });
+        if (found) {
+          if (src.kind === "step_output" && src.stepId) {
+            matchedThreadSource = {
+              kind: "step_output",
+              stepId: src.stepId,
+              field: found.path,
+            };
+          } else if (
+            src.kind === "req_body" ||
+            src.kind === "req_params" ||
+            src.kind === "req_query" ||
+            src.kind === "req_headers" ||
+            src.kind === "env"
+          ) {
+            matchedThreadSource = { kind: src.kind, field: found.path };
+          }
+          break;
+        }
+      }
+      if (matchedThreadSource) {
+        nextThreadIdSource = stepSourceToAccessor(
+          matchedThreadSource,
+          availableSources,
+        );
+      } else {
+        nextThreadIdSource = "body.thread_id";
+      }
+    }
+
     onChange({
       ...step,
       inputBindings: newBindings,
       langGraphStateMapping: newMapping,
+      ...(hasMemory && nextThreadIdSource
+        ? { langGraphThreadIdSource: nextThreadIdSource }
+        : {}),
     });
   };
 
@@ -562,6 +620,67 @@ export const LangGraphInvokeStepSection: React.FC<
         )}
       </div>
 
+      {/* Memory Checkpointer Thread ID Section */}
+      {hasMemory && (
+        <div className="flex flex-col gap-2.5 p-3.5 bg-emerald-500/10 border border-emerald-500/25 rounded-xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Database className="w-3.5 h-3.5 text-emerald-400" />
+              <Label className="text-xs font-bold text-foreground">
+                Session Thread ID (Checkpointer Memory)
+              </Label>
+            </div>
+            <Badge
+              variant="outline"
+              className="text-[9px] font-mono border-emerald-500/40 text-emerald-400 bg-emerald-500/15"
+            >
+              {selectedAgentNode?.data?.memoryConfig?.checkpointer || "memory"} checkpointer
+            </Badge>
+          </div>
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
+            LangGraph automatically queries the checkpointer database to retrieve the full chat history for this <code className="font-mono text-emerald-400">thread_id</code>. Only the new user message needs to be mapped into state channels.
+          </p>
+
+          <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/60 p-2 rounded-lg border border-emerald-500/20">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-mono font-bold text-emerald-400 text-[11px] truncate bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                thread_id
+              </span>
+              <span className="text-[9px] text-muted-foreground font-mono">string</span>
+            </div>
+            <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
+            <div className="min-w-0">
+              <BindingSourceEditor
+                binding={{
+                  argName: "thread_id",
+                  source: accessorToStepSource(
+                    step.langGraphThreadIdSource || "body.thread_id",
+                    availableSources,
+                  ),
+                }}
+                availableSources={availableSources}
+                serviceNodeId={serviceNodeId}
+                onChange={(updated) => {
+                  const accessor = stepSourceToAccessor(updated.source, availableSources);
+                  onChange({
+                    ...step,
+                    langGraphThreadIdSource: accessor,
+                  });
+                }}
+              />
+            </div>
+            <div className="w-6" />
+          </div>
+
+          {!step.langGraphThreadIdSource && (
+            <div className="flex items-center gap-1.5 text-[10px] text-amber-400/90 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20">
+              <AlertCircle className="w-3 h-3 shrink-0" />
+              <span>Defaults to <code className="font-mono font-bold">body.thread_id</code>. Provide a session/thread ID so the agent can resume conversation context.</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* State Channels Mapping */}
       <div className="flex flex-col gap-2.5 p-3.5 bg-secondary/15 rounded-xl border border-border/50">
         <div className="flex items-center justify-between">
@@ -606,13 +725,20 @@ export const LangGraphInvokeStepSection: React.FC<
                 key={`mapped-ch-${ch.key}-${idx}`}
                 className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/50 p-1.5 rounded-lg border border-border/40"
               >
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="font-mono font-bold text-purple-300 text-[11px] truncate bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                    {ch.key}
-                  </span>
-                  <span className="text-[9px] text-muted-foreground font-mono truncate">
-                    {ch.type}
-                  </span>
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-mono font-bold text-purple-300 text-[11px] truncate bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                      {ch.key}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground font-mono truncate">
+                      {ch.type}
+                    </span>
+                  </div>
+                  {ch.key === "messages" && hasMemory && (
+                    <span className="text-[8.5px] text-emerald-400/90 font-sans mt-0.5 leading-tight truncate">
+                      new input only (history from DB)
+                    </span>
+                  )}
                 </div>
                 <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
                 <div className="min-w-0">
