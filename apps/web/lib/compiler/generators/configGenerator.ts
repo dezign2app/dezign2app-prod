@@ -869,14 +869,14 @@ export function generateConfigFiles(
   // ── Canvas-driven .env generation ─────────────────────────────────────────
   // Prefer envVars defined on the canvas node (own + connected package nodes).
   // Fall back to the legacy hardcoded lines only when no canvas envVars exist.
-  const canvasSections = collectEnvSections(node, allNodes, allEdges);
+  const canvasSections = collectEnvSections(node, allNodes, allEdges, undefined, endpoints);
 
   let envFile: string;
   let envExampleFile: string;
 
   if (canvasSections.length > 0) {
     // Canvas-driven: use structured envVars from the node and its package dependencies
-    const { env, envExample } = generateEnvFilesForNode(node, allNodes, allEdges);
+    const { env, envExample } = generateEnvFilesForNode(node, allNodes, allEdges, undefined, endpoints);
     envFile = env;
     envExampleFile = envExample;
   } else {

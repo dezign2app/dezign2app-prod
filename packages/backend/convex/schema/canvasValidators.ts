@@ -792,6 +792,12 @@ export const webPageConvexDataValidator = v.object({
 
 export const backendWebPageDataValidator = webPageConvexDataValidator;
 
+export const envVarConvexValidator = v.object({
+  id: v.string(),
+  name: v.string(),
+  description: v.optional(v.string()),
+});
+
 export const langgraphConvexDataValidator = v.object({
   label: v.optional(v.string()),
   description: v.optional(v.string()),
@@ -805,6 +811,15 @@ export const langgraphConvexDataValidator = v.object({
   ),
   width: v.optional(v.number()),
   height: v.optional(v.number()),
+  color: v.optional(v.string()),
+  techStack: v.optional(v.string()),
+  techVersion: v.optional(v.string()),
+  systemBadge: v.optional(v.string()),
+  readOnly: v.optional(v.boolean()),
+  isReadOnly: v.optional(v.boolean()),
+  targetServiceId: v.optional(v.string()),
+  serviceNodeId: v.optional(v.string()),
+  envVars: v.optional(v.array(envVarConvexValidator)),
   version: v.optional(v.number()),
   recursionLimit: v.optional(v.number()),
   stepTimeoutMs: v.optional(v.number()),
@@ -1014,15 +1029,7 @@ export const backendNodeDataValidator = v.union(
     sourceEntityName: v.optional(v.string()),
     entityUpdatedAt: v.optional(v.number()),
     entitySyncWarning: v.optional(v.any()),
-    envVars: v.optional(
-      v.array(
-        v.object({
-          id: v.string(),
-          name: v.string(),
-          description: v.optional(v.string()),
-        }),
-      ),
-    ),
+    envVars: v.optional(v.array(envVarConvexValidator)),
   }),
 );
 

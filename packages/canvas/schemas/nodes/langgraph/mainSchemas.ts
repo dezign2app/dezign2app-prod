@@ -88,6 +88,9 @@ export const langgraphDataSchema = baseNodeDataSchema
       .object({
         checkpointer: z.string().default("memory"),
         checkpointerConnectionId: z.string().optional(),
+        checkpointerNodeId: z.string().optional(),
+        checkpointerEnvVar: z.string().optional(),
+        connectionString: z.string().optional(),
         threadScope: z.enum(["session", "user", "global"]).default("session"),
         autoSummarize: z.boolean().default(true),
         maxWindowMessages: z.number().default(10),
@@ -106,6 +109,7 @@ export const langgraphDataSchema = baseNodeDataSchema
           headersJson: z.string().optional(),
           bodyJson: z.string().optional(),
           model: z.string().optional(),
+          apiKey: z.string().optional(),
           apiKeyHeader: z.string().optional(),
           temperature: z.number().optional(),
           maxTokens: z.number().optional(),

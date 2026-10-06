@@ -47,9 +47,9 @@ export function buildGraphFile(
     isRedis ? `import { RedisSaver } from "@langchain/langgraph-checkpoint-redis";` : "",
     hasDbPkg ? `import { pool } from "${ctx.input.dbPackageName}";` : "",
     hasRedisPkg ? `import { REDIS_CONFIG } from "${ctx.input.redisPackageName}";` : "",
-    `import { ${schemaName} } from "./state.js";`,
+    `import { ${schemaName} } from "./state";`,
     nodeExports.length > 0
-      ? `import { ${nodeExports.join(", ")} } from "./nodes/index.js";`
+      ? `import { ${nodeExports.join(", ")} } from "./nodes";`
       : "",
   ].filter(Boolean);
 

@@ -337,10 +337,6 @@ export function compileSharedPackages(
     }
 
     const lgResult = compileLangGraphNode(lgNode, {
-      edges,
-      nodes,
-      endpoints,
-      events,
       testCases,
       outputMode: "package",
       packageName,

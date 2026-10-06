@@ -217,8 +217,8 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
 
   return `import "dotenv/config";
 import express, { type Request, type Response } from "express";
-${hasMemory ? `import crypto from "node:crypto";\n` : ""}import { ${graphVarName} } from "./graph.js";
-import type { ${toPascalCase(ctx.graphId)}StateUpdateType } from "./state.js";
+${hasMemory ? `import crypto from "node:crypto";\n` : ""}import { ${graphVarName} } from "./graph";
+import type { ${toPascalCase(ctx.graphId)}StateUpdateType } from "./state";
 
 /**
  * HTTP Server for ${agentLabel}

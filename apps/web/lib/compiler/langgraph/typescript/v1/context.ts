@@ -284,8 +284,12 @@ export function buildDependencies(ctx: CompileContext): Record<string, string> {
     deps["socket.io"] = "^4.7.5";
   }
 
-  // Add express when routes are connected
-  if (ctx.input.routeEndpoints && ctx.input.routeEndpoints.length > 0) {
+  // Add express when routes are connected (app mode only)
+  if (
+    ctx.input.outputMode !== "package" &&
+    ctx.input.routeEndpoints &&
+    ctx.input.routeEndpoints.length > 0
+  ) {
     deps["express"] = "^4.21.2";
   }
 

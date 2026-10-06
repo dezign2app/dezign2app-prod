@@ -165,6 +165,7 @@ export interface CanvasLangGraphNodeData {
     headersJson?: string;
     bodyJson?: string;
     model?: string;
+    apiKey?: string;
     apiKeyHeader?: string;
     temperature?: number;
     maxTokens?: number;

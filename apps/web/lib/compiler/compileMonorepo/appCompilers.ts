@@ -29,17 +29,20 @@ export interface AllAppsResult {
 }
 
 /**
- * Compiles all three app categories and returns their combined file list.
+ * Compiles all runnable app categories and returns their combined file list.
  *
- * Step 5   — Standalone service nodes (Express / FastAPI / Next.js microservices)
- * Step 5.5 — LangGraph AI agent graphs (injected into the service that uses them)
- * Step 6   — Web-app clients (Next.js full-stack apps with connected WebPage nodes)
+ * Step 5 — Standalone service nodes (Express / FastAPI / Next.js microservices)
+ * Step 6 — Web-app clients (Next.js full-stack apps with connected WebPage nodes)
+ *
+ * Note: LangGraph nodes are compiled as reusable library packages under
+ * packages/langgraph/<label>/ in step 4.13 (compileSharedPackages) and invoked
+ * as pipeline steps within service endpoints.
  *
  * @debugTag app-compilers-step-5-to-6
  */
 export function compileAllApps(params: {
   standaloneServiceNodes: BackendNode[];
-  langGraphNodes: BackendNode[];
+  langGraphNodes?: BackendNode[];
   webAppMap: Map<string, WebAppEntry>;
   servicesInfo: FolderEntry[];
   webClientsInfo: FolderEntry[];
@@ -55,14 +58,13 @@ export function compileAllApps(params: {
   storageFunctions?: ReusableFunction[];
   compiledFrontend: ReturnType<typeof compileFrontendNodes>;
   projectName: string;
-  getUniqueLangGraphFolder: (label: string, defaultName: string) => string;
+  getUniqueLangGraphFolder?: (label: string, defaultName: string) => string;
   getUniqueWebAppFolder: (slug: string, defaultName: string) => string;
 }): AllAppsResult {
   const files: CompiledFile[] = [];
 
   const {
     standaloneServiceNodes,
-    langGraphNodes,
     webAppMap,
     servicesInfo,
     webClientsInfo,

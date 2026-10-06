@@ -175,6 +175,7 @@ export interface LangGraphLLMNodeData extends Record<string, unknown> {
   baseUrl?: string;
   method?: "POST" | "GET" | "PUT" | string;
   headersJson?: string;
+  apiKey?: string;
   apiKeyHeader?: string;
   model?: string;
   systemPrompt?: string;

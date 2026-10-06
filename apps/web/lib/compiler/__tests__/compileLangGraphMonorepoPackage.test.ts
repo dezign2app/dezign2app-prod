@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { compileMonorepo } from "../compileMonorepo";
+import { compileLangGraphNode } from "../compileLangGraphNode";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { Endpoint, CompiledFile } from "@workspace/canvas/types";
 
@@ -99,12 +100,27 @@ describe("compileMonorepo: LangGraph Package Compilation & Service Integration",
       (f: CompiledFile) => f.filename === "packages/langgraph/SupportAgent/src/index.ts",
     );
     expect(lgIndexFile).toBeDefined();
-    expect(lgIndexFile!.content).toContain("export { supportAgentGraph } from \"./graph.js\";");
+    expect(lgIndexFile!.content).toContain("export { supportAgentGraph } from \"./graph\";");
 
     // Must NOT generate a standalone server in apps/ for langgraph
     expect(result.files.some((f: CompiledFile) => f.filename.startsWith("apps/supportagent/"))).toBe(false);
     expect(result.files.some((f: CompiledFile) => f.filename.startsWith("apps/SupportAgent/"))).toBe(false);
     expect(result.files.some((f: CompiledFile) => f.filename.includes("packages/langgraph/SupportAgent/src/server.ts"))).toBe(false);
+
+    // LangGraph package is a pure library — no express dependency and no start/dev scripts
+    expect(parsedLgPkg.dependencies?.["express"]).toBeUndefined();
+    expect(parsedLgPkg.scripts?.["start"]).toBeUndefined();
+    expect(parsedLgPkg.scripts?.["dev"]).toBeUndefined();
+    expect(parsedLgPkg.scripts?.["check-types"]).toBe("tsc --noEmit");
+
+    // Docker Compose must NOT declare a service for SupportAgent
+    const dockerCompose = result.files.find(
+      (f: CompiledFile) => f.filename === "docker-compose.yml",
+    );
+    if (dockerCompose) {
+      expect(dockerCompose.content).not.toContain("supportagent:");
+      expect(dockerCompose.content).not.toContain("SupportAgent");
+    }
 
     // 2. Consuming service package.json MUST depend on @workspace/langgraph-supportagent
     const srvPkgJson = result.files.find(
@@ -262,5 +278,67 @@ describe("compileMonorepo: LangGraph Package Compilation & Service Integration",
     expect(lgGraphFile).toBeDefined();
     expect(lgGraphFile!.content).toContain('import { REDIS_CONFIG } from "@workspace/rediscache";');
     expect(lgGraphFile!.content).toContain("const checkpointer = await RedisSaver.fromUrl(redisUrl);");
+  });
+
+  it("compileLangGraphNode with outputMode: 'package' suppresses routes and express even with connected edges", () => {
+    const langGraphNode: BackendNode = {
+      id: "agent-1",
+      type: "langgraph",
+      fractionalIndex: "a1",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "LibraryAgent",
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages", defaultValue: [] },
+        ],
+      },
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-test",
+      source: "service-1",
+      target: "agent-1",
+      sourceHandle: "endpoint-out-ep-1",
+      targetHandle: "langgraph-in",
+      type: "connection",
+      fractionalIndex: "a0",
+    };
+
+    const result = compileLangGraphNode(langGraphNode, {
+      edges: [edge],
+      nodes: [
+        {
+          id: "service-1",
+          type: "service",
+          fractionalIndex: "a0",
+          position: { x: 0, y: 0 },
+          data: { label: "HostService" },
+        },
+      ],
+      endpoints: [
+        {
+          id: "ep-1",
+          name: "/api/chat",
+          type: "POST",
+          pipelineSteps: [],
+        },
+      ],
+      outputMode: "package",
+      packageName: "@workspace/langgraph-libraryagent",
+    });
+
+    // Must not generate server.ts or express.d.ts
+    expect(result.files.some((f) => f.filename === "src/server.ts")).toBe(false);
+    expect(result.files.some((f) => f.filename === "src/express.d.ts")).toBe(false);
+
+    // Package.json must not have express dependency or start/dev scripts
+    const pkgJson = result.files.find((f) => f.filename === "package.json");
+    expect(pkgJson).toBeDefined();
+    const parsed = JSON.parse(pkgJson!.content);
+    expect(parsed.dependencies?.["express"]).toBeUndefined();
+    expect(parsed.scripts?.["start"]).toBeUndefined();
+    expect(parsed.scripts?.["dev"]).toBeUndefined();
+    expect(parsed.scripts?.["check-types"]).toBe("tsc --noEmit");
+    expect(parsed.name).toBe("@workspace/langgraph-libraryagent");
   });
 });

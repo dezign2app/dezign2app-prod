@@ -18,7 +18,7 @@
 
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { isServiceConnectedToStorage, toBucketKey } from "../storage/utils";
-import { getDefaultNodeEnvVars } from "@workspace/canvas";
+import { getDefaultNodeEnvVars, EndpointLike, PipelineStepDraft } from "@workspace/canvas";
 
 export interface EnvVarEntry {
   name: string;
@@ -49,6 +49,7 @@ const PACKAGE_NODE_TYPES = new Set([
   "auth",
   "payments",
   "external",
+  "langgraph",
 ]);
 
 function isPackageNode(nodeType: string | undefined): boolean {
@@ -253,6 +254,66 @@ function resolveEnvValue(name: string, packageNode?: BackendNode): string {
     }
   }
 
+  if (packageNode?.type === "langgraph") {
+    const customLLMs = packageNode.data?.customLlmNodes || [];
+    for (const llm of customLLMs) {
+      const p = (llm.provider || "openai").toLowerCase();
+      const expectedKey =
+        p === "groq"
+          ? "GROQ_API_KEY"
+          : p === "openai"
+            ? "OPENAI_API_KEY"
+            : p === "anthropic"
+              ? "ANTHROPIC_API_KEY"
+              : p === "google"
+                ? "GEMINI_API_KEY"
+                : "LLM_API_KEY";
+
+      const rawHeader = llm.apiKeyHeader
+        ? String(llm.apiKeyHeader).replace(/^Bearer\s+/i, "").trim()
+        : "";
+
+      if (name === expectedKey || name === rawHeader) {
+        if (
+          rawHeader &&
+          (rawHeader.startsWith("gsk_") ||
+            rawHeader.startsWith("sk-") ||
+            rawHeader.startsWith("AIza") ||
+            rawHeader.length > 25 ||
+            /[^A-Z0-9_]/.test(rawHeader))
+        ) {
+          return rawHeader;
+        }
+        const key = llm.apiKey;
+        if (key) return key;
+      }
+
+      if (
+        (p === "ollama" || p === "custom") &&
+        (name.endsWith("_BASE_URL") || name === "OLLAMA_BASE_URL")
+      ) {
+        const targetUrl = llm.baseUrl || llm.url;
+        if (targetUrl) return targetUrl;
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      try {
+        const prov = name
+          .toLowerCase()
+          .replace(/_api_key$/, "")
+          .replace(/_key$/, "");
+        const savedLgKey = localStorage.getItem(`dezign2app_lg_key_${prov}`);
+        if (savedLgKey) return savedLgKey;
+      } catch {}
+    }
+
+    const mem = packageNode.data?.memoryConfig;
+    if (mem && name === mem.checkpointerEnvVar && mem.connectionString) {
+      return mem.connectionString;
+    }
+  }
+
   return "";
 }
 
@@ -269,6 +330,7 @@ function sectionHeadingForNodeType(nodeType: string): string {
     auth: "Authentication",
     payments: "Payments",
     external: "External API",
+    langgraph: "LangGraph Agent (LLM & Tools)",
   };
   return map[nodeType] ?? nodeType;
 }
@@ -311,6 +373,13 @@ export function inferExampleValue(name: string, nodeType?: string): string {
   // SQS
   if (n === "SQS_QUEUE_URL") return "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue";
 
+  // LLM / AI Providers
+  if (n === "GROQ_API_KEY") return "gsk_your_groq_api_key_here";
+  if (n === "OPENAI_API_KEY") return "sk-proj-your_openai_api_key_here";
+  if (n === "ANTHROPIC_API_KEY") return "sk-ant-your_anthropic_api_key_here";
+  if (n === "GEMINI_API_KEY" || n === "GOOGLE_API_KEY") return "your_gemini_api_key_here";
+  if (n === "OLLAMA_BASE_URL") return "http://localhost:11434";
+
   // Common
   if (n === "PORT") return "8080";
   if (n === "NODE_ENV") return "development";
@@ -341,6 +410,7 @@ export function getDetectedPackageEnvVars(
   allNodes: BackendNode[],
   allEdges: BackendEdge[],
   associatedNodes?: BackendNode[],
+  allEndpoints?: EndpointLike[],
 ): DetectedEnvVar[] {
   const checkNodes = [appNode, ...(associatedNodes || [])];
   const detected: DetectedEnvVar[] = [];
@@ -351,12 +421,18 @@ export function getDetectedPackageEnvVars(
     if (seenPackageNodeIds.has(packageNode.id)) return;
     seenPackageNodeIds.add(packageNode.id);
 
-    let pkgVars: EnvVarEntry[] = packageNode.data.envVars ?? [];
+    let pkgVars: EnvVarEntry[] = packageNode.data.envVars ? [...packageNode.data.envVars] : [];
+    const defaults = getDefaultNodeEnvVars(packageNode.type, packageNode.data);
     if (pkgVars.length === 0) {
-      const defaults = getDefaultNodeEnvVars(packageNode.type, packageNode.data);
       if (defaults && defaults.length > 0) {
         pkgVars = defaults;
       }
+    } else if (packageNode.type === "langgraph" && defaults.length > 0) {
+      defaults.forEach((def) => {
+        if (!pkgVars.some((pv) => pv.name === def.name)) {
+          pkgVars.push(def);
+        }
+      });
     }
 
     const extraVars: EnvVarEntry[] = [];
@@ -474,6 +550,32 @@ export function getDetectedPackageEnvVars(
     }
   }
 
+  // D. Endpoints invoking LangGraph steps
+  const endpointsToCheck: EndpointLike[] = allEndpoints
+    ? allEndpoints.filter((ep: EndpointLike) => ep.nodeId === appNode.id)
+    : [];
+
+  endpointsToCheck.forEach((ep: EndpointLike) => {
+    const steps: PipelineStepDraft[] = ep.pipelineSteps || ep.steps || [];
+    steps.forEach((s: PipelineStepDraft) => {
+      if (s && s.type === "langgraph_invoke" && s.enabled !== false) {
+        const targetNode =
+          allNodes.find(
+            (n) => n.id === s.langGraphTargetNodeId && n.type === "langgraph",
+          ) ||
+          allNodes.find(
+            (n) => n.type === "langgraph" && n.data?.label === s.name,
+          ) ||
+          (allNodes.filter((n) => n.type === "langgraph").length === 1
+            ? allNodes.find((n) => n.type === "langgraph")
+            : undefined);
+        if (targetNode) {
+          collectFromPackageNode(targetNode);
+        }
+      }
+    });
+  });
+
   return detected;
 }
 
@@ -495,13 +597,14 @@ export function collectEnvSections(
   allNodes: BackendNode[],
   allEdges: BackendEdge[],
   associatedNodes?: BackendNode[],
+  allEndpoints?: EndpointLike[],
 ): EnvSection[] {
   const sections: EnvSection[] = [];
   const ownVars: EnvVarEntry[] = appNode.data.envVars ?? [];
   const ownVarNames = new Set(ownVars.map((v) => v.name));
 
   // Detect available package environment variables
-  const detectedVars = getDetectedPackageEnvVars(appNode, allNodes, allEdges, associatedNodes);
+  const detectedVars = getDetectedPackageEnvVars(appNode, allNodes, allEdges, associatedNodes, allEndpoints);
   const detectedMap = new Map<string, DetectedEnvVar>();
   detectedVars.forEach((d) => detectedMap.set(d.name, d));
 
@@ -549,13 +652,67 @@ export function collectEnvSections(
     }
   });
 
-  // Ensure default app vars if applicable
-  if (appNode.type === "webApp" && !ownVarNames.has("NEXT_PUBLIC_LOG_LEVEL")) {
-    appVars.push({
-      name: "NEXT_PUBLIC_LOG_LEVEL",
-      description: "Client logging level",
-      exampleValue: "info",
+  // For connected LangGraph agents, automatically include their detected LLM variables
+  // into the packageSectionsMap if not already in ownVars, so dev runtime has the required keys.
+  if (appNode.type === "service") {
+    detectedVars.forEach((d) => {
+      if (d.sourceNodeType === "langgraph" && !ownVarNames.has(d.name)) {
+        const heading = sectionHeadingForNodeType(d.sourceNodeType);
+        const subheading = d.sourceNodeLabel
+          ? `from package node: "${d.sourceNodeLabel}"`
+          : `from package node`;
+        const key = `${heading}_${d.sourceNodeId}`;
+
+        if (!packageSectionsMap.has(key)) {
+          packageSectionsMap.set(key, {
+            heading,
+            subheading,
+            vars: [],
+          });
+        }
+        const section = packageSectionsMap.get(key)!;
+        if (!section.vars.some((v) => v.name === d.name)) {
+          const pkgNode = allNodes.find((n) => n.id === d.sourceNodeId);
+          section.vars.push({
+            name: d.name,
+            description: d.description,
+            exampleValue:
+              resolveEnvValue(d.name, pkgNode) ||
+              d.exampleValue ||
+              inferExampleValue(d.name, d.sourceNodeType),
+          });
+        }
+      }
     });
+  }
+
+  // Ensure default app vars if the node has canvas-defined vars or connected package sections
+  const hasCanvasSections = ownVars.length > 0 || packageSectionsMap.size > 0;
+  if (hasCanvasSections) {
+    if (appNode.type === "service") {
+      if (!ownVarNames.has("PORT")) {
+        appVars.unshift({
+          name: "PORT",
+          description: `HTTP server port (default: ${appNode.data?.port || 8080})`,
+          exampleValue: String(appNode.data?.port || 8080),
+        });
+      }
+      if (!ownVarNames.has("NODE_ENV")) {
+        appVars.push({
+          name: "NODE_ENV",
+          description: "Environment mode (development, production)",
+          exampleValue: "development",
+        });
+      }
+    }
+
+    if (appNode.type === "webApp" && !ownVarNames.has("NEXT_PUBLIC_LOG_LEVEL")) {
+      appVars.push({
+        name: "NEXT_PUBLIC_LOG_LEVEL",
+        description: "Client logging level",
+        exampleValue: "info",
+      });
+    }
   }
 
   if (appVars.length > 0) {
@@ -642,7 +799,18 @@ export function renderEnvExampleFile(sections: EnvSection[], appLabel?: string):
       if (v.description) {
         lines.push(`# ${v.description}`);
       }
-      lines.push(`${v.name}=${v.exampleValue ? `<${v.exampleValue}>` : "<your_value_here>"}`);
+      let exampleVal = v.exampleValue;
+      if (
+        exampleVal &&
+        (exampleVal.startsWith("gsk_") ||
+          exampleVal.startsWith("sk-") ||
+          exampleVal.startsWith("AIza") ||
+          exampleVal.startsWith("Bearer ") ||
+          exampleVal.length > 25)
+      ) {
+        exampleVal = `your_${v.name.toLowerCase()}_here`;
+      }
+      lines.push(`${v.name}=${exampleVal ? `<${exampleVal}>` : "<your_value_here>"}`);
       seen.add(v.name);
     });
 
@@ -664,9 +832,11 @@ export function generateEnvFilesForNode(
   allNodes: BackendNode[],
   allEdges: BackendEdge[],
   associatedNodes?: BackendNode[],
+  allEndpoints?: EndpointLike[],
 ): { env: string; envExample: string } {
-  const sections = collectEnvSections(appNode, allNodes, allEdges, associatedNodes);
-  const label = appNode.data?.label as string | undefined;
+  const sections = collectEnvSections(appNode, allNodes, allEdges, associatedNodes, allEndpoints);
+  const rawLabel = appNode.data?.label;
+  const label = typeof rawLabel === "string" ? rawLabel : undefined;
 
   const env = renderEnvFile(
     sections,
