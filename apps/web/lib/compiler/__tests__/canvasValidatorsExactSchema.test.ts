@@ -1046,7 +1046,61 @@ describe("Convex canvasValidators exact schema", () => {
     const parsed = entityDataSchema.safeParse(redisSchemaPayload);
     expect(parsed.success).toBe(true);
   });
+
+  it("validates service node with expandedStepStacks from user error payload in Convex & Zod schemas", async () => {
+    const { serviceDataSchema } = await import("@workspace/canvas/schemas");
+    const { backendNodeDataValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    // Exact payload reported in user's Convex upsertBackendNode error:
+    const userPayload = {
+      envVars: [
+        { description: "HTTP server port (default: 8080)", id: "srv-port", name: "PORT" },
+        { description: "Environment mode (development, production)", id: "srv-node-env", name: "NODE_ENV" },
+        { description: "S3 Access Key ID", id: "q9vfqg4p", name: "AWS_ACCESS_KEY_ID" },
+        { description: "S3 Secret Access Key", id: "4dfhx7yu", name: "AWS_SECRET_ACCESS_KEY" },
+        { description: "Custom S3 endpoint URL (MinIO, R2, SeaweedFS)", id: "wi2ol059", name: "S3_ENDPOINT_URL" },
+        { description: "S3 Region (e.g. us-east-1)", id: "ja2v1l66", name: "AWS_REGION" },
+        { description: "Bucket name for test", id: "3l72cd0v", name: "STORAGE_BUCKET_TEST" },
+        { description: "API key for LLM config (openai/gpt-oss-120b)", id: "n8jl7ps5", name: "GROQ_API_KEY" },
+      ],
+      expandedStepStacks: ["9lev4yp"],
+      grpcPort: "50051",
+      inputs: [],
+      label: "profile",
+      logic: [],
+      outputs: [],
+      port: "8080",
+      position: { x: 1940.0, y: 60.0 },
+    };
+
+    const parsed = serviceDataSchema.safeParse(userPayload);
+    expect(parsed.success).toBe(true);
+  });
+
+  it("validates db_ref and langgraph node with stackOrder in Convex & Zod schemas", async () => {
+    const { dbRefDataSchema, langgraphDataSchema } = await import("@workspace/canvas/schemas");
+    const { langgraphConvexDataValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    const dbRefPayload = {
+      label: "users",
+      tableRef: "entity-1",
+      stackOrder: 1,
+    };
+    expect(dbRefDataSchema.safeParse(dbRefPayload).success).toBe(true);
+
+    const lgPayload = {
+      label: "Chatbot Agent",
+      stackOrder: 0,
+    };
+    expect(langgraphDataSchema.safeParse(lgPayload).success).toBe(true);
+    expect(langgraphConvexDataValidator.fields.stackOrder).toBeDefined();
+  });
 });
+
 
 
 

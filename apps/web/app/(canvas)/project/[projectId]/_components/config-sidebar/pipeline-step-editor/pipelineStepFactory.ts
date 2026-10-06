@@ -13,6 +13,7 @@ import {
   ensureDatabaseRefConnection,
   ensurePageRefConnection,
   ensureStorageOperationRefConnection,
+  ensureLangGraphConnection,
 } from "./utils";
 import { upsertDerivedConnection } from "./PushToClientStepSection";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -331,9 +332,20 @@ export function createDefaultStepDraft({
   } else if (type === "langgraph_invoke") {
     const allLangGraphNodes = allNodes.filter((n) => n.type === "langgraph");
     const firstAgent = allLangGraphNodes[0];
-    const agentLabel = firstAgent?.data?.label || "LangGraph Agent";
+    const connectionResult = ensureLangGraphConnection({
+      langGraphNodeId: firstAgent?.id,
+      serviceNodeId,
+      endpointId: endpoint?.id,
+      consumedEventId: consumedEvent?.id,
+    });
+    const effectiveLgId = connectionResult?.langGraphNodeId || firstAgent?.id;
+    const effectiveLgNode =
+      allNodes.find((n) => n.id === effectiveLgId) ||
+      useBackendCanvasStore.getState().nodes.find((n) => n.id === effectiveLgId) ||
+      firstAgent;
+    const agentLabel = effectiveLgNode?.data?.label || "AI Agent";
     const varName = `${toVarName(agentLabel)}Result`;
-    const stateChannels = firstAgent?.data?.stateChannels || [];
+    const stateChannels = effectiveLgNode?.data?.stateChannels || [];
     const defaultStateMapping: Record<string, string> = {};
     if (stateChannels.length > 0) {
       stateChannels.forEach((ch) => {
@@ -347,7 +359,7 @@ export function createDefaultStepDraft({
       defaultStateMapping["messages"] = isConsumer ? "event.message" : "body.message";
     }
 
-    const memoryConfig = firstAgent?.data?.memoryConfig;
+    const memoryConfig = effectiveLgNode?.data?.memoryConfig;
     const hasMemory = Boolean(
       memoryConfig &&
       memoryConfig.enabled !== false &&
@@ -357,7 +369,7 @@ export function createDefaultStepDraft({
     initialFields = {
       name: agentLabel,
       outputVariable: varName,
-      langGraphTargetNodeId: firstAgent?.id,
+      langGraphTargetNodeId: effectiveLgId,
       langGraphStreamingEnabled: false,
       langGraphStreamingProtocol: "sse",
       langGraphOutputMode: "full_state",

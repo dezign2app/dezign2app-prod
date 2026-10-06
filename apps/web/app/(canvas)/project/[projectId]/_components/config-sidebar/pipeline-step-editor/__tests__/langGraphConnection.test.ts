@@ -203,4 +203,25 @@ describe("pipeline-step-editor: LangGraph Node and Edge Synchronization", () => 
     expect(updatedEp?.pipelineSteps).toHaveLength(1);
     expect(updatedEp?.pipelineSteps?.[0]?.type).toBe("return_response");
   });
+
+  it("handles ingress connection from LangGraph node (langgraph-out) to Service node (endpoint-in)", () => {
+    useBackendCanvasStore.getState().onConnect({
+      source: langGraphNodeId,
+      target: serviceNodeId,
+      sourceHandle: "langgraph-out",
+      targetHandle: `endpoint-in-${endpointId}`,
+    });
+
+    const state = useBackendCanvasStore.getState();
+    const updatedEp = state.endpoints.find((e) => e.id === endpointId);
+
+    expect(updatedEp?.pipelineSteps).toHaveLength(2);
+    expect(updatedEp?.pipelineSteps?.[0]?.type).toBe("langgraph_invoke");
+    expect(updatedEp?.pipelineSteps?.[0]?.langGraphTargetNodeId).toBe(langGraphNodeId);
+
+    // LangGraph node is snapped to the left of the service node
+    const lgNode = state.nodes.find((n) => n.id === langGraphNodeId);
+    expect(lgNode?.position.x).toBeLessThan(serviceNode.position.x);
+  });
 });
+

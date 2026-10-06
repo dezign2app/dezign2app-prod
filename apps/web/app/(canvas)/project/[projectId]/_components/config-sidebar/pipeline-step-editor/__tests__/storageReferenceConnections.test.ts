@@ -86,14 +86,13 @@ describe("pipeline-step-editor: Storage Operation Ref Node and Function Edge Syn
     expect(refNode?.data?.bucketId).toBe("avatars");
     expect(refNode?.data?.storageNodeId).toBe(storageNodeId);
 
-    // Verify edge connects from endpoint to func-uploadObject
+    // Verify edge connects from func-uploadObject to endpoint-in
     const edge = state.edges.find(
-      (e) => e.target === refNode?.id && e.type === "connection",
+      (e) => e.source === refNode?.id && e.target === serviceNodeId && e.type === "connection",
     );
     expect(edge).toBeDefined();
-    expect(edge?.source).toBe(serviceNodeId);
-    expect(edge?.sourceHandle).toBe(`endpoint-out-${endpointId}`);
-    expect(edge?.targetHandle).toBe("func-uploadObject");
+    expect(edge?.sourceHandle).toBe("func-out-uploadObject");
+    expect(edge?.targetHandle).toBe(`endpoint-in-${endpointId}`);
 
     // Verify invisible reference edge from bucket to ref header
     const refEdge = state.edges.find(
@@ -130,21 +129,25 @@ describe("pipeline-step-editor: Storage Operation Ref Node and Function Edge Syn
     );
     expect(refNodes.length).toBe(1);
 
-    // Two distinct connection edges targeting different function handles (plus reference edge from bucket)
+    // Two distinct connection edges from functions to service endpoint-in handles (plus reference edge from bucket)
     const connectionEdges = state.edges.filter((e) => e.type === "connection");
     expect(connectionEdges.length).toBe(2);
     expect(
       connectionEdges.some(
         (e) =>
-          e.sourceHandle === `endpoint-out-${endpointId}` &&
-          e.targetHandle === "func-uploadObject",
+          e.source === firstResult?.storageRefNodeId &&
+          e.target === serviceNodeId &&
+          e.sourceHandle === "func-out-uploadObject" &&
+          e.targetHandle === `endpoint-in-${endpointId}`,
       ),
     ).toBe(true);
     expect(
       connectionEdges.some(
         (e) =>
-          e.sourceHandle === `endpoint-out-${secondEndpointId}` &&
-          e.targetHandle === "func-downloadObject",
+          e.source === secondResult?.storageRefNodeId &&
+          e.target === serviceNodeId &&
+          e.sourceHandle === "func-out-downloadObject" &&
+          e.targetHandle === `endpoint-in-${secondEndpointId}`,
       ),
     ).toBe(true);
   });

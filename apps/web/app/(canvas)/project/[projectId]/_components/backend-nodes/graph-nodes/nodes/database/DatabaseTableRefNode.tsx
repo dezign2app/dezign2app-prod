@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from "react";
 import { Handle, Position, NodeProps, useUpdateNodeInternals } from "@xyflow/react";
-import { Database, Server, Table2, Settings, Trash, Code2, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
+import { Database, Server, Table2, Settings, Trash, Code2, ChevronDown, ChevronRight, ChevronUp, AlertTriangle, Layers, Maximize2, Minimize2 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -16,6 +16,7 @@ import { useShallow } from "zustand/react/shallow";
 import {
   useSimulationNodeState,
   getSimulationNodeBorderClass,
+  useServiceStepHandLayout,
 } from "../../common";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 import { DbOperationFunction } from "@workspace/canvas/types";
@@ -110,16 +111,36 @@ export const DatabaseTableRefNode = ({
     }
   }, [isOperationsCollapsed, id, updateNodeInternals, operations.length]);
 
+  const {
+    cardIndex,
+    totalCards,
+    hasMultipleCards,
+    isStacked,
+    toggleStack,
+    moveCard,
+    bringCardToFront,
+  } = useServiceStepHandLayout(id, nodes, edges, updateNode);
+  const [isHovered, setIsHovered] = useState(false);
+
   const hasAnyConnectedOperation = useMemo(() => {
     return edges.some(
       (e) =>
-        e.target === id &&
-        operations.some(
-          (op) =>
-            e.targetHandle === `func-${op.name}` ||
-            e.targetHandle === `func-${op.id}` ||
-            (!e.targetHandle && op === operations[0]),
-        ),
+        (e.target === id &&
+          operations.some(
+            (op) =>
+              e.targetHandle === `func-${op.name}` ||
+              e.targetHandle === `func-${op.id}` ||
+              (!e.targetHandle && op === operations[0]),
+          )) ||
+        (e.source === id &&
+          operations.some(
+            (op) =>
+              e.sourceHandle === `func-${op.name}` ||
+              e.sourceHandle === `func-out-${op.name}` ||
+              e.sourceHandle === `func-${op.id}` ||
+              e.sourceHandle === `func-out-${op.id}` ||
+              (!e.sourceHandle && op === operations[0]),
+          )),
     );
   }, [edges, id, operations]);
 
@@ -145,8 +166,27 @@ export const DatabaseTableRefNode = ({
 
   return (
     <div
+      onClick={(e) => {
+        if (isStacked) {
+          e.stopPropagation();
+          bringCardToFront();
+        }
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        zIndex: isStacked
+          ? selected
+            ? 1000
+            : 10 + cardIndex
+          : selected
+            ? 1000
+            : undefined,
+      }}
       className={cn(
-        "shadow-md rounded-xl bg-card border-2 min-w-[280px] max-w-[340px] flex flex-col transition-all duration-300 select-none cursor-pointer",
+        "shadow-md rounded-xl bg-card border-2 min-w-[280px] max-w-[340px] flex flex-col transition-all duration-200 select-none cursor-pointer relative",
+        isStacked && "shadow-lg backdrop-blur-sm",
+        isStacked && (selected || isHovered) && "ring-2 ring-orange-500/50 shadow-2xl scale-[1.01] border-orange-500",
         selected
           ? "border-orange-500 shadow-orange-500/15 ring-1 ring-orange-500/20"
           : "border-border/80 hover:border-orange-500/50 hover:shadow-lg",
@@ -156,6 +196,7 @@ export const DatabaseTableRefNode = ({
       )}
       onDoubleClick={handleOpenConfig}
     >
+
       {/* Top Header: matches NodeHeader structure and padding with orange accents */}
       <div className="px-3 py-2 border-b flex items-center justify-between gap-2 rounded-t-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20 group">
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -190,6 +231,58 @@ export const DatabaseTableRefNode = ({
           onPointerDown={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
         >
+          {hasMultipleCards && (
+            <div className="flex items-center gap-1 shrink-0 mr-0.5">
+              {isStacked ? (
+                <div className="flex items-center rounded text-[8px] font-mono font-bold bg-orange-500/15 text-orange-400 border border-orange-500/30 overflow-hidden shrink-0">
+                  {cardIndex > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        moveCard("up");
+                      }}
+                      className="px-1 py-0.5 hover:bg-orange-500/30 text-orange-400 hover:text-orange-200 transition-colors cursor-pointer"
+                      title="Move step up in stack"
+                    >
+                      <ChevronUp size={9} />
+                    </button>
+                  )}
+                  <span
+                    className="px-1.5 py-0.5 flex items-center gap-0.5"
+                    title={`Step ${cardIndex + 1} of ${totalCards} (stacked)`}
+                  >
+                    <Layers size={8} />
+                    <span>{cardIndex + 1}/{totalCards}</span>
+                  </span>
+                  {cardIndex < totalCards - 1 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        moveCard("down");
+                      }}
+                      className="px-1 py-0.5 hover:bg-orange-500/30 text-orange-400 hover:text-orange-200 transition-colors cursor-pointer"
+                      title="Move step down in stack"
+                    >
+                      <ChevronDown size={9} />
+                    </button>
+                  )}
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleStack();
+                }}
+                className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+                title={isStacked ? "Fan out steps" : "Stack steps into deck"}
+              >
+                {isStacked ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
+              </button>
+            </div>
+          )}
           <button
             type="button"
             className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all cursor-pointer nodrag"
@@ -212,6 +305,20 @@ export const DatabaseTableRefNode = ({
           </button>
         </div>
       </div>
+
+      {/* Source Handle on Right to connect cleanly into ServiceNode on the left */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="database-source"
+        className={cn(
+          "w-2.5 h-2.5 border-2 transition-colors -right-[5px]",
+          hasAnyConnectedOperation
+            ? "!bg-orange-500 !border-orange-500 ring-2 ring-orange-500/30"
+            : "!bg-background border-muted-foreground/60 hover:!bg-orange-400",
+        )}
+        style={{ top: "18px" }}
+      />
 
       {hasPipelineError && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[11px] text-destructive leading-tight">
@@ -400,10 +507,16 @@ export const DatabaseTableRefNode = ({
             {operations.map((op) => {
               const isConnected = edges.some(
                 (e) =>
-                  e.target === id &&
-                  (e.targetHandle === `func-${op.name}` ||
-                    e.targetHandle === `func-${op.id}` ||
-                    (!e.targetHandle && op === operations[0])),
+                  (e.target === id &&
+                    (e.targetHandle === `func-${op.name}` ||
+                      e.targetHandle === `func-${op.id}` ||
+                      (!e.targetHandle && op === operations[0]))) ||
+                  (e.source === id &&
+                    (e.sourceHandle === `func-${op.name}` ||
+                      e.sourceHandle === `func-out-${op.name}` ||
+                      e.sourceHandle === `func-${op.id}` ||
+                      e.sourceHandle === `func-out-${op.id}` ||
+                      (!e.sourceHandle && op === operations[0]))),
               );
 
               const badgeColor =
@@ -459,6 +572,29 @@ export const DatabaseTableRefNode = ({
                       position={Position.Left}
                       id={`func-${op.id}`}
                       className="opacity-0 pointer-events-none -left-[5px]"
+                      style={{ top: "50%", transform: "translateY(-50%)" }}
+                    />
+                  )}
+
+                  {/* Source Handle on Right border to connect into ServiceNode on the left */}
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={`func-out-${op.name}`}
+                    className={cn(
+                      "w-2.5 h-2.5 border-2 transition-colors -right-[5px]",
+                      isConnected
+                        ? "!bg-orange-500 !border-orange-500 ring-2 ring-orange-500/30"
+                        : "!bg-background border-muted-foreground/60 hover:!bg-orange-400",
+                    )}
+                    style={{ top: "50%", transform: "translateY(-50%)" }}
+                  />
+                  {op.id && op.id !== op.name && (
+                    <Handle
+                      type="source"
+                      position={Position.Right}
+                      id={`func-out-${op.id}`}
+                      className="opacity-0 pointer-events-none -right-[5px]"
                       style={{ top: "50%", transform: "translateY(-50%)" }}
                     />
                   )}

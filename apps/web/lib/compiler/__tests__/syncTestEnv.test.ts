@@ -14,7 +14,7 @@ import { generatePageCode } from "../webClients/nextjs/v16/pageGenerators";
 import { generateEndpointRouteHandler } from "../generators/routeGenerator";
 import { generateServiceRouteTypes } from "../generators/typesGenerator/serviceRoutesGenerator";
 import { generateConfigFiles } from "../generators/configGenerator";
-import { BackendNode, Endpoint } from "@workspace/canvas/types";
+import { BackendNode, BackendEdge, Endpoint } from "@workspace/canvas/types";
 import { compilePostgresDatabase } from "../databases/postgres";
 import { LANGGRAPH_POSTGRES_TABLE_DEFINITIONS } from "../../../app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/utils/checkpointerTables";
 import { generateEventComponent } from "../webClients/nextjs/v16/eventGenerators";
@@ -233,8 +233,8 @@ describe("syncTestEnv via Compiler", () => {
     };
 
     const profileEdges: BackendEdge[] = [
-      { id: "e-srv-storage", source: dummyServiceNode.id, target: dummyStorageNode.id },
-      { id: "e-srv-chat", source: dummyServiceNode.id, target: chatLgNode.id },
+      { id: "e-srv-storage", source: dummyServiceNode.id, target: dummyStorageNode.id, type: "connection", fractionalIndex: "a0" },
+      { id: "e-srv-chat", source: dummyServiceNode.id, target: chatLgNode.id, type: "connection", fractionalIndex: "a1" },
     ];
 
     const profileConfigs = generateConfigFiles(

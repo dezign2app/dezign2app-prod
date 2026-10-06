@@ -13,6 +13,11 @@ import {
   Zap,
   Globe,
   AlertTriangle,
+  ChevronUp,
+  ChevronDown,
+  Layers,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import type {
   BackendNode,
@@ -23,7 +28,7 @@ import type {
 import { cn } from "@workspace/ui/lib/utils";
 import { Button } from "@workspace/ui/components/button";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { NodeHeader } from "../common";
+import { NodeHeader, useServiceStepHandLayout } from "../common";
 import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
 import { NodeEnvVarsSection } from "../nodes/ai-security/ExternalEnvVarsDrawer";
 
@@ -184,6 +189,19 @@ export const LangGraphNode = ({
   };
 
   const allCanvasNodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
+
+  const {
+    cardIndex,
+    totalCards,
+    hasMultipleCards,
+    isStacked,
+    toggleStack,
+    moveCard,
+    bringCardToFront,
+  } = useServiceStepHandLayout(id, allCanvasNodes, edges, updateNode);
+  const [isHovered, setIsHovered] = useState(false);
+
   const checkpointerMissingError = React.useMemo(() => {
     if (!memoryConfig || memoryConfig.enabled === false || memoryConfig.checkpointer === "memory") return null;
     const isPg = memoryConfig.checkpointer === "postgres";
@@ -202,8 +220,27 @@ export const LangGraphNode = ({
 
   return (
     <div
+      onClick={(e) => {
+        if (isStacked) {
+          e.stopPropagation();
+          bringCardToFront();
+        }
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        zIndex: isStacked
+          ? selected
+            ? 1000
+            : 10 + cardIndex
+          : selected
+            ? 1000
+            : undefined,
+      }}
       className={cn(
         "rounded-2xl bg-card/95 backdrop-blur-xl border-2 w-[280px] min-w-[280px] max-w-[340px] flex flex-col transition-all duration-300 relative shadow-2xl group",
+        isStacked && "shadow-lg backdrop-blur-sm",
+        isStacked && (selected || isHovered) && "ring-2 ring-primary/50 shadow-2xl scale-[1.01] border-primary",
         selected
           ? "border-primary ring-4 ring-primary/20 shadow-primary/10"
           : "border-border hover:border-border/80",
@@ -235,15 +272,69 @@ export const LangGraphNode = ({
           ) : undefined
         }
         rightElement={
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-secondary nodrag"
-            onClick={handleOpenEditor}
-            title="Open LangGraph Studio"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </Button>
+          <div className="flex items-center gap-1 shrink-0 nodrag">
+            {hasMultipleCards && (
+              <div className="flex items-center gap-1 shrink-0 mr-0.5">
+                {isStacked ? (
+                  <div className="flex items-center rounded text-[8px] font-mono font-bold bg-primary/15 text-primary border border-primary/30 overflow-hidden shrink-0">
+                    {cardIndex > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          moveCard("up");
+                        }}
+                        className="px-1 py-0.5 hover:bg-primary/30 text-primary hover:text-primary/80 transition-colors cursor-pointer"
+                        title="Move step up in stack"
+                      >
+                        <ChevronUp size={9} />
+                      </button>
+                    )}
+                    <span
+                      className="px-1.5 py-0.5 flex items-center gap-0.5"
+                      title={`Step ${cardIndex + 1} of ${totalCards} (stacked)`}
+                    >
+                      <Layers size={8} />
+                      <span>{cardIndex + 1}/{totalCards}</span>
+                    </span>
+                    {cardIndex < totalCards - 1 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          moveCard("down");
+                        }}
+                        className="px-1 py-0.5 hover:bg-primary/30 text-primary hover:text-primary/80 transition-colors cursor-pointer"
+                        title="Move step down in stack"
+                      >
+                        <ChevronDown size={9} />
+                      </button>
+                    )}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleStack();
+                  }}
+                  className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+                  title={isStacked ? "Fan out steps" : "Stack steps into deck"}
+                >
+                  {isStacked ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
+                </button>
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-secondary nodrag"
+              onClick={handleOpenEditor}
+              title="Open LangGraph Studio"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </Button>
+          </div>
         }
       />
 
@@ -277,7 +368,17 @@ export const LangGraphNode = ({
         position={Position.Left}
         id="input-start"
         className="!bg-primary !w-3 !h-3 !border-2 !border-background hover:!scale-125 transition-transform !-left-[7px]"
-        title="Drag from an endpoint or event handle to invoke this agent"
+        title="Incoming edge into agent"
+      />
+
+      {/* Outbound source handle on right feeding into ServiceNode endpoint-in */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="langgraph-out"
+        className="!bg-primary !w-3 !h-3 !border-2 !border-background hover:!scale-125 transition-transform !-right-[7px]"
+        style={{ top: "35px" }}
+        title="Drag to server endpoint to invoke this agent"
       />
 
       {/* Emitted Output Channels Section */}

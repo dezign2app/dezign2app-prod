@@ -13,6 +13,8 @@ import {
   ensurePageRefConnection,
   cleanupStorageOperationRefConnection,
   ensureStorageOperationRefConnection,
+  cleanupLangGraphConnection,
+  ensureLangGraphConnection,
 } from "./utils";
 import { removeDerivedConnection } from "./PushToClientStepSection";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -186,6 +188,41 @@ export function handleStepUpdateCanvasEffects({
       });
     }
   }
+
+  if (prevStep.type === "langgraph_invoke" && updatedStep.type !== "langgraph_invoke") {
+    cleanupLangGraphConnection({
+      langGraphNodeId: prevStep.langGraphTargetNodeId,
+      serviceNodeId,
+      endpointId,
+      consumedEventId,
+      remainingSteps,
+    });
+  } else if (
+    (prevStep.type === "langgraph_invoke" && updatedStep.type === "langgraph_invoke") ||
+    (prevStep.type !== "langgraph_invoke" && updatedStep.type === "langgraph_invoke")
+  ) {
+    if (
+      prevStep.type === "langgraph_invoke" &&
+      prevStep.langGraphTargetNodeId !== updatedStep.langGraphTargetNodeId
+    ) {
+      cleanupLangGraphConnection({
+        langGraphNodeId: prevStep.langGraphTargetNodeId,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+        remainingSteps,
+      });
+    }
+
+    if (updatedStep.type === "langgraph_invoke") {
+      ensureLangGraphConnection({
+        langGraphNodeId: updatedStep.langGraphTargetNodeId,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+      });
+    }
+  }
 }
 
 export interface HandleStepDeleteCanvasEffectsParams {
@@ -210,6 +247,16 @@ export function handleStepDeleteCanvasEffects({
   isNested,
 }: HandleStepDeleteCanvasEffectsParams): void {
   if (isNested) return;
+
+  if (stepToDelete.type === "langgraph_invoke") {
+    cleanupLangGraphConnection({
+      langGraphNodeId: stepToDelete.langGraphTargetNodeId,
+      serviceNodeId,
+      endpointId: endpoint?.id,
+      consumedEventId,
+      remainingSteps,
+    });
+  }
 
   if (stepToDelete.type === "push_to_client") {
     cleanupPageRefConnection({

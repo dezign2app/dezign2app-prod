@@ -90,10 +90,10 @@ describe("pipeline-step-editor: Database Ref Node and Function Edge Synchronizat
 
     const createdEdge = state.edges.find(
       (e) =>
-        e.source === serviceNodeId &&
-        e.target === result?.dbRefNodeId &&
-        e.sourceHandle === `endpoint-out-${endpointId}` &&
-        e.targetHandle === "func-findAllUsers",
+        e.source === result?.dbRefNodeId &&
+        e.target === serviceNodeId &&
+        e.sourceHandle === "func-out-findAllUsers" &&
+        e.targetHandle === `endpoint-in-${endpointId}`,
     );
     expect(createdEdge).toBeDefined();
     expect(createdEdge?.type).toBe("connection");
@@ -130,20 +130,20 @@ describe("pipeline-step-editor: Database Ref Node and Function Edge Synchronizat
     );
     expect(dbRefNodes.length).toBe(1);
 
-    // Both edges connect to the same db_ref node at their respective function handles
+    // Both edges connect from the same db_ref node at their respective function handles to service endpoint-in handles
     const edge1 = state.edges.find(
       (e) =>
-        e.source === serviceNodeId &&
-        e.target === result1?.dbRefNodeId &&
-        e.sourceHandle === `endpoint-out-${endpointId}` &&
-        e.targetHandle === "func-findAllUsers",
+        e.source === result1?.dbRefNodeId &&
+        e.target === serviceNodeId &&
+        e.sourceHandle === "func-out-findAllUsers" &&
+        e.targetHandle === `endpoint-in-${endpointId}`,
     );
     const edge2 = state.edges.find(
       (e) =>
-        e.source === serviceNodeId &&
-        e.target === result2?.dbRefNodeId &&
-        e.sourceHandle === `endpoint-out-${secondEndpointId}` &&
-        e.targetHandle === "func-createUser",
+        e.source === result2?.dbRefNodeId &&
+        e.target === serviceNodeId &&
+        e.sourceHandle === "func-out-createUser" &&
+        e.targetHandle === `endpoint-in-${secondEndpointId}`,
     );
 
     expect(edge1).toBeDefined();
@@ -191,7 +191,7 @@ describe("pipeline-step-editor: Database Ref Node and Function Edge Synchronizat
     expect(createdNode?.data?.label).toBe("Table Ref");
 
     const edge = state.edges.find(
-      (e) => e.source === serviceNodeId && e.target === result?.dbRefNodeId,
+      (e) => e.source === result?.dbRefNodeId && e.target === serviceNodeId,
     );
     expect(edge).toBeDefined();
   });
@@ -220,9 +220,9 @@ describe("pipeline-step-editor: Database Ref Node and Function Edge Synchronizat
     state = useBackendCanvasStore.getState();
     const remainingEdges = state.edges.filter(
       (e) =>
-        e.source === serviceNodeId &&
-        e.target === result?.dbRefNodeId &&
-        e.targetHandle === "func-findAllUsers",
+        e.source === result?.dbRefNodeId &&
+        e.target === serviceNodeId &&
+        e.sourceHandle === "func-out-findAllUsers",
     );
     expect(remainingEdges.length).toBe(0);
 
@@ -263,9 +263,9 @@ describe("pipeline-step-editor: Database Ref Node and Function Edge Synchronizat
     const state = useBackendCanvasStore.getState();
     const remainingEdges = state.edges.filter(
       (e) =>
-        e.source === serviceNodeId &&
-        e.target === result?.dbRefNodeId &&
-        e.targetHandle === "func-findAllUsers",
+        e.source === result?.dbRefNodeId &&
+        e.target === serviceNodeId &&
+        e.sourceHandle === "func-out-findAllUsers",
     );
     expect(remainingEdges.length).toBe(1);
   });
@@ -344,16 +344,16 @@ describe("pipeline-step-editor: Database Ref Node and Function Edge Synchronizat
 
     // Edge to users db_ref was deleted
     const userEdges = state.edges.filter(
-      (e) => e.target === userResult?.dbRefNodeId,
+      (e) => e.source === userResult?.dbRefNodeId,
     );
     expect(userEdges.length).toBe(0);
 
     // Edge to orders db_ref is STILL INTACT!
     const orderEdges = state.edges.filter(
       (e) =>
-        e.source === serviceNodeId &&
-        e.target === orderResult?.dbRefNodeId &&
-        e.targetHandle === "func-findAllOrders",
+        e.source === orderResult?.dbRefNodeId &&
+        e.target === serviceNodeId &&
+        e.sourceHandle === "func-out-findAllOrders",
     );
     expect(orderEdges.length).toBe(1);
 

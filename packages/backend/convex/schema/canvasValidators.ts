@@ -850,6 +850,7 @@ export const langgraphConvexDataValidator = v.object({
   ),
   endNodePosition: v.optional(v.object({ x: v.number(), y: v.number() })),
   endNodes: v.optional(v.array(v.any())),
+  stackOrder: v.optional(v.number()),
 });
 
 // State Store Node Data Validator
@@ -1031,6 +1032,7 @@ export const backendNodeDataValidator = v.union(
     entityUpdatedAt: v.optional(v.number()),
     entitySyncWarning: v.optional(v.any()),
     envVars: v.optional(v.array(envVarConvexValidator)),
+    expandedStepStacks: v.optional(v.array(v.string())),
   }),
 );
 

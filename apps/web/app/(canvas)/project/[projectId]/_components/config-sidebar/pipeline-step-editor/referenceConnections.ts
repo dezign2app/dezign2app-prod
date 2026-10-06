@@ -68,7 +68,7 @@ export function ensureRedisCacheConnection({
     const existingCacheNodes = allNodes.filter((n) => n.type === "redis-cache");
     const yOffset = existingCacheNodes.length * 90;
     const newPos = {
-      x: basePos.x + 380,
+      x: basePos.x - 340,
       y: basePos.y + yOffset,
     };
 
@@ -94,37 +94,39 @@ export function ensureRedisCacheConnection({
 
   if (!cacheNode) return undefined;
 
-  // 3. Draw edge from ServiceNode endpoint/event to RedisCacheNode database-target handle
-  const sourceHandle = endpointId
-    ? `endpoint-out-${endpointId}`
+  // 3. Draw edge from RedisCacheNode database-source handle to ServiceNode endpoint-in handle (or consumedEvents-in)
+  const serviceTargetHandle = endpointId
+    ? `endpoint-in-${endpointId}`
     : consumedEventId
     ? `consumedEvents-in-${consumedEventId}`
-    : `endpoint-out-${serviceNodeId}`;
+    : `endpoint-in-${serviceNodeId}`;
 
   const currentEdges = useBackendCanvasStore.getState().edges;
   const existingEdge = currentEdges.find((e) => {
-    const forwardMatch =
-      e.source === serviceNodeId &&
-      e.target === cacheNode!.id &&
-      (e.sourceHandle === sourceHandle || !e.sourceHandle || (endpointId && e.sourceHandle.includes(endpointId))) &&
-      (e.targetHandle === "database-target" || !e.targetHandle);
-
-    const reverseMatch =
+    // Ingress edge (step hanging on left feeding into server): cacheNode -> serviceNode
+    const ingressMatch =
       e.source === cacheNode!.id &&
       e.target === serviceNodeId &&
-      (e.targetHandle === sourceHandle || !e.targetHandle || (endpointId && e.targetHandle.includes(endpointId))) &&
-      (e.sourceHandle === "database-target" || !e.sourceHandle);
+      (e.targetHandle === serviceTargetHandle ||
+        !e.targetHandle ||
+        (endpointId && e.targetHandle.includes(endpointId)));
 
-    return forwardMatch || reverseMatch;
+    // Backward compatibility with legacy egress edge: serviceNode -> cacheNode
+    const legacyEgressMatch =
+      e.source === serviceNodeId &&
+      e.target === cacheNode!.id &&
+      (!e.sourceHandle || (endpointId && e.sourceHandle.includes(endpointId)));
+
+    return ingressMatch || legacyEgressMatch;
   });
 
   if (!existingEdge) {
     store.addEdge({
-      id: `edge-rediscache-${serviceNodeId}-${endpointId || consumedEventId || "ep"}-${cacheNode.id}-${Date.now()}`,
-      source: serviceNodeId,
-      target: cacheNode.id,
-      sourceHandle,
-      targetHandle: "database-target",
+      id: `edge-rediscache-${cacheNode.id}-${serviceNodeId}-${endpointId || consumedEventId || "ep"}-${Date.now()}`,
+      source: cacheNode.id,
+      target: serviceNodeId,
+      sourceHandle: "database-source",
+      targetHandle: serviceTargetHandle,
       type: "connection",
     });
   }
@@ -203,9 +205,17 @@ export function cleanupRedisCacheConnection({
     : undefined;
 
   const edgesToDelete = store.edges.filter((e) => {
-    if (e.source !== serviceNodeId) return false;
-    if (!matchingCacheNodeIds.has(e.target)) return false;
-    if (sourceHandle && e.sourceHandle && e.sourceHandle !== sourceHandle) return false;
+    const isServiceSource = e.source === serviceNodeId && matchingCacheNodeIds.has(e.target);
+    const isCacheSource = e.target === serviceNodeId && matchingCacheNodeIds.has(e.source);
+    if (!isServiceSource && !isCacheSource) return false;
+    if (endpointId) {
+      const handle = isServiceSource ? e.sourceHandle : e.targetHandle;
+      if (handle && !handle.includes(endpointId)) return false;
+    }
+    if (consumedEventId) {
+      const handle = isServiceSource ? e.sourceHandle : e.targetHandle;
+      if (handle && !handle.includes(consumedEventId)) return false;
+    }
     return true;
   });
 
@@ -296,7 +306,9 @@ export function ensureDatabaseRefConnection({
 
     // Check if this db_ref belongs to this server
     const isConnectedToThisService = edges.some(
-      (e) => e.source === serviceNodeId && e.target === n.id,
+      (e) =>
+        (e.source === serviceNodeId && e.target === n.id) ||
+        (e.target === serviceNodeId && e.source === n.id),
     );
     const isTaggedForService = n.data?.targetServiceId === serviceNodeId;
     return isConnectedToThisService || isTaggedForService;
@@ -310,7 +322,11 @@ export function ensureDatabaseRefConnection({
       if (!matchesTable) return false;
       const isClaimedByOther =
         Boolean(n.data?.targetServiceId && n.data?.targetServiceId !== serviceNodeId) ||
-        edges.some((e) => e.target === n.id && e.source !== serviceNodeId);
+        edges.some(
+          (e) =>
+            (e.target === n.id && e.source !== serviceNodeId) ||
+            (e.source === n.id && e.target !== serviceNodeId),
+        );
       return !isClaimedByOther;
     });
   }
@@ -338,7 +354,7 @@ export function ensureDatabaseRefConnection({
     );
     const yOffset = existingRefNodes.length * 110;
     const newPos = {
-      x: basePos.x + 380,
+      x: basePos.x - 340,
       y: basePos.y + yOffset,
     };
 
@@ -375,39 +391,47 @@ export function ensureDatabaseRefConnection({
     }
   }
 
-  const targetHandle = resolvedFnName ? `func-${resolvedFnName}` : "database-target";
+  // Outbound handle on DatabaseTableRefNode (func-out-${resolvedFnName} or database-source)
+  const dbSourceHandle = resolvedFnName ? `func-out-${resolvedFnName}` : "database-source";
 
-  // 4. Draw edge from ServiceNode endpoint/event to DatabaseTableRefNode function handle
-  const sourceHandle = endpointId
-    ? `endpoint-out-${endpointId}`
+  // Inbound handle on ServiceNode (endpoint-in-${endpointId})
+  const serviceTargetHandle = endpointId
+    ? `endpoint-in-${endpointId}`
     : consumedEventId
     ? `consumedEvents-in-${consumedEventId}`
-    : `endpoint-out-${serviceNodeId}`;
+    : `endpoint-in-${serviceNodeId}`;
 
+  // 4. Draw edge from DatabaseTableRefNode function handle (source) to ServiceNode endpoint-in handle (target)
   const currentEdges = useBackendCanvasStore.getState().edges;
   const existingEdge = currentEdges.find((e) => {
-    const forwardMatch =
-      e.source === serviceNodeId &&
-      e.target === dbRefNode!.id &&
-      (e.sourceHandle === sourceHandle || !e.sourceHandle || (endpointId && e.sourceHandle.includes(endpointId))) &&
-      (e.targetHandle === targetHandle || !e.targetHandle || (resolvedFnName && e.targetHandle.includes(resolvedFnName)));
-
-    const reverseMatch =
+    // Ingress edge (step hanging on left feeding into server): dbRefNode -> serviceNode
+    const ingressMatch =
       e.source === dbRefNode!.id &&
       e.target === serviceNodeId &&
-      (e.targetHandle === sourceHandle || !e.targetHandle || (endpointId && e.targetHandle.includes(endpointId))) &&
-      (e.sourceHandle === targetHandle || !e.sourceHandle || (resolvedFnName && e.sourceHandle.includes(resolvedFnName)));
+      (e.targetHandle === serviceTargetHandle ||
+        !e.targetHandle ||
+        (endpointId && e.targetHandle.includes(endpointId))) &&
+      (e.sourceHandle === dbSourceHandle ||
+        !e.sourceHandle ||
+        (resolvedFnName && e.sourceHandle.includes(resolvedFnName)));
 
-    return forwardMatch || reverseMatch;
+    // Backward compatibility with legacy egress edge: serviceNode -> dbRefNode
+    const legacyEgressMatch =
+      e.source === serviceNodeId &&
+      e.target === dbRefNode!.id &&
+      (!e.sourceHandle || (endpointId && e.sourceHandle.includes(endpointId))) &&
+      (!e.targetHandle || (resolvedFnName && e.targetHandle.includes(resolvedFnName)));
+
+    return ingressMatch || legacyEgressMatch;
   });
 
   if (!existingEdge) {
     store.addEdge({
-      id: `edge-dbref-${serviceNodeId}-${endpointId || consumedEventId || "ep"}-${dbRefNode.id}-${resolvedFnName || "fn"}-${Date.now()}`,
-      source: serviceNodeId,
-      target: dbRefNode.id,
-      sourceHandle,
-      targetHandle,
+      id: `edge-dbref-${dbRefNode.id}-${serviceNodeId}-${endpointId || consumedEventId || "ep"}-${resolvedFnName || "fn"}-${Date.now()}`,
+      source: dbRefNode.id,
+      target: serviceNodeId,
+      sourceHandle: dbSourceHandle,
+      targetHandle: serviceTargetHandle,
       type: "connection",
     });
   }
@@ -496,7 +520,11 @@ export function cleanupDatabaseRefConnection({
     // Check if this db_ref belongs to this service
     return (
       n.data?.targetServiceId === serviceNodeId ||
-      store.edges.some((e) => e.source === serviceNodeId && e.target === n.id)
+      store.edges.some(
+        (e) =>
+          (e.source === serviceNodeId && e.target === n.id) ||
+          (e.target === serviceNodeId && e.source === n.id),
+      )
     );
   });
 
@@ -505,22 +533,18 @@ export function cleanupDatabaseRefConnection({
   if (tableNodeId) matchingDbRefNodeIds.add(tableNodeId);
   if (resolvedEntityId) matchingDbRefNodeIds.add(resolvedEntityId);
 
-  const sourceHandle = endpointId
-    ? `endpoint-out-${endpointId}`
-    : consumedEventId
-    ? `consumedEvents-in-${consumedEventId}`
-    : undefined;
-
-  const targetHandle = functionName ? `func-${functionName}` : undefined;
-
   // 1. If the specific function is not used anymore, delete the edge targeting that function handle
   if (!isFunctionStillUsed) {
     const edgesToDelete = store.edges.filter((e) => {
-      if (e.source !== serviceNodeId) return false;
-      if (!matchingDbRefNodeIds.has(e.target)) return false;
-      if (sourceHandle && e.sourceHandle && e.sourceHandle !== sourceHandle) return false;
-      if (targetHandle) {
-        return e.targetHandle === targetHandle;
+      const isServiceSource = e.source === serviceNodeId && matchingDbRefNodeIds.has(e.target);
+      const isDbSource = e.target === serviceNodeId && matchingDbRefNodeIds.has(e.source);
+      if (!isServiceSource && !isDbSource) return false;
+      const serviceH = isServiceSource ? e.sourceHandle : e.targetHandle;
+      if (endpointId && serviceH && !serviceH.includes(endpointId)) return false;
+      if (consumedEventId && serviceH && !serviceH.includes(consumedEventId)) return false;
+      if (functionName) {
+        const dbH = isServiceSource ? e.targetHandle : e.sourceHandle;
+        return Boolean(dbH && dbH.includes(functionName));
       }
       return !isTableStillUsedAtAll;
     });
@@ -532,9 +556,11 @@ export function cleanupDatabaseRefConnection({
   // removing ONLY this specific table's db_ref node ID (other db_ref nodes remain untouched)
   if (!isTableStillUsedAtAll && endpointId) {
     const remainingTableEdges = store.edges.filter((e) => {
-      if (e.source !== serviceNodeId) return false;
-      if (!matchingDbRefNodeIds.has(e.target)) return false;
-      if (sourceHandle && e.sourceHandle && e.sourceHandle !== sourceHandle) return false;
+      const isServiceSource = e.source === serviceNodeId && matchingDbRefNodeIds.has(e.target);
+      const isDbSource = e.target === serviceNodeId && matchingDbRefNodeIds.has(e.source);
+      if (!isServiceSource && !isDbSource) return false;
+      const serviceH = isServiceSource ? e.sourceHandle : e.targetHandle;
+      if (serviceH && !serviceH.includes(endpointId)) return false;
       return true;
     });
     remainingTableEdges.forEach((e) => store.deleteEdge(e.id));
@@ -834,7 +860,9 @@ export function ensureStorageOperationRefConnection({
     if (!matchesStorage || !matchesBucket) return false;
 
     const isConnectedToThisService = edges.some(
-      (e) => e.source === serviceNodeId && e.target === n.id,
+      (e) =>
+        (e.source === serviceNodeId && e.target === n.id) ||
+        (e.target === serviceNodeId && e.source === n.id),
     );
     const isTaggedForService = n.data?.targetServiceId === serviceNodeId;
     return isConnectedToThisService || isTaggedForService;
@@ -856,7 +884,11 @@ export function ensureStorageOperationRefConnection({
       if (!matchesBucket) return false;
       const isClaimedByOther =
         Boolean(n.data?.targetServiceId && n.data?.targetServiceId !== serviceNodeId) ||
-        edges.some((e) => e.target === n.id && e.source !== serviceNodeId);
+        edges.some(
+          (e) =>
+            (e.target === n.id && e.source !== serviceNodeId) ||
+            (e.source === n.id && e.target !== serviceNodeId),
+        );
       return !isClaimedByOther;
     });
   }
@@ -890,7 +922,7 @@ export function ensureStorageOperationRefConnection({
     );
     const yOffset = existingRefNodes.length * 110;
     const newPos = {
-      x: basePos.x + 380,
+      x: basePos.x - 340,
       y: basePos.y + yOffset,
     };
 
@@ -952,7 +984,7 @@ export function ensureStorageOperationRefConnection({
 
   // 4. Target handle: specific function on storage ref node
   const resolvedFnName = functionName || "uploadObject";
-  const targetHandle = `func-${resolvedFnName}`;
+  const refSourceHandle = `func-out-${resolvedFnName}`;
 
   // 5. Ensure this operation is added to the refNode data so it displays in the operations list
   const currentOps: StorageOperationFunction[] = Array.isArray(refNode.data?.storageOperations)
@@ -981,37 +1013,43 @@ export function ensureStorageOperationRefConnection({
     });
   }
 
-  // 6. Source handle on service node
-  const sourceHandle = endpointId
-    ? `endpoint-out-${endpointId}`
+  // 6. Target handle on service node (endpoint-in)
+  const serviceTargetHandle = endpointId
+    ? `endpoint-in-${endpointId}`
     : consumedEventId
     ? `consumedEvents-in-${consumedEventId}`
-    : `endpoint-out-${serviceNodeId}`;
+    : `endpoint-in-${serviceNodeId}`;
 
   const currentEdges = useBackendCanvasStore.getState().edges;
   const existingEdge = currentEdges.find((e) => {
-    const forwardMatch =
-      e.source === serviceNodeId &&
-      e.target === refNode!.id &&
-      (e.sourceHandle === sourceHandle || !e.sourceHandle || (endpointId && e.sourceHandle.includes(endpointId))) &&
-      (e.targetHandle === targetHandle || !e.targetHandle || (resolvedFnName && e.targetHandle.includes(resolvedFnName)));
-
-    const reverseMatch =
+    // Ingress edge (step hanging on left feeding into server): refNode -> serviceNode
+    const ingressMatch =
       e.source === refNode!.id &&
       e.target === serviceNodeId &&
-      (e.targetHandle === sourceHandle || !e.targetHandle || (endpointId && e.targetHandle.includes(endpointId))) &&
-      (e.sourceHandle === targetHandle || !e.sourceHandle || (resolvedFnName && e.sourceHandle.includes(resolvedFnName)));
+      (e.targetHandle === serviceTargetHandle ||
+        !e.targetHandle ||
+        (endpointId && e.targetHandle.includes(endpointId))) &&
+      (e.sourceHandle === refSourceHandle ||
+        !e.sourceHandle ||
+        (resolvedFnName && e.sourceHandle.includes(resolvedFnName)));
 
-    return forwardMatch || reverseMatch;
+    // Backward compatibility with legacy egress edge: serviceNode -> refNode
+    const legacyEgressMatch =
+      e.source === serviceNodeId &&
+      e.target === refNode!.id &&
+      (!e.sourceHandle || (endpointId && e.sourceHandle.includes(endpointId))) &&
+      (!e.targetHandle || (resolvedFnName && e.targetHandle.includes(resolvedFnName)));
+
+    return ingressMatch || legacyEgressMatch;
   });
 
   if (!existingEdge) {
     store.addEdge({
-      id: `edge-storageref-${serviceNodeId}-${endpointId || consumedEventId || "ep"}-${refNode.id}-${resolvedFnName || "fn"}-${Date.now()}`,
-      source: serviceNodeId,
-      target: refNode.id,
-      sourceHandle,
-      targetHandle,
+      id: `edge-storageref-${refNode.id}-${serviceNodeId}-${endpointId || consumedEventId || "ep"}-${resolvedFnName || "fn"}-${Date.now()}`,
+      source: refNode.id,
+      target: serviceNodeId,
+      sourceHandle: refSourceHandle,
+      targetHandle: serviceTargetHandle,
       type: "connection",
     });
   }
@@ -1072,22 +1110,18 @@ export function cleanupStorageOperationRefConnection({
 
   const matchingNodeIds = new Set<string>(matchingRefNodes.map((n) => n.id));
 
-  const sourceHandle = endpointId
-    ? `endpoint-out-${endpointId}`
-    : consumedEventId
-    ? `consumedEvents-in-${consumedEventId}`
-    : undefined;
-
-  const targetHandle = functionName ? `func-${functionName}` : undefined;
-
   // 1. If function is no longer used, remove edges to that function
   if (!isFunctionStillUsed) {
     const edgesToDelete = store.edges.filter((e) => {
-      if (e.source !== serviceNodeId) return false;
-      if (!matchingNodeIds.has(e.target)) return false;
-      if (sourceHandle && e.sourceHandle && e.sourceHandle !== sourceHandle) return false;
-      if (targetHandle) {
-        return e.targetHandle === targetHandle;
+      const isServiceSource = e.source === serviceNodeId && matchingNodeIds.has(e.target);
+      const isRefSource = e.target === serviceNodeId && matchingNodeIds.has(e.source);
+      if (!isServiceSource && !isRefSource) return false;
+      const serviceH = isServiceSource ? e.sourceHandle : e.targetHandle;
+      if (endpointId && serviceH && !serviceH.includes(endpointId)) return false;
+      if (consumedEventId && serviceH && !serviceH.includes(consumedEventId)) return false;
+      if (functionName) {
+        const refH = isServiceSource ? e.targetHandle : e.sourceHandle;
+        return Boolean(refH && refH.includes(functionName));
       }
       return !isBucketStillUsed;
     });
@@ -1095,5 +1129,172 @@ export function cleanupStorageOperationRefConnection({
     edgesToDelete.forEach((e) => store.deleteEdge(e.id));
   }
 }
+
+// ---------------------------------------------------------------------------
+// LangGraph Node & Edge Synchronization Helpers
+// ---------------------------------------------------------------------------
+
+export interface LangGraphConnectionResult {
+  langGraphNodeId: string;
+  edgeId?: string;
+}
+
+export interface EnsureLangGraphConnectionParams {
+  langGraphNodeId?: string;
+  serviceNodeId?: string;
+  endpointId?: string;
+  consumedEventId?: string;
+}
+
+export interface CleanupLangGraphConnectionParams {
+  langGraphNodeId?: string;
+  serviceNodeId?: string;
+  endpointId?: string;
+  consumedEventId?: string;
+  remainingSteps: PipelineStepDraft[];
+}
+
+/**
+ * Ensures a LangGraph agent node exists on canvas positioned to the left of the service node,
+ * and wires an ingress edge from langgraph-out to the service endpoint-in handle.
+ */
+export function ensureLangGraphConnection({
+  langGraphNodeId,
+  serviceNodeId,
+  endpointId,
+  consumedEventId,
+}: EnsureLangGraphConnectionParams): LangGraphConnectionResult | undefined {
+  if (!serviceNodeId) return undefined;
+
+  const store = useBackendCanvasStore.getState();
+  const allNodes = store.nodes;
+
+  // 1. Look for existing langgraph node
+  let lgNode = allNodes.find(
+    (n) => n.type === "langgraph" && (langGraphNodeId ? n.id === langGraphNodeId : true),
+  );
+
+  const serviceNode = allNodes.find((n) => n.id === serviceNodeId);
+  const basePos = serviceNode?.position || { x: 300, y: 200 };
+
+  // 2. If no langgraph node exists, create one to the left of the service node
+  if (!lgNode) {
+    const newLgId = crypto.randomUUID();
+    const existingRefNodes = allNodes.filter(
+      (n) =>
+        n.type === "langgraph" ||
+        n.type === "db_ref" ||
+        n.type === "redis-cache" ||
+        n.type === "transformer_ref" ||
+        n.type === "storage_operation_ref",
+    );
+    const yOffset = existingRefNodes.length * 110;
+    const newPos = {
+      x: basePos.x - 340,
+      y: basePos.y + yOffset,
+    };
+
+    store.addNode({
+      id: newLgId,
+      type: "langgraph",
+      position: newPos,
+      data: {
+        label: "AI Agent",
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages" },
+        ],
+        graphSteps: [],
+        memoryConfig: { enabled: false, checkpointer: "memory" },
+      },
+    });
+
+    lgNode = useBackendCanvasStore.getState().nodes.find((n) => n.id === newLgId);
+  }
+
+  if (!lgNode) return undefined;
+
+  // Reposition to the left if currently located on or to the right of the service node
+  if (serviceNode && lgNode.position && lgNode.position.x >= serviceNode.position.x) {
+    store.updateNode(lgNode.id, {
+      position: {
+        x: serviceNode.position.x - 340,
+        y: lgNode.position.y,
+      },
+    });
+  }
+
+  // 3. Connect outbound handle from LangGraph node to inbound handle of ServiceNode
+  const serviceTargetHandle = endpointId
+    ? `endpoint-in-${endpointId}`
+    : consumedEventId
+    ? `consumedEvents-in-${consumedEventId}`
+    : `endpoint-in-${serviceNodeId}`;
+
+  // 4. Ingress edge: lgNode (langgraph-out) -> serviceNode (endpoint-in)
+  const currentEdges = useBackendCanvasStore.getState().edges;
+  const existingEdge = currentEdges.find((e) => {
+    const ingressMatch =
+      e.source === lgNode!.id &&
+      e.target === serviceNodeId &&
+      (e.targetHandle === serviceTargetHandle || !endpointId);
+    const reverseMatch =
+      e.target === lgNode!.id &&
+      e.source === serviceNodeId &&
+      (!endpointId || !e.sourceHandle || e.sourceHandle.includes(endpointId));
+    return ingressMatch || reverseMatch;
+  });
+
+  if (!existingEdge) {
+    store.addEdge({
+      id: crypto.randomUUID(),
+      source: lgNode.id,
+      target: serviceNodeId,
+      sourceHandle: "langgraph-out",
+      targetHandle: serviceTargetHandle,
+      type: "connection",
+    });
+  }
+
+  return {
+    langGraphNodeId: lgNode.id,
+    edgeId: existingEdge?.id,
+  };
+}
+
+/**
+ * Cleans up edge(s) connecting the service endpoint to a LangGraph node
+ * when the step is deleted.
+ */
+export function cleanupLangGraphConnection({
+  langGraphNodeId,
+  serviceNodeId,
+  endpointId,
+  consumedEventId,
+  remainingSteps,
+}: CleanupLangGraphConnectionParams) {
+  if (!serviceNodeId) return;
+  const store = useBackendCanvasStore.getState();
+
+  const isLgStillUsed = remainingSteps.some(
+    (s) =>
+      s.type === "langgraph_invoke" &&
+      (!langGraphNodeId || s.langGraphTargetNodeId === langGraphNodeId),
+  );
+
+  if (!isLgStillUsed) {
+    const edgesToDelete = store.edges.filter((e) => {
+      const isSrc = e.source === serviceNodeId && (!langGraphNodeId || e.target === langGraphNodeId);
+      const isTgt = e.target === serviceNodeId && (!langGraphNodeId || e.source === langGraphNodeId);
+      if (!isSrc && !isTgt) return false;
+      const sHandle = isSrc ? e.sourceHandle : e.targetHandle;
+      if (endpointId && sHandle && !sHandle.includes(endpointId)) return false;
+      if (consumedEventId && sHandle && !sHandle.includes(consumedEventId)) return false;
+      return true;
+    });
+
+    edgesToDelete.forEach((e) => store.deleteEdge(e.id));
+  }
+}
+
 
 
