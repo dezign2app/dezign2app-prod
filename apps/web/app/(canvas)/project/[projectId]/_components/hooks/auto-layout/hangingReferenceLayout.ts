@@ -109,9 +109,34 @@ export function layoutHangingReferenceNodes({
   const unattachedRefs: LayoutNode[] = [];
 
   hangingRefNodes.forEach((refNode) => {
-    const edge = hangingRefEdges.find(
-      (e) => e.target === refNode.id || e.source === refNode.id,
-    );
+    const edge =
+      hangingRefEdges.find((e) => {
+        const otherId = e.target === refNode.id ? e.source : e.target;
+        const otherNode = nodes.find((n) => n.id === otherId);
+        return (
+          otherNode &&
+          (otherNode.type === "service" ||
+            otherNode.type === "microservice" ||
+            otherNode.type === "backend" ||
+            otherNode.type === "api")
+        );
+      }) ||
+      hangingRefEdges.find((e) => {
+        const otherId = e.target === refNode.id ? e.source : e.target;
+        const otherNode = nodes.find((n) => n.id === otherId);
+        return (
+          otherNode &&
+          otherNode.type !== "webPage" &&
+          otherNode.type !== "webApp" &&
+          otherNode.type !== "storage" &&
+          otherNode.type !== "database" &&
+          otherNode.type !== "redis_instance" &&
+          otherNode.type !== "entity"
+        );
+      }) ||
+      hangingRefEdges.find(
+        (e) => e.target === refNode.id || e.source === refNode.id,
+      );
     if (!edge) {
       unattachedRefs.push(refNode);
       return;

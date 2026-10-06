@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { performGraphLayout } from "../graphLayout";
+import { getNodeDimensions } from "../nodeDimensions";
 import type { LayoutNode, LayoutEdge, PositionNodeChange } from "../types";
 
 describe("hangingReferenceLayout - Auto-Layout for Hanging Reference Nodes (DB Ref & Redis Cache)", () => {
@@ -255,5 +256,126 @@ describe("hangingReferenceLayout - Auto-Layout for Hanging Reference Nodes (DB R
     const lgPos = posMap.get("lg-1")!;
 
     expect(lgPos.x).toBeLessThan(servicePos.x);
+  });
+
+  it("does not push right-side nodes too far away when hanging references exist on the left", () => {
+    // Replicates topology: chat (langgraph) & db-ref -> profile (service) -> messaging (kafka) & page-ref
+    const serviceNode: LayoutNode = {
+      id: "service-profile",
+      type: "service",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "profile",
+        endpoints: [
+          { id: "ep-health", name: "GET /health" },
+          { id: "ep-chat", name: "POST simple-chat" },
+        ],
+      },
+    };
+
+    const lgNode: LayoutNode = {
+      id: "langgraph-chat",
+      type: "langgraph",
+      position: { x: 0, y: 0 },
+      data: { label: "chat" },
+    };
+
+    const dbRefNode: LayoutNode = {
+      id: "db-ref-user",
+      type: "db_ref",
+      position: { x: 0, y: 0 },
+      data: { label: "Primary SQLite DB" },
+    };
+
+    const kafkaNode: LayoutNode = {
+      id: "kafka-messaging",
+      type: "kafka",
+      position: { x: 0, y: 0 },
+      data: { label: "messaging" },
+    };
+
+    const pageRefNode: LayoutNode = {
+      id: "page-ref-profile",
+      type: "page_ref",
+      position: { x: 0, y: 0 },
+      data: { label: "profile" },
+    };
+
+    const nodes = [serviceNode, lgNode, dbRefNode, kafkaNode, pageRefNode];
+
+    const edges: LayoutEdge[] = [
+      {
+        id: "e-lg-service",
+        source: "langgraph-chat",
+        target: "service-profile",
+        sourceHandle: "langgraph-out",
+        targetHandle: "endpoint-in-ep-chat",
+        type: "connection",
+      },
+      {
+        id: "e-db-service",
+        source: "db-ref-user",
+        target: "service-profile",
+        sourceHandle: "database-target",
+        targetHandle: "endpoint-in-ep-chat",
+        type: "connection",
+      },
+      {
+        id: "e-service-kafka",
+        source: "service-profile",
+        target: "kafka-messaging",
+        sourceHandle: "endpoint-out-ep-chat",
+        targetHandle: "topic-in",
+        type: "connection",
+      },
+      {
+        id: "e-service-pageref",
+        source: "service-profile",
+        target: "page-ref-profile",
+        sourceHandle: "endpoint-out-ep-chat",
+        targetHandle: "page-ref-in",
+        type: "connection",
+      },
+    ];
+
+    let appliedChanges: PositionNodeChange[] = [];
+    const onNodesChange = (changes: PositionNodeChange[]) => {
+      appliedChanges = changes;
+    };
+
+    performGraphLayout({
+      nodes,
+      edges,
+      onNodesChange,
+      fitView: vi.fn(),
+      direction: "LR",
+      storeEndpoints: [
+        { id: "ep-health", nodeId: "service-profile", name: "GET /health", type: "GET" },
+        { id: "ep-chat", nodeId: "service-profile", name: "POST simple-chat", type: "POST" },
+      ],
+    });
+
+    const posMap = new Map(appliedChanges.map((c) => [c.id, c.position]));
+    const servicePos = posMap.get("service-profile")!;
+    const lgPos = posMap.get("langgraph-chat")!;
+    const dbPos = posMap.get("db-ref-user")!;
+    const kafkaPos = posMap.get("kafka-messaging")!;
+    const pageRefPos = posMap.get("page-ref-profile")!;
+
+    // 1. Hanging nodes must be to the left of the service node
+    expect(lgPos.x).toBeLessThan(servicePos.x);
+    expect(dbPos.x).toBeLessThan(servicePos.x);
+
+    // 2. Right-side nodes must be downstream (to the right of the service node)
+    expect(kafkaPos.x).toBeGreaterThan(servicePos.x);
+    expect(pageRefPos.x).toBeGreaterThan(servicePos.x);
+
+    // 3. Gap between service node's right edge and kafka's left edge should be compact (<= 250px)
+    // and NOT pushed out by hundreds of pixels (previously inflated to > 500px)
+    const serviceDim = getNodeDimensions(serviceNode);
+    const serviceRight = servicePos.x + serviceDim.width;
+    const gapToKafka = kafkaPos.x - serviceRight;
+    expect(gapToKafka).toBeLessThanOrEqual(250);
+    expect(gapToKafka).toBeGreaterThanOrEqual(100);
   });
 });

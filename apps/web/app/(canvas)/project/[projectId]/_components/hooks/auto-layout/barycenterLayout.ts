@@ -408,25 +408,8 @@ export function runBarycenterRefinement({
             positionsMap.set(id, { x, y });
 
             const nodeRight = x + maxNodeWidth;
-            const connectedRefEdges = hangingRefEdges.filter(
-              (e) => e.source === id || e.target === id,
-            );
-            const hasDownstreamRefs = connectedRefEdges.length > 0;
-            const maxRefWidth = hasDownstreamRefs
-              ? Math.max(
-                  ...connectedRefEdges.map((e) => {
-                    const refId = e.source === id ? e.target : e.source;
-                    const refNode = hangingRefNodes.find((n) => n.id === refId);
-                    return refNode ? getNodeDimensions(refNode).width : 240;
-                  }),
-                  240,
-                )
-              : 0;
-            const effectiveNodeRight = hasDownstreamRefs
-              ? nodeRight + 80 + maxRefWidth
-              : nodeRight;
-            if (effectiveNodeRight > currentRankMaxPrimary) {
-              currentRankMaxPrimary = effectiveNodeRight;
+            if (nodeRight > currentRankMaxPrimary) {
+              currentRankMaxPrimary = nodeRight;
             }
           });
         } else {
@@ -538,25 +521,8 @@ export function runBarycenterRefinement({
           positionsMap.set(id, { x: secondaryPos - width / 2, y: cursor });
           cursor += height + nodeGap;
           const nodeRight = secondaryPos + width / 2;
-          const connectedRefEdges = hangingRefEdges.filter(
-            (e) => e.source === id || e.target === id,
-          );
-          const hasDownstreamRefs = connectedRefEdges.length > 0;
-          const maxRefWidth = hasDownstreamRefs
-            ? Math.max(
-                ...connectedRefEdges.map((e) => {
-                  const refId = e.source === id ? e.target : e.source;
-                  const refNode = hangingRefNodes.find((n) => n.id === refId);
-                  return refNode ? getNodeDimensions(refNode).width : 240;
-                }),
-                240,
-              )
-            : 0;
-          const effectiveNodeRight = hasDownstreamRefs
-            ? nodeRight + 80 + maxRefWidth
-            : nodeRight;
-          if (effectiveNodeRight > currentRankMaxPrimary) {
-            currentRankMaxPrimary = effectiveNodeRight;
+          if (nodeRight > currentRankMaxPrimary) {
+            currentRankMaxPrimary = nodeRight;
           }
         } else {
           positionsMap.set(id, { x: cursor, y: secondaryPos - height / 2 });
