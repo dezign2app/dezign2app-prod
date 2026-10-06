@@ -374,3 +374,90 @@ describe("pipeline-validation: isNodePipelineUnconfigured for db_ref vs entity",
     expect(hasError).toBe(true);
   });
 });
+
+describe("pipeline-validation: transformer with empty / unconfigured input schema", () => {
+  const emptyTransformerNode = {
+    id: "transformer-empty",
+    type: "transformer",
+    data: {
+      label: "generateUniqueId",
+      functionName: "generateUniqueId",
+      inputSchema: [],
+      returnSchema: [{ name: "slug", type: "string", required: true }],
+    },
+  } as any;
+
+  const emptyTransformerRefNode = {
+    id: "ref-empty",
+    type: "transformer_ref",
+    data: {
+      label: "generateUniqueId (Ref)",
+      transformerRef: "transformer-empty",
+    },
+  } as any;
+
+  const endpointWithEmptyTransformerStep = {
+    id: "ep-1",
+    nodeId: "service-1",
+    pipelineSteps: [
+      {
+        id: "step-1",
+        name: "generateUniqueIdResult",
+        type: "transform",
+        enabled: true,
+        transformerNodeId: "transformer-empty",
+        functionRef: {
+          name: "generateUniqueId",
+          inputSchema: [],
+        },
+        inputBindings: [],
+      },
+    ],
+  } as any;
+
+  it("returns false (no error) for step with empty input schema", () => {
+    const step = endpointWithEmptyTransformerStep.pipelineSteps[0];
+    expect(isStepInputUnconfigured(step, [emptyTransformerNode])).toBe(false);
+  });
+
+  it("returns false (no error banner) for TransformerNode when input schema is empty", () => {
+    const hasError = isNodePipelineUnconfigured(
+      "transformer-empty",
+      [emptyTransformerNode],
+      [],
+      [endpointWithEmptyTransformerStep],
+      [],
+    );
+    expect(hasError).toBe(false);
+  });
+
+  it("returns false (no error banner) for TransformerRefNode when master transformer input schema is empty", () => {
+    const endpointWithRefStep = {
+      id: "ep-1",
+      nodeId: "service-1",
+      pipelineSteps: [
+        {
+          id: "step-1",
+          name: "generateUniqueIdResult",
+          type: "transform",
+          enabled: true,
+          transformerNodeId: "ref-empty",
+          functionRef: {
+            name: "generateUniqueId",
+          },
+          inputBindings: [],
+        },
+      ],
+    } as any;
+
+    const hasError = isNodePipelineUnconfigured(
+      "ref-empty",
+      [emptyTransformerNode, emptyTransformerRefNode],
+      [],
+      [endpointWithRefStep],
+      [],
+    );
+    expect(hasError).toBe(false);
+  });
+});
+

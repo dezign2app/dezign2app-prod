@@ -100,6 +100,35 @@ describe("Step Pipeline & Transformer Helpers", () => {
       expect(occurrences).toBe(1);
     });
 
+    it("emits empty function input func() and omits input interface when input schema is not configured or empty", () => {
+      const nodes: BackendNode[] = [
+        {
+          id: "trans-no-input",
+          type: "transformer",
+          position: { x: 0, y: 0 },
+          fractionalIndex: "a0",
+          data: {
+            label: "generateUniqueId",
+            functionName: "generateUniqueId",
+            scope: "global",
+            code: "return { slug: 'unique-123' };",
+            inputSchema: [],
+            returnSchema: [{ id: "1", name: "slug", type: "string", required: true }],
+          },
+        },
+      ];
+      const result = compileTransformerHelpers(nodes);
+      const file = result.files.find((f) => f.filename.includes("generateUniqueId.ts"));
+      expect(file).toBeDefined();
+      expect(file?.content).toContain("export function generateUniqueId(): GenerateUniqueIdOutput {");
+      expect(file?.content).not.toContain("export interface GenerateUniqueIdInput");
+      expect(file?.content).toContain("export interface GenerateUniqueIdOutput");
+
+      const reusable = result.reusableFunctions.find((r) => r.name === "generateUniqueId");
+      expect(reusable).toBeDefined();
+      expect(reusable?.signature).toBe("generateUniqueId(): GenerateUniqueIdOutput");
+    });
+
     it("generates imports for imported transformer dependencies", () => {
       const nodes: BackendNode[] = [
         {

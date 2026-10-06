@@ -63,7 +63,7 @@ export const TransformerDependenciesSection: React.FC<TransformerDependenciesSec
         const inputSig =
           inputParamNames.length > 0
             ? `{ ${inputParamNames.join(", ")} }: ${inputTypeName}`
-            : `input: ${inputTypeName}`;
+            : "";
 
         return {
           id: n.id,

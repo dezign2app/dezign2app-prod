@@ -150,6 +150,41 @@ export function useCanvasStepSync({
         }
       }
 
+      // Sync inputSchema and prune stale inputBindings if transformer input schema changed
+      const currentInputSchema = s.functionRef?.inputSchema || [];
+      const ctInputSchema = matchingCt.inputSchema || [];
+      const inputSchemaDiffers =
+        currentInputSchema.length !== ctInputSchema.length ||
+        ctInputSchema.some((cf, idx) => cf.name !== currentInputSchema[idx]?.name);
+
+      if (inputSchemaDiffers) {
+        const cleanName = toVarName(matchingCt.functionName);
+        const importPath =
+          updates.functionRef?.importPath ||
+          s.functionRef?.importPath ||
+          (matchingCt.isGlobal
+            ? "@workspace/transformers"
+            : `../transformers/${cleanName}`);
+
+        updates.functionRef = {
+          name: updates.functionRef?.name || s.functionRef?.name || cleanName,
+          importPath,
+          isGlobal: matchingCt.isGlobal ?? s.functionRef?.isGlobal,
+          inputSchema: ctInputSchema,
+          returnSchema: updates.functionRef?.returnSchema || s.functionRef?.returnSchema || matchingCt.returnSchema,
+        };
+        if (ctInputSchema.length === 0) {
+          updates.inputBindings = [];
+        } else {
+          const validNames = new Set(
+            ctInputSchema.map((f) => f.name?.toLowerCase()).filter(Boolean),
+          );
+          updates.inputBindings = (s.inputBindings || []).filter(
+            (b) => b.argName && validNames.has(b.argName.toLowerCase()),
+          );
+        }
+      }
+
       if (Object.keys(updates).length > 0) {
         stepsChanged = true;
         return { ...s, ...updates };

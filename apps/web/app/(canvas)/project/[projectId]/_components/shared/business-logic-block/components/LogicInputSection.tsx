@@ -139,10 +139,13 @@ export const LogicInputSection = React.memo(function LogicInputSection({
       return `${importsStr}${fnContent}\n`;
     }
 
-    const paramSignature =
-      inputFieldNames.length > 0
-        ? `{ ${inputFieldNames.join(", ")} }: ${inputName}`
-        : `input: ${inputName}`;
+    const hasInputFields = inputFieldNames.length > 0;
+    const shouldEmitInputInterface =
+      hasInputFields || (hasFullDecl && trimmedCode.includes(inputName));
+
+    const paramSignature = hasInputFields
+      ? `{ ${inputFieldNames.join(", ")} }: ${inputName}`
+      : "";
 
     const fnContent = hasFullDecl
       ? trimmedCode
@@ -156,7 +159,11 @@ export const LogicInputSection = React.memo(function LogicInputSection({
       .join("\n");
     const topImports = transformerImportsStr ? `${transformerImportsStr}\n\n` : "";
 
-    return `${topImports}export interface ${inputName} {\n${formatInterfaceFields(inputSchema)}\n}\n\nexport interface ${effectiveOutputName} {\n${formatInterfaceFields(returnSchema)}\n}\n\n${fnContent}\n`;
+    const inputInterfaceStr = shouldEmitInputInterface
+      ? `export interface ${inputName} {\n${formatInterfaceFields(inputSchema)}\n}\n\n`
+      : "";
+
+    return `${topImports}${inputInterfaceStr}export interface ${effectiveOutputName} {\n${formatInterfaceFields(returnSchema)}\n}\n\n${fnContent}\n`;
   }, [
     functionName,
     safeFunctionName,
@@ -308,31 +315,37 @@ export const LogicInputSection = React.memo(function LogicInputSection({
               {isAsync && <span className="text-sky-400 font-semibold">async</span>}
               <span className="text-blue-400 font-semibold">function</span>
               <span className="text-amber-300 font-bold">{safeFunctionName || functionName}</span>
-              <span className="text-muted-foreground">( </span>
               {isDbOp ? (
                 inputSchema && inputSchema.length > 0 ? (
-                  inputSchema.map((param, idx) => (
-                    <React.Fragment key={param.name || idx}>
-                      {idx > 0 && <span className="text-muted-foreground">, </span>}
-                      {param.name.startsWith("{") && param.name.endsWith("}") ? (
-                        <>
-                          <span className="text-muted-foreground">&#123; </span>
-                          <span className="text-emerald-400 font-medium">
-                            {param.name.slice(1, -1).trim()}
-                          </span>
-                          <span className="text-muted-foreground"> &#125;</span>
-                        </>
-                      ) : (
-                        <span className="text-emerald-400 font-medium">{param.name}</span>
-                      )}
-                      {param.required === false && <span className="text-amber-400">?</span>}
-                      <span className="text-muted-foreground">: </span>
-                      <span className="text-cyan-400 font-medium">{param.type || "string"}</span>
-                    </React.Fragment>
-                  ))
-                ) : null
+                  <>
+                    <span className="text-muted-foreground">( </span>
+                    {inputSchema.map((param, idx) => (
+                      <React.Fragment key={param.name || idx}>
+                        {idx > 0 && <span className="text-muted-foreground">, </span>}
+                        {param.name.startsWith("{") && param.name.endsWith("}") ? (
+                          <>
+                            <span className="text-muted-foreground">&#123; </span>
+                            <span className="text-emerald-400 font-medium">
+                              {param.name.slice(1, -1).trim()}
+                            </span>
+                            <span className="text-muted-foreground"> &#125;</span>
+                          </>
+                        ) : (
+                          <span className="text-emerald-400 font-medium">{param.name}</span>
+                        )}
+                        {param.required === false && <span className="text-amber-400">?</span>}
+                        <span className="text-muted-foreground">: </span>
+                        <span className="text-cyan-400 font-medium">{param.type || "string"}</span>
+                      </React.Fragment>
+                    ))}
+                    <span className="text-muted-foreground"> ): </span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">(): </span>
+                )
               ) : inputFieldNames.length > 0 ? (
                 <>
+                  <span className="text-muted-foreground">( </span>
                   <span className="text-muted-foreground">&#123; </span>
                   <span className="text-emerald-400 font-medium">
                     {inputFieldNames.join(", ")}
@@ -340,15 +353,11 @@ export const LogicInputSection = React.memo(function LogicInputSection({
                   <span className="text-muted-foreground"> &#125;</span>
                   <span className="text-muted-foreground"> : </span>
                   <span className="text-cyan-400 font-medium">{inputName}</span>
+                  <span className="text-muted-foreground"> ): </span>
                 </>
               ) : (
-                <>
-                  <span className="text-emerald-400 font-medium">input</span>
-                  <span className="text-muted-foreground"> : </span>
-                  <span className="text-cyan-400 font-medium">{inputName}</span>
-                </>
+                <span className="text-muted-foreground">(): </span>
               )}
-              <span className="text-muted-foreground"> ): </span>
               <span className="text-cyan-400 font-medium">{returnTypeAnnotation}</span>
               <span className="text-muted-foreground font-bold">&#123;</span>
             </div>
@@ -369,7 +378,7 @@ export const LogicInputSection = React.memo(function LogicInputSection({
                   >
                     <span className="text-muted-foreground font-mono truncate">
                       <span className="text-purple-400 font-medium">// {t.isAsync ? "await " : ""}{t.name}</span>
-                      <span className="text-muted-foreground/80">({t.inputSignature || "input"}): {t.outputSignature || "Record<string, unknown>"}</span>
+                      <span className="text-muted-foreground/80">({t.inputSignature || ""}): {t.outputSignature || "Record<string, unknown>"}</span>
                       {t.isCircular && (
                         <span className="ml-1.5 text-[9px] text-amber-400 font-sans font-medium">
                           ⚠️ circular
@@ -487,13 +496,18 @@ export const LogicInputSection = React.memo(function LogicInputSection({
               </>
             ) : (
               <>
-                Parameters accessible via{" "}
-                <code className="text-emerald-400 font-semibold">
-                  {inputFieldNames.length > 0
-                    ? `{ ${inputFieldNames.join(", ")} }`
-                    : "input"}
-                </code>{" "}
-                (<code className="text-cyan-400">{inputName}</code>). Return shape must match{" "}
+                {inputFieldNames.length > 0 ? (
+                  <>
+                    Parameters accessible via{" "}
+                    <code className="text-emerald-400 font-semibold">
+                      {`{ ${inputFieldNames.join(", ")} }`}
+                    </code>{" "}
+                    (<code className="text-cyan-400">{inputName}</code>).{" "}
+                  </>
+                ) : (
+                  <>No input parameters configured. </>
+                )}
+                Return shape must match{" "}
                 <code className="text-cyan-400">{effectiveOutputName}</code>.
               </>
             )}

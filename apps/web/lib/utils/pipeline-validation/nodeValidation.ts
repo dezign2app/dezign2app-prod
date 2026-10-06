@@ -10,6 +10,7 @@ import { PipelineStepDraft } from "@/app/(canvas)/project/[projectId]/_component
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { collectNestedSteps, isStepInputUnconfigured } from "./stepValidation";
 import { isEndpointPipelineUnconfigured } from "./endpointValidation";
+import { toVarName } from "@/lib/compiler/utils";
 
 /**
  * Checks if a specific canvas node has a pipeline error (either as a host node
@@ -174,6 +175,35 @@ export function isNodePipelineUnconfigured(
     targetNode.type === "transformer" ||
     targetNode.type === "transformer_ref"
   ) {
+    let effectiveInputSchema = targetNode.data?.inputSchema;
+    if (targetNode.type === "transformer_ref" && targetNode.data?.transformerRef) {
+      const master = allNodes.find(
+        (m) =>
+          m.type === "transformer" &&
+          (m.id === targetNode.data?.transformerRef ||
+            m.data?.functionName === targetNode.data?.transformerRef ||
+            m.data?.label === targetNode.data?.transformerRef ||
+            (targetNode.data?.transformerRef && (
+              toVarName(m.data?.functionName || "") === toVarName(targetNode.data.transformerRef) ||
+              toVarName(m.data?.label || "") === toVarName(targetNode.data.transformerRef)
+            ))),
+      );
+      if (master) {
+        effectiveInputSchema = master.data?.inputSchema;
+      }
+    }
+
+    const hasConfiguredInputFields =
+      Array.isArray(effectiveInputSchema) &&
+      effectiveInputSchema.some(
+        (f) => Boolean(f && f.name && f.name.trim().length > 0 && f.required !== false),
+      );
+
+    // If the transformer has no required input fields configured, it takes func() with no args
+    if (!hasConfiguredInputFields) {
+      return false;
+    }
+
     const fnName =
       targetNode.data?.functionName || targetNode.data?.label || "";
     const masterRef = targetNode.data?.transformerRef;
@@ -183,10 +213,10 @@ export function isNodePipelineUnconfigured(
         s.enabled !== false &&
         s.type === "transform" &&
         (s.transformerNodeId === nodeId ||
-          (fnName && s.functionRef?.name === fnName) ||
-          (masterRef && s.functionRef?.name === masterRef) ||
+          (fnName && (s.functionRef?.name === fnName || toVarName(s.functionRef?.name || "") === toVarName(fnName))) ||
+          (masterRef && (s.functionRef?.name === masterRef || toVarName(s.functionRef?.name || "") === toVarName(masterRef))) ||
           (targetNode.data?.label &&
-            s.functionRef?.name === targetNode.data.label)),
+            (s.functionRef?.name === targetNode.data.label || toVarName(s.functionRef?.name || "") === toVarName(targetNode.data.label)))),
     );
 
     if (
