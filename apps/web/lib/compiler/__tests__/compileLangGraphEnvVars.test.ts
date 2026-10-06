@@ -50,6 +50,8 @@ describe("LangGraph Environment Variable Compiler & Detection", () => {
     id: "edge-service-to-agent",
     source: serviceNode.id,
     target: langGraphAgentNode.id,
+    type: "connection",
+    fractionalIndex: "a0",
   };
 
   it("detects LangGraph LLM and checkpointer environment variables via direct edge", () => {
@@ -76,6 +78,7 @@ describe("LangGraph Environment Variable Compiler & Detection", () => {
       nodeId: serviceNode.id,
       pipelineSteps: [
         {
+          id: "step-1",
           type: "langgraph_invoke",
           name: "ChatAgent",
           langGraphTargetNodeId: langGraphAgentNode.id,
@@ -123,6 +126,7 @@ describe("LangGraph Environment Variable Compiler & Detection", () => {
         ...serviceNode.data,
         envVars: [
           {
+            id: "var-1",
             name: "GROQ_API_KEY",
             description: "Custom user-supplied description",
           },

@@ -629,6 +629,7 @@ export const serviceDataSchema = baseNodeDataSchema
     /** Local data-transformation helper functions attached to this service */
     transformerHelpers: z.array(transformerHelperSchema).optional(),
     customDependencies: z.array(nodeDependencyItemSchema).optional(),
+    expandedStepStacks: z.array(z.string()).optional(),
     envVars: z
       .array(
         z.object({
@@ -693,6 +694,7 @@ export const serviceDataInputSchema = baseNodeDataSchema
     /** Local data-transformation helper functions attached to this service */
     transformerHelpers: z.array(transformerHelperInputSchema).optional(),
     customDependencies: z.array(nodeDependencyItemInputSchema).optional(),
+    expandedStepStacks: z.array(z.string()).optional(),
   })
   .passthrough();
 
@@ -731,6 +733,7 @@ export const workerDataSchema = baseNodeDataSchema
     maxRetries: z.number().optional(),
     // Tags
     tags: z.array(z.string()).optional(),
+    expandedStepStacks: z.array(z.string()).optional(),
   })
   .strict();
 export type WorkerNodeData = z.infer<typeof workerDataSchema>;
@@ -749,6 +752,7 @@ export const serverlessDataSchema = baseNodeDataSchema
     timeoutSec: z.number().optional(),
     // Tags
     tags: z.array(z.string()).optional(),
+    expandedStepStacks: z.array(z.string()).optional(),
   })
   .strict();
 export type ServerlessNodeData = z.infer<typeof serverlessDataSchema>;

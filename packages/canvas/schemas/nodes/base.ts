@@ -36,6 +36,7 @@ export const baseNodeDataSchema = z.object({
   systemBadge: z.string().optional(),
   readOnly: z.boolean().optional(),
   isReadOnly: z.boolean().optional(),
+  stackOrder: z.number().optional(),
 });
 
 export const resourceItemSchema = z.object({

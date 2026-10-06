@@ -18,11 +18,23 @@ export const REFERENCE_NODE_TYPES = new Set<string>([
   "langgraph",
   "langgraph_agent",
   "langgraph_node",
+  "storage_operation_ref",
+  "storage_ref",
+  "StorageOperationRefNode",
+  "StorageBucketRefNode",
 ]);
 
+const STEP_CARD_HEADER_OFFSET_Y = 44;
+const STEP_CARD_HEADER_OFFSET_X = -8;
+
+export interface HangingReferenceLayoutResult {
+  stackedRefDeckGroups: string[][];
+}
+
 /**
- * Positions hanging reference nodes (Table Ref, Redis Cache Ref, Vector DB Ref, LangGraph Agent)
- * in a dedicated column immediately following (to the right of) the service node they connect to.
+ * Positions hanging reference nodes (Table Ref, Redis Cache Ref, Vector DB Ref, LangGraph Agent, Storage Bucket Ref)
+ * in a dedicated column immediately preceding (to the left of) the service node they feed into.
+ * When multiple reference cards attach to the same endpoint, they stack into a deck of cards by default.
  */
 export function layoutHangingReferenceNodes({
   nodes,
@@ -32,8 +44,9 @@ export function layoutHangingReferenceNodes({
   isHorizontal = true,
   storeEndpoints = [],
   storeEvents = [],
-}: HangingReferenceLayoutParams): void {
-  if (hangingRefNodes.length === 0) return;
+}: HangingReferenceLayoutParams): HangingReferenceLayoutResult {
+  const stackedRefDeckGroups: string[][] = [];
+  if (hangingRefNodes.length === 0) return { stackedRefDeckGroups };
 
   // Build lookup maps for endpoint & event handle ratios
   const endpointYRatio = new Map<string, number>();
@@ -91,7 +104,7 @@ export function layoutHangingReferenceNodes({
     return getHandleYRatio(serviceNode, sourceHandle);
   };
 
-  // Group hanging reference nodes by their source service node ID
+  // Group hanging reference nodes by their connected service node ID
   const refsByService = new Map<string, LayoutNode[]>();
   const unattachedRefs: LayoutNode[] = [];
 
@@ -119,11 +132,15 @@ export function layoutHangingReferenceNodes({
     const { width: serviceW, height: serviceH } = getNodeDimensions(serviceNode);
 
     if (isHorizontal) {
-      // LR Layout: Reference nodes sit in a column to the right of the service node
+      // LR Layout: Reference nodes sit in a column to the LEFT of the service node (ingress side)
       const gapX = 80;
-      const minVerticalGap = 16;
+      const minVerticalGap = 20;
 
-      const targetX = servicePos.x + serviceW + gapX;
+      const maxRefW = Math.max(
+        ...refs.map((r) => getNodeDimensions(r).width),
+      );
+
+      const targetX = servicePos.x - maxRefW - gapX;
 
       interface RefItem {
         node: LayoutNode;
@@ -132,6 +149,7 @@ export function layoutHangingReferenceNodes({
         sourceHandleY: number;
         idealY: number;
         y: number;
+        endpointKey: string;
       }
 
       const items: RefItem[] = refs.map((refNode) => {
@@ -150,6 +168,13 @@ export function layoutHangingReferenceNodes({
         const sourceHandleY = servicePos.y + handleRatio * serviceH;
         const idealY = sourceHandleY - height / 2;
 
+        const endpointKey = serviceHandle
+          ? serviceHandle.replace(
+              /^(endpoint-in-|endpoint-out-|consumedEvents-in-|consumedEvents-out-)/,
+              "",
+            )
+          : "default";
+
         return {
           node: refNode,
           width,
@@ -157,12 +182,11 @@ export function layoutHangingReferenceNodes({
           sourceHandleY,
           idealY,
           y: idealY,
+          endpointKey,
         };
       });
 
       // Sort primarily by source handle Y so edges don't cross.
-      // When connected to the same handle (or endpoints at the same vertical height),
-      // order db_ref / redis-cache / vector_db_ref first, then langgraph.
       items.sort((a, b) => {
         const diffHandleY = a.sourceHandleY - b.sourceHandleY;
         if (Math.abs(diffHandleY) > 5) {
@@ -174,12 +198,19 @@ export function layoutHangingReferenceNodes({
           if (type === "redis-cache") return 2;
           if (type === "vector_db_ref") return 3;
           if (
+            type === "storage_operation_ref" ||
+            type === "storage_ref" ||
+            type === "StorageOperationRefNode" ||
+            type === "StorageBucketRefNode"
+          )
+            return 4;
+          if (
             type === "langgraph" ||
             type === "langgraph_agent" ||
             type === "langgraph_node"
           )
-            return 4;
-          return 5;
+            return 5;
+          return 6;
         };
 
         const pA = typePriority(a.node.type);
@@ -189,40 +220,84 @@ export function layoutHangingReferenceNodes({
         return a.idealY - b.idealY;
       });
 
-      // Relax / resolve collisions so no reference nodes overlap
-      if (items.length > 1) {
-        // Forward pass: push overlapping items down
-        for (let i = 1; i < items.length; i++) {
-          const prev = items[i - 1]!;
-          const curr = items[i]!;
-          const minAllowedY = prev.y + prev.height + minVerticalGap;
-          if (curr.y < minAllowedY) {
-            curr.y = minAllowedY;
-          }
+      // Group items by endpoint to determine stacking
+      const expandedStacks: string[] = Array.isArray(serviceNode.data?.expandedStepStacks)
+        ? (serviceNode.data.expandedStepStacks as string[])
+        : [];
+
+      const endpointGroups = new Map<string, RefItem[]>();
+      items.forEach((item) => {
+        if (!endpointGroups.has(item.endpointKey)) {
+          endpointGroups.set(item.endpointKey, []);
         }
+        endpointGroups.get(item.endpointKey)!.push(item);
+      });
 
-        // Calculate shift to center the stack around the average ideal Y
-        const avgIdeal =
-          items.reduce((sum, item) => sum + item.idealY + item.height / 2, 0) /
-          items.length;
-        const totalStackH =
-          items[items.length - 1]!.y +
-          items[items.length - 1]!.height -
-          items[0]!.y;
-        const currentCenter = items[0]!.y + totalStackH / 2;
-        const shiftY = avgIdeal - currentCenter;
-
-        items.forEach((item) => {
-          item.y += shiftY;
-        });
+      // Represent each endpoint group as a layout block
+      interface GroupBlock {
+        key: string;
+        items: RefItem[];
+        isStacked: boolean;
+        baseY: number;
+        height: number;
       }
 
-      // Store final positions
-      items.forEach((item) => {
-        positionsMap.set(item.node.id, {
-          x: targetX,
-          y: item.y,
+      const groupBlocks: GroupBlock[] = [];
+      endpointGroups.forEach((groupItems, key) => {
+        const isStacked = groupItems.length > 1 && !expandedStacks.includes(key);
+        const leadItem = groupItems[0]!;
+        const totalHeight = isStacked
+          ? leadItem.height + (groupItems.length - 1) * STEP_CARD_HEADER_OFFSET_Y
+          : groupItems.reduce((acc, it) => acc + it.height + minVerticalGap, 0) - minVerticalGap;
+
+        groupBlocks.push({
+          key,
+          items: groupItems,
+          isStacked,
+          baseY: leadItem.idealY,
+          height: totalHeight,
         });
+      });
+
+      // Sort blocks by baseY
+      groupBlocks.sort((a, b) => a.baseY - b.baseY);
+
+      // Relax vertical collisions between different group blocks
+      if (groupBlocks.length > 1) {
+        for (let i = 1; i < groupBlocks.length; i++) {
+          const prev = groupBlocks[i - 1]!;
+          const curr = groupBlocks[i]!;
+          const minAllowedY = prev.baseY + prev.height + minVerticalGap;
+          if (curr.baseY < minAllowedY) {
+            curr.baseY = minAllowedY;
+          }
+        }
+      }
+
+      // Assign positions for each group block
+      groupBlocks.forEach((block) => {
+        if (block.isStacked) {
+          if (block.items.length > 1) {
+            stackedRefDeckGroups.push(block.items.map((it) => it.node.id));
+          }
+          // Deck of cards: peeking header offsets
+          block.items.forEach((item, idx) => {
+            positionsMap.set(item.node.id, {
+              x: targetX + idx * STEP_CARD_HEADER_OFFSET_X,
+              y: block.baseY + idx * STEP_CARD_HEADER_OFFSET_Y,
+            });
+          });
+        } else {
+          // Fanned out vertically
+          let currY = block.baseY;
+          block.items.forEach((item) => {
+            positionsMap.set(item.node.id, {
+              x: targetX,
+              y: currY,
+            });
+            currY += item.height + minVerticalGap;
+          });
+        }
       });
     } else {
       // TB Layout: Reference nodes sit in a row below the service node
@@ -290,4 +365,6 @@ export function layoutHangingReferenceNodes({
       }
     });
   }
+
+  return { stackedRefDeckGroups };
 }

@@ -121,15 +121,19 @@ export const createEndpointSlice = (
         }
 
         const epSourceHandle = `endpoint-out-${updated.id}`;
+        const epTargetHandle = `endpoint-in-${updated.id}`;
         const existingDbEdges = nextEdges.filter(
           (e) =>
-            e && e.source === updated.nodeId && e.sourceHandle === epSourceHandle,
+            e &&
+            ((e.source === updated.nodeId && e.sourceHandle === epSourceHandle) ||
+              (e.target === updated.nodeId && e.targetHandle === epTargetHandle)),
         );
 
         // 1. Remove edges ONLY to DB nodes no longer in targetDbNodeIds
         existingDbEdges.forEach((edge) => {
           if (edge) {
-            const targetNode = get().nodes.find((n) => n?.id === edge.target);
+            const otherId = edge.source === updated.nodeId ? edge.target : edge.source;
+            const targetNode = get().nodes.find((n) => n?.id === otherId);
             const isDbNode =
               targetNode &&
               (targetNode.type === "db_ref" ||
@@ -137,7 +141,7 @@ export const createEndpointSlice = (
                 targetNode.type === "entity");
 
             const isTargetInConfig =
-              targetDbNodeIds.has(edge.target) ||
+              targetDbNodeIds.has(otherId) ||
               (targetNode?.type === "db_ref" &&
                 targetNode.data?.tableRef &&
                 targetDbNodeIds.has(targetNode.data.tableRef));
@@ -159,9 +163,12 @@ export const createEndpointSlice = (
           const hasEdge = nextEdges.some(
             (e) =>
               e &&
-              e.source === updated.nodeId &&
-              e.sourceHandle === epSourceHandle &&
-              (e.target === actualTargetId || e.target === targetDbId),
+              ((e.source === updated.nodeId &&
+                e.sourceHandle === epSourceHandle &&
+                (e.target === actualTargetId || e.target === targetDbId)) ||
+                (e.target === updated.nodeId &&
+                  (!e.targetHandle || e.targetHandle === epTargetHandle) &&
+                  (e.source === actualTargetId || e.source === targetDbId))),
           );
           const targetNode = get().nodes.find((n) => n?.id === actualTargetId);
           if (
@@ -175,11 +182,11 @@ export const createEndpointSlice = (
             const fractionalIndex = generateKeyBetween(lastEdgeIndex, null);
             const newEdge: BackendEdge = {
               id: `edge-${Date.now()}-${updated.id}-${actualTargetId}`,
-              source: updated.nodeId,
-              target: actualTargetId,
+              source: actualTargetId,
+              target: updated.nodeId,
               type: "connection",
-              sourceHandle: epSourceHandle,
-              targetHandle: "database-target",
+              sourceHandle: "database-source",
+              targetHandle: epTargetHandle,
               fractionalIndex,
             };
             nextEdges.push(newEdge);

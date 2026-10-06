@@ -15,6 +15,9 @@ import {
   Code2,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
+  Maximize2,
+  Minimize2,
   AlertTriangle,
   Play,
   Plus,
@@ -33,6 +36,7 @@ import { useShallow } from "zustand/react/shallow";
 import {
   useSimulationNodeState,
   getSimulationNodeBorderClass,
+  useServiceStepHandLayout,
 } from "../../common";
 import {
   getStorageOperations,
@@ -52,11 +56,23 @@ export const StorageOperationRefNode = ({
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const edges = useBackendCanvasStore((s) => s.edges);
+  const nodes = useBackendCanvasStore((s) => s.nodes);
   const addEdge = useBackendCanvasStore((s) => s.addEdge);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
   );
+
+  const {
+    cardIndex,
+    totalCards,
+    hasMultipleCards,
+    isStacked,
+    toggleStack,
+    moveCard,
+    bringCardToFront,
+  } = useServiceStepHandLayout(id, nodes, edges, updateNode);
+  const [isHovered, setIsHovered] = useState(false);
 
   const simulation = useSimulationNodeState(id);
   const borderClass = getSimulationNodeBorderClass(
@@ -326,8 +342,27 @@ export const StorageOperationRefNode = ({
 
   return (
     <div
+      onClick={(e) => {
+        if (isStacked) {
+          e.stopPropagation();
+          bringCardToFront();
+        }
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        zIndex: isStacked
+          ? selected
+            ? 1000
+            : 10 + cardIndex
+          : selected
+            ? 1000
+            : undefined,
+      }}
       className={cn(
-        "shadow-md rounded-xl bg-card border-2 min-w-[280px] max-w-[340px] flex flex-col transition-all duration-300 select-none cursor-pointer relative",
+        "shadow-md rounded-xl bg-card border-2 min-w-[280px] max-w-[340px] flex flex-col transition-all duration-200 select-none cursor-pointer relative",
+        isStacked && "shadow-lg backdrop-blur-sm",
+        isStacked && (selected || isHovered) && "ring-2 ring-amber-500/50 shadow-2xl scale-[1.01] border-amber-500",
         selected
           ? "border-amber-500 shadow-amber-500/15 ring-1 ring-amber-500/20"
           : "border-border/80 hover:border-amber-500/50 hover:shadow-lg",
@@ -393,6 +428,58 @@ export const StorageOperationRefNode = ({
           onPointerDown={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
         >
+          {hasMultipleCards && (
+            <div className="flex items-center gap-1 shrink-0 mr-0.5">
+              {isStacked ? (
+                <div className="flex items-center rounded text-[8px] font-mono font-bold bg-amber-500/15 text-amber-500 dark:text-amber-400 border border-amber-500/30 overflow-hidden shrink-0">
+                  {cardIndex > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        moveCard("up");
+                      }}
+                      className="px-1 py-0.5 hover:bg-amber-500/30 text-amber-600 dark:text-amber-400 hover:text-amber-200 transition-colors cursor-pointer"
+                      title="Move step up in stack"
+                    >
+                      <ChevronUp size={9} />
+                    </button>
+                  )}
+                  <span
+                    className="px-1.5 py-0.5 flex items-center gap-0.5"
+                    title={`Step ${cardIndex + 1} of ${totalCards} (stacked)`}
+                  >
+                    <Layers size={8} />
+                    <span>{cardIndex + 1}/{totalCards}</span>
+                  </span>
+                  {cardIndex < totalCards - 1 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        moveCard("down");
+                      }}
+                      className="px-1 py-0.5 hover:bg-amber-500/30 text-amber-600 dark:text-amber-400 hover:text-amber-200 transition-colors cursor-pointer"
+                      title="Move step down in stack"
+                    >
+                      <ChevronDown size={9} />
+                    </button>
+                  )}
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleStack();
+                }}
+                className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+                title={isStacked ? "Fan out steps" : "Stack steps into deck"}
+              >
+                {isStacked ? <Maximize2 size={12} /> : <Minimize2 size={12} />}
+              </button>
+            </div>
+          )}
           <button
             type="button"
             className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all cursor-pointer nodrag"

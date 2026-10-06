@@ -590,15 +590,16 @@ export function performGraphLayout({
   });
 
   // 6.6. Layout hanging reference nodes (Table Ref, Redis Cache Ref, Vector DB Ref) in a dedicated column right after their connected service node
-  layoutHangingReferenceNodes({
-    nodes: graphNodes,
-    positionsMap,
-    hangingRefEdges,
-    hangingRefNodes,
-    isHorizontal,
-    storeEndpoints,
-    storeEvents,
-  });
+  const { stackedRefDeckGroups = [] } =
+    layoutHangingReferenceNodes({
+      nodes: graphNodes,
+      positionsMap,
+      hangingRefEdges,
+      hangingRefNodes,
+      isHorizontal,
+      storeEndpoints,
+      storeEvents,
+    }) || {};
 
   // 6.65. Layout Payments plugin nodes (Creem Payments) immediately preceding their connected Better Auth node
   layoutPaymentsPluginNodes({
@@ -673,6 +674,12 @@ export function performGraphLayout({
               ? nodeB.id
               : null);
           if (leadA && leadB && leadA === leadB) continue;
+
+          // Skip reference cards that belong to the same endpoint deck of cards
+          const inSameRefDeck = stackedRefDeckGroups.some(
+            (group) => group.includes(nodeA.id) && group.includes(nodeB.id),
+          );
+          if (inSameRefDeck) continue;
 
           const dimB = getNodeDimensions(nodeB);
 

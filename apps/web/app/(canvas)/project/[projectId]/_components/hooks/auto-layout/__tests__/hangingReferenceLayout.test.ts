@@ -88,23 +88,15 @@ describe("hangingReferenceLayout - Auto-Layout for Hanging Reference Nodes (DB R
     const dbRefPos = posMap.get("db-ref-1")!;
     const kafkaPos = posMap.get("kafka-1")!;
 
-    // 1. Both reference nodes are placed to the right of the service node (servicePos.x + serviceWidth + gap)
-    expect(redisPos.x).toBeGreaterThan(servicePos.x);
-    expect(dbRefPos.x).toBeGreaterThan(servicePos.x);
-    expect(redisPos.x).toBeCloseTo(dbRefPos.x, 0);
+    // 1. Both reference nodes are placed to the left of the service node (ingress / input side)
+    expect(redisPos.x).toBeLessThan(servicePos.x);
+    expect(dbRefPos.x).toBeLessThan(servicePos.x);
 
-    // 2. Both reference nodes do not vertically overlap
-    const redisTop = redisPos.y;
-    const redisBottom = redisPos.y + 80;
-    const dbTop = dbRefPos.y;
-    const dbBottom = dbRefPos.y + 80;
+    // 2. Reference cards form a deck of cards peeking with offset on the endpoint
+    expect(redisPos.y).toBeGreaterThan(dbRefPos.y);
 
-    const overlaps =
-      Math.max(redisTop, dbTop) < Math.min(redisBottom, dbBottom);
-    expect(overlaps).toBe(false);
-
-    // 3. Kafka is in the downstream DAG flow and pushed strictly to the right of the reference node column
-    expect(kafkaPos.x).toBeGreaterThanOrEqual(dbRefPos.x + 240);
+    // 3. Kafka is in the downstream DAG flow and pushed strictly to the right of the service node
+    expect(kafkaPos.x).toBeGreaterThan(servicePos.x);
   });
 
   it("positions langgraph node in the reference column alongside db_ref when connected to service", () => {
@@ -202,16 +194,15 @@ describe("hangingReferenceLayout - Auto-Layout for Hanging Reference Nodes (DB R
     const langGraphPos = posMap.get("langgraph-demo")!;
     const kafkaPos = posMap.get("kafka-node")!;
 
-    // 1. Both db_ref and langgraph are placed in the reference column immediately to the right of the service node
-    expect(dbRefPos.x).toBeGreaterThan(servicePos.x);
-    expect(langGraphPos.x).toBeGreaterThan(servicePos.x);
-    expect(langGraphPos.x).toBeCloseTo(dbRefPos.x, 0);
+    // 1. Both db_ref and langgraph are placed in the reference deck to the left of the service node
+    expect(dbRefPos.x).toBeLessThan(servicePos.x);
+    expect(langGraphPos.x).toBeLessThan(servicePos.x);
 
-    // 2. Both reference nodes do not vertically overlap, and db_ref sits above langgraph
-    expect(dbRefPos.y + 80).toBeLessThanOrEqual(langGraphPos.y);
+    // 2. Reference nodes form a deck on the endpoint
+    expect(langGraphPos.y).toBeGreaterThan(dbRefPos.y);
 
-    // 3. Kafka is in the downstream DAG flow and pushed strictly to the right of the reference column (including langgraph width of 280)
-    expect(kafkaPos.x).toBeGreaterThanOrEqual(langGraphPos.x + 280);
+    // 3. Kafka is in the downstream DAG flow to the right of the service node
+    expect(kafkaPos.x).toBeGreaterThan(servicePos.x);
   });
 
   it("handles reverse connection from langgraph node to service", () => {
@@ -263,7 +254,6 @@ describe("hangingReferenceLayout - Auto-Layout for Hanging Reference Nodes (DB R
     const servicePos = posMap.get("service-1")!;
     const lgPos = posMap.get("lg-1")!;
 
-    expect(lgPos.x).toBeGreaterThan(servicePos.x);
-    expect(lgPos.x).toBeCloseTo(servicePos.x + 280 + 80, 0);
+    expect(lgPos.x).toBeLessThan(servicePos.x);
   });
 });

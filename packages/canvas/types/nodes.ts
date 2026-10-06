@@ -150,6 +150,7 @@ export interface BaseNodeData {
   definitionMode?: "visual" | "raw";
   rawTypeScript?: string;
   types?: CustomTypeItem[];
+  stackOrder?: number;
 }
 
 export interface ExternalInputVariable {

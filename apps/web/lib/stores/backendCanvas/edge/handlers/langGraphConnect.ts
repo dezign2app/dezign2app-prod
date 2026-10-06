@@ -73,6 +73,16 @@ export function handleLangGraphConnect({
     }
   }
 
+  // Snap LangGraph node to the left of the service node (ingress / input side)
+  if (langGraphNode.position && serviceNode.position && langGraphNode.position.x >= serviceNode.position.x) {
+    get().updateNode(langGraphNode.id, {
+      position: {
+        x: serviceNode.position.x - 340,
+        y: langGraphNode.position.y,
+      },
+    });
+  }
+
   const agentLabel = langGraphNode.data?.label || "LangGraph Agent";
   const stateChannels = langGraphNode.data?.stateChannels || [];
 

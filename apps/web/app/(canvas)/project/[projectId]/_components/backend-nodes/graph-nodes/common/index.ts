@@ -5,3 +5,5 @@ export * from "./EditableNodeList";
 export * from "./EndpointList";
 export * from "./MessagingResourceList";
 export * from "./RouteGroupList";
+export * from "./useServiceStepHandLayout";
+

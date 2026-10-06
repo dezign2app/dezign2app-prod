@@ -1,6 +1,6 @@
 export type LangGraphMemoryConfig = {
   enabled?: boolean;
-  checkpointer: "memory" | "postgres" | "redis" | "convex" | string;
+  checkpointer?: "memory" | "postgres" | "redis" | "convex" | string;
   checkpointerNodeId?: string;
   checkpointerEnvVar?: string;
   checkpointerConnectionId?: string;

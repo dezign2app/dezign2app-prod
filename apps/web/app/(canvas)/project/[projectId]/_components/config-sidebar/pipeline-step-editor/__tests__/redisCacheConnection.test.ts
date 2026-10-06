@@ -65,10 +65,10 @@ describe("pipeline-step-editor: Redis Cache Node and Edge Synchronization", () =
 
     const createdEdge = state.edges.find(
       (e) =>
-        e.source === serviceNodeId &&
-        e.target === cacheNodeId &&
-        e.sourceHandle === `endpoint-out-${endpointId}` &&
-        e.targetHandle === "database-target",
+        e.source === cacheNodeId &&
+        e.target === serviceNodeId &&
+        e.sourceHandle === "database-source" &&
+        e.targetHandle === `endpoint-in-${endpointId}`,
     );
     expect(createdEdge).toBeDefined();
     expect(createdEdge?.type).toBe("connection");
@@ -102,10 +102,10 @@ describe("pipeline-step-editor: Redis Cache Node and Edge Synchronization", () =
 
     const edge = state.edges.find(
       (e) =>
-        e.source === serviceNodeId &&
-        e.target === existingCacheNodeId &&
-        e.sourceHandle === `endpoint-out-${endpointId}` &&
-        e.targetHandle === "database-target",
+        e.source === existingCacheNodeId &&
+        e.target === serviceNodeId &&
+        e.sourceHandle === "database-source" &&
+        e.targetHandle === `endpoint-in-${endpointId}`,
     );
     expect(edge).toBeDefined();
   });
@@ -131,7 +131,7 @@ describe("pipeline-step-editor: Redis Cache Node and Edge Synchronization", () =
 
     state = useBackendCanvasStore.getState();
     const remainingEdges = state.edges.filter(
-      (e) => e.source === serviceNodeId && e.target === cacheNodeId,
+      (e) => e.source === cacheNodeId && e.target === serviceNodeId,
     );
     expect(remainingEdges.length).toBe(0);
     // Cascade deletion of orphaned redis-cache node
@@ -169,7 +169,7 @@ describe("pipeline-step-editor: Redis Cache Node and Edge Synchronization", () =
 
     const state = useBackendCanvasStore.getState();
     const remainingEdges = state.edges.filter(
-      (e) => e.source === serviceNodeId && e.target === cacheNodeId,
+      (e) => e.source === cacheNodeId && e.target === serviceNodeId,
     );
     expect(remainingEdges.length).toBe(1);
   });

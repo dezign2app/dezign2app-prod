@@ -114,6 +114,7 @@ export interface CanvasServiceNodeData {
   /** Local data-transformation helper functions attached to this service */
   transformerHelpers?: TransformerHelperNodeData[];
   customDependencies?: NodeDependencyItem[];
+  expandedStepStacks?: string[];
   envVars?: Array<{ id: string; name: string; description?: string }>;
 }
 
