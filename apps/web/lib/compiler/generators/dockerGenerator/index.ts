@@ -109,9 +109,7 @@ export function generateDockerFiles(
   // 1. Generate Per-Service Dockerfiles
   services.forEach((srv) => {
     const srvNode = nodes.find((n) => n.id === srv.id);
-    const techStack =
-      srvNode?.data?.techStack ||
-      (srvNode?.type === "langgraph" ? "langgraph" : "express");
+    const techStack = srvNode?.data?.techStack || "express";
     const port = String(srvNode?.data?.port || "8080");
 
     const dockerfileContent = generateServiceDockerfile(

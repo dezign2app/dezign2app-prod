@@ -16,7 +16,7 @@ import { isServiceAssociatedWithAnyWebApp } from "../webClients/nextjs/v16/servi
 export interface ClassifiedNodes {
   /** All "service" type nodes — Express / Next.js / FastAPI microservices. */
   serviceNodes: BackendNode[];
-  /** All "langgraph" type nodes — Python LangGraph AI agents. */
+  /** All "langgraph" type nodes — LangGraph AI agents (compiled as shared packages under packages/langgraph/<label>, invoked via pipeline steps in service endpoints). */
   langGraphNodes: BackendNode[];
   /** All "entity" or "db_ref" nodes — database table definitions / references. */
   entityNodes: BackendNode[];

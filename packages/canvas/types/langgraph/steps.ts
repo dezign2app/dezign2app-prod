@@ -54,6 +54,7 @@ export type LangGraphStepConfig = {
     method?: string;
     headersJson?: string;
     bodyJson?: string;
+    apiKey?: string;
     apiKeyHeader?: string;
     customLlmNodeId?: string;
   };

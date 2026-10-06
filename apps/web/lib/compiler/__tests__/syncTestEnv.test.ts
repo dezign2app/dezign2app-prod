@@ -18,6 +18,7 @@ import { BackendNode, Endpoint } from "@workspace/canvas/types";
 import { compilePostgresDatabase } from "../databases/postgres";
 import { LANGGRAPH_POSTGRES_TABLE_DEFINITIONS } from "../../../app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/utils/checkpointerTables";
 import { generateEventComponent } from "../webClients/nextjs/v16/eventGenerators";
+import { compileLangGraphNode } from "../compileLangGraphNode";
 
 const TEST_ENV_DIR = "C:/Users/subha/Downloads/test env";
 
@@ -203,6 +204,39 @@ describe("syncTestEnv via Compiler", () => {
       }
     }
 
+    const chatLgNode: BackendNode = {
+      id: "node-langgraph-chat",
+      type: "langgraph",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "chat",
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages", defaultValue: [] },
+          { key: "message", type: "string", reducer: "replace" },
+          { key: "type", type: "string", reducer: "replace" },
+        ],
+        customLlmNodes: [
+          {
+            id: "llm-1",
+            label: "Groq LLM",
+            provider: "groq",
+            model: "openai/gpt-oss-120b",
+            apiKeyHeader: "Bearer gsk_live_test_api_key_12345",
+          },
+        ],
+        memoryConfig: {
+          enabled: true,
+          checkpointer: "postgres",
+        },
+      },
+    };
+
+    const profileEdges: BackendEdge[] = [
+      { id: "e-srv-storage", source: dummyServiceNode.id, target: dummyStorageNode.id },
+      { id: "e-srv-chat", source: dummyServiceNode.id, target: chatLgNode.id },
+    ];
+
     const profileConfigs = generateConfigFiles(
       dummyServiceNode,
       "profile",
@@ -211,8 +245,8 @@ describe("syncTestEnv via Compiler", () => {
       true,
       [ep, healthEp, simpleChatEp],
       [],
-      [dummyServiceNode, dummyStorageNode],
-      [{ id: "e-srv-storage", source: dummyServiceNode.id, target: dummyStorageNode.id } as any],
+      [dummyServiceNode, dummyStorageNode, chatLgNode],
+      profileEdges,
     );
     const pkgFile = profileConfigs.find((f) => f.filename === "package.json");
     if (pkgFile) {
@@ -228,6 +262,19 @@ describe("syncTestEnv via Compiler", () => {
         fs.writeFileSync(targetPkg, JSON.stringify({ ...existing, dependencies: mergedDeps }, null, 2), "utf-8");
         console.log("Updated via compiler:", targetPkg);
       }
+    }
+
+    const envFile = profileConfigs.find((f) => f.filename === ".env");
+    if (envFile) {
+      const targetEnv = path.join(TEST_ENV_DIR, "apps/profile/.env");
+      fs.writeFileSync(targetEnv, envFile.content, "utf-8");
+      console.log("Updated via compiler:", targetEnv);
+    }
+    const envExampleFile = profileConfigs.find((f) => f.filename === ".env.example");
+    if (envExampleFile) {
+      const targetEnvExample = path.join(TEST_ENV_DIR, "apps/profile/.env.example");
+      fs.writeFileSync(targetEnvExample, envExampleFile.content, "utf-8");
+      console.log("Updated via compiler:", targetEnvExample);
     }
 
     // 3. Generate Next.js UploadImageAction component
@@ -458,6 +505,41 @@ describe("syncTestEnv via Compiler", () => {
     if (fs.existsSync(path.dirname(targetMainSecPath))) {
       fs.writeFileSync(targetMainSecPath, mainSecCode, "utf-8");
       console.log("Updated via compiler:", targetMainSecPath);
+    }
+
+    // 9. Generate and Sync LangGraph Package (packages/langgraph/chat) via Compiler
+    const lgResult = compileLangGraphNode(chatLgNode, {
+      outputMode: "package",
+      packageName: "@workspace/langgraph-chat",
+      dbPackageName: "@workspace/db",
+    });
+    const lgPkgFile = lgResult.files.find((f) => f.filename === "package.json");
+    if (lgPkgFile) {
+      expect(JSON.parse(lgPkgFile.content).scripts.dev).toBeUndefined();
+      const targetLgPkg = path.join(TEST_ENV_DIR, "packages/langgraph/chat/package.json");
+      if (fs.existsSync(targetLgPkg)) {
+        const existing = JSON.parse(fs.readFileSync(targetLgPkg, "utf-8"));
+        const generated = JSON.parse(lgPkgFile.content);
+        const merged = {
+          ...generated,
+          dependencies: {
+            ...existing.dependencies,
+            ...generated.dependencies,
+          },
+        };
+        fs.writeFileSync(targetLgPkg, JSON.stringify(merged, null, 2), "utf-8");
+        console.log("Updated via compiler:", targetLgPkg);
+      }
+    }
+
+    for (const f of lgResult.files) {
+      if (f.filename === "package.json") continue;
+      const targetPath = path.join(TEST_ENV_DIR, "packages/langgraph/chat", f.filename);
+      if (!fs.existsSync(path.dirname(targetPath))) {
+        fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+      }
+      fs.writeFileSync(targetPath, f.content, "utf-8");
+      console.log("Updated via compiler:", targetPath);
     }
   });
 });

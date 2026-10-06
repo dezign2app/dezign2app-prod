@@ -25,6 +25,7 @@ import { Button } from "@workspace/ui/components/button";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader } from "../common";
 import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
+import { NodeEnvVarsSection } from "../nodes/ai-security/ExternalEnvVarsDrawer";
 
 export interface ConnectedRouteInfo {
   edgeId: string;
@@ -415,6 +416,9 @@ export const LangGraphNode = ({
           <ExternalLink className="w-3 h-3 ml-auto text-muted-foreground" />
         </Button>
       </div>
+
+      {/* Environment Variables (.env) Section */}
+      <NodeEnvVarsSection nodeId={id} />
     </div>
   );
 };

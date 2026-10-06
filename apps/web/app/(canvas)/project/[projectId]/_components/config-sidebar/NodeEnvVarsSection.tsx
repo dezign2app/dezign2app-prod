@@ -192,6 +192,7 @@ export const NodeEnvVarsSection: React.FC<NodeEnvVarsSectionProps> = ({
 }) => {
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const allEdges = useBackendCanvasStore((s) => s.edges);
+  const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
 
   const targetNode = React.useMemo(() => {
     if (!nodeId) return undefined;
@@ -201,10 +202,10 @@ export const NodeEnvVarsSection: React.FC<NodeEnvVarsSectionProps> = ({
   const detected: DetectedEnvVar[] = React.useMemo(() => {
     if (detectedEnvVars) return detectedEnvVars;
     if (targetNode) {
-      return getDetectedPackageEnvVars(targetNode, allNodes, allEdges);
+      return getDetectedPackageEnvVars(targetNode, allNodes, allEdges, undefined, allEndpoints);
     }
     return [];
-  }, [detectedEnvVars, targetNode, allNodes, allEdges]);
+  }, [detectedEnvVars, targetNode, allNodes, allEdges, allEndpoints]);
 
   const handleImportVar = useCallback(
     (d: DetectedEnvVar) => {
@@ -214,28 +215,36 @@ export const NodeEnvVarsSection: React.FC<NodeEnvVarsSectionProps> = ({
         name: d.name,
         description: d.description || `Imported from ${d.sourceNodeLabel}`,
       };
+      if (d.exampleValue && !d.exampleValue.startsWith("<")) {
+        saveLocalEnvVariable(d.name, d.exampleValue, projectId).catch(() => {});
+      }
       onChange([...envVars, newEntry]);
       toast.success(`Imported ${d.name}`);
     },
-    [envVars, onChange],
+    [envVars, onChange, projectId],
   );
 
   const handleImportAll = useCallback(() => {
     const existing = new Set(envVars.map((v) => v.name));
     const toAdd: EnvVarEntry[] = detected
       .filter((d) => !existing.has(d.name))
-      .map((d) => ({
-        id: genId(),
-        name: d.name,
-        description: d.description || `Imported from ${d.sourceNodeLabel}`,
-      }));
+      .map((d) => {
+        if (d.exampleValue && !d.exampleValue.startsWith("<")) {
+          saveLocalEnvVariable(d.name, d.exampleValue, projectId).catch(() => {});
+        }
+        return {
+          id: genId(),
+          name: d.name,
+          description: d.description || `Imported from ${d.sourceNodeLabel}`,
+        };
+      });
     if (toAdd.length > 0) {
       onChange([...envVars, ...toAdd]);
       toast.success(
         `Imported ${toAdd.length} environment variable${toAdd.length === 1 ? "" : "s"}`,
       );
     }
-  }, [detected, envVars, onChange]);
+  }, [detected, envVars, onChange, projectId]);
 
   const handleChangeName = useCallback(
     (id: string, name: string) => {

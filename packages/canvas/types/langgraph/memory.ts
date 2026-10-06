@@ -4,6 +4,7 @@ export type LangGraphMemoryConfig = {
   checkpointerNodeId?: string;
   checkpointerEnvVar?: string;
   checkpointerConnectionId?: string;
+  connectionString?: string;
   threadIdKey?: string;
   threadScope?: "session" | "user" | "global";
   autoSummarize?: boolean;

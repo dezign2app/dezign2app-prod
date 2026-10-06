@@ -138,47 +138,44 @@ describe("compileLangGraph Compiler Fixes", () => {
     expect(toolsFile).not.toContain("z.any()");
     expect(toolsFile).not.toContain("as any");
 
-    // 3. Verify graph.ts uses ESM .js extensions
+    // 3. Verify graph.ts uses standard TS imports
     const graphFile = fileMap.get("src/graph.ts");
     expect(graphFile).toBeDefined();
-    expect(graphFile).toContain('import { ChatState } from "./state.js";');
-    expect(graphFile).toContain('import { node } from "./nodes/index.js";');
-    expect(graphFile).not.toContain('from "./state";');
-    expect(graphFile).not.toContain('from "./nodes";');
+    expect(graphFile).toContain('import { ChatState } from "./state";');
+    expect(graphFile).toContain('import { node } from "./nodes";');
 
-    // 4. Verify llm/llmConfig.ts uses ESM .js extensions
+    // 4. Verify llm/llmConfig.ts uses standard TS imports
     const llmFile = fileMap.get("src/llm/llmConfig.ts");
     expect(llmFile).toBeDefined();
-    expect(llmFile).toContain('from "../tools.js";');
-    expect(llmFile).not.toContain('from "../tools";');
+    expect(llmFile).toContain('from "../tools";');
 
-    // 5. Verify llm/index.ts uses ESM .js extensions
+    // 5. Verify llm/index.ts uses standard TS imports
     const llmIndexFile = fileMap.get("src/llm/index.ts");
     expect(llmIndexFile).toBeDefined();
-    expect(llmIndexFile).toContain('export * from "./llmConfig.js";');
+    expect(llmIndexFile).toContain('export * from "./llmConfig";');
 
-    // 6. Verify nodes/node.ts uses ESM .js extensions
+    // 6. Verify nodes/node.ts uses standard TS imports
     const nodeFile = fileMap.get("src/nodes/node.ts");
     expect(nodeFile).toBeDefined();
-    expect(nodeFile).toContain('from "../state.js";');
-    expect(nodeFile).toContain('from "../llm/llmConfig.js";');
+    expect(nodeFile).toContain('from "../state";');
+    expect(nodeFile).toContain('from "../llm/llmConfig";');
 
-    // 7. Verify nodes/index.ts uses ESM .js extensions
+    // 7. Verify nodes/index.ts uses standard TS imports
     const nodesIndexFile = fileMap.get("src/nodes/index.ts");
     expect(nodesIndexFile).toBeDefined();
-    expect(nodesIndexFile).toContain('export * from "./node.js";');
+    expect(nodesIndexFile).toContain('export * from "./node";');
 
-    // 8. Verify index.ts uses ESM .js extensions
+    // 8. Verify index.ts uses standard TS imports
     const indexFile = fileMap.get("src/index.ts");
     expect(indexFile).toBeDefined();
-    expect(indexFile).toContain('from "./graph.js";');
+    expect(indexFile).toContain('from "./graph";');
 
-    // 9. Verify server.ts uses ESM .js extensions and strongly typed express handlers
+    // 9. Verify server.ts uses standard TS imports and strongly typed express handlers
     const serverFile = fileMap.get("src/server.ts");
     expect(serverFile).toBeDefined();
     expect(serverFile).toContain('import express, { type Request, type Response } from "express";');
-    expect(serverFile).toContain('import { chatGraph } from "./graph.js";');
-    expect(serverFile).toContain('import type { ChatStateUpdateType } from "./state.js";');
+    expect(serverFile).toContain('import { chatGraph } from "./graph";');
+    expect(serverFile).toContain('import type { ChatStateUpdateType } from "./state";');
     expect(serverFile).toContain("(_req: Request, res: Response)");
     expect(serverFile).toContain("(req: Request, res: Response)");
     expect(serverFile).not.toContain("(_req, res)");

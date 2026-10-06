@@ -6,7 +6,7 @@ export function buildIndexFile(ctx: CompileContext): string {
 
   return `import "dotenv/config";
 import { HumanMessage } from "@langchain/core/messages";
-import { ${graphVarName} } from "./graph.js";
+import { ${graphVarName} } from "./graph";
 
 async function main() {
   console.log("🚀 Running ${ctx.input.graphLabel || "LangGraph Agent"}...");

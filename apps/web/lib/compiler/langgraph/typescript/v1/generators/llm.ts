@@ -44,7 +44,7 @@ export function buildIndividualLLMFile(
   ] as string[];
 
   if (toolVarNames.length > 0) {
-    imports.push(`import { ${toolVarNames.join(", ")} } from "../tools.js";`);
+    imports.push(`import { ${toolVarNames.join(", ")} } from "../tools";`);
   }
 
   const configLines: string[] = [];
@@ -85,7 +85,7 @@ export function buildLLMIndexFile(
 ): string {
   const exports = ctx.llmNodes.map((l) => {
     const meta = llmMetaMap.get(l.id);
-    return `export * from "./${meta?.fileName}.js";`;
+    return `export * from "./${meta?.fileName}";`;
   });
   return exports.join("\n") + "\n";
 }

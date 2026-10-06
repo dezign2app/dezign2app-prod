@@ -7,6 +7,7 @@ export type {
   BindingCheckSource,
   BindingCheckItem,
   EndpointLike,
+  PipelineStepDraft,
 } from "./types/pipeline";
 export type {
   RealtimeProtocol,

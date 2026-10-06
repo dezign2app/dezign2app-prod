@@ -50,7 +50,6 @@ export function compileMonorepo(
 ): CompiledMonorepoResult {
   // ── step 0 | classify nodes ───────────────────────────────────────────────
   const {
-    langGraphNodes,
     entityNodes,
     webPageNodes,
     webAppNodes,
@@ -96,7 +95,6 @@ export function compileMonorepo(
   // ── steps 5, 6 | compile all apps ────────────────────────────────────────
   const appsResult = compileAllApps({
     standaloneServiceNodes,
-    langGraphNodes,
     webAppMap,
     servicesInfo,
     webClientsInfo,
@@ -112,7 +110,6 @@ export function compileMonorepo(
     storageFunctions: sharedResult.storageFunctions,
     compiledFrontend: sharedResult.compiledFrontend,
     projectName,
-    getUniqueLangGraphFolder,
     getUniqueWebAppFolder,
   });
 

@@ -53,12 +53,42 @@ export const DEFAULT_PAYMENTS_ENV_VARS: EnvVarTemplate[] = [
   { id: "pay-webhook-secret", name: "CREEM_WEBHOOK_SECRET", description: "Creem webhook secret" },
 ];
 
+export interface CustomLlmNodeConfig {
+  id?: string;
+  label?: string;
+  provider?: string;
+  model?: string;
+  apiKey?: string;
+  apiKeyHeader?: string;
+  baseUrl?: string;
+  url?: string;
+}
+
+export interface NodeEnvDataConfig {
+  accessKeyIdEnv?: string;
+  secretAccessKeyEnv?: string;
+  defaultRegion?: string;
+  dbEngine?: string;
+  connectionStringEnv?: string;
+  dbFilePathEnv?: string;
+  port?: string | number;
+  apiKeyEnv?: string;
+  webhookSecretEnv?: string;
+  customLlmNodes?: CustomLlmNodeConfig[];
+  memoryConfig?: {
+    enabled?: boolean;
+    checkpointer?: string;
+    checkpointerEnvVar?: string;
+    connectionString?: string;
+  };
+}
+
 /**
  * Returns sensible default environment variables for a given node type and its data.
  */
 export function getDefaultNodeEnvVars(
   nodeType?: string,
-  nodeData?: Record<string, any>,
+  nodeData?: NodeEnvDataConfig,
 ): EnvVarTemplate[] {
   if (!nodeType) return [];
 
@@ -150,6 +180,81 @@ export function getDefaultNodeEnvVars(
     return [
       { id: "redis-url", name: "REDIS_URL", description: "Redis connection URI (redis://localhost:6379)" },
     ];
+  }
+
+  if (nodeType === "langgraph") {
+    const customLLMs = nodeData?.customLlmNodes || [];
+    const vars: EnvVarTemplate[] = [];
+    const seen = new Set<string>();
+
+    const getProviderKey = (p?: string) => {
+      switch (p?.toLowerCase()) {
+        case "groq":
+          return "GROQ_API_KEY";
+        case "openai":
+          return "OPENAI_API_KEY";
+        case "anthropic":
+          return "ANTHROPIC_API_KEY";
+        case "google":
+          return "GEMINI_API_KEY";
+        case "ollama":
+          return "OLLAMA_BASE_URL";
+        case "custom":
+          return "CUSTOM_LLM_API_KEY";
+        default:
+          return "LLM_API_KEY";
+      }
+    };
+
+    customLLMs.forEach((llm: CustomLlmNodeConfig, idx: number) => {
+      const p = (llm.provider || "openai").toLowerCase();
+      let key = getProviderKey(p);
+      if (llm.apiKeyHeader) {
+        const raw = String(llm.apiKeyHeader).replace(/^Bearer\s+/i, "").trim();
+        if (/^[A-Z][A-Z0-9_]*$/.test(raw) && !raw.startsWith("GSK_") && !raw.startsWith("SK_")) {
+          key = raw;
+        }
+      }
+
+      if (!seen.has(key)) {
+        seen.add(key);
+        vars.push({
+          id: `lg-llm-key-${idx}`,
+          name: key,
+          description: `API key for ${llm.label || p} (${llm.model || "default model"})`,
+        });
+      }
+
+      if ((p === "ollama" || p === "custom") && (llm.baseUrl || llm.url)) {
+        const urlKey = `${(llm.label || p).toUpperCase().replace(/[^A-Z0-9_]/g, "_")}_BASE_URL`;
+        if (!seen.has(urlKey)) {
+          seen.add(urlKey);
+          vars.push({
+            id: `lg-llm-url-${idx}`,
+            name: urlKey,
+            description: `Base URL for ${llm.label || p} LLM endpoint`,
+          });
+        }
+      }
+    });
+
+    if (vars.length === 0) {
+      vars.push({
+        id: "lg-groq-key",
+        name: "GROQ_API_KEY",
+        description: "API key for Groq LLM provider",
+      });
+    }
+
+    if (nodeData?.memoryConfig?.enabled !== false && nodeData?.memoryConfig?.checkpointerEnvVar) {
+      vars.push({
+        id: "lg-checkpointer",
+        name: nodeData.memoryConfig.checkpointerEnvVar,
+        description: `${nodeData.memoryConfig.checkpointer || "Memory"} checkpointer connection string`,
+      });
+    }
+
+    return vars;
   }
 
   return [];

@@ -39,17 +39,26 @@ export function compileLangGraphNode(
     input.redisPackageName = context.redisPackageName;
   }
 
-  // Resolve connected route callers from the main canvas edge graph
-  if (context) {
+  // Resolve connected route callers from the main canvas edge graph (app mode only).
+  // In package mode, the LangGraph node is compiled as a pure reusable library without HTTP routes.
+  if (
+    context &&
+    context.outputMode !== "package" &&
+    context.edges &&
+    context.edges.length > 0
+  ) {
     const routeEndpoints = resolveRouteEndpoints(
       node.id,
-      context.edges ?? [],
+      context.edges,
       context.nodes ?? [],
       context.endpoints ?? [],
       context.events ?? [],
     );
     input.routeEndpoints = routeEndpoints;
-    input.testCases = context.testCases?.filter(
+  }
+
+  if (context?.testCases) {
+    input.testCases = context.testCases.filter(
       (testCase) => testCase.targetNodeId === node.id,
     );
   }

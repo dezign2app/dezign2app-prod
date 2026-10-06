@@ -31,7 +31,7 @@ export function buildAgentNodeFile(
   const llmMeta = llmId ? llmMetaMap.get(llmId) : null;
   const llmVar = llmMeta ? llmMeta.varName : null;
 
-  const imports: string[] = [`import { ${schemaName}Type } from "../state.js";`];
+  const imports: string[] = [`import { ${schemaName}Type } from "../state";`];
 
   const systemPrompt = d.systemPrompt?.trim();
   if (systemPrompt && llmVar) {
@@ -39,7 +39,7 @@ export function buildAgentNodeFile(
   }
 
   if (llmVar && llmMeta) {
-    imports.push(`import { ${llmVar} } from "../llm/${llmMeta.fileName}.js";`);
+    imports.push(`import { ${llmVar} } from "../llm/${llmMeta.fileName}";`);
   }
 
   const bodyLines: string[] = [];
@@ -258,8 +258,8 @@ export function buildStepNodeFile(
       possibleTargets.size > 0 ? [...possibleTargets].join(" | ") : "string";
     const hasEnd = possibleTargets.has("typeof END");
     const importHeader = hasEnd
-      ? `import { END } from "@langchain/langgraph";\nimport { ${schemaName}Type } from "../state.js";`
-      : `import { ${schemaName}Type } from "../state.js";`;
+      ? `import { END } from "@langchain/langgraph";\nimport { ${schemaName}Type } from "../state";`
+      : `import { ${schemaName}Type } from "../state";`;
 
     return `${importHeader}
 
@@ -282,7 +282,7 @@ ${branchLines.join("\n")}
       ),
     ] as string[];
     return `import { ToolNode } from "@langchain/langgraph";
-import { ${toolVarNames.join(", ")} } from "../tools.js";
+import { ${toolVarNames.join(", ")} } from "../tools";
 
 export const ${fnName} = new ToolNode([${toolVarNames.join(", ")}]);
 `;
@@ -290,7 +290,7 @@ export const ${fnName} = new ToolNode([${toolVarNames.join(", ")}]);
 
   if (d.stepType === "human_gate" || d.stepType === "interrupt") {
     return `import { interrupt } from "@langchain/langgraph";
-import { ${schemaName}Type } from "../state.js";
+import { ${schemaName}Type } from "../state";
 
 export async function ${fnName}(state: ${schemaName}Type) {
   const humanInput = interrupt({
@@ -320,7 +320,7 @@ export async function ${fnName}(state: ${schemaName}Type) {
     }
 
     const body = bodyLines.join("\n");
-    return `import { ${schemaName}Type } from "../state.js";
+    return `import { ${schemaName}Type } from "../state";
 
 export async function ${fnName}(state: ${schemaName}Type) {
 ${body}
@@ -328,7 +328,7 @@ ${body}
 `;
   }
 
-  return `import { ${schemaName}Type } from "../state.js";
+  return `import { ${schemaName}Type } from "../state";
 
 export async function ${fnName}(state: ${schemaName}Type) {
   return {};
@@ -349,5 +349,5 @@ export function buildNodesIndexFile(
     const meta = nodeMetaMap.get(stepNode.id);
     if (meta) files.add(meta.fileName);
   }
-  return [...files].map((f) => `export * from "./${f}.js";`).join("\n") + "\n";
+  return [...files].map((f) => `export * from "./${f}";`).join("\n") + "\n";
 }

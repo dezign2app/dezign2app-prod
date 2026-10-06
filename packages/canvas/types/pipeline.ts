@@ -179,7 +179,9 @@ export interface BindingCheckItem {
 
 export interface EndpointLike {
   id: string;
+  nodeId?: string;
   pipelineSteps?: PipelineStepDraft[];
+  steps?: PipelineStepDraft[];
   publishedEvents?: PublishedEventItem[];
   responseBody?: {
     fields?: Array<{ name?: string }>;
