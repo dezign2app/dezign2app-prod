@@ -170,11 +170,23 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         }
         rightElement={
           data.readOnly ? (
-            <div
-              className="flex items-center text-muted-foreground mr-1.5 p-1"
-              title="System-managed table (Read-only)"
-            >
-              <Lock size={13} className="text-sky-500" />
+            <div className="flex items-center gap-0.5 mr-1">
+              <div
+                className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-secondary text-muted-foreground hover:text-amber-500 transition-all cursor-pointer"
+                title="Generate / Sync TypesNode"
+                onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+                  e.stopPropagation();
+                  createTypesNodeFromEntity(id);
+                }}
+              >
+                <Sparkles size={14} />
+              </div>
+              <div
+                className="flex items-center text-muted-foreground mr-1 p-1"
+                title="System-managed table (Read-only)"
+              >
+                <Lock size={13} className="text-sky-500" />
+              </div>
             </div>
           ) : (
             <div className="flex items-center gap-0.5 mr-1">

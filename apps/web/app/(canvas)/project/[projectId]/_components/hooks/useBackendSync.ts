@@ -20,6 +20,7 @@ import {
 
 import { BackendCanvasAdapter } from "@/lib/canvas-adapters/backendAdapter";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
+import { buildCompanionTypesNodeAndEdge } from "@/lib/stores/backendCanvas/node";
 import { z } from "zod";
 import {
   endpointSchema,
@@ -385,6 +386,43 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
           addedProviderIds.add(local.id);
         }
       });
+    }
+
+    // Auto-reconcile missing companion TypesNodes for entity & redis_schema tables
+    const entityNodes = nodesToSet.filter(
+      (n) =>
+        (n.type === "entity" || n.type === "redis_schema") &&
+        !n.data?.skipTypesNode,
+    );
+    const existingTypeNodeSourceIds = new Set(
+      nodesToSet
+        .filter((n) => n.type === "types" && n.data?.sourceEntityId)
+        .map((n) => n.data!.sourceEntityId),
+    );
+
+    const newlyCreatedTypesNodes: BackendNode[] = [];
+    const newlyCreatedTypesEdges: BackendEdge[] = [];
+
+    entityNodes.forEach((entity) => {
+      if (!existingTypeNodeSourceIds.has(entity.id)) {
+        const { typesNode, typesEdge } = buildCompanionTypesNodeAndEdge(
+          entity,
+          [...nodesToSet, ...newlyCreatedTypesNodes],
+          [...healedEdges, ...newlyCreatedTypesEdges],
+        );
+        newlyCreatedTypesNodes.push(typesNode);
+        newlyCreatedTypesEdges.push(typesEdge);
+        existingTypeNodeSourceIds.add(entity.id);
+      }
+    });
+
+    if (newlyCreatedTypesNodes.length > 0) {
+      nodesToSet.push(...newlyCreatedTypesNodes);
+      healedEdges.push(...newlyCreatedTypesEdges);
+      useBackendCanvasStore.setState((s) => ({
+        pendingNodeUpserts: [...s.pendingNodeUpserts, ...newlyCreatedTypesNodes],
+        pendingEdgeUpserts: [...s.pendingEdgeUpserts, ...newlyCreatedTypesEdges],
+      }));
     }
 
     setNodesAndEdges(

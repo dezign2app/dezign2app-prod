@@ -441,13 +441,18 @@ export function createExtendedTypeNode(sourceNodeId: string, sourceTypeId: strin
  * - Idempotent: if a TypesNode with `sourceEntityId` already exists, refreshes it.
  * - Opens the config drawer for the new/refreshed type automatically.
  */
-export function createTypesNodeFromEntity(entityNodeId: string): void {
+export function createTypesNodeFromEntity(
+  entityNodeId: string,
+  options?: { silent?: boolean; openConfig?: boolean },
+): void {
   const store = useBackendCanvasStore.getState();
   const entityNode = store.nodes.find(
     (n) => n.id === entityNodeId && n.type === "entity",
   );
   if (!entityNode) {
-    toast.error("Entity node not found.");
+    if (!options?.silent) {
+      toast.error("Entity node not found.");
+    }
     return;
   }
 
@@ -495,19 +500,24 @@ export function createTypesNodeFromEntity(entityNodeId: string): void {
       });
     }
 
-    store.setActiveConfigItem({
-      id: existing.id,
-      nodeId: existing.id,
-      type: "types",
-      selectedTypeId: typeId,
-    });
-    toast.success(`Refreshed "${typeItem.name}" types from entity "${tableName}"`);
+    if (options?.openConfig !== false) {
+      store.setActiveConfigItem({
+        id: existing.id,
+        nodeId: existing.id,
+        type: "types",
+        selectedTypeId: typeId,
+      });
+    }
+    if (!options?.silent) {
+      toast.success(`Refreshed "${typeItem.name}" types from entity "${tableName}"`);
+    }
     return;
   }
 
-  // ── Create a new TypesNode positioned to the right of the entity ───────────
+  // ── Create a new TypesNode positioned in Column 1 ─────────────────────────
+  const existingTypesCount = store.nodes.filter((n) => n.type === "types").length;
   const newNodeId = `types-from-entity-${entityNodeId}-${now}`;
-  const pos = entityNode.position ?? { x: 100, y: 100 };
+  const pos = { x: 60, y: 60 + existingTypesCount * 260 };
 
   const newNodeData: BackendNode["data"] = {
     label: `${pascalName} Types`,
@@ -521,7 +531,7 @@ export function createTypesNodeFromEntity(entityNodeId: string): void {
   store.addNode({
     id: newNodeId,
     type: "types",
-    position: { x: pos.x + 380, y: pos.y },
+    position: pos,
     data: newNodeData,
   });
 
@@ -536,14 +546,18 @@ export function createTypesNodeFromEntity(entityNodeId: string): void {
   });
 
   // ── Open the config drawer for the newly created type ──────────────────────
-  store.setActiveConfigItem({
-    id: newNodeId,
-    nodeId: newNodeId,
-    type: "types",
-    selectedTypeId: typeItem.id,
-  });
+  if (options?.openConfig !== false) {
+    store.setActiveConfigItem({
+      id: newNodeId,
+      nodeId: newNodeId,
+      type: "types",
+      selectedTypeId: typeItem.id,
+    });
+  }
 
-  toast.success(
-    `Generated "${typeItem.name}" TypesNode from entity "${tableName}" (${fields.length} fields)`,
-  );
+  if (!options?.silent) {
+    toast.success(
+      `Generated "${typeItem.name}" TypesNode from entity "${tableName}" (${fields.length} fields)`,
+    );
+  }
 }

@@ -5,6 +5,8 @@ import {
   CustomTypeItem,
   CustomTypeField,
 } from "@/types/canvas";
+import { generateKeyBetween } from "fractional-indexing";
+import { getLastIndex } from "../utils";
 
 /**
  * Converts a snake_case, kebab-case, or space-separated name to PascalCase.
@@ -522,4 +524,91 @@ export function syncEntityRenameReferences(
       ? { ...node, data: { ...node.data, columns: newCols } }
       : node;
   });
+}
+
+export interface CompanionTypesResult {
+  typesNode: BackendNode;
+  typesEdge: BackendEdge;
+}
+
+/**
+ * Builds a companion TypesNode and a "generates" type-reference edge for an entity or redis_schema node.
+ * Automatically aligns the TypesNode in Column 1 (x: 60) with vertical stacking based on existing types nodes.
+ */
+export function buildCompanionTypesNodeAndEdge(
+  entityNode: BackendNode,
+  existingNodes: BackendNode[] = [],
+  existingEdges: BackendEdge[] = [],
+  customPosition?: { x: number; y: number },
+): CompanionTypesResult {
+  const tableName =
+    entityNode.data?.tableName || entityNode.data?.label || "Entity";
+  const columns = entityNode.data?.columns ?? [];
+  const pascalName = toPascalCase(tableName);
+  const typeId = `type-entity-${entityNode.id}`;
+  const now = Date.now();
+
+  const fields = mapColumnsToTypeFields(
+    columns,
+    [],
+    tableName,
+    `f-${typeId}`,
+  );
+
+  const typeItem: CustomTypeItem = {
+    id: typeId,
+    name: pascalName,
+    kind: "interface",
+    description: `Auto-generated TypeScript interface from ${
+      entityNode.type === "redis_schema" ? "schema" : "entity"
+    }: ${tableName}`,
+    fields,
+  };
+
+  const typesNodeId = `types-from-entity-${entityNode.id}-${now}`;
+
+  const existingTypesCount = existingNodes.filter(
+    (n) => n.type === "types",
+  ).length;
+
+  const typesPos =
+    customPosition ?? {
+      x: 60,
+      y: 60 + existingTypesCount * 260,
+    };
+
+  const lastNodeIdx = getLastIndex(existingNodes);
+  const typesIndex = generateKeyBetween(lastNodeIdx, null);
+
+  const typesNode: BackendNode = {
+    id: typesNodeId,
+    type: "types",
+    position: typesPos,
+    fractionalIndex: typesIndex,
+    selected: false,
+    data: {
+      label: `${pascalName} Types`,
+      scope: "global",
+      sourceEntityId: entityNode.id,
+      sourceEntityName: tableName,
+      entityUpdatedAt: now,
+      types: [typeItem],
+    },
+  };
+
+  const lastEdgeIdx = getLastIndex(existingEdges);
+  const typesEdgeIdx = generateKeyBetween(lastEdgeIdx, null);
+
+  const typesEdgeId = `edge-entity-types-${entityNode.id}-${typesNodeId}`;
+  const typesEdge: BackendEdge = {
+    id: typesEdgeId,
+    source: entityNode.id,
+    target: typesNodeId,
+    targetHandle: "types-in",
+    type: "type-reference",
+    fractionalIndex: typesEdgeIdx,
+    data: { label: "generates" },
+  };
+
+  return { typesNode, typesEdge };
 }
