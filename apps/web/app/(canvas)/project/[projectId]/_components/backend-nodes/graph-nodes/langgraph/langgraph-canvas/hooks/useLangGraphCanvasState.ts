@@ -429,7 +429,7 @@ export function useLangGraphCanvasState({
     updateSelectedAgent,
     updateSelectedMemory,
     updateSelectedOutput,
-  } = useSelectedNodeState({ nodes, selectedNodeId, setNodes });
+  } = useSelectedNodeState({ nodes, selectedNodeId, setNodes, setEdges });
 
   const { handleAddStep } = useNodeFactory({
     setNodes,

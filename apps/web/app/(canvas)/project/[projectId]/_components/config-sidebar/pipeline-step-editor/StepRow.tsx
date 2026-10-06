@@ -47,6 +47,7 @@ const HAS_OUTPUT_VAR_TYPES = new Set<StepType>([
   "service_call",
   "external_call",
   "custom_code",
+  "langgraph_invoke",
 ]);
 
 function isStepType(val: string): val is StepType {
