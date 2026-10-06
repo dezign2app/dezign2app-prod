@@ -9,6 +9,49 @@ import { PipelineRenderContext } from "../types";
 import { resolveBinding } from "../sourceResolver";
 import { toVarName } from "../../../../utils";
 
+function resolvePathAccessor(path: string, ctx: PipelineRenderContext): string {
+  if (path.startsWith("headers.")) {
+    return `req.headers["${path.slice(8)}"]`;
+  }
+  const headerMatch = path.match(/(?:req\.)?headers\[['"]([^'"]+)['"]\]/);
+  if (headerMatch) {
+    return `req.headers["${headerMatch[1]}"]`;
+  }
+  if (path.startsWith("body.")) {
+    return `${ctx.bodyVar}.${path.slice(5)}`;
+  }
+  if (path.startsWith("params.")) {
+    return `req.params.${path.slice(7)}`;
+  }
+  if (path.startsWith("query.")) {
+    return `req.query.${path.slice(6)}`;
+  }
+  if (path.startsWith("event.")) {
+    return `event.${path.slice(6)}`;
+  }
+  if (path === "body") {
+    return ctx.bodyVar;
+  }
+  if (path === "headers") {
+    return "req.headers";
+  }
+  if (path === "params") {
+    return "req.params";
+  }
+  if (path === "query") {
+    return "req.query";
+  }
+  if (ctx.priorOutputs) {
+    const parts = path.split(".");
+    const first = parts[0];
+    if (first && ctx.priorOutputs.has(first)) {
+      const mappedVar = ctx.priorOutputs.get(first);
+      return parts.length > 1 ? `${mappedVar}.${parts.slice(1).join(".")}` : (mappedVar || path);
+    }
+  }
+  return `${ctx.bodyVar}?.${path}`;
+}
+
 /**
  * Renders a LangGraph agent invocation step (sync await or real-time streaming).
  */
@@ -21,6 +64,7 @@ export function renderLangGraphInvokeStep(
     functionRef,
     inputBindings = [],
     langGraphStateMapping,
+    langGraphThreadIdSource,
     langGraphStreamingEnabled,
     langGraphStreamingFields = [],
     langGraphOutputMode = "full_state",
@@ -39,39 +83,36 @@ export function renderLangGraphInvokeStep(
       ? `${toVarName(langGraphTargetNodeId)}Graph`
       : `${toVarName(rawLabel)}Graph`);
 
+  // Extract thread_id if configured or mapped
+  let threadIdExpr: string | undefined = langGraphThreadIdSource
+    ? resolvePathAccessor(langGraphThreadIdSource, ctx)
+    : undefined;
+
   // Build state input object
   const stateFields: string[] = [];
 
   if (inputBindings.length > 0) {
     for (const b of inputBindings) {
       if (b.argName) {
+        if (b.argName === "thread_id" || b.argName === "threadId") {
+          if (!threadIdExpr) {
+            threadIdExpr = resolveBinding(b, ctx);
+          }
+          continue;
+        }
         stateFields.push(`  ${JSON.stringify(b.argName)}: ${resolveBinding(b, ctx)},`);
       }
     }
   } else if (langGraphStateMapping && Object.keys(langGraphStateMapping).length > 0) {
     for (const [key, path] of Object.entries(langGraphStateMapping)) {
       if (!path) continue;
-      let accessor: string;
-      if (path.startsWith("headers.")) {
-        accessor = `req.headers["${path.slice(8)}"]`;
-      } else if (path.startsWith("body.")) {
-        accessor = `${ctx.bodyVar}.${path.slice(5)}`;
-      } else if (path.startsWith("params.")) {
-        accessor = `req.params.${path.slice(7)}`;
-      } else if (path.startsWith("query.")) {
-        accessor = `req.query.${path.slice(6)}`;
-      } else if (path === "body") {
-        accessor = ctx.bodyVar;
-      } else if (path === "headers") {
-        accessor = "req.headers";
-      } else if (path === "params") {
-        accessor = "req.params";
-      } else if (path === "query") {
-        accessor = "req.query";
-      } else {
-        accessor = `${ctx.bodyVar}?.${path}`;
+      if (key === "thread_id" || key === "threadId") {
+        if (!threadIdExpr) {
+          threadIdExpr = resolvePathAccessor(path, ctx);
+        }
+        continue;
       }
-      stateFields.push(`  ${JSON.stringify(key)}: ${accessor},`);
+      stateFields.push(`  ${JSON.stringify(key)}: ${resolvePathAccessor(path, ctx)},`);
     }
   } else {
     stateFields.push(
@@ -84,6 +125,14 @@ export function renderLangGraphInvokeStep(
       ? `{\n${stateFields.join("\n")}\n}`
       : `{ messages: [{ role: "user", content: "hello" }] }`;
 
+  const streamConfigOptions = threadIdExpr
+    ? `{ streamMode: "messages", configurable: { thread_id: ${threadIdExpr} } }`
+    : `{ streamMode: "messages" }`;
+
+  const invokeConfigOptions = threadIdExpr
+    ? `, { configurable: { thread_id: ${threadIdExpr} } }`
+    : "";
+
   if (langGraphStreamingEnabled) {
     rawLines.push(`// --- LangGraph Streaming Invocation (${step.name}) ---`);
     rawLines.push(`const agentState = ${stateInit};`);
@@ -91,7 +140,7 @@ export function renderLangGraphInvokeStep(
     rawLines.push(`res.setHeader("Cache-Control", "no-cache");`);
     rawLines.push(`res.setHeader("Connection", "keep-alive");`);
     rawLines.push(
-      `const stream = await ${graphVar}.stream(agentState, { streamMode: "messages" });`,
+      `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
     );
     rawLines.push(`for await (const chunk of stream) {`);
     rawLines.push(
@@ -125,7 +174,7 @@ export function renderLangGraphInvokeStep(
   } else {
     rawLines.push(`// --- LangGraph Invocation (${step.name}) ---`);
     rawLines.push(`const agentState = ${stateInit};`);
-    rawLines.push(`const ${outputVariable}Raw = await ${graphVar}.invoke(agentState);`);
+    rawLines.push(`const ${outputVariable}Raw = await ${graphVar}.invoke(agentState${invokeConfigOptions});`);
 
     if (langGraphOutputMode === "last_message") {
       rawLines.push(

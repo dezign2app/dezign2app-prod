@@ -106,6 +106,13 @@ export function handleLangGraphConnect({
         existingSteps.filter((s) => s.type !== "return_response").length + 1;
       const outputVar = `${toVarName(agentLabel)}Result${stepNum > 1 ? stepNum : ""}`;
 
+      const memoryConfig = langGraphNode.data?.memoryConfig;
+      const hasMemory = Boolean(
+        memoryConfig &&
+        memoryConfig.enabled !== false &&
+        memoryConfig.checkpointer,
+      );
+
       const newLangGraphStep: PipelineStep = {
         id: `step-langgraph-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         name: agentLabel,
@@ -117,6 +124,7 @@ export function handleLangGraphConnect({
         langGraphStreamingProtocol: "sse",
         langGraphOutputMode: "full_state",
         langGraphStateMapping: defaultStateMapping,
+        ...(hasMemory ? { langGraphThreadIdSource: "body.thread_id" } : {}),
         inputBindings: [],
       };
 
@@ -169,6 +177,13 @@ export function handleLangGraphConnect({
       const stepNum = existingSteps.length + 1;
       const outputVar = `${toVarName(agentLabel)}Result${stepNum > 1 ? stepNum : ""}`;
 
+      const memoryConfig = langGraphNode.data?.memoryConfig;
+      const hasMemory = Boolean(
+        memoryConfig &&
+        memoryConfig.enabled !== false &&
+        memoryConfig.checkpointer,
+      );
+
       const newLangGraphStep: PipelineStep = {
         id: `step-langgraph-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         name: agentLabel,
@@ -180,6 +195,7 @@ export function handleLangGraphConnect({
         langGraphStreamingProtocol: "sse",
         langGraphOutputMode: "full_state",
         langGraphStateMapping: defaultStateMapping,
+        ...(hasMemory ? { langGraphThreadIdSource: "event.thread_id" } : {}),
         inputBindings: [],
       };
 

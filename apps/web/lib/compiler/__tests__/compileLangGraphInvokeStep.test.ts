@@ -121,6 +121,59 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain('"answer": agentOutputRaw?.answer');
       expect(code).toContain('"confidence": agentOutputRaw?.confidence');
     });
+
+    it("passes configurable thread_id when langGraphThreadIdSource is provided (sync invoke)", () => {
+      const step: PipelineStep = {
+        id: "step-agent-memory",
+        name: "MemoryAgent",
+        type: "langgraph_invoke",
+        outputVariable: "memResult",
+        langGraphTargetNodeId: "agentMemory",
+        langGraphStreamingEnabled: false,
+        langGraphThreadIdSource: "body.thread_id",
+        langGraphStateMapping: {
+          messages: "body.message",
+        },
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain(
+        "const memResultRaw = await agentMemoryGraph.invoke(agentState, { configurable: { thread_id: body.thread_id } });",
+      );
+      // Ensure thread_id is not injected as state channel in agentState
+      expect(code).not.toContain('"thread_id"');
+      expect(code).toContain('"messages": body.message');
+    });
+
+    it("passes configurable thread_id when langGraphThreadIdSource is provided (streaming)", () => {
+      const step: PipelineStep = {
+        id: "step-agent-stream-mem",
+        name: "MemoryStreamAgent",
+        type: "langgraph_invoke",
+        langGraphTargetNodeId: "agentMemStream",
+        langGraphStreamingEnabled: true,
+        langGraphStreamingProtocol: "sse",
+        langGraphThreadIdSource: "headers.x-thread-id",
+        langGraphStateMapping: {
+          messages: "body.message",
+        },
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain(
+        'await agentMemStreamGraph.stream(agentState, { streamMode: "messages", configurable: { thread_id: req.headers["x-thread-id"] } })',
+      );
+    });
   });
 
   describe("Endpoint Route Handler Integration", () => {

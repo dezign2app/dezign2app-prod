@@ -218,6 +218,7 @@ export const safePipelineStepSchema = z.object({
   // langgraph_invoke fields
   langGraphTargetNodeId: z.string().optional(),
   langGraphStateMapping: z.record(z.string()).optional(),
+  langGraphThreadIdSource: z.string().optional(),
   langGraphStreamingEnabled: z.boolean().optional(),
   langGraphStreamingProtocol: z.enum(["sse", "websocket"]).optional(),
   langGraphStreamingFields: z.array(z.string()).optional(),

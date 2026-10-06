@@ -204,4 +204,61 @@ describe("LangGraphInvokeStepSection Payload Mapping", () => {
     expect(updatedStep.langGraphStateMapping.messages).toBeDefined();
     expect(updatedStep.langGraphStateMapping.current_message).toBeDefined();
   });
+
+  it("renders Session Thread ID section and auto-maps thread_id when agent has checkpointer memory enabled", () => {
+    const memoryAgentNode: BackendNode = {
+      id: "agent-mem-1",
+      type: "langgraph",
+      fractionalIndex: "a2",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Memory Chatbot",
+        memoryConfig: {
+          enabled: true,
+          checkpointer: "postgres",
+        },
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages" },
+        ],
+      },
+    };
+
+    const step: PipelineStepDraft = {
+      id: "step-mem-1",
+      name: "Invoke Memory Chatbot",
+      type: "langgraph_invoke",
+      langGraphTargetNodeId: "agent-mem-1",
+      langGraphStateMapping: {
+        messages: "body.message",
+      },
+      inputBindings: [
+        { argName: "messages", source: { kind: "req_body", field: "message" } },
+      ],
+    };
+
+    const handleChange = vi.fn();
+
+    render(
+      <LangGraphInvokeStepSection
+        step={step}
+        allNodes={[memoryAgentNode]}
+        availableSources={mockAvailableSources}
+        onChange={handleChange}
+      />
+    );
+
+    // Thread ID header and checkpointer badge should be rendered
+    expect(screen.getByText("Session Thread ID (Checkpointer Memory)")).toBeInTheDocument();
+    expect(screen.getByText("postgres checkpointer")).toBeInTheDocument();
+    // Hint for messages channel history loaded from DB
+    expect(screen.getByText("new input only (history from DB)")).toBeInTheDocument();
+
+    // Auto-map should include thread_id source
+    const autoMapBtn = screen.getByTitle("Auto-map default payload fields");
+    fireEvent.click(autoMapBtn);
+
+    expect(handleChange).toHaveBeenCalledTimes(1);
+    const updatedStep = handleChange.mock.calls[0]![0]!;
+    expect(updatedStep.langGraphThreadIdSource).toBe("body.thread_id");
+  });
 });

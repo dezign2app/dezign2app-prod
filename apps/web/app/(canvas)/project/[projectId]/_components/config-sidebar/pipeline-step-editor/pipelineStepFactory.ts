@@ -347,6 +347,13 @@ export function createDefaultStepDraft({
       defaultStateMapping["messages"] = isConsumer ? "event.message" : "body.message";
     }
 
+    const memoryConfig = firstAgent?.data?.memoryConfig;
+    const hasMemory = Boolean(
+      memoryConfig &&
+      memoryConfig.enabled !== false &&
+      memoryConfig.checkpointer,
+    );
+
     initialFields = {
       name: agentLabel,
       outputVariable: varName,
@@ -355,6 +362,13 @@ export function createDefaultStepDraft({
       langGraphStreamingProtocol: "sse",
       langGraphOutputMode: "full_state",
       langGraphStateMapping: defaultStateMapping,
+      ...(hasMemory
+        ? {
+            langGraphThreadIdSource: isConsumer
+              ? "event.thread_id"
+              : "body.thread_id",
+          }
+        : {}),
       inputBindings: [],
     };
   } else if (type === "push_to_client") {
