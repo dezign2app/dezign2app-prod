@@ -146,6 +146,29 @@ export function compileTransformerHelpers(
     if (h.name) allHelpersById.set(h.name, h);
   });
 
+  // Cycle detection: checks if candidateId transitively depends on sourceId
+  const causesCycle = (sourceId: string, candidateId: string): boolean => {
+    if (sourceId === candidateId) return true;
+    const visited = new Set<string>();
+    const queue = [candidateId];
+    while (queue.length > 0) {
+      const curr = queue.shift()!;
+      if (curr === sourceId) return true;
+      if (visited.has(curr)) continue;
+      visited.add(curr);
+
+      const currNode = allHelpersById.get(curr);
+      if (currNode && currNode.importedTransformerIds) {
+        for (const depId of currNode.importedTransformerIds) {
+          if (!visited.has(depId)) {
+            queue.push(depId);
+          }
+        }
+      }
+    }
+    return false;
+  };
+
   // ── Compile global helpers → packages/transformers/ ──────────────────────
   if (globalHelpers.length > 0) {
     const globalBarrelExports: string[] = [];
@@ -153,10 +176,16 @@ export function compileTransformerHelpers(
     globalHelpers.forEach((helper) => {
       const cleanName = toVarName(helper.name || "transform");
 
-      // Resolve imported transformer dependencies
+      // Resolve imported transformer dependencies (warn on cycles, but keep import so recursive logic works)
       const resolvedImports = (helper.importedTransformerIds || [])
         .map((depId) => allHelpersById.get(depId))
-        .filter((dep): dep is TransformerHelperNodeData => !!dep && dep.id !== helper.id)
+        .filter((dep): dep is TransformerHelperNodeData => {
+          if (!dep || dep.id === helper.id) return false;
+          if (causesCycle(helper.id, dep.id)) {
+            console.warn(`[compileTransformerHelpers] Circular dependency detected between ${helper.name} and ${dep.name}. User must ensure base cases exist in logic.`);
+          }
+          return true;
+        })
         .map((dep) => {
           const depName = toVarName(dep.name || "transform");
           // Global helper importing another helper in packages/transformers uses relative "./depName"
@@ -262,10 +291,16 @@ export function compileTransformerHelpers(
       const cleanName = toVarName(helper.name || "transform");
       const localImportPath = `./transformers/${cleanName}`;
 
-      // Resolve imported transformer dependencies
+      // Resolve imported transformer dependencies (warn on cycles, but keep import so recursive logic works)
       const resolvedImports = (helper.importedTransformerIds || [])
         .map((depId) => allHelpersById.get(depId))
-        .filter((dep): dep is TransformerHelperNodeData => !!dep && dep.id !== helper.id)
+        .filter((dep): dep is TransformerHelperNodeData => {
+          if (!dep || dep.id === helper.id) return false;
+          if (causesCycle(helper.id, dep.id)) {
+            console.warn(`[compileTransformerHelpers] Circular dependency detected between ${helper.name} and ${dep.name}. User must ensure base cases exist in logic.`);
+          }
+          return true;
+        })
         .map((dep) => {
           const depName = toVarName(dep.name || "transform");
           // If the dependency is global, import from @workspace/transformers

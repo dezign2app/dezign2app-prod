@@ -56,8 +56,8 @@ export const TransformerDependenciesSection: React.FC<TransformerDependenciesSec
         }
 
         const inputParamNames = (d.inputSchema || [])
-          .map((f: any) => f.name?.trim())
-          .filter(Boolean);
+          .map((f) => (typeof f.name === "string" ? f.name.trim() : ""))
+          .filter((name) => name.length > 0);
         const inputTypeName = `${toPascalCase(fnName)}Input`;
         const outputTypeName = `${toPascalCase(fnName)}Output`;
         const inputSig =
@@ -77,6 +77,49 @@ export const TransformerDependenciesSection: React.FC<TransformerDependenciesSec
         };
       });
   }, [allNodes, currentNodeId]);
+
+  // Build map of transformer node ID -> importedTransformerIds for cycle detection
+  const dependencyGraph = useMemo(() => {
+    const graph = new Map<string, string[]>();
+    allNodes.forEach((n) => {
+      if (n.type === "transformer") {
+        const rawDeps = n.data?.importedTransformerIds;
+        const deps = Array.isArray(rawDeps)
+          ? rawDeps.filter((id): id is string => typeof id === "string")
+          : [];
+        graph.set(n.id, deps);
+      }
+    });
+    return graph;
+  }, [allNodes]);
+
+  // Checks whether targetId already depends on currentNodeId directly or indirectly (DFS)
+  const wouldCauseCycle = React.useCallback(
+    (targetCandidateId: string): boolean => {
+      // If targetCandidate is currentNodeId, that's a direct self-reference
+      if (targetCandidateId === currentNodeId) return true;
+
+      // Check if targetCandidate transitively depends on currentNodeId
+      const visited = new Set<string>();
+      const queue = [targetCandidateId];
+
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        if (current === currentNodeId) return true;
+        if (visited.has(current)) continue;
+        visited.add(current);
+
+        const currentDeps = dependencyGraph.get(current) || [];
+        for (const depId of currentDeps) {
+          if (!visited.has(depId)) {
+            queue.push(depId);
+          }
+        }
+      }
+      return false;
+    },
+    [currentNodeId, dependencyGraph],
+  );
 
   const selectedTransformers = useMemo(() => {
     const set = new Set(importedTransformerIds);
@@ -138,12 +181,13 @@ export const TransformerDependenciesSection: React.FC<TransformerDependenciesSec
                 <CommandGroup heading="Available Transformers">
                   {availableTransformers.map((t) => {
                     const isSelected = importedTransformerIds.includes(t.id);
+                    const isCycle = wouldCauseCycle(t.id);
                     return (
                       <CommandItem
                         key={t.id}
                         value={`${t.name} ${t.serviceName || ""}`}
                         onSelect={() => handleToggle(t.id)}
-                        className="flex items-center justify-between gap-2 text-xs cursor-pointer py-1.5"
+                        className="flex items-center justify-between gap-2 text-xs py-1.5 cursor-pointer"
                       >
                         <div className="flex flex-col min-w-0">
                           <div className="flex items-center gap-1.5">
@@ -165,9 +209,20 @@ export const TransformerDependenciesSection: React.FC<TransformerDependenciesSec
                                 {t.serviceName ? `Local: ${t.serviceName}` : "Local"}
                               </Badge>
                             )}
+                            {isCycle && (
+                              <Badge
+                                variant="outline"
+                                className="text-[8px] px-1 py-0 h-3.5 bg-amber-500/10 text-amber-400 border-amber-500/30 font-mono"
+                                title="This creates a mutual reference between functions"
+                              >
+                                ⚠️ Circular
+                              </Badge>
+                            )}
                           </div>
                           <span className="text-[10px] text-muted-foreground font-mono truncate">
-                            {t.isAsync ? "async " : ""}({t.inputSig}) : {t.outputSig}
+                            {isCycle
+                              ? "Mutual dependency — ensure terminating condition in logic"
+                              : `${t.isAsync ? "async " : ""}(${t.inputSig}) : ${t.outputSig}`}
                           </span>
                         </div>
                         <div className="shrink-0">
@@ -190,32 +245,45 @@ export const TransformerDependenciesSection: React.FC<TransformerDependenciesSec
       {/* Selected chips list */}
       {selectedTransformers.length > 0 ? (
         <div className="flex flex-wrap gap-1.5 pt-1">
-          {selectedTransformers.map((t) => (
-            <div
-              key={t.id}
-              className="group flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-md bg-secondary/50 border border-border/60 text-xs font-mono transition-colors hover:border-purple-500/40"
-            >
-              <div className="flex items-center gap-1">
-                {t.scope === "global" ? (
-                  <Globe className="w-3 h-3 text-purple-400 shrink-0" />
-                ) : (
-                  <Server className="w-3 h-3 text-sky-400 shrink-0" />
-                )}
-                <span className="text-foreground font-semibold">{t.name}</span>
-              </div>
-              <span className="text-[10px] text-muted-foreground/80">
-                {t.scope === "global" ? "@workspace/transformers" : `./${t.name}`}
-              </span>
-              <button
-                type="button"
-                onClick={(e) => handleRemove(t.id, e)}
-                className="ml-1 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer transition-colors"
-                title="Remove dependency"
+          {selectedTransformers.map((t) => {
+            const isCycle = wouldCauseCycle(t.id);
+            return (
+              <div
+                key={t.id}
+                className={`group flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-md bg-secondary/50 border text-xs font-mono transition-colors ${
+                  isCycle
+                    ? "border-amber-500/40 bg-amber-500/5 hover:border-amber-500/60"
+                    : "border-border/60 hover:border-purple-500/40"
+                }`}
               >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
+                <div className="flex items-center gap-1">
+                  {t.scope === "global" ? (
+                    <Globe className="w-3 h-3 text-purple-400 shrink-0" />
+                  ) : (
+                    <Server className="w-3 h-3 text-sky-400 shrink-0" />
+                  )}
+                  <span className="text-foreground font-semibold">{t.name}</span>
+                </div>
+                {isCycle ? (
+                  <span className="text-[10px] text-amber-400/90 font-sans" title="Mutual circular dependency">
+                    ⚠️ circular
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground/80">
+                    {t.scope === "global" ? "@workspace/transformers" : `./${t.name}`}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => handleRemove(t.id, e)}
+                  className="ml-1 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer transition-colors"
+                  title="Remove dependency"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="text-[11px] text-muted-foreground/70 italic px-1">

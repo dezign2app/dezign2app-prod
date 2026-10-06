@@ -51,6 +51,7 @@ export interface ImportedTransformerItem {
   outputSignature?: string;
   importPath?: string;
   exampleCall?: string;
+  isCircular?: boolean;
 }
 
 export interface BusinessLogicBlockProps {

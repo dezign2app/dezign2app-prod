@@ -369,7 +369,12 @@ export const LogicInputSection = React.memo(function LogicInputSection({
                   >
                     <span className="text-muted-foreground font-mono truncate">
                       <span className="text-purple-400 font-medium">// {t.isAsync ? "await " : ""}{t.name}</span>
-                      <span className="text-muted-foreground/80">({t.inputSignature || "input"}): {t.outputSignature || "any"}</span>
+                      <span className="text-muted-foreground/80">({t.inputSignature || "input"}): {t.outputSignature || "Record<string, unknown>"}</span>
+                      {t.isCircular && (
+                        <span className="ml-1.5 text-[9px] text-amber-400 font-sans font-medium">
+                          ⚠️ circular
+                        </span>
+                      )}
                     </span>
                     <button
                       type="button"
@@ -385,6 +390,11 @@ export const LogicInputSection = React.memo(function LogicInputSection({
                     </button>
                   </div>
                 ))}
+                {importedTransformers.some((t) => t.isCircular) && (
+                  <div className="mt-1 pt-1 border-t border-purple-500/20 text-[9px] text-amber-400/90 font-sans flex items-center gap-1 select-none">
+                    <span>⚠️ Mutual circular reference detected. Ensure terminating base conditions exist in your logic to avoid infinite call loops.</span>
+                  </div>
+                )}
               </div>
             )}
 
