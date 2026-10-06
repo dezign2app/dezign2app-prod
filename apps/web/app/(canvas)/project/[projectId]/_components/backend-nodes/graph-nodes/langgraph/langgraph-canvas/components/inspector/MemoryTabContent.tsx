@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useParams, useRouter } from "next/navigation";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,7 @@ import {
   Plus,
   Lock,
   X,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -47,6 +49,17 @@ export function MemoryTabContent({
   setMemoryConfig,
   onClose,
 }: MemoryTabContentProps) {
+  const params = useParams();
+  const router = useRouter();
+  const projectId = (params?.projectId as string) || "";
+
+  const handleOpenSchemaView = () => {
+    useBackendCanvasStore.getState().setView("schema");
+    if (projectId) {
+      router.push(`/project/${projectId}/schemas`);
+    }
+  };
+
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
   const addNode = useBackendCanvasStore((s) => s.addNode);
@@ -261,7 +274,7 @@ export function MemoryTabContent({
       {hasMissingLinkedDb && (
         <div className="flex items-start gap-2 p-3 rounded-xl bg-destructive/15 border border-destructive/30 text-destructive text-xs leading-relaxed">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1.5 flex-1">
             <span className="font-bold">Database Required</span>
             <span>
               {currentEngine === "postgres"
@@ -272,6 +285,19 @@ export function MemoryTabContent({
                   ? "No Redis instances exist in SchemaView. Please create a Redis Instance in SchemaView."
                   : "Please select a Redis instance from SchemaView."}
             </span>
+            {(currentEngine === "postgres"
+              ? postgresDatabaseNodes.length === 0
+              : redisNodes.length === 0) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-1 h-7 text-xs border-destructive/40 text-destructive hover:bg-destructive/20 w-fit gap-1.5"
+                onClick={handleOpenSchemaView}
+              >
+                <span>Open Schema View</span>
+                <ExternalLink className="w-3 h-3" />
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -336,6 +362,19 @@ export function MemoryTabContent({
             </SelectContent>
           </Select>
 
+          {postgresDatabaseNodes.length === 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleOpenSchemaView}
+              className="h-7 text-xs border-dashed text-muted-foreground hover:text-foreground gap-1.5 justify-center"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Create PostgreSQL Database in Schema View</span>
+            </Button>
+          )}
+
           {/* Table Provisioning Status & Action */}
           <CheckpointerTablesList
             checkpointerType="postgres"
@@ -394,6 +433,19 @@ export function MemoryTabContent({
               )}
             </SelectContent>
           </Select>
+
+          {redisNodes.length === 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleOpenSchemaView}
+              className="h-7 text-xs border-dashed text-muted-foreground hover:text-foreground gap-1.5 justify-center"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Create Redis Instance in Schema View</span>
+            </Button>
+          )}
 
           {/* Redis Schema Provisioning Status & Action */}
           <CheckpointerTablesList
