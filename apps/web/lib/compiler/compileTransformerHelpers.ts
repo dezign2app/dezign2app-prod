@@ -215,7 +215,7 @@ export function compileTransformerHelpers(
       const paramSignature =
         inputParamNames.length > 0
           ? `{ ${inputParamNames.join(", ")} }: ${inputTypeName}`
-          : `input: ${inputTypeName}`;
+          : "";
 
       allReusable.push({
         name: cleanName,
@@ -334,7 +334,7 @@ export function compileTransformerHelpers(
       const paramSignature =
         inputParamNames.length > 0
           ? `{ ${inputParamNames.join(", ")} }: ${inputTypeName}`
-          : `input: ${inputTypeName}`;
+          : "";
 
       allReusable.push({
         name: cleanName,

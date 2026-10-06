@@ -50,16 +50,21 @@ export function generateTransformerFile(
   const inputTypeName = `${Pascal}Input`;
   const outputTypeName = `${Pascal}Output`;
 
+  const inputParamNames = (helper.inputSchema || [])
+    .map((f) => f.name?.trim())
+    .filter(Boolean);
+  const hasInputFields = inputParamNames.length > 0;
+
   // ── Build input interface ────────────────────────────────────────────────
   const inputFields =
-    helper.inputSchema && helper.inputSchema.length > 0
-      ? helper.inputSchema
+    hasInputFields
+      ? helper.inputSchema!
           .map(
             (f) =>
               `  ${f.name}${f.required === false ? "?" : ""}: ${renderFieldType(f)};`,
           )
           .join("\n")
-      : "  [key: string]: string | number | boolean | null;";
+      : "";
 
   // ── Build output interface ───────────────────────────────────────────────
   const returnSchema = reconcileReturnSchema(
@@ -120,13 +125,10 @@ export function generateTransformerFile(
     : `/**\n * Pure data-transformation function: ${fnName}\n * Auto-generated — edit the transformer definition to regenerate.\n */\n`;
 
   // Build destructured parameter signature if input schema fields are named
-  const inputParamNames = (helper.inputSchema || [])
-    .map((f) => f.name?.trim())
-    .filter(Boolean);
   const paramSignature =
-    inputParamNames.length > 0
+    hasInputFields
       ? `{ ${inputParamNames.join(", ")} }: ${inputTypeName}`
-      : `input: ${inputTypeName}`;
+      : "";
 
   const importsStr =
     resolvedImports && resolvedImports.length > 0
@@ -135,11 +137,18 @@ export function generateTransformerFile(
           .join("\n") + "\n\n"
       : "";
 
+  const shouldEmitInputInterface =
+    hasInputFields || (hasFunctionDecl && rawCode.includes(inputTypeName));
+
+  const inputInterfaceDoc = shouldEmitInputInterface
+    ? `export interface ${inputTypeName} {\n${inputFields || "  [key: string]: string | number | boolean | null;"}\n}\n\n`
+    : "";
+
   const content = hasFunctionDecl
     ? // Full declaration — use as-is after renaming
-      `${importsStr}${fnDescription}export interface ${inputTypeName} {\n${inputFields}\n}\n\nexport interface ${outputTypeName} {\n${outputFields}\n}\n\n${processedCode}\n`
+      `${importsStr}${fnDescription}${inputInterfaceDoc}export interface ${outputTypeName} {\n${outputFields}\n}\n\n${processedCode}\n`
     : // Body-only — wrap in a generated declaration
-      `${importsStr}${fnDescription}export interface ${inputTypeName} {\n${inputFields}\n}\n\nexport interface ${outputTypeName} {\n${outputFields}\n}\n\nexport ${asyncKw}function ${fnName}(${paramSignature}): ${returnTypeAnnotation} {\n${body}\n}\n`;
+      `${importsStr}${fnDescription}${inputInterfaceDoc}export interface ${outputTypeName} {\n${outputFields}\n}\n\nexport ${asyncKw}function ${fnName}(${paramSignature}): ${returnTypeAnnotation} {\n${body}\n}\n`;
 
   return {
     filename: `src/${fnName}.ts`,

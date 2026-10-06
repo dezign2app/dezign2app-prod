@@ -122,34 +122,47 @@ function isTransformerStepUnconfigured(
 ): boolean {
   if (!step.functionRef?.name && !step.transformerNodeId) return true;
 
-  // Resolve input schema from step or from graph nodes
-  let inputSchema = step.functionRef?.inputSchema;
-  if (!inputSchema || inputSchema.length === 0) {
-    const tNode = allNodes.find(
-      (n) =>
-        (n.type === "transformer" || n.type === "transformer_ref") &&
-        (n.id === step.functionRef?.name ||
-          n.data?.functionName === step.functionRef?.name ||
-          n.data?.label === step.functionRef?.name ||
-          n.id === step.transformerNodeId),
+  // Resolve input schema from graph nodes (live canvas truth) or fallback to step
+  const tNode = allNodes.find(
+    (n) =>
+      (n.type === "transformer" || n.type === "transformer_ref") &&
+      (n.id === step.transformerNodeId ||
+        n.id === step.functionRef?.name ||
+        n.data?.functionName === step.functionRef?.name ||
+        n.data?.label === step.functionRef?.name ||
+        (step.functionRef?.name && (
+          toVarName(n.data?.functionName || "") === toVarName(step.functionRef.name) ||
+          toVarName(n.data?.label || "") === toVarName(step.functionRef.name)
+        ))),
+  );
+
+  let inputSchema:
+    | Array<{ name: string; type?: string; required?: boolean }>
+    | undefined = tNode?.data?.inputSchema;
+  if (tNode?.type === "transformer_ref" && tNode.data?.transformerRef) {
+    const master = allNodes.find(
+      (m) =>
+        m.type === "transformer" &&
+        (m.id === tNode.data?.transformerRef ||
+          m.data?.functionName === tNode.data?.transformerRef ||
+          m.data?.label === tNode.data?.transformerRef ||
+          (tNode.data?.transformerRef && (
+            toVarName(m.data?.functionName || "") === toVarName(tNode.data.transformerRef) ||
+            toVarName(m.data?.label || "") === toVarName(tNode.data.transformerRef)
+          ))),
     );
-    if (tNode) {
-      if (tNode.type === "transformer_ref" && tNode.data?.transformerRef) {
-        const master = allNodes.find(
-          (m) =>
-            m.type === "transformer" &&
-            (m.id === tNode.data?.transformerRef ||
-              m.data?.functionName === tNode.data?.transformerRef ||
-              m.data?.label === tNode.data?.transformerRef),
-        );
-        inputSchema = master?.data?.inputSchema || [];
-      } else {
-        inputSchema = tNode.data?.inputSchema || [];
-      }
+    if (master) {
+      inputSchema = master.data?.inputSchema;
     }
   }
 
-  if (inputSchema && inputSchema.length > 0) {
+  // Fallback to step.functionRef if node was not found
+  if (inputSchema === undefined) {
+    inputSchema = step.functionRef?.inputSchema;
+  }
+
+  // If input schema has fields
+  if (Array.isArray(inputSchema) && inputSchema.length > 0) {
     const validSchemaFields = inputSchema.filter(
       (f) => Boolean(f && f.name && f.name.trim().length > 0),
     );
@@ -159,27 +172,24 @@ function isTransformerStepUnconfigured(
     const fieldsToCheck =
       requiredFields.length > 0 ? requiredFields : validSchemaFields;
 
-    if (fieldsToCheck.length > 0 && bindings.length === 0) return true;
+    if (fieldsToCheck.length > 0) {
+      if (bindings.length === 0) return true;
 
-    for (const field of fieldsToCheck) {
-      const binding = bindings.find(
-        (b) =>
-          (b.argName || "").trim().toLowerCase() ===
-          field.name.trim().toLowerCase(),
-      );
-      if (!binding || !isBindingSourceConfigured(binding)) {
-        return true;
+      for (const field of fieldsToCheck) {
+        const binding = bindings.find(
+          (b) =>
+            (b.argName || "").trim().toLowerCase() ===
+            field.name.trim().toLowerCase(),
+        );
+        if (!binding || !isBindingSourceConfigured(binding)) {
+          return true;
+        }
       }
     }
-  } else if (inputSchema && inputSchema.length === 0) {
-    // Explicitly zero arguments required for this transformer
-    if (bindings.some((b) => !isBindingSourceConfigured(b))) return true;
     return false;
-  } else {
-    if (bindings.length === 0) return true;
-    if (bindings.some((b) => !isBindingSourceConfigured(b))) return true;
   }
 
+  // If input schema is not configured or empty: zero inputs required func()
   return false;
 }
 
