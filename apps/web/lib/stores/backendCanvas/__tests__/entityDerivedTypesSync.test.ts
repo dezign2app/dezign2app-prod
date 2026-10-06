@@ -388,4 +388,108 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
     expect(typesNode?.data?.types?.[0]?.name).toBe("LanggraphCheckpoints");
     expect(typesNode?.data?.types?.[0]?.fields).toHaveLength(2);
   });
+
+  it("automatically generates companion TypesNodes for tables created by authNode (Better Auth)", () => {
+    const store = useBackendCanvasStore.getState();
+
+    // 1. Simulate Auth Node creating core Better Auth tables (user, session, account, verification)
+    const authTables = [
+      {
+        id: "tbl-auth-user",
+        type: "entity" as const,
+        position: { x: 400, y: 100 },
+        data: {
+          label: "user",
+          tableName: "user",
+          description: "Better Auth user account identity record",
+          columns: [
+            { name: "id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+            { name: "name", type: "TEXT", isNotNull: true },
+            { name: "email", type: "TEXT", isNotNull: true },
+            { name: "emailVerified", type: "BOOLEAN", isNotNull: true },
+            { name: "image", type: "TEXT", isNotNull: false },
+            { name: "createdAt", type: "TIMESTAMP", isNotNull: true },
+            { name: "updatedAt", type: "TIMESTAMP", isNotNull: true },
+          ],
+        },
+      },
+      {
+        id: "tbl-auth-session",
+        type: "entity" as const,
+        position: { x: 400, y: 240 },
+        data: {
+          label: "session",
+          tableName: "session",
+          description: "Better Auth active session record",
+          columns: [
+            { name: "id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+            { name: "userId", type: "TEXT", isNotNull: true, isForeignKey: true },
+            { name: "token", type: "TEXT", isNotNull: true },
+            { name: "expiresAt", type: "TIMESTAMP", isNotNull: true },
+            { name: "ipAddress", type: "TEXT", isNotNull: false },
+            { name: "userAgent", type: "TEXT", isNotNull: false },
+          ],
+        },
+      },
+      {
+        id: "tbl-auth-account",
+        type: "entity" as const,
+        position: { x: 400, y: 380 },
+        data: {
+          label: "account",
+          tableName: "account",
+          description: "Better Auth social/credential account mapping",
+          columns: [
+            { name: "id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+            { name: "userId", type: "TEXT", isNotNull: true, isForeignKey: true },
+            { name: "accountId", type: "TEXT", isNotNull: true },
+            { name: "providerId", type: "TEXT", isNotNull: true },
+            { name: "accessToken", type: "TEXT", isNotNull: false },
+          ],
+        },
+      },
+    ];
+
+    for (const tbl of authTables) {
+      store.addNode(tbl);
+    }
+
+    const state = useBackendCanvasStore.getState();
+
+    // Verify companion TypesNode for 'user' table
+    const userTypesNode = state.nodes.find(
+      (n) => n.type === "types" && n.data?.sourceEntityId === "tbl-auth-user",
+    );
+    expect(userTypesNode).toBeDefined();
+    expect(userTypesNode?.data?.label).toBe("User Types");
+    expect(userTypesNode?.data?.types?.[0]?.name).toBe("User");
+    expect(userTypesNode?.data?.types?.[0]?.fields).toHaveLength(7);
+
+    // Verify companion TypesNode for 'session' table
+    const sessionTypesNode = state.nodes.find(
+      (n) => n.type === "types" && n.data?.sourceEntityId === "tbl-auth-session",
+    );
+    expect(sessionTypesNode).toBeDefined();
+    expect(sessionTypesNode?.data?.label).toBe("Session Types");
+    expect(sessionTypesNode?.data?.types?.[0]?.name).toBe("Session");
+    expect(sessionTypesNode?.data?.types?.[0]?.fields).toHaveLength(6);
+
+    // Verify companion TypesNode for 'account' table
+    const accountTypesNode = state.nodes.find(
+      (n) => n.type === "types" && n.data?.sourceEntityId === "tbl-auth-account",
+    );
+    expect(accountTypesNode).toBeDefined();
+    expect(accountTypesNode?.data?.label).toBe("Account Types");
+    expect(accountTypesNode?.data?.types?.[0]?.name).toBe("Account");
+    expect(accountTypesNode?.data?.types?.[0]?.fields).toHaveLength(5);
+
+    // Verify all generated type-reference edges exist with label 'generates'
+    for (const tbl of authTables) {
+      const edge = state.edges.find(
+        (e) => e.source === tbl.id && e.type === "type-reference",
+      );
+      expect(edge).toBeDefined();
+      expect(edge?.data?.label).toBe("generates");
+    }
+  });
 });
