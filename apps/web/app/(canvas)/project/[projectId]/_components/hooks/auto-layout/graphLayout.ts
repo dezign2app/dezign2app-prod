@@ -500,6 +500,56 @@ export function performGraphLayout({
     );
   });
 
+  // Bridge external/upstream connections through hanging reference nodes to their service
+  // so Dagre maintains proper topological rank ordering
+  hangingRefNodes.forEach((refNode) => {
+    const serviceEdge = hangingRefEdges.find((e) => {
+      const otherId = e.target === refNode.id ? e.source : e.target;
+      const otherNode = graphNodes.find((n) => n.id === otherId);
+      return (
+        otherNode &&
+        (otherNode.type === "service" ||
+          otherNode.type === "microservice" ||
+          otherNode.type === "backend" ||
+          otherNode.type === "api")
+      );
+    });
+    if (!serviceEdge) return;
+    const serviceId =
+      serviceEdge.target === refNode.id ? serviceEdge.source : serviceEdge.target;
+
+    const callerEdges = graphEdges.filter(
+      (e) =>
+        e.id !== serviceEdge.id &&
+        (e.target === refNode.id || e.source === refNode.id),
+    );
+
+    callerEdges.forEach((ce) => {
+      const callerId = ce.target === refNode.id ? ce.source : ce.target;
+      const callerNode = graphNodes.find((n) => n.id === callerId);
+      if (
+        callerNode &&
+        callerNode.type !== "storage" &&
+        callerNode.type !== "database" &&
+        callerNode.type !== "redis_instance" &&
+        callerNode.type !== "entity" &&
+        callerId !== serviceId
+      ) {
+        const remappedCaller = secondaryToLeadPageMap.get(callerId) ?? callerId;
+        const key = `${remappedCaller}:->${serviceId}:`;
+        if (!seenFlowEdgeKeys.has(key)) {
+          seenFlowEdgeKeys.add(key);
+          flowEdges.push({
+            id: `bridge-${remappedCaller}->${serviceId}`,
+            source: remappedCaller,
+            target: serviceId,
+            type: "connection",
+          });
+        }
+      }
+    });
+  });
+
   const mainGraphNodes: LayoutNode[] = graphNodes.filter(
     (n: LayoutNode) =>
       !attachedHeadNodeIdSet.has(n.id) &&
@@ -589,7 +639,7 @@ export function performGraphLayout({
     storeEvents,
   });
 
-  // 6.6. Layout hanging reference nodes (Table Ref, Redis Cache Ref, Vector DB Ref) in a dedicated column right after their connected service node
+  // 6.6. Layout hanging reference nodes (Table Ref, Redis Cache Ref, Vector DB Ref, LangGraph, Storage Bucket Ref) in a dedicated column immediately preceding (to the left of) their connected service node
   const { stackedRefDeckGroups = [] } =
     layoutHangingReferenceNodes({
       nodes: graphNodes,
