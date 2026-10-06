@@ -26,11 +26,79 @@ interface PackageJsonStructure {
 // In-memory cache keyed by "packageName@version"
 const extractionCache = new Map<string, PackageTypeExtractionResult>();
 
-function resolvePackageDirectory(pkg: string): string | null {
+function resolvePackageDirectory(pkg: string, projectDir?: string): string | null {
   const cwd = process.cwd();
   const pkgParts = pkg.split("/");
 
-  // 1. Search upwards in node_modules from potential workspace roots (pure fs, no Turbopack bundler warnings)
+  // 1. If projectDir is provided, prioritize searching inside that project
+  if (projectDir) {
+    const cleanProjectDir = path.resolve(projectDir);
+    if (fs.existsSync(cleanProjectDir)) {
+      // 1a. Direct candidates inside projectDir
+      const directCandidates = [
+        path.join(cleanProjectDir, "node_modules", pkg),
+        path.join(cleanProjectDir, "node_modules", ...pkgParts),
+        path.join(cleanProjectDir, "node_modules", ".pnpm", "node_modules", pkg),
+        path.join(cleanProjectDir, "node_modules", ".pnpm", "node_modules", ...pkgParts),
+      ];
+
+      for (const candidate of directCandidates) {
+        if (fs.existsSync(candidate) && fs.existsSync(path.join(candidate, "package.json"))) {
+          return candidate;
+        }
+      }
+
+      // 1b. Check apps/* and packages/* inside projectDir
+      const subFolders = ["apps", "packages"];
+      for (const folder of subFolders) {
+        const folderPath = path.join(cleanProjectDir, folder);
+        if (fs.existsSync(folderPath)) {
+          try {
+            const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+            for (const entry of entries) {
+              if (entry.isDirectory()) {
+                const subCandidate = path.join(folderPath, entry.name, "node_modules", ...pkgParts);
+                if (fs.existsSync(subCandidate) && fs.existsSync(path.join(subCandidate, "package.json"))) {
+                  return subCandidate;
+                }
+              }
+            }
+          } catch {}
+        }
+      }
+
+      // 1c. Check pnpm virtual store inside projectDir (.pnpm/<name>@<version>/node_modules/<name>)
+      const pnpmVirtualStore = path.join(cleanProjectDir, "node_modules", ".pnpm");
+      if (fs.existsSync(pnpmVirtualStore)) {
+        try {
+          const pnpmEntries = fs.readdirSync(pnpmVirtualStore, { withFileTypes: true });
+          const escapedPkgPrefix = pkg.replace("/", "+");
+          for (const entry of pnpmEntries) {
+            if (entry.isDirectory() && entry.name.startsWith(`${escapedPkgPrefix}@`)) {
+              const cand = path.join(pnpmVirtualStore, entry.name, "node_modules", ...pkgParts);
+              if (fs.existsSync(cand) && fs.existsSync(path.join(cand, "package.json"))) {
+                return cand;
+              }
+            }
+          }
+        } catch {}
+      }
+
+      // 1d. Upward traversal from projectDir
+      let searchDir = cleanProjectDir;
+      while (true) {
+        const candidateDir = path.join(searchDir, "node_modules", ...pkgParts);
+        if (fs.existsSync(candidateDir) && fs.existsSync(path.join(candidateDir, "package.json"))) {
+          return candidateDir;
+        }
+        const parentDir = path.dirname(searchDir);
+        if (parentDir === searchDir) break;
+        searchDir = parentDir;
+      }
+    }
+  }
+
+  // 2. Search upwards in node_modules from potential workspace roots (pure fs, no Turbopack bundler warnings)
   const searchRoots = [
     cwd,
     path.join(cwd, "apps", "web"),
@@ -51,7 +119,7 @@ function resolvePackageDirectory(pkg: string): string | null {
     }
   }
 
-  // 2. Direct candidate directory checks
+  // 3. Direct candidate directory checks
   const candidatePaths = [
     path.join(cwd, "node_modules", pkg),
     path.join(cwd, "node_modules", ...pkgParts),
@@ -338,7 +406,10 @@ function extractTypeFromDecl(
   return null;
 }
 
-export function extractPackageTypesFromNodeModules(pkg: string): PackageTypeExtractionResult {
+export function extractPackageTypesFromNodeModules(
+  pkg: string,
+  projectDir?: string,
+): PackageTypeExtractionResult {
   const trimmedPkg = pkg.trim();
   if (!trimmedPkg) {
     return {
@@ -349,7 +420,7 @@ export function extractPackageTypesFromNodeModules(pkg: string): PackageTypeExtr
     };
   }
 
-  const pkgDir = resolvePackageDirectory(trimmedPkg);
+  const pkgDir = resolvePackageDirectory(trimmedPkg, projectDir);
   if (!pkgDir) {
     return {
       installed: false,
@@ -370,7 +441,7 @@ export function extractPackageTypesFromNodeModules(pkg: string): PackageTypeExtr
     };
   }
 
-  const cacheKey = `${trimmedPkg}@${version || "unknown"}`;
+  const cacheKey = `${trimmedPkg}@${version || "unknown"}:${projectDir || "default"}`;
   const cached = extractionCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -381,7 +452,7 @@ export function extractPackageTypesFromNodeModules(pkg: string): PackageTypeExtr
       allowJs: true,
       declaration: true,
       target: ts.ScriptTarget.Latest,
-      moduleResolution: ts.ModuleResolutionKind.Node10,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
     });
 
     const typeChecker = program.getTypeChecker();
@@ -414,7 +485,14 @@ export function extractPackageTypesFromNodeModules(pkg: string): PackageTypeExtr
           continue;
         }
 
-        const declarations = exportSym.declarations;
+        let targetSym = exportSym;
+        if ((exportSym.flags & ts.SymbolFlags.Alias) !== 0) {
+          try {
+            targetSym = typeChecker.getAliasedSymbol(exportSym);
+          } catch {}
+        }
+
+        const declarations = targetSym.declarations;
         if (!declarations || declarations.length === 0) continue;
 
         const primaryDecl = declarations[0];

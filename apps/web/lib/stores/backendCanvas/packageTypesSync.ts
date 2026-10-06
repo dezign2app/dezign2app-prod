@@ -1,6 +1,7 @@
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import type { CustomTypeItem, BackendNode } from "@/types/canvas";
 import { toast } from "sonner";
+import { getActiveProjectOutputDir } from "@/lib/utils/localEnvSync";
 import {
   toPascalCase,
   mapColumnsToTypeFields,
@@ -22,6 +23,7 @@ export interface FetchPackageTypesResponse {
  */
 export async function fetchPackageTypesFromNodeModules(
   pkg: string,
+  outputDir?: string,
 ): Promise<FetchPackageTypesResponse> {
   const trimmedPkg = pkg.trim();
   if (!trimmedPkg) {
@@ -33,10 +35,15 @@ export async function fetchPackageTypesFromNodeModules(
     };
   }
 
+  const resolvedOutputDir = outputDir || getActiveProjectOutputDir();
+
   try {
-    const res = await fetch(
-      `/api/packages/extract-types?pkg=${encodeURIComponent(trimmedPkg)}`,
-    );
+    const params = new URLSearchParams({ pkg: trimmedPkg });
+    if (resolvedOutputDir) {
+      params.set("outputDir", resolvedOutputDir);
+    }
+
+    const res = await fetch(`/api/packages/extract-types?${params.toString()}`);
     if (!res.ok) {
       return {
         installed: false,
@@ -76,16 +83,18 @@ export async function fetchPackageTypesFromNodeModules(
 export async function refreshPackageTypesFromNodeModules(
   typesNodeId: string,
   pkg: string,
+  outputDir?: string,
 ): Promise<boolean> {
   const store = useBackendCanvasStore.getState();
   const node = store.nodes.find((n) => n.id === typesNodeId);
   if (!node) return false;
 
-  const result = await fetchPackageTypesFromNodeModules(pkg);
+  const resolvedOutputDir = outputDir || getActiveProjectOutputDir();
+  const result = await fetchPackageTypesFromNodeModules(pkg, resolvedOutputDir);
   const currentNode = useBackendCanvasStore.getState().nodes.find((n) => n.id === typesNodeId);
   if (!currentNode) return false;
 
-  if (result.installed && result.types.length > 0) {
+  if (result.installed) {
     useBackendCanvasStore.getState().updateNode(typesNodeId, {
       data: {
         ...currentNode.data,
@@ -96,7 +105,11 @@ export async function refreshPackageTypesFromNodeModules(
         packageVersion: result.version,
       },
     });
-    toast.success(`Inferred ${result.types.length} types from ${pkg} in node_modules`);
+    if (result.types.length > 0) {
+      toast.success(`Inferred ${result.types.length} types from ${pkg} in node_modules`);
+    } else {
+      toast.success(`Package "${pkg}" detected in node_modules`);
+    }
     return true;
   }
 
@@ -125,12 +138,14 @@ export async function syncPackageToDiskPackageJson(params: {
   version?: string;
   isDev?: boolean;
   nodeType?: "service" | "webApp" | "webPage";
+  outputDir?: string;
 }): Promise<boolean> {
   try {
+    const resolvedOutputDir = params.outputDir || getActiveProjectOutputDir();
     const res = await fetch("/api/packages/sync-package-json", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params),
+      body: JSON.stringify({ ...params, outputDir: resolvedOutputDir }),
     });
     return res.ok;
   } catch {
@@ -147,6 +162,7 @@ export async function syncPackageToDiskPackageJson(params: {
 export function syncPackageTypesToCanvas(
   targetNodeId: string,
   packages: string[],
+  outputDir?: string,
 ) {
   if (!packages || packages.length === 0 || !targetNodeId) return;
 
@@ -156,6 +172,8 @@ export function syncPackageTypesToCanvas(
 
   const targetNode = nodes.find((n) => n.id === targetNodeId);
   if (!targetNode) return;
+
+  const resolvedOutputDir = outputDir || getActiveProjectOutputDir();
 
   // Clean up any legacy lumped "Web App Package Types" nodes
   const legacyLumpedNodes = nodes.filter(
@@ -213,6 +231,7 @@ export function syncPackageTypesToCanvas(
       action: "add",
       name: trimmedPkg,
       nodeType: targetNode.type === "webApp" ? "webApp" : "service",
+      outputDir: resolvedOutputDir,
     });
 
     const sanitizedName = trimmedPkg.replace(/[^a-zA-Z0-9_-]/g, "-");
@@ -255,12 +274,12 @@ export function syncPackageTypesToCanvas(
     });
 
     // Asynchronously infer types directly from node_modules
-    fetchPackageTypesFromNodeModules(trimmedPkg).then((result) => {
+    fetchPackageTypesFromNodeModules(trimmedPkg, resolvedOutputDir).then((result) => {
       const storeState = useBackendCanvasStore.getState();
       const currentNode = storeState.nodes.find((n) => n.id === typesNodeId);
       if (!currentNode) return;
 
-      if (result.installed && result.types.length > 0) {
+      if (result.installed) {
         storeState.updateNode(typesNodeId, {
           data: {
             ...currentNode.data,

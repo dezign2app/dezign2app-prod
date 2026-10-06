@@ -7,6 +7,7 @@ import {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const pkg = searchParams.get("pkg")?.trim();
+  const outputDir = searchParams.get("outputDir")?.trim() || searchParams.get("projectDir")?.trim();
 
   if (!pkg) {
     return NextResponse.json<PackageTypeExtractionResult>(
@@ -20,6 +21,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const result = extractPackageTypesFromNodeModules(pkg);
+  const result = extractPackageTypesFromNodeModules(pkg, outputDir);
   return NextResponse.json<PackageTypeExtractionResult>(result);
 }

@@ -8,6 +8,7 @@ export interface SyncPackageJsonRequestBody {
   version?: string;
   isDev?: boolean;
   nodeType?: "service" | "webApp" | "webPage";
+  outputDir?: string;
 }
 
 export interface SyncPackageJsonResponse {
@@ -27,7 +28,38 @@ interface PackageJsonShape {
   [key: string]: unknown;
 }
 
-function findTargetPackageJson(nodeType?: string): string | null {
+function findTargetPackageJson(nodeType?: string, outputDir?: string): string | null {
+  if (outputDir && fs.existsSync(outputDir)) {
+    if (nodeType === "service") {
+      const appsDir = path.join(outputDir, "apps");
+      if (fs.existsSync(appsDir)) {
+        try {
+          const subs = fs.readdirSync(appsDir, { withFileTypes: true });
+          for (const s of subs) {
+            if (s.isDirectory()) {
+              const p = path.join(appsDir, s.name, "package.json");
+              if (fs.existsSync(p)) return p;
+            }
+          }
+        } catch {}
+      }
+      const packagesDir = path.join(outputDir, "packages");
+      if (fs.existsSync(packagesDir)) {
+        try {
+          const subs = fs.readdirSync(packagesDir, { withFileTypes: true });
+          for (const s of subs) {
+            if (s.isDirectory()) {
+              const p = path.join(packagesDir, s.name, "package.json");
+              if (fs.existsSync(p)) return p;
+            }
+          }
+        } catch {}
+      }
+    }
+    const rootPkg = path.join(outputDir, "package.json");
+    if (fs.existsSync(rootPkg)) return rootPkg;
+  }
+
   const cwd = process.cwd();
 
   if (nodeType === "service") {
@@ -87,7 +119,7 @@ function sortObjectKeys(obj: Record<string, string>): Record<string, string> {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as SyncPackageJsonRequestBody;
-    const { action, name, isDev, nodeType } = body;
+    const { action, name, isDev, nodeType, outputDir } = body;
     let { version } = body;
 
     const trimmedName = name?.trim();
@@ -103,7 +135,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const pkgPath = findTargetPackageJson(nodeType);
+    const pkgPath = findTargetPackageJson(nodeType, outputDir);
     if (!pkgPath) {
       return NextResponse.json<SyncPackageJsonResponse>(
         {
