@@ -48,6 +48,7 @@ export const BusinessLogicBlock = React.memo(function BusinessLogicBlock({
   dbType,
   connectedDatabases,
   importedTransformers,
+  packageImports,
 }: BusinessLogicBlockProps) {
   const [internalMode, setInternalMode] = useState<LogicMode>(mode);
   const [internalIsGenerating, setInternalIsGenerating] = useState(false);
@@ -112,6 +113,7 @@ export const BusinessLogicBlock = React.memo(function BusinessLogicBlock({
         dbType={dbType}
         connectedDatabases={connectedDatabases}
         importedTransformers={importedTransformers}
+        packageImports={packageImports}
       />
 
       {onCrudConfigChange && (

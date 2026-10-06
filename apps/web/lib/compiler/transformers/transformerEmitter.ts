@@ -130,12 +130,42 @@ export function generateTransformerFile(
       ? `{ ${inputParamNames.join(", ")} }: ${inputTypeName}`
       : "";
 
-  const importsStr =
+  const transformerImportsStr =
     resolvedImports && resolvedImports.length > 0
       ? resolvedImports
           .map((imp) => `import { ${imp.name} } from "${imp.importPath}";`)
-          .join("\n") + "\n\n"
+          .join("\n")
       : "";
+
+  const packageImportsStr = (helper.packageImports || [])
+    .map((item) => {
+      const typePrefix = item.isTypeOnly ? "type " : "";
+      const pkg = item.packageName?.trim();
+      if (!pkg) return "";
+      if (item.namespaceImport) {
+        const ns = item.namespaceImport.replace(/^\*\s+as\s+/, "").trim();
+        return `import ${typePrefix}* as ${ns || "_"} from "${pkg}";`;
+      }
+      const parts: string[] = [];
+      if (item.defaultImport && item.defaultImport.trim()) {
+        parts.push(item.defaultImport.trim());
+      }
+      const named = (item.namedImports || []).map((s) => s.trim()).filter(Boolean);
+      if (named.length > 0) {
+        parts.push(`{ ${named.join(", ")} }`);
+      }
+      if (parts.length === 0) {
+        return `import "${pkg}";`;
+      }
+      return `import ${typePrefix}${parts.join(", ")} from "${pkg}";`;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  const combinedImports = [packageImportsStr, transformerImportsStr]
+    .filter(Boolean)
+    .join("\n");
+  const importsPrefix = combinedImports ? `${combinedImports}\n\n` : "";
 
   const shouldEmitInputInterface =
     hasInputFields || (hasFunctionDecl && rawCode.includes(inputTypeName));
@@ -146,9 +176,9 @@ export function generateTransformerFile(
 
   const content = hasFunctionDecl
     ? // Full declaration — use as-is after renaming
-      `${importsStr}${fnDescription}${inputInterfaceDoc}export interface ${outputTypeName} {\n${outputFields}\n}\n\n${processedCode}\n`
+      `${importsPrefix}${fnDescription}${inputInterfaceDoc}export interface ${outputTypeName} {\n${outputFields}\n}\n\n${processedCode}\n`
     : // Body-only — wrap in a generated declaration
-      `${importsStr}${fnDescription}${inputInterfaceDoc}export interface ${outputTypeName} {\n${outputFields}\n}\n\nexport ${asyncKw}function ${fnName}(${paramSignature}): ${returnTypeAnnotation} {\n${body}\n}\n`;
+      `${importsPrefix}${fnDescription}${inputInterfaceDoc}export interface ${outputTypeName} {\n${outputFields}\n}\n\nexport ${asyncKw}function ${fnName}(${paramSignature}): ${returnTypeAnnotation} {\n${body}\n}\n`;
 
   return {
     filename: `src/${fnName}.ts`,

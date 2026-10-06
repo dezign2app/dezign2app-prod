@@ -5,6 +5,15 @@ import type { PipelineStepDraft } from "./pipeline";
 
 export type { NodeDependencyItem };
 
+export interface TransformerPackageImport {
+  id: string;
+  packageName: string;
+  namedImports?: string[];
+  defaultImport?: string;
+  namespaceImport?: string;
+  isTypeOnly?: boolean;
+}
+
 /**
  * A small, pure data-transformation helper function.
  * 3-section model: Input | Logic | Return.
@@ -46,6 +55,7 @@ export interface TransformerHelperNodeData {
 
   isAsync?: boolean;
   importedTransformerIds?: string[];
+  packageImports?: TransformerPackageImport[];
   customDependencies?: NodeDependencyItem[];
 }
 
@@ -146,6 +156,7 @@ export interface CanvasTransformerNodeData {
   isAsync?: boolean;
   transformerHelpers?: TransformerHelperNodeData[];
   importedTransformerIds?: string[];
+  packageImports?: TransformerPackageImport[];
   customDependencies?: NodeDependencyItem[];
 }
 

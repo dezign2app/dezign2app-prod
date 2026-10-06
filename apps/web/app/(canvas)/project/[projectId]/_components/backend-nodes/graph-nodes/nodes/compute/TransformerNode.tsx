@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Shuffle, Settings, Trash, AlertTriangle } from "lucide-react";
+import { Shuffle, Settings, Trash, AlertTriangle, Package } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -143,6 +143,15 @@ export const TransformerNode = ({
               >
                 {scope === "global" ? "GLOBAL" : "LOCAL"}
               </span>
+              {data.packageImports && data.packageImports.length > 0 && (
+                <span
+                  className="text-[7px] font-mono px-1 py-0.2 rounded font-medium bg-indigo-500/15 text-indigo-400 border border-indigo-500/20 flex items-center gap-0.5"
+                  title={`${data.packageImports.length} package import(s) configured`}
+                >
+                  <Package size={7} />
+                  {data.packageImports.length}
+                </span>
+              )}
               {hasPipelineError && (
                 <span className="text-[7px] font-medium px-1 py-0.2 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse">
                   <AlertTriangle size={8} />

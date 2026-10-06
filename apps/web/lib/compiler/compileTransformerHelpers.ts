@@ -126,6 +126,8 @@ export function compileTransformerHelpers(
       })),
       isAsync: d.isAsync,
       importedTransformerIds: d.importedTransformerIds || [],
+      packageImports: d.packageImports || [],
+      customDependencies: d.customDependencies || [],
     };
 
     if (helperData.scope === "global") {
@@ -241,10 +243,21 @@ export function compileTransformerHelpers(
     };
     globalHelpers.forEach((h) => {
       (h.customDependencies || []).forEach((dep) => {
+        if (!dep.name || dep.name === GLOBAL_PKG || dep.name.startsWith("@workspace/")) return;
         if (dep.isDev) {
           customDevDepsRecord[dep.name] = dep.version || "latest";
         } else {
           customDepsRecord[dep.name] = dep.version || "latest";
+        }
+      });
+      (h.packageImports || []).forEach((imp) => {
+        if (
+          imp.packageName &&
+          imp.packageName !== GLOBAL_PKG &&
+          !imp.packageName.startsWith("@workspace/") &&
+          !customDepsRecord[imp.packageName]
+        ) {
+          customDepsRecord[imp.packageName] = "latest";
         }
       });
     });

@@ -48,6 +48,18 @@ export const transformerNodeDataSchema = baseNodeDataSchema
     isAsync: z.boolean().optional().default(false),
     transformerHelpers: z.array(transformerHelperSchema).optional(),
     importedTransformerIds: z.array(z.string()).optional(),
+    packageImports: z
+      .array(
+        z.object({
+          id: z.string(),
+          packageName: z.string(),
+          namedImports: z.array(z.string()).optional(),
+          defaultImport: z.string().optional(),
+          namespaceImport: z.string().optional(),
+          isTypeOnly: z.boolean().optional(),
+        }),
+      )
+      .optional(),
     customDependencies: z.array(nodeDependencyItemSchema).optional(),
   })
   .passthrough();

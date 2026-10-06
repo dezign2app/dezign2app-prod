@@ -214,6 +214,70 @@ describe("Step Pipeline & Transformer Helpers", () => {
       expect(fileA?.content).toContain('import { fnB } from "./fnB";');
       expect(fileB?.content).toContain('import { fnA } from "./fnA";');
     });
+
+    it("generates imports for packageImports (named, default, namespace, and type-only) in transformer code", () => {
+      const nodes: BackendNode[] = [
+        {
+          id: "trans-pkg-demo",
+          type: "transformer",
+          position: { x: 0, y: 0 },
+          fractionalIndex: "a0",
+          data: {
+            label: "sanitizeAndFormatUser",
+            functionName: "sanitizeAndFormatUser",
+            scope: "global",
+            packageImports: [
+              {
+                id: "imp-1",
+                packageName: "lodash-es",
+                namedImports: ["cloneDeep", "merge"],
+              },
+              {
+                id: "imp-2",
+                packageName: "dayjs",
+                defaultImport: "dayjs",
+              },
+              {
+                id: "imp-3",
+                packageName: "crypto-js",
+                namespaceImport: "crypto",
+              },
+              {
+                id: "imp-4",
+                packageName: "zod",
+                namedImports: ["ZodType"],
+                isTypeOnly: true,
+              },
+            ],
+            code: "const cloned = cloneDeep(input);\nreturn { id: cloned.id, formattedDate: dayjs().toISOString() };",
+            inputSchema: [{ id: "1", name: "id", type: "string", required: true }],
+            returnSchema: [
+              { id: "2", name: "id", type: "string", required: true },
+              { id: "3", name: "formattedDate", type: "string", required: true },
+            ],
+          },
+        },
+      ];
+
+      const result = compileTransformerHelpers(nodes);
+      const file = result.files.find((f) => f.filename.includes("sanitizeAndFormatUser.ts"));
+      expect(file).toBeDefined();
+
+      // Verify all package import statements generated at top
+      expect(file?.content).toContain('import { cloneDeep, merge } from "lodash-es";');
+      expect(file?.content).toContain('import dayjs from "dayjs";');
+      expect(file?.content).toContain('import * as crypto from "crypto-js";');
+      expect(file?.content).toContain('import type { ZodType } from "zod";');
+
+      // Verify packages are added to packages/transformers/package.json dependencies
+      const pkgJsonFile = result.files.find((f) => f.filename.includes("packages/transformers/package.json"));
+      expect(pkgJsonFile).toBeDefined();
+      const parsedPkgJson = JSON.parse(pkgJsonFile!.content);
+      expect(parsedPkgJson.dependencies["lodash-es"]).toBeDefined();
+      expect(parsedPkgJson.dependencies["dayjs"]).toBeDefined();
+      expect(parsedPkgJson.dependencies["crypto-js"]).toBeDefined();
+      expect(parsedPkgJson.dependencies["zod"]).toBeDefined();
+    });
   });
 
   describe("pipelineRenderer & endpointHandlerGenerator", () => {

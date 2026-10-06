@@ -5,6 +5,7 @@ import { Button } from "@workspace/ui/components/button";
 import { LocalTextarea } from "../../../backend-nodes/graph-nodes/shared";
 import { LogicMode, ConnectedDbItem } from "../types";
 import { toPascalCase, toVarName } from "../utils";
+import { formatPackageImportStatement } from "@/lib/utils/packageExportsRegistry";
 
 interface LogicInputSectionProps {
   activeMode: LogicMode;
@@ -26,6 +27,7 @@ interface LogicInputSectionProps {
   dbType?: string;
   connectedDatabases?: ConnectedDbItem[];
   importedTransformers?: import("../types").ImportedTransformerItem[];
+  packageImports?: import("@workspace/canvas").TransformerPackageImport[];
 }
 
 function formatInterfaceFields(
@@ -60,6 +62,7 @@ export const LogicInputSection = React.memo(function LogicInputSection({
   dbType,
   connectedDatabases = [],
   importedTransformers = [],
+  packageImports = [],
 }: LogicInputSectionProps) {
   const [viewMode, setViewMode] = useState<"framed" | "preview">("framed");
   const [copied, setCopied] = useState(false);
@@ -151,13 +154,22 @@ export const LogicInputSection = React.memo(function LogicInputSection({
       ? trimmedCode
       : `export ${asyncKw}function ${safeFunctionName}(${paramSignature}): ${returnTypeAnnotation} {\n${bodyFormatted}\n}`;
 
+    const packageImportsStr = (packageImports || [])
+      .map(formatPackageImportStatement)
+      .filter(Boolean)
+      .join("\n");
+
     const transformerImportsStr = (importedTransformers || [])
       .map(
         (t) =>
           `import { ${t.name} } from "${t.importPath || `@workspace/transformers`}";`,
       )
       .join("\n");
-    const topImports = transformerImportsStr ? `${transformerImportsStr}\n\n` : "";
+
+    const allImportsStr = [packageImportsStr, transformerImportsStr]
+      .filter(Boolean)
+      .join("\n");
+    const topImports = allImportsStr ? `${allImportsStr}\n\n` : "";
 
     const inputInterfaceStr = shouldEmitInputInterface
       ? `export interface ${inputName} {\n${formatInterfaceFields(inputSchema)}\n}\n\n`
@@ -181,6 +193,7 @@ export const LogicInputSection = React.memo(function LogicInputSection({
     dbType,
     connectedDatabases,
     importedTransformers,
+    packageImports,
   ]);
 
   const handleCopy = () => {
@@ -404,6 +417,45 @@ export const LogicInputSection = React.memo(function LogicInputSection({
                     <span>⚠️ Mutual circular reference detected. Ensure terminating base conditions exist in your logic to avoid infinite call loops.</span>
                   </div>
                 )}
+              </div>
+            )}
+
+            {packageImports && packageImports.length > 0 && (
+              <div className="p-2 rounded bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-mono flex flex-col gap-1.5 select-none">
+                <div className="flex items-center justify-between text-indigo-300 font-semibold">
+                  <span>// ── Package Functions & Utilities (Installed in scope) ──</span>
+                  <span className="text-[9px] text-muted-foreground">{packageImports.length} package(s)</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  {packageImports.map((pkg) => {
+                    const fns = [
+                      ...(pkg.defaultImport ? [{ name: pkg.defaultImport, isDefault: true }] : []),
+                      ...(pkg.namespaceImport ? [{ name: pkg.namespaceImport.replace(/^\*\s+as\s+/, ""), isNamespace: true }] : []),
+                      ...(pkg.namedImports || []).map((name) => ({ name, isDefault: false })),
+                    ];
+                    return (
+                      <div key={pkg.id || pkg.packageName} className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-indigo-400/90 font-medium">{pkg.packageName}:</span>
+                        {fns.map((fn) => (
+                          <button
+                            key={fn.name}
+                            type="button"
+                            onClick={() => {
+                              const snippet = `const result = ${fn.name}(/* ... */);`;
+                              const updated = code ? `${code.trimEnd()}\n${snippet}\n` : `${snippet}\n`;
+                              onCodeChange?.(updated);
+                            }}
+                            className="px-1.5 py-0.5 rounded text-[9.5px] font-mono bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-500/30 transition-colors cursor-pointer flex items-center gap-1"
+                            title={`Click to insert ${fn.name}(...) into logic code`}
+                          >
+                            <span>{fn.name}</span>
+                            <span className="text-[8px] opacity-70">+</span>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

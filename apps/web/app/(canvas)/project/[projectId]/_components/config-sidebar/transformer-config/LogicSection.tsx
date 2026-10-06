@@ -14,6 +14,7 @@ interface LogicSectionProps {
   inputSchema?: Array<{ name: string; type: string; required?: boolean }>;
   returnSchema?: Array<{ name: string; type: string; required?: boolean }>;
   importedTransformers?: import("../../shared/business-logic-block/types").ImportedTransformerItem[];
+  packageImports?: import("@workspace/canvas").TransformerPackageImport[];
   onModeChange: (mode: "natural_language" | "code") => void;
   onPromptChange: (prompt: string) => void;
   onCodeChange: (code: string) => void;
@@ -31,6 +32,7 @@ export const LogicSection = React.memo<LogicSectionProps>(({
   inputSchema,
   returnSchema,
   importedTransformers,
+  packageImports,
   onModeChange,
   onPromptChange,
   onCodeChange,
@@ -57,6 +59,7 @@ export const LogicSection = React.memo<LogicSectionProps>(({
         inputSchema={inputSchema}
         returnSchema={returnSchema}
         importedTransformers={importedTransformers}
+        packageImports={packageImports}
       />
 
       <label className="flex items-center gap-2 text-[11px] text-muted-foreground/80 cursor-pointer select-none px-1">
