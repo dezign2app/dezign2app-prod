@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ReactFlow,
   Background,
@@ -10,7 +10,7 @@ import {
   MarkerType,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Layout, AlertTriangle } from "lucide-react";
+import { Layout, AlertTriangle, ExternalLink } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import type { BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -65,8 +65,16 @@ export function LangGraphStudioView({
   projectId: propProjectId,
 }: LangGraphStudioViewProps) {
   const params = useParams();
+  const router = useRouter();
   const routeProjectId = (params?.projectId as string) || "";
   const projectId = propProjectId || routeProjectId;
+
+  const handleOpenSchemaView = useCallback(() => {
+    useBackendCanvasStore.getState().setView("schema");
+    if (projectId) {
+      router.push(`/project/${projectId}/schemas`);
+    }
+  }, [projectId, router]);
 
   const terminalOpen = useSidebarStore((s) => s.terminalOpen);
   const toggleTerminal = useSidebarStore((s) => s.toggleTerminal);
@@ -277,11 +285,27 @@ export function LangGraphStudioView({
     [nodes],
   );
   const allCanvasNodes = useBackendCanvasStore((s) => s.nodes);
+  const hasStorageNodes = useMemo(() => {
+    if (!memoryConfig || memoryConfig.enabled === false) return true;
+    const isPg = memoryConfig.checkpointer === "postgres";
+    const isRedis = memoryConfig.checkpointer === "redis";
+    if (!isPg && !isRedis) return true;
+    return allCanvasNodes.some(
+      (n) =>
+        (isPg && n?.type === "database" && n.data?.dbEngine === "postgres") ||
+        (isRedis && (n?.type === "redis_instance" || (n?.type === "database" && n.data?.dbEngine === "redis"))),
+    );
+  }, [memoryConfig, allCanvasNodes]);
+
   const checkpointerMissingError = useMemo(() => {
     if (!memoryConfig || memoryConfig.enabled === false || memoryConfig.checkpointer === "memory") return null;
     const isPg = memoryConfig.checkpointer === "postgres";
     const isRedis = memoryConfig.checkpointer === "redis";
     if (!isPg && !isRedis) return null;
+
+    if (!hasStorageNodes) {
+      return `No ${isPg ? "PostgreSQL database" : "Redis instance"} found in SchemaView. Please create one in SchemaView.`;
+    }
 
     if (!memoryConfig.checkpointerNodeId) {
       return `No ${isPg ? "PostgreSQL database" : "Redis instance"} linked from SchemaView. Please link one in the Memory tab.`;
@@ -291,7 +315,7 @@ export function LangGraphStudioView({
       return `Linked ${isPg ? "database" : "Redis instance"} was deleted or not found in SchemaView. Please re-link in Memory tab.`;
     }
     return null;
-  }, [memoryConfig, allCanvasNodes]);
+  }, [memoryConfig, allCanvasNodes, hasStorageNodes]);
 
   const activeNodeIds = useSimulationStore((s) => s.activeNodeIds);
   const activeEdgeIds = useSimulationStore((s) => s.activeEdgeIds);
@@ -559,17 +583,30 @@ export function LangGraphStudioView({
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{checkpointerMissingError}</span>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-6 text-[11px] px-2.5 py-0 border-destructive/40 text-destructive hover:bg-destructive/20"
-            onClick={() => {
-              setSelectedNodeId("CHECKPOINTER");
-              setActiveSideTab("memory");
-            }}
-          >
-            Configure Memory
-          </Button>
+          <div className="flex items-center gap-2">
+            {hasStorageNodes && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 text-[11px] px-2.5 py-0 border-destructive/40 text-destructive hover:bg-destructive/20"
+                onClick={() => {
+                  setSelectedNodeId("CHECKPOINTER");
+                  setActiveSideTab("memory");
+                }}
+              >
+                Configure Memory
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[11px] px-2.5 py-0 border-destructive/40 text-destructive hover:bg-destructive/20 gap-1.5"
+              onClick={handleOpenSchemaView}
+            >
+              <span>Open Schema View</span>
+              <ExternalLink className="w-3 h-3" />
+            </Button>
+          </div>
         </div>
       )}
 
