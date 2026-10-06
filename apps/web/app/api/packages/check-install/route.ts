@@ -20,10 +20,37 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const outputDir = searchParams.get("outputDir")?.trim() || searchParams.get("projectDir")?.trim();
+
   try {
     const cwd = process.cwd();
     const pkgParts = pkg.split("/");
-    const possiblePaths = [
+    const possiblePaths: string[] = [];
+
+    if (outputDir && fs.existsSync(outputDir)) {
+      possiblePaths.push(
+        path.join(outputDir, "node_modules", pkg),
+        path.join(outputDir, "node_modules", ...pkgParts),
+        path.join(outputDir, "node_modules", ".pnpm", "node_modules", pkg),
+        path.join(outputDir, "node_modules", ".pnpm", "node_modules", ...pkgParts),
+      );
+      // Check subdirectories in apps/ and packages/
+      for (const folder of ["apps", "packages"]) {
+        const folderPath = path.join(outputDir, folder);
+        if (fs.existsSync(folderPath)) {
+          try {
+            const subs = fs.readdirSync(folderPath, { withFileTypes: true });
+            for (const s of subs) {
+              if (s.isDirectory()) {
+                possiblePaths.push(path.join(folderPath, s.name, "node_modules", ...pkgParts));
+              }
+            }
+          } catch {}
+        }
+      }
+    }
+
+    possiblePaths.push(
       path.join(cwd, "node_modules", pkg),
       path.join(cwd, "node_modules", ...pkgParts),
       path.join(cwd, "apps/web/node_modules", pkg),
@@ -31,7 +58,7 @@ export async function GET(request: NextRequest) {
       path.resolve(cwd, "../../node_modules", pkg),
       path.resolve(cwd, "../../node_modules", ...pkgParts),
       path.resolve(cwd, "../apps/web/node_modules", pkg),
-    ];
+    );
 
     const exists = possiblePaths.some((p) => fs.existsSync(p));
 

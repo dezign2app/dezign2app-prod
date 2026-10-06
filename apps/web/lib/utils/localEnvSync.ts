@@ -66,13 +66,23 @@ export function updateEnvString(
  * Retrieves the currently active project output directory from localStorage.
  */
 export function getActiveProjectOutputDir(projectId?: string): string {
-  if (typeof window === "undefined" || !projectId) return "";
+  if (typeof window === "undefined") return "";
   try {
-    return (
-      localStorage.getItem(`workspace_dir_${projectId}`) ||
-      localStorage.getItem(`docker_dir_${projectId}`) ||
-      ""
-    );
+    if (projectId) {
+      const explicit =
+        localStorage.getItem(`workspace_dir_${projectId}`) ||
+        localStorage.getItem(`docker_dir_${projectId}`);
+      if (explicit) return explicit;
+    }
+    // Fallback: search for any saved project workspace directory
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith("workspace_dir_") || key.startsWith("docker_dir_"))) {
+        const val = localStorage.getItem(key);
+        if (val) return val;
+      }
+    }
+    return "";
   } catch {
     return "";
   }
