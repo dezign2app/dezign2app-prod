@@ -94,16 +94,26 @@ export function useConnectedRoutes(nodeId: string): ConnectedRouteInfo[] {
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const events = useBackendCanvasStore((s) => s.events);
 
-  // All edges that target this langgraph node
-  const incomingEdges = edges.filter((e) => e.target === nodeId);
+  // All edges connected to this LangGraph node (either as source feeding into service, or as target)
+  const connectedEdges = edges.filter(
+    (e) => e.source === nodeId || e.target === nodeId,
+  );
 
-  return incomingEdges.map((edge): ConnectedRouteInfo => {
-    const sourceNode = nodes.find((n) => n.id === edge.source);
-    const sourceNodeLabel = sourceNode?.data?.label || edge.source;
+  return connectedEdges.map((edge): ConnectedRouteInfo => {
+    const isOutbound = edge.source === nodeId;
+    const otherNodeId = isOutbound ? edge.target : edge.source;
+    const otherNode = nodes.find((n) => n.id === otherNodeId);
+    const otherNodeLabel = otherNode?.data?.label || otherNodeId;
+
+    // Check targetHandle (when edge is LangGraph -> Service) or sourceHandle (when Service -> LangGraph)
+    const handleToCheck = isOutbound ? edge.targetHandle : edge.sourceHandle;
 
     // Resolve specific endpoint
-    if (edge.sourceHandle?.startsWith("endpoint-out-")) {
-      const endpointId = edge.sourceHandle.replace("endpoint-out-", "");
+    if (
+      handleToCheck?.startsWith("endpoint-in-") ||
+      handleToCheck?.startsWith("endpoint-out-")
+    ) {
+      const endpointId = handleToCheck.replace(/^endpoint-(in|out)-/, "");
       const ep = endpoints.find((e) => e.id === endpointId);
       if (ep) {
         const item: ConnectedRouteInfo = {
@@ -111,7 +121,7 @@ export function useConnectedRoutes(nodeId: string): ConnectedRouteInfo[] {
           kind: "endpoint",
           label: ep.name || ep.id,
           method: ep.type || "GET",
-          sourceNodeLabel,
+          sourceNodeLabel: otherNodeLabel,
           payloadMapping: edge.data?.payloadMapping,
         };
         return item;
@@ -119,8 +129,11 @@ export function useConnectedRoutes(nodeId: string): ConnectedRouteInfo[] {
     }
 
     // Resolve consumed event
-    if (edge.sourceHandle?.startsWith("consumedEvents-out-")) {
-      const eventId = edge.sourceHandle.replace("consumedEvents-out-", "");
+    if (
+      handleToCheck?.startsWith("consumedEvents-in-") ||
+      handleToCheck?.startsWith("consumedEvents-out-")
+    ) {
+      const eventId = handleToCheck.replace(/^consumedEvents-(in|out)-/, "");
       const ev = events.find((e) => e.id === eventId);
       if (ev) {
         const item: ConnectedRouteInfo = {
@@ -128,7 +141,7 @@ export function useConnectedRoutes(nodeId: string): ConnectedRouteInfo[] {
           kind: "event",
           label: ev.name || eventId,
           method: "EVENT",
-          sourceNodeLabel,
+          sourceNodeLabel: otherNodeLabel,
           payloadMapping: edge.data?.payloadMapping,
         };
         return item;
@@ -139,9 +152,9 @@ export function useConnectedRoutes(nodeId: string): ConnectedRouteInfo[] {
     const fallbackItem: ConnectedRouteInfo = {
       edgeId: edge.id,
       kind: "task",
-      label: sourceNodeLabel,
+      label: otherNodeLabel,
       method: "INVOKE",
-      sourceNodeLabel,
+      sourceNodeLabel: otherNodeLabel,
       payloadMapping: edge.data?.payloadMapping,
     };
     return fallbackItem;
@@ -362,14 +375,6 @@ export const LangGraphNode = ({
         </span>
       </div>
 
-      {/* Single generic target Handle for canvas edges */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="input-start"
-        className="!bg-primary !w-3 !h-3 !border-2 !border-background hover:!scale-125 transition-transform !-left-[7px]"
-        title="Incoming edge into agent"
-      />
 
       {/* Outbound source handle on right feeding into ServiceNode endpoint-in */}
       <Handle
