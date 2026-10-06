@@ -34,6 +34,7 @@ export const typesNodeDataSchema = baseNodeDataSchema
     scope: z.enum(["global", "local"]).optional().default("global"),
     targetServiceId: z.string().optional(),
     targetWebAppId: z.string().optional(),
+    targetTransformerId: z.string().optional(),
 
     // Definition mode: visual field editor vs. raw TypeScript text editor
     definitionMode: z.enum(["visual", "raw"]).optional().default("visual"),

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { baseNodeDataSchema } from "./base";
 import { transformerHelperSchema, transformerHelperInputSchema } from "../shared";
+import { nodeDependencyItemSchema, nodeDependencyItemInputSchema } from "./services";
 
 export const transformerParameterSchema = z.object({
   id: z.string().optional(),
@@ -47,6 +48,7 @@ export const transformerNodeDataSchema = baseNodeDataSchema
     isAsync: z.boolean().optional().default(false),
     transformerHelpers: z.array(transformerHelperSchema).optional(),
     importedTransformerIds: z.array(z.string()).optional(),
+    customDependencies: z.array(nodeDependencyItemSchema).optional(),
   })
   .passthrough();
 export type TransformerNodeData = z.infer<typeof transformerNodeDataSchema>;
@@ -74,6 +76,7 @@ export const transformerNodeDataInputSchema = baseNodeDataSchema
     isAsync: z.boolean().optional(),
     transformerHelpers: z.array(transformerHelperInputSchema).optional(),
     importedTransformerIds: z.array(z.string()).optional(),
+    customDependencies: z.array(nodeDependencyItemInputSchema).optional(),
   })
   .passthrough();
 

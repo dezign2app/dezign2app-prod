@@ -290,7 +290,11 @@ export const ConfigSidebar = () => {
           ) : type === "redis_cache" ? (
             <RedisCacheRefConfig id={id} nodeId={nodeId} />
           ) : type === "transformer" || type === "transformer_ref" ? (
-            <TransformerConfig id={id} nodeId={nodeId} />
+            <TransformerConfig
+              id={id}
+              nodeId={nodeId}
+              initialTab={activeConfigItem.initialTab}
+            />
           ) : type === "hook" || type === "hook_ref" ? (
             <HookConfig id={id} nodeId={nodeId} />
           ) : type === "state_store" ? (
