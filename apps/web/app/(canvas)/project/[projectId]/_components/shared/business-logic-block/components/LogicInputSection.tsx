@@ -25,6 +25,7 @@ interface LogicInputSectionProps {
   contextType?: "endpoint" | "db_operation" | "transformer" | "langgraph";
   dbType?: string;
   connectedDatabases?: ConnectedDbItem[];
+  importedTransformers?: import("../types").ImportedTransformerItem[];
 }
 
 function formatInterfaceFields(
@@ -58,6 +59,7 @@ export const LogicInputSection = React.memo(function LogicInputSection({
   contextType,
   dbType,
   connectedDatabases = [],
+  importedTransformers = [],
 }: LogicInputSectionProps) {
   const [viewMode, setViewMode] = useState<"framed" | "preview">("framed");
   const [copied, setCopied] = useState(false);
@@ -146,7 +148,15 @@ export const LogicInputSection = React.memo(function LogicInputSection({
       ? trimmedCode
       : `export ${asyncKw}function ${safeFunctionName}(${paramSignature}): ${returnTypeAnnotation} {\n${bodyFormatted}\n}`;
 
-    return `export interface ${inputName} {\n${formatInterfaceFields(inputSchema)}\n}\n\nexport interface ${effectiveOutputName} {\n${formatInterfaceFields(returnSchema)}\n}\n\n${fnContent}\n`;
+    const transformerImportsStr = (importedTransformers || [])
+      .map(
+        (t) =>
+          `import { ${t.name} } from "${t.importPath || `@workspace/transformers`}";`,
+      )
+      .join("\n");
+    const topImports = transformerImportsStr ? `${transformerImportsStr}\n\n` : "";
+
+    return `${topImports}export interface ${inputName} {\n${formatInterfaceFields(inputSchema)}\n}\n\nexport interface ${effectiveOutputName} {\n${formatInterfaceFields(returnSchema)}\n}\n\n${fnContent}\n`;
   }, [
     functionName,
     safeFunctionName,
@@ -163,6 +173,7 @@ export const LogicInputSection = React.memo(function LogicInputSection({
     isDbOp,
     dbType,
     connectedDatabases,
+    importedTransformers,
   ]);
 
   const handleCopy = () => {
@@ -344,7 +355,39 @@ export const LogicInputSection = React.memo(function LogicInputSection({
           </div>
 
           {/* Inner Editable Body Area */}
-          <div className="p-2 pl-5 bg-background/50">
+          <div className="p-2 pl-5 bg-background/50 flex flex-col gap-1.5">
+            {importedTransformers && importedTransformers.length > 0 && (
+              <div className="p-2 rounded bg-purple-500/10 border border-purple-500/20 text-[10px] font-mono flex flex-col gap-1 select-none">
+                <div className="flex items-center justify-between text-purple-300 font-semibold">
+                  <span>// ── Imported Transformers (Ready to invoke) ──</span>
+                  <span className="text-[9px] text-muted-foreground">{importedTransformers.length} available</span>
+                </div>
+                {importedTransformers.map((t) => (
+                  <div
+                    key={t.id || t.name}
+                    className="flex items-center justify-between gap-2 py-0.5 px-1 rounded hover:bg-purple-500/15 group/t transition-colors"
+                  >
+                    <span className="text-muted-foreground font-mono truncate">
+                      <span className="text-purple-400 font-medium">// {t.isAsync ? "await " : ""}{t.name}</span>
+                      <span className="text-muted-foreground/80">({t.inputSignature || "input"}): {t.outputSignature || "any"}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const snippet = t.exampleCall || (t.isAsync ? `const ${t.name}Result = await ${t.name}({ /* ... */ });` : `const ${t.name}Result = ${t.name}({ /* ... */ });`);
+                        const updated = code ? `${code.trimEnd()}\n${snippet}\n` : `${snippet}\n`;
+                        onCodeChange?.(updated);
+                      }}
+                      className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 transition-colors cursor-pointer flex items-center gap-1 opacity-80 group-hover/t:opacity-100"
+                      title={`Insert ${t.name} call example`}
+                    >
+                      <span>+ Insert</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <LocalTextarea
               value={code}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onCodeChange?.(e.target.value)}

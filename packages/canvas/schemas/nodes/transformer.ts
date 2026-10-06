@@ -46,6 +46,7 @@ export const transformerNodeDataSchema = baseNodeDataSchema
     returnSchema: z.array(transformerParameterSchema).optional(),
     isAsync: z.boolean().optional().default(false),
     transformerHelpers: z.array(transformerHelperSchema).optional(),
+    importedTransformerIds: z.array(z.string()).optional(),
   })
   .passthrough();
 export type TransformerNodeData = z.infer<typeof transformerNodeDataSchema>;
@@ -72,6 +73,7 @@ export const transformerNodeDataInputSchema = baseNodeDataSchema
     returnSchema: z.array(transformerParameterInputSchema).optional(),
     isAsync: z.boolean().optional(),
     transformerHelpers: z.array(transformerHelperInputSchema).optional(),
+    importedTransformerIds: z.array(z.string()).optional(),
   })
   .passthrough();
 

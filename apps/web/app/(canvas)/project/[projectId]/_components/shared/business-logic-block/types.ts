@@ -41,6 +41,18 @@ export interface ConnectedDbItem {
   engine?: string;
 }
 
+export interface ImportedTransformerItem {
+  id: string;
+  name: string;
+  scope?: "global" | "local";
+  serviceName?: string;
+  isAsync?: boolean;
+  inputSignature?: string;
+  outputSignature?: string;
+  importPath?: string;
+  exampleCall?: string;
+}
+
 export interface BusinessLogicBlockProps {
   connectedDatabases?: ConnectedDbItem[];
   mode?: LogicMode;
@@ -79,6 +91,7 @@ export interface BusinessLogicBlockProps {
   isAsync?: boolean;
   inputSchema?: Array<{ name: string; type: string; required?: boolean }>;
   returnSchema?: Array<{ name: string; type: string; required?: boolean }>;
+  importedTransformers?: ImportedTransformerItem[];
 
   // Database Operation Context Props
   contextType?: "endpoint" | "db_operation" | "transformer" | "langgraph";

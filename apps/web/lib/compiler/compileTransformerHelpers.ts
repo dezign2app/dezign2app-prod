@@ -125,6 +125,7 @@ export function compileTransformerHelpers(
         description: f.description,
       })),
       isAsync: d.isAsync,
+      importedTransformerIds: d.importedTransformerIds || [],
     };
 
     if (helperData.scope === "global") {
@@ -138,13 +139,34 @@ export function compileTransformerHelpers(
     }
   });
 
+  // Map of all helpers by ID and name for cross-transformer dependency resolution
+  const allHelpersById = new Map<string, TransformerHelperNodeData>();
+  [...globalHelpers, ...Array.from(localHelpersByService.values()).flat()].forEach((h) => {
+    allHelpersById.set(h.id, h);
+    if (h.name) allHelpersById.set(h.name, h);
+  });
+
   // ── Compile global helpers → packages/transformers/ ──────────────────────
   if (globalHelpers.length > 0) {
     const globalBarrelExports: string[] = [];
 
     globalHelpers.forEach((helper) => {
       const cleanName = toVarName(helper.name || "transform");
-      const file = generateTransformerFile(helper, GLOBAL_PKG);
+
+      // Resolve imported transformer dependencies
+      const resolvedImports = (helper.importedTransformerIds || [])
+        .map((depId) => allHelpersById.get(depId))
+        .filter((dep): dep is TransformerHelperNodeData => !!dep && dep.id !== helper.id)
+        .map((dep) => {
+          const depName = toVarName(dep.name || "transform");
+          // Global helper importing another helper in packages/transformers uses relative "./depName"
+          return {
+            name: depName,
+            importPath: dep.scope === "global" ? `./${depName}` : `./${depName}`,
+          };
+        });
+
+      const file = generateTransformerFile(helper, GLOBAL_PKG, resolvedImports);
 
       // ✦ emits: packages/transformers/src/<name>.ts
       allFiles.push({
@@ -240,7 +262,25 @@ export function compileTransformerHelpers(
       const cleanName = toVarName(helper.name || "transform");
       const localImportPath = `./transformers/${cleanName}`;
 
-      const file = generateTransformerFile(helper, localImportPath);
+      // Resolve imported transformer dependencies
+      const resolvedImports = (helper.importedTransformerIds || [])
+        .map((depId) => allHelpersById.get(depId))
+        .filter((dep): dep is TransformerHelperNodeData => !!dep && dep.id !== helper.id)
+        .map((dep) => {
+          const depName = toVarName(dep.name || "transform");
+          // If the dependency is global, import from @workspace/transformers
+          // If it is in the same service, import from relative ./depName
+          const importPath =
+            dep.scope === "global"
+              ? GLOBAL_PKG
+              : `./${depName}`;
+          return {
+            name: depName,
+            importPath,
+          };
+        });
+
+      const file = generateTransformerFile(helper, localImportPath, resolvedImports);
 
       // ✦ emits: apps/<service>/src/transformers/<name>.ts
       allFiles.push({

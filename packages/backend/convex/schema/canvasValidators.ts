@@ -1033,6 +1033,7 @@ export const backendNodeDataValidator = v.union(
     entitySyncWarning: v.optional(v.any()),
     envVars: v.optional(v.array(envVarConvexValidator)),
     expandedStepStacks: v.optional(v.array(v.string())),
+    importedTransformerIds: v.optional(v.array(v.string())),
   }),
 );
 

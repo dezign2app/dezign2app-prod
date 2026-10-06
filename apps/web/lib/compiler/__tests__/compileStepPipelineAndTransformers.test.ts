@@ -99,6 +99,47 @@ describe("Step Pipeline & Transformer Helpers", () => {
       const occurrences = (file?.content.match(/export function customTransformer/g) || []).length;
       expect(occurrences).toBe(1);
     });
+
+    it("generates imports for imported transformer dependencies", () => {
+      const nodes: BackendNode[] = [
+        {
+          id: "trans-slugify",
+          type: "transformer",
+          position: { x: 0, y: 0 },
+          fractionalIndex: "a0",
+          data: {
+            label: "slugify",
+            functionName: "slugify",
+            scope: "global",
+            code: "return { slug: input.name.toLowerCase() };",
+            inputSchema: [{ id: "1", name: "name", type: "string", required: true }],
+            returnSchema: [{ id: "2", name: "slug", type: "string", required: true }],
+          },
+        },
+        {
+          id: "trans-compose",
+          type: "transformer",
+          position: { x: 0, y: 0 },
+          fractionalIndex: "a1",
+          data: {
+            label: "createProductItem",
+            functionName: "createProductItem",
+            scope: "global",
+            importedTransformerIds: ["trans-slugify"],
+            code: "const { slug } = slugify({ name: input.title });\nreturn { id: slug, title: input.title };",
+            inputSchema: [{ id: "1", name: "title", type: "string", required: true }],
+            returnSchema: [
+              { id: "1", name: "id", type: "string", required: true },
+              { id: "2", name: "title", type: "string", required: true },
+            ],
+          },
+        },
+      ];
+      const result = compileTransformerHelpers(nodes);
+      const composeFile = result.files.find((f) => f.filename.includes("createProductItem.ts"));
+      expect(composeFile).toBeDefined();
+      expect(composeFile?.content).toContain('import { slugify } from "./slugify";');
+    });
   });
 
   describe("pipelineRenderer & endpointHandlerGenerator", () => {
