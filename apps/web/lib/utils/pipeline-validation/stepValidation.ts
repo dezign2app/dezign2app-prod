@@ -109,8 +109,24 @@ export function collectNestedSteps(step: PipelineStepDraft): PipelineStepDraft[]
       nested.push(s, ...collectNestedSteps(s));
     }
   }
+  if (step.cacheMissSteps) {
+    for (const s of step.cacheMissSteps) {
+      nested.push(s, ...collectNestedSteps(s));
+    }
+  }
 
   return nested;
+}
+
+/**
+ * Flattens all pipeline steps recursively including control flow branches.
+ */
+export function flattenAllPipelineSteps(steps: PipelineStepDraft[]): PipelineStepDraft[] {
+  const result: PipelineStepDraft[] = [];
+  for (const step of steps) {
+    result.push(step, ...collectNestedSteps(step));
+  }
+  return result;
 }
 
 // ─── Step-Specific Input Validators ──────────────────────────────────────────

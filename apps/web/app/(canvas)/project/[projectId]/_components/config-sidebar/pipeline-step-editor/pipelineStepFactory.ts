@@ -14,6 +14,7 @@ import {
   ensurePageRefConnection,
   ensureStorageOperationRefConnection,
   ensureLangGraphConnection,
+  ensureTransformerConnection,
 } from "./utils";
 import { upsertDerivedConnection } from "./PushToClientStepSection";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -86,7 +87,59 @@ export function createDefaultStepDraft({
 
   let initialFields: Partial<PipelineStepDraft> = {};
 
-  if (type === "db_operation") {
+  if (type === "transform") {
+    const allTransformerNodes = allNodes.filter(
+      (n) => n.type === "transformer" || n.type === "transformer_ref",
+    );
+    const firstTransformer = allTransformerNodes[0];
+    const rawFnName =
+      firstTransformer?.data?.functionName ||
+      firstTransformer?.data?.label ||
+      "transformData";
+    const fnName = toVarName(rawFnName);
+    const varName = `${fnName}Result`;
+
+    let connectionResult;
+    if (firstTransformer && serviceNodeId && (endpoint?.id || consumedEvent?.id)) {
+      connectionResult = ensureTransformerConnection({
+        transformerNodeId: firstTransformer.id,
+        functionName: rawFnName,
+        serviceNodeId,
+        endpointId: endpoint?.id,
+        consumedEventId: consumedEvent?.id,
+        allNodes,
+      });
+    }
+
+    const tNodeId = connectionResult?.transformerNodeId || firstTransformer?.id;
+    const isGlobal =
+      firstTransformer?.type === "transformer_ref" ||
+      firstTransformer?.data?.scope === "global" ||
+      firstTransformer?.data?.isGlobal === true;
+
+    const returnSchema = Array.isArray(firstTransformer?.data?.returnSchema)
+      ? firstTransformer.data.returnSchema
+      : [{ name: "result", type: "string", required: true }];
+
+    initialFields = {
+      name: varName,
+      outputVariable: varName,
+      transformerNodeId: tNodeId,
+      functionRef: firstTransformer
+        ? {
+            name: fnName,
+            importPath: isGlobal
+              ? "@workspace/transformers"
+              : `../transformers/${fnName}`,
+            isGlobal,
+            inputSchema: firstTransformer.data?.inputSchema || [],
+            returnSchema,
+          }
+        : undefined,
+      outputSchema: returnSchema,
+      inputBindings: [],
+    };
+  } else if (type === "db_operation") {
     const allEntityNodes = allNodes.filter(
       (n) => (n.type === "entity" || n.type === "db_ref") && n.data?.dbType !== "redis",
     );
