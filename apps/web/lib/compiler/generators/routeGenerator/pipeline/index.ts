@@ -11,6 +11,7 @@ import {
   renderResponseStep,
   renderLangGraphInvokeStep,
   renderPushToClientStep,
+  renderVariableStep,
 } from "./compilePipelineSteps";
 import { applyStepDecorators } from "./stepDecorators";
 import { collectReferencedEnvVars } from "./envCollector";
@@ -47,6 +48,10 @@ export function renderPipelineStep(
   const { type } = step;
 
   switch (type) {
+    case "variable":
+      rawLines = renderVariableStep(step, ctx);
+      break;
+
     case "transform":
       rawLines = renderTransformStep(step, ctx);
       break;

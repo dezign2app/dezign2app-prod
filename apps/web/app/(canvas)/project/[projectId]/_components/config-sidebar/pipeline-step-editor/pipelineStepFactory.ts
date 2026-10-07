@@ -36,6 +36,8 @@ export interface CreateDefaultStepDraftParams {
 
 export function getDefaultVariableName(type: StepType, stepNumber: number): string {
   switch (type) {
+    case "variable":
+      return `customVar${stepNumber}`;
     case "transform":
       return `transformedData${stepNumber}`;
     case "db_operation":
@@ -87,7 +89,17 @@ export function createDefaultStepDraft({
 
   let initialFields: Partial<PipelineStepDraft> = {};
 
-  if (type === "transform") {
+  if (type === "variable") {
+    initialFields = {
+      name: `Variable: ${defaultVar}`,
+      outputVariable: defaultVar,
+      declarationKind: "let",
+      variableOperation: "declare",
+      variableDataType: "string",
+      variableSource: { kind: "inline", value: "" },
+      variableOperator: "=",
+    };
+  } else if (type === "transform") {
     const allTransformerNodes = allNodes.filter(
       (n) => n.type === "transformer" || n.type === "transformer_ref",
     );

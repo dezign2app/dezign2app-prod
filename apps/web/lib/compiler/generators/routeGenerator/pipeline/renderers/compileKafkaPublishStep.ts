@@ -83,7 +83,8 @@ export function renderKafkaPublishStep(
 
   const keyExpr = keyBinding ? resolveBinding(keyBinding, ctx) : null;
 
-  rawLines.push(`const ${outputVariable} = await ${fnName}(`);
+  const declPrefix = step.declarationKind === "reassign" ? "" : `${step.declarationKind || "const"} `;
+  rawLines.push(`${declPrefix}${outputVariable} = await ${fnName}(`);
   if (isGeneric) {
     rawLines.push(`  ${topicExpr},`);
   }

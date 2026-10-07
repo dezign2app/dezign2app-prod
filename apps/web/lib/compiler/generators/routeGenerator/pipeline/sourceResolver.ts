@@ -52,7 +52,14 @@ export function resolveSource(
         const field = source.field ? source.field.trim() : "";
         return field ? `${varName}.${field}` : varName;
       }
-      const varName = ctx.priorOutputs.get(source.stepId);
+      let varName = ctx.priorOutputs.get(source.stepId);
+      if (!varName) {
+        if (source.stepId.startsWith("var:")) {
+          varName = source.stepId.replace("var:", "");
+        } else if (ctx.narrowedOutputs?.has(source.stepId) || /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(source.stepId)) {
+          varName = source.stepId;
+        }
+      }
       const field = source.field ? source.field.trim() : "";
       if (!varName) {
         const fallback = `/* step "${source.stepId}" not found */ undefined`;

@@ -14,3 +14,4 @@ export * from "./compileControlFlowStep";
 export * from "./compileResponseStep";
 export * from "./compileLangGraphStep";
 export * from "./compilePushToClientStep";
+export * from "./compileVariableStep";

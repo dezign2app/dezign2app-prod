@@ -31,3 +31,4 @@ export * from "./CustomCodeSection";
 export * from "./useStepRowState";
 export * from "./StepRow";
 export * from "./PushToClientStepSection";
+export * from "./VariableStepSection";
