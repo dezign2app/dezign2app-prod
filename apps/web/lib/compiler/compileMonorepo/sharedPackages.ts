@@ -80,6 +80,8 @@ export interface SharedPackagesResult {
   langGraphPackageFolders: string[];
   /** Metadata for all compiled LangGraph packages for service route integration. */
   langGraphPackages: LangGraphPackageMeta[];
+  /** Transformer package folder path if global helpers were compiled, e.g. "packages/transformers". */
+  transformerPackageFolder?: string;
 }
 
 /**
@@ -368,6 +370,10 @@ export function compileSharedPackages(
   const externalFunctions: ReusableFunction[] = compiledExternal.reusableFunctions ?? [];
   const storageFunctions: ReusableFunction[] = compiledStorage.reusableFunctions ?? [];
 
+  // Determine if any global transformer helpers were compiled
+  const transformerPackageFolder: string | undefined =
+    compiledTransformers.globalPackageName ? "packages/transformers" : undefined;
+
   return {
     files,
     dbFunctions,
@@ -380,5 +386,6 @@ export function compileSharedPackages(
     storagePackageFolders,
     langGraphPackageFolders,
     langGraphPackages,
+    transformerPackageFolder,
   };
 }

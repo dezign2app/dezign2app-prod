@@ -641,6 +641,7 @@ export function generateConfigFiles(
   }
 
   const langGraphDeps: Record<string, string> = {};
+  let hasGlobalTransformers = false;
   const serviceEndpoints = endpoints.filter(
     (e) =>
       e.nodeId === node.id ||
@@ -657,7 +658,7 @@ export function generateConfigFiles(
         enabled?: boolean;
         name?: string;
         langGraphTargetNodeId?: string;
-        functionRef?: { importPath?: string };
+        functionRef?: { importPath?: string; isGlobal?: boolean };
         thenSteps?: unknown[];
         elseSteps?: unknown[];
         trySteps?: unknown[];
@@ -665,6 +666,17 @@ export function generateConfigFiles(
         loopBody?: unknown[];
       };
       if (step.enabled === false) continue;
+      // Detect global transformer imports → @workspace/transformers dependency
+      if (step.type === "transform") {
+        const importPath = step.functionRef?.importPath || "";
+        if (
+          step.functionRef?.isGlobal ||
+          importPath === "@workspace/transformers" ||
+          importPath.startsWith("@workspace/transformers")
+        ) {
+          hasGlobalTransformers = true;
+        }
+      }
       if (step.type === "langgraph_invoke") {
         if (step.functionRef?.importPath?.startsWith("@")) {
           langGraphDeps[step.functionRef.importPath] = "workspace:*";
@@ -722,12 +734,25 @@ export function generateConfigFiles(
     }
   });
 
+  // Also check canvas-level transformer nodes connected to this service
+  if (!hasGlobalTransformers) {
+    const transformerNodes = allNodes.filter((n) => n.type === "transformer");
+    hasGlobalTransformers = transformerNodes.some((tn) => {
+      const scope = tn.data?.scope || "global";
+      if (scope !== "global") return false;
+      return allEdges.some(
+        (e) => e.source === tn.id && e.target === node.id || e.target === tn.id && e.source === node.id,
+      );
+    });
+  }
+
   const dependencies: Record<string, string> = {
     ...dbDeps,
     ...(hasKafka ? { [kafkaPackageName]: "workspace:*" } : {}),
     ...redisDeps,
     ...storageDeps,
     ...langGraphDeps,
+    ...(hasGlobalTransformers ? { "@workspace/transformers": "workspace:*" } : {}),
     "@workspace/logger": "workspace:*",
     "@workspace/types": "workspace:*",
     express: "^4.19.2",
