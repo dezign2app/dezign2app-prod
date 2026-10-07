@@ -34,9 +34,8 @@ export async function testDatabaseOperation(
   payload: TestDbOperationPayload,
 ): Promise<TestDbOperationResult> {
   const electron = getElectronAPI();
-  // Only route SQLite to Electron IPC (where local filesystem access via host Node is needed).
-  // Network engines (like Redis) have full live execution with ioredis implemented in Server Actions.
-  if (electron?.db?.executeOperation && payload.engine === "sqlite") {
+  // In Electron, always route through IPC — Server Actions are not available in the desktop shell.
+  if (electron?.db?.executeOperation) {
     try {
       return await electron.db.executeOperation(payload);
     } catch (err) {
@@ -54,8 +53,10 @@ export async function testDatabaseOperation(
  * Check database connection status, reachability, and metadata.
  *
  * Automatically routes:
- * 1. SQLite -> Desktop IPC pipe (`window.electronAPI.db.checkConnection`)
- * 2. Redis & others -> Next.js Server Action (`checkDbConnectionAction`)
+ * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.checkConnection`)
+ *    All engines (SQLite, Postgres, Redis, etc.) are handled by the Electron main process,
+ *    which has direct Node.js network/filesystem access to localhost services.
+ * 2. In Browser (dev/web) -> Next.js Server Action (`checkDbConnectionAction`)
  *
  * Zero manual `fetch()` or REST HTTP `/api` calls.
  */
@@ -63,7 +64,9 @@ export async function checkDatabaseConnection(
   payload: CheckDbConnectionPayload,
 ): Promise<CheckDbConnectionResult> {
   const electron = getElectronAPI();
-  if (electron?.db?.checkConnection && payload.engine === "sqlite") {
+  // In Electron, always route through IPC — Server Actions are not available in the desktop shell.
+  // The main process handles Postgres, Redis, SQLite, and TCP checks natively.
+  if (electron?.db?.checkConnection) {
     try {
       return await electron.db.checkConnection(payload);
     } catch (err) {

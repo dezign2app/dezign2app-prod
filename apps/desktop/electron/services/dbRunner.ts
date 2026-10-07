@@ -73,6 +73,10 @@ export interface CheckDbConnectionPayload {
   connection?: {
     host?: string;
     port?: number | string;
+    database?: string;
+    user?: string;
+    username?: string;
+    password?: string;
     connectionString?: string;
     connectionStringEnv?: string;
     dbFilePath?: string;
@@ -488,7 +492,26 @@ export async function checkDbConnection(
   const { engine = "sqlite", connection = {} } = payload;
   let host = connection.host || "127.0.0.1";
   if (host === "localhost") host = "127.0.0.1";
-  const port = Number(connection.port) || (engine === "redis" ? 6379 : 5432);
+  let port = Number(connection.port) || (engine === "redis" ? 6379 : 5432);
+
+  let connectionString = connection.connectionString;
+  if (!connectionString && connection.connectionStringEnv) {
+    connectionString = resolveEnvValue(connection.connectionStringEnv);
+  }
+
+  if (connectionString) {
+    try {
+      const parsed = new URL(connectionString);
+      if (parsed.hostname) {
+        host = parsed.hostname === "localhost" ? "127.0.0.1" : parsed.hostname;
+      }
+      if (parsed.port) {
+        port = Number(parsed.port);
+      }
+    } catch {
+      // Fallback to connection host/port if URL parsing fails
+    }
+  }
 
   // 1. SQLITE ENGINE
   if (engine === "sqlite") {
@@ -531,20 +554,35 @@ export async function checkDbConnection(
     }
   }
 
-  // 2. TCP ENGINES (Redis, Postgres, MySQL)
+  // 2. TCP ENGINES (PostgreSQL, Redis, MySQL, CockroachDB, etc.)
   const tcpResult = await checkTcpSocket(host, port);
+  const displayUri = connectionString
+    ? connectionString.replace(/:([^:@]+)@/, ":***@")
+    : `${engine}://${host}:${port}`;
+
   if (tcpResult.reachable) {
+    const isPostgres =
+      engine === "postgres" ||
+      engine === "postgresql" ||
+      engine === "pg" ||
+      engine === "cockroachdb";
+    const engineLabel = isPostgres
+      ? "PostgreSQL"
+      : engine === "redis"
+        ? "Redis"
+        : `${engine} server`;
+
     return {
       success: true,
       engine,
       latencyMs: tcpResult.latencyMs,
       host,
       port,
-      connectionUri: `${engine}://${host}:${port}`,
+      connectionUri: displayUri,
       info: {
         reachable: true,
         socket: `${host}:${port}`,
-        version: `${engine} server (TCP open)`,
+        version: `${engineLabel} (TCP Active)`,
         status: "Connected",
       },
     };
@@ -555,7 +593,7 @@ export async function checkDbConnection(
       latencyMs: 0,
       host,
       port,
-      connectionUri: `${engine}://${host}:${port}`,
+      connectionUri: displayUri,
       error: `Could not reach ${engine} database at ${host}:${port}: ${tcpResult.error || "Connection refused"}`,
     };
   }
