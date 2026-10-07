@@ -60,6 +60,8 @@ export const transformerNodeDataSchema = baseNodeDataSchema
         }),
       )
       .optional(),
+    returnType: z.string().optional(),
+    returnTypeMode: z.string().optional(),
     customDependencies: z.array(nodeDependencyItemSchema).optional(),
   })
   .passthrough();
@@ -88,6 +90,8 @@ export const transformerNodeDataInputSchema = baseNodeDataSchema
     isAsync: z.boolean().optional(),
     transformerHelpers: z.array(transformerHelperInputSchema).optional(),
     importedTransformerIds: z.array(z.string()).optional(),
+    returnType: z.string().optional(),
+    returnTypeMode: z.string().optional(),
     customDependencies: z.array(nodeDependencyItemInputSchema).optional(),
   })
   .passthrough();
