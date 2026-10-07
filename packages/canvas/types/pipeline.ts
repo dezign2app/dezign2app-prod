@@ -88,6 +88,7 @@ export interface AvailableTransformer {
   name: string;
   description?: string;
   scope: "global" | "local";
+  isGlobal?: boolean;
   targetServiceId?: string;
   targetEndpointId?: string;
   targetEndpointIds?: string[];

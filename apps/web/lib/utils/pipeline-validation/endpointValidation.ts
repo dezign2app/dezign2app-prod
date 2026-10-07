@@ -5,7 +5,7 @@ import {
   EndpointLike,
 } from "@/types/canvas";
 import { isOutputSchemaMissing } from "../nestedJsonSchema";
-import { isStepInputUnconfigured } from "./stepValidation";
+import { isStepInputUnconfigured, flattenAllPipelineSteps } from "./stepValidation";
 import {
   getConnectedTransformersForEndpoint,
   getConnectedKafkaForEndpoint,
@@ -30,7 +30,8 @@ export function isEndpointPipelineUnconfigured(
     return isOutputSchemaMissing(endpointOrConsumer);
   }
 
-  const steps = endpointOrConsumer.pipelineSteps || [];
+  const rootSteps = endpointOrConsumer.pipelineSteps || [];
+  const steps = flattenAllPipelineSteps(rootSteps);
 
   // Check 1: Are there any existing steps in the pipeline with unconfigured inputs?
   const hasUnconfiguredStep = steps

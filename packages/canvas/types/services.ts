@@ -134,6 +134,7 @@ export interface CanvasServiceNodeData {
 export interface CanvasTransformerNodeData {
   functionName?: string;
   scope?: "global" | "local";
+  isGlobal?: boolean;
   targetServiceId?: string;
   targetEndpointId?: string;
   targetEndpointIds?: string[];

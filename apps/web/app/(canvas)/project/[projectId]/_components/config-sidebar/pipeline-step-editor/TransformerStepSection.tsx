@@ -17,7 +17,7 @@ import {
   ExpectedArg,
   StepBinding,
 } from "./types";
-import { generateId } from "./utils";
+import { generateId, ensureTransformerConnection } from "./utils";
 import { toVarName } from "@/lib/compiler/utils";
 
 
@@ -80,178 +80,25 @@ export const TransformerStepSection = ({
         ? step.outputVariable
         : `${toVarName(t.name)}Result`;
 
-    const isGlobal = t.scope === "global";
-    const store = useBackendCanvasStore.getState();
-    const allNodes = store.nodes;
-    const allEdges = store.edges;
-
     let effectiveTransformerNodeId = t.nodeId || t.id;
 
-    if (isGlobal && serviceNodeId && endpointId) {
-      const serviceNode = allNodes.find((n) => n.id === serviceNodeId);
-      const masterTransformerNode = allNodes.find(
-        (n) =>
-          n.type === "transformer" &&
-          (n.id === t.nodeId ||
-            n.id === t.id ||
-            n.data?.functionName === t.name ||
-            n.data?.label === t.name),
-      );
-      const masterId = masterTransformerNode?.id || t.nodeId || t.id;
-
-      // 1 Ref per service rule: Check if a transformer_ref node already exists on canvas for this service
-      const existingRefNode = allNodes.find(
-        (n) =>
-          n.type === "transformer_ref" &&
-          (n.data?.targetServiceId === serviceNodeId ||
-            allEdges.some((e) => e.source === n.id && e.target === serviceNodeId)),
-      );
-
-      let refNodeId = existingRefNode?.id;
-
-      if (!refNodeId) {
-        // Automatically add 1 new transformer_ref node for this service
-        refNodeId = crypto.randomUUID();
-        const serviceX = serviceNode?.position?.x ?? 0;
-        const serviceY = serviceNode?.position?.y ?? 0;
-
-        store.addNode({
-          id: refNodeId,
-          type: "transformer_ref",
-          position: {
-            x: Math.max(0, serviceX - 300),
-            y: serviceY + 40,
-          },
-          data: {
-            label: `${t.name} (Ref)`,
-            transformerRef: masterId,
-            targetServiceId: serviceNodeId,
-            targetEndpointId: endpointId,
-            targetEndpointIds: [endpointId],
-          },
-        });
-      } else {
-        // Reuse the single transformer_ref for this service, updating targetEndpointIds
-        const currentLiveRef = store.nodes.find((n) => n.id === refNodeId);
-        if (currentLiveRef?.data) {
-          const currentEpIds: string[] =
-            currentLiveRef.data.targetEndpointIds ||
-            (currentLiveRef.data.targetEndpointId ? [currentLiveRef.data.targetEndpointId] : []);
-          const nextEpIds = currentEpIds.includes(endpointId)
-            ? currentEpIds
-            : [...currentEpIds, endpointId];
-
-          store.updateNode(refNodeId, {
-            data: {
-              ...currentLiveRef.data,
-              transformerRef: currentLiveRef.data.transformerRef || masterId,
-              targetServiceId: serviceNodeId,
-              targetEndpointIds: nextEpIds,
-              targetEndpointId: nextEpIds[0],
-            },
-          });
-        }
-      }
-
-      effectiveTransformerNodeId = refNodeId;
-
-      // Ensure reference edge from master global transformer to transformer_ref node
-      if (masterTransformerNode) {
-        const refEdgeExists = store.edges.some(
-          (e) =>
-            (e.type === "transformer-reference" || e.type === "reference") &&
-            e.source === masterTransformerNode.id &&
-            e.target === refNodeId,
-        );
-        if (!refEdgeExists) {
-          store.addEdge({
-            id: `edge-ref-link-${masterTransformerNode.id}-${refNodeId}`,
-            source: masterTransformerNode.id,
-            target: refNodeId,
-            sourceHandle: "transformer-out",
-            targetHandle: "transformer-in",
-            type: "transformer-reference",
-          });
-        }
-
-        // Clean up any direct edge from master global transformer to this service endpoint
-        const directEdges = store.edges.filter(
-          (e) =>
-            e.source === masterTransformerNode.id &&
-            e.target === serviceNodeId &&
-            (e.targetHandle === `endpoint-in-${endpointId}` ||
-              e.targetHandle === `consumedEvents-in-${endpointId}` ||
-              e.targetHandle === endpointId),
-        );
-        directEdges.forEach((e) => store.deleteEdge(e.id));
-      }
-
-      // Draw edge between transformer_ref and service endpoint / consumer
-      const targetHandle = endpointId.startsWith("consumedEvents-in-")
-        ? endpointId
-        : endpointId.startsWith("endpoint-in-")
-        ? endpointId
-        : `endpoint-in-${endpointId}`;
-      const edgeExists = store.edges.some(
-        (e) =>
-          e.source === refNodeId &&
-          e.target === serviceNodeId &&
-          e.targetHandle === targetHandle,
-      );
-      if (!edgeExists) {
-        store.addEdge({
-          id: `edge-ref-${refNodeId}-${endpointId}-${Date.now()}`,
-          source: refNodeId,
-          target: serviceNodeId,
-          sourceHandle: "transformer-out",
-          targetHandle,
-          type: "connection",
-        });
-      }
-    } else if (!isGlobal && t.nodeId && serviceNodeId && endpointId) {
-      // Local transformer: connect directly to service endpoint
-      const targetHandle = endpointId.startsWith("consumedEvents-in-")
-        ? endpointId
-        : endpointId.startsWith("endpoint-in-")
-        ? endpointId
-        : `endpoint-in-${endpointId}`;
-      const edgeExists = store.edges.some(
-        (e) =>
-          e.source === t.nodeId &&
-          e.target === serviceNodeId &&
-          e.targetHandle === targetHandle,
-      );
-      if (!edgeExists) {
-        store.addEdge({
-          id: `edge-transformer-${t.nodeId}-${endpointId}-${Date.now()}`,
-          source: t.nodeId,
-          target: serviceNodeId,
-          sourceHandle: "transformer-out",
-          targetHandle,
-          type: "connection",
-        });
-      }
-
-      const tNode = store.nodes.find((n) => n.id === t.nodeId);
-      if (tNode?.data) {
-        const currentEpIds: string[] =
-          tNode.data.targetEndpointIds ||
-          (tNode.data.targetEndpointId ? [tNode.data.targetEndpointId] : []);
-        if (!currentEpIds.includes(endpointId)) {
-          const nextEpIds = [...currentEpIds, endpointId];
-          store.updateNode(t.nodeId, {
-            data: {
-              ...tNode.data,
-              targetServiceId: serviceNodeId,
-              targetEndpointIds: nextEpIds,
-              targetEndpointId: nextEpIds[0],
-            },
-          });
-        }
+    if (serviceNodeId && endpointId) {
+      const conn = ensureTransformerConnection({
+        transformerNodeId: t.nodeId || t.id,
+        functionName: t.name,
+        serviceNodeId,
+        endpointId,
+      });
+      if (conn?.transformerNodeId) {
+        effectiveTransformerNodeId = conn.transformerNodeId;
       }
     }
 
     const cleanName = toVarName(t.name);
+    const isGlobal =
+      t.scope === "global" ||
+      t.isGlobal === true ||
+      Boolean(t.transformerRefNodeId);
     const currentBindings = step.inputBindings || [];
     const nextBindings: StepBinding[] = (t.inputSchema || [])
       .filter((field) => field && field.name && field.name.trim())

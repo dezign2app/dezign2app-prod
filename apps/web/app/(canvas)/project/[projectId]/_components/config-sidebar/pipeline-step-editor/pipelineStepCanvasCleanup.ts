@@ -15,6 +15,8 @@ import {
   ensureStorageOperationRefConnection,
   cleanupLangGraphConnection,
   ensureLangGraphConnection,
+  cleanupTransformerConnection,
+  ensureTransformerConnection,
 } from "./utils";
 import { removeDerivedConnection } from "./PushToClientStepSection";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -40,31 +42,33 @@ export function handleStepUpdateCanvasEffects({
   allNodes,
   isNested,
 }: HandleStepUpdateCanvasEffectsParams): void {
-  if (isNested) return;
-
   if (prevStep.type === "redis_operation" && updatedStep.type !== "redis_operation") {
-    cleanupRedisCacheConnection({
-      tableNodeId: prevStep.tableNodeId,
-      databaseId: prevStep.databaseId,
-      serviceNodeId,
-      endpointId,
-      consumedEventId,
-      remainingSteps,
-    });
+    if (!isNested) {
+      cleanupRedisCacheConnection({
+        tableNodeId: prevStep.tableNodeId,
+        databaseId: prevStep.databaseId,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+        remainingSteps,
+      });
+    }
   } else if (
     prevStep.type === "redis_operation" &&
     updatedStep.type === "redis_operation" &&
     prevStep.tableNodeId &&
     prevStep.tableNodeId !== updatedStep.tableNodeId
   ) {
-    cleanupRedisCacheConnection({
-      tableNodeId: prevStep.tableNodeId,
-      databaseId: prevStep.databaseId,
-      serviceNodeId,
-      endpointId,
-      consumedEventId,
-      remainingSteps,
-    });
+    if (!isNested) {
+      cleanupRedisCacheConnection({
+        tableNodeId: prevStep.tableNodeId,
+        databaseId: prevStep.databaseId,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+        remainingSteps,
+      });
+    }
     if (updatedStep.tableNodeId) {
       ensureRedisCacheConnection({
         schemaId: updatedStep.tableNodeId,
@@ -77,15 +81,17 @@ export function handleStepUpdateCanvasEffects({
   }
 
   if (prevStep.type === "db_operation" && updatedStep.type !== "db_operation") {
-    cleanupDatabaseRefConnection({
-      tableNodeId: prevStep.tableNodeId,
-      databaseId: prevStep.databaseId,
-      serviceNodeId,
-      endpointId,
-      consumedEventId,
-      functionName: prevStep.functionRef?.name || prevStep.operationId,
-      remainingSteps,
-    });
+    if (!isNested) {
+      cleanupDatabaseRefConnection({
+        tableNodeId: prevStep.tableNodeId,
+        databaseId: prevStep.databaseId,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+        functionName: prevStep.functionRef?.name || prevStep.operationId,
+        remainingSteps,
+      });
+    }
   } else if (
     prevStep.type === "db_operation" &&
     updatedStep.type === "db_operation" &&
@@ -94,15 +100,17 @@ export function handleStepUpdateCanvasEffects({
       prevStep.functionRef?.name !== updatedStep.functionRef?.name ||
       prevStep.operationId !== updatedStep.operationId)
   ) {
-    cleanupDatabaseRefConnection({
-      tableNodeId: prevStep.tableNodeId,
-      databaseId: prevStep.databaseId,
-      serviceNodeId,
-      endpointId,
-      consumedEventId,
-      functionName: prevStep.functionRef?.name || prevStep.operationId,
-      remainingSteps,
-    });
+    if (!isNested) {
+      cleanupDatabaseRefConnection({
+        tableNodeId: prevStep.tableNodeId,
+        databaseId: prevStep.databaseId,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+        functionName: prevStep.functionRef?.name || prevStep.operationId,
+        remainingSteps,
+      });
+    }
     if (updatedStep.tableNodeId || updatedStep.databaseId) {
       ensureDatabaseRefConnection({
         tableNodeId: updatedStep.tableNodeId,
@@ -116,16 +124,18 @@ export function handleStepUpdateCanvasEffects({
   }
 
   if (prevStep.type === "push_to_client" && updatedStep.type !== "push_to_client") {
-    cleanupPageRefConnection({
-      pageRefNodeId: prevStep.clientDeliveryPageRefNodeId,
-      serviceNodeId,
-      endpointId,
-      consumedEventId,
-      remainingSteps,
-    });
-    if (prevStep.clientDeliveryTargetPageId) {
-      const store = useBackendCanvasStore.getState();
-      removeDerivedConnection(store, prevStep.clientDeliveryTargetPageId, prevStep.id);
+    if (!isNested) {
+      cleanupPageRefConnection({
+        pageRefNodeId: prevStep.clientDeliveryPageRefNodeId,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+        remainingSteps,
+      });
+      if (prevStep.clientDeliveryTargetPageId) {
+        const store = useBackendCanvasStore.getState();
+        removeDerivedConnection(store, prevStep.clientDeliveryTargetPageId, prevStep.id);
+      }
     }
   } else if (prevStep.type !== "push_to_client" && updatedStep.type === "push_to_client") {
     const allWebPageNodes = allNodes.filter((n) => n.type === "webPage");
@@ -146,20 +156,23 @@ export function handleStepUpdateCanvasEffects({
   }
 
   if (prevStep.type === "storage_operation" && updatedStep.type !== "storage_operation") {
-    cleanupStorageOperationRefConnection({
-      storageNodeId: prevStep.storageNodeId || prevStep.brokerNodeId,
-      bucketId: prevStep.bucketId,
-      serviceNodeId,
-      endpointId,
-      consumedEventId,
-      functionName: prevStep.functionRef?.name || prevStep.operationId,
-      remainingSteps,
-    });
+    if (!isNested) {
+      cleanupStorageOperationRefConnection({
+        storageNodeId: prevStep.storageNodeId || prevStep.brokerNodeId,
+        bucketId: prevStep.bucketId,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+        functionName: prevStep.functionRef?.name || prevStep.operationId,
+        remainingSteps,
+      });
+    }
   } else if (
     (prevStep.type === "storage_operation" && updatedStep.type === "storage_operation") ||
     (prevStep.type !== "storage_operation" && updatedStep.type === "storage_operation")
   ) {
     if (
+      !isNested &&
       prevStep.type === "storage_operation" &&
       (prevStep.storageNodeId !== updatedStep.storageNodeId ||
         prevStep.bucketId !== updatedStep.bucketId ||
@@ -189,19 +202,65 @@ export function handleStepUpdateCanvasEffects({
     }
   }
 
+  if (prevStep.type === "transform" && updatedStep.type !== "transform") {
+    if (!isNested) {
+      cleanupTransformerConnection({
+        transformerNodeId: prevStep.transformerNodeId,
+        functionName: prevStep.functionRef?.name,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+        remainingSteps,
+      });
+    }
+  } else if (
+    (prevStep.type === "transform" && updatedStep.type === "transform") ||
+    (prevStep.type !== "transform" && updatedStep.type === "transform")
+  ) {
+    if (
+      !isNested &&
+      prevStep.type === "transform" &&
+      (prevStep.transformerNodeId !== updatedStep.transformerNodeId ||
+        prevStep.functionRef?.name !== updatedStep.functionRef?.name)
+    ) {
+      cleanupTransformerConnection({
+        transformerNodeId: prevStep.transformerNodeId,
+        functionName: prevStep.functionRef?.name,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+        remainingSteps,
+      });
+    }
+
+    if (updatedStep.type === "transform" && (updatedStep.transformerNodeId || updatedStep.functionRef?.name)) {
+      ensureTransformerConnection({
+        transformerNodeId: updatedStep.transformerNodeId,
+        functionName: updatedStep.functionRef?.name,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+        allNodes,
+      });
+    }
+  }
+
   if (prevStep.type === "langgraph_invoke" && updatedStep.type !== "langgraph_invoke") {
-    cleanupLangGraphConnection({
-      langGraphNodeId: prevStep.langGraphTargetNodeId,
-      serviceNodeId,
-      endpointId,
-      consumedEventId,
-      remainingSteps,
-    });
+    if (!isNested) {
+      cleanupLangGraphConnection({
+        langGraphNodeId: prevStep.langGraphTargetNodeId,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+        remainingSteps,
+      });
+    }
   } else if (
     (prevStep.type === "langgraph_invoke" && updatedStep.type === "langgraph_invoke") ||
     (prevStep.type !== "langgraph_invoke" && updatedStep.type === "langgraph_invoke")
   ) {
     if (
+      !isNested &&
       prevStep.type === "langgraph_invoke" &&
       prevStep.langGraphTargetNodeId !== updatedStep.langGraphTargetNodeId
     ) {
@@ -308,89 +367,13 @@ export function handleStepDeleteCanvasEffects({
   }
 
   if (stepToDelete.type === "transform") {
-    const store = useBackendCanvasStore.getState();
-    const fnName = stepToDelete.functionRef?.name;
-    const tNodeId = stepToDelete.transformerNodeId;
-
-    const matchingTransformerNodes = store.nodes.filter(
-      (n) =>
-        (n.type === "transformer" || n.type === "transformer_ref") &&
-        (n.id === tNodeId ||
-          n.id === fnName ||
-          n.data?.functionName === fnName ||
-          n.data?.label === fnName ||
-          (n.type === "transformer_ref" && n.data?.transformerRef === fnName)),
-    );
-
-    const matchingNodeIds = new Set<string>(matchingTransformerNodes.map((n) => n.id));
-
-    connectedTransformers.forEach((ct) => {
-      if (
-        ct.functionName === fnName ||
-        ct.id === tNodeId ||
-        ct.nodeId === tNodeId
-      ) {
-        matchingNodeIds.add(ct.id);
-        matchingNodeIds.add(ct.nodeId);
-        if (ct.masterId) matchingNodeIds.add(ct.masterId);
-      }
-    });
-
-    const edgesToDelete = store.edges.filter((e) => {
-      if (!e) return false;
-      const isFromTransformer =
-        matchingNodeIds.has(e.source) || matchingNodeIds.has(e.target);
-      if (!isFromTransformer) return false;
-
-      const isToThisService =
-        Boolean(serviceNodeId) &&
-        (e.target === serviceNodeId || e.source === serviceNodeId);
-
-      const isToThisTargetHandle =
-        Boolean(targetId) &&
-        (e.targetHandle === `endpoint-in-${targetId}` ||
-          e.targetHandle === `consumedEvents-in-${targetId}` ||
-          e.targetHandle === targetId ||
-          e.sourceHandle === `endpoint-in-${targetId}` ||
-          e.sourceHandle === `consumedEvents-in-${targetId}`);
-
-      return isToThisService && isToThisTargetHandle;
-    });
-
-    edgesToDelete.forEach((e) => store.deleteEdge(e.id));
-
-    matchingTransformerNodes.forEach((tNode) => {
-      if (tNode.data) {
-        const currentEpIds: string[] =
-          tNode.data.targetEndpointIds ||
-          (tNode.data.targetEndpointId ? [tNode.data.targetEndpointId] : []);
-        const currentEvIds: string[] =
-          tNode.data.targetEventIds ||
-          (tNode.data.targetEventId ? [tNode.data.targetEventId] : []);
-
-        const nextEpIds = targetId
-          ? currentEpIds.filter((id) => id !== targetId)
-          : currentEpIds;
-        const nextEvIds = targetId
-          ? currentEvIds.filter((id) => id !== targetId)
-          : currentEvIds;
-
-        const hasRemainingTargets =
-          nextEpIds.length > 0 || nextEvIds.length > 0;
-
-        store.updateNode(tNode.id, {
-          data: {
-            ...tNode.data,
-            targetEndpointIds: nextEpIds,
-            targetEndpointId: nextEpIds[0] || undefined,
-            targetEventIds: nextEvIds,
-            targetEventId: nextEvIds[0] || undefined,
-            targetServiceId: hasRemainingTargets
-              ? tNode.data.targetServiceId
-              : undefined,
-          },
-        });
-      }
+    cleanupTransformerConnection({
+      transformerNodeId: stepToDelete.transformerNodeId,
+      functionName: stepToDelete.functionRef?.name,
+      serviceNodeId,
+      endpointId: endpoint?.id,
+      consumedEventId,
+      remainingSteps,
     });
   }
 

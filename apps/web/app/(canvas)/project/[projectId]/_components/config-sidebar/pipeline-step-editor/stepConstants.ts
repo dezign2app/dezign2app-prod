@@ -223,7 +223,20 @@ export function collectAllNestedSteps(step: PipelineStepDraft): PipelineStepDraf
       nested.push(s, ...collectAllNestedSteps(s));
     });
   }
+  if (step.cacheMissSteps) {
+    step.cacheMissSteps.forEach((s) => {
+      nested.push(s, ...collectAllNestedSteps(s));
+    });
+  }
   return nested;
+}
+
+export function flattenAllPipelineSteps(steps: PipelineStepDraft[]): PipelineStepDraft[] {
+  const result: PipelineStepDraft[] = [];
+  steps.forEach((step) => {
+    result.push(step, ...collectAllNestedSteps(step));
+  });
+  return result;
 }
 
 export const TS_TYPES: readonly string[] = [
