@@ -165,6 +165,11 @@ export const safePipelineStepSchema = z.object({
   transformerNodeId: z.string().optional(),
   inputBindings: z.array(pipelineStepInputBindingSchema).optional(),
   outputVariable: z.string().optional(),
+  declarationKind: z.enum(["const", "let", "reassign"]).optional(),
+  variableOperation: z.enum(["declare", "assign"]).optional(),
+  variableDataType: z.string().optional(),
+  variableSource: pipelineStepInputSourceSchema.optional(),
+  variableOperator: z.enum(["=", "+=", "-="]).optional(),
   outputSchema: z.array(pipelineStepOutputSchemaFieldSchema).optional(),
   customCode: z.string().optional(),
 

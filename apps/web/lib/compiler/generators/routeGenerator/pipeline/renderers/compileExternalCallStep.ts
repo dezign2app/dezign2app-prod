@@ -21,9 +21,10 @@ export function renderExternalCallStep(
     const fnName = toVarName(functionRef.name || "fetchCall");
     const args = buildArgList(inputBindings, ctx);
     const isMultiLine = args.includes("\n");
+    const declPrefix = step.declarationKind === "reassign" ? "" : `${step.declarationKind || "const"} `;
     if (isMultiLine) {
       return [
-        `const ${outputVariable} = await ${fnName}(`,
+        `${declPrefix}${outputVariable} = await ${fnName}(`,
         ...args.split("\n").map((l) => `  ${l}`),
         `);`,
       ];
@@ -31,7 +32,7 @@ export function renderExternalCallStep(
     const callExpr = args
       ? `await ${fnName}(${args})`
       : `await ${fnName}()`;
-    return [`const ${outputVariable} = ${callExpr};`];
+    return [`${declPrefix}${outputVariable} = ${callExpr};`];
   }
 
   // Direct fetch call when no custom functionRef is configured

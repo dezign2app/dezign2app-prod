@@ -312,26 +312,28 @@ export function renderAsyncOperationStep(
       (step.cacheMiss?.enabled ?? hasMissSteps),
   );
   const isDeclLet = Boolean(
-    hasCacheMiss &&
-      ((step.cacheMiss?.action === "fallback_db" ||
-        step.cacheMiss?.action === "fallback_value") ||
-        hasMissSteps),
+    step.declarationKind === "let" ||
+      (hasCacheMiss &&
+        ((step.cacheMiss?.action === "fallback_db" ||
+          step.cacheMiss?.action === "fallback_value") ||
+          hasMissSteps)),
   );
-  const declKeyword = isDeclLet ? "let" : "const";
+  const isReassign = step.declarationKind === "reassign";
+  const declPrefix = isReassign ? "" : `${isDeclLet ? "let" : (step.declarationKind || "const")} `;
   const typeAnnotation =
-    isDeclLet && step.cacheMiss?.action === "fallback_db" && step.cacheMiss.functionRef?.name
+    !isReassign && isDeclLet && step.cacheMiss?.action === "fallback_db" && step.cacheMiss.functionRef?.name
       ? `: Awaited<ReturnType<typeof ${fnName}>> | Awaited<ReturnType<typeof ${toVarName(step.cacheMiss.functionRef.name)}>>`
       : "";
 
   if (isMultiLine) {
-    rawLines.push(`${declKeyword} ${outputVariable}${typeAnnotation} = await ${fnName}(`);
+    rawLines.push(`${declPrefix}${outputVariable}${typeAnnotation} = await ${fnName}(`);
     args.split("\n").forEach((l) => rawLines.push(`  ${l}`));
     rawLines.push(`);`);
   } else {
     const callExpr = args
       ? `await ${fnName}(${args})`
       : `await ${fnName}()`;
-    rawLines.push(`${declKeyword} ${outputVariable}${typeAnnotation} = ${callExpr};`);
+    rawLines.push(`${declPrefix}${outputVariable}${typeAnnotation} = ${callExpr};`);
   }
 
   if (outputVariable) {

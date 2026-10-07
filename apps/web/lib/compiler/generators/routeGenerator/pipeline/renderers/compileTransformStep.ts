@@ -26,13 +26,14 @@ export function renderTransformStep(
   if (outputVariable) {
     ctx.narrowedOutputs?.add(outputVariable);
   }
+  const declPrefix = step.declarationKind === "reassign" ? "" : `${step.declarationKind || "const"} `;
   if (isMultiLine) {
     return [
-      `const ${outputVariable} = ${fnName}(`,
+      `${declPrefix}${outputVariable} = ${fnName}(`,
       ...args.split("\n").map((l) => `  ${l}`),
       `);`,
     ];
   }
   const callExpr = args ? `${fnName}(${args})` : `${fnName}()`;
-  return [`const ${outputVariable} = ${callExpr};`];
+  return [`${declPrefix}${outputVariable} = ${callExpr};`];
 }

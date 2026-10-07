@@ -107,9 +107,47 @@ export const StepRowHeader = ({
             <span className="text-orange-300 font-semibold truncate">
               return res.status({step.statusCode || 200})
             </span>
+          ) : step.type === "variable" ? (
+            step.variableOperation === "assign" ? (
+              <>
+                <span className="text-primary/95 font-semibold">{displayVarName}</span>
+                <span className="text-amber-400 font-bold select-none">{step.variableOperator || "="}</span>
+                <span className="text-[11px] text-muted-foreground/70 font-mono truncate max-w-[160px]">
+                  {step.variableSource?.kind === "inline"
+                    ? `"${step.variableSource.value}"`
+                    : step.variableSource?.kind || "..."}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className={`font-normal select-none ${step.declarationKind === "const" ? "text-purple-400/80" : "text-blue-400/80"}`}>
+                  {step.declarationKind === "const" ? "const" : "let"}
+                </span>
+                <span className="text-primary/95 font-semibold">{displayVarName}</span>
+                {step.variableDataType && (
+                  <span className="text-[10px] text-muted-foreground/50 font-mono -ml-0.5">
+                    :{step.variableDataType}
+                  </span>
+                )}
+                <span className="text-muted-foreground/35 font-normal select-none">=</span>
+                <span className="text-[11px] text-muted-foreground/70 font-mono truncate max-w-[150px]">
+                  {step.variableSource?.kind === "inline"
+                    ? `"${step.variableSource.value}"`
+                    : step.variableSource?.kind || "..."}
+                </span>
+              </>
+            )
           ) : (
             <>
-              <span className="text-muted-foreground/45 font-normal select-none">const</span>
+              {step.declarationKind === "reassign" ? null : (
+                <span
+                  className={`font-normal select-none ${
+                    step.declarationKind === "let" ? "text-blue-400/80" : "text-muted-foreground/45"
+                  }`}
+                >
+                  {step.declarationKind === "let" ? "let" : "const"}
+                </span>
+              )}
               <span className="text-primary/95 font-semibold">{displayVarName}</span>
               <span className="text-muted-foreground/35 font-normal select-none">=</span>
               {step.functionRef?.name && (

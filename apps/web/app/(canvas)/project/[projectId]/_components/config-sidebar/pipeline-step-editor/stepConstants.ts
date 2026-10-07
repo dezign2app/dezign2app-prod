@@ -17,6 +17,7 @@ import {
   Globe,
   Network,
   HardDrive,
+  Variable,
 } from "lucide-react";
 import {
   StepType,
@@ -35,6 +36,11 @@ export interface StepTypeMeta {
 }
 
 export const STEP_TYPE_META: Record<StepType, StepTypeMeta> = {
+  variable: {
+    label: "Variable",
+    icon: React.createElement(Variable, { size: 13 }),
+    color: "text-blue-400 bg-blue-500/10 border-blue-500/30",
+  },
   transform: {
     label: "Transform",
     icon: React.createElement(Shuffle, { size: 13 }),
@@ -123,6 +129,7 @@ export const STEP_TYPE_META: Record<StepType, StepTypeMeta> = {
 };
 
 export const ADDABLE_STEP_TYPES: readonly StepType[] = [
+  "variable",
   "transform",
   "db_operation",
   "redis_operation",

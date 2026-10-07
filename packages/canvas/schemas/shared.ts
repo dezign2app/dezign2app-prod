@@ -157,6 +157,7 @@ export const conditionExprSchema: z.ZodType<ConditionExpr> = z.lazy(() =>
 // One ordered step in an endpoint or event handler
 // ---------------------------------------------------------------------------
 export const pipelineStepTypeEnum = z.enum([
+  "variable",         // declare (let/const) or assign/mutate a variable
   "transform",        // call a transformer helper function
   "db_operation",     // call a DB helper (createX, findById, etc.)
   "redis_operation",  // call a Redis cache helper
@@ -328,6 +329,16 @@ export interface PipelineStep {
   inputBindings?: PipelineStepInputBinding[];
   /** Variable name assigned to this step's return value (usable by subsequent steps) */
   outputVariable?: string;
+  /** Declaration kind for step output or variable step: 'const' (default), 'let', or 'reassign' */
+  declarationKind?: "const" | "let" | "reassign";
+  /** For variable steps: declaration vs assignment operation */
+  variableOperation?: "declare" | "assign";
+  /** For variable steps: explicit data type annotation (e.g. string, number, boolean, any) */
+  variableDataType?: string;
+  /** For variable steps: initial or assigned value source */
+  variableSource?: PipelineStepInputSource;
+  /** For variable assignment steps: assignment operator ('=', '+=', '-=') */
+  variableOperator?: "=" | "+=" | "-=";
   /** Declared output schema - fields available to downstream steps and response builder */
   outputSchema?: z.infer<typeof pipelineStepOutputSchemaFieldSchema>[];
   /** For custom_code steps: raw TypeScript to inline */
@@ -469,6 +480,11 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     transformerNodeId: z.string().optional(),
     inputBindings: z.array(pipelineStepInputBindingSchema).optional().default([]),
     outputVariable: z.string().optional().default(""),
+    declarationKind: z.enum(["const", "let", "reassign"]).optional().default("const"),
+    variableOperation: z.enum(["declare", "assign"]).optional().default("declare"),
+    variableDataType: z.string().optional(),
+    variableSource: pipelineStepInputSourceSchema.optional(),
+    variableOperator: z.enum(["=", "+=", "-="]).optional().default("="),
     outputSchema: z.array(pipelineStepOutputSchemaFieldSchema).optional(),
     customCode: z.string().optional(),
 
