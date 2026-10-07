@@ -337,8 +337,12 @@ export interface PipelineStep {
   variableDataType?: string;
   /** For variable steps: initial or assigned value source */
   variableSource?: PipelineStepInputSource;
-  /** For variable assignment steps: assignment operator ('=', '+=', '-=') */
-  variableOperator?: "=" | "+=" | "-=";
+  /** For variable assignment steps: assignment operator ('=', '+=', '-=', 'push') */
+  variableOperator?: "=" | "+=" | "-=" | "push";
+  /** Optional sub-property path on the target variable (e.g. "status" or "address.city") */
+  variablePropertyPath?: string;
+  /** Mutation mode for assign operations: root variable, object property, or array push */
+  variableMutationKind?: "variable" | "property" | "array_push";
   /** Declared output schema - fields available to downstream steps and response builder */
   outputSchema?: z.infer<typeof pipelineStepOutputSchemaFieldSchema>[];
   /** For custom_code steps: raw TypeScript to inline */
@@ -484,7 +488,9 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     variableOperation: z.enum(["declare", "assign"]).optional().default("declare"),
     variableDataType: z.string().optional(),
     variableSource: pipelineStepInputSourceSchema.optional(),
-    variableOperator: z.enum(["=", "+=", "-="]).optional().default("="),
+    variableOperator: z.enum(["=", "+=", "-=", "push"]).optional().default("="),
+    variablePropertyPath: z.string().optional(),
+    variableMutationKind: z.enum(["variable", "property", "array_push"]).optional().default("variable"),
     outputSchema: z.array(pipelineStepOutputSchemaFieldSchema).optional(),
     customCode: z.string().optional(),
 
