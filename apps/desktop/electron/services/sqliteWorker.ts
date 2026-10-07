@@ -146,6 +146,8 @@ process.stdin.on("end", async () => {
         (name.toLowerCase().startsWith("find") && (args.id !== undefined || args.key !== undefined));
       const isCreate =
         kind === "create" || name.toLowerCase().startsWith("create") || name.toLowerCase().startsWith("insert");
+      const isUpsert =
+        kind === "upsert" || name.toLowerCase().startsWith("upsert");
       const isUpdate = kind === "update" || name.toLowerCase().startsWith("update");
       const isDelete =
         kind === "delete" || name.toLowerCase().startsWith("delete") || name.toLowerCase().startsWith("remove");
@@ -255,6 +257,43 @@ process.stdin.on("end", async () => {
         const stmt = db.prepare(`INSERT INTO ${safeTable} (${colNames}) VALUES (${placeholders}) RETURNING *`);
         const created = stmt.get(...bindVals);
         output = created ? formatRow(created) : { id: newId, created_at: nowIso, updated_at: nowIso };
+      } else if (isUpsert) {
+        const dataObj =
+          typeof args.data === "object" && args.data !== null && !Array.isArray(args.data)
+            ? args.data
+            : typeof args === "object" && args !== null && !Array.isArray(args)
+            ? args
+            : {};
+        const newId = String(args.id ?? dataObj.id ?? `conv_${Date.now()}`);
+        const nowIso = new Date().toISOString();
+        const entries: [string, JsonPrimitive][] = [["id", newId]];
+        if (dataObj.created_at === undefined) entries.push(["created_at", nowIso]);
+        if (dataObj.updated_at === undefined) entries.push(["updated_at", nowIso]);
+        for (const [k, v] of Object.entries(dataObj)) {
+          if (k === "id" || k === "created_at" || k === "updated_at" || k === "limit" || k === "offset") continue;
+          if (typeof v === "string" || typeof v === "number" || typeof v === "boolean" || v === null) {
+            entries.push([k.replace(/[^a-zA-Z0-9_]/g, ""), v]);
+          }
+        }
+        const infoRows = db.prepare(`PRAGMA table_info(${safeTable})`).all();
+        const existing = new Set(infoRows.map((r) => String(r["name"] ?? "").toLowerCase()));
+        for (const [k] of entries) {
+          if (!existing.has(k.toLowerCase())) {
+            db.exec(`ALTER TABLE ${safeTable} ADD COLUMN ${k} TEXT;`);
+            existing.add(k.toLowerCase());
+          }
+        }
+        const colNames = entries.map(([k]) => k).join(", ");
+        const placeholders = entries.map(() => "?").join(", ");
+        const bindVals = entries.map(([, v]) => v);
+        const nonIdEntries = entries.filter(([k]) => k.toLowerCase() !== "id");
+        const conflictClause = nonIdEntries.length > 0
+          ? `DO UPDATE SET ` + nonIdEntries.map(([k]) => `${k} = excluded.${k}`).join(", ")
+          : `DO NOTHING`;
+        rawSql = `INSERT INTO ${safeTable} (${colNames}) VALUES (${bindVals.map((v) => JSON.stringify(v)).join(", ")}) ON CONFLICT(id) ${conflictClause} RETURNING *;`;
+        const stmt = db.prepare(`INSERT INTO ${safeTable} (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) ${conflictClause} RETURNING *`);
+        const upserted = stmt.get(...bindVals);
+        output = upserted ? formatRow(upserted) : { id: newId, created_at: nowIso, updated_at: nowIso };
       } else if (isUpdate) {
         const dataObj =
           typeof args.data === "object" && args.data !== null && !Array.isArray(args.data)

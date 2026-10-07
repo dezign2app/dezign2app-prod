@@ -21,7 +21,7 @@ import type {
 export interface DbOperationFunction {
   id: string;
   name: string;
-  kind: "findAll" | "findById" | "create" | "update" | "delete" | "fetchByIndex" | "join" | "custom";
+  kind: "findAll" | "findById" | "create" | "update" | "upsert" | "delete" | "fetchByIndex" | "join" | "custom";
   description?: string;
   signature?: string;
   indexName?: string;

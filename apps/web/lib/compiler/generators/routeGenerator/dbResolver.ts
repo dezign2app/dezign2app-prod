@@ -8,6 +8,7 @@ function isValidDbOpKind(kind: string): kind is ReusableFunction["kind"] {
     kind === "custom" ||
     kind === "create" ||
     kind === "update" ||
+    kind === "upsert" ||
     kind === "delete" ||
     kind === "findAll" ||
     kind === "findById" ||
@@ -17,7 +18,7 @@ function isValidDbOpKind(kind: string): kind is ReusableFunction["kind"] {
 }
 
 function toOperationKind(kind: ReusableFunction["kind"]): "read" | "create" | "update" | "delete" {
-  if (kind === "create") return "create";
+  if (kind === "create" || kind === "upsert") return "create";
   if (kind === "update") return "update";
   if (kind === "delete") return "delete";
   return "read";
@@ -249,7 +250,7 @@ export function pickDbFunctionsForEndpoint(
         } else {
           if (fn.kind === "findById" || opLower.includes("byid")) {
             callExpr = `await ${fn.name}(req.params.id)`;
-          } else if (fn.kind === "create") {
+          } else if (fn.kind === "create" || fn.kind === "upsert") {
             callExpr = `await ${fn.name}(PAYLOAD_VAR)`;
           } else if (fn.kind === "update") {
             callExpr = `await ${fn.name}(req.params.id, PAYLOAD_VAR)`;

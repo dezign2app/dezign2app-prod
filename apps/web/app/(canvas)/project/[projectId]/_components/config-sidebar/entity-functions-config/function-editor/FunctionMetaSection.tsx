@@ -17,6 +17,7 @@ const VALID_OPERATION_KINDS: readonly OperationKind[] = [
   "join",
   "create",
   "update",
+  "upsert",
   "delete",
   "custom",
 ];
@@ -85,6 +86,7 @@ export const FunctionMetaSection: React.FC<FunctionMetaSectionProps> = React.mem
               <SelectItem value="join">Relational Join (join)</SelectItem>
               <SelectItem value="create">Write (create)</SelectItem>
               <SelectItem value="update">Write (update)</SelectItem>
+              <SelectItem value="upsert">Write (upsert)</SelectItem>
               <SelectItem value="delete">Write (delete)</SelectItem>
               <SelectItem value="custom">Custom Query</SelectItem>
             </SelectContent>

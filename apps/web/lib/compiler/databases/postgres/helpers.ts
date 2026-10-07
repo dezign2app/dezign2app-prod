@@ -150,6 +150,72 @@ export function generateInlinePostgresOp(
         `}`
       );
     }
+    case "upsert": {
+      if (writableCols.length === 0 && !isStringPk) {
+        return (
+          `export async function ${effectiveName}({ ${pkVarName} }: Upsert${pascal}Data = {}): Promise<${pascal}> {\n` +
+          `  const res = ${pkVarName} !== undefined\n` +
+          `    ? await query<${pascal}>(\n` +
+          `        'INSERT INTO "${tableName}" ("${pkColName}") VALUES ($1) ON CONFLICT ("${pkColName}") DO NOTHING RETURNING *',\n` +
+          `        [${pkVarName}]\n` +
+          `      )\n` +
+          `    : await query<${pascal}>(\n` +
+          `        'INSERT INTO "${tableName}" DEFAULT VALUES RETURNING *',\n` +
+          `        []\n` +
+          `      );\n` +
+          `  const row = res.rows[0];\n` +
+          `  if (!row) {\n` +
+          `    throw new Error("Failed to upsert record into ${tableName}");\n` +
+          `  }\n` +
+          `  return row;\n` +
+          `}`
+        );
+      }
+      const insertCols = writableCols.map((c) => `"${c.name}"`).join(", ");
+      const insertParams = writableCols
+        .map((_, i) => `$${isStringPk ? i + 2 : i + 1}`)
+        .join(", ");
+      const destructuredFields = [
+        ...(isStringPk ? [pkVarName] : []),
+        ...writableCols.map((c) => toVarName(c.name)),
+      ].join(", ") || pkVarName;
+      const insertArgVals = writableCols
+        .map((c) => `${toVarName(c.name)} ?? null`)
+        .join(", ");
+      const pgConflictSets = writableCols.length > 0
+        ? `DO UPDATE SET ` + writableCols.map((c) => `"${c.name}" = EXCLUDED."${c.name}"`).join(", ")
+        : `DO NOTHING`;
+
+      if (isStringPk) {
+        return (
+          `export async function ${effectiveName}({ ${destructuredFields} }: Upsert${pascal}Data): Promise<${pascal}> {\n` +
+          `  const _id = ${pkVarName} || randomUUID();\n` +
+          `  const res = await query<${pascal}>(\n` +
+          `    'INSERT INTO "${tableName}" ("${pkColName}"${insertCols ? `, ${insertCols}` : ""}) VALUES ($1${insertParams ? `, ${insertParams}` : ""}) ON CONFLICT ("${pkColName}") ${pgConflictSets} RETURNING *',\n` +
+          `    [_id${insertArgVals ? `, ${insertArgVals}` : ""}]\n` +
+          `  );\n` +
+          `  const row = res.rows[0];\n` +
+          `  if (!row) {\n` +
+          `    throw new Error("Failed to upsert record into ${tableName}");\n` +
+          `  }\n` +
+          `  return row;\n` +
+          `}`
+        );
+      }
+      return (
+        `export async function ${effectiveName}({ ${destructuredFields} }: Upsert${pascal}Data): Promise<${pascal}> {\n` +
+        `  const res = await query<${pascal}>(\n` +
+        `    'INSERT INTO "${tableName}" (${insertCols}) VALUES (${insertParams}) ON CONFLICT ("${pkColName}") ${pgConflictSets} RETURNING *',\n` +
+        `    [${insertArgVals}]\n` +
+        `  );\n` +
+        `  const row = res.rows[0];\n` +
+        `  if (!row) {\n` +
+        `    throw new Error("Failed to upsert record into ${tableName}");\n` +
+        `  }\n` +
+        `  return row;\n` +
+        `}`
+      );
+    }
     case "delete":
       return (
         `export async function ${effectiveName}(${pkVarName}: ${pkTsType}): Promise<{ success: boolean; message: string }> {\n` +
@@ -232,20 +298,24 @@ export function generatePostgresTableHelpers(
   code += `export interface Create${pascal}Data {\n  ${pkVarName}?: ${pkTsType};\n${createFields ? `${createFields}\n` : ""}}\n\n`;
 
   code += `export type Update${pascal}Data = Partial<Create${pascal}Data>;\n\n`;
+  code += `export type Upsert${pascal}Data = Create${pascal}Data;\n\n`;
 
   const declaredTypes = new Set<string>([
     pascal,
     `Create${pascal}Data`,
     `Update${pascal}Data`,
+    `Upsert${pascal}Data`,
   ]);
 
   if (pascalSingular !== pascal) {
     code += `export type ${pascalSingular} = ${pascal};\n`;
     code += `export type Create${pascalSingular}Data = Create${pascal}Data;\n`;
     code += `export type Update${pascalSingular}Data = Update${pascal}Data;\n`;
+    code += `export type Upsert${pascalSingular}Data = Upsert${pascal}Data;\n`;
     declaredTypes.add(pascalSingular);
     declaredTypes.add(`Create${pascalSingular}Data`);
     declaredTypes.add(`Update${pascalSingular}Data`);
+    declaredTypes.add(`Upsert${pascalSingular}Data`);
   }
   if (pascalPlural !== pascal && pascalPlural !== pascalSingular) {
     code += `export type ${pascalPlural} = ${pascal};\n`;

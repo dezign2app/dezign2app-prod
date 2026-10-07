@@ -3,6 +3,14 @@ import path from "path";
 import net from "net";
 import { spawnSync } from "child_process";
 import { executeFunctionCode } from "./functionCodeRunner";
+import {
+  executePostgresLiveOperation,
+  checkPostgresConnection,
+} from "./postgresRunner";
+import {
+  executeRedisLiveOperation,
+  checkRedisConnection,
+} from "./redisRunner";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
@@ -27,6 +35,10 @@ export interface TestDbOperationPayload {
   connection?: {
     host?: string;
     port?: number | string;
+    database?: string;
+    user?: string;
+    username?: string;
+    password?: string;
     connectionString?: string;
     connectionStringEnv?: string;
     dbFilePath?: string;
@@ -414,7 +426,45 @@ export async function executeDbOperation(
     }
   }
 
-  // 2. LIVE TCP PROBE (Redis / Postgres / MySQL)
+  // 2. LIVE POSTGRES EXECUTION
+  if (
+    (engine === "postgres" ||
+      engine === "postgresql" ||
+      engine === "pg" ||
+      engine === "cockroachdb") &&
+    mode === "live"
+  ) {
+    return await executePostgresLiveOperation({
+      connection: {
+        host,
+        port,
+        connectionString: connection.connectionString,
+        connectionStringEnv: connection.connectionStringEnv,
+        database: connection.database,
+        user: connection.user || connection.username,
+        password: connection.password,
+      },
+      entity: {
+        name: entity?.name || extractTableName(operation),
+        columns: entity?.columns,
+      },
+      operation,
+      args,
+      mode: "live",
+    });
+  }
+
+  // 3. LIVE REDIS EXECUTION
+  if (engine === "redis" && mode === "live") {
+    return await executeRedisLiveOperation({
+      host,
+      port,
+      operation,
+      args,
+    });
+  }
+
+  // 4. LIVE TCP PROBE FALLBACK (MySQL, etc.)
   if (mode === "live") {
     const tcpResult = await checkTcpSocket(host, port, 2500);
     if (!tcpResult.reachable) {
@@ -554,7 +604,34 @@ export async function checkDbConnection(
     }
   }
 
-  // 2. TCP ENGINES (PostgreSQL, Redis, MySQL, CockroachDB, etc.)
+  // 2. POSTGRES ENGINE
+  if (
+    engine === "postgres" ||
+    engine === "postgresql" ||
+    engine === "pg" ||
+    engine === "cockroachdb"
+  ) {
+    return await checkPostgresConnection({
+      host,
+      port,
+      connectionString,
+      connectionStringEnv: connection.connectionStringEnv,
+      database: connection.database,
+      user: connection.user || connection.username,
+      password: connection.password,
+    });
+  }
+
+  // 3. REDIS ENGINE
+  if (engine === "redis") {
+    return await checkRedisConnection({
+      host,
+      port,
+      connectionString,
+    });
+  }
+
+  // 4. TCP ENGINES (MySQL, etc.)
   const tcpResult = await checkTcpSocket(host, port);
   const displayUri = connectionString
     ? connectionString.replace(/:([^:@]+)@/, ":***@")

@@ -343,7 +343,7 @@ export interface ReusableFunction {
   /** The entity/table/topic this function targets, e.g. "users" */
   targetName: string;
   /** CRUD operation kind or category */
-  kind: "findAll" | "findById" | "create" | "update" | "delete" | "publish" | "consume" | "custom";
+  kind: "findAll" | "findById" | "create" | "update" | "upsert" | "delete" | "publish" | "consume" | "custom";
   /** Whether the return type is an array (used for safe element navigation in response mapping) */
   returnIsArray?: boolean;
 }

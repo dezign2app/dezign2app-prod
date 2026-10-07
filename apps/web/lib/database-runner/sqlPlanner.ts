@@ -82,6 +82,9 @@ export function planSqlCommand(
     kind === "create" ||
     name.toLowerCase().startsWith("create") ||
     name.toLowerCase().startsWith("insert");
+  const isUpsert =
+    kind === "upsert" ||
+    name.toLowerCase().startsWith("upsert");
   const isUpdate =
     kind === "update" || name.toLowerCase().startsWith("update");
   const isDelete =
@@ -118,6 +121,56 @@ export function planSqlCommand(
       rawSql: `SELECT * FROM ${tableName} WHERE id = '${idVal}' LIMIT 1;`,
       tableName,
       kind: "findById",
+    };
+  }
+
+  if (isUpsert) {
+    let rawPayload: unknown = args.data;
+    if (!rawPayload) {
+      const destructuredKey = Object.keys(args).find((k) => k.startsWith("{"));
+      if (destructuredKey) rawPayload = args[destructuredKey];
+    }
+    if (!rawPayload) {
+      rawPayload = args.record || args.item || args;
+    }
+
+    const dataObj: JsonObject = isJsonObject(rawPayload)
+      ? (rawPayload as JsonObject)
+      : {};
+
+    const keys = Object.keys(dataObj).filter(
+      (k) => !k.startsWith("{") && k !== "data" && k !== "record" && dataObj[k] !== undefined,
+    );
+
+    if (!keys.some((k) => k.toLowerCase() === "id")) {
+      keys.unshift("id");
+      dataObj["id"] = dataObj["id"] || `${tableName}_${Date.now().toString(36)}`;
+    }
+
+    const nonIdKeys = keys.filter((k) => k.toLowerCase() !== "id");
+
+    if (_engine === "postgres") {
+      const cols = keys.map((k) => `"${k}"`).join(", ");
+      const vals = keys.map((k) => JSON.stringify(dataObj[k])).join(", ");
+      const conflictSet = nonIdKeys.length > 0
+        ? `DO UPDATE SET ` + nonIdKeys.map((k) => `"${k}" = EXCLUDED."${k}"`).join(", ")
+        : `DO NOTHING`;
+      return {
+        rawSql: `INSERT INTO "${tableName}" (${cols}) VALUES (${vals}) ON CONFLICT ("id") ${conflictSet} RETURNING *;`,
+        tableName,
+        kind: "upsert",
+      };
+    }
+
+    const cols = keys.join(", ");
+    const vals = keys.map((k) => JSON.stringify(dataObj[k])).join(", ");
+    const conflictSet = nonIdKeys.length > 0
+      ? `DO UPDATE SET ` + nonIdKeys.map((k) => `${k} = excluded.${k}`).join(", ")
+      : `DO NOTHING`;
+    return {
+      rawSql: `INSERT INTO ${tableName} (${cols}) VALUES (${vals}) ON CONFLICT(id) ${conflictSet} RETURNING *;`,
+      tableName,
+      kind: "upsert",
     };
   }
 
@@ -261,6 +314,9 @@ export function executeSqlOperation(
     kind === "create" ||
     name.toLowerCase().startsWith("create") ||
     name.toLowerCase().startsWith("insert");
+  const isUpsert =
+    kind === "upsert" ||
+    name.toLowerCase().startsWith("upsert");
   const isUpdate =
     kind === "update" || name.toLowerCase().startsWith("update");
   const isDelete =
@@ -321,8 +377,9 @@ export function executeSqlOperation(
     return buildSampleRow(1, idVal);
   }
 
-  if (isCreate) {
-    const newId = args.id !== undefined ? String(args.id) : `new_${Date.now()}`;
+  if (isCreate || isUpsert) {
+    const payloadId = args.data && typeof args.data === "object" ? (args.data as Record<string, unknown>).id : undefined;
+    const newId = args.id !== undefined ? String(args.id) : payloadId !== undefined ? String(payloadId) : `new_${Date.now()}`;
     return buildSampleRow(1, newId);
   }
 
