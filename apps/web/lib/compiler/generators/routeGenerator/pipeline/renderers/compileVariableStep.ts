@@ -1,7 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 // MODULE: VariableStepRenderer
 // LAYER:  generators / routeGenerator / pipeline / renderers
-// EMITS:  TypeScript variable declarations (let/const) and variable assignments (=, +=, -=)
+// EMITS:  TypeScript variable declarations (let/const), variable assignments (=, +=, -=),
+//         object property mutations, and array push operations
 // ═══════════════════════════════════════════════════════════════
 
 import { PipelineStep } from "@workspace/canvas/types";
@@ -10,7 +11,20 @@ import { PipelineRenderContext } from "../types";
 import { resolveSource } from "../sourceResolver";
 
 /**
- * Renders a "variable" pipeline step (declaration of let/const or assignment).
+ * Sanitizes a dot-separated property path, cleaning each identifier.
+ */
+function formatPropertyPath(propPath: string): string {
+  const trimmed = propPath.trim();
+  if (!trimmed) return "";
+  return trimmed
+    .split(".")
+    .map((seg) => toVarName(seg.trim()))
+    .filter(Boolean)
+    .join(".");
+}
+
+/**
+ * Renders a "variable" pipeline step (declaration of let/const or assignment/mutation).
  */
 export function renderVariableStep(
   step: PipelineStep,
@@ -23,6 +37,8 @@ export function renderVariableStep(
     variableDataType,
     variableSource,
     variableOperator = "=",
+    variablePropertyPath,
+    variableMutationKind,
   } = step;
 
   const varName = toVarName(outputVariable || "customVar");
@@ -39,6 +55,29 @@ export function renderVariableStep(
 
   if (variableOperation === "assign") {
     const valExpr = variableSource ? resolveSource(variableSource, ctx) : "undefined";
+    const cleanProp = variablePropertyPath ? formatPropertyPath(variablePropertyPath) : "";
+
+    const mutationKind =
+      variableMutationKind ||
+      (variableOperator === "push"
+        ? "array_push"
+        : cleanProp
+          ? "property"
+          : "variable");
+
+    // Case 1: Array Push (.push(value))
+    if (mutationKind === "array_push" || variableOperator === "push") {
+      const targetExpr = cleanProp ? `${varName}.${cleanProp}` : varName;
+      return [`${targetExpr}.push(${valExpr});`];
+    }
+
+    // Case 2: Object Property Mutation (target.prop = value or target.prop += value)
+    if (mutationKind === "property" && cleanProp) {
+      const op = variableOperator || "=";
+      return [`${varName}.${cleanProp} ${op} ${valExpr};`];
+    }
+
+    // Case 3: Root Variable Reassignment (target = value or target += value)
     const op = variableOperator || "=";
     return [`${varName} ${op} ${valExpr};`];
   }

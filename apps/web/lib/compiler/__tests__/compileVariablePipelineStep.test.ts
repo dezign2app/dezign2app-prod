@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { renderPipeline, renderPipelineStep } from "../generators/routeGenerator/pipeline";
 import { PipelineStep } from "@workspace/canvas/types";
-import { getAvailableSources, getPriorMutableVariables } from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/pipeline-step-editor/utils";
+import {
+  getAvailableSources,
+  getPriorMutableVariables,
+  getPriorVariables,
+} from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/pipeline-step-editor/utils";
 
 describe("compileVariablePipelineStep", () => {
   it("renders a mutable variable declaration (let)", () => {
@@ -263,5 +267,143 @@ describe("compileVariablePipelineStep", () => {
 
     const mutables = getPriorMutableVariables(priorSteps);
     expect(mutables.map((m) => m.name)).toEqual(["counter", "activeUser"]);
+  });
+
+  it("renders object property assignment / update on a const object", () => {
+    const step: PipelineStep = {
+      id: "var-obj-mutate",
+      name: "Update user status",
+      type: "variable",
+      outputVariable: "user",
+      variableOperation: "assign",
+      variableMutationKind: "property",
+      variablePropertyPath: "status",
+      variableOperator: "=",
+      variableSource: { kind: "inline", value: "active" },
+    };
+
+    const lines = renderPipelineStep(step, {
+      priorOutputs: new Map(),
+      bodyVar: "body",
+    });
+
+    expect(lines).toEqual(['user.status = "active";']);
+  });
+
+  it("renders object property numeric increment", () => {
+    const step: PipelineStep = {
+      id: "var-obj-inc",
+      name: "Increment view count",
+      type: "variable",
+      outputVariable: "analytics",
+      variableOperation: "assign",
+      variableMutationKind: "property",
+      variablePropertyPath: "stats.viewCount",
+      variableOperator: "+=",
+      variableSource: { kind: "inline", value: 1 },
+    };
+
+    const lines = renderPipelineStep(step, {
+      priorOutputs: new Map(),
+      bodyVar: "body",
+    });
+
+    expect(lines).toEqual(["analytics.stats.viewCount += 1;"]);
+  });
+
+  it("renders array push on a const array", () => {
+    const step: PipelineStep = {
+      id: "var-arr-push",
+      name: "Add item to cart",
+      type: "variable",
+      outputVariable: "items",
+      variableOperation: "assign",
+      variableMutationKind: "array_push",
+      variableOperator: "push",
+      variableSource: { kind: "req_body", field: "newItem" },
+    };
+
+    const lines = renderPipelineStep(step, {
+      priorOutputs: new Map(),
+      bodyVar: "body",
+    });
+
+    expect(lines).toEqual(["items.push(body.newItem);"]);
+  });
+
+  it("renders array push on a nested object property array", () => {
+    const step: PipelineStep = {
+      id: "var-nested-push",
+      name: "Push role to user roles",
+      type: "variable",
+      outputVariable: "user",
+      variableOperation: "assign",
+      variableMutationKind: "array_push",
+      variablePropertyPath: "roles",
+      variableOperator: "push",
+      variableSource: { kind: "inline", value: "admin" },
+    };
+
+    const lines = renderPipelineStep(step, {
+      priorOutputs: new Map(),
+      bodyVar: "body",
+    });
+
+    expect(lines).toEqual(['user.roles.push("admin");']);
+  });
+
+  it("extracts rich variable info via getPriorVariables including const/let, objects, and schemas", () => {
+    const priorSteps: PipelineStep[] = [
+      {
+        id: "s1",
+        name: "Create User",
+        type: "db_operation",
+        outputVariable: "createdUser",
+        declarationKind: "const",
+        outputSchema: [
+          { name: "id", type: "string" },
+          { name: "email", type: "string" },
+          { name: "status", type: "string" },
+        ],
+      },
+      {
+        id: "s2",
+        name: "Init Tags",
+        type: "variable",
+        outputVariable: "tags",
+        declarationKind: "const",
+        variableOperation: "declare",
+        variableDataType: "string[]",
+      },
+      {
+        id: "s3",
+        name: "Init Counter",
+        type: "variable",
+        outputVariable: "counter",
+        declarationKind: "let",
+        variableOperation: "declare",
+        variableDataType: "number",
+      },
+    ];
+
+    const vars = getPriorVariables(priorSteps);
+    expect(vars).toHaveLength(3);
+
+    const userVar = vars.find((v) => v.name === "createdUser");
+    expect(userVar).toBeDefined();
+    expect(userVar?.declarationKind).toBe("const");
+    expect(userVar?.isMutable).toBe(false);
+    expect(userVar?.isObject).toBe(true);
+    expect(userVar?.knownProperties).toEqual(["id", "email", "status"]);
+
+    const tagsVar = vars.find((v) => v.name === "tags");
+    expect(tagsVar).toBeDefined();
+    expect(tagsVar?.isArray).toBe(true);
+    expect(tagsVar?.declarationKind).toBe("const");
+
+    const counterVar = vars.find((v) => v.name === "counter");
+    expect(counterVar).toBeDefined();
+    expect(counterVar?.declarationKind).toBe("let");
+    expect(counterVar?.isMutable).toBe(true);
   });
 });

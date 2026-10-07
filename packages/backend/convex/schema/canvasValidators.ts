@@ -169,7 +169,9 @@ export const safePipelineStepSchema = z.object({
   variableOperation: z.enum(["declare", "assign"]).optional(),
   variableDataType: z.string().optional(),
   variableSource: pipelineStepInputSourceSchema.optional(),
-  variableOperator: z.enum(["=", "+=", "-="]).optional(),
+  variableOperator: z.enum(["=", "+=", "-=", "push"]).optional(),
+  variablePropertyPath: z.string().optional(),
+  variableMutationKind: z.enum(["variable", "property", "array_push"]).optional(),
   outputSchema: z.array(pipelineStepOutputSchemaFieldSchema).optional(),
   customCode: z.string().optional(),
 
