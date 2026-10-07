@@ -373,6 +373,7 @@ const StepRowComponent = ({
                   return (
                     <ConditionStepSection
                       step={step}
+                      priorSteps={priorSteps}
                       availableSources={availableSources}
                       endpoint={endpoint}
                       consumedEvent={consumedEvent}

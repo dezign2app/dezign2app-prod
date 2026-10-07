@@ -30,6 +30,8 @@ export interface PipelineStepEditorProps {
   isNested?: boolean;
   extraSources?: AvailableSource[];
   droppableId?: string;
+  /** Steps from enclosing scopes (e.g. outer pipeline before an if/else block). Prepended to every inner step's priorSteps so variables declared above the block are visible inside it. */
+  outerScopeSteps?: PipelineStepDraft[];
 }
 
 export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
@@ -45,6 +47,7 @@ export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
   isNested = false,
   extraSources = [],
   droppableId = "pipeline-steps-droppable",
+  outerScopeSteps = [],
 }) => {
   const {
     isConsumer,
@@ -71,10 +74,12 @@ export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
   const priorStepsMap = React.useMemo(() => {
     const map = new Map<number, PipelineStepDraft[]>();
     for (let i = 0; i < executableSteps.length; i++) {
-      map.set(i, executableSteps.slice(0, i));
+      // Prepend outer-scope steps so variables declared above this nested block (e.g.
+      // `let threadId` before an if/else) are visible inside the branch.
+      map.set(i, [...outerScopeSteps, ...executableSteps.slice(0, i)]);
     }
     return map;
-  }, [executableSteps]);
+  }, [executableSteps, outerScopeSteps]);
 
   const presignSourcesMap = React.useMemo(() => {
     const map = new Map<number, AvailableSource[]>();
