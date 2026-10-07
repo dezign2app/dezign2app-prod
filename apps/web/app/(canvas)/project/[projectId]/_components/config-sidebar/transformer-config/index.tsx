@@ -1109,6 +1109,7 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
             code={data.code || ""}
             isAsync={Boolean(data.isAsync)}
             inputSchema={inputSchema}
+            packageImports={packageImports}
             testCases={data.transformerTestCases || []}
             onSaveTestCase={(tc: TransformerTestCase) => {
               const existing = data.transformerTestCases || [];
