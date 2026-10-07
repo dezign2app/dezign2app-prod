@@ -93,6 +93,7 @@ export interface BusinessLogicBlockProps {
   inputSchema?: Array<{ name: string; type: string; required?: boolean }>;
   returnSchema?: Array<{ name: string; type: string; required?: boolean }>;
   importedTransformers?: ImportedTransformerItem[];
+  packageImports?: import("@workspace/canvas").TransformerPackageImport[];
 
   // Database Operation Context Props
   contextType?: "endpoint" | "db_operation" | "transformer" | "langgraph";

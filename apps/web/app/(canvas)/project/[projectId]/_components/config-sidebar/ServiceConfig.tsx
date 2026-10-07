@@ -336,6 +336,7 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
           <NodePackageManager
             nodeId={nodeId}
             nodeType="service"
+            projectId={id}
             customDependencies={customDependencies}
             onUpdateDependencies={(deps) => updateData({ customDependencies: deps })}
             inferredDependencies={inferredDeps}

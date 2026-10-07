@@ -139,9 +139,19 @@ export async function syncPackageToDiskPackageJson(params: {
   isDev?: boolean;
   nodeType?: "service" | "webApp" | "webPage" | "transformer";
   outputDir?: string;
+  projectId?: string;
 }): Promise<boolean> {
   try {
-    const resolvedOutputDir = params.outputDir || getActiveProjectOutputDir();
+    const resolvedOutputDir =
+      params.outputDir ||
+      (params.projectId ? getActiveProjectOutputDir(params.projectId) : "") ||
+      getActiveProjectOutputDir();
+
+    if (!resolvedOutputDir) {
+      console.warn("[syncPackageToDiskPackageJson] Skipped: No project output directory selected.");
+      return false;
+    }
+
     const res = await fetch("/api/packages/sync-package-json", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -163,6 +173,7 @@ export function syncPackageTypesToCanvas(
   targetNodeId: string,
   packages: string[],
   outputDir?: string,
+  projectId?: string,
 ) {
   if (!packages || packages.length === 0 || !targetNodeId) return;
 
@@ -173,7 +184,10 @@ export function syncPackageTypesToCanvas(
   const targetNode = nodes.find((n) => n.id === targetNodeId);
   if (!targetNode) return;
 
-  const resolvedOutputDir = outputDir || getActiveProjectOutputDir();
+  const resolvedOutputDir =
+    outputDir ||
+    (projectId ? getActiveProjectOutputDir(projectId) : "") ||
+    getActiveProjectOutputDir();
 
   // Clean up any legacy lumped "Web App Package Types" nodes
   const legacyLumpedNodes = nodes.filter(
@@ -239,6 +253,7 @@ export function syncPackageTypesToCanvas(
             ? "transformer"
             : "service",
       outputDir: resolvedOutputDir,
+      projectId,
     });
 
     const sanitizedName = trimmedPkg.replace(/[^a-zA-Z0-9_-]/g, "-");

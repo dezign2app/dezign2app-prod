@@ -1042,6 +1042,7 @@ export const backendNodeDataValidator = v.union(
     envVars: v.optional(v.array(envVarConvexValidator)),
     expandedStepStacks: v.optional(v.array(v.string())),
     importedTransformerIds: v.optional(v.array(v.string())),
+    packageImports: v.optional(v.array(v.any())),
     customDependencies: v.optional(v.array(nodeDependencyItemConvexValidator)),
   }),
 );

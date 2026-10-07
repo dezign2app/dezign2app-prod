@@ -31,6 +31,9 @@ import {
 import { cn } from "@workspace/ui/lib/utils";
 import { toast } from "sonner";
 import { NodeDependencyItem } from "@workspace/canvas";
+import { useParams } from "next/navigation";
+import { getProjectWorkspaceDir } from "../terminal/hooks/projectWorkspaceUtils";
+import { getActiveProjectOutputDir } from "@/lib/utils/localEnvSync";
 import {
   syncPackageTypesToCanvas,
   syncPackageToDiskPackageJson,
@@ -39,6 +42,8 @@ import {
 interface NodePackageManagerProps {
   nodeId: string;
   nodeType: "service" | "webApp" | "webPage" | "transformer";
+  projectId?: string;
+  outputDir?: string;
   customDependencies?: NodeDependencyItem[];
   onUpdateDependencies: (deps: NodeDependencyItem[]) => void;
   inferredDependencies?: { name: string; version: string; reason: string }[];
@@ -77,7 +82,7 @@ const TRANSFORMER_PRESETS: CuratedPreset[] = [
   {
     category: "Identifiers & Crypto",
     items: [
-      { name: "uuid", version: "^9.0.1", description: "RFC4122 UUID generator" },
+      { name: "uuid", version: "^11.1.0", description: "RFC4122 UUID generator (native TypeScript types)" },
       { name: "nanoid", version: "^5.0.6", description: "Compact URL-friendly unique ID generator" },
       { name: "crypto-js", version: "^4.2.0", description: "Standard cryptographic algorithms in JS" },
       { name: "hash-wasm", version: "^4.11.0", description: "Lightning fast hashing algorithms" },
@@ -128,7 +133,7 @@ const SERVICE_PRESETS: CuratedPreset[] = [
     items: [
       { name: "lodash-es", version: "^4.17.21", description: "ES modular utilities" },
       { name: "dayjs", version: "^1.11.10", description: "Fast lightweight date parser" },
-      { name: "uuid", version: "^9.0.1", description: "RFC4122 UUID generator" },
+      { name: "uuid", version: "^11.1.0", description: "RFC4122 UUID generator (native TypeScript types)" },
       { name: "nanoid", version: "^5.0.6", description: "Compact URL-friendly ID generator" },
       { name: "axios", version: "^1.6.8", description: "Promise-based HTTP client" },
     ],
@@ -224,11 +229,28 @@ const WEB_APP_PRESETS: CuratedPreset[] = [
 export const NodePackageManager: React.FC<NodePackageManagerProps> = ({
   nodeId,
   nodeType,
+  projectId,
+  outputDir,
   customDependencies = [],
   onUpdateDependencies,
   inferredDependencies = [],
   inferredDevDependencies = [],
 }) => {
+  const routeParams = useParams();
+  const routeProjectId = (routeParams?.projectId as string) || "";
+  const effectiveProjectId = projectId || routeProjectId;
+
+  const getResolvedOutputDir = (): string => {
+    if (outputDir && outputDir.trim()) return outputDir.trim();
+    if (effectiveProjectId) {
+      const fromWorkspace = getProjectWorkspaceDir(effectiveProjectId);
+      if (fromWorkspace && fromWorkspace.trim()) return fromWorkspace.trim();
+    }
+    const fromActive = getActiveProjectOutputDir(effectiveProjectId);
+    if (fromActive && fromActive.trim()) return fromActive.trim();
+    return "";
+  };
+
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{ name: string; version: string; description?: string }[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -359,6 +381,11 @@ export const NodePackageManager: React.FC<NodePackageManagerProps> = ({
     onUpdateDependencies(updated);
     setStagedChangesCount((prev) => prev + 1);
 
+    const effectiveDir = getResolvedOutputDir();
+    if (!effectiveDir) {
+      toast.warning("No project directory selected. Please select a workspace folder first.");
+    }
+
     // Sync package to package.json on disk
     syncPackageToDiskPackageJson({
       action: "add",
@@ -366,10 +393,12 @@ export const NodePackageManager: React.FC<NodePackageManagerProps> = ({
       version,
       isDev: isDevDep,
       nodeType,
+      outputDir: effectiveDir,
+      projectId: effectiveProjectId,
     });
 
     // Sync package types to canvas
-    syncPackageTypesToCanvas(nodeId, [trimmedName]);
+    syncPackageTypesToCanvas(nodeId, [trimmedName], effectiveDir, effectiveProjectId);
 
     toast.success(`Saved ${trimmedName}@${version} to package.json! Run 'pnpm i' to install.`);
 
@@ -400,6 +429,11 @@ export const NodePackageManager: React.FC<NodePackageManagerProps> = ({
     onUpdateDependencies(updated);
     setStagedChangesCount((prev) => prev + 1);
 
+    const effectiveDir = getResolvedOutputDir();
+    if (!effectiveDir) {
+      toast.warning("No project directory selected. Please select a workspace folder first.");
+    }
+
     // Sync package to package.json on disk
     syncPackageToDiskPackageJson({
       action: "add",
@@ -407,10 +441,12 @@ export const NodePackageManager: React.FC<NodePackageManagerProps> = ({
       version: presetItem.version || "latest",
       isDev: Boolean(presetItem.isDev),
       nodeType,
+      outputDir: effectiveDir,
+      projectId: effectiveProjectId,
     });
 
     // Sync package types to canvas
-    syncPackageTypesToCanvas(nodeId, [presetItem.name]);
+    syncPackageTypesToCanvas(nodeId, [presetItem.name], effectiveDir, effectiveProjectId);
 
     toast.success(`Saved ${presetItem.name} to package.json! Run 'pnpm i' to install.`);
   };
@@ -420,11 +456,15 @@ export const NodePackageManager: React.FC<NodePackageManagerProps> = ({
     onUpdateDependencies(updated);
     setStagedChangesCount((prev) => prev + 1);
 
+    const effectiveDir = getResolvedOutputDir();
+
     // Remove package from package.json on disk
     syncPackageToDiskPackageJson({
       action: "remove",
       name,
       nodeType,
+      outputDir: effectiveDir,
+      projectId: effectiveProjectId,
     });
 
     toast.info(`Removed "${name}" from package.json.`);
@@ -439,6 +479,8 @@ export const NodePackageManager: React.FC<NodePackageManagerProps> = ({
       onUpdateDependencies(updated);
       setStagedChangesCount((prev) => prev + 1);
 
+      const effectiveDir = getResolvedOutputDir();
+
       // Update package version in package.json on disk
       syncPackageToDiskPackageJson({
         action: "update",
@@ -446,6 +488,8 @@ export const NodePackageManager: React.FC<NodePackageManagerProps> = ({
         version: editingVersion.trim(),
         isDev: targetPkg.isDev,
         nodeType,
+        outputDir: effectiveDir,
+        projectId: effectiveProjectId,
       });
 
       toast.success(`Updated ${targetPkg.name} to ${editingVersion.trim()} in package.json!`);

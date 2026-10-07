@@ -7,11 +7,20 @@ import type {
   CustomTypeKind,
 } from "@workspace/canvas/types";
 
+export interface PackageExportSymbol {
+  name: string;
+  kind: "function" | "variable" | "class" | "interface" | "type" | "enum";
+  signature?: string;
+  description?: string;
+  isDefault?: boolean;
+}
+
 export interface PackageTypeExtractionResult {
   installed: boolean;
   pkg: string;
   version?: string;
   types: CustomTypeItem[];
+  exports?: PackageExportSymbol[];
   error?: string;
 }
 
@@ -469,7 +478,67 @@ export function extractPackageTypesFromNodeModules(
     }
 
     const extractedTypes: CustomTypeItem[] = [];
+    const extractedExports: PackageExportSymbol[] = [];
     const seenNames = new Set<string>();
+    const seenExportNames = new Set<string>();
+
+    // Helper to determine kind and signature
+    const recordExportSymbol = (sym: ts.Symbol, name: string, isDefault = false) => {
+      if (seenExportNames.has(name) || name.startsWith("_")) return;
+      seenExportNames.add(name);
+
+      let targetSym = sym;
+      if ((sym.flags & ts.SymbolFlags.Alias) !== 0) {
+        try {
+          targetSym = typeChecker.getAliasedSymbol(sym);
+        } catch {}
+      }
+
+      const decls = targetSym.declarations;
+      const primaryDecl = decls && decls.length > 0 ? decls[0] : undefined;
+      const desc = primaryDecl ? extractJsDocComment(primaryDecl, sourceFile) : undefined;
+
+      let kind: PackageExportSymbol["kind"] = "function";
+      let signature: string | undefined;
+
+      if (primaryDecl) {
+        if (ts.isFunctionDeclaration(primaryDecl)) {
+          kind = "function";
+          try {
+            const sig = typeChecker.typeToString(typeChecker.getTypeOfSymbolAtLocation(targetSym, primaryDecl));
+            signature = sig;
+          } catch {}
+        } else if (ts.isClassDeclaration(primaryDecl)) {
+          kind = "class";
+        } else if (ts.isInterfaceDeclaration(primaryDecl)) {
+          kind = "interface";
+        } else if (ts.isTypeAliasDeclaration(primaryDecl)) {
+          kind = "type";
+        } else if (ts.isEnumDeclaration(primaryDecl)) {
+          kind = "enum";
+        } else if (ts.isVariableDeclaration(primaryDecl)) {
+          try {
+            const symType = typeChecker.getTypeOfSymbolAtLocation(targetSym, primaryDecl);
+            if (symType.getCallSignatures().length > 0) {
+              kind = "function";
+              signature = typeChecker.typeToString(symType);
+            } else {
+              kind = "variable";
+            }
+          } catch {
+            kind = "variable";
+          }
+        }
+      }
+
+      extractedExports.push({
+        name,
+        kind,
+        signature,
+        description: desc,
+        isDefault,
+      });
+    };
 
     // 1. Process module exports if available
     const moduleSymbol = typeChecker.getSymbolAtLocation(sourceFile);
@@ -477,13 +546,12 @@ export function extractPackageTypesFromNodeModules(
       const exports = typeChecker.getExportsOfModule(moduleSymbol);
       for (const exportSym of exports) {
         const symName = exportSym.name;
-        if (
-          symName.startsWith("_") ||
-          symName === "default" ||
-          seenNames.has(symName)
-        ) {
+        if (symName === "default") {
+          recordExportSymbol(exportSym, "default", true);
           continue;
         }
+
+        if (symName.startsWith("_")) continue;
 
         let targetSym = exportSym;
         if ((exportSym.flags & ts.SymbolFlags.Alias) !== 0) {
@@ -500,10 +568,12 @@ export function extractPackageTypesFromNodeModules(
 
         const item = extractTypeFromDecl(primaryDecl, symName, trimmedPkg, seenNames);
         if (item) extractedTypes.push(item);
+
+        recordExportSymbol(exportSym, symName, false);
       }
     }
 
-    // 2. Process top-level statements directly in sourceFile (interfaces, type aliases, enums)
+    // 2. Process top-level statements directly in sourceFile (interfaces, type aliases, enums, functions)
     for (const stmt of sourceFile.statements) {
       if (
         (ts.isInterfaceDeclaration(stmt) ||
@@ -521,6 +591,19 @@ export function extractPackageTypesFromNodeModules(
           if (item) extractedTypes.push(item);
         }
       }
+
+      // Check for top-level function declarations
+      if (ts.isFunctionDeclaration(stmt) && stmt.name) {
+        const fnName = stmt.name.text;
+        if (!fnName.startsWith("_") && !seenExportNames.has(fnName)) {
+          seenExportNames.add(fnName);
+          extractedExports.push({
+            name: fnName,
+            kind: "function",
+            description: extractJsDocComment(stmt, sourceFile),
+          });
+        }
+      }
     }
 
     const result: PackageTypeExtractionResult = {
@@ -528,6 +611,7 @@ export function extractPackageTypesFromNodeModules(
       pkg: trimmedPkg,
       version: version || "installed",
       types: extractedTypes,
+      exports: extractedExports,
     };
 
     extractionCache.set(cacheKey, result);
