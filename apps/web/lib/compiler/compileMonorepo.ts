@@ -154,6 +154,7 @@ export function compileMonorepo(
     ...sharedResult.grpcPackageFolders,
     ...sharedResult.storagePackageFolders,
     ...sharedResult.langGraphPackageFolders,
+    ...(sharedResult.transformerPackageFolder ? [sharedResult.transformerPackageFolder] : []),
     ...servicesInfo.map((s) => `apps/${s.folderName}`),
     ...webClientsInfo.map((w) => `apps/${w.folderName}`),
   ];

@@ -84,10 +84,33 @@ export function renderVariableStep(
 
   // Declaration mode (let or const)
   const keyword = declarationKind === "const" ? "const" : "let";
-  const typeAnnotation =
+
+  // When a user-specified type annotation is present but the source is a request body field
+  // (which TypeScript types as `T | undefined` for optional fields), we must widen the annotation
+  // to avoid TS2322 ("Type 'string | undefined' is not assignable to type 'string'").
+  const rawType =
     variableDataType && variableDataType.trim() && variableDataType.trim() !== "inferred"
-      ? `: ${variableDataType.trim()}`
+      ? variableDataType.trim()
       : "";
+
+  const isBodySource =
+    variableSource?.kind === "req_body" ||
+    variableSource?.kind === "req_query" ||
+    variableSource?.kind === "req_params" ||
+    variableSource?.kind === "req_headers";
+
+  // Widen primitive types from req_body/req_query/req_params/req_headers sources
+  // to include `| undefined` so optional fields don't cause TS2322 errors.
+  const needsUndefined =
+    isBodySource &&
+    rawType &&
+    !rawType.includes("undefined") &&
+    !rawType.includes("|") &&
+    !rawType.startsWith("{") &&
+    !rawType.startsWith("[");
+
+  const effectiveType = needsUndefined ? `${rawType} | undefined` : rawType;
+  const typeAnnotation = effectiveType ? `: ${effectiveType}` : "";
 
   if (variableSource) {
     const valExpr = resolveSource(variableSource, ctx);
