@@ -5,6 +5,15 @@ import type { PipelineStepDraft } from "./pipeline";
 
 export type { NodeDependencyItem };
 
+export interface TransformerTestCase {
+  id: string;
+  label: string;
+  inputs: Record<string, unknown>;
+  lastOutput?: unknown;
+  lastError?: string;
+  lastRunAt?: string;
+}
+
 export interface TransformerPackageImport {
   id: string;
   packageName: string;
@@ -159,6 +168,7 @@ export interface CanvasTransformerNodeData {
   importedTransformerIds?: string[];
   packageImports?: TransformerPackageImport[];
   customDependencies?: NodeDependencyItem[];
+  transformerTestCases?: TransformerTestCase[];
 }
 
 /** Transformer reference node fields (canvas type). */

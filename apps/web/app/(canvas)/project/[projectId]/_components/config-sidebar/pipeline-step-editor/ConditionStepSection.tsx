@@ -8,6 +8,7 @@ import { PipelineStepEditor } from "./index";
 
 export interface ConditionStepSectionProps {
   step: PipelineStepDraft;
+  priorSteps?: PipelineStepDraft[];
   availableSources: AvailableSource[];
   endpoint?: Endpoint;
   consumedEvent?: AnyMessagingResource;
@@ -20,6 +21,7 @@ export interface ConditionStepSectionProps {
 
 export const ConditionStepSection = ({
   step,
+  priorSteps = [],
   availableSources,
   endpoint,
   consumedEvent,
@@ -99,6 +101,7 @@ export const ConditionStepSection = ({
               serviceNodeId={serviceNodeId}
               depth={depth + 1}
               isNested={true}
+              outerScopeSteps={priorSteps}
               droppableId={`droppable-${step.id}-then`}
             />
           ) : (
@@ -112,6 +115,7 @@ export const ConditionStepSection = ({
               serviceNodeId={serviceNodeId}
               depth={depth + 1}
               isNested={true}
+              outerScopeSteps={priorSteps}
               droppableId={`droppable-${step.id}-else`}
             />
           )}
