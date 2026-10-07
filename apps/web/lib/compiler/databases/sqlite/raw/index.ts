@@ -151,28 +151,34 @@ function generateTableHelpers(
   code += `};\n\n`;
   code += `export type Create${Pascal}Data = ${dataType};\n\n`;
   code += `export type Update${Pascal}Data = Partial<Create${Pascal}Data>;\n\n`;
+  code += `export type Upsert${Pascal}Data = Create${Pascal}Data;\n\n`;
 
   const declaredTypes = new Set<string>([
     `${Pascal}`,
     `Create${Pascal}Data`,
     `Update${Pascal}Data`,
+    `Upsert${Pascal}Data`,
   ]);
 
   if (pascalSingular !== Pascal) {
     code += `export type ${pascalSingular} = ${Pascal};\n`;
     code += `export type Create${pascalSingular}Data = Create${Pascal}Data;\n`;
-    code += `export type Update${pascalSingular}Data = Update${Pascal}Data;\n\n`;
+    code += `export type Update${pascalSingular}Data = Update${Pascal}Data;\n`;
+    code += `export type Upsert${pascalSingular}Data = Upsert${Pascal}Data;\n\n`;
     declaredTypes.add(pascalSingular);
     declaredTypes.add(`Create${pascalSingular}Data`);
     declaredTypes.add(`Update${pascalSingular}Data`);
+    declaredTypes.add(`Upsert${pascalSingular}Data`);
   }
   if (pascalPlural !== Pascal && pascalPlural !== pascalSingular) {
     code += `export type ${pascalPlural} = ${Pascal};\n`;
     code += `export type Create${pascalPlural}Data = Create${Pascal}Data;\n`;
-    code += `export type Update${pascalPlural}Data = Update${Pascal}Data;\n\n`;
+    code += `export type Update${pascalPlural}Data = Update${Pascal}Data;\n`;
+    code += `export type Upsert${pascalPlural}Data = Upsert${Pascal}Data;\n\n`;
     declaredTypes.add(pascalPlural);
     declaredTypes.add(`Create${pascalPlural}Data`);
     declaredTypes.add(`Update${pascalPlural}Data`);
+    declaredTypes.add(`Upsert${pascalPlural}Data`);
   }
 
   // DB operations defined on entity node (or fallback defaults)
@@ -246,6 +252,13 @@ function generateTableHelpers(
     code += `const stmtInsert = db.prepare<[${insertBindTypes}]>(\n`;
     code += `  "INSERT INTO ${tableName} (${insertCols}) VALUES (${insertPlaceholders})"\n`;
     code += `);\n\n`;
+
+    const upsertConflictList = writableCols.length > 0
+      ? `ON CONFLICT(${pkColName}) DO UPDATE SET ${writableCols.map((c) => `${c.name} = excluded.${c.name}`).join(", ")}`
+      : `ON CONFLICT(${pkColName}) DO NOTHING`;
+    code += `const stmtUpsert = db.prepare<[${insertBindTypes}]>(\n`;
+    code += `  "INSERT INTO ${tableName} (${insertCols}) VALUES (${insertPlaceholders}) ${upsertConflictList}"\n`;
+    code += `);\n\n`;
   }
   if (writableCols.length > 0) {
     code += `const stmtUpdate = db.prepare<[${updateBindTypes}, ${pkVarName}: ${pkTs}]>(\n`;
@@ -264,6 +277,7 @@ function generateTableHelpers(
     "stmtFindAll",
     "stmtFindById",
     "stmtInsert",
+    "stmtUpsert",
     "stmtUpdate",
     "stmtDelete",
   ]);
@@ -483,6 +497,48 @@ function generateTableHelpers(
       code += `  const fresh = find${toPascal(tableName)}ById(${pkVarName});\n`;
       const operationalUpdatedMsg = colVarNames.has("message") ? "" : `, message: "${pascalSingular} updated successfully"`;
       code += `  return fresh ? ({ ...fresh${operationalUpdatedMsg} } as unknown as ${Pascal}) : undefined;\n`;
+      code += `}\n\n`;
+    } else if (op.kind === "upsert" && insertColList.length > 0) {
+      code += `/** ${op.description || `Insert or update a record in ${tableName}`} */\n`;
+      code += `export function ${effectiveName}(data: Upsert${Pascal}Data): ${Pascal} {\n`;
+      code += `  logger.info("Upserting record into ${tableName}...", { data });\n`;
+      code += `  const now = new Date().toISOString();\n`;
+      if (isStringPk) {
+        code += `  const _rowId = data.${pkVarName} || randomUUID();\n`;
+      }
+      const insertRunArgs = insertColList
+        .map((c) => {
+          if (c.isPrimaryKey) return `_rowId`;
+          const varName = toVarName(c.name);
+          const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (
+            nameLower === "createdat" ||
+            nameLower === "updatedat" ||
+            nameLower === "created_at" ||
+            nameLower === "updated_at"
+          ) {
+            return `data.${varName} ?? now`;
+          }
+          return `data.${varName} ?? null`;
+        })
+        .join(", ");
+      code += `  const info = stmtUpsert.run(${insertRunArgs});\n`;
+      if (!isStringPk) {
+        const rowIdExpr =
+          pkTs === "number"
+            ? `typeof info.lastInsertRowid === "bigint" ? Number(info.lastInsertRowid) : info.lastInsertRowid`
+            : `typeof info.lastInsertRowid === "bigint" ? info.lastInsertRowid.toString() : String(info.lastInsertRowid)`;
+        code += `  const _rowId = data.${pkVarName} !== undefined ? data.${pkVarName} : ${rowIdExpr};\n`;
+      }
+      code += `  logger.info("✓ Record upserted in ${tableName}", { ${pkColName}: _rowId });\n`;
+      const operationalUpsertMsg = colVarNames.has("message") ? "" : `message: "${pascalSingular} upserted successfully", `;
+      code += `  return { ${pkColName}: _rowId, ${operationalUpsertMsg}...data, ${writableCols.filter((c) => {
+        const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+        return nameLower === "createdat" || nameLower === "updatedat" || nameLower === "created_at" || nameLower === "updated_at";
+      }).map((c) => {
+        const varName = toVarName(c.name);
+        return `${varName}: data.${varName} ?? now`;
+      }).join(", ")} } as unknown as ${Pascal};\n`;
       code += `}\n\n`;
     } else if (op.kind === "delete") {
       code += `/** ${op.description || `Delete a ${tableName} row by primary key`} */\n`;

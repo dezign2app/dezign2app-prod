@@ -205,6 +205,9 @@ export async function executePostgresLiveOperation(
     // If the operation has explicit SQL code or query, extract & execute it
     const opCode = (op.code || "").trim();
     const opQuery = (op.query || "").trim();
+    const queryMatch = opCode.match(
+      /query(?:<[^>]+>)?\s*\(\s*(['"`])([\s\S]*?)\1\s*(?:,\s*\[([\s\S]*?)\])?\s*\)/m,
+    );
 
     if (
       opQuery &&
@@ -217,28 +220,30 @@ export async function executePostgresLiveOperation(
       /^\s*(SELECT|INSERT|UPDATE|DELETE|WITH|CREATE|ALTER|DROP)\b/i.test(opCode)
     ) {
       rawSql = opCode;
+    } else if (
+      queryMatch &&
+      queryMatch[2] &&
+      /^\s*(SELECT|INSERT|UPDATE|DELETE)\b/i.test(queryMatch[2].trim())
+    ) {
+      rawSql = queryMatch[2].trim();
     } else {
-      // Check if opCode has an embedded query('SQL...') call
-      const queryMatch = opCode.match(
-        /query(?:<[^>]+>)?\s*\(\s*(['"`])([\s\S]*?)\1\s*(?:,\s*\[([\s\S]*?)\])?\s*\)/m,
-      );
-      if (
-        queryMatch &&
-        queryMatch[2] &&
-        /^\s*(SELECT|INSERT|UPDATE|DELETE)\b/i.test(queryMatch[2].trim())
-      ) {
-        rawSql = queryMatch[2].trim();
-      } else {
-        // Generate SQL from operation kind + args
-        const plan = planSqlCommand(op, args, "postgres");
-        rawSql = plan.rawSql;
-      }
+      // Generate SQL from operation kind + args
+      const plan = planSqlCommand(op, args, "postgres");
+      rawSql = plan.rawSql;
     }
 
     // Build parameterized query: replace literal values with $N params when we can
     // For sandbox-generated SQL (has quoted literals), run as-is
     // For parameterized queries already using $1, pass args as params array
     if (rawSql.includes("$1")) {
+      // Check if opCode had an explicit query('...', [...]) call with argument variable names
+      const explicitArgs = queryMatch && queryMatch[3]
+        ? queryMatch[3]
+            .split(",")
+            .map((s) => s.trim().replace(/^data\./, ""))
+            .filter(Boolean)
+        : [];
+
       // Extract payload object from args
       let payloadObj: Record<string, unknown> = {};
       Object.keys(args).forEach((k) => {
@@ -257,21 +262,81 @@ export async function executePostgresLiveOperation(
         const colsInSql = colMatch[1]
           .split(",")
           .map((c) => c.replace(/["`\s]/g, ""));
-        params = colsInSql.map((c) => payloadObj[c] ?? payloadObj.id ?? null);
+        params = colsInSql.map((colName) => {
+          if (colName.toLowerCase() === "id") {
+            return (
+              payloadObj["id"] ??
+              args["id"] ??
+              payloadObj["_id"] ??
+              args["_id"] ??
+              (typeof crypto !== "undefined" && crypto.randomUUID
+                ? crypto.randomUUID()
+                : `${tableName}_${Date.now().toString(36)}`)
+            );
+          }
+          return payloadObj[colName] ?? args[colName] ?? null;
+        });
+      } else if (explicitArgs.length > 0) {
+        params = explicitArgs.map((rawArg) => {
+          const cleanArg = rawArg
+            .trim()
+            .replace(/^data\./, "")
+            .replace(/\s*\?\?.*$/, "")
+            .replace(/\s*\|\|.*$/, "")
+            .trim();
+
+          if (cleanArg === "_id" || cleanArg === "_rowId" || cleanArg === "id") {
+            return (
+              payloadObj["id"] ??
+              args["id"] ??
+              payloadObj["_id"] ??
+              args["_id"] ??
+              (typeof crypto !== "undefined" && crypto.randomUUID
+                ? crypto.randomUUID()
+                : `${tableName}_${Date.now().toString(36)}`)
+            );
+          }
+          if (cleanArg === "limit") return args.limit !== undefined ? Number(args.limit) : 20;
+          if (cleanArg === "offset") return args.offset !== undefined ? Number(args.offset) : 0;
+          if (args[cleanArg] !== undefined) return args[cleanArg];
+          if (payloadObj[cleanArg] !== undefined) return payloadObj[cleanArg];
+          return null;
+        });
       } else {
         const opParams = op.params || [];
-        params = opParams.map((p) => {
+        params = [];
+        for (const p of opParams) {
           if (p.name.startsWith("{") && p.name.endsWith("}")) {
             const inner = p.name
               .slice(1, -1)
               .split(",")
               .map((s) => s.trim())
               .filter(Boolean);
-            const firstKey = inner[0];
-            if (firstKey) return payloadObj[firstKey] ?? null;
+            for (const k of inner) {
+              params.push(payloadObj[k] ?? args[k] ?? null);
+            }
+          } else {
+            params.push(args[p.name] ?? payloadObj[p.name] ?? null);
           }
-          return args[p.name] ?? payloadObj[p.name] ?? null;
-        });
+        }
+      }
+
+      // Fill in any trailing parameters (such as LIMIT $2 OFFSET $3)
+      const placeholderMatches = rawSql.match(/\$\d+/g) || [];
+      const maxPlaceholderIndex = placeholderMatches.reduce((max, ph) => {
+        const idx = parseInt(ph.slice(1), 10);
+        return Math.max(max, isNaN(idx) ? 0 : idx);
+      }, 0);
+
+      while (params.length < maxPlaceholderIndex) {
+        const missingIndex = params.length + 1;
+        if (rawSql.includes(`LIMIT $${missingIndex}`)) {
+          params.push(args.limit !== undefined ? Number(args.limit) : 20);
+        } else if (rawSql.includes(`OFFSET $${missingIndex}`)) {
+          params.push(args.offset !== undefined ? Number(args.offset) : 0);
+        } else {
+          params.push(null);
+        }
       }
     } else {
       // Execute the raw SQL directly (from sandbox planner)
@@ -282,12 +347,22 @@ export async function executePostgresLiveOperation(
     const durationMs = Math.round((performance.now() - start) * 100) / 100;
 
     const kind = op.kind || "";
+    const name = op.name || "";
+    const isFindAllLike =
+      kind === "findAll" ||
+      kind === "fetchByIndex" ||
+      name.toLowerCase().startsWith("findall") ||
+      name.toLowerCase().startsWith("getall") ||
+      name.toLowerCase().startsWith("list");
+
     if (kind === "delete") {
       output = { success: true, message: "Record deleted successfully", deletedCount: result.rowCount };
-    } else if (result.rows.length === 1 && (kind === "findById" || kind === "create" || kind === "update")) {
+    } else if (result.rows.length === 1 && (kind === "findById" || kind === "create" || kind === "update" || kind === "upsert") && !isFindAllLike) {
       output = result.rows[0];
+    } else if (isFindAllLike) {
+      output = result.rows;
     } else {
-      output = result.rows.length > 0 ? result.rows : { success: true, rowCount: result.rowCount };
+      output = result.rows.length > 0 ? result.rows : result.rows;
     }
 
     return {

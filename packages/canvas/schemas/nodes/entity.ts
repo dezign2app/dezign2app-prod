@@ -26,6 +26,7 @@ export const dbOperationFunctionSchema = z.object({
     "findById",
     "create",
     "update",
+    "upsert",
     "delete",
     "fetchByIndex",
     "join",

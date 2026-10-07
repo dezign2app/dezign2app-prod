@@ -522,7 +522,7 @@ export const DatabaseTableRefNode = ({
               const badgeColor =
                 op.kind === "findAll" || op.kind === "findById"
                   ? "bg-blue-500/15 text-blue-400 border-blue-500/30"
-                  : op.kind === "create"
+                  : op.kind === "create" || op.kind === "upsert"
                   ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
                   : op.kind === "update"
                   ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
@@ -537,6 +537,8 @@ export const DatabaseTableRefNode = ({
                   ? "BY ID"
                   : op.kind === "create"
                   ? "NEW"
+                  : op.kind === "upsert"
+                  ? "UPSERT"
                   : op.kind === "update"
                   ? "SET"
                   : op.kind === "delete"

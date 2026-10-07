@@ -150,8 +150,10 @@ export function generateEntitiesModule(
     const createFields = [`  id?: string;`, ...writableLines].join("\n");
     code += `\nexport type Create${pascal}Data = {\n${createFields}\n};\n\n`;
     code += `export type Update${pascal}Data = Partial<Create${pascal}Data>;\n\n`;
+    code += `export type Upsert${pascal}Data = Create${pascal}Data;\n\n`;
     seenNames.add(`Create${pascal}Data`);
     seenNames.add(`Update${pascal}Data`);
+    seenNames.add(`Upsert${pascal}Data`);
 
     if (
       singularPascal &&
@@ -161,8 +163,10 @@ export function generateEntitiesModule(
     ) {
       seenNames.add(`Create${singularPascal}Data`);
       seenNames.add(`Update${singularPascal}Data`);
+      seenNames.add(`Upsert${singularPascal}Data`);
       code += `export type Create${singularPascal}Data = Create${pascal}Data;\n`;
       code += `export type Update${singularPascal}Data = Update${pascal}Data;\n`;
+      code += `export type Upsert${singularPascal}Data = Upsert${pascal}Data;\n`;
     }
     if (
       pluralPascal &&
@@ -172,8 +176,10 @@ export function generateEntitiesModule(
     ) {
       seenNames.add(`Create${pluralPascal}Data`);
       seenNames.add(`Update${pluralPascal}Data`);
+      seenNames.add(`Upsert${pluralPascal}Data`);
       code += `export type Create${pluralPascal}Data = Create${pascal}Data;\n`;
       code += `export type Update${pluralPascal}Data = Update${pascal}Data;\n`;
+      code += `export type Upsert${pluralPascal}Data = Upsert${pascal}Data;\n`;
     }
     code += `\n`;
   }

@@ -319,4 +319,67 @@ describe("entityOperationsHelper - Redis Operations Generator", () => {
       }
     });
   });
+
+  describe("upsert<TableName> operations", () => {
+    it("generates default upsert operation for SQLite", async () => {
+      const { generateDefaultDbOperations } = await import("../entityOperationsHelper");
+      const ops = generateDefaultDbOperations("User", [
+        { name: "id", type: "string", isPrimaryKey: true },
+        { name: "name", type: "string" },
+        { name: "email", type: "string" },
+      ]);
+
+      const upsertOp = ops.find((o) => o.kind === "upsert");
+      expect(upsertOp).toBeDefined();
+      expect(upsertOp?.name).toBe("upsertUser");
+      expect(upsertOp?.signature).toContain("upsertUser(data: UpsertUserData): User");
+      expect(upsertOp?.code).toContain("stmtUpsert.run");
+    });
+
+    it("generates default upsert operation for PostgreSQL with ON CONFLICT", async () => {
+      const { generateDefaultDbOperationsForEngine } = await import("../entityOperationsHelper");
+      const ops = generateDefaultDbOperationsForEngine(
+        "User",
+        [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "name", type: "string" },
+          { name: "email", type: "string" },
+        ],
+        [],
+        [],
+        "postgres",
+      );
+
+      const upsertOp = ops.find((o) => o.kind === "upsert");
+      expect(upsertOp).toBeDefined();
+      expect(upsertOp?.name).toBe("upsertUser");
+      expect(upsertOp?.code).toContain('ON CONFLICT ("id") DO UPDATE SET "name" = EXCLUDED."name", "email" = EXCLUDED."email" RETURNING *');
+    });
+
+    it("automatically injects upsert operation into existing entity nodes missing upsert", () => {
+      const node: BackendNode = {
+        id: "node-user-1",
+        type: "entity",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "User",
+          columns: [
+            { id: "col-1", name: "id", type: "string", isPrimaryKey: true },
+            { id: "col-2", name: "name", type: "string" },
+          ],
+          dbOperations: [
+            { id: "auto-find-all-user", name: "findAllUsers", kind: "findAll" },
+            { id: "auto-create-user", name: "createUser", kind: "create" },
+            { id: "auto-update-user", name: "updateUser", kind: "update" },
+            { id: "auto-delete-user", name: "deleteUserById", kind: "delete" },
+          ],
+        },
+      };
+
+      const ops = getEntityDbOperations(node, [], "postgres");
+      const upsertOp = ops.find((o) => o.kind === "upsert");
+      expect(upsertOp).toBeDefined();
+      expect(upsertOp?.name).toBe("upsertUser");
+    });
+  });
 });

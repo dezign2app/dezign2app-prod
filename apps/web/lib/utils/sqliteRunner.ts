@@ -212,6 +212,10 @@ export async function executeSqliteLiveOperation(
       name.toLowerCase().startsWith("create") ||
       name.toLowerCase().startsWith("insert");
 
+    const isUpsert =
+      kind === "upsert" ||
+      name.toLowerCase().startsWith("upsert");
+
     const isFindById =
       kind === "findById" ||
       name.toLowerCase().startsWith("findbyid") ||
@@ -229,7 +233,7 @@ export async function executeSqliteLiveOperation(
         code.includes("stmt") ||
         code.includes("db."));
 
-    if (hasCustomCode && (kind === "custom" || (!isFindAll && !isFindById && !isCreate && !isUpdate && !isDelete))) {
+    if (hasCustomCode && (kind === "custom" || (!isFindAll && !isFindById && !isCreate && !isUpsert && !isUpdate && !isDelete))) {
       const codeRes = await executeFunctionCode({
         code,
         name,
@@ -383,6 +387,84 @@ export async function executeSqliteLiveOperation(
         success: true,
         output: created
           ? formatSqliteRow(created)
+          : { id: newId, created_at: nowIso, updated_at: nowIso },
+        rawSql,
+        durationMs: Math.max(0.4, durationMs),
+        dbInfo: { path: resolvedPath, sizeBytes, table: safeTable, exists: true },
+      };
+    }
+
+    // 4b. Upsert (INSERT ... ON CONFLICT(id) DO UPDATE SET ... RETURNING *)
+    if (isUpsert) {
+      const dataObj: JsonObject = isJsonObject(args.data)
+        ? args.data
+        : isJsonObject(args)
+          ? args
+          : {};
+      const newId = String(args.id ?? dataObj.id ?? `conv_${Date.now()}`);
+      const nowIso = new Date().toISOString();
+
+      const entries: [string, SqliteBindValue][] = [];
+      entries.push(["id", newId]);
+      if (dataObj.created_at === undefined) entries.push(["created_at", nowIso]);
+      if (dataObj.updated_at === undefined) entries.push(["updated_at", nowIso]);
+
+      for (const [k, v] of Object.entries(dataObj)) {
+        if (
+          k === "id" ||
+          k === "created_at" ||
+          k === "updated_at" ||
+          k === "limit" ||
+          k === "offset"
+        ) {
+          continue;
+        }
+        if (typeof v === "string" || typeof v === "number" || typeof v === "boolean" || v === null) {
+          entries.push([sanitizeIdentifier(k), v]);
+        }
+      }
+
+      // Ensure any extra dynamic fields exist as columns
+      const infoRows = db.prepare(`PRAGMA table_info(${safeTable})`).all();
+      const existing = new Set<string>();
+      for (const r of infoRows) {
+        if (typeof (r as { name?: string }).name === "string") {
+          existing.add((r as { name: string }).name.toLowerCase());
+        }
+      }
+      for (const [k, v] of entries) {
+        if (!existing.has(k.toLowerCase())) {
+          const colType = typeof v === "number" ? "INTEGER" : "TEXT";
+          try {
+            db.prepare(`ALTER TABLE ${safeTable} ADD COLUMN ${k} ${colType}`).run();
+            existing.add(k.toLowerCase());
+          } catch {
+            // Ignore if column was already added concurrently
+          }
+        }
+      }
+
+      const colNames = entries.map(([k]) => k).join(", ");
+      const placeholders = entries.map(() => "?").join(", ");
+      const bindVals = entries.map(([, v]) => v);
+      const nonIdEntries = entries.filter(([k]) => k.toLowerCase() !== "id");
+      const conflictSetClause = nonIdEntries.length > 0
+        ? `DO UPDATE SET ` + nonIdEntries.map(([k]) => `${k} = excluded.${k}`).join(", ")
+        : `DO NOTHING`;
+
+      const rawSql = `INSERT INTO ${safeTable} (${colNames}) VALUES (${bindVals.map((v) => JSON.stringify(v)).join(", ")}) ON CONFLICT(id) ${conflictSetClause} RETURNING *;`;
+
+      const stmt = db.prepare(
+        `INSERT INTO ${safeTable} (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) ${conflictSetClause} RETURNING *`,
+      );
+      const upserted = stmt.get(...bindVals);
+      const durationMs = Math.round((performance.now() - start) * 100) / 100;
+      const sizeBytes = fs.existsSync(resolvedPath) ? fs.statSync(resolvedPath).size : 0;
+
+      return {
+        success: true,
+        output: upserted
+          ? formatSqliteRow(upserted)
           : { id: newId, created_at: nowIso, updated_at: nowIso },
         rawSql,
         durationMs: Math.max(0.4, durationMs),
