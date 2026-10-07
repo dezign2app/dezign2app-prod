@@ -1084,6 +1084,7 @@ export const TransformerConfig: React.FC<TransformerConfigProps> = ({
           <NodePackageManager
             nodeId={node.id}
             nodeType="transformer"
+            projectId={id}
             customDependencies={customDependencies}
             onUpdateDependencies={(deps) => updateData({ customDependencies: deps })}
             inferredDependencies={inferredDeps}

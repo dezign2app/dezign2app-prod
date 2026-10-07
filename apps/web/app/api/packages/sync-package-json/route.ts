@@ -28,96 +28,132 @@ interface PackageJsonShape {
   [key: string]: unknown;
 }
 
-function findTargetPackageJson(nodeType?: string, outputDir?: string): string | null {
-  if (outputDir && fs.existsSync(outputDir)) {
-    if (nodeType === "transformer") {
-      const transformerPkg = path.join(outputDir, "packages/transformers/package.json");
-      if (fs.existsSync(transformerPkg)) return transformerPkg;
-    }
-    if (nodeType === "service" || nodeType === "transformer") {
-      const appsDir = path.join(outputDir, "apps");
-      if (fs.existsSync(appsDir)) {
-        try {
-          const subs = fs.readdirSync(appsDir, { withFileTypes: true });
-          for (const s of subs) {
-            if (s.isDirectory()) {
-              const p = path.join(appsDir, s.name, "package.json");
-              if (fs.existsSync(p)) return p;
-            }
-          }
-        } catch {}
-      }
-      const packagesDir = path.join(outputDir, "packages");
-      if (fs.existsSync(packagesDir)) {
-        try {
-          const subs = fs.readdirSync(packagesDir, { withFileTypes: true });
-          for (const s of subs) {
-            if (s.isDirectory()) {
-              const p = path.join(packagesDir, s.name, "package.json");
-              if (fs.existsSync(p)) return p;
-            }
-          }
-        } catch {}
-      }
-    }
-    const rootPkg = path.join(outputDir, "package.json");
-    if (fs.existsSync(rootPkg)) return rootPkg;
-  }
-
-  const cwd = process.cwd();
-
+/**
+ * Resolves the target package.json strictly within the selected project outputDir.
+ * NEVER falls back to process.cwd() or internal workspace repository files.
+ */
+function findTargetPackageJson(
+  nodeType: string | undefined,
+  cleanOutputDir: string,
+): string | null {
   if (nodeType === "transformer") {
-    const transformerCandidates = [
-      path.join(cwd, "packages/transformers/package.json"),
-      path.resolve(cwd, "../packages/transformers/package.json"),
-      path.resolve(cwd, "../../packages/transformers/package.json"),
-      path.join(cwd, "packages/backend/package.json"),
-      path.resolve(cwd, "../packages/backend/package.json"),
-      path.resolve(cwd, "../../packages/backend/package.json"),
-    ];
-    for (const cand of transformerCandidates) {
-      if (fs.existsSync(cand)) return cand;
+    const transformerDir = path.join(cleanOutputDir, "packages", "transformers");
+    const transformerPkg = path.join(transformerDir, "package.json");
+
+    // Auto-scaffold packages/transformers if not yet created in the generated app
+    if (!fs.existsSync(transformerDir)) {
+      fs.mkdirSync(path.join(transformerDir, "src"), { recursive: true });
     }
+
+    if (!fs.existsSync(transformerPkg)) {
+      const initialPkg: PackageJsonShape = {
+        name: "@workspace/transformers",
+        version: "0.0.0",
+        private: true,
+        description: "Shared pure data-transformation functions",
+        main: "src/index.ts",
+        types: "src/index.ts",
+        exports: {
+          ".": "./src/index.ts",
+          "./*": "./src/*.ts",
+        },
+        scripts: {
+          build: "tsc",
+          "check-types": "tsc --noEmit",
+        },
+        dependencies: {},
+        devDependencies: {
+          "@workspace/typescript-config": "workspace:*",
+          typescript: "^5.3.3",
+        },
+      };
+      fs.writeFileSync(transformerPkg, JSON.stringify(initialPkg, null, 2) + "\n", "utf-8");
+    }
+
+    const transformerTsconfig = path.join(transformerDir, "tsconfig.json");
+    if (!fs.existsSync(transformerTsconfig)) {
+      const initialTsconfig = {
+        extends: "@workspace/typescript-config/base.json",
+        compilerOptions: {
+          outDir: "./dist",
+          rootDir: "./src",
+        },
+        include: ["src/**/*"],
+      };
+      fs.writeFileSync(transformerTsconfig, JSON.stringify(initialTsconfig, null, 2) + "\n", "utf-8");
+    }
+
+    const transformerIndex = path.join(transformerDir, "src", "index.ts");
+    if (!fs.existsSync(transformerIndex)) {
+      fs.mkdirSync(path.join(transformerDir, "src"), { recursive: true });
+      fs.writeFileSync(transformerIndex, "export {};\n", "utf-8");
+    }
+
+    return transformerPkg;
   }
 
   if (nodeType === "service") {
+    // 1. Direct candidate: packages/backend/package.json
     const backendCandidates = [
-      path.join(cwd, "packages/backend/package.json"),
-      path.resolve(cwd, "../packages/backend/package.json"),
-      path.resolve(cwd, "../../packages/backend/package.json"),
+      path.join(cleanOutputDir, "packages", "backend", "package.json"),
     ];
     for (const cand of backendCandidates) {
       if (fs.existsSync(cand)) return cand;
     }
-  }
 
-  const candidatePaths = [
-    path.join(cwd, "apps/web/package.json"),
-    path.resolve(cwd, "../apps/web/package.json"),
-    path.resolve(cwd, "../../apps/web/package.json"),
-    path.join(cwd, "package.json"),
-  ];
-
-  for (const candidate of candidatePaths) {
-    if (fs.existsSync(candidate)) {
+    // 2. apps/* services
+    const appsDir = path.join(cleanOutputDir, "apps");
+    if (fs.existsSync(appsDir)) {
       try {
-        const raw = fs.readFileSync(candidate, "utf-8");
-        const parsed = JSON.parse(raw) as PackageJsonShape;
-        if (parsed.name === "web") {
-          return candidate;
+        const subs = fs.readdirSync(appsDir, { withFileTypes: true });
+        for (const s of subs) {
+          if (s.isDirectory()) {
+            const p = path.join(appsDir, s.name, "package.json");
+            if (fs.existsSync(p)) return p;
+          }
         }
-      } catch {
-        // Continue
-      }
+      } catch {}
     }
+
+    // 3. packages/* packages (excluding transformers)
+    const packagesDir = path.join(cleanOutputDir, "packages");
+    if (fs.existsSync(packagesDir)) {
+      try {
+        const subs = fs.readdirSync(packagesDir, { withFileTypes: true });
+        for (const s of subs) {
+          if (s.isDirectory() && s.name !== "transformers") {
+            const p = path.join(packagesDir, s.name, "package.json");
+            if (fs.existsSync(p)) return p;
+          }
+        }
+      } catch {}
+    }
+
+    // 4. Root package.json
+    const rootPkg = path.join(cleanOutputDir, "package.json");
+    if (fs.existsSync(rootPkg)) return rootPkg;
+    return null;
   }
 
-  // Fallback to first existing package.json
-  for (const candidate of candidatePaths) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
+  // WebApp / WebPage / default client target
+  const webPkg = path.join(cleanOutputDir, "apps", "web", "package.json");
+  if (fs.existsSync(webPkg)) return webPkg;
+
+  const appsDir = path.join(cleanOutputDir, "apps");
+  if (fs.existsSync(appsDir)) {
+    try {
+      const subs = fs.readdirSync(appsDir, { withFileTypes: true });
+      for (const s of subs) {
+        if (s.isDirectory()) {
+          const p = path.join(appsDir, s.name, "package.json");
+          if (fs.existsSync(p)) return p;
+        }
+      }
+    } catch {}
   }
+
+  const rootPkg = path.join(cleanOutputDir, "package.json");
+  if (fs.existsSync(rootPkg)) return rootPkg;
 
   return null;
 }
@@ -153,16 +189,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const pkgPath = findTargetPackageJson(nodeType, outputDir);
+    // Ensure outputDir is provided and exists on disk
+    const cleanOutputDir = outputDir ? outputDir.trim().replace(/^["']|["']$/g, "") : "";
+    if (!cleanOutputDir) {
+      return NextResponse.json<SyncPackageJsonResponse>(
+        {
+          success: false,
+          action: action || "add",
+          name: trimmedName,
+          error: "Target project directory (outputDir) is required. Please select a workspace folder first.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!fs.existsSync(cleanOutputDir)) {
+      return NextResponse.json<SyncPackageJsonResponse>(
+        {
+          success: false,
+          action: action || "add",
+          name: trimmedName,
+          error: `Target project directory "${cleanOutputDir}" does not exist on disk.`,
+        },
+        { status: 400 },
+      );
+    }
+
+    const pkgPath = findTargetPackageJson(nodeType, cleanOutputDir);
     if (!pkgPath) {
       return NextResponse.json<SyncPackageJsonResponse>(
         {
           success: false,
           action,
           name: trimmedName,
-          error: "Could not find target package.json in workspace.",
+          error: `Could not find target package.json in selected project directory: ${cleanOutputDir}`,
         },
-        { status: 500 },
+        { status: 404 },
       );
     }
 
