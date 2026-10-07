@@ -82,7 +82,7 @@ const TRANSFORMER_PRESETS: CuratedPreset[] = [
   {
     category: "Identifiers & Crypto",
     items: [
-      { name: "uuid", version: "^9.0.1", description: "RFC4122 UUID generator" },
+      { name: "uuid", version: "^11.1.0", description: "RFC4122 UUID generator (native TypeScript types)" },
       { name: "nanoid", version: "^5.0.6", description: "Compact URL-friendly unique ID generator" },
       { name: "crypto-js", version: "^4.2.0", description: "Standard cryptographic algorithms in JS" },
       { name: "hash-wasm", version: "^4.11.0", description: "Lightning fast hashing algorithms" },
@@ -133,7 +133,7 @@ const SERVICE_PRESETS: CuratedPreset[] = [
     items: [
       { name: "lodash-es", version: "^4.17.21", description: "ES modular utilities" },
       { name: "dayjs", version: "^1.11.10", description: "Fast lightweight date parser" },
-      { name: "uuid", version: "^9.0.1", description: "RFC4122 UUID generator" },
+      { name: "uuid", version: "^11.1.0", description: "RFC4122 UUID generator (native TypeScript types)" },
       { name: "nanoid", version: "^5.0.6", description: "Compact URL-friendly ID generator" },
       { name: "axios", version: "^1.6.8", description: "Promise-based HTTP client" },
     ],
