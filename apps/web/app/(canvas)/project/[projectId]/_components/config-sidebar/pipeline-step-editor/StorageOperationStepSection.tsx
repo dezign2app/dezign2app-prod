@@ -10,13 +10,7 @@ import {
 import { toFolderName, toVarName } from "@/lib/compiler/utils";
 import { cn } from "@workspace/ui/lib/utils";
 import { Label } from "@workspace/ui/components/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
+import { StepCombobox, StepComboboxOption } from "./StepCombobox";
 import { HardDrive, Layers, Code2, Sparkles } from "lucide-react";
 import { PipelineStepDraft, ExpectedArg, AvailableSource } from "./types";
 import { Badge } from "@workspace/ui/components/badge";
@@ -247,27 +241,16 @@ export const StorageOperationStepSection: React.FC<StorageOperationStepSectionPr
             <HardDrive size={11} className="text-amber-500" />
             Storage Node
           </Label>
-          <Select
-            value={selectedStorageNode?.id || "__none__"}
+          <StepCombobox
+            value={selectedStorageNode?.id || ""}
             onValueChange={handleSelectStorageNode}
-          >
-            <SelectTrigger className="h-7 text-xs bg-background/60 border-border/60">
-              <SelectValue placeholder="Select storage node..." />
-            </SelectTrigger>
-            <SelectContent>
-              {allStorageNodes.length === 0 ? (
-                <SelectItem value="__none__" disabled className="text-xs">
-                  No storage nodes on canvas
-                </SelectItem>
-              ) : (
-                allStorageNodes.map((node) => (
-                  <SelectItem key={node.id} value={node.id} className="text-xs">
-                    {node.data?.label || "Storage Node"}
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
+            options={allStorageNodes.map((node) => ({
+              value: node.id,
+              label: node.data?.label || "Storage Node",
+            }))}
+            placeholder="Select storage node..."
+            className="h-7 text-xs bg-background/60 border-border/60"
+          />
         </div>
 
         {/* Bucket Selector */}
@@ -276,27 +259,20 @@ export const StorageOperationStepSection: React.FC<StorageOperationStepSectionPr
             <Layers size={11} className="text-amber-500" />
             Bucket Resource
           </Label>
-          <Select
-            value={selectedBucket || "__custom__"}
+          <StepCombobox
+            value={selectedBucket || ""}
             onValueChange={handleSelectBucket}
-          >
-            <SelectTrigger className="h-7 text-xs bg-background/60 border-border/60 font-mono">
-              <SelectValue placeholder="Select bucket..." />
-            </SelectTrigger>
-            <SelectContent>
-              {availableBuckets.length === 0 ? (
-                <SelectItem value="default-bucket" className="text-xs font-mono">
-                  default-bucket
-                </SelectItem>
-              ) : (
-                availableBuckets.map((b) => (
-                  <SelectItem key={b.id || b.name} value={b.name} className="text-xs font-mono">
-                    {b.name}
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
+            options={
+              availableBuckets.length === 0
+                ? [{ value: "default-bucket", label: "default-bucket" }]
+                : availableBuckets.map((b) => ({
+                    value: b.name,
+                    label: b.name,
+                  }))
+            }
+            placeholder="Select bucket..."
+            className="h-7 text-xs bg-background/60 border-border/60 font-mono"
+          />
         </div>
       </div>
 
@@ -319,39 +295,28 @@ export const StorageOperationStepSection: React.FC<StorageOperationStepSectionPr
             </button>
           )}
         </div>
-        <Select
+        <StepCombobox
           value={selectedOp?.id || selectedOp?.name || ""}
           onValueChange={handleSelectOperation}
-        >
-          <SelectTrigger className="h-8 text-xs bg-background/60 border-border/60">
-            <SelectValue placeholder="Select storage function..." />
-          </SelectTrigger>
-          <SelectContent className="max-h-[300px]">
-            {operations.map((op) => (
-              <SelectItem key={op.id} value={op.id} className="text-xs py-1.5">
-                <div className="flex items-center justify-between gap-3 w-full">
-                  <div className="flex flex-col">
-                    <span className="font-mono text-xs font-semibold">{op.name}</span>
-                    <span className="text-[10px] text-muted-foreground line-clamp-1">
-                      {op.description}
-                    </span>
-                  </div>
-                  {op.badge && (
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[8px] font-bold font-mono px-1 py-0 h-4 border uppercase shrink-0",
-                        op.badge.colorClass,
-                      )}
-                    >
-                      {op.badge.label}
-                    </Badge>
-                  )}
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          options={operations.map((op) => ({
+            value: op.id,
+            label: op.name,
+            description: op.description,
+            badge: op.badge ? (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[8px] font-bold font-mono px-1 py-0 h-4 border uppercase shrink-0",
+                  op.badge.colorClass,
+                )}
+              >
+                {op.badge.label}
+              </Badge>
+            ) : undefined,
+          }))}
+          placeholder="Select storage function..."
+          className="h-7 text-xs bg-background/60 border-border/60"
+        />
       </div>
 
       {/* 3. Live Function Signature & Description Box */}

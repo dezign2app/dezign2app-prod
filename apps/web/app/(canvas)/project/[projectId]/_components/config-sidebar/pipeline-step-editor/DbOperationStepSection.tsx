@@ -12,13 +12,7 @@ import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 import { toTableName, toVarName } from "@/lib/compiler/utils";
 import { BufferedInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
+import { StepCombobox, StepComboboxOption } from "./StepCombobox";
 import { Database, Table as TableIcon, Code2, Settings, Sparkles, ExternalLink } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
@@ -346,6 +340,61 @@ export const DbOperationStepSection = ({
     });
   };
 
+  const databaseOptions: StepComboboxOption[] = useMemo(() => {
+    const opts: StepComboboxOption[] = [
+      {
+        value: "all",
+        label: "All Databases",
+      },
+    ];
+    dbNodes
+      .filter((db) => Boolean(db && db.id && db.id.trim()))
+      .forEach((db) => {
+        const isRedisInstance = db.type === "redis_instance";
+        opts.push({
+          value: db.id,
+          label: `${isRedisInstance ? "⚡" : "🛢"} ${
+            db.data?.label || (isRedisInstance ? "Redis Instance" : "Database")
+          }`,
+        });
+      });
+    return opts;
+  }, [dbNodes]);
+
+  const tableOptions: StepComboboxOption[] = useMemo(() => {
+    return filteredEntityNodes
+      .filter((t) => Boolean(t && t.id && t.id.trim()))
+      .map((t) => {
+        const isRedis =
+          t.type === "redis_schema" ||
+          t.type === "redis-cache" ||
+          t.data?.dbType === "redis";
+        const icon = isRedis ? "⚡" : "📄";
+        const label =
+          t.data?.label ||
+          t.data?.tableRef ||
+          (isRedis ? "Redis Cache" : "Table");
+        return {
+          value: t.id,
+          label: `${icon} ${label}`,
+        };
+      });
+  }, [filteredEntityNodes]);
+
+  const operationOptions: StepComboboxOption[] = useMemo(() => {
+    return availableDbOperations
+      .filter((op) => Boolean(op && op.name && op.name.trim()))
+      .map((op) => ({
+        value: op.name,
+        label: op.name,
+        badge: (
+          <span className="text-[9px] text-muted-foreground uppercase font-sans">
+            ({op.kind})
+          </span>
+        ),
+      }));
+  }, [availableDbOperations]);
+
   return (
     <div className="flex flex-col gap-3 p-2.5 rounded-lg border border-blue-500/25 bg-blue-500/[0.04]">
       <div className="flex items-center justify-between">
@@ -366,30 +415,13 @@ export const DbOperationStepSection = ({
           <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
             <Database size={10} /> Database
           </Label>
-          <Select
+          <StepCombobox
             value={selectedDbId}
             onValueChange={(v) => onChange({ ...step, databaseId: v })}
-          >
-            <SelectTrigger className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full">
-              <SelectValue placeholder="Select Database..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">
-                All Databases
-              </SelectItem>
-              {dbNodes
-                .filter((db) => Boolean(db && db.id && db.id.trim()))
-                .map((db) => {
-                  const isRedisInstance = db.type === "redis_instance";
-                  return (
-                    <SelectItem key={db.id} value={db.id} className="text-xs font-mono">
-                      {isRedisInstance ? "⚡" : "🛢"}{" "}
-                      {db.data?.label || (isRedisInstance ? "Redis Instance" : "Database")}
-                    </SelectItem>
-                  );
-                })}
-            </SelectContent>
-          </Select>
+            options={databaseOptions}
+            placeholder="Select Database..."
+            className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full"
+          />
         </div>
 
         {/* Table / Entity selector */}
@@ -397,37 +429,13 @@ export const DbOperationStepSection = ({
           <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
             <TableIcon size={10} /> Table / Entity
           </Label>
-          <Select
-            value={selectedTableNode?.id || step.tableNodeId || "__none__"}
+          <StepCombobox
+            value={selectedTableNode?.id || step.tableNodeId || ""}
             onValueChange={handleSelectTable}
-          >
-            <SelectTrigger className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full">
-              <SelectValue placeholder="Select Table..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__" className="text-xs text-muted-foreground">
-                Select a table...
-              </SelectItem>
-              {filteredEntityNodes
-                .filter((t) => Boolean(t && t.id && t.id.trim()))
-                .map((t) => {
-                  const isRedis =
-                    t.type === "redis_schema" ||
-                    t.type === "redis-cache" ||
-                    t.data?.dbType === "redis";
-                  const icon = isRedis ? "⚡" : "📄";
-                  const label =
-                    t.data?.label ||
-                    t.data?.tableRef ||
-                    (isRedis ? "Redis Cache" : "Table");
-                  return (
-                    <SelectItem key={t.id} value={t.id} className="text-xs font-mono">
-                      {icon} {label}
-                    </SelectItem>
-                  );
-                })}
-            </SelectContent>
-          </Select>
+            options={tableOptions}
+            placeholder="Select Table..."
+            className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full"
+          />
         </div>
 
         {/* Operation / Function selector */}
@@ -435,38 +443,20 @@ export const DbOperationStepSection = ({
           <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
             <Code2 size={10} /> Operation / Function
           </Label>
-          <Select
-            value={step.functionRef?.name || step.operationId || "__none__"}
+          <StepCombobox
+            value={step.functionRef?.name || step.operationId || ""}
             onValueChange={handleSelectOperation}
+            options={operationOptions}
+            placeholder={
+              !selectedTableNode
+                ? "Select table first"
+                : availableDbOperations.length === 0
+                ? "No operations"
+                : "Choose operation..."
+            }
             disabled={!selectedTableNode || availableDbOperations.length === 0}
-          >
-            <SelectTrigger className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full">
-              <SelectValue
-                placeholder={
-                  !selectedTableNode
-                    ? "Select table first"
-                    : availableDbOperations.length === 0
-                    ? "No operations"
-                    : "Choose operation..."
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__" className="text-xs text-muted-foreground">
-                Select an operation...
-              </SelectItem>
-              {availableDbOperations
-                .filter((op) => Boolean(op && op.name && op.name.trim()))
-                .map((op) => (
-                  <SelectItem key={op.id} value={op.name} className="text-xs font-mono">
-                    <span className="font-semibold text-primary/90">{op.name}</span>
-                    <span className="text-[9px] text-muted-foreground ml-1.5 uppercase">
-                      ({op.kind})
-                    </span>
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+            className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full"
+          />
         </div>
       </div>
 

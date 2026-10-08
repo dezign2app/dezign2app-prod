@@ -2,13 +2,7 @@
 
 import React, { useMemo, useState, useRef } from "react";
 import { BufferedInput, BufferedTextarea } from "./BufferedInput";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
+import { StepCombobox, StepComboboxOption } from "./StepCombobox";
 import {
   Popover,
   PopoverTrigger,
@@ -183,24 +177,29 @@ export const BindingSourceEditor = ({
   const hasNewlines = stringVal.includes("\n");
   const showTextarea = isExpanded || hasNewlines;
 
+  const sourceOptions: StepComboboxOption[] = useMemo(() => {
+    return uniqueSources
+      .filter((s) => Boolean(s && s.id && s.id.trim()))
+      .map((s) => ({
+        value: s.id,
+        label: s.label,
+        group: s.kind === "step_output" ? "Prior Steps" : "Request & Context",
+      }));
+  }, [uniqueSources]);
+
   return (
     <div className="flex flex-col gap-1.5 w-full min-w-0">
       <div className="flex gap-1.5 items-center w-full">
         {/* Source selector */}
-        <Select value={currentSourceOptionId} onValueChange={handleSourceSelect}>
-          <SelectTrigger className="h-7 text-xs bg-background/60 border-border/60 w-[140px] shrink-0">
-            <SelectValue placeholder="Source..." />
-          </SelectTrigger>
-          <SelectContent>
-            {uniqueSources
-              .filter((s) => Boolean(s && s.id && s.id.trim()))
-              .map((s) => (
-                <SelectItem key={s.id} value={s.id} className="text-xs">
-                  {s.label}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
+        <StepCombobox
+          value={currentSourceOptionId}
+          onValueChange={handleSourceSelect}
+          options={sourceOptions}
+          placeholder="Source..."
+          wrapperClassName="w-[180px] shrink-0"
+          className="h-7 text-xs bg-background/60 border-border/60"
+          contentClassName="w-[240px]"
+        />
 
         {/* Path / Value field editor */}
         {source.kind === "env" ? (
@@ -306,7 +305,7 @@ export const BindingSourceEditor = ({
 
       {/* Expanded Multi-line Textarea */}
       {source.kind === "inline" && showTextarea && (
-        <div className="w-full flex flex-col gap-1 pl-[146px]">
+        <div className="w-full flex flex-col gap-1 pl-[186px]">
           <BufferedTextarea
             ref={(el) => { inputRef.current = el; }}
             rows={4}

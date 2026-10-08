@@ -5,14 +5,7 @@ import { Plus, Trash, Edit2, List, AlertTriangle, Sparkles } from "lucide-react"
 import { BufferedInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
 import { cn } from "@workspace/ui/lib/utils";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
+import { StepCombobox, StepComboboxOption } from "./StepCombobox";
 import { BindingSourceEditor } from "./BindingSourceEditor";
 import { StepBinding, ExpectedArg, AvailableSource } from "./types";
 import { isPathMatch } from "./utils";
@@ -204,7 +197,7 @@ export const ArgumentBindingsSection = ({
           <div
             key={bi}
             className={cn(
-              "grid grid-cols-[1.1fr_auto_2.2fr_auto] gap-1.5 bg-background/60 p-1.5 rounded border",
+              "grid grid-cols-[1fr_auto_2.4fr_auto] gap-1.5 bg-background/60 p-1.5 rounded border",
               isInlineSource ? "items-start pt-2" : "items-center",
               isCredentialLeak
                 ? "border-amber-500/60 bg-amber-500/5"
@@ -216,70 +209,64 @@ export const ArgumentBindingsSection = ({
             {/* Arg name (Dropdown of function input variables or custom text input) */}
             <div className="min-w-0">
               {hasExpectedArgs && !isCustomMode ? (
-                <Select
-                  value={matchingExpectedArg ? matchingExpectedArg.name : (binding.argName?.trim() || undefined)}
-                  onValueChange={(val) => handleArgSelect(bi, binding, val)}
-                >
-                  <SelectTrigger className="h-7 text-xs font-mono bg-background/70 border-border/60 w-full min-w-0">
-                    <SelectValue placeholder="Select arg...">
-                      {getArgDisplayLabel(binding.argName) || undefined}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <div className="px-2 py-1 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
-                      Function Input Variables
-                    </div>
-                    {validExpectedArgs.map((arg) => {
-                      const isAlreadyBound = bindings.some(
-                        (b, idx) =>
-                          idx !== bi &&
-                          b.argName.trim().toLowerCase() === arg.name.trim().toLowerCase(),
-                      );
-                      const displayLabel = getArgDisplayLabel(arg.name);
-                      return (
-                        <SelectItem key={arg.name} value={arg.name} className="text-xs font-mono">
-                          <div className="flex items-center justify-between w-full gap-2 pr-2">
-                            <div className="flex items-center gap-1.5 truncate">
-                              <span className="font-semibold">{displayLabel}</span>
-                              {isAlreadyBound && (
-                                <span className="text-[8px] font-sans text-muted-foreground/60">
-                                  (bound)
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-[9px] text-muted-foreground font-sans uppercase shrink-0">
-                              :{arg.type}
-                              {arg.required && (
-                                <span className="text-amber-500 font-bold ml-0.5" title="Required">
-                                  *
-                                </span>
-                              )}
+                (() => {
+                  const argOptions: StepComboboxOption[] = validExpectedArgs.map((arg) => {
+                    const isAlreadyBound = bindings.some(
+                      (b, idx) =>
+                        idx !== bi &&
+                        b.argName.trim().toLowerCase() === arg.name.trim().toLowerCase(),
+                    );
+                    const displayLabel = getArgDisplayLabel(arg.name);
+                    return {
+                      value: arg.name,
+                      label: displayLabel,
+                      badge: (
+                        <div className="flex items-center gap-1">
+                          {isAlreadyBound && (
+                            <span className="text-[8px] font-sans text-muted-foreground/60">
+                              (bound)
                             </span>
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-
-                    {isCustomValue && Boolean(binding.argName?.trim()) && (
-                      <SelectItem value={binding.argName.trim()} className="text-xs font-mono">
-                        <div className="flex items-center justify-between w-full gap-2 pr-2">
-                          <span>{getArgDisplayLabel(binding.argName)}</span>
-                          <span className="text-[9px] text-muted-foreground font-sans italic shrink-0">
-                            (custom)
+                          )}
+                          <span className="text-[9px] text-muted-foreground font-sans uppercase shrink-0">
+                            :{arg.type}
+                            {arg.required && (
+                              <span className="text-amber-500 font-bold ml-0.5" title="Required">
+                                *
+                              </span>
+                            )}
                           </span>
                         </div>
-                      </SelectItem>
-                    )}
+                      ),
+                    };
+                  });
 
-                    <SelectSeparator />
-                    <SelectItem value="__custom__" className="text-xs text-muted-foreground font-sans">
-                      <div className="flex items-center gap-1.5">
-                        <Edit2 size={10} />
-                        <span>Custom variable name...</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                  if (isCustomValue && Boolean(binding.argName?.trim())) {
+                    argOptions.push({
+                      value: binding.argName.trim(),
+                      label: getArgDisplayLabel(binding.argName),
+                      badge: (
+                        <span className="text-[9px] text-muted-foreground font-sans italic shrink-0">
+                          (custom)
+                        </span>
+                      ),
+                    });
+                  }
+
+                  return (
+                    <StepCombobox
+                      value={matchingExpectedArg ? matchingExpectedArg.name : (binding.argName?.trim() || "")}
+                      onValueChange={(val) => handleArgSelect(bi, binding, val)}
+                      options={argOptions}
+                      placeholder="Select arg..."
+                      className="h-7 text-xs font-mono bg-background/70 border-border/60 w-full min-w-0"
+                      footerAction={{
+                        label: "Custom variable name...",
+                        icon: <Edit2 size={10} />,
+                        onSelect: () => handleArgSelect(bi, binding, "__custom__"),
+                      }}
+                    />
+                  );
+                })()
               ) : (
                 <div className="flex items-center gap-1 min-w-0">
                   <BufferedInput

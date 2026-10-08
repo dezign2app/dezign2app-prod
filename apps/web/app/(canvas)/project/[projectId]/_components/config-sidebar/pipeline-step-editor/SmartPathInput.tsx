@@ -1,13 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
-import { BufferedInput } from "./BufferedInput";
+import React, { useState, useMemo, useEffect } from "react";
 import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@workspace/ui/components/popover";
-import { ChevronDown } from "lucide-react";
+  Combobox,
+  ComboboxInput,
+  ComboboxContent,
+  ComboboxList,
+  ComboboxItem,
+  ComboboxEmpty,
+} from "@workspace/ui/components/combobox";
+import { cn } from "@workspace/ui/lib/utils";
 import { AvailablePath } from "./types";
 
 export interface SmartPathInputProps {
@@ -19,97 +21,138 @@ export interface SmartPathInputProps {
   rootVariableName?: string;
 }
 
-export const SmartPathInput = ({
+export const SmartPathInput: React.FC<SmartPathInputProps> = ({
   value,
   onChange,
   suggestedPaths,
   placeholder,
   sourceKindLabel,
   rootVariableName,
-}: SmartPathInputProps) => {
-  const [open, setOpen] = useState(false);
+}) => {
+  const [inputValue, setInputValue] = useState<string>(value || "");
+
+  useEffect(() => {
+    setInputValue(value || "");
+  }, [value]);
 
   const displayPlaceholder =
     placeholder ||
     (rootVariableName ? `(whole ${rootVariableName})` : "path.to.field");
 
-  return (
-    <div className="flex-1 min-w-0">
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <div className="relative flex items-center w-full">
-            <BufferedInput
-              className="h-7 text-xs font-mono bg-background/70 border-border/60 pr-6 w-full"
-              placeholder={displayPlaceholder}
-              value={value}
-              onCommit={onChange}
-              onFocus={() => setOpen(true)}
-            />
-            <button
-              type="button"
-              className="absolute right-1.5 top-1.5 text-muted-foreground/60 hover:text-foreground p-0.5 rounded transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpen((v) => !v);
-              }}
-              title="Choose from suggested paths or whole object"
-            >
-              <ChevronDown size={12} />
-            </button>
-          </div>
-        </PopoverTrigger>
+  const items = useMemo(() => {
+    const set = new Set<string>();
+    suggestedPaths.forEach((p) => {
+      if (p.path) set.add(p.path);
+    });
+    if (rootVariableName) {
+      set.add(`(whole ${rootVariableName})`);
+    }
+    if (value && value.trim()) {
+      set.add(value.trim());
+    }
+    if (inputValue && inputValue.trim()) {
+      set.add(inputValue.trim());
+    }
+    return Array.from(set);
+  }, [suggestedPaths, rootVariableName, value, inputValue]);
 
-        <PopoverContent
+  const filteredPaths = useMemo(() => {
+    if (!inputValue.trim()) return suggestedPaths;
+    const q = inputValue.toLowerCase().trim();
+    return suggestedPaths.filter(
+      (p) =>
+        p.path.toLowerCase().includes(q) ||
+        (p.type && p.type.toLowerCase().includes(q))
+    );
+  }, [suggestedPaths, inputValue]);
+
+  const handleCommit = (raw: string) => {
+    if (rootVariableName && raw === `(whole ${rootVariableName})`) {
+      onChange("");
+      setInputValue("");
+      return;
+    }
+    onChange(raw);
+    setInputValue(raw);
+  };
+
+  return (
+    <div className="relative flex-1 min-w-0 nodrag" onClick={(e) => e.stopPropagation()}>
+      <Combobox
+        items={items}
+        value={value || null}
+        onValueChange={(selected) => {
+          if (typeof selected === "string") {
+            handleCommit(selected);
+          }
+        }}
+        inputValue={inputValue}
+        onInputValueChange={(text) => {
+          setInputValue(text);
+          onChange(text);
+        }}
+      >
+        <ComboboxInput
+          placeholder={displayPlaceholder}
+          className="h-7 w-full bg-background/70 border-border/60 text-xs font-mono nodrag"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              handleCommit(inputValue);
+            }
+          }}
+          onBlur={() => {
+            handleCommit(inputValue);
+          }}
+        />
+        <ComboboxContent
+          className="w-[var(--anchor-width)] min-w-[220px] max-h-56 p-0 shadow-2xl border border-border/80 bg-popover text-popover-foreground rounded-lg z-[100] overflow-hidden"
           align="start"
-          side="bottom"
           sideOffset={4}
-          className="p-1 w-[var(--radix-popover-trigger-width)] min-w-[220px] max-h-56 overflow-y-auto z-[100] bg-popover border border-border rounded-md shadow-lg hide-scrollbar"
-          onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/40 mb-1">
+          <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/40 bg-muted/20">
             <span>{sourceKindLabel ? `Fields in ${sourceKindLabel}` : "Suggested Fields"}</span>
           </div>
 
-          {suggestedPaths.map((p) => (
-            <button
-              key={p.path}
-              type="button"
-              className="w-full text-left px-2 py-1 text-xs font-mono rounded hover:bg-accent text-foreground flex items-center justify-between transition-colors"
-              onClick={() => {
-                onChange(p.path);
-                setOpen(false);
-              }}
-            >
-              <span className="truncate">{p.path}</span>
-              {p.type && (
-                <span className="text-[9px] text-muted-foreground/60 px-1 py-0.2 rounded bg-muted/40 font-sans shrink-0 ml-1">
-                  {p.type}
-                </span>
+          {filteredPaths.length === 0 && !rootVariableName ? (
+            <ComboboxEmpty className="py-2.5 px-3 text-xs text-muted-foreground text-center">
+              No matching fields
+            </ComboboxEmpty>
+          ) : (
+            <ComboboxList className="p-1 max-h-48 overflow-y-auto">
+              {filteredPaths.map((p) => (
+                <ComboboxItem
+                  key={p.path}
+                  value={p.path}
+                  className="py-1 px-2 text-xs font-mono cursor-pointer rounded-md hover:bg-accent flex items-center justify-between transition-colors"
+                >
+                  <span className="truncate">{p.path}</span>
+                  {p.type && (
+                    <span className="text-[9px] text-muted-foreground/60 px-1 py-0.2 rounded bg-muted/40 font-sans shrink-0 ml-1">
+                      {p.type}
+                    </span>
+                  )}
+                </ComboboxItem>
+              ))}
+
+              {filteredPaths.length > 0 && (
+                <div className="border-t border-border/40 my-1" />
               )}
-            </button>
-          ))}
 
-          {suggestedPaths.length > 0 && (
-            <div className="border-t border-border/40 my-1" />
+              <ComboboxItem
+                value={`(whole ${rootVariableName || "object"})`}
+                className="py-1 px-2 text-xs font-mono cursor-pointer rounded-md hover:bg-accent flex items-center justify-between transition-colors"
+              >
+                <span className="italic text-[11px] text-foreground/80">
+                  (whole {rootVariableName || "object"})
+                </span>
+                <span className="text-[9px] text-muted-foreground/60 px-1 py-0.2 rounded bg-muted/40 font-sans shrink-0 ml-1">
+                  object
+                </span>
+              </ComboboxItem>
+            </ComboboxList>
           )}
-
-          <button
-            type="button"
-            className="w-full text-left px-2 py-1.5 text-xs font-mono rounded hover:bg-accent text-foreground flex items-center justify-between transition-colors"
-            onClick={() => {
-              onChange("");
-              setOpen(false);
-            }}
-          >
-            <span className="italic text-[11px] text-foreground/80">
-              (whole {rootVariableName || "object"})
-            </span>
-            <span className="text-[9px] text-muted-foreground/60 px-1 py-0.2 rounded bg-muted/40 font-sans shrink-0 ml-1">
-              object
-            </span>
-          </button>
-        </PopoverContent>
-      </Popover>
+        </ComboboxContent>
+      </Combobox>
     </div>
   );
 };
