@@ -159,7 +159,7 @@ export function compileServiceNode(
             }
             if (step.functionRef?.importPath?.includes("/helpers/")) {
               const helperMatch = step.functionRef.importPath.match(/\/helpers\/([^/]+)$/);
-              if (helperMatch) {
+              if (helperMatch && helperMatch[1]) {
                 const helperName = helperMatch[1].toLowerCase();
                 if (
                   !existingEntityNames.has(helperName) &&
