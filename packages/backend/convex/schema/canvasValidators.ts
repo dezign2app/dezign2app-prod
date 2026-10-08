@@ -98,6 +98,7 @@ export const safePipelineStepCacheMissSchema = z.object({
     .optional(),
   databaseId: z.string().optional(),
   tableNodeId: z.string().optional(),
+  dbRefNodeId: z.string().optional(),
   operationId: z.string().optional(),
   functionRef: z
     .object({
@@ -144,6 +145,7 @@ export const safePipelineStepSchema = z.object({
   responseMode: z.string().optional(),
   databaseId: z.string().optional(),
   tableNodeId: z.string().optional(),
+  dbRefNodeId: z.string().optional(),
   externalNodeId: z.string().optional(),
   externalEndpointId: z.string().optional(),
   operationId: z.string().optional(),

@@ -104,7 +104,7 @@ export function handleStepUpdateCanvasEffects({
       prevStep.operationId !== updatedStep.operationId)
   ) {
     if (!isNested) {
-      updateDatabaseRefConnection({
+      const res = updateDatabaseRefConnection({
         stepId: updatedStep.id,
         dbRefNodeId: updatedStep.dbRefNodeId || prevStep.dbRefNodeId,
         prevTableNodeId: prevStep.tableNodeId,
@@ -118,6 +118,9 @@ export function handleStepUpdateCanvasEffects({
         consumedEventId,
         remainingSteps,
       });
+      if (res?.dbRefNodeId) {
+        updatedStep.dbRefNodeId = res.dbRefNodeId;
+      }
     }
   }
 

@@ -112,9 +112,16 @@ export function usePipelineSteps({
 
   const updateStep = (index: number, updated: PipelineStepDraft) => {
     const prevStep = executableSteps[index];
+    const isTableChanging =
+      prevStep?.type === "db_operation" &&
+      updated.type === "db_operation" &&
+      prevStep.tableNodeId !== updated.tableNodeId;
+
     const finalUpdated = {
       ...updated,
-      dbRefNodeId: updated.dbRefNodeId || prevStep?.dbRefNodeId,
+      dbRefNodeId: isTableChanging
+        ? undefined
+        : updated.dbRefNodeId || prevStep?.dbRefNodeId,
     };
     if (prevStep) {
       const remainingSteps = executableSteps.filter((_, i) => i !== index);

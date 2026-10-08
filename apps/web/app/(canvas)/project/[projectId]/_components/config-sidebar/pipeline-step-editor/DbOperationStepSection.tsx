@@ -463,6 +463,7 @@ export const DbOperationStepSection = ({
 
     onChange({
       ...step,
+      dbRefNodeId: undefined,
       tableNodeId: targetNode.id,
       operationId: defaultOp?.id,
       functionRef: defaultOp

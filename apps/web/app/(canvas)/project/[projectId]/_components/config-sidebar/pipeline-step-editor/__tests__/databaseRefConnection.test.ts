@@ -619,8 +619,8 @@ describe("pipeline-step-editor: Database Ref Node and Function Edge Synchronizat
     expect(state.nodes.filter((n) => n.type === "db_ref")).toHaveLength(0);
   });
 
-  describe("1:1 Step-to-TableRef Bidirectional Synchronization", () => {
-    it("creates dedicated db_ref node per step (link 1 table ref per step)", () => {
+  describe("TableRef per table per ServiceNode Synchronization", () => {
+    it("reuses single db_ref node for multiple db operations of the same table and links all operations", () => {
       const step1Id = "step-db-1";
       const step2Id = "step-db-2";
 
@@ -644,19 +644,59 @@ describe("pipeline-step-editor: Database Ref Node and Function Edge Synchronizat
 
       expect(res1?.dbRefNodeId).toBeDefined();
       expect(res2?.dbRefNodeId).toBeDefined();
-      expect(res1?.dbRefNodeId).not.toBe(res2?.dbRefNodeId);
+      // Scenario 1: Same table -> same db_ref node
+      expect(res1?.dbRefNodeId).toBe(res2?.dbRefNodeId);
 
       const state = useBackendCanvasStore.getState();
-      const node1 = state.nodes.find((n) => n.id === res1?.dbRefNodeId);
-      const node2 = state.nodes.find((n) => n.id === res2?.dbRefNodeId);
+      const matchingNodes = state.nodes.filter(
+        (n) => n.type === "db_ref" && n.data?.tableRef === entityId,
+      );
+      expect(matchingNodes).toHaveLength(1);
 
-      expect(node1?.data?.stepId).toBe(step1Id);
-      expect(node2?.data?.stepId).toBe(step2Id);
+      // Both operations linked to the same table ref node
+      const edge1 = state.edges.find(
+        (e) =>
+          e.source === res1?.dbRefNodeId &&
+          e.target === serviceNodeId &&
+          e.sourceHandle === "func-out-findAllUsers" &&
+          e.targetHandle === `endpoint-in-${endpointId}`,
+      );
+      const edge2 = state.edges.find(
+        (e) =>
+          e.source === res2?.dbRefNodeId &&
+          e.target === serviceNodeId &&
+          e.sourceHandle === "func-out-createUser" &&
+          e.targetHandle === `endpoint-in-${endpointId}`,
+      );
+
+      expect(edge1).toBeDefined();
+      expect(edge2).toBeDefined();
     });
 
-    it("updates dedicated db_ref node in place when step table selection changes (never adds a new node)", () => {
+    it("creates 2 separate db_ref nodes for 2 different tables and links operations to respective nodes", () => {
       const step1Id = "step-db-1";
-      const initial = ensureDatabaseRefConnection({
+      const step2Id = "step-db-2";
+      const entityOrdersId = "entity-orders";
+
+      // Setup 2nd entity
+      useBackendCanvasStore.setState((s) => ({
+        nodes: [
+          ...s.nodes,
+          {
+            id: entityOrdersId,
+            fractionalIndex: "a4",
+            type: "entity",
+            position: { x: 100, y: 300 },
+            data: {
+              label: "orders",
+              databaseId,
+              columns: [{ name: "id", type: "string", isPrimaryKey: true }],
+            },
+          },
+        ],
+      }));
+
+      const resUsers = ensureDatabaseRefConnection({
         stepId: step1Id,
         tableNodeId: entityId,
         databaseId,
@@ -665,32 +705,110 @@ describe("pipeline-step-editor: Database Ref Node and Function Edge Synchronizat
         functionName: "findAllUsers",
       });
 
-      const stateBefore = useBackendCanvasStore.getState();
-      const dbRefCountBefore = stateBefore.nodes.filter((n) => n.type === "db_ref").length;
-
-      const updated = updateDatabaseRefConnection({
-        stepId: step1Id,
-        dbRefNodeId: initial?.dbRefNodeId,
-        prevTableNodeId: entityId,
-        newTableNodeId: "entity-orders",
-        newDatabaseId: databaseId,
-        newFunctionName: "findAllOrders",
+      const resOrders = ensureDatabaseRefConnection({
+        stepId: step2Id,
+        tableNodeId: entityOrdersId,
+        databaseId,
         serviceNodeId,
         endpointId,
-        remainingSteps: [],
+        functionName: "findAllOrders",
       });
 
-      expect(updated?.dbRefNodeId).toBe(initial?.dbRefNodeId);
+      // Scenario 2: 2 different tables -> 2 separate db_ref nodes
+      expect(resUsers?.dbRefNodeId).toBeDefined();
+      expect(resOrders?.dbRefNodeId).toBeDefined();
+      expect(resUsers?.dbRefNodeId).not.toBe(resOrders?.dbRefNodeId);
 
-      const stateAfter = useBackendCanvasStore.getState();
-      const dbRefCountAfter = stateAfter.nodes.filter((n) => n.type === "db_ref").length;
-      expect(dbRefCountAfter).toBe(dbRefCountBefore);
+      const state = useBackendCanvasStore.getState();
+      const userRefNode = state.nodes.find((n) => n.id === resUsers?.dbRefNodeId);
+      const orderRefNode = state.nodes.find((n) => n.id === resOrders?.dbRefNodeId);
 
-      const updatedNode = stateAfter.nodes.find((n) => n.id === initial?.dbRefNodeId);
-      expect(updatedNode?.data?.tableRef).toBe("entity-orders");
+      expect(userRefNode?.data?.tableRef).toBe(entityId);
+      expect(orderRefNode?.data?.tableRef).toBe(entityOrdersId);
+
+      // Edges link each table's operations to endpoint
+      const edgeUser = state.edges.find(
+        (e) =>
+          e.source === resUsers?.dbRefNodeId &&
+          e.target === serviceNodeId &&
+          e.sourceHandle === "func-out-findAllUsers",
+      );
+      const edgeOrder = state.edges.find(
+        (e) =>
+          e.source === resOrders?.dbRefNodeId &&
+          e.target === serviceNodeId &&
+          e.sourceHandle === "func-out-findAllOrders",
+      );
+
+      expect(edgeUser).toBeDefined();
+      expect(edgeOrder).toBeDefined();
     });
 
-    it("deletes linked db_ref node when step is deleted", () => {
+    it("preserves db_ref node when 1 step is deleted if another step still uses the same table", () => {
+      const step1Id = "step-db-1";
+      const step2Id = "step-db-2";
+
+      const res = ensureDatabaseRefConnection({
+        stepId: step1Id,
+        tableNodeId: entityId,
+        databaseId,
+        serviceNodeId,
+        endpointId,
+        functionName: "findAllUsers",
+      });
+
+      ensureDatabaseRefConnection({
+        stepId: step2Id,
+        tableNodeId: entityId,
+        databaseId,
+        serviceNodeId,
+        endpointId,
+        functionName: "createUser",
+      });
+
+      // Delete step 2, but step 1 remains
+      cleanupDatabaseRefConnection({
+        stepId: step2Id,
+        tableNodeId: entityId,
+        databaseId,
+        serviceNodeId,
+        endpointId,
+        functionName: "createUser",
+        remainingSteps: [
+          {
+            id: step1Id,
+            name: "findAllUsersResult",
+            type: "db_operation",
+            tableNodeId: entityId,
+            functionRef: { name: "findAllUsers", importPath: "" },
+          },
+        ],
+      });
+
+      const state = useBackendCanvasStore.getState();
+      // TableRef node is PRESERVED because step 1 still uses it
+      expect(state.nodes.find((n) => n.id === res?.dbRefNodeId)).toBeDefined();
+
+      // Step 2's edge is removed
+      const edge2 = state.edges.find(
+        (e) =>
+          e.source === res?.dbRefNodeId &&
+          e.target === serviceNodeId &&
+          e.sourceHandle === "func-out-createUser",
+      );
+      expect(edge2).toBeUndefined();
+
+      // Step 1's edge remains intact
+      const edge1 = state.edges.find(
+        (e) =>
+          e.source === res?.dbRefNodeId &&
+          e.target === serviceNodeId &&
+          e.sourceHandle === "func-out-findAllUsers",
+      );
+      expect(edge1).toBeDefined();
+    });
+
+    it("deletes linked db_ref node when the last step using the table is deleted", () => {
       const step1Id = "step-db-1";
       const initial = ensureDatabaseRefConnection({
         stepId: step1Id,
@@ -707,6 +825,7 @@ describe("pipeline-step-editor: Database Ref Node and Function Edge Synchronizat
       cleanupDatabaseRefConnection({
         stepId: step1Id,
         dbRefNodeId: initial?.dbRefNodeId,
+        tableNodeId: entityId,
         serviceNodeId,
         endpointId,
         remainingSteps: [],
@@ -758,6 +877,106 @@ describe("pipeline-step-editor: Database Ref Node and Function Edge Synchronizat
       const stateAfter = useBackendCanvasStore.getState();
       const epAfter = stateAfter.endpoints.find((e) => e.id === endpointId);
       expect(epAfter?.pipelineSteps).toHaveLength(0);
+    });
+
+    it("deletes orphaned table ref when step 2 changes from conversation to user and links to existing user table ref", () => {
+      const step1Id = "step-db-1";
+      const step2Id = "step-db-2";
+      const entityConvId = "entity-conversations";
+
+      // Setup conversation entity
+      useBackendCanvasStore.setState((s) => ({
+        nodes: [
+          ...s.nodes,
+          {
+            id: entityConvId,
+            fractionalIndex:"s3",
+            type: "entity",
+            position: { x: 100, y: 300 },
+            data: {
+              label: "conversations",
+              databaseId,
+              columns: [{ name: "id", type: "string", isPrimaryKey: true }],
+            },
+          },
+        ],
+      }));
+
+      // Step 1: add db operation for user
+      const resUser = ensureDatabaseRefConnection({
+        stepId: step1Id,
+        tableNodeId: entityId,
+        databaseId,
+        serviceNodeId,
+        endpointId,
+        functionName: "findAllUsers",
+      });
+
+      // Step 2: add db operation for conversation
+      const resConv = ensureDatabaseRefConnection({
+        stepId: step2Id,
+        tableNodeId: entityConvId,
+        databaseId,
+        serviceNodeId,
+        endpointId,
+        functionName: "findAllConversations",
+      });
+
+      let state = useBackendCanvasStore.getState();
+      expect(state.nodes.filter((n) => n.type === "db_ref")).toHaveLength(2);
+
+      // Edit step 2 db operation to user
+      const updated = updateDatabaseRefConnection({
+        stepId: step2Id,
+        dbRefNodeId: resConv?.dbRefNodeId,
+        prevTableNodeId: entityConvId,
+        prevDatabaseId: databaseId,
+        prevFunctionName: "findAllConversations",
+        newTableNodeId: entityId,
+        newDatabaseId: databaseId,
+        newFunctionName: "createUser",
+        serviceNodeId,
+        endpointId,
+        remainingSteps: [
+          {
+            id: step1Id,
+            name: "findAllUsersResult",
+            type: "db_operation",
+            tableNodeId: entityId,
+            functionRef: { name: "findAllUsers", importPath: "" },
+          },
+        ],
+      });
+
+      state = useBackendCanvasStore.getState();
+
+      // 1. Conversation table ref node was deleted (0 remaining connections)
+      expect(state.nodes.find((n) => n.id === resConv?.dbRefNodeId)).toBeUndefined();
+
+      // 2. Only 1 table ref node remains on canvas (for Users)
+      const remainingTableRefs = state.nodes.filter((n) => n.type === "db_ref");
+      expect(remainingTableRefs).toHaveLength(1);
+      expect(remainingTableRefs[0]?.id).toBe(resUser?.dbRefNodeId);
+      expect(updated?.dbRefNodeId).toBe(resUser?.dbRefNodeId);
+
+      // 3. Both operations are linked from that single User table ref to the endpoint
+      const edgeUser1 = state.edges.find(
+        (e) =>
+          e.source === resUser?.dbRefNodeId &&
+          e.target === serviceNodeId &&
+          e.sourceHandle === "func-out-findAllUsers" &&
+          e.targetHandle === `endpoint-in-${endpointId}`,
+      );
+      const edgeUser2 = state.edges.find(
+        (e) =>
+          e.source === resUser?.dbRefNodeId &&
+          e.target === serviceNodeId &&
+          e.sourceHandle === "func-out-createUser" &&
+          e.targetHandle === `endpoint-in-${endpointId}`,
+      );
+
+      expect(edgeUser1).toBeDefined();
+      expect(edgeUser2).toBeDefined();
     });
   });
 });
