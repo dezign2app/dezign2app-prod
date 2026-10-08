@@ -290,6 +290,15 @@ export function compileMysqlDatabase(
       content: code,
     });
 
+    const pluralVarName = toVarName(toPlural(tableName));
+    if (pluralVarName !== varName) {
+      files.push({
+        filename: `helpers/${pluralVarName}.ts`,
+        language: "typescript",
+        content: `export * from "./${varName}";\n`,
+      });
+    }
+
     allReusableFunctions.push(...fns);
 
     const uniqueTypeExports = typeExports.filter((s) => {

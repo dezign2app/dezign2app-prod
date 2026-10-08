@@ -953,6 +953,22 @@ export function compileRawSqliteDatabase(
     const { code, fns, typeExports, valueExports } = generateTableHelpers(tableNode, tables);
 
     files.push({ filename: `helpers/${varName}.ts`, language: "typescript", content: code });
+    const singularVarName = toVarName(toSingular(tableName));
+    const pluralVarName = toVarName(toPlural(tableName));
+    if (singularVarName !== varName) {
+      files.push({
+        filename: `helpers/${singularVarName}.ts`,
+        language: "typescript",
+        content: `export * from "./${varName}";\n`,
+      });
+    }
+    if (pluralVarName !== varName && pluralVarName !== singularVarName) {
+      files.push({
+        filename: `helpers/${pluralVarName}.ts`,
+        language: "typescript",
+        content: `export * from "./${varName}";\n`,
+      });
+    }
     allReusableFunctions.push(...fns);
 
     const uniqueTypeExports = (typeExports || []).filter((sym: string) => {
