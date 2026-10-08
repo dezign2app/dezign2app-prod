@@ -15,13 +15,7 @@ import { toFolderName, toVarName } from "@/lib/compiler/utils";
 import { cn } from "@workspace/ui/lib/utils";
 import { BufferedInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
+import { StepCombobox, StepComboboxOption } from "./StepCombobox";
 import { Zap, Database, Code2, Settings, Sparkles, Layers, Search, PencilLine } from "lucide-react";
 import { PipelineStepDraft, ExpectedArg, AvailableSource, StepBinding } from "./types";
 import { ensureRedisCacheConnection } from "./utils";
@@ -575,26 +569,21 @@ export const RedisOperationStepSection = ({
           <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
             <Database size={10} /> Redis Instance
           </Label>
-          <Select
+          <StepCombobox
             value={step.databaseId || "all"}
             onValueChange={handleSelectInstance}
-          >
-            <SelectTrigger className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full">
-              <SelectValue placeholder="Select Redis Instance..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">
-                ⚡ All Redis Instances (Default)
-              </SelectItem>
-              {redisInstances
+            options={[
+              { value: "all", label: "⚡ All Redis Instances (Default)" },
+              ...redisInstances
                 .filter((inst) => Boolean(inst && inst.id && inst.id.trim()))
-                .map((inst) => (
-                  <SelectItem key={inst.id} value={inst.id} className="text-xs font-mono">
-                    ⚡ {inst.data?.label || "Redis Instance"} ({inst.data?.host || "localhost"}:{inst.data?.port || 6379})
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+                .map((inst) => ({
+                  value: inst.id,
+                  label: `⚡ ${inst.data?.label || "Redis Instance"} (${inst.data?.host || "localhost"}:${inst.data?.port || 6379})`,
+                })),
+            ]}
+            placeholder="Select Redis Instance..."
+            className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full"
+          />
         </div>
 
         {/* 2. Redis Schema / Model selector */}
@@ -602,30 +591,28 @@ export const RedisOperationStepSection = ({
           <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
             <Layers size={10} /> Redis Schema / Structure
           </Label>
-          <Select
+          <StepCombobox
             value={step.tableNodeId || "__direct__"}
             onValueChange={handleSelectSchema}
-          >
-            <SelectTrigger className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full">
-              <SelectValue placeholder="Select Schema or Direct Command..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__direct__" className="text-xs font-mono text-primary font-semibold">
-                ⚡ Direct Redis Commands ({currentMode === "read" ? "get, hget, exists, etc." : "set, del, expire, etc."})
-              </SelectItem>
-              {filteredRedisSchemas
+            options={[
+              {
+                value: "__direct__",
+                label: `⚡ Direct Redis Commands (${currentMode === "read" ? "get, hget, exists, etc." : "set, del, expire, etc."})`,
+              },
+              ...filteredRedisSchemas
                 .filter((schema) => Boolean(schema && schema.id && schema.id.trim()))
                 .map((schema) => {
                   const label = schema.data?.label || schema.data?.tableRef || "Redis Cache";
                   const structure = schema.data?.redisDataStructure || "hash";
-                  return (
-                    <SelectItem key={schema.id} value={schema.id} className="text-xs font-mono">
-                      📑 {label} ({structure})
-                    </SelectItem>
-                  );
-                })}
-            </SelectContent>
-          </Select>
+                  return {
+                    value: schema.id,
+                    label: `📑 ${label} (${structure})`,
+                  };
+                }),
+            ]}
+            placeholder="Select Schema or Direct Command..."
+            className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full"
+          />
         </div>
 
         {/* 3. Operation / Function selector */}
@@ -633,43 +620,33 @@ export const RedisOperationStepSection = ({
           <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
             <Code2 size={10} /> Redis Operation ({currentMode === "read" ? "Read / Lookup" : "Write / Mutation"})
           </Label>
-          <Select
-            value={step.functionRef?.name || step.operationId || "__none__"}
+          <StepCombobox
+            value={step.functionRef?.name || step.operationId || ""}
             onValueChange={handleSelectOperation}
-          >
-            <SelectTrigger className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full">
-              <SelectValue placeholder="Choose Redis Operation..." />
-            </SelectTrigger>
-            <SelectContent>
-              {isDirectMode || !selectedSchemaNode ? (
-                filteredDirectCommands
-                  .filter((cmd) => Boolean(cmd && cmd.id && cmd.id.trim()))
-                  .map((cmd) => (
-                    <SelectItem key={cmd.id} value={cmd.id} className="text-xs font-mono">
-                      <span className="font-semibold text-foreground">{cmd.name}</span>
-                      <span className="text-[9px] text-muted-foreground ml-1.5">
-                        — {cmd.description}
-                      </span>
-                    </SelectItem>
-                  ))
-              ) : filteredSchemaOperations.length > 0 ? (
-                filteredSchemaOperations
-                  .filter((op) => Boolean(op && op.name && op.name.trim()))
-                  .map((op) => (
-                    <SelectItem key={op.id} value={op.name} className="text-xs font-mono">
-                      <span className="font-semibold text-foreground">{op.name}</span>
-                      <span className="text-[9px] text-muted-foreground ml-1.5 uppercase">
-                        ({op.kind})
-                      </span>
-                    </SelectItem>
-                  ))
-              ) : (
-                <SelectItem value="__none__" disabled className="text-xs text-muted-foreground italic">
-                  No {currentMode} operations found in schema
-                </SelectItem>
-              )}
-            </SelectContent>
-          </Select>
+            options={
+              isDirectMode || !selectedSchemaNode
+                ? filteredDirectCommands
+                    .filter((cmd) => Boolean(cmd && cmd.id && cmd.id.trim()))
+                    .map((cmd) => ({
+                      value: cmd.id,
+                      label: cmd.name,
+                      description: cmd.description,
+                    }))
+                : filteredSchemaOperations
+                    .filter((op) => Boolean(op && op.name && op.name.trim()))
+                    .map((op) => ({
+                      value: op.name,
+                      label: op.name,
+                      badge: (
+                        <span className="text-[9px] text-muted-foreground uppercase font-sans">
+                          ({op.kind})
+                        </span>
+                      ),
+                    }))
+            }
+            placeholder="Choose Redis Operation..."
+            className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full"
+          />
         </div>
       </div>
 

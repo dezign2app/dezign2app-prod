@@ -5,13 +5,7 @@ import { BackendNode, BackendEdge, Endpoint } from "@workspace/canvas/types";
 import { toFolderName, toPascalCase, toVarName } from "@/lib/compiler/utils";
 import { BufferedInput } from "./BufferedInput";
 import { Label } from "@workspace/ui/components/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
+import { StepCombobox, StepComboboxOption } from "./StepCombobox";
 import { Cloud, Globe, Code2, Settings, Sparkles, ExternalLink, AlertCircle } from "lucide-react";
 import { PipelineStepDraft, ExpectedArg, StepBinding } from "./types";
 
@@ -228,29 +222,18 @@ export const ServiceCallStepSection = ({
           <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
             <Globe size={10} /> Target Microservice
           </Label>
-          <Select
-            value={selectedServiceNode?.id || availableServices[0]?.id || "__none__"}
+          <StepCombobox
+            value={selectedServiceNode?.id || availableServices[0]?.id || ""}
             onValueChange={handleSelectService}
-          >
-            <SelectTrigger className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full">
-              <SelectValue placeholder="Select Target Microservice..." />
-            </SelectTrigger>
-            <SelectContent>
-              {availableServices.length === 0 ? (
-                <SelectItem value="__none__" className="text-xs text-muted-foreground">
-                  No other microservices available
-                </SelectItem>
-              ) : (
-                availableServices
-                  .filter((svc) => Boolean(svc && svc.id && svc.id.trim()))
-                  .map((svc) => (
-                    <SelectItem key={svc.id} value={svc.id} className="text-xs font-mono">
-                      ☁️ {svc.data?.label || "Service"} ({svc.data?.techStack || "node"})
-                    </SelectItem>
-                  ))
-              )}
-            </SelectContent>
-          </Select>
+            options={availableServices
+              .filter((svc) => Boolean(svc && svc.id && svc.id.trim()))
+              .map((svc) => ({
+                value: svc.id,
+                label: `☁️ ${svc.data?.label || "Service"} (${svc.data?.techStack || "node"})`,
+              }))}
+            placeholder="Select Target Microservice..."
+            className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full"
+          />
         </div>
 
         {/* 2. Target Endpoint selector */}
@@ -258,53 +241,25 @@ export const ServiceCallStepSection = ({
           <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
             <ExternalLink size={10} /> Target Endpoint
           </Label>
-          <Select
-            value={selectedEndpoint?.id || "__none__"}
+          <StepCombobox
+            value={selectedEndpoint?.id || ""}
             onValueChange={handleSelectEndpoint}
+            options={serviceEndpoints
+              .filter((ep) => Boolean(ep && ep.id && ep.id.trim()))
+              .map((ep) => ({
+                value: ep.id,
+                label: `${ep.type || "GET"} ${ep.name || "/"}`,
+              }))}
+            placeholder={
+              !selectedServiceNode
+                ? "Select service first"
+                : serviceEndpoints.length === 0
+                ? "No endpoints in service"
+                : "Select endpoint..."
+            }
             disabled={!selectedServiceNode || serviceEndpoints.length === 0}
-          >
-            <SelectTrigger className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full">
-              <SelectValue
-                placeholder={
-                  !selectedServiceNode
-                    ? "Select service first"
-                    : serviceEndpoints.length === 0
-                    ? "No endpoints in service"
-                    : "Select endpoint..."
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {serviceEndpoints.length === 0 ? (
-                <SelectItem value="__none__" className="text-xs text-muted-foreground">
-                  No endpoints configured on this service
-                </SelectItem>
-              ) : (
-                serviceEndpoints
-                  .filter((ep) => Boolean(ep && ep.id && ep.id.trim()))
-                  .map((ep) => {
-                    const methodColor =
-                      ep.type === "GET"
-                        ? "text-blue-400 bg-blue-500/10"
-                        : ep.type === "POST"
-                        ? "text-green-400 bg-green-500/10"
-                        : ep.type === "PUT"
-                        ? "text-amber-400 bg-amber-500/10"
-                        : ep.type === "DELETE"
-                        ? "text-red-400 bg-red-500/10"
-                        : "text-purple-400 bg-purple-500/10";
-                    return (
-                      <SelectItem key={ep.id} value={ep.id} className="text-xs font-mono">
-                        <span className={`px-1 py-0.2 rounded text-[9px] font-bold mr-1.5 ${methodColor}`}>
-                          {ep.type || "GET"}
-                        </span>
-                        <span>{ep.name || "/"}</span>
-                      </SelectItem>
-                    );
-                  })
-              )}
-            </SelectContent>
-          </Select>
+            className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full"
+          />
         </div>
 
         {/* 3. Client Function selector */}
@@ -312,27 +267,20 @@ export const ServiceCallStepSection = ({
           <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
             <Code2 size={10} /> Client Invocation Helper
           </Label>
-          <Select
-            value={selectedClientOption?.id || selectedClientOption?.name || "__none__"}
+          <StepCombobox
+            value={selectedClientOption?.id || selectedClientOption?.name || ""}
             onValueChange={handleSelectFunction}
+            options={clientOptions
+              .filter((opt) => Boolean(opt && opt.id && opt.id.trim()))
+              .map((opt) => ({
+                value: opt.id,
+                label: opt.name,
+                description: opt.description,
+              }))}
+            placeholder="Choose Client Function..."
             disabled={clientOptions.length === 0}
-          >
-            <SelectTrigger className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full">
-              <SelectValue placeholder="Choose Client Function..." />
-            </SelectTrigger>
-            <SelectContent>
-              {clientOptions
-                .filter((opt) => Boolean(opt && opt.id && opt.id.trim()))
-                .map((opt) => (
-                  <SelectItem key={opt.id} value={opt.id} className="text-xs font-mono">
-                    <span className="font-semibold text-cyan-300">{opt.name}</span>
-                    <span className="text-[9px] text-muted-foreground ml-1.5">
-                      — {opt.description}
-                    </span>
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+            className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full"
+          />
         </div>
       </div>
 
