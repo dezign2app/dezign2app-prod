@@ -438,6 +438,42 @@ export function resolveServiceRealtimeCapabilities(
   return { hasSse, hasWs };
 }
 
+export function parseRateLimit(rateLimitStr?: string): { max: number; windowMs: number; desc: string } | null {
+  if (!rateLimitStr || typeof rateLimitStr !== "string") return null;
+  const trimmed = rateLimitStr.trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(/^(\d+)(?:\/(\d+)?([smhd]))?$/i);
+  if (!match) {
+    const num = parseInt(trimmed, 10);
+    if (!isNaN(num) && num > 0) {
+      return { max: num, windowMs: 60 * 1000, desc: "1 minute" };
+    }
+    return null;
+  }
+
+  const max = parseInt(match[1]!, 10);
+  const multiplier = match[2] ? parseInt(match[2], 10) : 1;
+  const unit = (match[3] || "m").toLowerCase();
+
+  let unitMs = 60 * 1000;
+  let unitName = "minute";
+  if (unit === "s") {
+    unitMs = 1000;
+    unitName = "second";
+  } else if (unit === "h") {
+    unitMs = 60 * 60 * 1000;
+    unitName = "hour";
+  } else if (unit === "d") {
+    unitMs = 24 * 60 * 60 * 1000;
+    unitName = "day";
+  }
+
+  const windowMs = multiplier * unitMs;
+  const desc = multiplier === 1 ? `1 ${unitName}` : `${multiplier} ${unitName}s`;
+  return { max, windowMs, desc };
+}
+
 export function generateServerFile(
   serviceName: string,
   port: string,
@@ -453,8 +489,16 @@ export function generateServerFile(
   })[] = [],
 ): CompiledFile {
   const grpcEnabled = node ? isGrpcEnabledForService(node, allNodes, allEdges) : false;
-  const grpcPort = node?.data?.grpcPort || "50051";
+  const grpcPort = node?.data?.grpcPort || (node?.data as any)?.server?.grpcPort || "50051";
   const { hasSse, hasWs } = resolveServiceRealtimeCapabilities(node, endpoints, events, allNodes, allEdges);
+
+  const parsedRateLimit = parseRateLimit(
+    node?.data?.rateLimit ||
+    (node?.data as any)?.server?.rateLimit ||
+    (node?.data as any)?.serverConfig?.rateLimit,
+  );
+  const rateLimitImportLine = parsedRateLimit ? `import rateLimit from "express-rate-limit";\n` : "";
+  const corsImportLine = cors ? `import cors from "cors";\n` : "";
 
   const libImports: string[] = [];
   if (hasSse) libImports.push("handleSseConnection");
@@ -464,8 +508,7 @@ export function generateServerFile(
 
   let serverCode = `import "dotenv/config";
 ${httpImportLine}import express, { Request, Response, NextFunction } from "express";
-import cors from "cors";
-import { createLogger } from "@workspace/logger";
+${corsImportLine}${rateLimitImportLine}import { createLogger } from "@workspace/logger";
 import { router as apiRouter } from "./routes";
 import { initConsumers } from "./consumer";
 ${libImportLine}
@@ -475,7 +518,7 @@ const PORT = process.env.PORT || ${port};
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(
+${cors ? `app.use(
   cors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       if (!origin) return callback(null, true);
@@ -485,8 +528,14 @@ app.use(
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "*"],
   })
-);
-// --- Request Logger ---
+);\n` : ""}${parsedRateLimit ? `// --- Rate Limiting ---
+const limiter = rateLimit({
+  windowMs: ${parsedRateLimit.windowMs}, // ${parsedRateLimit.desc}
+  max: ${parsedRateLimit.max}, // limit each IP to ${parsedRateLimit.max} requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(limiter);\n` : ""}// --- Request Logger ---
 app.use((req: Request, _res: Response, next: NextFunction) => {
   logger.info(\`\${req.method} \${req.url}\`);
   next();
@@ -762,6 +811,15 @@ export function generateConfigFiles(
     jose: "^5.9.6",
     ...(hasWs ? { ws: "^8.18.0" } : {}),
   };
+
+  const parsedRateLimit = parseRateLimit(
+    node.data?.rateLimit ||
+    (node.data as any)?.server?.rateLimit ||
+    (node.data as any)?.serverConfig?.rateLimit,
+  );
+  if (parsedRateLimit) {
+    dependencies["express-rate-limit"] = "^7.5.0";
+  }
 
   if (grpcEnabled) {
     dependencies["@grpc/grpc-js"] = "^1.11.1";

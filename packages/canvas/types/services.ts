@@ -101,6 +101,15 @@ export interface ConsumedEventItem {
   variant?: "consume" | "publish";
 }
 
+export interface CanvasServiceServerConfig {
+  port?: string | number;
+  grpcPort?: string | number;
+  cors?: boolean;
+  corsOrigins?: string;
+  rateLimit?: string;
+  interServiceProtocol?: InterServiceProtocol | string;
+}
+
 export interface CanvasServiceNodeData {
   baseUrl?: string;
   cors?: boolean;
@@ -110,6 +119,8 @@ export interface CanvasServiceNodeData {
   port?: string | number;
   grpcPort?: string;
   interServiceProtocol?: InterServiceProtocol;
+  server?: CanvasServiceServerConfig;
+  serverConfig?: CanvasServiceServerConfig;
   endpoints?: Endpoint[];
   enableWebSocket?: boolean;
   enableSse?: boolean;
