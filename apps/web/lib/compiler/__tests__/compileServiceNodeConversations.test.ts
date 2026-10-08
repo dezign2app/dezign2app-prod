@@ -8,6 +8,7 @@ import { compilePostgresDatabase } from "../databases/postgres";
 import { compileMysqlDatabase } from "../databases/mysql";
 import { compileRawSqliteDatabase } from "../databases/sqlite/raw";
 import { cleanupDeletedNodesState, cleanupDeletedEdgesState } from "@/lib/stores/backendCanvas/stateCleanup";
+import { compileExpressV4Service } from "../services/express/v4";
 
 describe("compileServiceNode - Conversations route & typing audit", () => {
   it("compiles create-conversation endpoint with exact entity typing, no 'as any', no 'unknown', and guarded body", () => {
@@ -501,6 +502,50 @@ export async function handler(req: any, res: any) {
     expect(epAfterEdgeDelete?.databaseNodeIds).toEqual([]);
     expect(epAfterEdgeDelete?.pipelineSteps).toHaveLength(1);
     expect(epAfterEdgeDelete?.pipelineSteps?.[0]?.type).toBe("custom_code");
+  });
+
+  it("cleanUnusedImports preserves side-effect imports like dotenv/config and keeps default express import", () => {
+    const rawIndex = `import "dotenv/config";
+import express, { Request, Response, NextFunction } from "express";
+import cors from "cors";
+
+const app = express();
+app.use(express.json());
+`;
+    const cleaned = cleanUnusedImports(rawIndex);
+    expect(cleaned).toContain('import "dotenv/config";');
+    expect(cleaned).toContain("import express");
+    expect(cleaned).toContain("from \"express\"");
+  });
+
+  it("compileExpressV4Service and compileServiceNode always produce src/index.ts with express and dotenv/config imports", () => {
+    const srvNode: BackendNode = {
+      id: "srv-conversation",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "conversation",
+        techStack: "express",
+        port: "8080",
+      },
+    };
+
+    // Test compileExpressV4Service directly
+    const expressResult = compileExpressV4Service(srvNode);
+    const expressIndex = expressResult.files.find((f) => f.filename === "src/index.ts");
+    expect(expressIndex).toBeDefined();
+    expect(expressIndex!.content).toContain("import express");
+    expect(expressIndex!.content).toContain('import "dotenv/config";');
+    expect(expressIndex!.content).toContain("const app = express();");
+
+    // Test compileServiceNode wrapper
+    const compiledResult = compileServiceNode(srvNode);
+    const compiledIndex = compiledResult.files.find((f) => f.filename === "src/index.ts");
+    expect(compiledIndex).toBeDefined();
+    expect(compiledIndex!.content).toContain("import express");
+    expect(compiledIndex!.content).toContain('import "dotenv/config";');
+    expect(compiledIndex!.content).toContain("const app = express();");
   });
 });
 
