@@ -486,6 +486,7 @@ const StepRowComponent = ({
                       allNodes={allNodes}
                       allEdges={allEdges}
                       expectedArgs={expectedArgs}
+                      availableSources={availableSources}
                       selectedDbId={selectedDbId}
                       showAdvancedSettings={showAdvancedSettings}
                       onToggleAdvancedSettings={() => setShowAdvancedSettings((v) => !v)}

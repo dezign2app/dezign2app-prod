@@ -8,7 +8,7 @@ import { PipelineStep, PipelineStepInputBinding } from "@workspace/canvas/types"
 import { toVarName } from "../../../../utils";
 import { PipelineRenderContext, PipelineStepOutputMeta } from "../types";
 import { buildArgList, resolveBinding } from "../sourceResolver";
-import { sortRedisBindings } from "./compileRedisBindingSorter";
+import { sortRedisBindings, extractSigParamNames } from "./compileRedisBindingSorter";
 function sortStorageBindings(
   bindings: PipelineStepInputBinding[],
   fnName?: string,
@@ -281,6 +281,14 @@ export function renderAsyncOperationStep(
       step.operationId === "findById" ||
       step.operationId === "deleteById";
 
+    const sigParams = extractSigParamNames(functionRef.signature);
+    const isDestructuredOrObject = Boolean(
+      functionRef.signature &&
+        (functionRef.signature.includes("({") ||
+          functionRef.signature.includes("(data:") ||
+          functionRef.signature.includes("(payload:")),
+    );
+
     const firstBinding = inputBindings[0];
     if (
       isById &&
@@ -291,6 +299,32 @@ export function renderAsyncOperationStep(
         /^\d+$/.test(firstBinding.argName))
     ) {
       args = resolveBinding(firstBinding, ctx);
+    } else if (!isDestructuredOrObject && sigParams.length > 0) {
+      // Positional parameter call (e.g. findAllConversationsByUser(createdBy, limit, offset))
+      const resolvedList: string[] = [];
+      for (const param of sigParams) {
+        const bound = inputBindings.find(
+          (b) => b.argName.replace(/\?$/, "").toLowerCase() === param.toLowerCase(),
+        );
+        const isBoundConfigured =
+          bound &&
+          (bound.source.kind === "inline"
+            ? bound.source.value !== undefined && bound.source.value !== ""
+            : Boolean(bound.source.field && bound.source.field.trim()));
+
+        if (bound && isBoundConfigured) {
+          resolvedList.push(resolveBinding(bound, ctx));
+        } else {
+          resolvedList.push("undefined");
+        }
+      }
+      while (
+        resolvedList.length > 0 &&
+        resolvedList[resolvedList.length - 1] === "undefined"
+      ) {
+        resolvedList.pop();
+      }
+      args = resolvedList.join(", ");
     } else {
       args = buildArgList(inputBindings, ctx);
     }

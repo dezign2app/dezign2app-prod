@@ -232,14 +232,21 @@ function isDbOperationStepUnconfigured(
   const op = (step.operationId || step.functionRef?.name || "").toLowerCase();
   if (!op) return true;
 
-  // Any binding that is present must be properly configured (non-empty source/field)
-  if (bindings.some((b) => !isBindingSourceConfigured(b))) {
-    return true;
+  // 1. Pure findAll operations (without index/by) have no required input arguments
+  if (op.includes("findall") && !op.includes("by")) {
+    return false;
   }
 
-  // 1. findAll operations have no required input arguments
-  if (op.includes("findall")) {
-    return false;
+  // Any non-optional binding that is present must be properly configured (non-empty source/field)
+  if (
+    bindings.some((b) => {
+      const isOptionalPagination =
+        b.argName?.toLowerCase() === "limit" || b.argName?.toLowerCase() === "offset";
+      if (isOptionalPagination) return false;
+      return !isBindingSourceConfigured(b);
+    })
+  ) {
+    return true;
   }
 
   // 2. create / insert: requires not-null columns (or writable cols if none)

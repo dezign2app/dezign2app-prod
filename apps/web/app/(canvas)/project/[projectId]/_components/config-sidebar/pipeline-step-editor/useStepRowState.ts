@@ -16,7 +16,10 @@ import {
 } from "./utils";
 import { toVarName, toPascalCase, parseSchemaJson } from "@/lib/compiler/utils";
 import { isStepInputUnconfigured } from "@/lib/utils/pipelineValidation";
-import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
+import {
+  getEntityDbOperations,
+  getDbOperationExpectedArgs,
+} from "@/lib/utils/entityOperationsHelper";
 import {
   getStorageOperations,
   getStorageOperationExpectedArgs,
@@ -216,54 +219,15 @@ export function useStepRowState({
       }
 
       if (step.type === "db_operation" && selectedTableNode) {
-        const columns = selectedTableNode.data?.columns || [];
-        const pkCol = columns.find((c) => c.isPrimaryKey) || columns[0];
-        const pkName = pkCol?.name || "id";
-        const pkType = pkCol?.type || "string";
-        const writableCols = columns.filter((c) => !c.isPrimaryKey && c.name && c.name.trim());
-
-        const opName = (step.functionRef?.name || step.operationId || "").toLowerCase();
-        if (opName.includes("findall")) {
-          return [];
-        }
-        if (opName.includes("create") || opName.includes("insert")) {
-          return writableCols.map((c) => ({
-            name: toVarName(c.name),
-            type: c.type || "string",
-            required: c.isNotNull,
-          }));
-        }
-        if (opName.includes("update")) {
-          return [
-            { name: toVarName(pkName), type: pkType, required: true },
-            ...writableCols.map((c) => ({
-              name: toVarName(c.name),
-              type: c.type || "string",
-              required: false,
-            })),
-          ];
-        }
-        if (opName.includes("byid") || opName.includes("findone") || opName.includes("delete")) {
-          return [{ name: toVarName(pkName), type: pkType, required: true }];
-        }
-
         const ops = getEntityDbOperations(selectedTableNode, allNodes);
+        const opName = (step.functionRef?.name || step.operationId || "").toLowerCase();
         const matchedOp = ops.find(
           (o) =>
-            o.id === step.operationId ||
-            o.name?.toLowerCase() === opName ||
-            (step.functionRef?.name && o.name === step.functionRef.name),
+            (step.operationId && (o.id === step.operationId || o.name?.toLowerCase() === step.operationId.toLowerCase())) ||
+            (step.functionRef?.name && (o.name === step.functionRef.name || o.name?.toLowerCase() === step.functionRef.name.toLowerCase())) ||
+            (o.name && o.name.toLowerCase() === opName),
         );
-        if (matchedOp && matchedOp.params && matchedOp.kind !== "findAll") {
-          return matchedOp.params
-            .filter((p) => p && p.name && p.name.trim())
-            .map((p) => ({
-              name: p.name.trim(),
-              type: p.type || "string",
-              required: p.required !== false,
-            }));
-        }
-        return [];
+        return getDbOperationExpectedArgs(matchedOp, selectedTableNode, step.functionRef);
       }
 
       if (step.type === "redis_operation") {

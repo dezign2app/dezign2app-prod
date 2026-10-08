@@ -13,7 +13,7 @@ export function extractSigParamNames(signature?: string): string[] {
   if (!paramList || !paramList.trim()) return [];
   return paramList
     .split(",")
-    .map((p) => (p.trim().split(/[:=]/)[0] ?? "").replace(/^\.\.\./, "").trim())
+    .map((p) => (p.trim().split(/[:=]/)[0] ?? "").replace(/^\.\.\./, "").replace(/\?$/, "").trim())
     .filter(Boolean);
 }
 
