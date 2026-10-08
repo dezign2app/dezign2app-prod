@@ -5,6 +5,36 @@ import { log } from "../logger";
 
 let isInitialized = false;
 
+export interface UpdaterState {
+  status:
+    | "idle"
+    | "checking"
+    | "available"
+    | "downloading"
+    | "downloaded"
+    | "not-available"
+    | "error";
+  version?: string;
+  percent?: number;
+  error?: string;
+}
+
+let lastUpdaterState: UpdaterState = { status: "idle" };
+
+/**
+ * Returns the latest recorded auto-updater state.
+ */
+export function getUpdaterState(): UpdaterState {
+  return lastUpdaterState;
+}
+
+/**
+ * Allows manual or test simulation of updater status (useful in local dev).
+ */
+export function simulateUpdaterStatus(mock: Partial<UpdaterState>): void {
+  sendUpdaterStatus(mock.status || "downloading", mock);
+}
+
 /**
  * Initializes the background auto-updater service.
  * Connects to GitHub Releases (via electron-builder configuration in package.json).
@@ -46,33 +76,12 @@ export function initAutoUpdater(): void {
   autoUpdater.on("download-progress", (progress) => {
     const percent = Math.round(progress.percent);
     log(`[updater] Downloading update: ${percent}%`);
-    sendUpdaterStatus("downloading", { percent });
+    sendUpdaterStatus("downloading", { percent, version: lastUpdaterState.version });
   });
 
   autoUpdater.on("update-downloaded", async (info) => {
     log(`[updater] Update v${info.version} downloaded successfully!`);
-    sendUpdaterStatus("downloaded", { version: info.version });
-
-    const mainWindow = getMainWindow();
-    const messageBoxOptions = {
-      type: "info" as const,
-      title: "Update Ready",
-      message: `A new version of D2A (v${info.version}) has been downloaded.`,
-      detail: "Would you like to restart now to complete the update, or install it next time you close the app?",
-      buttons: ["Restart & Install", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-    };
-    const response = mainWindow
-      ? await dialog.showMessageBox(mainWindow, messageBoxOptions)
-      : await dialog.showMessageBox(messageBoxOptions);
-
-    if (response.response === 0) {
-      // User clicked "Restart & Install"
-      setImmediate(() => {
-        autoUpdater.quitAndInstall(false, true);
-      });
-    }
+    sendUpdaterStatus("downloaded", { version: info.version, percent: 100 });
   });
 
   // Initial check after a short 10-second startup delay to keep app launch instant
@@ -116,9 +125,24 @@ export function quitAndInstall(): void {
 /**
  * Sends update status events to the renderer window if active.
  */
-function sendUpdaterStatus(status: string, payload?: Record<string, unknown>): void {
+export function sendUpdaterStatus(
+  status: UpdaterState["status"],
+  payload?: Partial<UpdaterState>
+): void {
+  lastUpdaterState = {
+    status,
+    version: payload?.version ?? lastUpdaterState.version,
+    percent:
+      payload?.percent !== undefined
+        ? payload.percent
+        : status === "downloaded"
+          ? 100
+          : lastUpdaterState.percent,
+    error: payload?.error,
+  };
+
   const mainWindow = getMainWindow();
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("updater:status", { status, ...payload });
+    mainWindow.webContents.send("updater:status", lastUpdaterState);
   }
 }

@@ -9,6 +9,20 @@ export interface ElectronCompiledFile {
   content: string;
 }
 
+export interface ElectronUpdaterState {
+  status:
+    | "idle"
+    | "checking"
+    | "available"
+    | "downloading"
+    | "downloaded"
+    | "not-available"
+    | "error";
+  version?: string;
+  percent?: number;
+  error?: string;
+}
+
 export interface ElectronAPI {
   isElectron: true;
   platform(): Promise<NodeJS.Platform>;
@@ -104,6 +118,14 @@ export interface ElectronAPI {
   workspace?: {
     setPath?(path: string): void;
     getPath?(): Promise<string | null>;
+  };
+
+  updater?: {
+    getStatus(): Promise<ElectronUpdaterState>;
+    checkForUpdates(): Promise<{ success: boolean; message?: string }>;
+    quitAndInstall(): Promise<void>;
+    onStatus(cb: (state: ElectronUpdaterState) => void): () => void;
+    simulateStatus?(mockState: Partial<ElectronUpdaterState>): Promise<{ success: boolean }>;
   };
 }
 

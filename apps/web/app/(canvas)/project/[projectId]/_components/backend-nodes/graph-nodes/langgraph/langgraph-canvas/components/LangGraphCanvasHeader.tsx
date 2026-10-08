@@ -12,6 +12,7 @@ import {
 import { Button } from "@workspace/ui/components/button";
 
 import { LocalInput } from "../../../common";
+import { AppUpdateToolbarButton } from "@/app/(canvas)/project/[projectId]/_components/AppUpdateIndicator";
 
 interface LangGraphCanvasHeaderProps {
   label?: string;
@@ -84,6 +85,7 @@ export function LangGraphCanvasHeader({
       </div>
 
       <div className="flex items-center gap-3">
+        <AppUpdateToolbarButton />
         {onToggleTerminal && (
           <Button
             variant={terminalOpen ? "secondary" : "outline"}
