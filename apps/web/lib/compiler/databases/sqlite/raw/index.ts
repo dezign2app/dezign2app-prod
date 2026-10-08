@@ -1191,6 +1191,9 @@ try {
           typescript: "^5.3.3",
           vitest: "^1.6.0",
         },
+        pnpm: {
+          onlyBuiltDependencies: ["better-sqlite3"],
+        },
       },
       null,
       2,

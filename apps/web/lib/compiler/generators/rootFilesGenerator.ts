@@ -22,7 +22,7 @@ export function generateRootFiles(projectName: string): CompiledFile[] {
         "docker:up": "docker compose up -d",
         "docker:down": "docker compose down",
         "docker:logs": "docker compose logs -f",
-        postinstall: 'node -e "try { const p = require(\'path\').dirname(require.resolve(\'better-sqlite3/package.json\', { paths: [\'./packages/db\'] })); require(\'child_process\').execSync(\'npx prebuild-install\', { cwd: p, stdio: \'inherit\' }); } catch (e) {}"',
+        postinstall: 'node -e "try { const fs = require(\'fs\'); const path = require(\'path\'); const cp = require(\'child_process\'); const findDir = (t) => { const candidates = [\'packages/db\', \'packages/db/primary-db\', \'packages/db/primary-sqlite-db\']; for (const c of candidates) { try { return path.dirname(require.resolve(t, { paths: [path.resolve(c)] })); } catch {} } try { return path.dirname(require.resolve(t)); } catch {} const pnpmDir = path.resolve(\'node_modules/.pnpm\'); if (fs.existsSync(pnpmDir)) { const m = fs.readdirSync(pnpmDir).find(d => d.startsWith(\'better-sqlite3@\')); if (m) { const loc = path.join(pnpmDir, m, \'node_modules\', \'better-sqlite3\'); if (fs.existsSync(loc)) return loc; } } return null; }; const loc = findDir(\'better-sqlite3/package.json\'); if (loc) { cp.execSync(\'npx prebuild-install\', { cwd: loc, stdio: \'inherit\' }); } } catch (e) {}"',
       },
       devDependencies: {
         "@workspace/typescript-config": "workspace:*",
@@ -30,6 +30,13 @@ export function generateRootFiles(projectName: string): CompiledFile[] {
         turbo: "^2.6.3",
         typescript: "5.7.3",
         vitest: "^1.6.0",
+      },
+      pnpm: {
+        onlyBuiltDependencies: [
+          "better-sqlite3",
+          "esbuild",
+          "@prisma/client",
+        ],
       },
       packageManager: "pnpm@10.4.1",
       engines: {
