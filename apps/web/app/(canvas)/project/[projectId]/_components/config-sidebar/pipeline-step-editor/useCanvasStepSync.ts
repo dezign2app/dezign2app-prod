@@ -645,6 +645,8 @@ export function useCanvasStepSync({
 
     dbSteps.forEach((s) => {
       ensureDatabaseRefConnection({
+        stepId: s.id,
+        dbRefNodeId: s.dbRefNodeId,
         tableNodeId: s.tableNodeId,
         databaseId: s.databaseId,
         serviceNodeId,

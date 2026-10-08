@@ -199,6 +199,15 @@ export function cleanupDeletedNodesState(
     }
   });
 
+  // Track deleted db_ref nodes for pipeline step cleanup (1:1 step-to-node link)
+  const deletedDbRefNodes = currentState.nodes.filter(
+    (n) => n && n.type === "db_ref" && allIdsSet.has(n.id),
+  );
+  const deletedDbRefIds = new Set(deletedDbRefNodes.map((n) => n.id));
+  const deletedDbRefStepIds = new Set(
+    deletedDbRefNodes.map((n) => n.data?.stepId).filter(Boolean),
+  );
+
   // 2. Events to remove (publishers & consumers)
   const eventsToDelete = currentState.events.filter((ev) =>
     allIdsSet.has(ev.nodeId),
@@ -270,7 +279,7 @@ export function cleanupDeletedNodesState(
         }
       }
       if (
-        allIdsSet.size > 0 &&
+        (allIdsSet.size > 0 || deletedDbRefIds.size > 0 || deletedDbRefStepIds.size > 0) &&
         updatedEv.pipelineSteps &&
         updatedEv.pipelineSteps.length > 0
       ) {
@@ -279,7 +288,9 @@ export function cleanupDeletedNodesState(
             !(
               s.type === "db_operation" &&
               ((s.tableNodeId && allIdsSet.has(s.tableNodeId)) ||
-                (s.databaseId && allIdsSet.has(s.databaseId)))
+                (s.databaseId && allIdsSet.has(s.databaseId)) ||
+                (s.dbRefNodeId && (allIdsSet.has(s.dbRefNodeId) || deletedDbRefIds.has(s.dbRefNodeId))) ||
+                (s.id && deletedDbRefStepIds.has(s.id)))
             ),
         );
         if (filteredSteps.length !== updatedEv.pipelineSteps.length) {
@@ -366,7 +377,7 @@ export function cleanupDeletedNodesState(
       }
 
       if (
-        allIdsSet.size > 0 &&
+        (allIdsSet.size > 0 || deletedDbRefIds.size > 0 || deletedDbRefStepIds.size > 0) &&
         newPipelineSteps &&
         newPipelineSteps.length > 0
       ) {
@@ -375,7 +386,9 @@ export function cleanupDeletedNodesState(
             !(
               s.type === "db_operation" &&
               ((s.tableNodeId && allIdsSet.has(s.tableNodeId)) ||
-                (s.databaseId && allIdsSet.has(s.databaseId)))
+                (s.databaseId && allIdsSet.has(s.databaseId)) ||
+                (s.dbRefNodeId && (allIdsSet.has(s.dbRefNodeId) || deletedDbRefIds.has(s.dbRefNodeId))) ||
+                (s.id && deletedDbRefStepIds.has(s.id)))
             ),
         );
         if (filteredSteps.length !== newPipelineSteps.length) {

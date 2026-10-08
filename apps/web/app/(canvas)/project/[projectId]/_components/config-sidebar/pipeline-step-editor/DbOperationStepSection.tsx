@@ -68,13 +68,27 @@ export const DbOperationStepSection = ({
 
   const allEntityNodes = useMemo(
     () =>
-      allNodes.filter(
-        (n) =>
+      allNodes.filter((n) => {
+        if (
           n.type === "entity" ||
           n.type === "redis_schema" ||
-          n.type === "redis-cache" ||
-          n.type === "db_ref",
-      ),
+          n.type === "redis-cache"
+        ) {
+          return true;
+        }
+        if (n.type === "db_ref") {
+          // Only show standalone db_ref if there is no master entity node for it
+          const hasMasterEntity = Boolean(
+            n.data?.tableRef &&
+              allNodes.some(
+                (other) =>
+                  other.id === n.data.tableRef && other.type === "entity",
+              ),
+          );
+          return !hasMasterEntity;
+        }
+        return false;
+      }),
     [allNodes],
   );
 
@@ -91,12 +105,12 @@ export const DbOperationStepSection = ({
   }, [allEntityNodes, selectedDbId, allEdges]);
 
   const selectedTableNode = useMemo(() => {
-    const found = allEntityNodes.find((n) => n.id === step.tableNodeId);
+    const found = allNodes.find((n) => n.id === step.tableNodeId);
     if (found?.type === "db_ref" && found.data?.tableRef) {
       return allNodes.find((n) => n.id === found.data!.tableRef) || found;
     }
     return found;
-  }, [allEntityNodes, allNodes, step.tableNodeId]);
+  }, [allNodes, step.tableNodeId]);
 
   const availableDbOperations: DbOperationFunction[] = useMemo(() => {
     if (!selectedTableNode) return [];
@@ -171,7 +185,7 @@ export const DbOperationStepSection = ({
 
   const handleSelectTable = (tableId: string) => {
     const cleanTableId = tableId === "__none__" ? undefined : tableId;
-    let targetNode = allEntityNodes.find((n) => n.id === cleanTableId);
+    let targetNode = allNodes.find((n) => n.id === cleanTableId) || allEntityNodes.find((n) => n.id === cleanTableId);
     if (targetNode?.type === "db_ref" && targetNode.data?.tableRef) {
       targetNode = allNodes.find((n) => n.id === targetNode!.data!.tableRef) || targetNode;
     }
@@ -245,7 +259,7 @@ export const DbOperationStepSection = ({
 
     onChange({
       ...step,
-      tableNodeId: cleanTableId,
+      tableNodeId: targetNode.id,
       operationId: defaultOp?.id,
       functionRef: defaultOp
         ? {
@@ -384,7 +398,7 @@ export const DbOperationStepSection = ({
             <TableIcon size={10} /> Table / Entity
           </Label>
           <Select
-            value={step.tableNodeId || "__none__"}
+            value={selectedTableNode?.id || step.tableNodeId || "__none__"}
             onValueChange={handleSelectTable}
           >
             <SelectTrigger className="h-7 text-xs bg-background/70 border-border/60 font-mono w-full">

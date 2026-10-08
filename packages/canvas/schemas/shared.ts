@@ -299,6 +299,8 @@ export interface PipelineStep {
   databaseId?: string;
   /** For DB/Redis operation steps: ID of the selected table/entity node */
   tableNodeId?: string;
+  /** For DB operation steps: ID of the dedicated table_ref (db_ref) canvas node linked to this step */
+  dbRefNodeId?: string;
   /** For external_call steps: ID of the selected external node */
   externalNodeId?: string;
   /** For external_call steps: ID of the selected external endpoint */
@@ -463,6 +465,7 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     responseMode: z.string().optional(),
     databaseId: z.string().optional(),
     tableNodeId: z.string().optional(),
+    dbRefNodeId: z.string().optional(),
     externalNodeId: z.string().optional(),
     externalEndpointId: z.string().optional(),
     operationId: z.string().optional(),

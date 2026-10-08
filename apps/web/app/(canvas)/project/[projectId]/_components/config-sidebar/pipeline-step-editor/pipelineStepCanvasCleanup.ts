@@ -9,6 +9,7 @@ import {
   ensureRedisCacheConnection,
   cleanupDatabaseRefConnection,
   ensureDatabaseRefConnection,
+  updateDatabaseRefConnection,
   cleanupPageRefConnection,
   ensurePageRefConnection,
   cleanupStorageOperationRefConnection,
@@ -83,6 +84,8 @@ export function handleStepUpdateCanvasEffects({
   if (prevStep.type === "db_operation" && updatedStep.type !== "db_operation") {
     if (!isNested) {
       cleanupDatabaseRefConnection({
+        stepId: prevStep.id,
+        dbRefNodeId: prevStep.dbRefNodeId,
         tableNodeId: prevStep.tableNodeId,
         databaseId: prevStep.databaseId,
         serviceNodeId,
@@ -101,24 +104,19 @@ export function handleStepUpdateCanvasEffects({
       prevStep.operationId !== updatedStep.operationId)
   ) {
     if (!isNested) {
-      cleanupDatabaseRefConnection({
-        tableNodeId: prevStep.tableNodeId,
-        databaseId: prevStep.databaseId,
+      updateDatabaseRefConnection({
+        stepId: updatedStep.id,
+        dbRefNodeId: updatedStep.dbRefNodeId || prevStep.dbRefNodeId,
+        prevTableNodeId: prevStep.tableNodeId,
+        prevDatabaseId: prevStep.databaseId,
+        prevFunctionName: prevStep.functionRef?.name || prevStep.operationId,
+        newTableNodeId: updatedStep.tableNodeId,
+        newDatabaseId: updatedStep.databaseId,
+        newFunctionName: updatedStep.functionRef?.name || updatedStep.operationId,
         serviceNodeId,
         endpointId,
         consumedEventId,
-        functionName: prevStep.functionRef?.name || prevStep.operationId,
         remainingSteps,
-      });
-    }
-    if (updatedStep.tableNodeId || updatedStep.databaseId) {
-      ensureDatabaseRefConnection({
-        tableNodeId: updatedStep.tableNodeId,
-        databaseId: updatedStep.databaseId,
-        serviceNodeId,
-        endpointId,
-        consumedEventId,
-        functionName: updatedStep.functionRef?.name || updatedStep.operationId,
       });
     }
   }
@@ -344,6 +342,8 @@ export function handleStepDeleteCanvasEffects({
 
   if (stepToDelete.type === "db_operation") {
     cleanupDatabaseRefConnection({
+      stepId: stepToDelete.id,
+      dbRefNodeId: stepToDelete.dbRefNodeId,
       tableNodeId: stepToDelete.tableNodeId,
       databaseId: stepToDelete.databaseId,
       serviceNodeId,

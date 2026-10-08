@@ -191,6 +191,7 @@ export function createDefaultStepDraft({
     }
 
     const connectionResult = ensureDatabaseRefConnection({
+      stepId: id,
       tableNodeId: firstEntity?.id,
       databaseId: targetDbId,
       serviceNodeId,
@@ -222,6 +223,7 @@ export function createDefaultStepDraft({
     initialFields = {
       databaseId: targetDbId,
       tableNodeId: firstEntity?.id || connectionResult?.dbRefNodeId,
+      dbRefNodeId: connectionResult?.dbRefNodeId,
       operationId: defaultOp?.id,
       functionRef: defaultOp && importPath
         ? {

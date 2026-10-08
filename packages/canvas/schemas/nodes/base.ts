@@ -134,6 +134,9 @@ export const dbRefDataSchema = baseNodeDataSchema
     databaseId: z.string().optional(),
     targetServiceId: z.string().optional(),
     serviceNodeId: z.string().optional(),
+    stepId: z.string().optional(),
+    endpointId: z.string().optional(),
+    consumedEventId: z.string().optional(),
     graphPosition: z.object({ x: z.number(), y: z.number() }).optional(),
   })
   .strict();
