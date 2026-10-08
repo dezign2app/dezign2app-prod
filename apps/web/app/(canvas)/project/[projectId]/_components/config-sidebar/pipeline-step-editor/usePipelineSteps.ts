@@ -14,11 +14,14 @@ import {
   handleStepUpdateCanvasEffects,
   handleStepDeleteCanvasEffects,
 } from "./pipelineStepCanvasCleanup";
+import { isPaginationNeededByOtherSteps } from "./DbOperationStepSection";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
 export interface UsePipelineStepsProps {
   steps: PipelineStepDraft[];
   onChange: (steps: PipelineStepDraft[]) => void;
   endpoint?: Endpoint;
+  onEndpointChange?: (changes: Partial<Endpoint>) => void;
   consumedEvent?: AnyMessagingResource;
   allNodes?: BackendNode[];
   allEdges?: BackendEdge[];
@@ -30,6 +33,7 @@ export function usePipelineSteps({
   steps,
   onChange,
   endpoint,
+  onEndpointChange,
   consumedEvent,
   allNodes = [],
   allEdges = [],
@@ -155,6 +159,29 @@ export function usePipelineSteps({
       onChange(remainingSteps);
     } else {
       onChange([...remainingSteps, returnStep]);
+    }
+
+    if (endpoint && endpoint.queryParams && endpoint.queryParams.length > 0) {
+      const isNeededElsewhere = isPaginationNeededByOtherSteps(
+        stepToDelete.id,
+        remainingSteps,
+        allNodes,
+      );
+      if (!isNeededElsewhere) {
+        const nextQueryParams = endpoint.queryParams.filter((qp) => {
+          const name = (qp.name || "").trim().toLowerCase();
+          return name !== "limit" && name !== "offset";
+        });
+        if (nextQueryParams.length !== endpoint.queryParams.length) {
+          if (onEndpointChange) {
+            onEndpointChange({ queryParams: nextQueryParams });
+          } else {
+            useBackendCanvasStore.getState().updateEndpoint(endpoint.id, {
+              queryParams: nextQueryParams,
+            });
+          }
+        }
+      }
     }
   };
 

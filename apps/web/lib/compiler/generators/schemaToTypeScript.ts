@@ -5,6 +5,7 @@ export interface ParameterItem {
   type?: string;
   required?: boolean;
   description?: string;
+  defaultValue?: string;
   enumValues?: string[];
   isArray?: boolean;
 }
@@ -270,6 +271,8 @@ export function parametersToZodSchema(
     };
   }
 
+  const isQuerySchema = schemaName.toLowerCase().includes("query");
+
   const lines: string[] = [];
   for (const p of params) {
     if (!p.name) continue;
@@ -277,8 +280,35 @@ export function parametersToZodSchema(
     const key = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(p.name)
       ? p.name
       : JSON.stringify(p.name);
-    const typeRes = typeStrToTsAndZod(p.type || "string", p.enumValues);
-    const zodType = req ? typeRes.zod : `${typeRes.zod}.optional()`;
+
+    const normType = (p.type || "string").toLowerCase();
+    const isNumber = normType === "number" || normType === "int" || normType === "integer" || normType === "float" || normType === "double";
+    const isBoolean = normType === "boolean" || normType === "bool";
+
+    let baseZod: string;
+    if (isQuerySchema && isNumber) {
+      baseZod = "z.coerce.number()";
+    } else if (isQuerySchema && isBoolean) {
+      baseZod = "z.coerce.boolean()";
+    } else {
+      const typeRes = typeStrToTsAndZod(p.type || "string", p.enumValues);
+      baseZod = typeRes.zod;
+    }
+
+    let zodType: string;
+    if (p.defaultValue !== undefined && p.defaultValue !== "") {
+      let defExpr = JSON.stringify(p.defaultValue);
+      if (isNumber) {
+        const numVal = Number(p.defaultValue);
+        defExpr = isNaN(numVal) ? "0" : String(numVal);
+      } else if (isBoolean) {
+        defExpr = p.defaultValue === "true" ? "true" : "false";
+      }
+      zodType = `${baseZod}.default(${defExpr})`;
+    } else {
+      zodType = req ? baseZod : `${baseZod}.optional()`;
+    }
+
     lines.push(`  ${key}: ${zodType}`);
   }
 
@@ -294,6 +324,7 @@ export function parametersToZodSchema(
     hasContent: true,
   };
 }
+
 
 export function schemaToTsInterface(
   interfaceName: string,

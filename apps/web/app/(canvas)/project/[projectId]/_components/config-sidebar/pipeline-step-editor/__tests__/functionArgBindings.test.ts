@@ -1,11 +1,28 @@
 import { describe, it, expect, vi } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, render, screen } from "@testing-library/react";
+import React from "react";
 import { useStepRowState } from "../useStepRowState";
 import { getAvailableSources } from "../sourcePaths";
 import { PipelineStepDraft } from "../types";
-import { BackendNode } from "@workspace/canvas/types";
+import { BackendNode, Endpoint } from "@workspace/canvas/types";
 import { computeDbOpBindings } from "@/lib/utils/entityOperationsHelper";
 import { renderAsyncOperationStep } from "@/lib/compiler/generators/routeGenerator/pipeline/renderers/compileAsyncOperationStep";
+import {
+  DbOperationStepSection,
+  isDbOperationPaginated,
+  isPaginationNeededByOtherSteps,
+} from "../DbOperationStepSection";
+
+vi.mock("@workspace/ui/components/combobox", () => ({
+  Combobox: ({ children }: any) => React.createElement("div", { "data-testid": "mock-combobox" }, children),
+  ComboboxInput: (props: any) => React.createElement("input", { "data-testid": "combobox-input", ...props }),
+  ComboboxContent: ({ children }: any) => React.createElement("div", { "data-testid": "combobox-content" }, children),
+  ComboboxList: ({ children }: any) =>
+    React.createElement("div", { "data-testid": "combobox-list" }, typeof children === "function" ? children([]) : children),
+  ComboboxItem: ({ children, value }: any) =>
+    React.createElement("div", { "data-testid": "combobox-item", "data-value": value }, children),
+  ComboboxEmpty: ({ children }: any) => React.createElement("div", { "data-testid": "combobox-empty" }, children),
+}));
 
 describe("pipeline-step-editor: function argument bindings and configuration state", () => {
   const mockTableNode: BackendNode = {
@@ -582,5 +599,423 @@ describe("pipeline-step-editor: function argument bindings and configuration sta
     expect(nextBindings.some((b) => b.argName === "id")).toBe(false);
     expect(nextBindings.some((b) => b.argName === "name")).toBe(false);
   });
+
+  it("auto-syncs missing limit and offset query params to endpoint and displays the synced badge", () => {
+    const tableWithPagination: BackendNode = {
+      id: "table-users-page",
+      type: "entity",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "users",
+        tableRef: "users",
+        columns: [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "name", type: "string", isNotNull: true },
+        ],
+        dbOperations: [
+          {
+            id: "op-find-all",
+            name: "findAllUsers",
+            kind: "findAll",
+            params: [
+              { name: "limit", type: "number", required: false, defaultValue: "20" },
+              { name: "offset", type: "number", required: false, defaultValue: "0" },
+            ],
+            pagination: { enabled: true, defaultLimit: 20, maxLimit: 100, mode: "offset" },
+            returnType: "Promise<User[]>",
+          },
+        ],
+      },
+    };
+
+    const endpointNoQuery: Endpoint = {
+      id: "ep-test-sync",
+      name: "/users",
+      type: "GET",
+      pathParams: [],
+      queryParams: [],
+    };
+
+    const onEndpointChange = vi.fn();
+
+    const step: PipelineStepDraft = {
+      id: "step-1",
+      name: "findAllUsersResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-users-page",
+      operationId: "op-find-all",
+      functionRef: {
+        name: "findAllUsers",
+        importPath: "@workspace/db/helpers/user",
+      },
+      inputBindings: [],
+    };
+
+    render(
+      React.createElement(DbOperationStepSection, {
+        step,
+        allNodes: [tableWithPagination],
+        allEdges: [],
+        selectedDbId: "all",
+        showAdvancedSettings: false,
+        onToggleAdvancedSettings: vi.fn(),
+        onChange: vi.fn(),
+        endpoint: endpointNoQuery,
+        onEndpointChange,
+        expectedArgs: [
+          { name: "limit", type: "number", required: false },
+          { name: "offset", type: "number", required: false },
+        ],
+      })
+    );
+
+    // 1. Should call onEndpointChange with limit and offset query params
+    expect(onEndpointChange).toHaveBeenCalled();
+    const calls = onEndpointChange.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const firstCall = calls[0];
+    expect(firstCall).toBeDefined();
+    if (!firstCall) return;
+    const updatedQueryParams = firstCall[0]?.queryParams;
+    expect(updatedQueryParams).toBeDefined();
+    if (!updatedQueryParams) return;
+    expect(updatedQueryParams).toHaveLength(2);
+    expect(updatedQueryParams[0]?.name).toBe("limit");
+    expect(updatedQueryParams[0]?.defaultValue).toBe("20");
+    expect(updatedQueryParams[0]?.required).toBe(false);
+    expect(updatedQueryParams[1]?.name).toBe("offset");
+    expect(updatedQueryParams[1]?.defaultValue).toBe("0");
+    expect(updatedQueryParams[1]?.required).toBe(false);
+  });
+
+  it("isPaginationNeededByOtherSteps detects when pagination query params are needed", () => {
+    const paginatedStep: PipelineStepDraft = {
+      id: "step-find-all",
+      name: "findAllUsersResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-users-page",
+      operationId: "op-find-all",
+      inputBindings: [],
+    };
+
+    const boundStep: PipelineStepDraft = {
+      id: "step-custom",
+      name: "customStep",
+      type: "transform",
+      enabled: true,
+      inputBindings: [
+        { argName: "take", source: { kind: "req_query", field: "limit" } },
+      ],
+    };
+
+    const nonPaginatedStep: PipelineStepDraft = {
+      id: "step-create",
+      name: "createUserResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-users-page",
+      operationId: "op-create",
+      inputBindings: [],
+    };
+
+    const tableNode: BackendNode = {
+      id: "table-users-page",
+      type: "entity",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "users",
+        tableRef: "users",
+        dbOperations: [
+          {
+            id: "op-find-all",
+            name: "findAllUsers",
+            kind: "findAll",
+            pagination: { enabled: true },
+          },
+          {
+            id: "op-create",
+            name: "createUser",
+            kind: "create",
+          },
+        ],
+      },
+      fractionalIndex: "a0",
+    };
+
+    // Case 1: Another step is a paginated DB op
+    expect(
+      isPaginationNeededByOtherSteps(
+        "step-current",
+        [paginatedStep, nonPaginatedStep],
+        [tableNode]
+      )
+    ).toBe(true);
+
+    // Case 2: Another step binds to query.limit
+    expect(
+      isPaginationNeededByOtherSteps(
+        "step-current",
+        [boundStep, nonPaginatedStep],
+        [tableNode]
+      )
+    ).toBe(true);
+
+    // Case 3: Only the current step was paginated, no other steps need it
+    expect(
+      isPaginationNeededByOtherSteps(
+        "step-find-all",
+        [paginatedStep, nonPaginatedStep],
+        [tableNode]
+      )
+    ).toBe(false);
+
+    // Case 4: No steps need pagination
+    expect(
+      isPaginationNeededByOtherSteps("step-create", [nonPaginatedStep], [tableNode])
+    ).toBe(false);
+  });
+
+  it("auto-prunes limit and offset when changing to a non-fetch operation (create/delete) if no other step needs them", () => {
+    const tableWithOps: BackendNode = {
+      id: "table-users-ops",
+      type: "entity",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "users",
+        tableRef: "users",
+        columns: [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "name", type: "string", isNotNull: true },
+        ],
+        dbOperations: [
+          {
+            id: "op-find-all",
+            name: "findAllUsers",
+            kind: "findAll",
+            pagination: { enabled: true, defaultLimit: 20 },
+            returnType: "Promise<User[]>",
+          },
+          {
+            id: "op-create",
+            name: "createUser",
+            kind: "create",
+            params: [{ name: "name", type: "string", required: true }],
+            returnType: "Promise<User>",
+          },
+        ],
+      },
+    };
+
+    const initialEndpoint: Endpoint = {
+      id: "ep-switch-test",
+      name: "/users",
+      type: "POST",
+      pathParams: [],
+      queryParams: [
+        { id: "qp-filter", name: "filter", type: "string", required: false },
+        { id: "qp-limit", name: "limit", type: "number", required: false, defaultValue: "20" },
+        { id: "qp-offset", name: "offset", type: "number", required: false, defaultValue: "0" },
+      ],
+    };
+
+    const onEndpointChange = vi.fn();
+
+    const paginatedStep: PipelineStepDraft = {
+      id: "step-1",
+      name: "findAllUsersResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-users-ops",
+      operationId: "op-find-all",
+      functionRef: {
+        name: "findAllUsers",
+        importPath: "@workspace/db/helpers/user",
+      },
+      inputBindings: [],
+    };
+
+    const { rerender } = render(
+      React.createElement(DbOperationStepSection, {
+        step: paginatedStep,
+        allNodes: [tableWithOps],
+        allEdges: [],
+        selectedDbId: "all",
+        showAdvancedSettings: false,
+        onToggleAdvancedSettings: vi.fn(),
+        onChange: vi.fn(),
+        endpoint: initialEndpoint,
+        onEndpointChange,
+        expectedArgs: [],
+      })
+    );
+
+    // Now switch the step to a non-fetch operation (createUser)
+    const createStep: PipelineStepDraft = {
+      id: "step-1",
+      name: "createUserResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-users-ops",
+      operationId: "op-create",
+      functionRef: {
+        name: "createUser",
+        importPath: "@workspace/db/helpers/user",
+      },
+      inputBindings: [{ argName: "name", source: { kind: "req_body", field: "name" } }],
+    };
+
+    rerender(
+      React.createElement(DbOperationStepSection, {
+        step: createStep,
+        allNodes: [tableWithOps],
+        allEdges: [],
+        selectedDbId: "all",
+        showAdvancedSettings: false,
+        onToggleAdvancedSettings: vi.fn(),
+        onChange: vi.fn(),
+        endpoint: initialEndpoint,
+        onEndpointChange,
+        expectedArgs: [{ name: "name", type: "string", required: true }],
+      })
+    );
+
+    // Should call onEndpointChange and remove limit and offset, but keep custom 'filter'
+    expect(onEndpointChange).toHaveBeenCalled();
+    const calls = onEndpointChange.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall).toBeDefined();
+    if (!lastCall) return;
+    const lastCallArg = lastCall[0];
+    expect(lastCallArg?.queryParams).toBeDefined();
+    if (!lastCallArg?.queryParams) return;
+    expect(lastCallArg.queryParams).toHaveLength(1);
+    expect(lastCallArg.queryParams[0]?.name).toBe("filter");
+  });
+
+  it("preserves limit and offset query params if another step in the pipeline is paginated", () => {
+    const tableWithOps: BackendNode = {
+      id: "table-users-ops",
+      type: "entity",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "users",
+        tableRef: "users",
+        dbOperations: [
+          {
+            id: "op-find-all",
+            name: "findAllUsers",
+            kind: "findAll",
+            pagination: { enabled: true, defaultLimit: 20 },
+          },
+          {
+            id: "op-create",
+            name: "createUser",
+            kind: "create",
+          },
+        ],
+      },
+    };
+
+    const initialEndpoint2: Endpoint = {
+      id: "ep-switch-test-2",
+      name: "/users",
+      type: "POST",
+      pathParams: [],
+      queryParams: [
+        { id: "qp-limit", name: "limit", type: "number", required: false, defaultValue: "20" },
+        { id: "qp-offset", name: "offset", type: "number", required: false, defaultValue: "0" },
+      ],
+    };
+
+    const onEndpointChange = vi.fn();
+
+    // Step 2 is paginated and exists in allSteps
+    const anotherPaginatedStep: PipelineStepDraft = {
+      id: "step-2",
+      name: "findAllUsersResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-users-ops",
+      operationId: "op-find-all",
+      functionRef: {
+        name: "findAllUsers",
+        importPath: "@workspace/db/helpers/user",
+      },
+      inputBindings: [],
+    };
+
+    const step1Paginated: PipelineStepDraft = {
+      id: "step-1",
+      name: "findAllUsersResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-users-ops",
+      operationId: "op-find-all",
+      functionRef: {
+        name: "findAllUsers",
+        importPath: "@workspace/db/helpers/user",
+      },
+      inputBindings: [],
+    };
+
+    const step1Create: PipelineStepDraft = {
+      id: "step-1",
+      name: "createUserResult",
+      type: "db_operation",
+      enabled: true,
+      tableNodeId: "table-users-ops",
+      operationId: "op-create",
+      functionRef: {
+        name: "createUser",
+        importPath: "@workspace/db/helpers/user",
+      },
+      inputBindings: [],
+    };
+
+    const { rerender } = render(
+      React.createElement(DbOperationStepSection, {
+        step: step1Paginated,
+        allSteps: [step1Paginated, anotherPaginatedStep],
+        allNodes: [tableWithOps],
+        allEdges: [],
+        selectedDbId: "all",
+        showAdvancedSettings: false,
+        onToggleAdvancedSettings: vi.fn(),
+        onChange: vi.fn(),
+        endpoint: initialEndpoint2,
+        onEndpointChange,
+        expectedArgs: [],
+      })
+    );
+
+    onEndpointChange.mockClear();
+
+    // Now switch step 1 to non-fetch (create)
+    rerender(
+      React.createElement(DbOperationStepSection, {
+        step: step1Create,
+        allSteps: [step1Create, anotherPaginatedStep],
+        allNodes: [tableWithOps],
+        allEdges: [],
+        selectedDbId: "all",
+        showAdvancedSettings: false,
+        onToggleAdvancedSettings: vi.fn(),
+        onChange: vi.fn(),
+        endpoint: initialEndpoint2,
+        onEndpointChange,
+        expectedArgs: [],
+      })
+    );
+
+    // Because anotherPaginatedStep is present, onEndpointChange must NOT prune limit and offset
+    expect(onEndpointChange).not.toHaveBeenCalled();
+  });
 });
+
 

@@ -53,6 +53,7 @@ function isStepType(val: string): val is StepType {
 
 export interface StepRowProps {
   step: PipelineStepDraft;
+  allSteps?: PipelineStepDraft[];
   index: number;
   priorSteps: PipelineStepDraft[];
   endpoint?: Endpoint;
@@ -64,6 +65,7 @@ export interface StepRowProps {
   extraSources?: AvailableSource[];
   onChange: (updated: PipelineStepDraft) => void;
   onDelete: () => void;
+  onEndpointChange?: (changes: Partial<Endpoint>) => void;
   isFirst: boolean;
   isLast: boolean;
   onMoveUp: () => void;
@@ -72,6 +74,7 @@ export interface StepRowProps {
 
 const StepRowComponent = ({
   step,
+  allSteps,
   index,
   priorSteps,
   endpoint,
@@ -83,6 +86,7 @@ const StepRowComponent = ({
   extraSources = [],
   onChange,
   onDelete,
+  onEndpointChange,
   isFirst,
   isLast,
   onMoveUp,
@@ -471,6 +475,7 @@ const StepRowComponent = ({
                   return (
                     <DbOperationStepSection
                       step={step}
+                      allSteps={allSteps || endpoint?.pipelineSteps}
                       allNodes={allNodes}
                       allEdges={allEdges}
                       expectedArgs={expectedArgs}
@@ -480,6 +485,8 @@ const StepRowComponent = ({
                       onToggleAdvancedSettings={() => setShowAdvancedSettings((v) => !v)}
                       onChange={onChange}
                       onAutoMapArguments={handleAutoMapArguments}
+                      endpoint={endpoint}
+                      onEndpointChange={onEndpointChange}
                     >
                       {argumentBindingsSection}
                     </DbOperationStepSection>

@@ -166,9 +166,10 @@ export const ParameterEditor = ({
   isExternal?: boolean;
 }) => {
   const addParam = () => {
+    const isQueryParam = title?.toLowerCase().includes("query");
     onChange([
       ...parameters,
-      { id: generateId(), name: "", type: "string", required: true },
+      { id: generateId(), name: "", type: "string", required: isQueryParam ? false : true },
     ]);
   };
 
@@ -327,6 +328,29 @@ export const ParameterEditor = ({
                 </Button>
               </div>
             )}
+            {(!p.required || Boolean(p.defaultValue)) && !isAuthManaged && (
+              <div className="flex items-center gap-2 pt-1 border-t border-border/20">
+                <span className="text-[10px] text-muted-foreground font-mono w-14 shrink-0 pl-1">
+                  Default:
+                </span>
+                <LocalInput
+                  className="h-6 text-[11px] font-mono bg-background/50 flex-1 border-none shadow-none focus-visible:ring-1 text-foreground placeholder:text-muted-foreground/40 rounded px-2"
+                  placeholder={
+                    p.type === "number"
+                      ? "e.g. 20"
+                      : p.type === "boolean"
+                      ? "e.g. true"
+                      : "e.g. value"
+                  }
+                  value={p.defaultValue ?? ""}
+                  onBlur={(e) => {
+                    const val = e.target.value.trim();
+                    updateParam(p.id, { defaultValue: val ? val : undefined });
+                  }}
+                />
+              </div>
+            )}
+
           </div>
           );
         })}
