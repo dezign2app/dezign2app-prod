@@ -19,7 +19,6 @@ export default function robots(): MetadataRoute.Robots {
           "/docs",
           "/blog",
           "/about",
-          "/early-believer",
           "/privacy",
           "/terms",
           "/terms-and-conditions",
