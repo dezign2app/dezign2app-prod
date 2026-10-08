@@ -565,15 +565,41 @@ export const DatabaseTableRefNode = ({
               entity?.data?.databaseId || selectedDatabaseId || data.databaseId;
             const tableLabel = entity?.data?.label || "Table Ref";
 
-            updateNode(id, {
-              data: {
-                ...data,
-                tableRef: val,
-                databaseId: targetDbId,
-                label: tableLabel,
-                graphPosition: entity?.position,
-              },
-            });
+            // Find connected service node from edges or targetServiceId
+            const currentEdge = edges.find((edge) => edge.source === id || edge.target === id);
+            const serviceNodeId = currentEdge
+              ? (currentEdge.source === id ? currentEdge.target : currentEdge.source)
+              : data.targetServiceId;
+
+            // Check if there is already an existing table ref for val connected to this service node
+            const existingRefForVal = serviceNodeId
+              ? nodes.find(
+                  (n) =>
+                    n.id !== id &&
+                    n.type === "db_ref" &&
+                    n.data?.tableRef === val &&
+                    (n.data?.targetServiceId === serviceNodeId ||
+                      edges.some(
+                        (e) =>
+                          (e.source === serviceNodeId && e.target === n.id) ||
+                          (e.target === serviceNodeId && e.source === n.id),
+                      )),
+                )
+              : undefined;
+
+            const targetRefId = existingRefForVal ? existingRefForVal.id : id;
+
+            if (!existingRefForVal) {
+              updateNode(id, {
+                data: {
+                  ...data,
+                  tableRef: val,
+                  databaseId: targetDbId,
+                  label: tableLabel,
+                  graphPosition: entity?.position,
+                },
+              });
+            }
 
             // Synchronize with linked pipeline step
             const linked = findLinkedStep(id, data.stepId, data.endpointId, data.consumedEventId);
@@ -627,7 +653,7 @@ export const DatabaseTableRefNode = ({
 
               const updatedStep = {
                 ...linked.step,
-                dbRefNodeId: id,
+                dbRefNodeId: targetRefId,
                 databaseId: targetDbId,
                 tableNodeId: entity.id,
                 operationId: defaultOp?.id,
@@ -652,9 +678,48 @@ export const DatabaseTableRefNode = ({
                 useBackendCanvasStore.getState().updateEvent(linked.containerId, { pipelineSteps: nextSteps });
               }
 
-              // Update connecting edge handle to func-out-${defaultOp.name}
-              if (defaultOp) {
-                const store = useBackendCanvasStore.getState();
+              const store = useBackendCanvasStore.getState();
+
+              if (existingRefForVal && defaultOp && serviceNodeId) {
+                // Delete edges from old node `id`
+                const oldEdges = store.edges.filter((e) => e.source === id || e.target === id);
+                oldEdges.forEach((e) => store.deleteEdge(e.id));
+
+                // Connect to existingRefForVal
+                const targetHandle =
+                  linked.containerType === "endpoint"
+                    ? `endpoint-in-${linked.containerId}`
+                    : `consumedEvents-in-${linked.containerId}`;
+                const dbSourceHandle = `func-out-${defaultOp.name}`;
+
+                const edgeExists = store.edges.some(
+                  (e) =>
+                    e.source === existingRefForVal.id &&
+                    e.target === serviceNodeId &&
+                    e.sourceHandle === dbSourceHandle &&
+                    e.targetHandle === targetHandle,
+                );
+                if (!edgeExists) {
+                  store.addEdge({
+                    id: `edge-dbref-${existingRefForVal.id}-${serviceNodeId}-${linked.containerId}-${defaultOp.name}-${Date.now()}`,
+                    source: existingRefForVal.id,
+                    target: serviceNodeId,
+                    sourceHandle: dbSourceHandle,
+                    targetHandle,
+                    type: "connection",
+                    
+                  });
+                }
+
+                // Check for other connections on `id`. If none, delete `id`
+                const remainingOnOld = useBackendCanvasStore.getState().edges.filter(
+                  (e) => e.source === id || e.target === id,
+                );
+                if (remainingOnOld.length === 0) {
+                  store.deleteNode(id);
+                }
+              } else if (defaultOp) {
+                // Update connecting edge handle to func-out-${defaultOp.name}
                 const targetEdge = store.edges.find((e) => e.source === id || e.target === id);
                 if (targetEdge) {
                   if (targetEdge.source === id) {

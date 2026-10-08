@@ -426,6 +426,7 @@ describe("Convex canvasValidators exact schema", () => {
       enabled: true,
       databaseId: "db-1",
       tableNodeId: "users",
+      dbRefNodeId: "ref-node-1",
       operationId: "findAll",
       functionRef: {
         name: "findAllUsers",
