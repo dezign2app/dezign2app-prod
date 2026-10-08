@@ -22,7 +22,13 @@ import {
   TestDbOperationPayload,
   CheckDbConnectionPayload,
 } from "../services/dbRunner";
-import { checkForUpdatesManual, quitAndInstall } from "../services/updater";
+import {
+  checkForUpdatesManual,
+  quitAndInstall,
+  getUpdaterState,
+  simulateUpdaterStatus,
+  UpdaterState,
+} from "../services/updater";
 
 /**
  * Registers all IPC handlers for the Electron main process.
@@ -177,10 +183,17 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("app:is-electron", () => true);
 
   // ── Auto-Updater ───────────────────────────
+  ipcMain.handle("updater:get-status", () => {
+    return getUpdaterState();
+  });
   ipcMain.handle("updater:check", async () => {
     return checkForUpdatesManual();
   });
   ipcMain.handle("updater:quit-and-install", () => {
     quitAndInstall();
+  });
+  ipcMain.handle("updater:simulate-status", (_event, mockState: Partial<UpdaterState>) => {
+    simulateUpdaterStatus(mockState);
+    return { success: true };
   });
 }

@@ -23,6 +23,7 @@ import {
 } from "@workspace/ui/components/tooltip";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { AppUpdateToolbarButton } from "./AppUpdateIndicator";
 
 interface CanvasToolbarProps {
   projectName: string;
@@ -191,6 +192,8 @@ export function CanvasToolbar({
             Create a version checkpoint snapshot
           </TooltipContent>
         </Tooltip>
+
+        <AppUpdateToolbarButton />
 
         <Button asChild variant={"secondary"} size="sm" className="py-3.5 h-8">
           <Link href={"#"}>

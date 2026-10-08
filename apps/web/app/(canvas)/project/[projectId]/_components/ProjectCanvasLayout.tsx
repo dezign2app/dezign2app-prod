@@ -14,6 +14,7 @@ import { NodePaletteSidebar } from "./NodePaletteSidebar";
 import { AiPanel } from "./AiPanel";
 import { Terminal } from "./terminal/Terminal";
 import { ReactFlowProvider } from "@xyflow/react";
+import { AppUpdateIndicator } from "./AppUpdateIndicator";
 
 interface ProjectCanvasLayoutProps {
   children: React.ReactNode;
@@ -144,6 +145,9 @@ export function ProjectCanvasLayout({
           onPickDirectory={handlePickDirectory}
           onSaveDirectory={saveWorkspaceDir}
         />
+
+        {/* Global Desktop Auto-Update Indicator with Progress & Restart */}
+        <AppUpdateIndicator />
       </div>
     </ReactFlowProvider>
   );

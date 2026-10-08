@@ -5,6 +5,7 @@ import type {
   CheckDbConnectionPayload,
   CheckDbConnectionResult,
 } from "./services/dbRunner";
+import type { UpdaterState } from "./services/updater";
 
 // ─────────────────────────────────────────────
 //  Types
@@ -101,6 +102,15 @@ export interface ElectronAPI {
     executeOperation(payload: TestDbOperationPayload): Promise<TestDbOperationResult>;
     checkConnection(payload: CheckDbConnectionPayload): Promise<CheckDbConnectionResult>;
   };
+
+  /** Background auto-updater service */
+  updater: {
+    getStatus(): Promise<UpdaterState>;
+    checkForUpdates(): Promise<{ success: boolean; message?: string }>;
+    quitAndInstall(): Promise<void>;
+    onStatus(cb: (state: UpdaterState) => void): () => void;
+    simulateStatus?(mockState: Partial<UpdaterState>): Promise<{ success: boolean }>;
+  };
 }
 
 // ─────────────────────────────────────────────
@@ -193,5 +203,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("db:execute-operation", payload),
     checkConnection: (payload: CheckDbConnectionPayload) =>
       ipcRenderer.invoke("db:check-connection", payload),
+  },
+
+  updater: {
+    getStatus: () => ipcRenderer.invoke("updater:get-status"),
+    checkForUpdates: () => ipcRenderer.invoke("updater:check"),
+    quitAndInstall: () => ipcRenderer.invoke("updater:quit-and-install"),
+    onStatus: (cb: (state: UpdaterState) => void) => on("updater:status", cb),
+    simulateStatus: (mockState: Partial<UpdaterState>) =>
+      ipcRenderer.invoke("updater:simulate-status", mockState),
   },
 } satisfies ElectronAPI);
