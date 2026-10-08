@@ -3,6 +3,9 @@ import { Plus, ChevronDown, ChevronRight } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { ColumnItem, ColumnRow } from "./ColumnRow";
 
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
+
 export interface ColumnListProps {
   nodeId: string;
   items?: ColumnItem[];
@@ -24,16 +27,31 @@ export const ColumnList = ({
   title,
   badge,
 }: ColumnListProps) => {
+  const allNodes = useBackendCanvasStore((s) => s.nodes);
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingType, setEditingType] = useState("TEXT");
   const [nameError, setNameError] = useState(false);
 
+  const syncNodeData = (newCols: ColumnItem[], newIndexes?: BackendNode["data"]["indexes"]) => {
+    const nextData: BackendNode["data"] = {
+      ...data,
+      columns: newCols,
+      ...(newIndexes !== undefined ? { indexes: newIndexes } : {}),
+    };
+    if (data.dbOperations && data.dbOperations.length > 0) {
+      const parentDb = allNodes.find((n) => n.id === data.databaseId);
+      const engine = parentDb?.data?.dbEngine || parentDb?.data?.dbType || "sqlite";
+      nextData.dbOperations = getEntityDbOperations({ data: nextData }, allNodes, engine);
+    }
+    return nextData;
+  };
+
   const handleAdd = () => {
     setIsCollapsed(false);
     const newItems = [...items, { name: "", type: "TEXT" }];
-    updateNode(nodeId, { data: { ...data, columns: newItems } });
+    updateNode(nodeId, { data: syncNodeData(newItems) });
     setEditingIndex(newItems.length - 1);
     setEditingName("");
     setEditingType("TEXT");
@@ -42,6 +60,8 @@ export const ColumnList = ({
 
   const handleUpdate = (index: number, changes: Partial<ColumnItem>) => {
     let newCols = [...items];
+    const oldCol = items[index];
+    const oldColName = oldCol?.name;
     if (
       changes.name &&
       changes.name.trim() !== "" &&
@@ -57,13 +77,51 @@ export const ColumnList = ({
       }
     }
     newCols[index] = { ...newCols[index]!, ...changes };
-    updateNode(nodeId, { data: { ...data, columns: newCols } });
+    const newColName = newCols[index]?.name;
+
+    // Update any indexes that reference the renamed column
+    let newIndexes = data.indexes;
+    if (oldColName && newColName && oldColName !== newColName && data.indexes) {
+      newIndexes = data.indexes.map((idx) => {
+        const colList = (idx.columns || "").split(",").map((c) => c.trim());
+        if (colList.includes(oldColName)) {
+          const updatedCols = colList.map((c) => (c === oldColName ? newColName : c));
+          const isOldNameMatching =
+            idx.name === oldColName ||
+            idx.name === `idx_${oldColName}` ||
+            idx.name === `idx_${data.label || ""}_${oldColName}`;
+          return {
+            ...idx,
+            name: isOldNameMatching ? newColName : idx.name,
+            columns: updatedCols.join(", "),
+          };
+        }
+        return idx;
+      });
+    }
+
+    updateNode(nodeId, { data: syncNodeData(newCols, newIndexes) });
   };
 
   const handleDelete = (index: number) => {
     let newCols = [...items];
+    const deletedCol = newCols[index];
     newCols.splice(index, 1);
-    updateNode(nodeId, { data: { ...data, columns: newCols } });
+
+    let newIndexes = data.indexes;
+    if (deletedCol?.name && data.indexes) {
+      newIndexes = data.indexes
+        .map((idx) => {
+          const colList = (idx.columns || "")
+            .split(",")
+            .map((c) => c.trim())
+            .filter((c) => c !== deletedCol.name);
+          return { ...idx, columns: colList.join(", ") };
+        })
+        .filter((idx) => idx.columns.trim() !== "");
+    }
+
+    updateNode(nodeId, { data: syncNodeData(newCols, newIndexes) });
   };
 
   return (
