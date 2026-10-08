@@ -624,6 +624,10 @@ export function compileRawSqliteDatabase(
   tables.forEach((tableNode) => {
     const tableName = toTableName(tableNode.data.label || "table");
     createdTableNames.add(tableName.toLowerCase());
+  });
+
+  tables.forEach((tableNode) => {
+    const tableName = toTableName(tableNode.data.label || "table");
     const cols = getColumns(tableNode);
 
     tableSchemas[tableName] = cols
@@ -955,9 +959,23 @@ export function compileRawSqliteDatabase(
     ('fake_session_superadmin', 'fake_superadmin_1', 'fake_superadmin_token', '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');`);
 
   const sqlStatementsString = JSON.stringify(ddlStatements.join("\n\n"));
+  const ddlStatementsJson = JSON.stringify(ddlStatements, null, 2);
   const ddlBlock =
     ddlStatements.length > 0
-      ? `\n// Ensure all entity & auth tables exist on database initialization\ndb.exec(${sqlStatementsString});\n`
+      ? `\n// Ensure all entity & auth tables exist on database initialization
+try {
+  db.exec(${sqlStatementsString});
+} catch {
+  // Fallback: execute statements individually so a collision on one table/view doesn't block others
+  const statements: string[] = ${ddlStatementsJson};
+  for (const stmt of statements) {
+    try {
+      db.exec(stmt);
+    } catch {
+      // Ignore if table or view already exists
+    }
+  }
+}\n`
       : "";
 
   const helperBarrel: string[] = [];

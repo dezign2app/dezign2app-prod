@@ -38,7 +38,12 @@ export function buildGraphFile(
   const isRedis = isEnabled && ctx.input.memoryConfig?.checkpointer === "redis";
   const usesMemorySaver = isEnabled && ctx.hasMemory && !isPostgres && !isRedis;
 
-  const hasDbPkg = isPostgres && Boolean(ctx.input.dbPackageName) && ctx.input.outputMode === "package";
+  const isDbSqlite = ctx.input.dbEngine === "sqlite";
+  const hasDbPkg =
+    isPostgres &&
+    !isDbSqlite &&
+    Boolean(ctx.input.dbPackageName) &&
+    ctx.input.outputMode === "package";
   const hasRedisPkg = isRedis && Boolean(ctx.input.redisPackageName) && ctx.input.outputMode === "package";
 
   const imports = [

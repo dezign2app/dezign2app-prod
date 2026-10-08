@@ -20,6 +20,7 @@ export function compileLangGraphNode(
     outputMode?: "app" | "package";
     packageName?: string;
     dbPackageName?: string;
+    dbEngine?: string;
     redisPackageName?: string;
   },
 ): CompiledServiceResult {
@@ -32,9 +33,31 @@ export function compileLangGraphNode(
   if (context?.packageName) {
     input.packageName = context.packageName;
   }
-  if (context?.dbPackageName) {
+
+  // Resolve dbEngine: from context or infer from canvas nodes
+  let dbEngine = context?.dbEngine;
+  if (!dbEngine && context?.nodes) {
+    const linkedDbId = node.data?.memoryConfig?.checkpointerNodeId;
+    const dbNode =
+      (linkedDbId ? context.nodes.find((n) => n.id === linkedDbId) : undefined) ||
+      context.nodes.find((n) => n.type === "database");
+    if (dbNode) {
+      dbEngine =
+        dbNode.data?.dbEngine || dbNode.data?.provider || dbNode.data?.dbType;
+    }
+  }
+  if (dbEngine) {
+    input.dbEngine = dbEngine;
+  }
+
+  // During SQLite, the DB package has no connection pool (better-sqlite3).
+  // Never link dbPackageName for Postgres checkpointer during SQLite.
+  if (dbEngine === "sqlite") {
+    input.dbPackageName = undefined;
+  } else if (context?.dbPackageName) {
     input.dbPackageName = context.dbPackageName;
   }
+
   if (context?.redisPackageName) {
     input.redisPackageName = context.redisPackageName;
   }

@@ -316,18 +316,27 @@ export function compileSharedPackages(
     const folderPath = `packages/langgraph/${folderName}`;
     langGraphPackageFolders.push(folderPath);
 
-    // Resolve DB package name if memoryConfig uses postgres
+    // Resolve DB package name and engine if memoryConfig uses postgres
     let dbPackageName: string | undefined;
+    let dbEngine: string | undefined;
+
+    const linkedDbNodeId = lgNode.data?.memoryConfig?.checkpointerNodeId;
+    const targetDb =
+      (linkedDbNodeId ? nodes.find((n) => n.id === linkedDbNodeId) : undefined) ||
+      nodes.find((n) => n.type === "database");
+
+    if (targetDb) {
+      dbEngine = targetDb.data?.dbEngine || targetDb.data?.provider || targetDb.data?.dbType;
+    }
+
     if (lgNode.data?.memoryConfig?.checkpointer === "postgres") {
-      const linkedDbNodeId = lgNode.data.memoryConfig.checkpointerNodeId;
-      const targetDb =
-        nodes.find((n) => n.id === linkedDbNodeId) ||
-        nodes.find((n) => n.type === "database" && n.data?.dbEngine === "postgres");
-      if (targetDb) {
+      // During SQLite, the DB package uses better-sqlite3 and has no connection pool.
+      // Only link dbPackageName when the database engine is PostgreSQL and a package exists.
+      if (dbEngine !== "sqlite") {
         const matchPkg = compiledDb.packages?.find((p) => p.dbEngine === "postgres");
-        dbPackageName = matchPkg?.packageName || "@workspace/db";
-      } else {
-        dbPackageName = "@workspace/db";
+        if (matchPkg) {
+          dbPackageName = matchPkg.packageName;
+        }
       }
     }
 
@@ -343,6 +352,7 @@ export function compileSharedPackages(
       outputMode: "package",
       packageName,
       dbPackageName,
+      dbEngine,
       redisPackageName,
     });
 

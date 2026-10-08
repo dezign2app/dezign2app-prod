@@ -65,6 +65,8 @@ export interface CompileLangGraphInput {
   packageName?: string;
   /** Name of the linked database workspace package (e.g. "@workspace/db" or "@workspace/db-postgres"). */
   dbPackageName?: string;
+  /** Database engine of the linked or workspace database (e.g. "postgres", "sqlite", "mysql"). */
+  dbEngine?: string;
   /** Name of the linked Redis workspace package (e.g. "@workspace/redis"). */
   redisPackageName?: string;
 }
