@@ -171,6 +171,19 @@ export function compileExpressV4Service(
     ...generateServiceUnitTests(serviceName, nodeEndpoints, testCases),
   ];
 
+  // Guarantee that src/index.ts always includes the default express import
+  const serverFile = files.find((f) => f.filename === "src/index.ts");
+  if (serverFile && !serverFile.content.includes("import express")) {
+    if (serverFile.content.includes("from \"express\"")) {
+      serverFile.content = serverFile.content.replace(
+        /import\s+(\{[^}]*\})\s+from\s+["']express["']/,
+        'import express, $1 from "express"'
+      );
+    } else {
+      serverFile.content = `import express from "express";\n${serverFile.content}`;
+    }
+  }
+
   return {
     serviceId: node.id,
     serviceName,

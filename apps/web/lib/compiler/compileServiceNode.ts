@@ -274,9 +274,26 @@ export function compileServiceNode(
     ...result,
     files: result.files.map((f) => {
       if (f.filename.endsWith(".ts") || f.filename.endsWith(".tsx")) {
+        let content = cleanUnusedImports(f.content);
+        // Guarantee that express service entry files always retain the express import
+        if (
+          techStack === "express" &&
+          (f.filename === "src/index.ts" || f.filename === "index.ts") &&
+          content.includes("express(") &&
+          !content.includes("import express")
+        ) {
+          if (content.includes("from \"express\"")) {
+            content = content.replace(
+              /import\s+(\{[^}]*\})\s+from\s+["']express["']/,
+              'import express, $1 from "express"',
+            );
+          } else {
+            content = `import express from "express";\n${content}`;
+          }
+        }
         return {
           ...f,
-          content: cleanUnusedImports(f.content),
+          content,
         };
       }
       return f;
