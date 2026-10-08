@@ -18,7 +18,13 @@ import {
   getSimulationNodeBorderClass,
   useServiceStepHandLayout,
 } from "../../common";
-import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
+import {
+  getEntityDbOperations,
+  deriveDbFunctionSignature,
+  inferDbOperationReturnType,
+  computeDbOpBindings,
+} from "@/lib/utils/entityOperationsHelper";
+import { toTableName, toVarName } from "@/lib/compiler/utils";
 import { DbOperationFunction } from "@workspace/canvas/types";
 import { useSectionCollapseStore } from "@/lib/stores/sectionCollapseStore";
 import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
@@ -149,6 +155,154 @@ export const DatabaseTableRefNode = ({
     parentDatabase?.data?.dbEngine ||
     selectedDatabase?.data?.dbType ||
     parentDatabase?.data?.dbType;
+
+  const findLinkedStep = (
+    nodeId: string,
+    nodeStepId?: string,
+    nodeEndpointId?: string,
+    nodeConsumedEventId?: string,
+  ) => {
+    const store = useBackendCanvasStore.getState();
+    // 1. Check endpoints
+    for (const ep of store.endpoints) {
+      if (nodeEndpointId && ep.id !== nodeEndpointId) continue;
+      const steps = ep.pipelineSteps || [];
+      const step = steps.find(
+        (s) => (nodeStepId && s.id === nodeStepId) || s.dbRefNodeId === nodeId,
+      );
+      if (step) {
+        return { containerType: "endpoint" as const, containerId: ep.id, step, steps };
+      }
+    }
+    if (nodeEndpointId) {
+      for (const ep of store.endpoints) {
+        const steps = ep.pipelineSteps || [];
+        const step = steps.find(
+          (s) => (nodeStepId && s.id === nodeStepId) || s.dbRefNodeId === nodeId,
+        );
+        if (step) {
+          return { containerType: "endpoint" as const, containerId: ep.id, step, steps };
+        }
+      }
+    }
+    // 2. Check events
+    for (const ev of store.events || []) {
+      if (nodeConsumedEventId && ev.id !== nodeConsumedEventId) continue;
+      const steps = ev.pipelineSteps || [];
+      const step = steps.find(
+        (s) => (nodeStepId && s.id === nodeStepId) || s.dbRefNodeId === nodeId,
+      );
+      if (step) {
+        return { containerType: "event" as const, containerId: ev.id, step, steps };
+      }
+    }
+    // 3. Fallback: check connected edge
+    const edge = store.edges.find((e) => e.source === nodeId || e.target === nodeId);
+    if (edge) {
+      const targetHandle = edge.source === nodeId ? edge.targetHandle : edge.sourceHandle;
+      if (targetHandle) {
+        if (targetHandle.startsWith("endpoint-in-")) {
+          const epId = targetHandle.replace("endpoint-in-", "");
+          const ep = store.endpoints.find((e) => e.id === epId);
+          if (ep) {
+            const step = (ep.pipelineSteps || []).find((s) => s.type === "db_operation");
+            if (step) {
+              return { containerType: "endpoint" as const, containerId: ep.id, step, steps: ep.pipelineSteps || [] };
+            }
+          }
+        } else if (targetHandle.startsWith("consumedEvents-in-")) {
+          const evId = targetHandle.replace("consumedEvents-in-", "");
+          const ev = (store.events || []).find((e) => e.id === evId);
+          if (ev) {
+            const step = (ev.pipelineSteps || []).find((s) => s.type === "db_operation");
+            if (step) {
+              return { containerType: "event" as const, containerId: ev.id, step, steps: ev.pipelineSteps || [] };
+            }
+          }
+        }
+      }
+    }
+    return null;
+  };
+
+  const handleSelectOperation = (op: DbOperationFunction) => {
+    if (!selectedTable) return;
+    const linked = findLinkedStep(id, data.stepId, data.endpointId, data.consumedEventId);
+    if (!linked) return;
+
+    const tableLabel = selectedTable.data?.label || selectedTable.data?.tableRef || "table";
+    const importPath = `@workspace/db/helpers/${toTableName(tableLabel)}`;
+    const varName = `${toVarName(op.name)}Result`;
+    const liveSig =
+      deriveDbFunctionSignature(op.name, op.params, op.returnType) || op.signature;
+
+    const returnTypeStr =
+      (op.code && op.code.trim() ? inferDbOperationReturnType(op.code) : null) ||
+      op.returnType ||
+      "any";
+    const isArrayOp = Boolean(
+      op.kind === "findAll" ||
+        (op.name || "").toLowerCase().includes("findall") ||
+        (returnTypeStr && (returnTypeStr.includes("[]") || returnTypeStr.includes("Array<"))),
+    );
+
+    const schemaFields = isArrayOp
+      ? []
+      : op.kind === "delete"
+      ? [
+          { name: "success", type: "boolean", required: true },
+          { name: "message", type: "string", required: true },
+        ]
+      : (selectedTable.data?.columns || []).map((c: any) => ({
+          name: c.name,
+          type: c.type || "string",
+          required: Boolean(c.isPrimaryKey || c.isNotNull),
+        }));
+
+    const nextBindings = computeDbOpBindings(
+      op,
+      selectedTable,
+      [],
+      [],
+      { name: op.name, signature: liveSig },
+    );
+
+    const updatedStep = {
+      ...linked.step,
+      operationId: op.id,
+      functionRef: {
+        name: op.name,
+        importPath,
+        signature: liveSig,
+        returnIsArray: isArrayOp,
+      },
+      outputSchema: schemaFields,
+      name: varName,
+      outputVariable: varName,
+      inputBindings: nextBindings,
+    };
+
+    const nextSteps = linked.steps.map((s) => (s.id === linked.step.id ? updatedStep : s));
+    if (linked.containerType === "endpoint") {
+      useBackendCanvasStore.getState().updateEndpoint(linked.containerId, { pipelineSteps: nextSteps });
+    } else {
+      useBackendCanvasStore.getState().updateEvent(linked.containerId, { pipelineSteps: nextSteps });
+    }
+
+    const store = useBackendCanvasStore.getState();
+    const targetEdge = store.edges.find((e) => e.source === id || e.target === id);
+    if (targetEdge) {
+      if (targetEdge.source === id) {
+        store.updateEdge(targetEdge.id, {
+          sourceHandle: `func-out-${op.name}`,
+        });
+      } else {
+        store.updateEdge(targetEdge.id, {
+          targetHandle: `func-out-${op.name}`,
+        });
+      }
+    }
+  };
 
   const handleOpenConfig = (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -357,6 +511,22 @@ export const DatabaseTableRefNode = ({
                 label: belongsToNew ? data.label : "Table Ref",
               },
             });
+
+            // Synchronize with linked pipeline step
+            const linked = findLinkedStep(id, data.stepId, data.endpointId, data.consumedEventId);
+            if (linked) {
+              const updatedStep = {
+                ...linked.step,
+                databaseId: newDbId || undefined,
+                tableNodeId: belongsToNew ? linked.step.tableNodeId : undefined,
+              };
+              const nextSteps = linked.steps.map((s) => (s.id === linked.step.id ? updatedStep : s));
+              if (linked.containerType === "endpoint") {
+                useBackendCanvasStore.getState().updateEndpoint(linked.containerId, { pipelineSteps: nextSteps });
+              } else {
+                useBackendCanvasStore.getState().updateEvent(linked.containerId, { pipelineSteps: nextSteps });
+              }
+            }
           }}
         >
           <SelectTrigger
@@ -391,16 +561,114 @@ export const DatabaseTableRefNode = ({
           onValueChange={(val) => {
             if (val === "__none__") return;
             const entity = allEntities.find((e) => e.id === val);
+            const targetDbId =
+              entity?.data?.databaseId || selectedDatabaseId || data.databaseId;
+            const tableLabel = entity?.data?.label || "Table Ref";
+
             updateNode(id, {
               data: {
                 ...data,
                 tableRef: val,
-                databaseId:
-                  entity?.data?.databaseId || selectedDatabaseId || data.databaseId,
-                label: entity?.data?.label || "Table Ref",
+                databaseId: targetDbId,
+                label: tableLabel,
                 graphPosition: entity?.position,
               },
             });
+
+            // Synchronize with linked pipeline step
+            const linked = findLinkedStep(id, data.stepId, data.endpointId, data.consumedEventId);
+            if (linked && entity) {
+              const ops = getEntityDbOperations(entity, nodes);
+              const defaultOp = ops[0];
+              const importPath = `@workspace/db/helpers/${toTableName(tableLabel)}`;
+              const varName = defaultOp
+                ? `${toVarName(defaultOp.name)}Result`
+                : linked.step.outputVariable || linked.step.name || "dbResult";
+              const liveSig = defaultOp
+                ? deriveDbFunctionSignature(defaultOp.name, defaultOp.params, defaultOp.returnType) ||
+                  defaultOp.signature
+                : undefined;
+
+              const returnTypeStr = defaultOp
+                ? (defaultOp.code && defaultOp.code.trim()
+                    ? inferDbOperationReturnType(defaultOp.code)
+                    : null) ||
+                  defaultOp.returnType ||
+                  "any"
+                : undefined;
+
+              const isArrayOp = Boolean(
+                defaultOp &&
+                  (defaultOp.kind === "findAll" ||
+                    (defaultOp.name || "").toLowerCase().includes("findall") ||
+                    (returnTypeStr && (returnTypeStr.includes("[]") || returnTypeStr.includes("Array<")))),
+              );
+
+              const schemaFields = isArrayOp
+                ? []
+                : defaultOp?.kind === "delete"
+                ? [
+                    { name: "success", type: "boolean", required: true },
+                    { name: "message", type: "string", required: true },
+                  ]
+                : (entity.data?.columns || []).map((c: any) => ({
+                    name: c.name,
+                    type: c.type || "string",
+                    required: Boolean(c.isPrimaryKey || c.isNotNull),
+                  }));
+
+              const nextBindings = computeDbOpBindings(
+                defaultOp,
+                entity,
+                [],
+                [],
+                defaultOp ? { name: defaultOp.name, signature: liveSig } : undefined,
+              );
+
+              const updatedStep = {
+                ...linked.step,
+                dbRefNodeId: id,
+                databaseId: targetDbId,
+                tableNodeId: entity.id,
+                operationId: defaultOp?.id,
+                functionRef: defaultOp
+                  ? {
+                      name: defaultOp.name,
+                      importPath,
+                      signature: liveSig,
+                      returnIsArray: isArrayOp,
+                    }
+                  : linked.step.functionRef,
+                outputSchema: schemaFields,
+                name: varName,
+                outputVariable: varName,
+                inputBindings: nextBindings,
+              };
+
+              const nextSteps = linked.steps.map((s) => (s.id === linked.step.id ? updatedStep : s));
+              if (linked.containerType === "endpoint") {
+                useBackendCanvasStore.getState().updateEndpoint(linked.containerId, { pipelineSteps: nextSteps });
+              } else {
+                useBackendCanvasStore.getState().updateEvent(linked.containerId, { pipelineSteps: nextSteps });
+              }
+
+              // Update connecting edge handle to func-out-${defaultOp.name}
+              if (defaultOp) {
+                const store = useBackendCanvasStore.getState();
+                const targetEdge = store.edges.find((e) => e.source === id || e.target === id);
+                if (targetEdge) {
+                  if (targetEdge.source === id) {
+                    store.updateEdge(targetEdge.id, {
+                      sourceHandle: `func-out-${defaultOp.name}`,
+                    });
+                  } else {
+                    store.updateEdge(targetEdge.id, {
+                      targetHandle: `func-out-${defaultOp.name}`,
+                    });
+                  }
+                }
+              }
+            }
           }}
         >
           <SelectTrigger
@@ -548,10 +816,14 @@ export const DatabaseTableRefNode = ({
               return (
                 <div
                   key={op.id || op.name}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSelectOperation(op);
+                  }}
                   className={cn(
-                    "flex items-center justify-between px-3 py-2 border-b last:border-b-0 text-xs relative group/row transition-colors nodrag",
+                    "flex items-center justify-between px-3 py-2 border-b last:border-b-0 text-xs relative group/row transition-colors nodrag cursor-pointer",
                     isConnected
-                      ? "text-foreground font-medium"
+                      ? "text-foreground font-medium bg-orange-500/10"
                       : "hover:bg-secondary/20 text-muted-foreground hover:text-foreground",
                   )}
                 >

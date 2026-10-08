@@ -108,11 +108,15 @@ export function usePipelineSteps({
 
   const updateStep = (index: number, updated: PipelineStepDraft) => {
     const prevStep = executableSteps[index];
+    const finalUpdated = {
+      ...updated,
+      dbRefNodeId: updated.dbRefNodeId || prevStep?.dbRefNodeId,
+    };
     if (prevStep) {
       const remainingSteps = executableSteps.filter((_, i) => i !== index);
       handleStepUpdateCanvasEffects({
         prevStep,
-        updatedStep: updated,
+        updatedStep: finalUpdated,
         remainingSteps,
         serviceNodeId,
         endpointId: endpoint?.id,
@@ -123,7 +127,7 @@ export function usePipelineSteps({
     }
 
     const next = [...executableSteps];
-    next[index] = updated;
+    next[index] = finalUpdated;
     if (isConsumer || isNested) {
       onChange(next);
     } else {

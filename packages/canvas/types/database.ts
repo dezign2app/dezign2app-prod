@@ -141,6 +141,12 @@ export interface CanvasEntityNodeData {
   jsonRootType?: "object" | "array";
   /** Reference to entity node ID (used by DB Ref nodes). */
   tableRef?: string;
+  /** Linked pipeline step ID (used by DB Ref nodes for 1:1 step binding). */
+  stepId?: string;
+  /** Linked endpoint ID (used by DB Ref nodes). */
+  endpointId?: string;
+  /** Linked consumed event ID (used by DB Ref nodes). */
+  consumedEventId?: string;
   /** Reference to vector collection (used by Vector DB Ref nodes). */
   collectionRef?: string;
   /** Reference to Redis schema node (used by Redis Cache Ref nodes). */
