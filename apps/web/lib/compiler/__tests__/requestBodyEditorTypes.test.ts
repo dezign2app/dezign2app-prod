@@ -95,4 +95,21 @@ describe("RequestBodyEditor Types & schemaToTypeScript", () => {
     expect(zod.code).toContain("icon: z.custom<LucideProps>().optional()");
     expect(zod.code).toContain("meta: z.any().optional()");
   });
+
+  it("coerces numbers in query schemas and applies default values", () => {
+    const queryParams = [
+      { name: "limit", type: "number", required: false, defaultValue: "20" },
+      { name: "offset", type: "number", required: false, defaultValue: "0" },
+      { name: "search", type: "string", required: false },
+      { name: "active", type: "boolean", required: false, defaultValue: "true" },
+    ];
+
+    const zod = parametersToZodSchema("getUsersQuerySchema", queryParams, false);
+    expect(zod.hasContent).toBe(true);
+    expect(zod.code).toContain("limit: z.coerce.number().default(20)");
+    expect(zod.code).toContain("offset: z.coerce.number().default(0)");
+    expect(zod.code).toContain("search: z.string().optional()");
+    expect(zod.code).toContain("active: z.coerce.boolean().default(true)");
+  });
 });
+

@@ -64,6 +64,7 @@ export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
     steps,
     onChange,
     endpoint,
+    onEndpointChange,
     consumedEvent,
     allNodes,
     allEdges,
@@ -148,9 +149,11 @@ export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
                   <StepRow
                     key={step.id || `step-${i}`}
                     step={step}
+                    allSteps={steps}
                     index={i}
                     priorSteps={priorStepsMap.get(i) || []}
                     endpoint={endpoint}
+                    onEndpointChange={onEndpointChange}
                     consumedEvent={consumedEvent}
                     allNodes={allNodes}
                     allEdges={allEdges}
