@@ -6,6 +6,9 @@ import { cn } from "@workspace/ui/lib/utils";
 import { ColumnItem } from "./ColumnRow";
 import { NodeDeletionDialog } from "../../node-deletion-dialog/NodeDeletionDialog";
 
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
+
 export interface IndexListProps {
   id: string;
   indexes?: NonNullable<BackendNode["data"]["indexes"]>;
@@ -21,18 +24,27 @@ export const IndexList = ({
   data,
   updateNode,
 }: IndexListProps) => {
+  const allNodes = useBackendCanvasStore((s) => s.nodes);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [indexToDelete, setIndexToDelete] = useState<{
     index: number;
     item: NonNullable<BackendNode["data"]["indexes"]>[0];
   } | null>(null);
 
+  const syncNodeDataWithIndexes = (nextIndexes: NonNullable<BackendNode["data"]["indexes"]>) => {
+    const nextData = { ...data, indexes: nextIndexes };
+    if (data.dbOperations && data.dbOperations.length > 0) {
+      const parentDb = allNodes.find((n) => n.id === data.databaseId);
+      const engine = parentDb?.data?.dbEngine || parentDb?.data?.dbType || "sqlite";
+      nextData.dbOperations = getEntityDbOperations({ data: nextData }, allNodes, engine);
+    }
+    return nextData;
+  };
+
   const addIndex = () => {
+    const nextIndexes = [...indexes, { name: "", columns: "" }];
     updateNode(id, {
-      data: {
-        ...data,
-        indexes: [...indexes, { name: "", columns: "" }],
-      },
+      data: syncNodeDataWithIndexes(nextIndexes),
     });
     setEditingIndex(indexes.length);
   };
@@ -45,13 +57,13 @@ export const IndexList = ({
     newIndexes[idx] = { ...newIndexes[idx], ...changes } as NonNullable<
       BackendNode["data"]["indexes"]
     >[0];
-    updateNode(id, { data: { ...data, indexes: newIndexes } });
+    updateNode(id, { data: syncNodeDataWithIndexes(newIndexes) });
   };
 
   const deleteIndex = (i: number) => {
     const newIdxs = [...indexes];
     newIdxs.splice(i, 1);
-    updateNode(id, { data: { ...data, indexes: newIdxs } });
+    updateNode(id, { data: syncNodeDataWithIndexes(newIdxs) });
   };
 
   return (
@@ -81,7 +93,7 @@ export const IndexList = ({
                       const newIdxs = [...indexes];
                       if (newIdxs[i]?.name.trim() === "") {
                         newIdxs.splice(i, 1);
-                        updateNode(id, { data: { ...data, indexes: newIdxs } });
+                        updateNode(id, { data: syncNodeDataWithIndexes(newIdxs) });
                       }
                       setEditingIndex(null);
                     }
@@ -102,7 +114,7 @@ export const IndexList = ({
                           if (newIdxs[i]?.name.trim() === "") {
                             newIdxs.splice(i, 1);
                             updateNode(id, {
-                              data: { ...data, indexes: newIdxs },
+                              data: syncNodeDataWithIndexes(newIdxs),
                             });
                           }
                           setEditingIndex(null);
