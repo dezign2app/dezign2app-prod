@@ -267,14 +267,18 @@ describe("syncTestEnv via Compiler", () => {
     const envFile = profileConfigs.find((f) => f.filename === ".env");
     if (envFile) {
       const targetEnv = path.join(TEST_ENV_DIR, "apps/profile/.env");
-      fs.writeFileSync(targetEnv, envFile.content, "utf-8");
-      console.log("Updated via compiler:", targetEnv);
+      if (fs.existsSync(path.dirname(targetEnv))) {
+        fs.writeFileSync(targetEnv, envFile.content, "utf-8");
+        console.log("Updated via compiler:", targetEnv);
+      }
     }
     const envExampleFile = profileConfigs.find((f) => f.filename === ".env.example");
     if (envExampleFile) {
       const targetEnvExample = path.join(TEST_ENV_DIR, "apps/profile/.env.example");
-      fs.writeFileSync(targetEnvExample, envExampleFile.content, "utf-8");
-      console.log("Updated via compiler:", targetEnvExample);
+      if (fs.existsSync(path.dirname(targetEnvExample))) {
+        fs.writeFileSync(targetEnvExample, envExampleFile.content, "utf-8");
+        console.log("Updated via compiler:", targetEnvExample);
+      }
     }
 
     // 3. Generate Next.js UploadImageAction component
@@ -511,7 +515,7 @@ describe("syncTestEnv via Compiler", () => {
     const lgResult = compileLangGraphNode(chatLgNode, {
       outputMode: "package",
       packageName: "@workspace/langgraph-chat",
-      dbPackageName: "@workspace/db",
+      dbEngine: "sqlite",
     });
     const lgPkgFile = lgResult.files.find((f) => f.filename === "package.json");
     if (lgPkgFile) {

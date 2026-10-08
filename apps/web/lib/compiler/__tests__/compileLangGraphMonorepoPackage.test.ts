@@ -222,6 +222,75 @@ describe("compileMonorepo: LangGraph Package Compilation & Service Integration",
     expect(lgGraphFile!.content).toContain("void checkpointer.setup();");
   });
 
+  it("does NOT import pool from @workspace/db when database engine is sqlite", () => {
+    const dbNode: BackendNode = {
+      id: "db-sqlite-1",
+      type: "database",
+      position: { x: 100, y: 100 },
+      fractionalIndex: "a0",
+      data: {
+        label: "PrimaryDb",
+        dbEngine: "sqlite",
+      },
+    };
+
+    const entityNode: BackendNode = {
+      id: "ent-users",
+      type: "entity",
+      position: { x: 100, y: 300 },
+      fractionalIndex: "a1",
+      data: {
+        label: "users",
+        databaseId: dbNode.id,
+        columns: [{ name: "id", type: "string", isPrimaryKey: true }],
+      },
+    };
+
+    const langGraphNode: BackendNode = {
+      id: "agent-sqlite",
+      type: "langgraph",
+      position: { x: 400, y: 100 },
+      fractionalIndex: "a2",
+      data: {
+        label: "SqliteAgent",
+        memoryConfig: {
+          enabled: true,
+          checkpointer: "postgres",
+          checkpointerNodeId: dbNode.id,
+        },
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages", defaultValue: [] },
+        ],
+      },
+    };
+
+    const result = compileMonorepo(
+      [dbNode, entityNode, langGraphNode],
+      [],
+      [],
+      [],
+      [],
+      "Test Sqlite Checkpointer Monorepo",
+    );
+
+    // 1. packages/langgraph/SqliteAgent/package.json MUST NOT depend on @workspace/db
+    const lgPkgJson = result.files.find(
+      (f: CompiledFile) => f.filename === "packages/langgraph/SqliteAgent/package.json",
+    );
+    expect(lgPkgJson).toBeDefined();
+    const parsedPkg = JSON.parse(lgPkgJson!.content);
+    expect(parsedPkg.dependencies?.["@workspace/db"]).toBeUndefined();
+
+    // 2. packages/langgraph/SqliteAgent/src/graph.ts MUST NOT import pool from @workspace/db
+    const lgGraphFile = result.files.find(
+      (f: CompiledFile) => f.filename === "packages/langgraph/SqliteAgent/src/graph.ts",
+    );
+    expect(lgGraphFile).toBeDefined();
+    expect(lgGraphFile!.content).not.toContain('import { pool } from "@workspace/db";');
+    expect(lgGraphFile!.content).not.toContain("new PostgresSaver(pool)");
+    expect(lgGraphFile!.content).toContain("PostgresSaver.fromConnString(");
+  });
+
   it("imports REDIS_CONFIG from @workspace/redis when LangGraph node has checkpointer: 'redis'", () => {
     const redisNode: BackendNode = {
       id: "redis-1",

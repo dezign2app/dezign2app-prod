@@ -297,7 +297,11 @@ export function buildDependencies(ctx: CompileContext): Record<string, string> {
   if (ctx.input.memoryConfig?.checkpointer === "postgres") {
     deps["@langchain/langgraph-checkpoint-postgres"] = "^1.0.5";
     deps["pg"] = "^8.13.1";
-    if (ctx.input.dbPackageName && ctx.input.outputMode === "package") {
+    if (
+      ctx.input.dbPackageName &&
+      ctx.input.dbEngine !== "sqlite" &&
+      ctx.input.outputMode === "package"
+    ) {
       deps[ctx.input.dbPackageName] = "workspace:*";
     }
   } else if (ctx.input.memoryConfig?.checkpointer === "redis") {

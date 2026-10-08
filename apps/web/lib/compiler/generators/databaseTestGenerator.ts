@@ -134,15 +134,17 @@ describe("Table Helper: ${tableName} (${Pascal})", () => {
   });
 
   it("should execute findAll${pascalPlural} without runtime errors", () => {
-    if (typeof (helper as Record<string, unknown>).findAll${pascalPlural} === "function") {
-      const records = (helper as { findAll${pascalPlural}: (limit?: number) => unknown[] }).findAll${pascalPlural}(5);
+    const fn = (helper as any).findAll${pascalPlural};
+    if (typeof fn === "function") {
+      const records = fn(5);
       expect(Array.isArray(records)).toBe(true);
     }
   });
 
   it("should return undefined or null when searching for non-existent ${pascalSingular} ID", () => {
-    if (typeof (helper as Record<string, unknown>).find${pascalSingular}ById === "function") {
-      const result = (helper as { find${pascalSingular}ById: (id: string) => unknown }).find${pascalSingular}ById("non-existent-id");
+    const fn = (helper as any).find${pascalSingular}ById;
+    if (typeof fn === "function") {
+      const result = fn("non-existent-id");
       expect(result).toBeFalsy();
     }
   });
