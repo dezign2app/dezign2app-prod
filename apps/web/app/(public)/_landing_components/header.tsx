@@ -9,7 +9,6 @@ const navLinks = [
   // { name: "Templates", href: "/workflows" },
   // { name: "Docs", href: "/docs" },
   { name: "About", href: "/about" },
-  { name: "Early Believer", href: "/early-believer" },
 ];
 
 export const Header = () => {

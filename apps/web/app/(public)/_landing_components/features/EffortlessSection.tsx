@@ -1,30 +1,10 @@
-import React, { useState } from "react";
+import React from "react";
 import Pricing from "../pricing";
 
 export const EffortlessSection: React.FC = () => {
-  const [billing, setBilling] = useState<"monthly" | "annually">("monthly");
-
   return (
     <section className="w-full relative overflow-hidden py-32 bg-[#f4f4f5] flex justify-center font-sans">
       <div className="relative z-10 max-w-6xl w-full px-6 flex flex-col items-center justify-center min-h-[600px]">
-        {/* Billing toggle at the top */}
-        <div className="flex flex-col items-center mb-12">
-          <div className="z-50 flex items-center bg-gray-200/70 backdrop-blur-md rounded-full p-1 gap-1 shadow-inner border border-gray-300 pointer-events-auto">
-            {(["monthly", "annually"] as const).map((cycle) => (
-              <button
-                key={cycle}
-                onClick={() => setBilling(cycle)}
-                className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-300 capitalize ${
-                  billing === cycle
-                    ? "bg-[#1a1a1a] text-white shadow-md"
-                    : "text-gray-600 hover:text-black"
-                }`}
-              >
-                {cycle === "annually" ? "Annually" : "Monthly"}
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* Floating Elements & Backgrounds */}
         <div className="absolute inset-0 pointer-events-none flex justify-center items-center z-10">
@@ -140,7 +120,6 @@ export const EffortlessSection: React.FC = () => {
             <Pricing
               hideHeader={true}
               hideToggle={true}
-              externalBilling={billing}
             />
           </div>
         </div>
