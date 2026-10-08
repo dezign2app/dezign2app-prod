@@ -269,6 +269,24 @@ export function cleanupDeletedNodesState(
           evChanged = true;
         }
       }
+      if (
+        allIdsSet.size > 0 &&
+        updatedEv.pipelineSteps &&
+        updatedEv.pipelineSteps.length > 0
+      ) {
+        const filteredSteps = updatedEv.pipelineSteps.filter(
+          (s) =>
+            !(
+              s.type === "db_operation" &&
+              ((s.tableNodeId && allIdsSet.has(s.tableNodeId)) ||
+                (s.databaseId && allIdsSet.has(s.databaseId)))
+            ),
+        );
+        if (filteredSteps.length !== updatedEv.pipelineSteps.length) {
+          updatedEv = { ...updatedEv, pipelineSteps: filteredSteps };
+          evChanged = true;
+        }
+      }
       return evChanged ? updatedEv : ev;
     });
 
@@ -339,6 +357,25 @@ export function cleanupDeletedNodesState(
               s.type === "redis_operation" &&
               ((s.tableNodeId && deletedRedisIds.has(s.tableNodeId)) ||
                 (s.databaseId && deletedRedisIds.has(s.databaseId)))
+            ),
+        );
+        if (filteredSteps.length !== newPipelineSteps.length) {
+          changed = true;
+          newPipelineSteps = filteredSteps;
+        }
+      }
+
+      if (
+        allIdsSet.size > 0 &&
+        newPipelineSteps &&
+        newPipelineSteps.length > 0
+      ) {
+        const filteredSteps = newPipelineSteps.filter(
+          (s) =>
+            !(
+              s.type === "db_operation" &&
+              ((s.tableNodeId && allIdsSet.has(s.tableNodeId)) ||
+                (s.databaseId && allIdsSet.has(s.databaseId)))
             ),
         );
         if (filteredSteps.length !== newPipelineSteps.length) {
@@ -468,26 +505,26 @@ export function cleanupDeletedNodesState(
     identityProviders: nextProviders,
     activeConfigItem: nextActiveConfigItem,
     pendingNodeUpserts: [
-      ...currentState.pendingNodeUpserts.filter((n) => !allIdsSet.has(n.id)),
+      ...(currentState.pendingNodeUpserts || []).filter((n) => !allIdsSet.has(n.id)),
       ...changedNodes,
     ],
     pendingNodeRemovals: [
-      ...currentState.pendingNodeRemovals,
+      ...(currentState.pendingNodeRemovals || []),
       ...idsToDeleteArray,
     ],
-    pendingEdgeUpserts: currentState.pendingEdgeUpserts.filter(
+    pendingEdgeUpserts: (currentState.pendingEdgeUpserts || []).filter(
       (e) => !removedEdgeSet.has(e.id),
     ),
     pendingEdgeRemovals: [
-      ...currentState.pendingEdgeRemovals,
+      ...(currentState.pendingEdgeRemovals || []),
       ...removedEdgeIds,
     ],
     pendingEndpointUpserts: [
-      ...currentState.pendingEndpointUpserts,
+      ...(currentState.pendingEndpointUpserts || []),
       ...changedEndpoints,
     ],
     pendingEndpointRemovals: [
-      ...currentState.pendingEndpointRemovals,
+      ...(currentState.pendingEndpointRemovals || []),
       ...endpointsToDelete.map((ep) => ({
         nodeId: ep.nodeId,
         endpointId: ep.id,
@@ -538,7 +575,7 @@ export function cleanupDeletedEdgesState(
 
   const dbNodeIdsSet = new Set(
     currentState.nodes
-      .filter((n) => n && (n.type === "db_ref" || n.type === "database"))
+      .filter((n) => n && (n.type === "db_ref" || n.type === "database" || n.type === "entity"))
       .map((n) => n.id),
   );
 
@@ -624,12 +661,34 @@ export function cleanupDeletedEdgesState(
           const newCrudExp = { ...(ep.crudExplanations || {}) };
           delete newCrudExp[targetDbId!];
 
+          let newPipelineSteps = ep.pipelineSteps;
+          if (newPipelineSteps && newPipelineSteps.length > 0) {
+            const relatedEntityIds = new Set(
+              currentState.nodes
+                .filter(
+                  (n) =>
+                    n &&
+                    (n.id === targetDbId ||
+                      n.parentId === targetDbId ||
+                      (n.data as any)?.databaseId === targetDbId),
+                )
+                .map((n) => n.id),
+            );
+            newPipelineSteps = newPipelineSteps.filter((step) => {
+              if (step.type !== "db_operation") return true;
+              if (step.databaseId && step.databaseId === targetDbId) return false;
+              if (step.tableNodeId && relatedEntityIds.has(step.tableNodeId)) return false;
+              return true;
+            });
+          }
+
           const updatedEp = {
             ...ep,
             databaseNodeIds: newDbIds,
             databaseNodeId: newDbId,
             crudOperations: newCrudOps,
             crudExplanations: newCrudExp,
+            pipelineSteps: newPipelineSteps,
           };
           pendingEndpointUpserts.push(updatedEp);
           return updatedEp;

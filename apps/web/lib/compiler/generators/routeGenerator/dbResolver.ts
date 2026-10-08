@@ -113,6 +113,8 @@ export function pickDbFunctionsForEndpoint(
 
   for (const tableNodeId of targetNodeIds) {
     const tableNode = allNodes.find((n) => n.id === tableNodeId);
+    if (!tableNode) continue;
+
     let rawTableName =
       tableNode?.data?.label ||
       tableNode?.data?.tableRef ||
@@ -194,12 +196,19 @@ export function pickDbFunctionsForEndpoint(
 
     const method = (ep.type || "POST").toLowerCase();
     const rawOps = ep.crudOperations?.[tableNodeId];
+
+    // If explicit empty crudOperations are set for this table, user deliberately deselected/deleted ops
+    if (Array.isArray(rawOps) && rawOps.length === 0) {
+      continue;
+    }
+
     let selectedOps: string[] =
       Array.isArray(rawOps) && rawOps.length > 0
         ? rawOps
         : [];
 
-    if (selectedOps.length === 0) {
+    // Only default if endpoint has no explicit pipelineSteps and no crudOps map
+    if (selectedOps.length === 0 && (!ep.pipelineSteps || ep.pipelineSteps.length === 0)) {
       if (method === "get") {
         selectedOps = ["read"];
       } else if (method === "post") {

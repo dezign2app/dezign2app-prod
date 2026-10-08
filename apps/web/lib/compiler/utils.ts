@@ -316,4 +316,118 @@ export function toPlural(str: string): string {
   return str + (str.charAt(str.length - 1) === str.charAt(str.length - 1).toUpperCase() ? "S" : "s");
 }
 
+/**
+ * Strips comments from TypeScript/JavaScript code for AST/identifier scanning.
+ */
+export function stripComments(code: string): string {
+  if (!code) return "";
+  const noBlock = code.replace(/\/\*[\s\S]*?\*\//g, (m) => "\n".repeat(m.split("\n").length - 1));
+  return noBlock.replace(/\/\/.*$/gm, "");
+}
+
+/**
+ * Parses import declarations in a TypeScript/JavaScript source file and removes any imported symbols
+ * that are not actually referenced in the file content (outside of comments and import statements).
+ * Completely removes import declarations that have no remaining symbols.
+ */
+export function cleanUnusedImports(sourceCode: string): string {
+  if (!sourceCode || !sourceCode.includes("import")) return sourceCode;
+
+  const importStmtRegex = /(?:^|\n)(import(?:\s+type)?\s+([\s\S]*?)\s+from\s+['"][^'"]+['"]\s*;?)/g;
+
+  // Code body without imports or comments to verify true identifier usage
+  const codeWithoutImports = sourceCode.replace(/(?:^|\n)import\b[\s\S]*?(?:from\s+['"][^'"]+['"]|['"][^'"]+['"])\s*;?/g, "\n");
+  const codeWithoutComments = stripComments(codeWithoutImports);
+
+  function isUsed(id: string): boolean {
+    if (!id) return false;
+    const cleanId = id.trim();
+    if (!cleanId) return false;
+    const re = new RegExp(`\\b${cleanId}\\b`);
+    return re.test(codeWithoutComments);
+  }
+
+  return sourceCode.replace(importStmtRegex, (fullMatch, fullImport, clause) => {
+    const fromIndex = fullImport.indexOf("from");
+    if (fromIndex === -1) return fullMatch;
+    const fromPart = fullImport.slice(fromIndex);
+    const importPrefix = fullImport.slice(0, fullImport.indexOf(clause));
+
+    let defaultSpecifier: string | null = null;
+    let namespaceSpecifier: string | null = null;
+    let namedSpecifiersStr: string | null = null;
+
+    let remainingClause = clause.trim();
+
+    // Check for namespace: "* as foo"
+    const nsMatch = remainingClause.match(/\*\s+as\s+([a-zA-Z0-9_$]+)/);
+    if (nsMatch) {
+      namespaceSpecifier = nsMatch[1];
+      remainingClause = remainingClause.replace(/\*\s+as\s+[a-zA-Z0-9_$]+/, "").trim();
+    }
+
+    // Check for named: "{ ... }"
+    const namedMatch = remainingClause.match(/\{([^}]*)\}/);
+    if (namedMatch) {
+      namedSpecifiersStr = namedMatch[1];
+      remainingClause = remainingClause.replace(/\{[^}]*\}/, "").trim();
+    }
+
+    // Any remaining identifier before comma or alone is default:
+    const defMatch = remainingClause.replace(/,/g, "").trim();
+    if (defMatch && /^[a-zA-Z0-9_$]+$/.test(defMatch)) {
+      defaultSpecifier = defMatch;
+    }
+
+    let keepDefault = false;
+    if (defaultSpecifier) {
+      keepDefault = isUsed(defaultSpecifier);
+    }
+
+    let keepNamespace = false;
+    if (namespaceSpecifier) {
+      keepNamespace = isUsed(namespaceSpecifier);
+    }
+
+    const remainingNamed: string[] = [];
+    if (namedSpecifiersStr !== null) {
+      const specifiers = namedSpecifiersStr
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+
+      for (const spec of specifiers) {
+        const asMatch = spec.match(/^[a-zA-Z0-9_$]+\s+as\s+([a-zA-Z0-9_$]+)$/);
+        const localName = asMatch ? asMatch[1] : spec;
+        if (isUsed(localName)) {
+          remainingNamed.push(spec);
+        }
+      }
+    }
+
+    const hasNamed = remainingNamed.length > 0;
+    if (!keepDefault && !keepNamespace && !hasNamed) {
+      return fullMatch.startsWith("\n") ? "" : "";
+    }
+
+    const parts: string[] = [];
+    if (keepDefault && defaultSpecifier) {
+      parts.push(defaultSpecifier);
+    }
+    if (keepNamespace && namespaceSpecifier) {
+      parts.push(`* as ${namespaceSpecifier}`);
+    }
+    if (hasNamed) {
+      if (namedSpecifiersStr && namedSpecifiersStr.includes("\n") && remainingNamed.length > 2) {
+        parts.push(`{\n  ${remainingNamed.join(",\n  ")}\n}`);
+      } else {
+        parts.push(`{ ${remainingNamed.join(", ")} }`);
+      }
+    }
+
+    const reconstructed = `${importPrefix}${parts.join(", ")} ${fromPart}`;
+    return fullMatch.startsWith("\n") ? `\n${reconstructed}` : reconstructed;
+  }).replace(/\n{3,}/g, "\n\n");
+}
+
 

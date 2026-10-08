@@ -561,21 +561,27 @@ export function compileDatabaseNodes(
       generateCentralDbTest(packages, primaryFolder),
     ];
 
-    // Helper forwarders for every helper file in child packages
+    // Helper forwarders for every helper file in child packages (supporting both singular and plural imports)
     const seenHelperFiles = new Set<string>();
     packages.forEach((p) => {
       p.files.forEach((f) => {
         if (f.filename.startsWith("helpers/") && f.filename !== "helpers/index.ts") {
           const helperSubPath = f.filename.slice("helpers/".length);
           const helperBase = helperSubPath.replace(/\.ts$/, "");
-          if (!seenHelperFiles.has(helperBase)) {
-            seenHelperFiles.add(helperBase);
-            centralFiles.push({
-              filename: `helpers/${helperSubPath}`,
-              language: "typescript",
-              content: `export * from "../${p.packageFolder}/helpers/${helperBase}";\n`,
-            });
-          }
+          const singularBase = toSingular(helperBase);
+          const pluralBase = toPlural(helperBase);
+          const aliases = Array.from(new Set([helperBase, singularBase, pluralBase])).filter(Boolean);
+
+          aliases.forEach((alias) => {
+            if (!seenHelperFiles.has(alias)) {
+              seenHelperFiles.add(alias);
+              centralFiles.push({
+                filename: `helpers/${alias}.ts`,
+                language: "typescript",
+                content: `export * from "../${p.packageFolder}/helpers/${helperBase}";\n`,
+              });
+            }
+          });
         }
       });
     });

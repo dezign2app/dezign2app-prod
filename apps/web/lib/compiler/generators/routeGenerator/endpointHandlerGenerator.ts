@@ -6,7 +6,7 @@
 
 import { Endpoint, AnyMessagingResource, CompiledFile, ReusableFunction } from "@workspace/canvas/types";
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { parseSchemaJson, deriveRouteFileName } from "../../utils";
+import { parseSchemaJson, deriveRouteFileName, cleanUnusedImports } from "../../utils";
 import { parametersToTsInterface, schemaToTsInterface } from "../schemaToTypeScript";
 import { resolveEndpointTrace } from "../../traceResolver";
 import { pickDbFunctionsForEndpoint } from "./dbResolver";
@@ -154,15 +154,22 @@ export function generateEndpointRouteHandler(
       )
     : { incoming: [], outgoing: [] };
 
+  const pipelineSteps = ep.pipelineSteps;
+  const hasPipelineSteps = Array.isArray(pipelineSteps) && pipelineSteps.length > 0;
+
   // --- Resolve reusable function imports ---
-  const pickedDbOps = pickDbFunctionsForEndpoint(
-    ep,
-    dbFunctions,
-    allNodes,
-    path,
-    allEdges,
-    redisFunctions,
-  );
+  // In pipeline mode, database operations and imports are driven strictly by the configured pipeline steps.
+  // Do NOT auto-infer legacy CRUD database operations when explicit pipeline steps exist.
+  const pickedDbOps = hasPipelineSteps
+    ? []
+    : pickDbFunctionsForEndpoint(
+        ep,
+        dbFunctions,
+        allNodes,
+        path,
+        allEdges,
+        redisFunctions,
+      );
   const hasPublishedEvents =
     nodePublishedEvents.length > 0 || Boolean(ep.publishedEvents && ep.publishedEvents.length > 0);
   const hasBrokerTrace = trace.outgoing.some((out) => out.nodeType === "Message Broker");
@@ -229,10 +236,7 @@ export function generateEndpointRouteHandler(
   // -----------------------------------------------------------------------
   // PIPELINE MODE: explicit configured pipeline steps
   // -----------------------------------------------------------------------
-  const pipelineSteps = ep.pipelineSteps;
-  const hasPipelineSteps = Array.isArray(pipelineSteps) && pipelineSteps.length > 0;
-
-  if (hasPipelineSteps) {
+  if (hasPipelineSteps && pipelineSteps) {
     const allReusableFunctions = [
       ...dbFunctions,
       ...(redisFunctions || []),
@@ -306,7 +310,7 @@ export function generateEndpointRouteHandler(
       file: {
         filename: `src/routes/${routeFileName}.ts`,
         language: "typescript",
-        content: routeHandlerCode,
+        content: cleanUnusedImports(routeHandlerCode),
       },
       routeImport: `import { ${handlerName} } from "./${routeFileName}";`,
       routeRegistration: `router.${method}("${path}", ${handlerName});`,
@@ -407,7 +411,7 @@ export function generateEndpointRouteHandler(
     file: {
       filename: `src/routes/${routeFileName}.ts`,
       language: "typescript",
-      content: routeHandlerCode,
+      content: cleanUnusedImports(routeHandlerCode),
     },
     routeImport: `import { ${handlerName} } from "./${routeFileName}";`,
     routeRegistration: `router.${method}("${path}", ${handlerName});`,
