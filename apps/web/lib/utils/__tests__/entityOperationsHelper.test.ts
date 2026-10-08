@@ -361,11 +361,12 @@ describe("entityOperationsHelper - Redis Operations Generator", () => {
         id: "node-user-1",
         type: "entity",
         position: { x: 0, y: 0 },
+        fractionalIndex: "a0",
         data: {
           label: "User",
           columns: [
-            { id: "col-1", name: "id", type: "string", isPrimaryKey: true },
-            { id: "col-2", name: "name", type: "string" },
+            { name: "id", type: "string", isPrimaryKey: true },
+            { name: "name", type: "string" },
           ],
           dbOperations: [
             { id: "auto-find-all-user", name: "findAllUsers", kind: "findAll" },

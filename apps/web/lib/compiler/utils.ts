@@ -398,8 +398,8 @@ export function cleanUnusedImports(sourceCode: string): string {
 
       for (const spec of specifiers) {
         const asMatch = spec.match(/^[a-zA-Z0-9_$]+\s+as\s+([a-zA-Z0-9_$]+)$/);
-        const localName = asMatch ? asMatch[1] : spec;
-        if (isUsed(localName)) {
+        const localName = (asMatch && asMatch[1]) ? asMatch[1] : spec;
+        if (localName && isUsed(localName)) {
           remainingNamed.push(spec);
         }
       }
