@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Globe, LayoutTemplate, Copy, Check, ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../backend-nodes/graph-nodes/shared";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
 import { AuthAwarenessBanner } from "../AuthAwarenessBanner";
@@ -206,10 +207,11 @@ export function WebPageHeaderSection({
         <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
           Summary
         </Label>
-        <Input
+        <LocalInput
           className="bg-background/50 text-xs"
           placeholder="e.g. Fetches or submits client data."
           value={summary || description || ""}
+          debounceMs={150}
           onChange={(e) => onUpdateSummary(e.target.value)}
         />
       </div>

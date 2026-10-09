@@ -260,6 +260,7 @@ export const ConfigSidebar = () => {
             <WebPageSectionConfig id={id} nodeId={nodeId} />
           ) : type === "pageState" ? (
             <WebPageStateConfig
+              key={`${nodeId}-${id}`}
               id={id}
               nodeId={nodeId}
               sectionId={activeConfigItem.sectionId}

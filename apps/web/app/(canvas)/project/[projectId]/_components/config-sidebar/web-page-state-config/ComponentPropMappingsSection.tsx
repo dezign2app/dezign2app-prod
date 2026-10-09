@@ -5,7 +5,7 @@ import { SlidersHorizontal } from "lucide-react";
 import { StateRenderComponent, ComponentPropMappings } from "@/types/canvas";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../backend-nodes/graph-nodes/shared";
 import { Switch } from "@workspace/ui/components/switch";
 import {
   Select,
@@ -61,7 +61,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
                 Bound to State
               </Badge>
             </div>
-            <Input
+            <LocalInput
               value={propMappings.valueBinding ?? stateName}
               onChange={(e) => onUpdatePropMapping({ valueBinding: e.target.value })}
               placeholder={stateName}
@@ -105,7 +105,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
             <Label className="text-[11px] font-medium text-foreground">
               Placeholder (<code className="font-mono text-[10px] text-cyan-500">placeholder</code>)
             </Label>
-            <Input
+            <LocalInput
               value={propMappings.placeholder || ""}
               onChange={(e) => onUpdatePropMapping({ placeholder: e.target.value })}
               placeholder={`Enter ${displayLabel}...`}
@@ -198,7 +198,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
             <Label className="text-[11px] font-medium text-foreground">
               Card Title (<code className="font-mono text-[10px] text-cyan-500">title</code>)
             </Label>
-            <Input
+            <LocalInput
               value={propMappings.titleBinding || ""}
               onChange={(e) => onUpdatePropMapping({ titleBinding: e.target.value })}
               placeholder={displayLabel}
@@ -213,7 +213,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
             <Label className="text-[11px] font-medium text-foreground">
               Card Subtitle / Description (<code className="font-mono text-[10px] text-cyan-500">description</code>)
             </Label>
-            <Input
+            <LocalInput
               value={propMappings.descriptionBinding || ""}
               onChange={(e) => onUpdatePropMapping({ descriptionBinding: e.target.value })}
               placeholder="e.g. Total count or last 30 days"
@@ -231,7 +231,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
               <Label className="text-[11px] font-medium text-foreground">
                 Max Value (<code className="font-mono text-[10px] text-cyan-500">max</code>)
               </Label>
-              <Input
+              <LocalInput
                 type="number"
                 value={propMappings.max ?? 100}
                 onChange={(e) => onUpdatePropMapping({ max: Number(e.target.value) || 100 })}
@@ -264,7 +264,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
             <Label className="text-[11px] font-medium text-foreground">
               Alert Title (<code className="font-mono text-[10px] text-cyan-500">title</code>)
             </Label>
-            <Input
+            <LocalInput
               value={propMappings.alertTitle || ""}
               onChange={(e) => onUpdatePropMapping({ alertTitle: e.target.value })}
               placeholder="e.g. System Notice"
@@ -284,7 +284,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
             <Label className="text-[11px] font-medium text-foreground">
               Image URL (<code className="font-mono text-[10px] text-cyan-500">src</code>)
             </Label>
-            <Input
+            <LocalInput
               value={propMappings.avatarSrc || ""}
               onChange={(e) => onUpdatePropMapping({ avatarSrc: e.target.value })}
               placeholder="https://example.com/avatar.jpg"
@@ -299,7 +299,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
             <Label className="text-[11px] font-medium text-foreground">
               Fallback Initials (<code className="font-mono text-[10px] text-cyan-500">fallback</code>)
             </Label>
-            <Input
+            <LocalInput
               value={propMappings.avatarFallback || ""}
               onChange={(e) => onUpdatePropMapping({ avatarFallback: e.target.value })}
               placeholder={displayLabel.slice(0, 2).toUpperCase() || "AV"}

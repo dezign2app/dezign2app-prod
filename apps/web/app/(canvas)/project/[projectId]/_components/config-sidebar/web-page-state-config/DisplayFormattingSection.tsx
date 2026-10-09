@@ -4,7 +4,7 @@ import React from "react";
 import { Type } from "lucide-react";
 import { StateRenderComponent, StateRenderConfig } from "@/types/canvas";
 import { Label } from "@workspace/ui/components/label";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../backend-nodes/graph-nodes/shared";
 import {
   Select,
   SelectContent,
@@ -47,7 +47,7 @@ export const DisplayFormattingSection: React.FC<DisplayFormattingSectionProps> =
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
           <Label className="text-[11px] text-muted-foreground">Display Label / Title</Label>
-          <Input
+          <LocalInput
             value={label}
             onChange={(e) => onUpdateRenderConfig({ label: e.target.value })}
             placeholder={stateName}
@@ -104,7 +104,7 @@ export const DisplayFormattingSection: React.FC<DisplayFormattingSectionProps> =
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-[11px] text-muted-foreground">Empty / Fallback Text</Label>
-          <Input
+          <LocalInput
             value={fallbackText}
             onChange={(e) => onUpdateRenderConfig({ fallbackText: e.target.value })}
             placeholder="—"
@@ -114,7 +114,7 @@ export const DisplayFormattingSection: React.FC<DisplayFormattingSectionProps> =
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-[11px] text-muted-foreground">Prefix</Label>
-          <Input
+          <LocalInput
             value={prefix}
             onChange={(e) => onUpdateRenderConfig({ prefix: e.target.value })}
             placeholder="e.g. $"
@@ -124,7 +124,7 @@ export const DisplayFormattingSection: React.FC<DisplayFormattingSectionProps> =
 
         <div className="flex flex-col gap-1.5">
           <Label className="text-[11px] text-muted-foreground">Suffix</Label>
-          <Input
+          <LocalInput
             value={suffix}
             onChange={(e) => onUpdateRenderConfig({ suffix: e.target.value })}
             placeholder="e.g. items, USD, %"

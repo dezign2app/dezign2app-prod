@@ -1,6 +1,6 @@
 import React from "react";
 import { Layers } from "lucide-react";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../backend-nodes/graph-nodes/shared";
 import { Label } from "@workspace/ui/components/label";
 
 interface WebPageMembershipSectionProps {
@@ -18,18 +18,6 @@ export function WebPageMembershipSection({
   onUpdateLabel,
   onUpdateAppSlug,
 }: WebPageMembershipSectionProps) {
-  const [currentLabel, setCurrentLabel] = React.useState(label || "");
-
-  React.useEffect(() => {
-    setCurrentLabel(label || "");
-  }, [label]);
-
-  const handleCommitLabel = () => {
-    if (currentLabel !== label) {
-      onUpdateLabel(currentLabel);
-    }
-  };
-
   return (
     <div className="flex flex-col gap-4 p-4 rounded-xl bg-card border border-border/60 shadow-sm">
       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -40,13 +28,9 @@ export function WebPageMembershipSection({
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-2">
           <Label className="text-xs text-muted-foreground">Page Route Name</Label>
-          <Input
-            value={currentLabel}
-            onChange={(e) => setCurrentLabel(e.target.value)}
-            onBlur={handleCommitLabel}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleCommitLabel();
-            }}
+          <LocalInput
+            value={label || ""}
+            onChange={(e) => onUpdateLabel(e.target.value)}
             placeholder="e.g. /dashboard/settings"
             className="h-8 text-xs bg-background/50 font-mono"
           />
@@ -54,7 +38,7 @@ export function WebPageMembershipSection({
 
         <div className="flex flex-col gap-2">
           <Label className="text-xs text-muted-foreground">Target Monorepo App</Label>
-          <Input
+          <LocalInput
             value={appSlug}
             onChange={(e) => onUpdateAppSlug(e.target.value)}
             placeholder="e.g. customer-portal"

@@ -1,6 +1,6 @@
 import React from "react";
 import { ShieldCheck } from "lucide-react";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../backend-nodes/graph-nodes/shared";
 import { Label } from "@workspace/ui/components/label";
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import {
@@ -118,7 +118,7 @@ export function WebPageProtectionSection({
               <Label className="text-xs text-muted-foreground">
                 Allowed Roles (comma-separated)
               </Label>
-              <Input
+              <LocalInput
                 value={allowedRoles.join(", ")}
                 onChange={(e) =>
                   onUpdateAllowedRoles(
@@ -139,7 +139,7 @@ export function WebPageProtectionSection({
               <Label className="text-xs text-muted-foreground">
                 Required Plan Tiers (comma-separated)
               </Label>
-              <Input
+              <LocalInput
                 value={requiredPlans.join(", ")}
                 onChange={(e) =>
                   onUpdateRequiredPlans(
@@ -160,7 +160,7 @@ export function WebPageProtectionSection({
               <Label className="text-xs text-muted-foreground">
                 Unauthorized Redirect Target Route
               </Label>
-              <Input
+              <LocalInput
                 value={redirectTo}
                 onChange={(e) => onUpdateRedirectTo(e.target.value)}
                 placeholder="e.g. /login, /pricing"

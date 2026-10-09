@@ -8,7 +8,7 @@ import {
   UIEventItem,
 } from "@/types/canvas";
 import { Label } from "@workspace/ui/components/label";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../backend-nodes/graph-nodes/shared";
 import {
   Select,
   SelectContent,
@@ -79,7 +79,7 @@ export const ClickInteractivitySection: React.FC<ClickInteractivitySectionProps>
               <Copy size={11} />
               <span>Toast Feedback Message</span>
             </Label>
-            <Input
+            <LocalInput
               value={copyToastMessage || ""}
               onChange={(e) => onUpdateRenderConfig({ copyToastMessage: e.target.value })}
               placeholder={`Copied ${stateName} to clipboard!`}
@@ -123,7 +123,7 @@ export const ClickInteractivitySection: React.FC<ClickInteractivitySectionProps>
         {currentClickAction === "navigate" && (
           <div className="flex flex-col gap-2 p-3 rounded-lg bg-muted/20 border border-border/50">
             <Label className="text-[11px] text-muted-foreground">Destination Route</Label>
-            <Input
+            <LocalInput
               value={targetRoute || ""}
               onChange={(e) => onUpdateRenderConfig({ targetRoute: e.target.value })}
               placeholder="/dashboard or /login"
