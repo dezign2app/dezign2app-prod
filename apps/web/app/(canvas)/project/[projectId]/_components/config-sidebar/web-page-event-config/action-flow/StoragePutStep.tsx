@@ -12,7 +12,7 @@ import {
 import type { StoragePutStepProps } from "./types";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
 import { ActionFlowCombobox } from "./ActionFlowCombobox";
-import { ensureActionStorageConnection } from "./actionStepCanvasSync";
+import { ensureActionStorageConnection, cleanupActionStepEdge } from "./actionStepCanvasSync";
 
 const COMMON_CONTENT_TYPES = [
   "application/octet-stream",
@@ -80,6 +80,25 @@ export const StoragePutStep: React.FC<StoragePutStepProps> = ({
 
   const handleBucketSelect = (selectedBucketId: string) => {
     const bInfo = availableBuckets.find((b) => b.bucketId === selectedBucketId);
+    const oldEdgeId =
+      draft.edgeId ||
+      canvasStep?.edgeId ||
+      canvasStep?.edge?.id;
+
+    if (!selectedBucketId) {
+      if (oldEdgeId) {
+        cleanupActionStepEdge(oldEdgeId);
+      }
+      onChange({
+        ...draft,
+        bucketId: "",
+        bucketName: "",
+        storageRefNodeId: undefined,
+        edgeId: undefined,
+      });
+      return;
+    }
+
     let newEdgeId: string | undefined;
     let newRefNodeId: string | undefined;
 
@@ -90,6 +109,7 @@ export const StoragePutStep: React.FC<StoragePutStepProps> = ({
         storageNodeId: bInfo?.storageNodeId,
         bucketId: selectedBucketId,
         stepOrder: stepIndex + 1,
+        previousEdgeId: oldEdgeId,
       });
       newEdgeId = res?.edgeId;
       newRefNodeId = res?.refNodeId;
@@ -100,7 +120,7 @@ export const StoragePutStep: React.FC<StoragePutStepProps> = ({
       bucketId: selectedBucketId,
       bucketName: bInfo?.bucketName || selectedBucketId,
       storageRefNodeId: newRefNodeId || draft.storageRefNodeId,
-      edgeId: newEdgeId || draft.edgeId,
+      edgeId: newEdgeId || oldEdgeId,
     });
   };
 

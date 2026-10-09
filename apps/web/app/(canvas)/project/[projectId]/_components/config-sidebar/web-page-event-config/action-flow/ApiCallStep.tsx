@@ -17,7 +17,7 @@ import type {
 } from "./types";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
 import { ActionFlowCombobox, ComboboxOption } from "./ActionFlowCombobox";
-import { ensureActionServiceConnection } from "./actionStepCanvasSync";
+import { ensureActionServiceConnection, cleanupActionStepEdge } from "./actionStepCanvasSync";
 
 type SourceKindOption = "user_input" | "state_var" | "literal" | "prev_response";
 
@@ -115,6 +115,23 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
   const handleServiceSelect = (newServiceId: string) => {
     const eps = endpoints.filter((ep) => ep.nodeId === newServiceId);
     const defaultEpId = eps[0]?.id || "";
+    const oldEdgeId =
+      draft.edgeId ||
+      canvasStep?.edgeId ||
+      canvasStep?.edge?.id;
+
+    if (!newServiceId || !defaultEpId) {
+      if (oldEdgeId) {
+        cleanupActionStepEdge(oldEdgeId);
+      }
+      onChange({
+        ...draft,
+        serviceNodeId: newServiceId,
+        endpointId: "",
+        edgeId: undefined,
+      });
+      return;
+    }
 
     let newEdgeId: string | undefined;
     if (webPageNodeId && actionId && defaultEpId) {
@@ -124,6 +141,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
         serviceNodeId: newServiceId,
         endpointId: defaultEpId,
         stepOrder: stepIndex + 1,
+        previousEdgeId: oldEdgeId,
       });
     }
 
@@ -131,11 +149,28 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
       ...draft,
       serviceNodeId: newServiceId,
       endpointId: defaultEpId,
-      edgeId: newEdgeId || draft.edgeId,
+      edgeId: newEdgeId || oldEdgeId,
     });
   };
 
   const handleEndpointSelect = (newEndpointId: string) => {
+    const oldEdgeId =
+      draft.edgeId ||
+      canvasStep?.edgeId ||
+      canvasStep?.edge?.id;
+
+    if (!newEndpointId) {
+      if (oldEdgeId) {
+        cleanupActionStepEdge(oldEdgeId);
+      }
+      onChange({
+        ...draft,
+        endpointId: "",
+        edgeId: undefined,
+      });
+      return;
+    }
+
     let newEdgeId: string | undefined;
     if (webPageNodeId && actionId && currentServiceId) {
       newEdgeId = ensureActionServiceConnection({
@@ -144,13 +179,14 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
         serviceNodeId: currentServiceId,
         endpointId: newEndpointId,
         stepOrder: stepIndex + 1,
+        previousEdgeId: oldEdgeId,
       });
     }
 
     onChange({
       ...draft,
       endpointId: newEndpointId,
-      edgeId: newEdgeId || draft.edgeId,
+      edgeId: newEdgeId || oldEdgeId,
     });
   };
 

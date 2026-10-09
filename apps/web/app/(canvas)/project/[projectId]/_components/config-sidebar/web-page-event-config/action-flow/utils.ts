@@ -69,6 +69,9 @@ export function deriveStepsFromEdges(
   if (existing) {
     for (const draft of existing) {
       existingMap.set(draft.id, draft);
+      if (draft.edgeId) {
+        existingMap.set(draft.edgeId, draft);
+      }
       orderMap.set(draft.order, draft);
     }
   }
@@ -101,9 +104,10 @@ export function deriveStepsFromEdges(
         existingDraft?.contentType || "application/octet-stream";
 
       const draft: FrontendActionStepDraft = {
-        id: cStep.edgeId,
+        id: existingDraft?.id || cStep.edgeId,
         order,
         type: "storage_put",
+        edgeId: cStep.edgeId,
         storageRefNodeId: cStep.targetNodeId,
         storageServiceNodeId: existingDraft?.storageServiceNodeId,
         presignedUrlSource,
@@ -118,9 +122,10 @@ export function deriveStepsFromEdges(
       existingDraft?.requestBindings ? [...existingDraft.requestBindings] : [];
 
     const draft: FrontendActionStepDraft = {
-      id: cStep.edgeId,
+      id: existingDraft?.id || cStep.edgeId,
       order,
       type: "api_call",
+      edgeId: cStep.edgeId,
       serviceNodeId: cStep.targetNodeId,
       endpointId: cStep.endpointId,
       requestBindings,
