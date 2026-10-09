@@ -460,19 +460,6 @@ export const DatabaseTableRefNode = ({
         </div>
       </div>
 
-      {/* Source Handle on Right to connect cleanly into ServiceNode on the left */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="database-source"
-        className={cn(
-          "w-2.5 h-2.5 border-2 transition-colors -right-[5px]",
-          hasAnyConnectedOperation
-            ? "!bg-orange-500 !border-orange-500 ring-2 ring-orange-500/30"
-            : "!bg-background border-muted-foreground/60 hover:!bg-orange-400",
-        )}
-        style={{ top: "18px" }}
-      />
 
       {hasPipelineError && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[11px] text-destructive leading-tight">
@@ -800,6 +787,27 @@ export const DatabaseTableRefNode = ({
                     position={Position.Left}
                     id={`func-${op.id}`}
                     className="opacity-0 pointer-events-none -left-[5px]"
+                    style={{ top: "50%", transform: "translateY(-50%)" }}
+                  />
+                )}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={`func-out-${op.name}`}
+                  className={cn(
+                    "w-2.5 h-2.5 border-2 transition-colors -right-[5px]",
+                    hasAnyConnectedOperation
+                      ? "!bg-orange-500 !border-orange-500 ring-2 ring-orange-500/30"
+                      : "!bg-background border-muted-foreground/60 hover:!bg-orange-400",
+                  )}
+                  style={{ top: "50%", transform: "translateY(-50%)" }}
+                />
+                {op.id && op.id !== op.name && (
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={`func-out-${op.id}`}
+                    className="opacity-0 pointer-events-none -right-[5px]"
                     style={{ top: "50%", transform: "translateY(-50%)" }}
                   />
                 )}
