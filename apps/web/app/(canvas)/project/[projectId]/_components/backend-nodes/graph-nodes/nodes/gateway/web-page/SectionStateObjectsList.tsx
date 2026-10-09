@@ -534,14 +534,32 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
                     <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0" />
                     <span
                       className="font-medium text-foreground/90 truncate cursor-pointer hover:text-cyan-400 transition-colors"
-                      onClick={() => handleStartEdit(st)}
-                      title="Click to edit field name"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveConfigItem({
+                          type: "pageState",
+                          id: st.id,
+                          nodeId,
+                          sectionId: section.id,
+                        });
+                      }}
+                      title="Click to configure state variable"
                     >
                       {st.name}
                     </span>
                     <span className="text-[7px] px-1 py-0.2 rounded bg-secondary text-muted-foreground/80 border border-border/40 shrink-0">
                       {st.type}
                     </span>
+                    {st.renderConfig?.component && st.renderConfig.component !== "text" && (
+                      <span className="text-[7px] px-1 py-0.2 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
+                        {st.renderConfig.component}
+                      </span>
+                    )}
+                    {st.renderConfig?.enabled === false && (
+                      <span className="text-[7px] px-1 py-0.2 rounded bg-muted/60 text-muted-foreground/60 border border-border/30 shrink-0" title="Hidden from UI">
+                        hidden
+                      </span>
+                    )}
                     {st.storeName && (
                       <span className="text-[7px] px-1 py-0.2 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 shrink-0 truncate max-w-[65px]">
                         {st.storeName}
@@ -561,11 +579,19 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
                   <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0 ml-1">
                     <button
                       type="button"
-                      onClick={() => handleStartEdit(st)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveConfigItem({
+                          type: "pageState",
+                          id: st.id,
+                          nodeId,
+                          sectionId: section.id,
+                        });
+                      }}
                       className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                      title="Edit state object"
+                      title="Configure state variable rendering"
                     >
-                      <Pencil size={10} />
+                      <Settings size={10} />
                     </button>
                     <button
                       type="button"

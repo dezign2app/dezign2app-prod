@@ -635,6 +635,7 @@ export const pageStateObjectConvexValidator = v.object({
   storeName: v.optional(v.string()),
   fieldId: v.optional(v.string()),
   description: v.optional(v.string()),
+  renderConfig: v.optional(v.any()),
 });
 
 // Page Section Validator

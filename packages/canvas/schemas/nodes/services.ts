@@ -265,6 +265,24 @@ export const clientEventInputSchema = z.object({
 
 export const webPageEventSchema = clientEventInputSchema;
 
+export const stateRenderConfigSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    component: z.string().optional(),
+    variant: z.enum(["default", "secondary", "outline", "destructive"]).optional(),
+    label: z.string().optional(),
+    prefix: z.string().optional(),
+    suffix: z.string().optional(),
+    fallbackText: z.string().optional(),
+    formatter: z.enum(["none", "currency", "number", "json", "date"]).optional(),
+    clickAction: z.enum(["none", "trigger_event", "copy_to_clipboard", "navigate", "toggle_state"]).optional(),
+    targetActionId: z.string().optional(),
+    targetRoute: z.string().optional(),
+    copyToastMessage: z.string().optional(),
+    propMappings: z.record(z.any()).optional(),
+  })
+  .optional();
+
 export const pageStateObjectSchema = z.object({
   id: z.string().describe("Unique state object ID"),
   name: z.string().describe("State variable / field name"),
@@ -274,6 +292,7 @@ export const pageStateObjectSchema = z.object({
   storeName: z.string().optional().describe("Source Zustand StateStore name"),
   fieldId: z.string().optional().describe("Source field ID within store"),
   description: z.string().optional().describe("Description of state object"),
+  renderConfig: stateRenderConfigSchema.describe("Rendering and interaction configuration for this state variable"),
 });
 
 export const pageSectionSchema = z.object({

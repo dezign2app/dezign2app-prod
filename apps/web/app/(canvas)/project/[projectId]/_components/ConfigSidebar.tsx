@@ -37,6 +37,7 @@ import { RedisCacheRefConfig } from "./config-sidebar/RedisCacheRefConfig";
 import { HookConfig } from "./config-sidebar/HookConfig";
 import { TypesConfig } from "./config-sidebar/TypesConfig";
 import { WebPageRealtimeConnectionConfig } from "./config-sidebar/WebPageRealtimeConnectionConfig";
+import { WebPageStateConfig } from "./config-sidebar/WebPageStateConfig";
 import { StateStoreConfig } from "./config-sidebar/StateStoreConfig";
 import { StorageNodeConfig } from "./config-sidebar/StorageNodeConfig";
 import { StorageOperationRefConfig } from "./config-sidebar/StorageOperationRefConfig";
@@ -257,6 +258,12 @@ export const ConfigSidebar = () => {
             <WebPageConfig id={id} nodeId={nodeId} />
           ) : type === "pageSection" ? (
             <WebPageSectionConfig id={id} nodeId={nodeId} />
+          ) : type === "pageState" ? (
+            <WebPageStateConfig
+              id={id}
+              nodeId={nodeId}
+              sectionId={activeConfigItem.sectionId}
+            />
           ) : type === "payments" ? (
             <PaymentsConfig id={id} nodeId={nodeId} />
           ) : type === "zone" ? (

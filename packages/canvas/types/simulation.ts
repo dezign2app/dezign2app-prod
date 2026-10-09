@@ -51,6 +51,71 @@ export interface SectionStateVariable {
   description?: string;
 }
 
+export type StateRenderComponent =
+  | "badge"
+  | "card"
+  | "button"
+  | "switch"
+  | "checkbox"
+  | "progress"
+  | "input"
+  | "alert"
+  | "avatar"
+  | "skeleton"
+  | "table"
+  | "code"
+  | "text";
+
+export interface ComponentPropMappings {
+  // Input
+  inputType?: "text" | "number" | "password" | "email" | "tel" | "url" | "date";
+  placeholder?: string;
+  readOnly?: boolean;
+  disabled?: boolean;
+  valueBinding?: string;
+
+  // Card
+  titleBinding?: string;
+  descriptionBinding?: string;
+
+  // Button
+  buttonSize?: "default" | "sm" | "lg" | "icon";
+
+  // Progress
+  max?: number;
+  showPercent?: boolean;
+
+  // Alert
+  alertTitle?: string;
+
+  // Avatar
+  avatarFallback?: string;
+  avatarSrc?: string;
+
+  // Skeleton
+  skeletonWidth?: string;
+  skeletonHeight?: string;
+
+  // Custom props
+  customProps?: Record<string, string>;
+}
+
+export interface StateRenderConfig {
+  enabled?: boolean;
+  component?: StateRenderComponent;
+  variant?: "default" | "secondary" | "outline" | "destructive";
+  label?: string;
+  prefix?: string;
+  suffix?: string;
+  fallbackText?: string;
+  formatter?: "none" | "currency" | "number" | "json" | "date";
+  clickAction?: "none" | "trigger_event" | "copy_to_clipboard" | "navigate" | "toggle_state";
+  targetActionId?: string;
+  targetRoute?: string;
+  copyToastMessage?: string;
+  propMappings?: ComponentPropMappings;
+}
+
 export interface PageStateObject {
   id: string;
   name: string;
@@ -61,6 +126,7 @@ export interface PageStateObject {
   storeName?: string;
   fieldId?: string;
   description?: string;
+  renderConfig?: StateRenderConfig;
 }
 
 export type PageSection = {
