@@ -308,13 +308,7 @@ describe("syncTestEnv via Compiler", () => {
     expect(uploadActionCode).not.toContain("requestBody?: never");
     expect(uploadActionCode).not.toContain("Promise<any>");
 
-    const targetActionPath = path.join(TEST_ENV_DIR, "apps/web/app/(public)/not-found/_components/navigation/UploadImageAction.tsx");
-    if (fs.existsSync(path.dirname(targetActionPath))) {
-      fs.writeFileSync(targetActionPath, uploadActionCode, "utf-8");
-      console.log("Updated via compiler:", targetActionPath);
-    }
-
-    // 4. Generate Next.js NavigationSection component
+    // 4. Generate Next.js NavigationSection component (404 only has Back to Home)
     const navSectionCode = generateSectionComponent(
       {
         id: "sec-nav",
@@ -330,13 +324,6 @@ describe("syncTestEnv via Compiler", () => {
           url: "/",
           method: "GET",
           targetRoute: "/",
-        },
-        {
-          componentName: "UploadImageAction",
-          eventName: "upload image",
-          eventType: "custom",
-          url: "/upload-image",
-          method: "POST",
         },
       ],
     );
@@ -384,13 +371,6 @@ describe("syncTestEnv via Compiler", () => {
               url: "/",
               method: "GET",
               targetRoute: "/",
-            },
-            {
-              componentName: "UploadImageAction",
-              eventName: "upload image",
-              eventType: "custom",
-              url: "/upload-image",
-              method: "POST",
             },
           ],
         },
