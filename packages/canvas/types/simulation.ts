@@ -119,7 +119,9 @@ export type FrontendFieldSource =
   | { kind: "literal"; value: string }
   | { kind: "state_var"; stateKey: string }
   | { kind: "prev_response"; stepId: string; fieldPath: string }
-  | { kind: "user_input"; fieldName: string };
+  | { kind: "user_input"; fieldName: string }
+  | { kind: "route_param"; paramName: string }
+  | { kind: "query_param"; paramName: string };
 
 export type FrontendRequestFieldBinding = {
   id: string;

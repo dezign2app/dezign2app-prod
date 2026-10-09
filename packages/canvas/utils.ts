@@ -4,6 +4,7 @@ import type {
   BackendEdgeType,
   WebRtcCapabilities,
   WebRtcMediaMode,
+  Parameter,
 } from "./types";
 import { CONNECTION_RULES, EDGE_TYPE_MAP } from "./graph-rules";
 import { MESSAGING_RESOURCE_TYPES, MESSAGING_NODE_TYPES, BACKEND_EDGE_TYPES } from "./constants";
@@ -458,10 +459,14 @@ export function parsePageRoute(raw: string): string {
   if (!raw) return "";
   const trimmed = raw.trim();
   if (trimmed === "") return "";
-  if (trimmed === "/") return "/";
+  // Strip query string if present before folder route parsing
+  const qIndex = trimmed.indexOf("?");
+  const pathPart = qIndex >= 0 ? trimmed.slice(0, qIndex).trim() : trimmed;
+  if (pathPart === "") return "";
+  if (pathPart === "/") return "/";
 
   // Split into segments in case of nested paths (e.g. "dashboard/user profile")
-  const segments = trimmed
+  const segments = pathPart
     .split("/")
     .map((seg) => {
       const segTrimmed = seg.trim();
@@ -492,7 +497,82 @@ export function parsePageRoute(raw: string): string {
   if (segments.length === 0) return "/";
 
   const cleanPath = segments.join("/");
-  return trimmed.startsWith("/") ? `/${cleanPath}` : cleanPath;
+  return pathPart.startsWith("/") ? `/${cleanPath}` : cleanPath;
+}
+
+export interface ParsedRouteWithParams {
+  route: string;
+  extractedPathParams: Parameter[];
+  extractedQueryParams: Parameter[];
+}
+
+/**
+ * Parses a page route string that may include dynamic segments (e.g. /c/[id])
+ * and/or query parameters (e.g. ?limit=10&offset=20).
+ * Extracts clean route path, dynamic path params, and query params.
+ */
+export function parseRouteWithQueryParams(raw: string): ParsedRouteWithParams {
+  if (!raw) {
+    return { route: "", extractedPathParams: [], extractedQueryParams: [] };
+  }
+  const trimmed = raw.trim();
+  const qIndex = trimmed.indexOf("?");
+  const pathPart = qIndex >= 0 ? trimmed.slice(0, qIndex).trim() : trimmed;
+  const queryPart = qIndex >= 0 ? trimmed.slice(qIndex + 1).trim() : "";
+
+  const route = parsePageRoute(pathPart);
+
+  // Extract dynamic route segments: [id], [...slug], [[...slug]]
+  const extractedPathParams: Parameter[] = [];
+  const dynamicParamMatches = route.matchAll(/\[\[?\.\.\.([a-zA-Z0-9_-]+)\]?\]|\[([a-zA-Z0-9_-]+)\]/g);
+  const seenPathParams = new Set<string>();
+
+  for (const match of dynamicParamMatches) {
+    const paramName = match[1] || match[2];
+    if (paramName && !seenPathParams.has(paramName)) {
+      seenPathParams.add(paramName);
+      extractedPathParams.push({
+        id: `param-${paramName}`,
+        name: paramName,
+        type: "string",
+        required: true,
+      });
+    }
+  }
+
+  // Extract query parameters
+  const extractedQueryParams: Parameter[] = [];
+  if (queryPart) {
+    const searchParams = new URLSearchParams(queryPart);
+    const seenQueryParams = new Set<string>();
+
+    searchParams.forEach((val, key) => {
+      const cleanKey = key.trim();
+      if (cleanKey && !seenQueryParams.has(cleanKey)) {
+        seenQueryParams.add(cleanKey);
+        let paramType = "string";
+        if (!isNaN(Number(val)) && val.trim() !== "") {
+          paramType = "number";
+        } else if (val === "true" || val === "false") {
+          paramType = "boolean";
+        }
+
+        extractedQueryParams.push({
+          id: `query-${cleanKey}`,
+          name: cleanKey,
+          type: paramType,
+          defaultValue: val,
+          required: false,
+        });
+      }
+    });
+  }
+
+  return {
+    route,
+    extractedPathParams,
+    extractedQueryParams,
+  };
 }
 
 /**
@@ -519,6 +599,172 @@ export function pageRouteToFolderPath(routeOrLabel: string): string {
 export function pageRouteToUrl(routeOrLabel: string): string {
   const folder = pageRouteToFolderPath(routeOrLabel);
   return folder ? `/${folder}` : "/";
+}
+
+/**
+ * Computes the final compiled page route including query parameters.
+ * - For layouts: returns "layout"
+ * - For routes without query parameters: returns e.g. "/c/[id]"
+ * - For routes with query parameters: returns e.g. "/c/[id]?limit=20&offset=0"
+ */
+export function computeCompiledPageRoute({
+  label,
+  pathParams = [],
+  queryParams = [],
+  isLayout = false,
+}: {
+  label?: string;
+  pathParams?: Array<{ name?: string; key?: string }>;
+  queryParams?: Array<{ name?: string; key?: string; defaultValue?: any }>;
+  isLayout?: boolean;
+}): string {
+  if (isLayout) {
+    return "layout";
+  }
+  const cleanLabel = (label || "").trim();
+  let baseRoute = pageRouteToUrl(cleanLabel);
+
+  // Ensure all non-empty path parameters are represented in the base route path
+  if (pathParams && pathParams.length > 0) {
+    pathParams.forEach((p) => {
+      const name = (p.name || p.key || "").trim();
+      if (name && !baseRoute.includes(`[${name}]`) && !baseRoute.includes(`[...${name}]`)) {
+        if (baseRoute === "/" || baseRoute === "") {
+          baseRoute = `/[${name}]`;
+        } else {
+          baseRoute = `${baseRoute.replace(/\/+$/, "")}/[${name}]`;
+        }
+      }
+    });
+  }
+
+  const validQueryParams = (queryParams || []).filter(
+    (p) => p && typeof (p.name || p.key) === "string" && (p.name || p.key)!.trim().length > 0,
+  );
+
+  if (validQueryParams.length === 0) {
+    return baseRoute;
+  }
+
+  const queryParts = validQueryParams.map((p) => {
+    const k = (p.name || p.key)!.trim();
+    const v = p.defaultValue !== undefined && p.defaultValue !== null ? String(p.defaultValue).trim() : "";
+    if (v.length > 0) {
+      return `${k}=${v}`;
+    }
+    return k;
+  });
+
+  return `${baseRoute}?${queryParts.join("&")}`;
+}
+
+/**
+ * Synchronizes a page route URL with an updated list of path parameters.
+ * When a user renames, adds, or deletes a path param in the Path Params editor,
+ * this function updates the bracketed dynamic segments in the route URL.
+ *
+ * Examples:
+ * - "/c/[id]" with "id" renamed to "userId" -> "/c/[userId]"
+ * - "/docs/[...slug]" with "slug" renamed to "path" -> "/docs/[...path]"
+ * - "/c/[id]" with "id" removed -> "/c"
+ * - "/c" or "c" with "id" added -> "/c/[id]"
+ */
+export function syncRouteWithUpdatedPathParams({
+  currentRoute,
+  oldPathParams = [],
+  newPathParams = [],
+  isLayout = false,
+}: {
+  currentRoute: string;
+  oldPathParams?: Array<{ id?: string; name?: string; key?: string }>;
+  newPathParams?: Array<{ id?: string; name?: string; key?: string }>;
+  isLayout?: boolean;
+}): string {
+  if (isLayout || !currentRoute) {
+    return currentRoute || "/";
+  }
+
+  let route = currentRoute.trim();
+  if (route.toLowerCase() === "layout") {
+    return route;
+  }
+
+  // 1. Handle renamed parameters (matched by parameter id)
+  newPathParams.forEach((newP) => {
+    const oldP = oldPathParams.find((op) => op.id && newP.id && op.id === newP.id);
+    const newName = (newP.name || newP.key || "").trim();
+    if (oldP) {
+      const oldName = (oldP.name || oldP.key || "").trim();
+      if (oldName && newName && oldName !== newName) {
+        // Replace regular dynamic segment [oldName] with [newName]
+        const bracketOld = `[${oldName}]`;
+        const bracketNew = `[${newName}]`;
+        if (route.includes(bracketOld)) {
+          route = route.split(bracketOld).join(bracketNew);
+        }
+
+        // Replace catch-all segment [...oldName] with [...newName]
+        const catchAllOld = `[...${oldName}]`;
+        const catchAllNew = `[...${newName}]`;
+        if (route.includes(catchAllOld)) {
+          route = route.split(catchAllOld).join(catchAllNew);
+        }
+      }
+    }
+  });
+
+  // 2. Handle removed parameters (existed in oldPathParams, removed in newPathParams)
+  oldPathParams.forEach((oldP) => {
+    const stillExists = newPathParams.some(
+      (np) => (oldP.id && np.id && oldP.id === np.id) || (oldP.name && np.name && oldP.name === np.name),
+    );
+    if (!stillExists) {
+      const oldName = (oldP.name || oldP.key || "").trim();
+      if (oldName) {
+        // Remove catch-all or regular param segments
+        route = route.replace(new RegExp(`/\\[\\.\\.\\.${escapeRegexForRoute(oldName)}\\]`, "g"), "");
+        route = route.replace(new RegExp(`\\[\\.\\.\\.${escapeRegexForRoute(oldName)}\\]`, "g"), "");
+        route = route.replace(new RegExp(`/\\[${escapeRegexForRoute(oldName)}\\]`, "g"), "");
+        route = route.replace(new RegExp(`\\[${escapeRegexForRoute(oldName)}\\]`, "g"), "");
+      }
+    }
+  });
+
+  // 3. Ensure all non-empty parameters in newPathParams are present in the route
+  newPathParams.forEach((newP) => {
+    const newName = (newP.name || newP.key || "").trim();
+    if (newName) {
+      const bracketSegment = `[${newName}]`;
+      const catchAllSegment = `[...${newName}]`;
+      if (!route.includes(bracketSegment) && !route.includes(catchAllSegment)) {
+        if (route === "/" || route === "") {
+          route = `/${bracketSegment}`;
+        } else {
+          route = `${route.replace(/\/+$/, "")}/${bracketSegment}`;
+        }
+      }
+    }
+  });
+
+  // Clean up any double slashes or trailing slashes (unless root "/")
+  route = route.replace(/\/+/g, "/");
+  if (route.length > 1 && route.endsWith("/")) {
+    route = route.slice(0, -1);
+  }
+  if (!route || route === "") {
+    route = "/";
+  }
+
+  // Ensure leading slash for non-layout routes
+  if (route !== "layout" && !route.startsWith("/")) {
+    route = `/${route}`;
+  }
+
+  return route;
+}
+
+function escapeRegexForRoute(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**

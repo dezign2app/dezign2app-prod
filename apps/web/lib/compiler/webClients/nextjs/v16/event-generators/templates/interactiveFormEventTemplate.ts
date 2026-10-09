@@ -246,7 +246,7 @@ export function generateInteractiveFormEventTemplate({
   return `"use client";
 
 import React, { useState, useEffect } from "react";
-${storeImports}import { Button } from "@workspace/ui/components/button";
+${hasPathParams || hasQueryParams ? `import { useParams, useSearchParams } from "next/navigation";\n` : ""}${storeImports}import { Button } from "@workspace/ui/components/button";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@workspace/ui/components/card";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -255,7 +255,28 @@ ${libImports}${typeDefs.join("\n\n")}
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, string | number | boolean | null | undefined>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
+${hasPathParams || hasQueryParams ? `  const routeParams = useParams();\n  const routeSearchParams = useSearchParams();\n` : ""}${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, string | number | boolean | null | undefined>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
+${hasPathParams ? `  useEffect(() => {
+    if (routeParams) {
+      setPathParams((prev) => {
+        const next = { ...prev };
+        Object.entries(routeParams).forEach(([k, v]) => {
+          if (v !== undefined) next[k] = Array.isArray(v) ? v.join("/") : String(v);
+        });
+        return next;
+      });
+    }
+  }, [routeParams]);\n` : ""}${hasQueryParams ? `  useEffect(() => {
+    if (routeSearchParams) {
+      setQueryParams((prev) => {
+        const next = { ...prev };
+        routeSearchParams.forEach((v, k) => {
+          if (v !== undefined) next[k] = v;
+        });
+        return next;
+      });
+    }
+  }, [routeSearchParams]);\n` : ""}
   const computeFinalUrl = (): string => {
     let currentUrl = "${url}";
     let origin = "";

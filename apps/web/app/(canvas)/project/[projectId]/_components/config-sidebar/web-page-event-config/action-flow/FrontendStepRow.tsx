@@ -108,6 +108,7 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   allSteps={allSteps}
                   stepIndex={index}
                   allNodes={allNodes}
+                  webPageNodeId={webPageNodeId}
                   onChange={onChange}
                 />
               )}

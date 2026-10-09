@@ -195,7 +195,11 @@ export function getActionFlowRuntime(
                       ? `state.${b.source.stateKey}`
                       : b.source.kind === "user_input"
                         ? `input.${b.source.fieldName}`
-                        : `Step.${b.source.fieldPath}`;
+                        : b.source.kind === "route_param"
+                          ? `params.${b.source.paramName}`
+                          : b.source.kind === "query_param"
+                            ? `query.${b.source.paramName}`
+                            : `Step.${b.source.fieldPath || ""}`;
                 return `${b.targetField}: ${src}`;
               })
               .join(", ")

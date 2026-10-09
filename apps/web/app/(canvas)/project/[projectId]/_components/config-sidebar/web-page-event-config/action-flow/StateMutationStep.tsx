@@ -22,6 +22,7 @@ export interface StateMutationStepProps {
   allSteps: FrontendActionStepDraft[];
   stepIndex: number;
   allNodes: BackendNode[];
+  webPageNodeId?: string;
   onChange: (updated: FrontendActionStepDraft) => void;
 }
 
@@ -30,10 +31,34 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
   allSteps,
   stepIndex,
   allNodes,
+  webPageNodeId,
   onChange,
 }) => {
   const stateStores = allNodes.filter((n) => n.type === "state_store");
   const priorSteps = allSteps.slice(0, stepIndex);
+
+  const currentPageNode = React.useMemo(
+    () => allNodes.find((n) => n.id === webPageNodeId),
+    [allNodes, webPageNodeId],
+  );
+
+  const routeParamSuggestions = React.useMemo(() => {
+    const params = currentPageNode?.data?.pathParams || [];
+    return params.map((p) => ({
+      value: p.name,
+      label: p.name,
+      type: p.type || "string",
+    }));
+  }, [currentPageNode?.data?.pathParams]);
+
+  const queryParamSuggestions = React.useMemo(() => {
+    const queries = currentPageNode?.data?.queryParams || [];
+    return queries.map((q) => ({
+      value: q.name,
+      label: q.name,
+      type: q.type || "string",
+    }));
+  }, [currentPageNode?.data?.queryParams]);
 
   const targetKind = draft.stateTargetKind || "local";
   const updateType = draft.stateUpdateType || "set";
@@ -147,13 +172,29 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
             <Select
               value={valueSource.kind}
               onValueChange={(
-                val: "literal" | "state_var" | "user_input" | "prev_response",
+                val:
+                  | "literal"
+                  | "state_var"
+                  | "user_input"
+                  | "prev_response"
+                  | "route_param"
+                  | "query_param",
               ) => {
                 let nextSource: FrontendFieldSource;
                 if (val === "literal") {
                   nextSource = { kind: "literal", value: "" };
                 } else if (val === "state_var") {
                   nextSource = { kind: "state_var", stateKey: "" };
+                } else if (val === "route_param") {
+                  nextSource = {
+                    kind: "route_param",
+                    paramName: routeParamSuggestions[0]?.value || "",
+                  };
+                } else if (val === "query_param") {
+                  nextSource = {
+                    kind: "query_param",
+                    paramName: queryParamSuggestions[0]?.value || "",
+                  };
                 } else if (val === "prev_response") {
                   nextSource = {
                     kind: "prev_response",
@@ -172,6 +213,8 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
               <SelectContent>
                 <SelectItem value="literal">Static Literal</SelectItem>
                 <SelectItem value="user_input">User Form Input</SelectItem>
+                <SelectItem value="route_param">Page Route Param</SelectItem>
+                <SelectItem value="query_param">Page Query Param</SelectItem>
                 <SelectItem value="state_var">Another State Var</SelectItem>
                 {priorSteps.length > 0 && (
                   <SelectItem value="prev_response">Prior Step Response</SelectItem>
@@ -231,6 +274,46 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
                   { value: "message", type: "string" },
                   { value: "query", type: "string" },
                 ]}
+              />
+            </div>
+          )}
+
+          {valueSource.kind === "route_param" && (
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">
+                Route Parameter Name (e.g. id from /c/[id])
+              </Label>
+              <ActionFlowCombobox
+                value={valueSource.paramName || ""}
+                onChange={(name) =>
+                  onChange({
+                    ...draft,
+                    stateValueSource: { kind: "route_param", paramName: name },
+                  })
+                }
+                placeholder="e.g. id, slug"
+                headerLabel="Page Route Params"
+                options={routeParamSuggestions}
+              />
+            </div>
+          )}
+
+          {valueSource.kind === "query_param" && (
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">
+                Query Parameter Name (e.g. limit from ?limit=10)
+              </Label>
+              <ActionFlowCombobox
+                value={valueSource.paramName || ""}
+                onChange={(name) =>
+                  onChange({
+                    ...draft,
+                    stateValueSource: { kind: "query_param", paramName: name },
+                  })
+                }
+                placeholder="e.g. limit, offset"
+                headerLabel="Page Query Params"
+                options={queryParamSuggestions}
               />
             </div>
           )}

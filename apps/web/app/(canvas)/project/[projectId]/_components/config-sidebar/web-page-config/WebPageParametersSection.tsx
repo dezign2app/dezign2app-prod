@@ -1,49 +1,25 @@
 import React from "react";
 import { Endpoint } from "@workspace/canvas";
-import { Parameter, Schema } from "@/types/canvas";
+import { Parameter } from "@/types/canvas";
 import { ParameterEditor } from "../../backend-nodes/graph-nodes/Editors";
-import { RequestBodyEditor, RequestBodyMode } from "../RequestBodyEditor";
 
-interface WebPageParametersSectionProps {
-  connectedEndpoint: Endpoint | null;
-  effectiveHeaders: Parameter[];
+export interface WebPageParametersSectionProps {
+  connectedEndpoint?: Endpoint | null;
   effectivePathParams: Parameter[];
   effectiveQueryParams: Parameter[];
-  effectiveRequestBody: Schema;
-  effectiveRequestBodyMode: RequestBodyMode;
-  onUpdateHeaders: (headers: Parameter[]) => void;
   onUpdatePathParams: (pathParams: Parameter[]) => void;
   onUpdateQueryParams: (queryParams: Parameter[]) => void;
-  onUpdateRequestBody: (requestBody: Schema) => void;
-  onUpdateRequestBodyMode: (mode: RequestBodyMode) => void;
 }
 
 export function WebPageParametersSection({
   connectedEndpoint,
-  effectiveHeaders,
   effectivePathParams,
   effectiveQueryParams,
-  effectiveRequestBody,
-  effectiveRequestBodyMode,
-  onUpdateHeaders,
   onUpdatePathParams,
   onUpdateQueryParams,
-  onUpdateRequestBody,
-  onUpdateRequestBodyMode,
 }: WebPageParametersSectionProps) {
-  const sanitizedHeaders = React.useMemo(
-    () =>
-      (effectiveHeaders || []).filter(
-        (h: Parameter) =>
-          h.name?.toLowerCase() !== "authorization" &&
-          h.id !== "auth-bearer-header" &&
-          !h.id?.startsWith("auth-"),
-      ),
-    [effectiveHeaders],
-  );
-
   return (
-    <>
+    <div className="flex flex-col gap-4">
       {connectedEndpoint && (
         <div className="flex items-center justify-between p-2.5 rounded-lg bg-secondary/30 border border-border/50 text-xs">
           <span className="text-[11px] text-muted-foreground">
@@ -59,20 +35,6 @@ export function WebPageParametersSection({
       )}
 
       <ParameterEditor
-        title="Headers"
-        parameters={sanitizedHeaders}
-        onChange={(updated) =>
-          onUpdateHeaders(
-            updated.filter(
-              (h: Parameter) =>
-                h.name?.toLowerCase() !== "authorization" &&
-                h.id !== "auth-bearer-header" &&
-                !h.id?.startsWith("auth-"),
-            ),
-          )
-        }
-      />
-      <ParameterEditor
         title="Path Params"
         parameters={effectivePathParams}
         onChange={onUpdatePathParams}
@@ -82,12 +44,6 @@ export function WebPageParametersSection({
         parameters={effectiveQueryParams}
         onChange={onUpdateQueryParams}
       />
-      <RequestBodyEditor
-        mode={effectiveRequestBodyMode}
-        onModeChange={onUpdateRequestBodyMode}
-        schema={effectiveRequestBody}
-        onSchemaChange={onUpdateRequestBody}
-      />
-    </>
+    </div>
   );
 }
