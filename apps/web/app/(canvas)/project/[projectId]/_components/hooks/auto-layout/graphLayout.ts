@@ -20,6 +20,7 @@ import {
 import { layoutPaymentsPluginNodes } from "./paymentsPluginLayout";
 import { layoutHangingStateStoreNodes } from "./hangingStateStoreLayout";
 import { layoutTypesNodes } from "./typesNodeLayout";
+import { computeTierRanks } from "./serviceTierLayout";
 import type { EndpointWithNode, EventWithNode } from "@workspace/canvas";
 import {
   CARD_HEADER_OFFSET_X,
@@ -503,17 +504,27 @@ export function performGraphLayout({
   // Bridge external/upstream connections through hanging reference nodes to their service
   // so Dagre maintains proper topological rank ordering
   hangingRefNodes.forEach((refNode) => {
-    const serviceEdge = hangingRefEdges.find((e) => {
-      const otherId = e.target === refNode.id ? e.source : e.target;
-      const otherNode = graphNodes.find((n) => n.id === otherId);
-      return (
-        otherNode &&
-        (otherNode.type === "service" ||
-          otherNode.type === "microservice" ||
-          otherNode.type === "backend" ||
-          otherNode.type === "api")
+    const targetServiceId = (refNode.data as any)?.targetServiceId;
+    const targetServiceEdge =
+      targetServiceId &&
+      hangingRefEdges.find(
+        (e) =>
+          (e.target === refNode.id && e.source === targetServiceId) ||
+          (e.source === refNode.id && e.target === targetServiceId),
       );
-    });
+    const serviceEdge =
+      targetServiceEdge ||
+      hangingRefEdges.find((e) => {
+        const otherId = e.target === refNode.id ? e.source : e.target;
+        const otherNode = graphNodes.find((n) => n.id === otherId);
+        return (
+          otherNode &&
+          (otherNode.type === "service" ||
+            otherNode.type === "microservice" ||
+            otherNode.type === "backend" ||
+            otherNode.type === "api")
+        );
+      });
     if (!serviceEdge) return;
     const serviceId =
       serviceEdge.target === refNode.id ? serviceEdge.source : serviceEdge.target;
@@ -560,6 +571,17 @@ export function performGraphLayout({
       !stackedSecondaryNodeIdSet.has(n.id),
   );
 
+  // 3.9. Compute topological tier ranks:
+  // - All client nodes form the entry tier (rank 0 / chained client ranks)
+  // - All servers invoked by Client are placed at Level 1 (Service Tier 1)
+  // - Intra-level invoked servers stay at the same level (do not get pushed to Level 2)
+  // - Servers invoked by Level 1 servers are placed at Level 2
+  const { assignedRankMap, intraRankEdgeIds } = computeTierRanks({
+    mainGraphNodes,
+    flowEdges,
+    direction,
+  });
+
   // 4. Run Dagre layout for mainGraphNodes and flowEdges
   const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({
@@ -578,11 +600,33 @@ export function performGraphLayout({
 
   flowEdges.forEach((edge: LayoutEdge) => {
     if (dagreGraph.hasNode(edge.source) && dagreGraph.hasNode(edge.target)) {
-      dagreGraph.setEdge(edge.source, edge.target);
+      const srcRank = assignedRankMap.get(edge.source);
+      const tgtRank = assignedRankMap.get(edge.target);
+      // Only add edges that strictly advance to a higher rank (srcRank < tgtRank).
+      // Omit intra-rank edges so Dagre's ranker does not push same-level nodes into separate ranks!
+      if (
+        !intraRankEdgeIds.has(edge.id) &&
+        srcRank !== undefined &&
+        tgtRank !== undefined &&
+        srcRank < tgtRank
+      ) {
+        dagreGraph.setEdge(edge.source, edge.target);
+      }
     }
   });
 
   dagre.layout(dagreGraph);
+
+  // Enforce the computed rank on every node in dagreGraph
+  mainGraphNodes.forEach((node: LayoutNode) => {
+    const assignedRank = assignedRankMap.get(node.id);
+    if (assignedRank !== undefined) {
+      const dNode = dagreGraph.node(node.id) as any;
+      if (dNode) {
+        dNode.rank = assignedRank;
+      }
+    }
+  });
 
   // 5. Store positions computed by Dagre
   const positionsMap = new Map<string, { x: number; y: number }>();

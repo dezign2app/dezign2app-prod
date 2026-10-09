@@ -236,6 +236,8 @@ export function runBarycenterRefinement({
   });
 
   const ranks = Array.from(rankMap.keys()).sort((a, b) => a - b);
+  const nodeToRank = new Map<string, number>();
+  rankMap.forEach((ids, r) => ids.forEach((id) => nodeToRank.set(id, r)));
 
   const computeBarycenter = (nodeId: string): number => {
     const node = flowNodes.find((n) => n.id === nodeId);
@@ -249,9 +251,17 @@ export function runBarycenterRefinement({
     );
     if (nodeEdges.length === 0) return pos.y + height / 2;
 
+    const myRank = nodeToRank.get(nodeId);
+    const interRankEdges = nodeEdges.filter((e) => {
+      const neighborId = e.source === nodeId ? e.target : e.source;
+      const neighborRank = nodeToRank.get(neighborId);
+      return neighborRank !== undefined && neighborRank !== myRank;
+    });
+    const edgesToUse = interRankEdges.length > 0 ? interRankEdges : nodeEdges;
+
     let sum = 0;
     let count = 0;
-    nodeEdges.forEach((edge) => {
+    edgesToUse.forEach((edge) => {
       const isSrc = edge.source === nodeId;
       const neighborId = isSrc ? edge.target : edge.source;
       const neighborNode = flowNodes.find((n) => n.id === neighborId);
@@ -315,7 +325,7 @@ export function runBarycenterRefinement({
   };
 
   // Use compact gaps so vertical Y-axis spacing remains tight and readable
-  const nodeGap = hasEntityNodesLocal ? 60 : 45;
+  const nodeGap = hasEntityNodesLocal ? 60 : 50;
   const minRankGap = hasEntityNodesLocal ? 200 : 160;
 
   const reapplyRankPositions = () => {
