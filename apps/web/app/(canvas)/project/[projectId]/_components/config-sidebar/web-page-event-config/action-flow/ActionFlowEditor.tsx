@@ -111,10 +111,16 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
 
   const handleDeleteStep = (stepId: string) => {
     const stepToDelete = drafts.find((d) => d.id === stepId);
-    if (stepToDelete?.edgeId) {
-      cleanupActionStepEdge(stepToDelete.edgeId);
+    const edgeIdToDelete =
+      stepToDelete?.edgeId ||
+      canvasSteps.find(
+        (c) => c.edgeId === stepToDelete?.id || c.step === stepToDelete?.order,
+      )?.edgeId;
+
+    if (edgeIdToDelete) {
+      cleanupActionStepEdge(edgeIdToDelete);
       if (onDeleteStep) {
-        onDeleteStep(stepToDelete.edgeId);
+        onDeleteStep(edgeIdToDelete);
       }
     }
 

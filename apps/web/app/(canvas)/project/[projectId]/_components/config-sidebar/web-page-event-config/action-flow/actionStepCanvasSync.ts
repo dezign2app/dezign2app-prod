@@ -8,6 +8,7 @@ export interface EnsureActionServiceConnectionParams {
   serviceNodeId: string;
   endpointId: string;
   stepOrder: number;
+  previousEdgeId?: string;
 }
 
 export function ensureActionServiceConnection({
@@ -16,6 +17,7 @@ export function ensureActionServiceConnection({
   serviceNodeId,
   endpointId,
   stepOrder,
+  previousEdgeId,
 }: EnsureActionServiceConnectionParams): string | undefined {
   if (!webPageNodeId || !actionId || !serviceNodeId || !endpointId) return undefined;
 
@@ -23,8 +25,19 @@ export function ensureActionServiceConnection({
   const sourceHandle = `events-${actionId}`;
   const targetHandle = `endpoint-in-${endpointId}`;
 
-  // Find existing edge matching this action and endpoint
-  const existingEdge = store.edges.find((e) => {
+  // 1. Identify previous edge for this step (if any)
+  const prevEdge =
+    (previousEdgeId ? store.edges.find((e) => e.id === previousEdgeId) : undefined) ||
+    store.edges.find(
+      (e) =>
+        e.source === webPageNodeId &&
+        e.sourceHandle === sourceHandle &&
+        (e.data?.sequenceOrder === stepOrder ||
+          e.data?.label === String(stepOrder)),
+    );
+
+  // 2. Find existing edge already targeting this exact service & endpoint
+  const existingTargetEdge = store.edges.find((e) => {
     const forwardMatch =
       e.source === webPageNodeId &&
       e.target === serviceNodeId &&
@@ -35,25 +48,75 @@ export function ensureActionServiceConnection({
     return forwardMatch;
   });
 
-  if (existingEdge) {
-    const needsHandleFix = existingEdge.targetHandle !== targetHandle;
-    const needsOrderFix =
-      existingEdge.data?.sequenceOrder !== stepOrder ||
-      existingEdge.data?.label !== String(stepOrder);
+  if (prevEdge) {
+    // If an edge to the target already exists and is distinct from prevEdge, remove prevEdge
+    if (existingTargetEdge && existingTargetEdge.id !== prevEdge.id) {
+      store.deleteEdge(prevEdge.id);
+      if (
+        existingTargetEdge.targetHandle !== targetHandle ||
+        existingTargetEdge.data?.sequenceOrder !== stepOrder ||
+        existingTargetEdge.data?.label !== String(stepOrder)
+      ) {
+        store.updateEdge(existingTargetEdge.id, {
+          targetHandle,
+          data: {
+            ...existingTargetEdge.data,
+            sequenceOrder: stepOrder,
+            label: String(stepOrder),
+          },
+        });
+      }
+      return existingTargetEdge.id;
+    }
 
-    // Ensure sequence order or target handle is updated if needed
-    if (needsHandleFix || needsOrderFix) {
-      store.updateEdge(existingEdge.id, {
-        ...existingEdge,
+    // Otherwise, update prevEdge to the new service and endpoint
+    const oldTargetId = prevEdge.target;
+    store.updateEdge(prevEdge.id, {
+      target: serviceNodeId,
+      targetHandle,
+      data: {
+        ...prevEdge.data,
+        sequenceOrder: stepOrder,
+        label: String(stepOrder),
+      },
+    });
+
+    // If prevEdge was previously pointing to an orphaned StorageBucketRefNode, clean it up
+    if (oldTargetId !== serviceNodeId) {
+      const remainingEdges = store.edges.filter(
+        (e) => e.id !== prevEdge.id && (e.target === oldTargetId || e.source === oldTargetId),
+      );
+      const oldNode = store.nodes.find((n) => n.id === oldTargetId);
+      if (
+        remainingEdges.length === 0 &&
+        oldNode &&
+        (oldNode.type === "StorageBucketRefNode" ||
+          oldNode.type === "storage_ref" ||
+          oldNode.type === "storage_operation_ref")
+      ) {
+        store.deleteNode(oldTargetId);
+      }
+    }
+
+    return prevEdge.id;
+  }
+
+  if (existingTargetEdge) {
+    if (
+      existingTargetEdge.targetHandle !== targetHandle ||
+      existingTargetEdge.data?.sequenceOrder !== stepOrder ||
+      existingTargetEdge.data?.label !== String(stepOrder)
+    ) {
+      store.updateEdge(existingTargetEdge.id, {
         targetHandle,
         data: {
-          ...existingEdge.data,
+          ...existingTargetEdge.data,
           sequenceOrder: stepOrder,
           label: String(stepOrder),
         },
       });
     }
-    return existingEdge.id;
+    return existingTargetEdge.id;
   }
 
   // Draw new edge automatically on canvas
@@ -80,6 +143,7 @@ export interface EnsureActionStorageConnectionParams {
   storageNodeId?: string;
   bucketId: string;
   stepOrder: number;
+  previousEdgeId?: string;
 }
 
 export function ensureActionStorageConnection({
@@ -88,6 +152,7 @@ export function ensureActionStorageConnection({
   storageNodeId,
   bucketId,
   stepOrder,
+  previousEdgeId,
 }: EnsureActionStorageConnectionParams): { edgeId: string; refNodeId: string } | undefined {
   if (!webPageNodeId || !actionId || !bucketId) return undefined;
 
@@ -163,7 +228,18 @@ export function ensureActionStorageConnection({
 
   const targetHandle = "func-in-uploadObject";
 
-  // 3. Look for existing edge to this ref node
+  // 3. Identify previous edge for this step (if any)
+  const prevEdge =
+    (previousEdgeId ? store.edges.find((e) => e.id === previousEdgeId) : undefined) ||
+    store.edges.find(
+      (e) =>
+        e.source === webPageNodeId &&
+        e.sourceHandle === sourceHandle &&
+        (e.data?.sequenceOrder === stepOrder ||
+          e.data?.label === String(stepOrder)),
+    );
+
+  // 4. Look for existing edge to this ref node
   const existingEdge = store.edges.find(
     (e) =>
       e.source === webPageNodeId &&
@@ -171,13 +247,68 @@ export function ensureActionStorageConnection({
       e.sourceHandle === sourceHandle,
   );
 
+  if (prevEdge) {
+    if (existingEdge && existingEdge.id !== prevEdge.id) {
+      store.deleteEdge(prevEdge.id);
+      if (
+        existingEdge.data?.sequenceOrder !== stepOrder ||
+        existingEdge.data?.label !== String(stepOrder) ||
+        existingEdge.data?.bucketId !== bucketId
+      ) {
+        store.updateEdge(existingEdge.id, {
+          targetHandle,
+          data: {
+            ...existingEdge.data,
+            sequenceOrder: stepOrder,
+            label: String(stepOrder),
+            operationName: "uploadObject",
+            bucketId,
+          },
+        });
+      }
+      return { edgeId: existingEdge.id, refNodeId: refNode.id };
+    }
+
+    const oldTargetNodeId = prevEdge.target;
+    store.updateEdge(prevEdge.id, {
+      target: refNode.id,
+      targetHandle,
+      data: {
+        ...prevEdge.data,
+        sequenceOrder: stepOrder,
+        label: String(stepOrder),
+        operationName: "uploadObject",
+        bucketId,
+      },
+    });
+
+    if (oldTargetNodeId !== refNode.id) {
+      const remainingEdges = store.edges.filter(
+        (e) => e.id !== prevEdge.id && (e.target === oldTargetNodeId || e.source === oldTargetNodeId),
+      );
+      const oldNode = store.nodes.find((n) => n.id === oldTargetNodeId);
+      if (
+        remainingEdges.length === 0 &&
+        oldNode &&
+        (oldNode.type === "StorageBucketRefNode" ||
+          oldNode.type === "storage_ref" ||
+          oldNode.type === "storage_operation_ref")
+      ) {
+        store.deleteNode(oldTargetNodeId);
+      }
+    }
+
+    return { edgeId: prevEdge.id, refNodeId: refNode.id };
+  }
+
   if (existingEdge) {
     if (
       existingEdge.data?.sequenceOrder !== stepOrder ||
-      existingEdge.data?.label !== String(stepOrder)
+      existingEdge.data?.label !== String(stepOrder) ||
+      existingEdge.data?.bucketId !== bucketId
     ) {
       store.updateEdge(existingEdge.id, {
-        ...existingEdge,
+        targetHandle,
         data: {
           ...existingEdge.data,
           sequenceOrder: stepOrder,
@@ -190,7 +321,7 @@ export function ensureActionStorageConnection({
     return { edgeId: existingEdge.id, refNodeId: refNode.id };
   }
 
-  // 4. Draw new edge to storage bucket ref
+  // Draw new edge to storage bucket ref
   const newEdgeId = `edge-action-${actionId}-${refNode.id}-${Date.now()}`;
   store.addEdge({
     id: newEdgeId,
