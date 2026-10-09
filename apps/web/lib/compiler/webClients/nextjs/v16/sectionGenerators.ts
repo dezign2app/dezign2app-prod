@@ -227,24 +227,105 @@ export default ${sectionCompName};
     ? `\n        <CardDescription className="text-xs text-muted-foreground">${section.description}</CardDescription>`
     : "";
 
-  const stateObjectsJsx = hasStateObjects
-    ? `\n        <div className="flex flex-wrap gap-2 mb-3">\n${(section.stateObjects || [])
+  const renderedStateObjects = (section.stateObjects || []).filter(
+    (st) => st.renderConfig?.enabled !== false,
+  );
+  const hasRenderedStateObjects = renderedStateObjects.length > 0;
+
+  const neededShadcnImports = new Set<string>();
+  let needsToast = false;
+
+  const stateObjectsJsx = hasRenderedStateObjects
+    ? `\n        <div className="flex flex-wrap gap-2 mb-3">\n${renderedStateObjects
         .map((st) => {
           const varName = toCamelCase(st.name || "state");
-          return `          <div key="${st.id}" className="text-xs px-2.5 py-1 rounded bg-secondary/50 border border-border text-foreground font-mono"><span className="text-muted-foreground">${st.name}: </span>{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</div>`;
+          const cfg = st.renderConfig;
+          const label = cfg?.label || st.name;
+          const comp = cfg?.component;
+          const variant = cfg?.variant || (comp === "badge" ? "secondary" : "default");
+
+          let clickAttr = "";
+          if (cfg?.clickAction === "copy_to_clipboard") {
+            needsToast = true;
+            const toastMsg = cfg.copyToastMessage || `Copied ${st.name} to clipboard!`;
+            clickAttr = ` onClick={() => { navigator.clipboard?.writeText(typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})); toast.success("${toastMsg}"); }}`;
+          }
+
+          const props = cfg?.propMappings;
+
+          if (comp === "badge") {
+            neededShadcnImports.add('import { Badge } from "@workspace/ui/components/badge";');
+            return `          <Badge key="${st.id}" variant="${variant}" className="text-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}><span className="text-muted-foreground mr-1">${label}: </span>{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</Badge>`;
+          }
+          if (comp === "button") {
+            neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
+            const btnSize = props?.buttonSize || "sm";
+            const disabledAttr = props?.disabled ? " disabled" : "";
+            return `          <Button key="${st.id}" variant="${variant}" size="${btnSize}"${disabledAttr}${clickAttr}>${label}: {typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</Button>`;
+          }
+          if (comp === "switch") {
+            neededShadcnImports.add('import { Switch } from "@workspace/ui/components/switch";');
+            const disabledAttr = props?.disabled ? " disabled" : "";
+            return `          <div key="${st.id}" className="flex items-center gap-2 text-xs"><Switch checked={Boolean(${varName})}${disabledAttr} /><span>${label}</span></div>`;
+          }
+          if (comp === "progress") {
+            neededShadcnImports.add('import { Progress } from "@workspace/ui/components/progress";');
+            const maxVal = props?.max || 100;
+            const showPct = props?.showPercent !== false;
+            return `          <div key="${st.id}" className="flex flex-col gap-1 min-w-[120px] text-xs"><span>${label}${showPct ? `: {String(${varName})}%` : ""}</span><Progress value={Number(${varName}) || 0} max={${maxVal}} /></div>`;
+          }
+          if (comp === "alert") {
+            neededShadcnImports.add('import { Alert, AlertDescription } from "@workspace/ui/components/alert";');
+            const alertTitle = props?.alertTitle ? `<strong>${props.alertTitle}</strong> ` : "";
+            return `          <Alert key="${st.id}" className="py-2 px-3 text-xs"${clickAttr}><AlertDescription>${alertTitle}<strong>${label}: </strong>{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</AlertDescription></Alert>`;
+          }
+          if (comp === "skeleton") {
+            neededShadcnImports.add('import { Skeleton } from "@workspace/ui/components/skeleton";');
+            const w = props?.skeletonWidth || "w-24";
+            const h = props?.skeletonHeight || "h-6";
+            return `          <Skeleton key="${st.id}" className="${h} ${w}" />`;
+          }
+          if (comp === "input") {
+            neededShadcnImports.add('import { Input } from "@workspace/ui/components/input";');
+            const inType = props?.inputType || "text";
+            const ph = props?.placeholder ? ` placeholder="${props.placeholder}"` : "";
+            const ro = props?.readOnly !== false ? " readOnly" : "";
+            const dis = props?.disabled ? " disabled" : "";
+            const valExpr = props?.valueBinding ? props.valueBinding : `String(${varName})`;
+            return `          <Input key="${st.id}" type="${inType}" value={${valExpr}}${ph}${ro}${dis} className="h-8 text-xs max-w-xs" />`;
+          }
+          if (comp === "avatar") {
+            const fallbackText = props?.avatarFallback || (label ? label.slice(0, 2).toUpperCase() : "AV");
+            if (props?.avatarSrc) {
+              neededShadcnImports.add('import { Avatar, AvatarFallback, AvatarImage } from "@workspace/ui/components/avatar";');
+              return `          <Avatar key="${st.id}" className="h-8 w-8"><AvatarImage src="${props.avatarSrc}" alt="${label}" /><AvatarFallback>${fallbackText}</AvatarFallback></Avatar>`;
+            }
+            neededShadcnImports.add('import { Avatar, AvatarFallback } from "@workspace/ui/components/avatar";');
+            return `          <Avatar key="${st.id}" className="h-8 w-8"><AvatarFallback>${fallbackText}</AvatarFallback></Avatar>`;
+          }
+          if (comp === "card") {
+            const cardTitle = props?.titleBinding || label;
+            const cardDesc = props?.descriptionBinding ? `\n            <div className="text-[10px] text-muted-foreground">${props.descriptionBinding}</div>` : "";
+            return `          <div key="${st.id}" className="p-3 rounded-lg border bg-card text-card-foreground shadow-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}><div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">${cardTitle}</div>${cardDesc}\n            <div className="text-sm font-bold mt-0.5 font-mono">{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</div>\n          </div>`;
+          }
+
+          return `          <div key="${st.id}" className="text-xs px-2.5 py-1 rounded bg-secondary/50 border border-border text-foreground font-mono${clickAttr ? " cursor-pointer" : ""}"${clickAttr}><span className="text-muted-foreground">${label}: </span>{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</div>`;
         })
         .join("\n")}\n        </div>`
     : "";
 
-  const contentJsx = (hasActions || hasStateObjects)
+  const extraComponentImports = Array.from(neededShadcnImports).join("\n");
+  const toastImport = needsToast ? `import { toast } from "sonner";\n` : "";
+
+  const contentJsx = (hasActions || hasRenderedStateObjects)
     ? `\n      <CardContent>${stateObjectsJsx}${hasActions ? `\n        <div className="flex flex-wrap gap-3">\n${eventComponents
         .map((c) => `          <${c.componentName} onTrigger={onTrigger} />`)
         .join("\n")}\n        </div>` : ""}\n      </CardContent>`
     : "";
 
   return `${isClient ? `"use client";\n\n` : ""}${reactImport}
-import { Card, CardHeader, CardTitle${section.description ? ", CardDescription" : ""}${hasActions || hasStateObjects ? ", CardContent" : ""} } from "@workspace/ui/components/card";
-${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${actionImports}\n` : ""}export interface ${sectionCompName}Props {
+import { Card, CardHeader, CardTitle${section.description ? ", CardDescription" : ""}${hasActions || hasRenderedStateObjects ? ", CardContent" : ""} } from "@workspace/ui/components/card";
+${extraComponentImports ? `${extraComponentImports}\n` : ""}${toastImport}${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${actionImports}\n` : ""}export interface ${sectionCompName}Props {
   onTrigger?: (
     eventName: string,
     eventType: string,

@@ -211,5 +211,211 @@ describe("compileNextjsV16SectionState", () => {
     expect(code).toContain("items:");
     expect(code).toContain("totalPrice:");
   });
+
+  it("respects renderConfig.enabled = false by hiding state from UI while keeping store subscription", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-hidden-state",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/dashboard",
+        appSlug: "shop-app",
+        sections: [
+          {
+            id: "sec-metrics",
+            name: "Metrics",
+            renderMode: "client",
+            actions: [],
+            stateObjects: [
+              {
+                id: "st-secret",
+                name: "internalToken",
+                type: "string",
+                storeName: "Auth",
+                renderConfig: {
+                  enabled: false,
+                },
+              },
+              {
+                id: "st-public",
+                name: "activeUsers",
+                type: "number",
+                storeName: "Analytics",
+                renderConfig: {
+                  enabled: true,
+                  component: "badge",
+                  label: "Online Users",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const metricsFile = result.files.find((f) =>
+      f.filename.includes("MetricsSection.tsx"),
+    );
+
+    expect(metricsFile).toBeDefined();
+    const code = metricsFile!.content;
+
+    // Subscribed in code
+    expect(code).toContain("const internalToken = useAuthStore((s) => s.internalToken);");
+    expect(code).toContain("const activeUsers = useAnalyticsStore((s) => s.activeUsers);");
+
+    // But internalToken is NOT in JSX
+    expect(code).not.toContain("internalToken:");
+    // activeUsers is rendered with Badge
+    expect(code).toContain("<Badge");
+    expect(code).toContain("Online Users:");
+  });
+
+  it("renders configured shadcn Switch and copy_to_clipboard click action with sonner toast", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-interactive",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/settings",
+        appSlug: "shop-app",
+        sections: [
+          {
+            id: "sec-toggles",
+            name: "Settings Controls",
+            renderMode: "client",
+            actions: [],
+            stateObjects: [
+              {
+                id: "st-dark",
+                name: "darkMode",
+                type: "boolean",
+                storeName: "Theme",
+                renderConfig: {
+                  enabled: true,
+                  component: "switch",
+                  label: "Dark Mode Enabled",
+                },
+              },
+              {
+                id: "st-apikey",
+                name: "apiKey",
+                type: "string",
+                storeName: "Api",
+                renderConfig: {
+                  enabled: true,
+                  component: "badge",
+                  clickAction: "copy_to_clipboard",
+                  copyToastMessage: "API Key copied!",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const controlsFile = result.files.find((f) =>
+      f.filename.includes("SettingsControlsSection.tsx"),
+    );
+
+    expect(controlsFile).toBeDefined();
+    const code = controlsFile!.content;
+
+    expect(code).toContain('import { Switch } from "@workspace/ui/components/switch";');
+    expect(code).toContain('import { Badge } from "@workspace/ui/components/badge";');
+    expect(code).toContain('import { toast } from "sonner";');
+    expect(code).toContain("<Switch checked={Boolean(darkMode)} />");
+    expect(code).toContain('toast.success("API Key copied!")');
+  });
+
+  it("correctly compiles component prop mappings for input, button, progress, and avatar", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-form",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/profile",
+        appSlug: "test-app",
+        sections: [
+          {
+            id: "sec-profile-form",
+            name: "Profile Form Section",
+            renderMode: "client",
+            actions: [],
+            stateObjects: [
+              {
+                id: "st-user-email",
+                name: "userEmail",
+                type: "string",
+                defaultValue: "test@example.com",
+                renderConfig: {
+                  enabled: true,
+                  component: "input",
+                  propMappings: {
+                    inputType: "email",
+                    placeholder: "Enter user email...",
+                    readOnly: true,
+                    disabled: false,
+                    valueBinding: "userEmail",
+                  },
+                },
+              },
+              {
+                id: "st-submit-btn",
+                name: "isSubmitting",
+                type: "boolean",
+                renderConfig: {
+                  enabled: true,
+                  component: "button",
+                  propMappings: {
+                    buttonSize: "lg",
+                    disabled: true,
+                  },
+                },
+              },
+              {
+                id: "st-avatar-pic",
+                name: "avatarUrl",
+                type: "string",
+                defaultValue: "https://example.com/pic.jpg",
+                renderConfig: {
+                  enabled: true,
+                  component: "avatar",
+                  propMappings: {
+                    avatarSrc: "https://example.com/pic.jpg",
+                    avatarFallback: "JD",
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const formFile = result.files.find((f) =>
+      f.filename.includes("ProfileFormSection.tsx"),
+    );
+
+    expect(formFile).toBeDefined();
+    const code = formFile!.content;
+
+    expect(code).toContain('import { Input } from "@workspace/ui/components/input";');
+    expect(code).toContain('import { Button } from "@workspace/ui/components/button";');
+    expect(code).toContain('import { Avatar, AvatarFallback, AvatarImage } from "@workspace/ui/components/avatar";');
+    expect(code).toContain(
+      '<Input key="st-user-email" type="email" value={userEmail} placeholder="Enter user email..." readOnly className="h-8 text-xs max-w-xs" />',
+    );
+    expect(code).toContain('size="lg" disabled');
+    expect(code).toContain('<AvatarImage src="https://example.com/pic.jpg" alt="avatarUrl" />');
+    expect(code).toContain('<AvatarFallback>JD</AvatarFallback>');
+  });
 });
 

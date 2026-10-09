@@ -450,11 +450,18 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
                     <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0 ml-1">
                       <button
                         type="button"
-                        onClick={() => handleStartEdit(st)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveConfigItem({
+                            type: "pageState",
+                            id: st.id,
+                            nodeId,
+                          });
+                        }}
                         className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                        title="Edit state object"
+                        title="Configure state variable rendering"
                       >
-                        <Pencil size={10} />
+                        <Settings size={10} />
                       </button>
                       <button
                         type="button"
