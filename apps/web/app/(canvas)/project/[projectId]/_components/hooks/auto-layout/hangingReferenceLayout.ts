@@ -109,7 +109,16 @@ export function layoutHangingReferenceNodes({
   const unattachedRefs: LayoutNode[] = [];
 
   hangingRefNodes.forEach((refNode) => {
+    const targetServiceId = (refNode.data as any)?.targetServiceId;
+    const targetServiceEdge =
+      targetServiceId &&
+      hangingRefEdges.find(
+        (e) =>
+          (e.target === refNode.id && e.source === targetServiceId) ||
+          (e.source === refNode.id && e.target === targetServiceId),
+      );
     const edge =
+      targetServiceEdge ||
       hangingRefEdges.find((e) => {
         const otherId = e.target === refNode.id ? e.source : e.target;
         const otherNode = nodes.find((n) => n.id === otherId);
