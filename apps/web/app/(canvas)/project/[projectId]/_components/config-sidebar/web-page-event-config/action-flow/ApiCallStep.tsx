@@ -19,7 +19,13 @@ import { ResponseFieldPicker } from "./ResponseFieldPicker";
 import { ActionFlowCombobox, ComboboxOption } from "./ActionFlowCombobox";
 import { ensureActionServiceConnection, cleanupActionStepEdge } from "./actionStepCanvasSync";
 
-type SourceKindOption = "user_input" | "state_var" | "literal" | "prev_response";
+type SourceKindOption =
+  | "user_input"
+  | "route_param"
+  | "query_param"
+  | "state_var"
+  | "literal"
+  | "prev_response";
 
 export const ApiCallStep: React.FC<ApiCallStepProps> = ({
   draft,
@@ -111,6 +117,29 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
 
     return list;
   }, [selectedEndpoint]);
+
+  const currentPageNode = React.useMemo(
+    () => allNodes.find((n) => n.id === webPageNodeId),
+    [allNodes, webPageNodeId],
+  );
+
+  const routeParamSuggestions: ComboboxOption[] = React.useMemo(() => {
+    const params = currentPageNode?.data?.pathParams || [];
+    return params.map((p) => ({
+      value: p.name,
+      label: p.name,
+      type: p.type || "string",
+    }));
+  }, [currentPageNode?.data?.pathParams]);
+
+  const queryParamSuggestions: ComboboxOption[] = React.useMemo(() => {
+    const queries = currentPageNode?.data?.queryParams || [];
+    return queries.map((q) => ({
+      value: q.name,
+      label: q.name,
+      type: q.type || "string",
+    }));
+  }, [currentPageNode?.data?.queryParams]);
 
   const handleServiceSelect = (newServiceId: string) => {
     const eps = endpoints.filter((ep) => ep.nodeId === newServiceId);
@@ -231,6 +260,16 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
         nextSource = { kind: "literal", value: "" };
       } else if (newKind === "state_var") {
         nextSource = { kind: "state_var", stateKey: "" };
+      } else if (newKind === "route_param") {
+        nextSource = {
+          kind: "route_param",
+          paramName: routeParamSuggestions[0]?.value || "",
+        };
+      } else if (newKind === "query_param") {
+        nextSource = {
+          kind: "query_param",
+          paramName: queryParamSuggestions[0]?.value || "",
+        };
       } else if (newKind === "prev_response") {
         const firstPrior = priorSteps[0];
         nextSource = {
@@ -370,6 +409,8 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="user_input">User Input</SelectItem>
+                        <SelectItem value="route_param">Route Param</SelectItem>
+                        <SelectItem value="query_param">Query Param</SelectItem>
                         <SelectItem value="state_var">State Var</SelectItem>
                         <SelectItem value="literal">Static Value</SelectItem>
                         {priorSteps.length > 0 && (
@@ -409,6 +450,46 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                         }}
                         placeholder="Static string value"
                         className="h-7 text-xs bg-background"
+                      />
+                    </div>
+                  )}
+
+                  {binding.source.kind === "route_param" && (
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground">
+                        Route Parameter Name (e.g. id from /c/[id])
+                      </Label>
+                      <ActionFlowCombobox
+                        value={binding.source.paramName}
+                        onChange={(name) => {
+                          handleUpdateBinding(binding.id, (prev) => ({
+                            ...prev,
+                            source: { kind: "route_param", paramName: name },
+                          }));
+                        }}
+                        placeholder="e.g. id, slug"
+                        headerLabel="Page Route Params"
+                        options={routeParamSuggestions}
+                      />
+                    </div>
+                  )}
+
+                  {binding.source.kind === "query_param" && (
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground">
+                        Query Parameter Name (e.g. limit from ?limit=10)
+                      </Label>
+                      <ActionFlowCombobox
+                        value={binding.source.paramName}
+                        onChange={(name) => {
+                          handleUpdateBinding(binding.id, (prev) => ({
+                            ...prev,
+                            source: { kind: "query_param", paramName: name },
+                          }));
+                        }}
+                        placeholder="e.g. limit, offset"
+                        headerLabel="Page Query Params"
+                        options={queryParamSuggestions}
                       />
                     </div>
                   )}

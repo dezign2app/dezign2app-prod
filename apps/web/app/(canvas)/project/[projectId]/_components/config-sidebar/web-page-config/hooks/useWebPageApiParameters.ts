@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { BackendNode, Parameter, Schema } from "@/types/canvas";
-import { Endpoint } from "@workspace/canvas";
+import { Endpoint, parseRouteWithQueryParams } from "@workspace/canvas";
 import { RequestBodyMode } from "../../RequestBodyEditor";
 
 interface UseWebPageApiParametersParams {
@@ -79,16 +79,48 @@ export function useWebPageApiParameters({
   }, [data.headers, connectedEndpoint?.headers]);
 
   const effectivePathParams: Parameter[] = useMemo(() => {
-    return data.pathParams && data.pathParams.length > 0
-      ? data.pathParams
-      : connectedEndpoint?.pathParams || [];
-  }, [data.pathParams, connectedEndpoint?.pathParams]);
+    const rawLabel = typeof data.label === "string" ? data.label : "";
+    const parsed = parseRouteWithQueryParams(rawLabel);
+    const labelPathParams = parsed.extractedPathParams || [];
+
+    const existingParams =
+      data.pathParams && data.pathParams.length > 0
+        ? [...data.pathParams]
+        : connectedEndpoint?.pathParams
+        ? [...connectedEndpoint.pathParams]
+        : [];
+
+    const merged = [...existingParams];
+    labelPathParams.forEach((lp) => {
+      if (!merged.some((p) => p.name.toLowerCase() === lp.name.toLowerCase())) {
+        merged.push(lp);
+      }
+    });
+
+    return merged;
+  }, [data.label, data.pathParams, connectedEndpoint?.pathParams]);
 
   const effectiveQueryParams: Parameter[] = useMemo(() => {
-    return data.queryParams && data.queryParams.length > 0
-      ? data.queryParams
-      : connectedEndpoint?.queryParams || [];
-  }, [data.queryParams, connectedEndpoint?.queryParams]);
+    const rawLabel = typeof data.label === "string" ? data.label : "";
+    const parsed = parseRouteWithQueryParams(rawLabel);
+    const labelQueryParams = parsed.extractedQueryParams || [];
+
+    const existingParams =
+      data.queryParams && data.queryParams.length > 0
+        ? [...data.queryParams]
+        : connectedEndpoint?.queryParams
+        ? [...connectedEndpoint.queryParams]
+        : [];
+
+    const merged = [...existingParams];
+    labelQueryParams.forEach((lq) => {
+      if (!merged.some((q) => q.name.toLowerCase() === lq.name.toLowerCase())) {
+        merged.push(lq);
+      }
+    });
+
+    return merged;
+  }, [data.label, data.queryParams, connectedEndpoint?.queryParams]);
 
   const effectiveRequestBodyMode: RequestBodyMode =
     data.requestBodyMode ??

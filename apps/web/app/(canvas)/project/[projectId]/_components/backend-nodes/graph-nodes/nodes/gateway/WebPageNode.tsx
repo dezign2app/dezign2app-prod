@@ -25,7 +25,7 @@ import {
   getSimulationNodeBorderClass,
 } from "../../common";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { parsePageRoute, normalizePageRoute, arePageRoutesEqual, WebAppZone } from "@workspace/canvas";
+import { parseRouteWithQueryParams, parsePageRoute, normalizePageRoute, arePageRoutesEqual, WebAppZone } from "@workspace/canvas";
 import { RealtimeConnection, ClientDeliveryProtocol, Endpoint, PageStateObject, PageSection, StoreActionBinding } from "@workspace/canvas/types";
 import { SectionList, RealtimeConnectionList, useZoneHandLayout } from "./web-page";
 import { NodeDeletionDialog } from "@/app/(canvas)/project/[projectId]/_components/NodeDeletionDialog";
@@ -256,7 +256,8 @@ export const WebPageNode = ({
   const handleRequestRename = React.useCallback(
     (newLabel: string) => {
       const oldLabel = data.label || "";
-      const cleanNew = parsePageRoute(newLabel) || newLabel.trim();
+      const parsed = parseRouteWithQueryParams(newLabel);
+      const cleanNew = parsed.route || newLabel.trim();
 
       // Check if user is trying to rename to "layout"
       if (cleanNew.toLowerCase() === "layout") {
@@ -318,12 +319,37 @@ export const WebPageNode = ({
         }
       }
 
+      // Merge any extracted path params or query params from the input string
+      const existingPathParams = data.pathParams || [];
+      const mergedPathParams = [...existingPathParams];
+      let pathParamsChanged = false;
+      parsed.extractedPathParams.forEach((ep) => {
+        if (!mergedPathParams.some((p) => p.name.toLowerCase() === ep.name.toLowerCase())) {
+          mergedPathParams.push(ep);
+          pathParamsChanged = true;
+        }
+      });
+
+      const existingQueryParams = data.queryParams || [];
+      const mergedQueryParams = [...existingQueryParams];
+      let queryParamsChanged = false;
+      parsed.extractedQueryParams.forEach((eq) => {
+        if (!mergedQueryParams.some((q) => q.name.toLowerCase() === eq.name.toLowerCase())) {
+          mergedQueryParams.push(eq);
+          queryParamsChanged = true;
+        }
+      });
+
+      const additionalChanges: Partial<BackendNode["data"]> = {};
+      if (pathParamsChanged) additionalChanges.pathParams = mergedPathParams;
+      if (queryParamsChanged) additionalChanges.queryParams = mergedQueryParams;
+
       // If previously was layout, reset isLayout flag when renamed
       const nextIsLayout = Boolean(data.isLayout && cleanNew.toLowerCase() === "layout");
 
       // If oldLabel and cleanNew point to the exact same route (e.g. "/login" vs "login"), update label directly
       if (arePageRoutesEqual(oldLabel, cleanNew)) {
-        updateNode(id, { data: { ...data, label: cleanNew, isLayout: nextIsLayout } });
+        updateNode(id, { data: { ...data, label: cleanNew, isLayout: nextIsLayout, ...additionalChanges } });
         return;
       }
 
@@ -334,16 +360,21 @@ export const WebPageNode = ({
         oldLabel === "Untitled" ||
         oldLabel === "Page"
       ) {
-        updateNode(id, { data: { ...data, label: cleanNew, isLayout: nextIsLayout } });
+        updateNode(id, { data: { ...data, label: cleanNew, isLayout: nextIsLayout, ...additionalChanges } });
         return;
       }
 
       const cleanOld = parsePageRoute(oldLabel);
 
-      if (cleanOld === cleanNew) return;
+      if (cleanOld === cleanNew) {
+        if (pathParamsChanged || queryParamsChanged) {
+          updateNode(id, { data: { ...data, ...additionalChanges } });
+        }
+        return;
+      }
 
       if (!cleanOld || cleanOld === "page-server" || cleanOld === "Untitled" || cleanOld === "Page") {
-        updateNode(id, { data: { ...data, label: cleanNew, isLayout: nextIsLayout } });
+        updateNode(id, { data: { ...data, label: cleanNew, isLayout: nextIsLayout, ...additionalChanges } });
         return;
       }
 

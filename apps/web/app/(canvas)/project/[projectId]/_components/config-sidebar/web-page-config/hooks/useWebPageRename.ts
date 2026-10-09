@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { parsePageRoute, normalizePageRoute, arePageRoutesEqual } from "@workspace/canvas";
+import { parseRouteWithQueryParams, parsePageRoute, normalizePageRoute, arePageRoutesEqual } from "@workspace/canvas";
 import { toast } from "sonner";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 
@@ -21,11 +21,16 @@ export function useWebPageRename({
   allEdges = [],
 }: UseWebPageRenameParams) {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
-  const [pendingRename, setPendingRename] = useState<{ oldLabel: string; newLabel: string } | null>(null);
+  const [pendingRename, setPendingRename] = useState<{
+    oldLabel: string;
+    newLabel: string;
+    additionalChanges?: Partial<BackendNode["data"]>;
+  } | null>(null);
 
   const handleRequestRename = (newLabel: string) => {
     const oldLabel = data.label || "";
-    const cleanNew = parsePageRoute(newLabel) || newLabel.trim();
+    const parsed = parseRouteWithQueryParams(newLabel);
+    const cleanNew = parsed.route || newLabel.trim();
 
     // Check if another page in the same WebApp already has this route
     if (cleanNew.toLowerCase() !== "layout" && connectedWebApp) {
@@ -53,9 +58,34 @@ export function useWebPageRename({
       }
     }
 
+    // Merge any extracted path params or query params from the input string
+    const existingPathParams = data.pathParams || [];
+    const mergedPathParams = [...existingPathParams];
+    let pathParamsChanged = false;
+    parsed.extractedPathParams.forEach((ep) => {
+      if (!mergedPathParams.some((p) => p.name.toLowerCase() === ep.name.toLowerCase())) {
+        mergedPathParams.push(ep);
+        pathParamsChanged = true;
+      }
+    });
+
+    const existingQueryParams = data.queryParams || [];
+    const mergedQueryParams = [...existingQueryParams];
+    let queryParamsChanged = false;
+    parsed.extractedQueryParams.forEach((eq) => {
+      if (!mergedQueryParams.some((q) => q.name.toLowerCase() === eq.name.toLowerCase())) {
+        mergedQueryParams.push(eq);
+        queryParamsChanged = true;
+      }
+    });
+
+    const additionalChanges: Partial<BackendNode["data"]> = {};
+    if (pathParamsChanged) additionalChanges.pathParams = mergedPathParams;
+    if (queryParamsChanged) additionalChanges.queryParams = mergedQueryParams;
+
     // If oldLabel and cleanNew point to the exact same route (e.g. "/login" vs "login"), update label directly
     if (arePageRoutesEqual(oldLabel, cleanNew)) {
-      updateData({ label: cleanNew });
+      updateData({ label: cleanNew, ...additionalChanges });
       return;
     }
 
@@ -66,26 +96,34 @@ export function useWebPageRename({
       oldLabel === "Untitled" ||
       oldLabel === "Page"
     ) {
-      updateData({ label: cleanNew });
+      updateData({ label: cleanNew, ...additionalChanges });
       return;
     }
 
     const cleanOld = parsePageRoute(oldLabel);
 
-    if (cleanOld === cleanNew) return;
-
-    if (!cleanOld || cleanOld === "page-server" || cleanOld === "Untitled" || cleanOld === "Page") {
-      updateData({ label: cleanNew });
+    if (cleanOld === cleanNew) {
+      if (pathParamsChanged || queryParamsChanged) {
+        updateData(additionalChanges);
+      }
       return;
     }
 
-    setPendingRename({ oldLabel: cleanOld, newLabel: cleanNew });
+    if (!cleanOld || cleanOld === "page-server" || cleanOld === "Untitled" || cleanOld === "Page") {
+      updateData({ label: cleanNew, ...additionalChanges });
+      return;
+    }
+
+    setPendingRename({ oldLabel: cleanOld, newLabel: cleanNew, additionalChanges });
     setRenameDialogOpen(true);
   };
 
   const handleConfirmRename = () => {
     if (pendingRename) {
-      updateData({ label: pendingRename.newLabel });
+      updateData({
+        label: pendingRename.newLabel,
+        ...(pendingRename.additionalChanges || {}),
+      });
       setPendingRename(null);
     }
   };

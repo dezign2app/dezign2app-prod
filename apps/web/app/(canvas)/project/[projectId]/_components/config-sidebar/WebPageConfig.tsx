@@ -8,6 +8,7 @@ import { Id } from "@workspace/backend/_generated/dataModel";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { BackendNode, PageSection, Parameter } from "@/types/canvas";
 import { Tabs } from "@workspace/ui/components/tabs";
+import { syncRouteWithUpdatedPathParams } from "@workspace/canvas";
 import { useTerminalWorkspace } from "../terminal/hooks/useTerminalWorkspace";
 import { useWebPageCodeMismatch } from "./useWebPageCodeMismatch";
 import {
@@ -16,7 +17,6 @@ import {
   WebPageSectionsTab,
   WebPageStateTab,
   WebPageUploadsTab,
-  WebPageApiTab,
   WebPageCodeSyncTab,
   WebPageProtectionTab,
   WebPageAiTab,
@@ -47,14 +47,17 @@ export const WebPageConfig = ({
   const patchNodeData = useMutation(api.canvas.patchNodeData);
 
   const initialTab =
-    (activeConfigItem?.initialTab as string) ||
-    "sections";
+    activeConfigItem?.initialTab &&
+    activeConfigItem.initialTab !== "api" &&
+    activeConfigItem.initialTab !== "params"
+      ? (activeConfigItem.initialTab as string)
+      : "sections";
   const [activeTab, setActiveTab] = useState(initialTab);
 
   React.useEffect(() => {
     const nextTab = activeConfigItem?.initialTab as string;
     if (nextTab) {
-      setActiveTab(nextTab);
+      setActiveTab(nextTab === "api" || nextTab === "params" ? "sections" : nextTab);
     }
   }, [activeConfigItem?.initialTab]);
 
@@ -74,6 +77,8 @@ export const WebPageConfig = ({
   const updateData = (changes: Partial<BackendNode["data"]>) => {
     updateNode(nodeId, { data: { ...data, ...changes } });
   };
+
+  const isLayout = Boolean(data.isLayout || data.label?.trim().toLowerCase() === "layout");
 
   const appName = data.appName || "Web App";
   const appSlug =
@@ -130,18 +135,49 @@ export const WebPageConfig = ({
     endpoints: allEndpoints,
   });
 
-  // 3. Resolve API headers, path/query params and request body schema
+  // 3. Resolve path/query params
   const {
-    effectiveHeaders,
     effectivePathParams,
     effectiveQueryParams,
-    effectiveRequestBody,
-    effectiveRequestBodyMode,
   } = useWebPageApiParameters({
     data,
     connectedEndpoint,
     isProtected,
   });
+
+  // Auto-persist dynamic path params (e.g. [id]) and query params into node data
+  React.useEffect(() => {
+    let changed = false;
+    const updates: Partial<BackendNode["data"]> = {};
+
+    if (effectivePathParams.length > (data.pathParams || []).length) {
+      updates.pathParams = effectivePathParams;
+      changed = true;
+    }
+    if (effectiveQueryParams.length > (data.queryParams || []).length) {
+      updates.queryParams = effectiveQueryParams;
+      changed = true;
+    }
+
+    if (changed) {
+      updateData(updates);
+    }
+  }, [effectivePathParams, effectiveQueryParams, data.pathParams, data.queryParams]);
+
+  // Auto-synchronize route label with effectivePathParams (e.g. route "c" + param "id" -> "/c/[id]")
+  React.useEffect(() => {
+    if (isLayout || !data.label) return;
+    const syncedRoute = syncRouteWithUpdatedPathParams({
+      currentRoute: data.label,
+      oldPathParams: data.pathParams || [],
+      newPathParams: effectivePathParams,
+      isLayout,
+    });
+
+    if (syncedRoute !== data.label) {
+      updateData({ label: syncedRoute });
+    }
+  }, [data.label, effectivePathParams, isLayout, data.pathParams]);
 
   // Auto-clean any default or stale auth headers stored on page data
   React.useEffect(() => {
@@ -199,6 +235,26 @@ export const WebPageConfig = ({
   const stateStoreNodes = allNodes.filter((n) => n.type === "state_store");
   const storeCount = stateStoreNodes.length;
 
+  const handleUpdatePathParams = (newPathParams: Parameter[]) => {
+    const currentRoute = data.label || "/";
+    const nextRoute = syncRouteWithUpdatedPathParams({
+      currentRoute,
+      oldPathParams: effectivePathParams,
+      newPathParams,
+      isLayout,
+    });
+
+    const updates: Partial<BackendNode["data"]> = {
+      pathParams: newPathParams,
+    };
+
+    if (nextRoute !== currentRoute) {
+      updates.label = nextRoute;
+    }
+
+    updateData(updates);
+  };
+
   return (
     <div className="flex flex-col h-full font-sans text-foreground">
       {/* Top Header Section */}
@@ -211,6 +267,14 @@ export const WebPageConfig = ({
         requireAuth={data.requireAuth !== undefined ? data.requireAuth : isProtected}
         onUpdateSummary={(summary) => updateData({ summary, description: summary })}
         onUpdateRequireAuth={(requireAuth) => updateData({ requireAuth })}
+        onRequestRename={handleRequestRename}
+        isLayout={isLayout}
+        effectivePathParams={effectivePathParams}
+        effectiveQueryParams={effectiveQueryParams}
+        onUpdatePathParams={handleUpdatePathParams}
+        onUpdateQueryParams={(queryParams) => updateData({ queryParams })}
+        connectedEndpoint={connectedEndpoint}
+        connectedWebApp={connectedWebApp}
       />
 
       {/* Tabs Navigation */}
@@ -267,31 +331,7 @@ export const WebPageConfig = ({
           onUpdateData={updateData}
         />
 
-        {/* Tab 4: API Parameters & Request Body */}
-        <WebPageApiTab
-          connectedEndpoint={connectedEndpoint}
-          effectiveHeaders={effectiveHeaders}
-          effectivePathParams={effectivePathParams}
-          effectiveQueryParams={effectiveQueryParams}
-          effectiveRequestBody={effectiveRequestBody}
-          effectiveRequestBodyMode={effectiveRequestBodyMode}
-          onUpdateHeaders={(headers) =>
-            updateData({
-              headers: headers.filter(
-                (h: Parameter) =>
-                  h.name?.toLowerCase() !== "authorization" &&
-                  h.id !== "auth-bearer-header" &&
-                  !h.id?.startsWith("auth-"),
-              ),
-            })
-          }
-          onUpdatePathParams={(pathParams) => updateData({ pathParams })}
-          onUpdateQueryParams={(queryParams) => updateData({ queryParams })}
-          onUpdateRequestBody={(requestBody) => updateData({ requestBody })}
-          onUpdateRequestBodyMode={(requestBodyMode) => updateData({ requestBodyMode })}
-        />
-
-        {/* Tab 3: Code Sync & Visual Studio */}
+        {/* Tab 4: Code Sync & Visual Studio */}
         <WebPageCodeSyncTab
           hasCustomServerFile={hasCustomServerFile}
           detectedDiskPath={detectedDiskPath}
