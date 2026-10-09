@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
+import { LocalInput } from "../../../common";
 
 interface PageStateObjectsListProps {
   nodeId: string;
@@ -57,6 +58,12 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
   const [fieldSearch, setFieldSearch] = useState<string>("");
 
+  // Local state for picker dialog to guarantee 0ms instant UI checkbox toggle
+  const [localPickerStates, setLocalPickerStates] = useState<PageStateObject[] | null>(null);
+  const commitTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const latestLocalStatesRef = React.useRef<PageStateObject[] | null>(null);
+  latestLocalStatesRef.current = localPickerStates;
+
   // Inline edit state
   const [editingStateId, setEditingStateId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -64,7 +71,7 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
   const [editDefault, setEditDefault] = useState("");
 
   // Configured state objects on this page (user-decided)
-  const configuredStates: PageStateObject[] = data?.stateObjects || [];
+  const configuredStates: PageStateObject[] = localPickerStates ?? (data?.stateObjects || []);
 
   // 1. Discover all StateStore nodes for this WebPage
   const connectedStoreIds = new Set<string>();
@@ -128,17 +135,73 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
   const activeStoreId = selectedStoreId || associatedStores[0]?.id || "";
   const currentStore = associatedStores.find((s) => s.id === activeStoreId) || associatedStores[0];
 
-  // Toggle a field from the selected store
+  const commitStates = React.useCallback(
+    (nextStates: PageStateObject[]) => {
+      updateNode(nodeId, {
+        data: {
+          ...data,
+          stateObjects: nextStates,
+        },
+      });
+    },
+    [nodeId, data, updateNode],
+  );
+
+  const scheduleCommit = (nextStates: PageStateObject[]) => {
+    if (commitTimeoutRef.current) {
+      clearTimeout(commitTimeoutRef.current);
+    }
+    commitTimeoutRef.current = setTimeout(() => {
+      commitStates(nextStates);
+      commitTimeoutRef.current = null;
+    }, 250);
+  };
+
+  const flushCommit = React.useCallback(() => {
+    if (commitTimeoutRef.current) {
+      clearTimeout(commitTimeoutRef.current);
+      commitTimeoutRef.current = null;
+    }
+    if (latestLocalStatesRef.current !== null) {
+      commitStates(latestLocalStatesRef.current);
+    }
+  }, [commitStates]);
+
+  React.useEffect(() => {
+    return () => {
+      if (commitTimeoutRef.current) {
+        clearTimeout(commitTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleOpenPicker = () => {
+    setLocalPickerStates(data?.stateObjects || []);
+    setIsPickerOpen(true);
+  };
+
+  const handleDialogChange = (open: boolean) => {
+    if (!open) {
+      flushCommit();
+      setLocalPickerStates(null);
+    } else {
+      setLocalPickerStates(data?.stateObjects || []);
+    }
+    setIsPickerOpen(open);
+  };
+
+  // Toggle a field from the selected store - instantaneous 0ms UI update
   const handleToggleStoreField = (store: BackendNode, field: GlobalStoreField) => {
     const storeName = store.data?.label || store.data?.storeName || "Store";
-    const isAlreadySelected = configuredStates.some(
+    const current = configuredStates;
+    const isAlreadySelected = current.some(
       (s) => s.fieldId === field.id || (s.storeId === store.id && s.name === field.name),
     );
 
     let nextStates: PageStateObject[];
     if (isAlreadySelected) {
       // Remove from page
-      nextStates = configuredStates.filter(
+      nextStates = current.filter(
         (s) => !(s.fieldId === field.id || (s.storeId === store.id && s.name === field.name)),
       );
     } else {
@@ -152,21 +215,18 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
         storeName,
         fieldId: field.id,
       };
-      nextStates = [...configuredStates, newObj];
+      nextStates = [...current, newObj];
     }
 
-    updateNode(nodeId, {
-      data: {
-        ...data,
-        stateObjects: nextStates,
-      },
-    });
+    setLocalPickerStates(nextStates);
+    scheduleCommit(nextStates);
   };
 
-  // Select all visible fields of current store
+  // Select all visible fields of current store - instantaneous 0ms UI update
   const handleSelectAllVisible = (store: BackendNode, fields: GlobalStoreField[]) => {
     const storeName = store.data?.label || store.data?.storeName || "Store";
-    const existingFieldIds = new Set(configuredStates.map((s) => s.fieldId));
+    const current = configuredStates;
+    const existingFieldIds = new Set(current.map((s) => s.fieldId));
 
     const toAdd: PageStateObject[] = fields
       .filter((f) => !existingFieldIds.has(f.id))
@@ -180,23 +240,18 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
         fieldId: f.id,
       }));
 
-    updateNode(nodeId, {
-      data: {
-        ...data,
-        stateObjects: [...configuredStates, ...toAdd],
-      },
-    });
+    if (toAdd.length === 0) return;
+    const nextStates = [...current, ...toAdd];
+    setLocalPickerStates(nextStates);
+    scheduleCommit(nextStates);
   };
 
-  // Deselect all fields of current store
+  // Deselect all fields of current store - instantaneous 0ms UI update
   const handleDeselectAllCurrentStore = (store: BackendNode) => {
-    const nextStates = configuredStates.filter((s) => s.storeId !== store.id);
-    updateNode(nodeId, {
-      data: {
-        ...data,
-        stateObjects: nextStates,
-      },
-    });
+    const current = configuredStates;
+    const nextStates = current.filter((s) => s.storeId !== store.id);
+    setLocalPickerStates(nextStates);
+    scheduleCommit(nextStates);
   };
 
   // Delete a state object from the page
@@ -315,7 +370,7 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setIsPickerOpen(true);
+              handleOpenPicker();
             }}
             className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 text-[9px] font-semibold transition-colors cursor-pointer"
             title="Select dynamic state fields to render"
@@ -337,7 +392,7 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
               </span>
               <button
                 type="button"
-                onClick={() => setIsPickerOpen(true)}
+                onClick={handleOpenPicker}
                 className="flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 text-[9px] font-semibold cursor-pointer transition-colors"
               >
                 <Plus size={10} />
@@ -479,7 +534,7 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
               {/* Bottom "+ Add / Select" button */}
               <button
                 type="button"
-                onClick={() => setIsPickerOpen(true)}
+                onClick={handleOpenPicker}
                 className="flex items-center justify-center gap-1 py-1 text-[9px] text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 rounded transition-colors cursor-pointer"
               >
                 <Plus size={10} /> Add / Select State
@@ -490,7 +545,7 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
       )}
 
       {/* Field Picker / Configuration Dialog */}
-      <Dialog open={isPickerOpen} onOpenChange={setIsPickerOpen}>
+      <Dialog open={isPickerOpen} onOpenChange={handleDialogChange}>
         <DialogContent className="sm:max-w-[480px] p-5 font-sans">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base text-foreground">
@@ -628,6 +683,8 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
                         <button
                           type="button"
                           onClick={() => {
+                            flushCommit();
+                            setLocalPickerStates(null);
                             setIsPickerOpen(false);
                             setActiveConfigItem({
                               id: nodeId,
@@ -649,7 +706,7 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
                     {currentStoreFields.length > 4 && (
                       <div className="relative">
                         <Search size={12} className="absolute left-2.5 top-2.5 text-muted-foreground" />
-                        <Input
+                        <LocalInput
                           value={fieldSearch}
                           onChange={(e) => setFieldSearch(e.target.value)}
                           placeholder={`Search ${currentStoreFields.length} fields in ${currentStore.data?.label || "store"}...`}
@@ -665,6 +722,8 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
                         <button
                           type="button"
                           onClick={() => {
+                            flushCommit();
+                            setLocalPickerStates(null);
                             setIsPickerOpen(false);
                             setActiveConfigItem({
                               id: currentStore.id,
@@ -766,7 +825,11 @@ export const PageStateObjectsList: React.FC<PageStateObjectsListProps> = ({
             </div>
             <Button
               type="button"
-              onClick={() => setIsPickerOpen(false)}
+              onClick={() => {
+                flushCommit();
+                setLocalPickerStates(null);
+                setIsPickerOpen(false);
+              }}
               className="h-8 text-xs px-4"
             >
               Done

@@ -1,6 +1,6 @@
 import React from "react";
 import { ShieldCheck } from "lucide-react";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../backend-nodes/graph-nodes/shared";
 import { Label } from "@workspace/ui/components/label";
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import {
@@ -40,6 +40,11 @@ export function WebPageProtectionSection({
   onUpdateRedirectTo,
   onUpdateIsAuthPage,
 }: WebPageProtectionSectionProps) {
+  const [localIsAuthPage, setLocalIsAuthPage] = React.useState<boolean>(Boolean(isAuthPage));
+
+  React.useEffect(() => {
+    setLocalIsAuthPage(Boolean(isAuthPage));
+  }, [isAuthPage]);
   return (
     <div className="flex flex-col gap-4 p-4 rounded-xl bg-card border border-border/60 shadow-sm">
       <div className="flex items-center justify-between">
@@ -118,7 +123,7 @@ export function WebPageProtectionSection({
               <Label className="text-xs text-muted-foreground">
                 Allowed Roles (comma-separated)
               </Label>
-              <Input
+              <LocalInput
                 value={allowedRoles.join(", ")}
                 onChange={(e) =>
                   onUpdateAllowedRoles(
@@ -139,7 +144,7 @@ export function WebPageProtectionSection({
               <Label className="text-xs text-muted-foreground">
                 Required Plan Tiers (comma-separated)
               </Label>
-              <Input
+              <LocalInput
                 value={requiredPlans.join(", ")}
                 onChange={(e) =>
                   onUpdateRequiredPlans(
@@ -160,7 +165,7 @@ export function WebPageProtectionSection({
               <Label className="text-xs text-muted-foreground">
                 Unauthorized Redirect Target Route
               </Label>
-              <Input
+              <LocalInput
                 value={redirectTo}
                 onChange={(e) => onUpdateRedirectTo(e.target.value)}
                 placeholder="e.g. /login, /pricing"
@@ -175,8 +180,12 @@ export function WebPageProtectionSection({
       <div className="flex items-center gap-2.5 pt-2 border-t border-border/40">
         <Checkbox
           id="isAuthPage"
-          checked={Boolean(isAuthPage)}
-          onCheckedChange={(val) => onUpdateIsAuthPage(Boolean(val))}
+          checked={localIsAuthPage}
+          onCheckedChange={(val) => {
+            const nextVal = Boolean(val);
+            setLocalIsAuthPage(nextVal);
+            onUpdateIsAuthPage(nextVal);
+          }}
         />
         <Label htmlFor="isAuthPage" className="text-xs font-normal cursor-pointer">
           This page is the Login / Authentication entry page (unauthenticated target)

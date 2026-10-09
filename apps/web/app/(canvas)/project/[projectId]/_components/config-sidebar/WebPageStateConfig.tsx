@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useCallback } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useShallow } from "zustand/react/shallow";
 import { Eye, EyeOff, AlertTriangle } from "lucide-react";
 import {
   BackendNode,
@@ -39,11 +40,17 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
   nodeId,
   sectionId,
 }) => {
-  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const parentNode = useBackendCanvasStore(
+    useCallback((s) => s.nodes.find((n) => n.id === nodeId), [nodeId]),
+  );
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
-  const parentNode = nodes.find((n) => n.id === nodeId);
+  // All web pages in project for navigation action
+  const availablePages = useBackendCanvasStore(
+    useShallow((s) => s.nodes.filter((n) => n.type === "webPage" && n.id !== nodeId)),
+  );
+
   const sections: PageSection[] = parentNode?.data?.sections || [];
 
   // Find target section containing this state variable
@@ -71,59 +78,86 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
   // Section actions available for interactive triggering
   const availableActions: UIEventItem[] = targetSection?.actions || [];
 
-  // All web pages in project for navigation action
-  const availablePages = useMemo(
-    () => nodes.filter((n) => n.type === "webPage" && n.id !== nodeId),
-    [nodes, nodeId],
-  );
-
   // Helper to persist changes
-  const handleUpdateRenderConfig = (changes: Partial<StateRenderConfig>) => {
-    if (!parentNode || !stateObj) return;
+  const handleUpdateRenderConfig = useCallback(
+    (changes: Partial<StateRenderConfig>) => {
+      const store = useBackendCanvasStore.getState();
+      const currentParent = store.nodes.find((n) => n.id === nodeId);
+      if (!currentParent) return;
 
-    const nextConfig: StateRenderConfig = {
-      ...renderConfig,
-      ...changes,
-    };
+      const currentSections: PageSection[] = currentParent.data?.sections || [];
+      const currentTargetSec =
+        currentSections.find((s) => (s.stateObjects || []).some((st) => st.id === id)) ||
+        currentSections.find((s) => s.id === sectionId) ||
+        currentSections[0];
 
-    if (targetSection) {
-      const updatedSections = sections.map((sec) => {
-        if (sec.id !== targetSection.id) return sec;
-        const updatedStateObjects = (sec.stateObjects || []).map((st) => {
+      const currentStObj: PageStateObject | undefined = currentTargetSec
+        ? (currentTargetSec.stateObjects || []).find((st) => st.id === id)
+        : (currentParent.data?.stateObjects || []).find((st: PageStateObject) => st.id === id);
+
+      if (!currentStObj) return;
+
+      const nextConfig: StateRenderConfig = {
+        ...(currentStObj.renderConfig || {}),
+        ...changes,
+      };
+
+      if (currentTargetSec) {
+        const updatedSections = currentSections.map((sec) => {
+          if (sec.id !== currentTargetSec.id) return sec;
+          const updatedStateObjects = (sec.stateObjects || []).map((st) => {
+            if (st.id !== id) return st;
+            return { ...st, renderConfig: nextConfig };
+          });
+          return { ...sec, stateObjects: updatedStateObjects };
+        });
+
+        store.updateNode(nodeId, {
+          data: {
+            ...currentParent.data,
+            sections: updatedSections,
+          },
+        });
+      } else if (currentParent.data?.stateObjects) {
+        const updatedStateObjects = currentParent.data.stateObjects.map((st: PageStateObject) => {
           if (st.id !== id) return st;
           return { ...st, renderConfig: nextConfig };
         });
-        return { ...sec, stateObjects: updatedStateObjects };
-      });
+        store.updateNode(nodeId, {
+          data: {
+            ...currentParent.data,
+            stateObjects: updatedStateObjects,
+          },
+        });
+      }
+    },
+    [id, nodeId, sectionId],
+  );
 
-      updateNode(nodeId, {
-        data: {
-          ...parentNode.data,
-          sections: updatedSections,
+  const handleUpdatePropMapping = useCallback(
+    (changes: Partial<ComponentPropMappings>) => {
+      const store = useBackendCanvasStore.getState();
+      const currentParent = store.nodes.find((n) => n.id === nodeId);
+      const currentSections: PageSection[] = currentParent?.data?.sections || [];
+      const currentTargetSec =
+        currentSections.find((s) => (s.stateObjects || []).some((st) => st.id === id)) ||
+        currentSections.find((s) => s.id === sectionId) ||
+        currentSections[0];
+      const currentStObj: PageStateObject | undefined = currentTargetSec
+        ? (currentTargetSec.stateObjects || []).find((st) => st.id === id)
+        : (currentParent?.data?.stateObjects || []).find((st: PageStateObject) => st.id === id);
+
+      const currentProps = currentStObj?.renderConfig?.propMappings || {};
+
+      handleUpdateRenderConfig({
+        propMappings: {
+          ...currentProps,
+          ...changes,
         },
       });
-    } else if (parentNode.data?.stateObjects) {
-      const updatedStateObjects = parentNode.data.stateObjects.map((st: PageStateObject) => {
-        if (st.id !== id) return st;
-        return { ...st, renderConfig: nextConfig };
-      });
-      updateNode(nodeId, {
-        data: {
-          ...parentNode.data,
-          stateObjects: updatedStateObjects,
-        },
-      });
-    }
-  };
-
-  const handleUpdatePropMapping = (changes: Partial<ComponentPropMappings>) => {
-    handleUpdateRenderConfig({
-      propMappings: {
-        ...(renderConfig.propMappings || {}),
-        ...changes,
-      },
-    });
-  };
+    },
+    [handleUpdateRenderConfig, id, nodeId, sectionId],
+  );
 
   // Derive sample value for preview
   const sampleValue = useMemo(() => {

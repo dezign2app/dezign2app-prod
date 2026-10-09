@@ -17,11 +17,11 @@ import {
   BackendNode,
 } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
 import { StateStoreConfig } from "../StateStoreConfig";
 import { StateStoreCombobox } from "../StateStoreCombobox";
 import { cn } from "@workspace/ui/lib/utils";
+import { LocalInput } from "../../backend-nodes/graph-nodes/shared";
 
 export interface SectionStateTabProps {
   nodeId?: string;
@@ -40,9 +40,15 @@ export const SectionStateTab: React.FC<SectionStateTabProps> = ({
   const edges = useBackendCanvasStore((s) => s.edges);
   const addNode = useBackendCanvasStore((s) => s.addNode);
 
+  // Local state buffering for 0ms instant UI checkbox toggling
+  const [localStates, setLocalStates] = useState<PageStateObject[] | null>(null);
+  const commitTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const latestLocalStatesRef = React.useRef<PageStateObject[] | null>(null);
+  latestLocalStatesRef.current = localStates;
+
   const configuredStoreStates: PageStateObject[] = useMemo(
-    () => section?.stateObjects || [],
-    [section?.stateObjects],
+    () => localStates ?? (section?.stateObjects || []),
+    [localStates, section?.stateObjects],
   );
 
   // --------------------------------------------------------------------------
@@ -194,9 +200,45 @@ export const SectionStateTab: React.FC<SectionStateTabProps> = ({
     setStoreSubView("fields");
   };
 
+  const commitStates = React.useCallback(
+    (nextStates: PageStateObject[]) => {
+      if (onUpdateSection) {
+        onUpdateSection({ stateObjects: nextStates });
+      }
+    },
+    [onUpdateSection],
+  );
+
+  const scheduleCommit = (nextStates: PageStateObject[]) => {
+    if (commitTimeoutRef.current) {
+      clearTimeout(commitTimeoutRef.current);
+    }
+    commitTimeoutRef.current = setTimeout(() => {
+      commitStates(nextStates);
+      commitTimeoutRef.current = null;
+    }, 250);
+  };
+
+  const flushCommit = React.useCallback(() => {
+    if (commitTimeoutRef.current) {
+      clearTimeout(commitTimeoutRef.current);
+      commitTimeoutRef.current = null;
+    }
+    if (latestLocalStatesRef.current !== null) {
+      commitStates(latestLocalStatesRef.current);
+    }
+  }, [commitStates]);
+
+  React.useEffect(() => {
+    return () => {
+      flushCommit();
+    };
+  }, [flushCommit]);
+
   const handleToggleStoreField = (store: BackendNode, field: GlobalStoreField) => {
     const storeName = store.data?.label || store.data?.storeName || "Store";
-    const isAlreadySelected = configuredStoreStates.some(
+    const current = configuredStoreStates;
+    const isAlreadySelected = current.some(
       (s) =>
         s.fieldId === field.id ||
         ((s.storeId === store.id || s.storeNodeId === store.id) &&
@@ -205,7 +247,7 @@ export const SectionStateTab: React.FC<SectionStateTabProps> = ({
 
     let nextStates: PageStateObject[];
     if (isAlreadySelected) {
-      nextStates = configuredStoreStates.filter(
+      nextStates = current.filter(
         (s) =>
           !(
             s.fieldId === field.id ||
@@ -224,17 +266,17 @@ export const SectionStateTab: React.FC<SectionStateTabProps> = ({
         storeName,
         fieldId: field.id,
       };
-      nextStates = [...configuredStoreStates, newObj];
+      nextStates = [...current, newObj];
     }
 
-    if (onUpdateSection) {
-      onUpdateSection({ stateObjects: nextStates });
-    }
+    setLocalStates(nextStates);
+    scheduleCommit(nextStates);
   };
 
   const handleSelectAllVisible = (store: BackendNode, fields: GlobalStoreField[]) => {
     const storeName = store.data?.label || store.data?.storeName || "Store";
-    const existingFieldIds = new Set(configuredStoreStates.map((s) => s.fieldId));
+    const current = configuredStoreStates;
+    const existingFieldIds = new Set(current.map((s) => s.fieldId));
 
     const toAdd: PageStateObject[] = fields
       .filter((f) => !existingFieldIds.has(f.id))
@@ -249,25 +291,26 @@ export const SectionStateTab: React.FC<SectionStateTabProps> = ({
         fieldId: f.id,
       }));
 
-    if (onUpdateSection) {
-      onUpdateSection({ stateObjects: [...configuredStoreStates, ...toAdd] });
-    }
+    if (toAdd.length === 0) return;
+    const nextStates = [...current, ...toAdd];
+    setLocalStates(nextStates);
+    scheduleCommit(nextStates);
   };
 
   const handleDeselectAllCurrentStore = (store: BackendNode) => {
-    const nextStates = configuredStoreStates.filter(
+    const current = configuredStoreStates;
+    const nextStates = current.filter(
       (s) => s.storeId !== store.id && s.storeNodeId !== store.id,
     );
-    if (onUpdateSection) {
-      onUpdateSection({ stateObjects: nextStates });
-    }
+    setLocalStates(nextStates);
+    scheduleCommit(nextStates);
   };
 
   const handleRemoveStoreState = (stateId: string) => {
-    const nextStates = configuredStoreStates.filter((s) => s.id !== stateId);
-    if (onUpdateSection) {
-      onUpdateSection({ stateObjects: nextStates });
-    }
+    const current = configuredStoreStates;
+    const nextStates = current.filter((s) => s.id !== stateId);
+    setLocalStates(nextStates);
+    scheduleCommit(nextStates);
   };
 
   return (
@@ -390,9 +433,9 @@ export const SectionStateTab: React.FC<SectionStateTabProps> = ({
                       size={12}
                       className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
                     />
-                    <Input
+                    <LocalInput
                       value={fieldSearch}
-                      onChange={(e) => setFieldSearch(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFieldSearch(e.target.value)}
                       placeholder={`Search ${activeStore.data?.label || "store"} fields...`}
                       className="h-7 pl-7 text-xs bg-background"
                     />

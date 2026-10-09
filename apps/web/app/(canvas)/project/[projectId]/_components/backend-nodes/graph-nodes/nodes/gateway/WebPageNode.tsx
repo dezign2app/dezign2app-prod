@@ -23,8 +23,8 @@ import {
   NodeHeader,
   useSimulationNodeState,
   getSimulationNodeBorderClass,
+  LocalTextarea,
 } from "../../common";
-import { Textarea } from "@workspace/ui/components/textarea";
 import { parseRouteWithQueryParams, parsePageRoute, normalizePageRoute, arePageRoutesEqual, WebAppZone } from "@workspace/canvas";
 import { RealtimeConnection, ClientDeliveryProtocol, Endpoint, PageStateObject, PageSection, StoreActionBinding } from "@workspace/canvas/types";
 import { SectionList, RealtimeConnectionList, useZoneHandLayout } from "./web-page";
@@ -839,11 +839,12 @@ export const WebPageNode = ({
 
           {/* Description */}
           <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
-            <Textarea
+            <LocalTextarea
               className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50 disabled:opacity-60"
               placeholder="description"
               disabled={isLocked}
               value={data.description || ""}
+              debounceMs={150}
               onChange={(e) =>
                 updateNode(id, { data: { ...data, description: e.target.value } })
               }
