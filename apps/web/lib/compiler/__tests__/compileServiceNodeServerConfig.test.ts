@@ -8,6 +8,7 @@ describe("compileServiceNode: server config section & ports handling", () => {
       id: "srv-orders",
       type: "service",
       position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
       data: {
         label: "OrdersService",
         techStack: "express",
@@ -35,6 +36,7 @@ describe("compileServiceNode: server config section & ports handling", () => {
       id: "srv-nested",
       type: "service",
       position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
       data: {
         label: "NestedService",
         techStack: "express",
@@ -69,6 +71,7 @@ describe("compileServiceNode: server config section & ports handling", () => {
       id: "srv-grpc",
       type: "service",
       position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
       data: {
         label: "GrpcService",
         techStack: "express",
@@ -95,6 +98,7 @@ describe("compileServiceNode: server config section & ports handling", () => {
       id: "srv-no-cors",
       type: "service",
       position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
       data: {
         label: "PrivateService",
         techStack: "express",
@@ -114,6 +118,7 @@ describe("compileServiceNode: server config section & ports handling", () => {
       id: "srv-limited",
       type: "service",
       position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
       data: {
         label: "LimitedService",
         techStack: "express",
@@ -138,6 +143,7 @@ describe("compileServiceNode: server config section & ports handling", () => {
       id: "srv-a",
       type: "service",
       position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
       data: {
         label: "OrdersService",
         techStack: "express",
@@ -149,6 +155,7 @@ describe("compileServiceNode: server config section & ports handling", () => {
       id: "srv-b",
       type: "service",
       position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
       data: {
         label: "PaymentsService",
         techStack: "express",
@@ -160,6 +167,8 @@ describe("compileServiceNode: server config section & ports handling", () => {
       id: "e-a-b",
       source: "srv-a",
       target: "srv-b",
+      type: "connection",
+      fractionalIndex: "a0",
     };
 
     const result = compileServiceNode(serviceA, [], [], [serviceA, serviceB], [edge]);
@@ -175,6 +184,7 @@ describe("compileServiceNode: server config section & ports handling", () => {
       id: "srv-next",
       type: "service",
       position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
       data: {
         label: "NextService",
         techStack: "nextjs",
@@ -197,6 +207,7 @@ describe("compileServiceNode: server config section & ports handling", () => {
       id: "srv-fastapi",
       type: "service",
       position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
       data: {
         label: "FastApiService",
         techStack: "fastapi",

@@ -595,6 +595,7 @@ export type WebAppNodeData = z.infer<typeof webAppDataSchema>;
 
 export const serviceDataSchema = baseNodeDataSchema
   .extend({
+    serviceFolder: z.string().optional(),
     description: z.string().optional(),
     techStack: z.string().optional(),
     port: z.string().optional(),

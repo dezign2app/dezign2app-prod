@@ -111,6 +111,7 @@ export interface CanvasServiceServerConfig {
 }
 
 export interface CanvasServiceNodeData {
+  serviceFolder?: string;
   baseUrl?: string;
   cors?: boolean;
   corsOrigins?: string;

@@ -2,6 +2,7 @@ import {
   BackendNode,
   BackendEdge,
   Endpoint,
+  EndpointWithNode,
   KafkaTopic,
   PublishedEventItem,
 } from "@/types/canvas";
@@ -11,6 +12,7 @@ import {
   ConnectedKafka,
   ConnectedLangGraph,
   ConnectedRedis,
+  ConnectedServiceCall,
 } from "@/types/canvas";
 
 /**
@@ -373,6 +375,108 @@ export function getConnectedRedisForEndpoint(
       instanceId,
       instanceNode,
       label,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Returns all inter-service endpoints connected via canvas edges from this service endpoint.
+ */
+export function getConnectedServiceCallsForEndpoint(
+  endpointId: string,
+  serviceNodeId: string,
+  allNodes: BackendNode[] = [],
+  allEdges: BackendEdge[] = [],
+  endpoints?: EndpointWithNode[],
+): ConnectedServiceCall[] {
+  if (!endpointId || !serviceNodeId) return [];
+
+  const epOutHandle = `endpoint-out-${endpointId}`;
+
+  // Find all edges directed from this service endpoint to another service endpoint
+  const connectedEdges = allEdges.filter(
+    (e) =>
+      e &&
+      e.source === serviceNodeId &&
+      (e.sourceHandle === epOutHandle ||
+        e.sourceHandle === `endpoints-out-${endpointId}` ||
+        e.sourceHandle === `routeEndpoints-out-${endpointId}`) &&
+      e.target !== serviceNodeId,
+  );
+
+  const results: ConnectedServiceCall[] = [];
+
+  for (const edge of connectedEdges) {
+    const targetNode = allNodes.find((n) => n.id === edge.target);
+    if (!targetNode) continue;
+
+    const isServiceTarget =
+      targetNode.type === "service" ||
+      targetNode.type === "serverless" ||
+      targetNode.type === "worker" ||
+      Array.isArray(targetNode.data?.endpoints);
+
+    if (!isServiceTarget) continue;
+
+    // Extract target endpoint ID from targetHandle
+    let targetEndpointId: string | null = null;
+    const targetHandle = edge.targetHandle || "";
+    const match = targetHandle.match(
+      /^(?:routeEndpoints|endpoints|endpoint)-(?:in|out)-(.+)$/,
+    );
+    if (match && match[1]) {
+      targetEndpointId = match[1];
+    } else if (targetHandle.startsWith("func-in-")) {
+      targetEndpointId = targetHandle.replace("func-in-", "");
+    } else if (targetHandle.startsWith("func-")) {
+      targetEndpointId = targetHandle.replace("func-", "");
+    }
+
+    const targetEndpoints: Endpoint[] =
+      (endpoints ? endpoints.filter((e) => e.nodeId === targetNode.id) : []) ||
+      (Array.isArray(targetNode.data?.endpoints) ? targetNode.data.endpoints : []);
+
+    const targetEp = targetEndpointId
+      ? targetEndpoints.find(
+        (ep) => ep.id === targetEndpointId || ep.name === targetEndpointId,
+      )
+      : targetEndpoints[0];
+
+    if (!targetEp) continue;
+
+    const resolvedEpId = targetEp.id || targetEndpointId || "endpoint";
+    const serviceLabel = targetNode.data?.label || "service";
+    const pascalService = toPascalCase(serviceLabel);
+    const folderName = targetNode.data?.serviceFolder || toFolderName(serviceLabel);
+    const rawEpName = targetEp.name?.replace(/[^a-zA-Z0-9]/g, "") || "call";
+    const method = targetEp.type || "GET";
+    const methodLower = method.toLowerCase();
+    const cleanedEpName = rawEpName.toLowerCase().startsWith(methodLower)
+      ? rawEpName.slice(methodLower.length)
+      : rawEpName;
+    const pascalEp = toPascalCase(`${methodLower}_${cleanedEpName || "call"}`);
+    const functionName = `call${pascalService}${pascalEp}`;
+    const operationId = `call-${serviceLabel}-${rawEpName}`;
+    const importPath = `@workspace/services/${folderName}`;
+
+    results.push({
+      id: `${edge.id}:${targetNode.id}:${resolvedEpId}`,
+      edgeId: edge.id,
+      targetServiceId: targetNode.id,
+      targetServiceNode: targetNode,
+      targetServiceName: serviceLabel,
+      targetEndpointId: resolvedEpId,
+      targetEndpoint: targetEp,
+      targetEndpointName: targetEp.name || "/",
+      targetEndpointMethod: method,
+      serviceLabel,
+      endpointName: targetEp.name || "/",
+      method,
+      functionName,
+      importPath,
+      operationId,
     });
   }
 

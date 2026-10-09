@@ -4,6 +4,7 @@ export type {
   ConnectedKafka,
   ConnectedLangGraph,
   ConnectedRedis,
+  ConnectedServiceCall,
   BindingCheckSource,
   BindingCheckItem,
   EndpointLike,

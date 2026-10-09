@@ -17,6 +17,7 @@ import type {
   LangGraphInputChannel,
   LangGraphStepConfig,
 } from "./langgraph";
+import { Endpoint } from "./messaging";
 
 // ─── Step Binding & Source Types ──────────────────────────────────────────────
 
@@ -164,6 +165,24 @@ export interface ConnectedRedis {
   instanceId?: string;
   instanceNode?: BackendNode;
   label: string;
+}
+
+export interface ConnectedServiceCall {
+  id: string;
+  edgeId: string;
+  targetServiceId: string;
+  targetServiceNode?: BackendNode;
+  targetServiceName?: string;
+  targetEndpointId: string;
+  targetEndpoint?: Endpoint;
+  targetEndpointName?: string;
+  targetEndpointMethod?: string;
+  serviceLabel: string;
+  endpointName: string;
+  method: string;
+  functionName: string;
+  importPath: string;
+  operationId: string;
 }
 
 export interface BindingCheckSource {

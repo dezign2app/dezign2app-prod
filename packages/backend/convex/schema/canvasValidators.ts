@@ -148,6 +148,8 @@ export const safePipelineStepSchema = z.object({
   dbRefNodeId: z.string().optional(),
   externalNodeId: z.string().optional(),
   externalEndpointId: z.string().optional(),
+  serviceId: z.string().optional(),
+  endpointId: z.string().optional(),
   operationId: z.string().optional(),
   storageNodeId: z.string().optional(),
   bucketId: z.string().optional(),
@@ -156,7 +158,8 @@ export const safePipelineStepSchema = z.object({
   functionRef: z
     .object({
       name: z.string(),
-      importPath: z.string(),
+      importPath: z.string().optional(),
+      path: z.string().optional(),
       signature: z.string().optional(),
       isGlobal: z.boolean().optional(),
       inputSchema: z.array(stepSchemaFieldSchema).optional(),
@@ -401,6 +404,11 @@ export const backendEdgeDataValidator = v.object({
   bucketId: v.optional(v.string()),
   storageNodeId: v.optional(v.string()),
   refNodeId: v.optional(v.string()),
+  // --- Service Call Connection Fields ---
+  isServiceCall: v.optional(v.boolean()),
+  targetServiceId: v.optional(v.string()),
+  targetEndpointId: v.optional(v.string()),
+  sourceEndpointId: v.optional(v.string()),
   // --- LangGraph Route Invocation ---
   payloadMapping: v.optional(v.record(v.string(), v.string())),
   preInvokeLogicMode: v.optional(
