@@ -7,6 +7,7 @@ export { ApiCallStep } from "./ApiCallStep";
 export { StoragePutStep } from "./StoragePutStep";
 export { StateMutationStep } from "./StateMutationStep";
 export { NavigationStep } from "./NavigationStep";
+export { QueryParamsStep } from "./QueryParamsStep";
 export { CustomCodeStep } from "./CustomCodeStep";
 export { ConditionStep } from "./ConditionStep";
 export { NotificationStep } from "./NotificationStep";

@@ -113,7 +113,14 @@ export type FrontendActionStepType =
   | "custom_code"
   | "condition"
   | "notification"
-  | "reset_form";
+  | "reset_form"
+  | "update_query_params";
+
+export type QueryParamUpdateItem = {
+  key: string;
+  mode: "set" | "remove" | "toggle";
+  valueSource?: FrontendFieldSource;
+};
 
 export type FrontendFieldSource =
   | { kind: "literal"; value: string }
@@ -186,6 +193,14 @@ export type FrontendActionStepDraft = {
 
   // --- For type === "reset_form" ---
   formTarget?: string;
+
+  // --- For type === "update_query_params" ---
+  queryParamKey?: string;
+  queryParamMode?: "set" | "remove" | "toggle";
+  queryParamValueSource?: FrontendFieldSource;
+  queryParamNavMode?: "replace" | "push";
+  queryParamScroll?: boolean;
+  queryParamsUpdates?: QueryParamUpdateItem[];
 };
 
 export type UIEventItem = {
