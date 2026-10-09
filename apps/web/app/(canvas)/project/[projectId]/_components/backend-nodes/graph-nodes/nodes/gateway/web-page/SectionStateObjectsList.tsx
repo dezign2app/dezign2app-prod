@@ -36,6 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
+import { LocalInput } from "../../../common";
 
 interface SectionStateObjectsListProps {
   nodeId: string;
@@ -62,13 +63,19 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
   const [fieldSearch, setFieldSearch] = useState<string>("");
 
+  // Local state for picker dialog to guarantee 0ms instant UI checkbox toggle
+  const [localPickerStates, setLocalPickerStates] = useState<PageStateObject[] | null>(null);
+  const commitTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const latestLocalStatesRef = React.useRef<PageStateObject[] | null>(null);
+  latestLocalStatesRef.current = localPickerStates;
+
   // Inline edit state
   const [editingStateId, setEditingStateId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState("string");
   const [editDefault, setEditDefault] = useState("");
 
-  const configuredStates: PageStateObject[] = section.stateObjects || [];
+  const configuredStates: PageStateObject[] = localPickerStates ?? (section.stateObjects || []);
 
   // Auto-sync edges for configured state objects (ensures edges are drawn between state store fields and rendered section state)
   React.useEffect(() => {
@@ -216,6 +223,93 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
   const activeStoreId = selectedStoreId || associatedStores[0]?.id || "";
   const currentStore = associatedStores.find((s) => s.id === activeStoreId) || associatedStores[0];
 
+  const commitStates = React.useCallback(
+    (nextStates: PageStateObject[]) => {
+      // 1. Synchronize edges for removed state objects
+      const currentConfigured = section.stateObjects || [];
+      const nextIds = new Set(nextStates.map((s) => s.id));
+      const removedStates = currentConfigured.filter((s) => !nextIds.has(s.id));
+
+      removedStates.forEach((st) => {
+        const targetHandle = `section-state-in-${section.id}-${st.id}`;
+        edges
+          .filter((e) => e.target === nodeId && e.targetHandle === targetHandle)
+          .forEach((e) => deleteEdge(e.id));
+      });
+
+      // 2. Add edges for newly added state objects
+      const currentIds = new Set(currentConfigured.map((s) => s.id));
+      const addedStates = nextStates.filter((s) => !currentIds.has(s.id));
+      addedStates.forEach((newObj) => {
+        if (newObj.storeId && newObj.fieldId) {
+          addEdge({
+            id: `edge-state-${newObj.storeId}-${newObj.fieldId}-${nodeId}-${section.id}-${newObj.id}`,
+            source: newObj.storeId,
+            target: nodeId,
+            sourceHandle: `store-field-out-${newObj.fieldId}`,
+            targetHandle: `section-state-in-${section.id}-${newObj.id}`,
+            type: "connection",
+            data: {
+              isStateSubscription: true,
+              storeName: newObj.storeName || "Store",
+              fieldName: newObj.name,
+            },
+          });
+        }
+      });
+
+      // 3. Update section states in canvas
+      const updated = sections.map((s) =>
+        s.id === section.id ? { ...s, stateObjects: nextStates } : s,
+      );
+      updateSections(updated);
+    },
+    [section.id, section.stateObjects, sections, updateSections, edges, nodeId, deleteEdge, addEdge],
+  );
+
+  const scheduleCommit = (nextStates: PageStateObject[]) => {
+    if (commitTimeoutRef.current) {
+      clearTimeout(commitTimeoutRef.current);
+    }
+    commitTimeoutRef.current = setTimeout(() => {
+      commitStates(nextStates);
+      commitTimeoutRef.current = null;
+    }, 250);
+  };
+
+  const flushCommit = React.useCallback(() => {
+    if (commitTimeoutRef.current) {
+      clearTimeout(commitTimeoutRef.current);
+      commitTimeoutRef.current = null;
+    }
+    if (latestLocalStatesRef.current !== null) {
+      commitStates(latestLocalStatesRef.current);
+    }
+  }, [commitStates]);
+
+  React.useEffect(() => {
+    return () => {
+      if (commitTimeoutRef.current) {
+        clearTimeout(commitTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleOpenPicker = () => {
+    setLocalPickerStates(section.stateObjects || []);
+    setIsPickerOpen(true);
+  };
+
+  const handleDialogChange = (open: boolean) => {
+    if (!open) {
+      flushCommit();
+      setLocalPickerStates(null);
+    } else {
+      setLocalPickerStates(section.stateObjects || []);
+    }
+    setIsPickerOpen(open);
+  };
+
   const updateSectionStates = (nextStates: PageStateObject[]) => {
     const updated = sections.map((s) =>
       s.id === section.id ? { ...s, stateObjects: nextStates } : s,
@@ -223,25 +317,17 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
     updateSections(updated);
   };
 
-  // Toggle a field from the selected store
+  // Toggle a field from the selected store - instantaneous 0ms UI update
   const handleToggleStoreField = (store: BackendNode, field: GlobalStoreField) => {
     const storeName = store.data?.label || store.data?.storeName || "Store";
-    const isAlreadySelected = configuredStates.some(
+    const current = configuredStates;
+    const isAlreadySelected = current.some(
       (s) => s.fieldId === field.id || (s.storeId === store.id && s.name === field.name),
     );
 
     let nextStates: PageStateObject[];
     if (isAlreadySelected) {
-      const removed = configuredStates.filter(
-        (s) => s.fieldId === field.id || (s.storeId === store.id && s.name === field.name),
-      );
-      removed.forEach((st) => {
-        const targetHandle = `section-state-in-${section.id}-${st.id}`;
-        edges
-          .filter((e) => e.target === nodeId && e.targetHandle === targetHandle)
-          .forEach((e) => deleteEdge(e.id));
-      });
-      nextStates = configuredStates.filter(
+      nextStates = current.filter(
         (s) => !(s.fieldId === field.id || (s.storeId === store.id && s.name === field.name)),
       );
     } else {
@@ -254,74 +340,43 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
         storeName,
         fieldId: field.id,
       };
-      nextStates = [...configuredStates, newObj];
-
-      // Add edge immediately
-      addEdge({
-        id: `edge-state-${store.id}-${field.id}-${nodeId}-${section.id}-${newObj.id}`,
-        source: store.id,
-        target: nodeId,
-        sourceHandle: `store-field-out-${field.id}`,
-        targetHandle: `section-state-in-${section.id}-${newObj.id}`,
-        type: "connection",
-        data: {
-          isStateSubscription: true,
-          storeName,
-          fieldName: field.name,
-        },
-      });
+      nextStates = [...current, newObj];
     }
 
-    updateSectionStates(nextStates);
+    setLocalPickerStates(nextStates);
+    scheduleCommit(nextStates);
   };
 
-  // Select all visible fields of current store
+  // Select all visible fields of current store - instantaneous 0ms UI update
   const handleSelectAllVisible = (store: BackendNode, fields: GlobalStoreField[]) => {
     const storeName = store.data?.label || store.data?.storeName || "Store";
-    const existingFieldIds = new Set(configuredStates.map((s) => s.fieldId));
+    const current = configuredStates;
+    const existingFieldIds = new Set(current.map((s) => s.fieldId));
 
     const toAdd: PageStateObject[] = fields
       .filter((f) => !existingFieldIds.has(f.id))
-      .map((f) => {
-        const stateId = `state-${Date.now()}-${Math.random().toString(36).substr(2, 4)}-${f.id}`;
-        addEdge({
-          id: `edge-state-${store.id}-${f.id}-${nodeId}-${section.id}-${stateId}`,
-          source: store.id,
-          target: nodeId,
-          sourceHandle: `store-field-out-${f.id}`,
-          targetHandle: `section-state-in-${section.id}-${stateId}`,
-          type: "connection",
-          data: {
-            isStateSubscription: true,
-            storeName,
-            fieldName: f.name,
-          },
-        });
-        return {
-          id: stateId,
-          name: f.name,
-          type: f.type,
-          defaultValue: f.defaultValue,
-          storeId: store.id,
-          storeName,
-          fieldId: f.id,
-        };
-      });
+      .map((f) => ({
+        id: `state-${Date.now()}-${Math.random().toString(36).substr(2, 4)}-${f.id}`,
+        name: f.name,
+        type: f.type,
+        defaultValue: f.defaultValue,
+        storeId: store.id,
+        storeName,
+        fieldId: f.id,
+      }));
 
-    updateSectionStates([...configuredStates, ...toAdd]);
+    if (toAdd.length === 0) return;
+    const nextStates = [...current, ...toAdd];
+    setLocalPickerStates(nextStates);
+    scheduleCommit(nextStates);
   };
 
-  // Deselect all fields of current store
+  // Deselect all fields of current store - instantaneous 0ms UI update
   const handleDeselectAllCurrentStore = (store: BackendNode) => {
-    const removed = configuredStates.filter((s) => s.storeId === store.id);
-    removed.forEach((st) => {
-      const targetHandle = `section-state-in-${section.id}-${st.id}`;
-      edges
-        .filter((e) => e.target === nodeId && e.targetHandle === targetHandle)
-        .forEach((e) => deleteEdge(e.id));
-    });
-    const nextStates = configuredStates.filter((s) => s.storeId !== store.id);
-    updateSectionStates(nextStates);
+    const current = configuredStates;
+    const nextStates = current.filter((s) => s.storeId !== store.id);
+    setLocalPickerStates(nextStates);
+    scheduleCommit(nextStates);
   };
 
   // Delete a state object
@@ -413,7 +468,7 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
 
         <button
           type="button"
-          onClick={() => setIsPickerOpen(true)}
+          onClick={handleOpenPicker}
           className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 text-[8px] font-semibold transition-colors cursor-pointer"
           title="Select Zustand store fields to render in this section"
         >
@@ -429,7 +484,7 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
             <span>No Zustand state bound to this section.</span>
             <button
               type="button"
-              onClick={() => setIsPickerOpen(true)}
+              onClick={handleOpenPicker}
               className="text-cyan-600 dark:text-cyan-400 hover:underline cursor-pointer font-medium"
             >
               + Select fields
@@ -610,7 +665,7 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
       </div>
 
       {/* Field Picker / Configuration Dialog */}
-      <Dialog open={isPickerOpen} onOpenChange={setIsPickerOpen}>
+      <Dialog open={isPickerOpen} onOpenChange={handleDialogChange}>
         <DialogContent className="sm:max-w-[480px] p-5 font-sans">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base text-foreground">
@@ -748,6 +803,8 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
                         <button
                           type="button"
                           onClick={() => {
+                            flushCommit();
+                            setLocalPickerStates(null);
                             setIsPickerOpen(false);
                             setActiveConfigItem({
                               id: nodeId,
@@ -769,7 +826,7 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
                     {currentStoreFields.length > 4 && (
                       <div className="relative">
                         <Search size={12} className="absolute left-2.5 top-2.5 text-muted-foreground" />
-                        <Input
+                        <LocalInput
                           value={fieldSearch}
                           onChange={(e) => setFieldSearch(e.target.value)}
                           placeholder={`Search ${currentStoreFields.length} fields in ${currentStore.data?.label || "store"}...`}
@@ -785,6 +842,8 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
                         <button
                           type="button"
                           onClick={() => {
+                            flushCommit();
+                            setLocalPickerStates(null);
                             setIsPickerOpen(false);
                             setActiveConfigItem({
                               id: currentStore.id,
@@ -886,7 +945,11 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
             </div>
             <Button
               type="button"
-              onClick={() => setIsPickerOpen(false)}
+              onClick={() => {
+                flushCommit();
+                setLocalPickerStates(null);
+                setIsPickerOpen(false);
+              }}
               className="h-8 text-xs px-4"
             >
               Done

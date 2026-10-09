@@ -40,6 +40,11 @@ export function WebPageProtectionSection({
   onUpdateRedirectTo,
   onUpdateIsAuthPage,
 }: WebPageProtectionSectionProps) {
+  const [localIsAuthPage, setLocalIsAuthPage] = React.useState<boolean>(Boolean(isAuthPage));
+
+  React.useEffect(() => {
+    setLocalIsAuthPage(Boolean(isAuthPage));
+  }, [isAuthPage]);
   return (
     <div className="flex flex-col gap-4 p-4 rounded-xl bg-card border border-border/60 shadow-sm">
       <div className="flex items-center justify-between">
@@ -175,8 +180,12 @@ export function WebPageProtectionSection({
       <div className="flex items-center gap-2.5 pt-2 border-t border-border/40">
         <Checkbox
           id="isAuthPage"
-          checked={Boolean(isAuthPage)}
-          onCheckedChange={(val) => onUpdateIsAuthPage(Boolean(val))}
+          checked={localIsAuthPage}
+          onCheckedChange={(val) => {
+            const nextVal = Boolean(val);
+            setLocalIsAuthPage(nextVal);
+            onUpdateIsAuthPage(nextVal);
+          }}
         />
         <Label htmlFor="isAuthPage" className="text-xs font-normal cursor-pointer">
           This page is the Login / Authentication entry page (unauthenticated target)
