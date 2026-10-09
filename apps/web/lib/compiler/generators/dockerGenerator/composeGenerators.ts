@@ -1,5 +1,6 @@
 import { toEnvVarName } from "../../utils";
 import { ComposeGeneratorContext, InfraComposeContext } from "@workspace/canvas/types";
+import { INTER_SERVICE_PROTOCOL_GRPC } from "@workspace/canvas";
 
 /**
  * Generates the master root docker-compose.yml wiring all services, frontends, and infrastructure
@@ -38,7 +39,13 @@ export function generateRootDockerCompose(ctx: ComposeGeneratorContext): string 
   // 1. Backend Microservices
   services.forEach((srv) => {
     const srvNode = nodes.find((n) => n.id === srv.id);
-    const port = String(srvNode?.data?.port || "8080");
+    const srvData = srvNode?.data;
+    const srvServer = srvData?.server || srvData?.serverConfig;
+    const port = String(srvData?.port ?? srvServer?.port ?? "8080");
+    const grpcPort = String(srvData?.grpcPort ?? srvServer?.grpcPort ?? "50051");
+    const usesGrpc =
+      srvData?.interServiceProtocol === INTER_SERVICE_PROTOCOL_GRPC ||
+      srvServer?.interServiceProtocol === INTER_SERVICE_PROTOCOL_GRPC;
 
     composeLines.push(`  ${srv.folderName}:`);
     composeLines.push(`    build:`);
@@ -48,10 +55,16 @@ export function generateRootDockerCompose(ctx: ComposeGeneratorContext): string 
     composeLines.push(`    restart: unless-stopped`);
     composeLines.push(`    ports:`);
     composeLines.push(`      - "${port}:${port}"`);
+    if (usesGrpc) {
+      composeLines.push(`      - "${grpcPort}:${grpcPort}"`);
+    }
 
     // Environment variables
     composeLines.push(`    environment:`);
     composeLines.push(`      - PORT=${port}`);
+    if (usesGrpc) {
+      composeLines.push(`      - GRPC_PORT=${grpcPort}`);
+    }
     composeLines.push(`      - NODE_ENV=production`);
 
     if (hasPostgres) {
@@ -93,12 +106,23 @@ export function generateRootDockerCompose(ctx: ComposeGeneratorContext): string 
         if (targetNode) {
           const tgtSrv = services.find((s) => s.id === targetNode.id);
           if (tgtSrv) {
-            const tgtLabel = targetNode.data?.label || targetNode.id;
-            const tgtPort = String(targetNode.data?.port || "8080");
-            const envVarName = `${toEnvVarName(tgtLabel)}_BASE_URL`;
-            composeLines.push(
-              `      - ${envVarName}=http://${tgtSrv.folderName}:${tgtPort}`,
-            );
+            const tgtData = targetNode.data;
+            const tgtServer = tgtData?.server || tgtData?.serverConfig;
+            const tgtLabel = tgtData?.label || targetNode.id;
+            const tgtPort = String(tgtData?.port ?? tgtServer?.port ?? "8080");
+            const tgtGrpcPort = String(tgtData?.grpcPort ?? tgtServer?.grpcPort ?? "50051");
+
+            if (usesGrpc) {
+              const envVarName = `${toEnvVarName(tgtLabel)}_GRPC_URL`;
+              composeLines.push(
+                `      - ${envVarName}=${tgtSrv.folderName}:${tgtGrpcPort}`,
+              );
+            } else {
+              const envVarName = `${toEnvVarName(tgtLabel)}_BASE_URL`;
+              composeLines.push(
+                `      - ${envVarName}=http://${tgtSrv.folderName}:${tgtPort}`,
+              );
+            }
           }
         }
       }

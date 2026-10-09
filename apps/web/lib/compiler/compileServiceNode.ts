@@ -1,5 +1,10 @@
 import { BackendNode, BackendEdge, SimulationTestCase } from "@/types/canvas";
 import { Endpoint, AnyMessagingResource, CompiledServiceResult, ReusableFunction } from "@workspace/canvas/types";
+import {
+  INTER_SERVICE_PROTOCOL_GRPC,
+  INTER_SERVICE_PROTOCOL_HTTP,
+  InterServiceProtocol,
+} from "@workspace/canvas";
 import { compileExpressV4Service } from "./services/express/v4";
 import { compileFastAPIService } from "./services/fastapi/v0";
 import { compileNextjsV16Service } from "./services/nextjs/v16";
@@ -27,26 +32,92 @@ export function compileServiceNode(
   redisFunctions: ReusableFunction[] = [],
   storageFunctions: ReusableFunction[] = [],
 ): CompiledServiceResult {
-  const techStack = node.data?.techStack || "express";
+  // Normalize server configuration (supports flat node.data and nested server/serverConfig sections)
+  const nodeData = node.data;
+  const serverSection = nodeData?.server || nodeData?.serverConfig;
 
-  if (dbFunctions.length === 0 && allNodes.length > 0) {
-    const compiledDb = compileDatabaseNodes(allNodes, allEdges);
+  const port = String(nodeData?.port ?? serverSection?.port ?? "8080").trim() || "8080";
+  const interServiceProtocol: InterServiceProtocol =
+    (nodeData?.interServiceProtocol || serverSection?.interServiceProtocol) === INTER_SERVICE_PROTOCOL_GRPC
+      ? INTER_SERVICE_PROTOCOL_GRPC
+      : INTER_SERVICE_PROTOCOL_HTTP;
+  const explicitGrpcPort = nodeData?.grpcPort ?? serverSection?.grpcPort;
+  const grpcPort = explicitGrpcPort !== undefined && explicitGrpcPort !== null && String(explicitGrpcPort).trim() !== ""
+    ? String(explicitGrpcPort).trim()
+    : interServiceProtocol === INTER_SERVICE_PROTOCOL_GRPC
+      ? "50051"
+      : undefined;
+  const cors = nodeData?.cors !== undefined
+    ? Boolean(nodeData.cors)
+    : serverSection?.cors !== undefined
+      ? Boolean(serverSection.cors)
+      : true;
+  const corsOrigins = String(nodeData?.corsOrigins ?? serverSection?.corsOrigins ?? "*").trim() || "*";
+  const rateLimit = String(nodeData?.rateLimit ?? serverSection?.rateLimit ?? "").trim();
+
+  const effectiveNode: BackendNode = {
+    ...node,
+    data: {
+      ...node.data,
+      port,
+      ...(grpcPort ? { grpcPort } : {}),
+      cors,
+      corsOrigins,
+      rateLimit: rateLimit || undefined,
+      interServiceProtocol,
+    },
+  };
+
+  const effectiveAllNodes: BackendNode[] = allNodes.map((n): BackendNode => {
+    if (n.type !== "service") return n;
+    if (n.id === node.id) return effectiveNode;
+    const nData = n.data;
+    const nServer = nData?.server || nData?.serverConfig;
+    const nInterServiceProtocol: InterServiceProtocol =
+      (nData?.interServiceProtocol || nServer?.interServiceProtocol) === INTER_SERVICE_PROTOCOL_GRPC
+        ? INTER_SERVICE_PROTOCOL_GRPC
+        : INTER_SERVICE_PROTOCOL_HTTP;
+    const nExplicitGrpcPort = nData?.grpcPort ?? nServer?.grpcPort;
+    const nGrpcPort = nExplicitGrpcPort !== undefined && nExplicitGrpcPort !== null && String(nExplicitGrpcPort).trim() !== ""
+      ? String(nExplicitGrpcPort).trim()
+      : nInterServiceProtocol === INTER_SERVICE_PROTOCOL_GRPC
+        ? "50051"
+        : undefined;
+
+    return {
+      ...n,
+      data: {
+        ...n.data,
+        port: String(nData?.port ?? nServer?.port ?? "8080").trim() || "8080",
+        ...(nGrpcPort ? { grpcPort: nGrpcPort } : {}),
+        cors: nData?.cors !== undefined ? Boolean(nData.cors) : nServer?.cors !== undefined ? Boolean(nServer.cors) : true,
+        corsOrigins: String(nData?.corsOrigins ?? nServer?.corsOrigins ?? "*").trim() || "*",
+        rateLimit: String(nData?.rateLimit ?? nServer?.rateLimit ?? "").trim() || undefined,
+        interServiceProtocol: nInterServiceProtocol,
+      },
+    };
+  });
+
+  const techStack = effectiveNode.data?.techStack || "express";
+
+  if (dbFunctions.length === 0 && effectiveAllNodes.length > 0) {
+    const compiledDb = compileDatabaseNodes(effectiveAllNodes, allEdges);
     dbFunctions = compiledDb.reusableFunctions || [];
   }
 
-  const isConnectedToKafka = isServiceConnectedToKafka(node, allNodes, allEdges, endpoints, events);
+  const isConnectedToKafka = isServiceConnectedToKafka(effectiveNode, effectiveAllNodes, allEdges, endpoints, events);
   if (!isConnectedToKafka) {
     kafkaFunctions = [];
-  } else if (kafkaFunctions.length === 0 && allNodes.length > 0) {
-    const compiledKafka = compileKafkaNodes(allNodes, allEdges);
+  } else if (kafkaFunctions.length === 0 && effectiveAllNodes.length > 0) {
+    const compiledKafka = compileKafkaNodes(effectiveAllNodes, allEdges);
     kafkaFunctions = compiledKafka.reusableFunctions || [];
   }
 
-  const isConnectedToRedis = isServiceConnectedToRedis(node, allNodes, allEdges, endpoints);
+  const isConnectedToRedis = isServiceConnectedToRedis(effectiveNode, effectiveAllNodes, allEdges, endpoints);
   if (!isConnectedToRedis) {
     redisFunctions = [];
-  } else if (redisFunctions.length === 0 && allNodes.length > 0) {
-    const compiledRedis = compileRedisNodes(allNodes, allEdges);
+  } else if (redisFunctions.length === 0 && effectiveAllNodes.length > 0) {
+    const compiledRedis = compileRedisNodes(effectiveAllNodes, allEdges);
     redisFunctions = compiledRedis.reusableFunctions || [];
   }
 
@@ -227,10 +298,10 @@ export function compileServiceNode(
   switch (techStack) {
     case "nextjs":
       result = compileNextjsV16Service(
-        node,
+        effectiveNode,
         nodeEndpoints,
         nodeEvents,
-        allNodes,
+        effectiveAllNodes,
         allEdges,
         testCases,
         dbFunctions,
@@ -241,10 +312,10 @@ export function compileServiceNode(
       break;
     case "fastapi":
       result = compileFastAPIService(
-        node,
+        effectiveNode,
         nodeEndpoints,
         nodeEvents,
-        allNodes,
+        effectiveAllNodes,
         allEdges,
         testCases,
         dbFunctions,
@@ -254,10 +325,10 @@ export function compileServiceNode(
     case "express":
     default:
       result = compileExpressV4Service(
-        node,
+        effectiveNode,
         nodeEndpoints,
         nodeEvents,
-        allNodes,
+        effectiveAllNodes,
         allEdges,
         testCases,
         dbFunctions,

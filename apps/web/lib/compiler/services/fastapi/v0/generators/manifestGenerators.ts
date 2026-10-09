@@ -1,6 +1,7 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { Endpoint, CompiledFile } from "@workspace/canvas/types";
 import { resolveEndpointTrace } from "../../../../traceResolver";
+import { toEnvVarName } from "../../../../utils";
 
 interface ManifestGeneratorsOptions {
   node: BackendNode;
@@ -67,10 +68,32 @@ testpaths = [
 `,
   });
 
+  const connectedServiceEnvLines: string[] = [];
+  allEdges.forEach((edge) => {
+    if (edge.source === node.id) {
+      const targetNode = allNodes.find(
+        (n) => n.id === edge.target && n.type === "service",
+      );
+      if (targetNode) {
+        const tgtData = targetNode.data;
+        const tgtServer = tgtData?.server || tgtData?.serverConfig;
+        const tgtLabel = tgtData?.label || targetNode.id;
+        const tgtPort = String(tgtData?.port ?? tgtServer?.port ?? "8080");
+        const envVarName = `${toEnvVarName(tgtLabel)}_BASE_URL`;
+        connectedServiceEnvLines.push(`${envVarName}=http://localhost:${tgtPort}`);
+      }
+    }
+  });
+
+  const connectedEnvString =
+    connectedServiceEnvLines.length > 0
+      ? `\n# Connected Services\n${connectedServiceEnvLines.join("\n")}\n`
+      : "";
+
   files.push({
     filename: ".env",
     language: "dotenv",
-    content: `PORT=${port}\nENVIRONMENT=development\nLOG_LEVEL=info\n`,
+    content: `PORT=${port}\nENVIRONMENT=development\nLOG_LEVEL=info\n${connectedEnvString}`,
   });
 
   files.push({

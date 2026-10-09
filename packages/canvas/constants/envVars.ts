@@ -64,6 +64,15 @@ export interface CustomLlmNodeConfig {
   url?: string;
 }
 
+export interface NodeServerConfig {
+  port?: string | number;
+  grpcPort?: string | number;
+  cors?: boolean;
+  corsOrigins?: string;
+  rateLimit?: string;
+  interServiceProtocol?: "http" | "grpc" | string;
+}
+
 export interface NodeEnvDataConfig {
   accessKeyIdEnv?: string;
   secretAccessKeyEnv?: string;
@@ -72,6 +81,10 @@ export interface NodeEnvDataConfig {
   connectionStringEnv?: string;
   dbFilePathEnv?: string;
   port?: string | number;
+  grpcPort?: string | number;
+  interServiceProtocol?: "http" | "grpc" | string;
+  server?: NodeServerConfig;
+  serverConfig?: NodeServerConfig;
   apiKeyEnv?: string;
   webhookSecretEnv?: string;
   customLlmNodes?: CustomLlmNodeConfig[];
@@ -131,10 +144,26 @@ export function getDefaultNodeEnvVars(
   }
 
   if (nodeType === "service") {
-    return [
-      { id: "srv-port", name: "PORT", description: `HTTP server port (default: ${nodeData?.port || 8080})` },
+    const rawPort = nodeData?.port || nodeData?.server?.port || nodeData?.serverConfig?.port || 8080;
+    const rawGrpcPort = nodeData?.grpcPort || nodeData?.server?.grpcPort || nodeData?.serverConfig?.grpcPort || 50051;
+    const isGrpc =
+      nodeData?.interServiceProtocol === "grpc" ||
+      nodeData?.server?.interServiceProtocol === "grpc" ||
+      nodeData?.serverConfig?.interServiceProtocol === "grpc" ||
+      Boolean(nodeData?.grpcPort || nodeData?.server?.grpcPort || nodeData?.serverConfig?.grpcPort);
+
+    const vars: EnvVarTemplate[] = [
+      { id: "srv-port", name: "PORT", description: `HTTP server port (default: ${rawPort})` },
       { id: "srv-node-env", name: "NODE_ENV", description: "Environment mode (development, production)" },
     ];
+    if (isGrpc) {
+      vars.push({
+        id: "srv-grpc-port",
+        name: "GRPC_PORT",
+        description: `gRPC server port (default: ${rawGrpcPort})`,
+      });
+    }
+    return vars;
   }
 
   if (nodeType === "webApp") {

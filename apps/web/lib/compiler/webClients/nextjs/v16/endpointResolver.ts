@@ -3,11 +3,16 @@ import { Endpoint } from "@workspace/canvas/types";
 import { LinkedEndpointInfo } from "./types";
 
 export function getServicePort(targetNode: BackendNode): string {
-  if (targetNode.data?.port) return targetNode.data.port.toString().trim();
-  const fw = targetNode.data?.framework?.toString().toLowerCase();
+  const data = targetNode.data;
+  const serverSection = data?.server || data?.serverConfig;
+  const rawPort = data?.port ?? serverSection?.port;
+  if (rawPort !== undefined && rawPort !== null && String(rawPort).trim() !== "") {
+    return String(rawPort).trim();
+  }
+  const fw = (data?.framework || data?.techStack)?.toString().toLowerCase();
   if (fw === "fastapi" || fw === "python" || fw === "flask") return "8000";
-  if (fw === "express" || fw === "node" || fw === "hono" || fw === "nest") return "3000";
-  return "8000";
+  if (fw === "express" || fw === "node" || fw === "hono" || fw === "nest") return "8080";
+  return "8080";
 }
 
 export function resolveLinkedEndpoint(

@@ -18,7 +18,13 @@
 
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { isServiceConnectedToStorage, toBucketKey } from "../storage/utils";
-import { getDefaultNodeEnvVars, EndpointLike, PipelineStepDraft } from "@workspace/canvas";
+import {
+  getDefaultNodeEnvVars,
+  EndpointLike,
+  PipelineStepDraft,
+  INTER_SERVICE_PROTOCOL_GRPC,
+} from "@workspace/canvas";
+import { toEnvVarName } from "../utils";
 
 export interface EnvVarEntry {
   name: string;
@@ -203,6 +209,33 @@ export function resolveRedisNodeFromRef(
 }
 
 function resolveEnvValue(name: string, packageNode?: BackendNode): string {
+  // Service node explicit ports / configs (takes priority over host process.env)
+  if (packageNode?.type === "service") {
+    const rawData = packageNode.data;
+    const serverSection = rawData?.server || rawData?.serverConfig;
+    if (name === "PORT") {
+      const p = rawData?.port ?? serverSection?.port;
+      if (p !== undefined && p !== null && String(p).trim() !== "") {
+        return String(p).trim();
+      }
+    }
+    if (name === "GRPC_PORT") {
+      const gp = rawData?.grpcPort ?? serverSection?.grpcPort;
+      if (gp !== undefined && gp !== null && String(gp).trim() !== "") {
+        return String(gp).trim();
+      }
+    }
+  }
+
+  if (packageNode?.type === "webApp") {
+    if (name === "PORT") {
+      const p = packageNode.data?.port;
+      if (p !== undefined && p !== null && String(p).trim() !== "") {
+        return String(p).trim();
+      }
+    }
+  }
+
   if (typeof window !== "undefined") {
     try {
       const cached = localStorage.getItem(`dezign2app_env_${name}`);
@@ -381,10 +414,15 @@ export function inferExampleValue(name: string, nodeType?: string): string {
   if (n === "OLLAMA_BASE_URL") return "http://localhost:11434";
 
   // Common
-  if (n === "PORT") return "8080";
+  if (n === "PORT") {
+    if (nodeType === "webApp") return "3000";
+    return "8080";
+  }
+  if (n === "GRPC_PORT") return "50051";
   if (n === "NODE_ENV") return "development";
   if (n === "LOG_LEVEL") return "info";
   if (n.endsWith("_BASE_URL")) return "http://localhost:8080";
+  if (n.endsWith("_GRPC_URL")) return "localhost:50051";
   if (n.endsWith("_API_KEY")) return "your_api_key_here";
 
   return "";
@@ -641,13 +679,21 @@ export function collectEnvSections(
           inferExampleValue(v.name, detected.sourceNodeType),
       });
     } else {
+      let exVal = resolveEnvValue(v.name, appNode) || v.exampleValue;
+      if (!exVal && v.name === "PORT") {
+        exVal = String(appNode.data?.port ?? (appNode.data as any)?.server?.port ?? (appNode.data as any)?.serverConfig?.port ?? "8080");
+      }
+      if (!exVal && v.name === "GRPC_PORT") {
+        exVal = String(appNode.data?.grpcPort ?? (appNode.data as any)?.server?.grpcPort ?? (appNode.data as any)?.serverConfig?.grpcPort ?? "50051");
+      }
+      if (!exVal) {
+        exVal = inferExampleValue(v.name, appNode.type);
+      }
+
       appVars.push({
         name: v.name,
         description: v.description,
-        exampleValue:
-          resolveEnvValue(v.name, appNode) ||
-          v.exampleValue ||
-          inferExampleValue(v.name, appNode.type),
+        exampleValue: exVal,
       });
     }
   });
@@ -686,15 +732,19 @@ export function collectEnvSections(
     });
   }
 
-  // Ensure default app vars if the node has canvas-defined vars or connected package sections
-  const hasCanvasSections = ownVars.length > 0 || packageSectionsMap.size > 0;
+  // Ensure default app vars if the node has canvas-defined vars, connected package sections, or is a service
+  const hasCanvasSections = ownVars.length > 0 || packageSectionsMap.size > 0 || appNode.type === "service";
   if (hasCanvasSections) {
     if (appNode.type === "service") {
+      const rawData = appNode.data;
+      const serverSection = rawData?.server || rawData?.serverConfig;
+      const portVal = String(rawData?.port ?? serverSection?.port ?? "8080").trim() || "8080";
+
       if (!ownVarNames.has("PORT")) {
         appVars.unshift({
           name: "PORT",
-          description: `HTTP server port (default: ${appNode.data?.port || 8080})`,
-          exampleValue: String(appNode.data?.port || 8080),
+          description: `HTTP server port (default: ${portVal})`,
+          exampleValue: portVal,
         });
       }
       if (!ownVarNames.has("NODE_ENV")) {
@@ -702,6 +752,20 @@ export function collectEnvSections(
           name: "NODE_ENV",
           description: "Environment mode (development, production)",
           exampleValue: "development",
+        });
+      }
+
+      const grpcEnabled =
+        rawData?.interServiceProtocol === INTER_SERVICE_PROTOCOL_GRPC ||
+        serverSection?.interServiceProtocol === INTER_SERVICE_PROTOCOL_GRPC ||
+        Boolean(rawData?.grpcPort || serverSection?.grpcPort);
+
+      if (grpcEnabled && !ownVarNames.has("GRPC_PORT")) {
+        const grpcPortVal = String(rawData?.grpcPort ?? serverSection?.grpcPort ?? "50051").trim() || "50051";
+        appVars.push({
+          name: "GRPC_PORT",
+          description: `gRPC server port (default: ${grpcPortVal})`,
+          exampleValue: grpcPortVal,
         });
       }
     }
@@ -725,6 +789,108 @@ export function collectEnvSections(
   packageSectionsMap.forEach((pkgSec) => {
     sections.push(pkgSec);
   });
+
+  // If centralized SQLite database exists in monorepo and service has canvas sections, ensure db env vars
+  if (hasCanvasSections && appNode.type === "service") {
+    const hasDb = allNodes.some(
+      (n) => n.type === "database" || n.type === "entity" || n.type === "db_ref" || n.type === "auth",
+    );
+    const isPostgres = allNodes.some(
+      (n) => n.type === "database" && n.data?.dbEngine === "postgres",
+    );
+    const hasDbSection = sections.some((s) => s.heading.toLowerCase().includes("database"));
+
+    if (!hasDbSection && hasDb && !isPostgres) {
+      const dbVars: EnvVarEntry[] = [];
+      if (!ownVarNames.has("DATABASE_PATH")) {
+        dbVars.push({
+          name: "DATABASE_PATH",
+          description: "Path to centralized SQLite database",
+          exampleValue: "../../packages/db/sqlite.db",
+        });
+      }
+      if (!ownVarNames.has("DATABASE_URL")) {
+        dbVars.push({
+          name: "DATABASE_URL",
+          description: "URL or path to centralized SQLite database",
+          exampleValue: "../../packages/db/sqlite.db",
+        });
+      }
+      if (dbVars.length > 0) {
+        sections.push({
+          heading: "Database (Centralized)",
+          subheading: "from packages/db",
+          vars: dbVars,
+        });
+      }
+    }
+  }
+
+  // Connected microservices environment variables
+  if (appNode.type === "service" || appNode.type === "webApp") {
+    const connectedServicesMap = new Map<
+      string,
+      { label: string; port: string; grpcPort: string; usesGrpc: boolean }
+    >();
+
+    allEdges.forEach((edge) => {
+      if (edge.source === appNode.id) {
+        const targetNode = allNodes.find(
+          (n) => n.id === edge.target && n.type === "service",
+        );
+        if (targetNode && !connectedServicesMap.has(targetNode.id)) {
+          const tgtData = targetNode.data;
+          const tgtServer = tgtData?.server || tgtData?.serverConfig;
+          const tgtLabel = tgtData?.label || targetNode.id;
+          const tgtPort = String(tgtData?.port ?? tgtServer?.port ?? "8080").trim() || "8080";
+          const tgtGrpcPort = String(tgtData?.grpcPort ?? tgtServer?.grpcPort ?? "50051").trim() || "50051";
+          const usesGrpc =
+            appNode.data?.interServiceProtocol === INTER_SERVICE_PROTOCOL_GRPC ||
+            appNode.data?.server?.interServiceProtocol === INTER_SERVICE_PROTOCOL_GRPC;
+
+          connectedServicesMap.set(targetNode.id, {
+            label: tgtLabel,
+            port: tgtPort,
+            grpcPort: tgtGrpcPort,
+            usesGrpc,
+          });
+        }
+      }
+    });
+
+    if (connectedServicesMap.size > 0) {
+      const serviceVars: EnvVarEntry[] = [];
+      connectedServicesMap.forEach(
+        ({ label, port: tgtPort, grpcPort: tgtGrpcPort, usesGrpc }) => {
+          if (usesGrpc) {
+            const envVarName = `${toEnvVarName(label)}_GRPC_URL`;
+            if (!ownVarNames.has(envVarName)) {
+              serviceVars.push({
+                name: envVarName,
+                description: `gRPC endpoint URL for ${label}`,
+                exampleValue: `localhost:${tgtGrpcPort}`,
+              });
+            }
+          } else {
+            const envVarName = `${toEnvVarName(label)}_BASE_URL`;
+            if (!ownVarNames.has(envVarName)) {
+              serviceVars.push({
+                name: envVarName,
+                description: `HTTP base URL for ${label}`,
+                exampleValue: `http://localhost:${tgtPort}`,
+              });
+            }
+          }
+        },
+      );
+      if (serviceVars.length > 0) {
+        sections.push({
+          heading: "Connected Services",
+          vars: serviceVars,
+        });
+      }
+    }
+  }
 
   return sections;
 }
