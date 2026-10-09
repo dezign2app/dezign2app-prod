@@ -3,6 +3,7 @@ import type {
   FrontendFieldSource,
   FrontendRequestFieldBinding,
   FrontendActionStepDraft,
+  QueryParamUpdateItem,
   BackendNode,
   Endpoint,
   UIEventItem,
@@ -14,6 +15,7 @@ export type {
   FrontendFieldSource,
   FrontendRequestFieldBinding,
   FrontendActionStepDraft,
+  QueryParamUpdateItem,
 };
 
 export interface ActionFlowEditorProps {
@@ -76,4 +78,13 @@ export interface ResponseFieldPickerProps {
   endpoint?: Endpoint;
   placeholder?: string;
   disabled?: boolean;
+}
+
+export interface QueryParamsStepProps {
+  draft: FrontendActionStepDraft;
+  allSteps: FrontendActionStepDraft[];
+  stepIndex: number;
+  allNodes: BackendNode[];
+  webPageNodeId?: string;
+  onChange: (updated: FrontendActionStepDraft) => void;
 }

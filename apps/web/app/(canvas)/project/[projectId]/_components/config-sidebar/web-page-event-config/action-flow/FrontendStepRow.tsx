@@ -8,6 +8,7 @@ import { ApiCallStep } from "./ApiCallStep";
 import { StoragePutStep } from "./StoragePutStep";
 import { StateMutationStep } from "./StateMutationStep";
 import { NavigationStep } from "./NavigationStep";
+import { QueryParamsStep } from "./QueryParamsStep";
 import { CustomCodeStep } from "./CustomCodeStep";
 import { ConditionStep } from "./ConditionStep";
 import { NotificationStep } from "./NotificationStep";
@@ -117,6 +118,17 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                 <NavigationStep
                   draft={step}
                   allNodes={allNodes}
+                  onChange={onChange}
+                />
+              )}
+
+              {step.type === "update_query_params" && (
+                <QueryParamsStep
+                  draft={step}
+                  allSteps={allSteps}
+                  stepIndex={index}
+                  allNodes={allNodes}
+                  webPageNodeId={webPageNodeId}
                   onChange={onChange}
                 />
               )}

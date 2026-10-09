@@ -97,5 +97,31 @@ export function createDefaultFrontendStep(
         formTarget: "form",
         ...defaults,
       };
+
+    case "update_query_params":
+      return {
+        id,
+        order,
+        type: "update_query_params",
+        queryParamKey: "",
+        queryParamMode: "set",
+        queryParamNavMode: "replace",
+        queryParamScroll: false,
+        queryParamValueSource: {
+          kind: "literal",
+          value: "",
+        },
+        queryParamsUpdates: [
+          {
+            key: "",
+            mode: "set",
+            valueSource: {
+              kind: "literal",
+              value: "",
+            },
+          },
+        ],
+        ...defaults,
+      };
   }
 }

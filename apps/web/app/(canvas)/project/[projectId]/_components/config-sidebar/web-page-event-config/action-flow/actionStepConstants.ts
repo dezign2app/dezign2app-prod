@@ -8,6 +8,7 @@ import {
   GitBranch,
   Bell,
   RotateCcw,
+  SlidersHorizontal,
 } from "lucide-react";
 import type { FrontendActionStepType } from "./types";
 
@@ -46,6 +47,12 @@ export const FRONTEND_STEP_TYPE_META: Record<
     color: "text-cyan-500 bg-cyan-500/10 border-cyan-500/30",
     description: "Route to another page or external URL",
   },
+  update_query_params: {
+    label: "Query Params",
+    icon: React.createElement(SlidersHorizontal, { size: 12 }),
+    color: "text-teal-500 bg-teal-500/10 border-teal-500/30",
+    description: "Update, toggle, or clear URL query parameters in-place",
+  },
   custom_code: {
     label: "Custom Code",
     icon: React.createElement(Terminal, { size: 12 }),
@@ -77,6 +84,7 @@ export const FRONTEND_ADDABLE_STEP_TYPES: readonly FrontendActionStepType[] = [
   "storage_put",
   "state_mutation",
   "navigation",
+  "update_query_params",
   "custom_code",
   "condition",
   "notification",

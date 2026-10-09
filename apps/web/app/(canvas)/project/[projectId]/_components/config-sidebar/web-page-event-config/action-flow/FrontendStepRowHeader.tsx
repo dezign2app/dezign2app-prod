@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
 import type { BackendNode, Endpoint } from "@workspace/canvas";
-import type { FrontendActionStepDraft } from "./types";
+import type { FrontendActionStepDraft, FrontendFieldSource } from "./types";
 import { FRONTEND_STEP_TYPE_META } from "./actionStepConstants";
 
 export interface FrontendStepRowHeaderProps {
@@ -73,6 +73,38 @@ export function formatStepCodePreview(
 
     case "reset_form": {
       return `form.reset()`;
+    }
+
+    case "update_query_params": {
+      const nav = step.queryParamNavMode || "replace";
+      const updates = step.queryParamsUpdates;
+      if (updates && updates.length > 1) {
+        const keys = updates
+          .map((u) => u.key.trim())
+          .filter((k) => k.length > 0);
+        const keysSummary =
+          keys.length > 0 ? `: ${keys.join(", ")}` : "";
+        return `queryParams.update(${updates.length} params${keysSummary}) (${nav})`;
+      }
+
+      const key = step.queryParamKey || "param";
+      const mode = step.queryParamMode || "set";
+      if (mode === "remove") return `queryParams.delete("${key}") (${nav})`;
+      if (mode === "toggle") return `queryParams.toggle("${key}") (${nav})`;
+
+      const formatSource = (src?: FrontendFieldSource): string => {
+        if (!src) return "value";
+        if (src.kind === "literal") return `"${src.value || ""}"`;
+        if (src.kind === "state_var") return `state.${src.stateKey}`;
+        if (src.kind === "user_input") return `input.${src.fieldName}`;
+        if (src.kind === "prev_response") return `step.${src.fieldPath}`;
+        if (src.kind === "route_param") return `params.${src.paramName}`;
+        if (src.kind === "query_param") return `query.${src.paramName}`;
+        return "value";
+      };
+
+      const val = formatSource(step.queryParamValueSource);
+      return `queryParams.set("${key}", ${val}) (${nav})`;
     }
   }
 }
