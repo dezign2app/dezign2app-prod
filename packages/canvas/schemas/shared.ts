@@ -305,6 +305,10 @@ export interface PipelineStep {
   externalNodeId?: string;
   /** For external_call steps: ID of the selected external endpoint */
   externalEndpointId?: string;
+  /** For service_call steps: ID of the target service node */
+  serviceId?: string;
+  /** For service_call steps: ID of the target endpoint */
+  endpointId?: string;
   /** For DB/Redis operation steps: ID of the selected operation */
   operationId?: string;
   /** For storage_operation steps: ID of the storage node */
@@ -319,6 +323,7 @@ export interface PipelineStep {
   functionRef?: {
     name: string;
     importPath: string;
+    path?: string;
     signature?: string;
     isGlobal?: boolean;
     inputSchema?: z.infer<typeof stepSchemaFieldSchema>[];
@@ -468,6 +473,8 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     dbRefNodeId: z.string().optional(),
     externalNodeId: z.string().optional(),
     externalEndpointId: z.string().optional(),
+    serviceId: z.string().optional(),
+    endpointId: z.string().optional(),
     operationId: z.string().optional(),
     storageNodeId: z.string().optional(),
     bucketId: z.string().optional(),
@@ -477,6 +484,7 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
       .object({
         name: z.string(),
         importPath: z.string(),
+        path: z.string().optional(),
         signature: z.string().optional(),
         isGlobal: z.boolean().optional(),
         inputSchema: z.array(stepSchemaFieldSchema).optional(),

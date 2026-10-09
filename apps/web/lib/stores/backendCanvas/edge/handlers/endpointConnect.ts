@@ -2,8 +2,13 @@ import {
   DEFAULT_PUBLISH_TRIGGER_CONDITION,
   DEFAULT_PUBLISHED_EVENT_DEFAULTS,
 } from "@workspace/canvas";
-import { PipelineStep, PipelineStepInputSource } from "@workspace/canvas/types";
-import { toFolderName, toPascalCase } from "@/lib/compiler/utils";
+import {
+  PipelineStep,
+  PipelineStepInputSource,
+  PipelineStepInputBinding,
+  Endpoint,
+} from "@workspace/canvas/types";
+import { toFolderName, toPascalCase, toVarName } from "@/lib/compiler/utils";
 import {
   getStorageOperations,
   computeStorageOpBindings,
@@ -185,14 +190,216 @@ export function handleEndpointConnect({
     }
   }
 
+  // 0b. Service Endpoint (source) → Service Endpoint (target) [Inter-Service API Call]
+  const isSourceServiceNode =
+    sourceNode.type === "service" ||
+    sourceNode.type === "serverless" ||
+    sourceNode.type === "worker" ||
+    Boolean(sourceNode.data?.endpoints);
+
+  const isTargetServiceNode =
+    targetNode.type === "service" ||
+    targetNode.type === "serverless" ||
+    targetNode.type === "worker" ||
+    Boolean(targetNode.data?.endpoints);
+
+  if (isSourceServiceNode && isTargetServiceNode && sourceNode.id !== targetNode.id) {
+    const srcHandle = connection.sourceHandle || "";
+    const tgtHandle = connection.targetHandle || "";
+
+    const parseEpHandle = (handle: string) => {
+      const outMatch =
+        handle.match(/^(?:routeEndpoints|endpoints|endpoint)-out-(.+)$/) ||
+        handle.match(/^func-out-(.+)$/);
+      if (outMatch && outMatch[1]) {
+        return { isEndpoint: true, isOut: true, isIn: false, epId: outMatch[1] };
+      }
+      const inMatch =
+        handle.match(/^(?:routeEndpoints|endpoints|endpoint)-in-(.+)$/) ||
+        handle.match(/^func-in-(.+)$/) ||
+        handle.match(/^func-(.+)$/);
+      if (inMatch && inMatch[1]) {
+        return { isEndpoint: true, isOut: false, isIn: true, epId: inMatch[1] };
+      }
+      return { isEndpoint: false, isOut: false, isIn: false, epId: "" };
+    };
+
+    const parsedSrc = parseEpHandle(srcHandle);
+    const parsedTgt = parseEpHandle(tgtHandle);
+
+    let callerNode = sourceNode;
+    let callerEpId = parsedSrc.epId;
+    let calleeNode = targetNode;
+    let calleeEpId = parsedTgt.epId;
+
+    if (parsedSrc.isIn && parsedTgt.isOut) {
+      callerNode = targetNode;
+      callerEpId = parsedTgt.epId;
+      calleeNode = sourceNode;
+      calleeEpId = parsedSrc.epId;
+    }
+
+    const allStoreEndpoints = get().endpoints;
+    const callerEndpoints: Endpoint[] =
+      allStoreEndpoints.filter((e) => e.nodeId === callerNode.id).length > 0
+        ? allStoreEndpoints.filter((e) => e.nodeId === callerNode.id)
+        : callerNode.data?.endpoints || [];
+
+    const callerEp =
+      allStoreEndpoints.find((e) => e.id === callerEpId) ||
+      callerEndpoints.find((e) => e.id === callerEpId || e.name === callerEpId) ||
+      callerEndpoints[0];
+
+    const calleeEndpoints: Endpoint[] =
+      allStoreEndpoints.filter((e) => e.nodeId === calleeNode.id).length > 0
+        ? allStoreEndpoints.filter((e) => e.nodeId === calleeNode.id)
+        : calleeNode.data?.endpoints || [];
+
+    const calleeEp =
+      allStoreEndpoints.find((e) => e.id === calleeEpId) ||
+      calleeEndpoints.find((e) => e.id === calleeEpId || e.name === calleeEpId) ||
+      calleeEndpoints[0];
+
+    if (callerEp && calleeEp) {
+      const existingSteps = callerEp.pipelineSteps ?? [];
+      const serviceLabel = calleeNode.data?.label || "service";
+      const pascalService = toPascalCase(serviceLabel);
+      const serviceFolder = calleeNode.data?.serviceFolder;
+      const folderName = serviceFolder || toFolderName(serviceLabel);
+      const rawEpName = calleeEp.name?.replace(/[^a-zA-Z0-9]/g, "") || "call";
+      const method = calleeEp.type || "GET";
+      const methodLower = method.toLowerCase();
+      const cleanedEpName = rawEpName.toLowerCase().startsWith(methodLower)
+        ? rawEpName.slice(methodLower.length)
+        : rawEpName;
+      const pascalEp = toPascalCase(`${methodLower}_${cleanedEpName || "call"}`);
+      const fnName = `call${pascalService}${pascalEp}`;
+      const opId = `call-${serviceLabel}-${rawEpName}`;
+
+      const hasMatchingStep = existingSteps.some(
+        (s) =>
+          s.type === "service_call" &&
+          ((s.databaseId === calleeNode.id &&
+            (s.tableNodeId === calleeEp.id || s.operationId === opId)) ||
+            (s.tableNodeId === calleeEp.id && s.functionRef?.name === fnName) ||
+            s.externalEndpointId === calleeEp.id),
+      );
+
+      if (!hasMatchingStep) {
+        const stepNum =
+          existingSteps.filter((s) => s.type !== "return_response").length + 1;
+        const baseVar = calleeEp.name
+          ? `${toVarName(calleeEp.name)}Result`
+          : `${toVarName(serviceLabel)}Response`;
+        const outputVar = existingSteps.some((s) => s.outputVariable === baseVar)
+          ? `${baseVar}${stepNum}`
+          : baseVar;
+
+        const defaultBindings: PipelineStepInputBinding[] = [];
+        if (calleeEp.pathParams && calleeEp.pathParams.length > 0) {
+          calleeEp.pathParams.forEach((p: any) => {
+            if (p?.name?.trim()) {
+              defaultBindings.push({
+                argName: p.name.trim(),
+                source: { kind: "req_body", field: p.name.trim() },
+              });
+            }
+          });
+        }
+        if (calleeEp.queryParams && calleeEp.queryParams.length > 0) {
+          calleeEp.queryParams.forEach((q: any) => {
+            if (q?.name?.trim()) {
+              defaultBindings.push({
+                argName: q.name.trim(),
+                source: { kind: "req_query", field: q.name.trim() },
+              });
+            }
+          });
+        }
+        if (calleeEp.requestBody?.fields && calleeEp.requestBody.fields.length > 0) {
+          calleeEp.requestBody.fields.forEach((f: any) => {
+            if (f?.name?.trim()) {
+              defaultBindings.push({
+                argName: f.name.trim(),
+                source: { kind: "req_body", field: f.name.trim() },
+              });
+            }
+          });
+        }
+
+        const newStep: PipelineStep = {
+          id: `step-service-call-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: `Call ${serviceLabel} ${calleeEp.name || "Endpoint"}`,
+          type: "service_call",
+          enabled: true,
+          outputVariable: outputVar,
+          databaseId: calleeNode.id,
+          tableNodeId: calleeEp.id,
+          operationId: opId,
+          functionRef: {
+            name: fnName,
+            importPath: `@workspace/services/${folderName}`,
+            path: `@workspace/services/${folderName}`,
+            signature: `call${pascalService}${pascalEp}(params?: Record<string, unknown>, body?: Record<string, unknown>): Promise<unknown>`,
+          },
+          inputBindings: defaultBindings,
+        };
+
+        const returnIdx = existingSteps.findIndex(
+          (s) => s.type === "return_response",
+        );
+        const nextPipelineSteps =
+          returnIdx !== -1
+            ? [
+                ...existingSteps.slice(0, returnIdx),
+                newStep,
+                ...existingSteps.slice(returnIdx),
+              ]
+            : [...existingSteps, newStep];
+
+        get().updateEndpoint(callerEp.id, {
+          pipelineSteps: nextPipelineSteps,
+        });
+
+        // Enrich newEdge data
+        const currentEdges = get().edges;
+        set({
+          edges: currentEdges.map((e) =>
+            e.id === newEdge.id
+              ? {
+                  ...e,
+                  data: {
+                    ...e.data,
+                    isServiceCall: true,
+                    targetServiceId: calleeNode.id,
+                    targetEndpointId: calleeEp.id,
+                    sourceEndpointId: callerEp.id,
+                  },
+                }
+              : e,
+          ),
+        });
+
+        toast.success(
+          `Added endpoint request step to "${callerEp.name || callerEp.type || "endpoint"}" calling "${serviceLabel}" [${method} ${calleeEp.name || "/"}]`,
+        );
+      }
+    }
+  }
+
   const isEndpointConnect =
-    connection.sourceHandle?.startsWith("endpoint-out-");
+    connection.sourceHandle?.startsWith("endpoint-out-") ||
+    connection.sourceHandle?.startsWith("endpoints-out-") ||
+    connection.sourceHandle?.startsWith("routeEndpoints-out-") ||
+    connection.sourceHandle?.startsWith("func-out-");
 
   if (!isEndpointConnect || !connection.sourceHandle || !connection.target) {
     return false;
   }
 
-  const endpointId = connection.sourceHandle.replace("endpoint-out-", "");
+  const endpointId = connection.sourceHandle
+    .replace(/^(?:routeEndpoints|endpoints|endpoint)-out-/, "")
+    .replace(/^func-out-/, "");
 
   // 1. Endpoint → DB / DB_Ref node
   if (targetNode.type === "db_ref" || targetNode.type === "database") {

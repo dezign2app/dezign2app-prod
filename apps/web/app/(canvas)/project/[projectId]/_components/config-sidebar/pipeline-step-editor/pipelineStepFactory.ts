@@ -15,6 +15,7 @@ import {
   ensureStorageOperationRefConnection,
   ensureLangGraphConnection,
   ensureTransformerConnection,
+  ensureServiceCallConnection,
 } from "./utils";
 import { upsertDerivedConnection } from "./PushToClientStepSection";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -26,7 +27,7 @@ import {
   getStorageOperations,
   computeStorageOpBindings,
 } from "@/lib/utils/storageOperationsHelper";
-import { toFolderName, toTableName, toVarName } from "@/lib/compiler/utils";
+import { toFolderName, toPascalCase, toTableName, toVarName } from "@/lib/compiler/utils";
 
 export interface CreateDefaultStepDraftParams {
   type: StepType;
@@ -306,6 +307,57 @@ export function createDefaultStepDraft({
         signature: defaultOp?.signature,
       },
       inputBindings: nextBindings,
+    };
+  } else if (type === "service_call") {
+    const availableServices = allNodes.filter(
+      (n) =>
+        (n.type === "service" || n.type === "serverless" || n.type === "worker") &&
+        (!serviceNodeId || n.id !== serviceNodeId),
+    );
+    const firstService = availableServices[0];
+    const allStoreEndpoints = useBackendCanvasStore.getState().endpoints;
+    const serviceEndpoints: Endpoint[] = firstService
+      ? allStoreEndpoints.filter((e) => e.nodeId === firstService.id).length > 0
+        ? allStoreEndpoints.filter((e) => e.nodeId === firstService.id)
+        : firstService.data?.endpoints || []
+      : [];
+    const firstEp = serviceEndpoints[0];
+    const serviceLabel = firstService?.data?.label || "service";
+    const pascalService = toPascalCase(serviceLabel);
+    const folderName = firstService?.data?.serviceFolder || toFolderName(serviceLabel);
+    const rawEpName = firstEp?.name?.replace(/[^a-zA-Z0-9]/g, "") || "call";
+    const method = firstEp?.type || "GET";
+    const methodLower = method.toLowerCase();
+    const cleanedEpName = rawEpName.toLowerCase().startsWith(methodLower)
+      ? rawEpName.slice(methodLower.length)
+      : rawEpName;
+    const pascalEp = toPascalCase(`${methodLower}_${cleanedEpName || "call"}`);
+    const fnName = `call${pascalService}${pascalEp}`;
+    const varName = firstService ? `${toVarName(serviceLabel)}Response` : defaultVar;
+
+    if (firstService && firstEp) {
+      ensureServiceCallConnection({
+        serviceNodeId,
+        endpointId: endpoint?.id,
+        targetServiceId: firstService.id,
+        targetEndpointId: firstEp.id,
+      });
+    }
+
+    initialFields = {
+      name: varName,
+      outputVariable: varName,
+      databaseId: firstService?.id,
+      tableNodeId: firstEp?.id,
+      operationId: firstEp ? `call-${serviceLabel}-${firstEp.name || "call"}` : undefined,
+      functionRef: firstService
+        ? {
+            name: fnName,
+            importPath: `@workspace/services/${folderName}`,
+            signature: `call${pascalService}${pascalEp}(params?: Record<string, unknown>, body?: Record<string, unknown>): Promise<unknown>`,
+          }
+        : undefined,
+      inputBindings: [],
     };
   } else if (type === "external_call") {
     const extNodes = allNodes.filter((n) => n.type === "external");

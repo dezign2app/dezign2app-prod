@@ -18,6 +18,8 @@ import {
   ensureLangGraphConnection,
   cleanupTransformerConnection,
   ensureTransformerConnection,
+  cleanupServiceCallConnection,
+  ensureServiceCallConnection,
 } from "./utils";
 import { removeDerivedConnection } from "./PushToClientStepSection";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -283,6 +285,49 @@ export function handleStepUpdateCanvasEffects({
       });
     }
   }
+
+  if (prevStep.type === "service_call" && updatedStep.type !== "service_call") {
+    if (!isNested) {
+      cleanupServiceCallConnection({
+        serviceNodeId,
+        endpointId,
+        targetServiceId: prevStep.databaseId || prevStep.externalNodeId,
+        targetEndpointId: prevStep.tableNodeId || prevStep.externalEndpointId,
+        remainingSteps,
+      });
+    }
+  } else if (
+    (prevStep.type === "service_call" && updatedStep.type === "service_call") ||
+    (prevStep.type !== "service_call" && updatedStep.type === "service_call")
+  ) {
+    if (
+      !isNested &&
+      prevStep.type === "service_call" &&
+      (prevStep.databaseId !== updatedStep.databaseId ||
+        prevStep.tableNodeId !== updatedStep.tableNodeId)
+    ) {
+      cleanupServiceCallConnection({
+        serviceNodeId,
+        endpointId,
+        targetServiceId: prevStep.databaseId || prevStep.externalNodeId,
+        targetEndpointId: prevStep.tableNodeId || prevStep.externalEndpointId,
+        remainingSteps,
+      });
+    }
+
+    if (
+      updatedStep.type === "service_call" &&
+      (updatedStep.databaseId || updatedStep.externalNodeId) &&
+      (updatedStep.tableNodeId || updatedStep.externalEndpointId)
+    ) {
+      ensureServiceCallConnection({
+        serviceNodeId,
+        endpointId,
+        targetServiceId: updatedStep.databaseId || updatedStep.externalNodeId,
+        targetEndpointId: updatedStep.tableNodeId || updatedStep.externalEndpointId,
+      });
+    }
+  }
 }
 
 export interface HandleStepDeleteCanvasEffectsParams {
@@ -433,5 +478,15 @@ export function handleStepDeleteCanvasEffects({
 
       edgesToDelete.forEach((e) => store.deleteEdge(e.id));
     }
+  }
+
+  if (stepToDelete.type === "service_call") {
+    cleanupServiceCallConnection({
+      serviceNodeId,
+      endpointId: endpoint?.id,
+      targetServiceId: stepToDelete.databaseId || stepToDelete.externalNodeId,
+      targetEndpointId: stepToDelete.tableNodeId || stepToDelete.externalEndpointId,
+      remainingSteps,
+    });
   }
 }

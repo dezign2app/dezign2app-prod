@@ -4,3 +4,4 @@ export * from "./pageRefConnection";
 export * from "./storageConnection";
 export * from "./langGraphConnection";
 export * from "./transformerConnection";
+export * from "./serviceCallConnection";
