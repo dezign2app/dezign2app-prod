@@ -16,6 +16,7 @@ import {
   Lock,
   Ban,
   Database,
+  Plus,
 } from "lucide-react";
 import { StateRenderComponent, ComponentPropMappings, UIEventItem, BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -47,6 +48,8 @@ export interface ComponentPropMappingsSectionProps {
   stateStoreNodes?: BackendNode[];
   propMappings: ComponentPropMappings;
   onUpdatePropMapping: (changes: Partial<ComponentPropMappings>) => void;
+  onOpenEventConfig?: (actionId: string) => void;
+  onCreateAction?: (name?: string, eventType?: string) => void;
 }
 
 export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSectionProps> = ({
@@ -62,6 +65,8 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
   stateStoreNodes,
   propMappings: rawPropMappings,
   onUpdatePropMapping: rawOnUpdatePropMapping,
+  onOpenEventConfig,
+  onCreateAction,
 }) => {
   // Local optimistic state for prop mappings so all switches, selectors and inputs react instantaneously with 0ms lag
   const [optimisticProps, setOptimisticProps] = React.useState<ComponentPropMappings>(rawPropMappings);
@@ -352,27 +357,75 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
 
             {/* Action Trigger Mode Details */}
             {onChangeMode === "action" && (
-              <div className="p-2 rounded-lg bg-background/80 border border-border/40 text-[11px] space-y-1.5">
-                <Label className="text-[10px] text-muted-foreground">Select Section Action to Dispatch</Label>
+              <div className="p-2.5 rounded-lg bg-background/80 border border-border/40 text-[11px] space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[10px] text-muted-foreground font-medium">Select Section Action to Dispatch</Label>
+                  {onCreateAction && (
+                    <button
+                      type="button"
+                      onClick={() => onCreateAction(`on${capitalizedState}Change`, "change")}
+                      className="text-[10px] text-primary hover:underline flex items-center gap-0.5 cursor-pointer font-medium"
+                    >
+                      <Plus size={10} />
+                      New Action
+                    </button>
+                  )}
+                </div>
                 {availableActions.length > 0 ? (
-                  <Select
-                    value={propMappings.onChangeActionId || availableActions[0]?.id || ""}
-                    onValueChange={(val) => onUpdatePropMapping({ onChangeActionId: val })}
-                  >
-                    <SelectTrigger className="h-7 text-xs bg-background font-mono">
-                      <SelectValue placeholder="Select target action..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableActions.map((act) => (
-                        <SelectItem key={act.id} value={act.id} className="text-xs">
-                          {act.name} ({act.event || "action"})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2">
+                    <Select
+                      value={propMappings.onChangeActionId || availableActions[0]?.id || ""}
+                      onValueChange={(val) => onUpdatePropMapping({ onChangeActionId: val })}
+                    >
+                      <SelectTrigger className="h-7 text-xs bg-background font-mono">
+                        <SelectValue placeholder="Select target action..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableActions.map((act) => (
+                          <SelectItem key={act.id} value={act.id} className="text-xs font-mono">
+                            {act.name} ({act.event || "action"})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Button to navigate directly to Action Flow Editor */}
+                    {onOpenEventConfig && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full h-7 text-[11px] flex items-center justify-between font-normal text-indigo-600 dark:text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/10 cursor-pointer"
+                        onClick={() => {
+                          const targetId = propMappings.onChangeActionId || availableActions[0]?.id;
+                          if (targetId) onOpenEventConfig(targetId);
+                        }}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Zap size={12} className="text-amber-500" />
+                          Configure Action Flow & Mappings
+                        </span>
+                        <ArrowRight size={12} />
+                      </Button>
+                    )}
+                  </div>
                 ) : (
-                  <div className="text-[10px] text-amber-500 bg-amber-500/10 p-1.5 rounded">
-                    No section actions configured yet. Add an action to this page section to dispatch events.
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] text-amber-500 bg-amber-500/10 p-1.5 rounded">
+                      No section actions configured yet. Add an action to this page section to dispatch events.
+                    </div>
+                    {onCreateAction && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full h-7 text-[11px] flex items-center justify-center gap-1.5 border-dashed border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 cursor-pointer"
+                        onClick={() => onCreateAction(`on${capitalizedState}Change`, "change")}
+                      >
+                        <Zap size={12} className="text-amber-500" />
+                        + Create & Configure Change Action
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>

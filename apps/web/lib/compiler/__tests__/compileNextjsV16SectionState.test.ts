@@ -928,7 +928,152 @@ describe("compileNextjsV16SectionState", () => {
     expect(code).toContain("readOnly={Boolean(isLocked)}");
     expect(code).toContain("disabled={!isLoading}");
   });
+
+  it("generates store action dispatch and section trigger calls on state component click", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-clicks",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/dashboard",
+        appSlug: "dash-app",
+        sections: [
+          {
+            id: "sec-metrics",
+            name: "Metrics Section",
+            renderMode: "client",
+            actions: [
+              {
+                id: "act-refresh",
+                name: "refreshDashboard",
+                event: "click",
+              },
+            ],
+            stateObjects: [
+              {
+                id: "st-counter",
+                name: "counter",
+                type: "number",
+                defaultValue: 10,
+                storeName: "CartStore",
+                renderConfig: {
+                  enabled: true,
+                  component: "button",
+                  clickAction: "dispatch_store_action",
+                  targetStoreActionName: "incrementCounter",
+                },
+              },
+              {
+                id: "st-badge",
+                name: "badgeStatus",
+                type: "string",
+                defaultValue: "Online",
+                renderConfig: {
+                  enabled: true,
+                  component: "badge",
+                  clickAction: "trigger_event",
+                  targetActionId: "act-refresh",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const file = result.files.find((f) => f.filename.includes("MetricsSection.tsx"));
+    expect(file).toBeDefined();
+    const code = file!.content;
+
+    // Must import store
+    expect(code).toContain('import { useCartStore } from "@/lib/stores";');
+
+    // Must extract state and mutator action
+    expect(code).toContain("const counter = useCartStore((s) => s.counter);");
+    expect(code).toContain("const incrementCounter = useCartStore((s) => s.incrementCounter);");
+
+    // Must wire store action dispatch
+    expect(code).toContain("onClick={() => incrementCounter()}");
+
+    // Must wire section action trigger
+    expect(code).toContain('onClick={() => onTrigger?.("refreshDashboard", "click", "", "POST")}');
+  });
+
+  it("supports copying static text or store variables to clipboard", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-copy",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/share",
+        appSlug: "share-app",
+        sections: [
+          {
+            id: "sec-share",
+            name: "Share Section",
+            renderMode: "client",
+            actions: [],
+            stateObjects: [
+              {
+                id: "st-static-copy",
+                name: "shareLink",
+                type: "string",
+                defaultValue: "temp",
+                renderConfig: {
+                  enabled: true,
+                  component: "button",
+                  clickAction: "copy_to_clipboard",
+                  copySourceMode: "static",
+                  copyStaticValue: "https://example.com/invite/123",
+                  copyToastMessage: "Link copied!",
+                },
+              },
+              {
+                id: "st-store-copy",
+                name: "authToken",
+                type: "string",
+                defaultValue: "xyz",
+                renderConfig: {
+                  enabled: true,
+                  component: "badge",
+                  clickAction: "copy_to_clipboard",
+                  copySourceMode: "store_var",
+                  copyStoreName: "AuthStore",
+                  copyStoreVar: "sessionToken",
+                  copyToastMessage: "Token copied!",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const file = result.files.find((f) => f.filename.includes("ShareSection.tsx"));
+    expect(file).toBeDefined();
+    const code = file!.content;
+
+    // Must import AuthStore
+    expect(code).toContain('import { useAuthStore } from "@/lib/stores";');
+
+    // Must extract sessionToken from AuthStore
+    expect(code).toContain("const sessionToken = useAuthStore((s) => s.sessionToken);");
+
+    // Must generate static clipboard copy
+    expect(code).toContain('navigator.clipboard?.writeText("https://example.com/invite/123")');
+    expect(code).toContain('toast.success("Link copied!")');
+
+    // Must generate store var clipboard copy
+    expect(code).toContain('navigator.clipboard?.writeText(typeof sessionToken === "object" ? JSON.stringify(sessionToken) : String(sessionToken))');
+    expect(code).toContain('toast.success("Token copied!")');
+  });
 });
+
+
 
 
 

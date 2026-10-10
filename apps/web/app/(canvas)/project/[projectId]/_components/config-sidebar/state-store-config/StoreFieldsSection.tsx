@@ -3,8 +3,8 @@
 import React, { useMemo, useCallback } from "react";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
-import { Layers, Plus, Trash2, AlertCircle, Type } from "lucide-react";
-import { GlobalStoreField, JsonValue } from "@workspace/canvas/types";
+import { Layers, Plus, Trash2, AlertCircle, Type, Zap } from "lucide-react";
+import { GlobalStoreField, GlobalStoreAction, JsonValue, StoreActionType } from "@workspace/canvas/types";
 import {
   Select,
   SelectContent,
@@ -18,23 +18,29 @@ import { cn } from "@workspace/ui/lib/utils";
 
 export interface StoreFieldsSectionProps {
   fields: GlobalStoreField[];
+  actions?: GlobalStoreAction[];
   onAddField: () => void;
   onUpdateField: (fieldId: string, patch: Partial<GlobalStoreField>) => void;
   onRemoveField: (fieldId: string) => void;
+  onSelectFieldAction?: (fieldId: string, actionType: StoreActionType | "none", actionId?: string) => void;
 }
 
 interface StoreFieldRowProps {
   field: GlobalStoreField;
+  actions?: GlobalStoreAction[];
   isDuplicate?: boolean;
   onUpdateField: (fieldId: string, patch: Partial<GlobalStoreField>) => void;
   onRemoveField: (fieldId: string) => void;
+  onSelectFieldAction?: (fieldId: string, actionType: StoreActionType | "none", actionId?: string) => void;
 }
 
 const StoreFieldRow = React.memo(function StoreFieldRow({
   field,
+  actions = [],
   isDuplicate = false,
   onUpdateField,
   onRemoveField,
+  onSelectFieldAction,
 }: StoreFieldRowProps) {
   const handleNameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,6 +52,38 @@ const StoreFieldRow = React.memo(function StoreFieldRow({
   // Resolve isArray and baseType (strip trailing [] if present)
   const isArray = Boolean(field.isArray || field.type?.endsWith("[]"));
   const baseType = (field.type || "string").replace(/\[\]$/, "");
+
+  const capitalized = useMemo(() => {
+    return field.name ? field.name.charAt(0).toUpperCase() + field.name.slice(1) : "Field";
+  }, [field.name]);
+
+  const linkedAction = useMemo(() => {
+    return (actions || []).find((a) => a.targetFieldId === field.id || (field.actionId && a.id === field.actionId));
+  }, [actions, field.id, field.actionId]);
+
+  const currentActionValue = field.actionType || linkedAction?.actionType || "set";
+
+  const handleActionChange = useCallback(
+    (val: string) => {
+      if (!onSelectFieldAction) return;
+      if (val === "none") {
+        onSelectFieldAction(field.id, "none");
+      } else if (
+        val === "set" ||
+        val === "toggle" ||
+        val === "append" ||
+        val === "pop" ||
+        val === "remove" ||
+        val === "increment" ||
+        val === "reset"
+      ) {
+        onSelectFieldAction(field.id, val as StoreActionType);
+      } else {
+        onSelectFieldAction(field.id, "custom", val);
+      }
+    },
+    [field.id, onSelectFieldAction],
+  );
 
   const handleTypeChange = useCallback(
     (selectedBase: string) => {
@@ -251,15 +289,69 @@ const StoreFieldRow = React.memo(function StoreFieldRow({
           </Select>
         </div>
       </div>
+
+      {/* Action / Mutator selector for this State Variable */}
+      <div className="flex items-center gap-2 pt-1 border-t border-border/30">
+        <span className="text-[10px] text-muted-foreground font-mono w-16 shrink-0 flex items-center gap-1">
+          <Zap size={10} className="text-amber-500 shrink-0" />
+          <span>Action:</span>
+        </span>
+        <div className="flex items-center gap-1 flex-1">
+          <Select
+            value={currentActionValue}
+            onValueChange={handleActionChange}
+          >
+            <SelectTrigger className="h-6 text-[10px] font-mono bg-background/50 flex-1">
+              <SelectValue placeholder="Select action..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="set" className="text-xs">
+                set{capitalized} (Direct Setter)
+              </SelectItem>
+              {baseType === "boolean" && (
+                <SelectItem value="toggle" className="text-xs">
+                  toggle{capitalized} (Toggle true/false)
+                </SelectItem>
+              )}
+              {isArray && (
+                <>
+                  <SelectItem value="append" className="text-xs">
+                    append{capitalized} (Append item to array)
+                  </SelectItem>
+                  <SelectItem value="pop" className="text-xs">
+                    pop{capitalized} (Remove last item)
+                  </SelectItem>
+                  <SelectItem value="remove" className="text-xs">
+                    remove{capitalized} (Remove item by ID)
+                  </SelectItem>
+                </>
+              )}
+              {baseType === "number" && (
+                <SelectItem value="increment" className="text-xs">
+                  increment{capitalized} (Increment value)
+                </SelectItem>
+              )}
+              <SelectItem value="reset" className="text-xs">
+                reset{capitalized} (Reset to default)
+              </SelectItem>
+              <SelectItem value="none" className="text-xs text-muted-foreground">
+                None (Read-only / No Action)
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
     </div>
   );
 });
 
 export const StoreFieldsSection: React.FC<StoreFieldsSectionProps> = ({
   fields,
+  actions = [],
   onAddField,
   onUpdateField,
   onRemoveField,
+  onSelectFieldAction,
 }) => {
   const duplicateFieldNames = useMemo(() => {
     const counts = new Map<string, number>();
@@ -320,9 +412,11 @@ export const StoreFieldsSection: React.FC<StoreFieldsSectionProps> = ({
               <StoreFieldRow
                 key={f.id}
                 field={f}
+                actions={actions}
                 isDuplicate={isDuplicate}
                 onUpdateField={onUpdateField}
                 onRemoveField={onRemoveField}
+                onSelectFieldAction={onSelectFieldAction}
               />
             );
           })}

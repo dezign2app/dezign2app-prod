@@ -126,7 +126,8 @@ export const isClickAction = (val: string): val is NonNullable<StateRenderConfig
   val === "copy_to_clipboard" ||
   val === "trigger_event" ||
   val === "navigate" ||
-  val === "toggle_state";
+  val === "toggle_state" ||
+  val === "dispatch_store_action";
 
 export const isInputType = (val: string): val is NonNullable<ComponentPropMappings["inputType"]> =>
   val === "text" ||

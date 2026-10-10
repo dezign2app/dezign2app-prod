@@ -183,7 +183,13 @@ export function generateSectionComponent(
     const pm = s.renderConfig?.propMappings;
     return [pm?.readOnlyStoreName, pm?.disabledStoreName].filter((n): n is string => Boolean(n));
   });
-  const uniqueStoreNames = Array.from(new Set([...actionStoreNames, ...stateStoreNames, ...guardStoreNames]));
+  const copyStoreNames = (section.stateObjects || []).flatMap((s) => {
+    const cfg = s.renderConfig;
+    return cfg?.clickAction === "copy_to_clipboard" && cfg.copySourceMode === "store_var" && cfg.copyStoreName
+      ? [cfg.copyStoreName]
+      : [];
+  });
+  const uniqueStoreNames = Array.from(new Set([...actionStoreNames, ...stateStoreNames, ...guardStoreNames, ...copyStoreNames]));
 
   const storeImports = uniqueStoreNames
     .map((sName) => {
@@ -223,6 +229,21 @@ export function generateSectionComponent(
         guardHookCalls.push(`  const ${cleanVar} = ${hookName}((s) => s.${cleanVar});`);
       }
     }
+    const cfg = st.renderConfig;
+    if (
+      cfg?.clickAction === "copy_to_clipboard" &&
+      cfg.copySourceMode === "store_var" &&
+      cfg.copyStoreVar
+    ) {
+      const cleanVar = toCamelCase(cfg.copyStoreVar);
+      const storeName = cfg.copyStoreName || st.storeName;
+      if (storeName && !declaredVars.has(cleanVar)) {
+        declaredVars.add(cleanVar);
+        const cleanStore = storeName.replace(/Store$/i, "");
+        const hookName = `use${cleanStore.charAt(0).toUpperCase() + cleanStore.slice(1)}Store`;
+        guardHookCalls.push(`  const ${cleanVar} = ${hookName}((s) => s.${cfg.copyStoreVar});`);
+      }
+    }
   });
 
   const declaredSetters = new Set<string>();
@@ -242,15 +263,25 @@ export function generateSectionComponent(
         props?.onChangeMode === "action");
 
     const setterName = props?.targetSetterName || `set${toPascalCase(st.name || "state")}`;
+    const clickStoreAction =
+      cfg?.clickAction === "dispatch_store_action" && cfg.targetStoreActionName
+        ? cfg.targetStoreActionName
+        : undefined;
 
     if (st.storeName) {
       const clean = st.storeName.replace(/Store$/i, "");
       const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
+      const lines: string[] = [`  const ${varName} = ${hookName}((s) => s.${st.name});`];
+
       if (isInteractiveInput && !declaredSetters.has(setterName)) {
         declaredSetters.add(setterName);
-        return `  const ${varName} = ${hookName}((s) => s.${st.name});\n  const ${setterName} = ${hookName}((s) => s.${setterName});`;
+        lines.push(`  const ${setterName} = ${hookName}((s) => s.${setterName});`);
       }
-      return `  const ${varName} = ${hookName}((s) => s.${st.name});`;
+      if (clickStoreAction && !declaredSetters.has(clickStoreAction)) {
+        declaredSetters.add(clickStoreAction);
+        lines.push(`  const ${clickStoreAction} = ${hookName}((s) => s.${clickStoreAction});`);
+      }
+      return lines.join("\n");
     }
 
     const tsType = mapStateTypeToTs(st.type || "string");
@@ -400,7 +431,26 @@ export default ${sectionCompName};
           if (cfg?.clickAction === "copy_to_clipboard") {
             needsToast = true;
             const toastMsg = cfg.copyToastMessage || `Copied ${st.name} to clipboard!`;
-            clickAttr = ` onClick={() => { navigator.clipboard?.writeText(typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})); toast.success("${toastMsg}"); }}`;
+            let copyExpr = `typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})`;
+            if (cfg.copySourceMode === "static") {
+              const staticVal = cfg.copyStaticValue ?? "";
+              copyExpr = JSON.stringify(staticVal);
+            } else if (cfg.copySourceMode === "store_var" && cfg.copyStoreVar) {
+              const cleanVar = toCamelCase(cfg.copyStoreVar);
+              copyExpr = `typeof ${cleanVar} === "object" ? JSON.stringify(${cleanVar}) : String(${cleanVar})`;
+            }
+            clickAttr = ` onClick={() => { navigator.clipboard?.writeText(${copyExpr}); toast.success("${toastMsg}"); }}`;
+          } else if (cfg?.clickAction === "dispatch_store_action" && cfg.targetStoreActionName) {
+            clickAttr = ` onClick={() => ${cfg.targetStoreActionName}()}`;
+          } else if (cfg?.clickAction === "trigger_event" && cfg.targetActionId) {
+            const act = (section.actions || []).find((a) => a.id === cfg.targetActionId);
+            const actName = act?.name || "action";
+            const actEvent = act?.event || "click";
+            const actUrl = ((act as Record<string, unknown>)?.url as string) || "";
+            const actMethod = ((act as Record<string, unknown>)?.method as string) || "POST";
+            clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", "${actUrl}", "${actMethod}")}`;
+          } else if (cfg?.clickAction === "navigate" && cfg.targetRoute) {
+            clickAttr = ` onClick={() => { window.location.href = "${cfg.targetRoute}"; }}`;
           }
 
           const props = cfg?.propMappings;

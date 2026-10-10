@@ -145,10 +145,18 @@ export interface StateRenderConfig {
   suffix?: string;
   fallbackText?: string;
   formatter?: "none" | "currency" | "number" | "json" | "date";
-  clickAction?: "none" | "trigger_event" | "copy_to_clipboard" | "navigate" | "toggle_state";
+  clickAction?: "none" | "trigger_event" | "copy_to_clipboard" | "navigate" | "toggle_state" | "dispatch_store_action";
   targetActionId?: string;
   targetRoute?: string;
   copyToastMessage?: string;
+  copySourceMode?: "current" | "store_var" | "static";
+  copyStaticValue?: string;
+  copyStoreId?: string;
+  copyStoreName?: string;
+  copyStoreVar?: string;
+  targetStoreId?: string;
+  targetStoreActionId?: string;
+  targetStoreActionName?: string;
   propMappings?: ComponentPropMappings;
 }
 
