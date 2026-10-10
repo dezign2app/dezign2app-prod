@@ -227,4 +227,85 @@ describe("typesNodeLayout - Auto-Layout for TypesNode", () => {
     expect(appliedChanges[0]?.position.x).toBeGreaterThanOrEqual(60);
     expect(appliedChanges[0]?.position.y).toBeGreaterThanOrEqual(60);
   });
+
+  it("parks TransformerNode floating next to the types node and shifts main graph to the right", () => {
+    const nodes: LayoutNode[] = [
+      {
+        id: "types-pkg-1",
+        type: "types",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "@xyflow/react",
+          isPackageNode: true,
+          types: [{ id: "t1", name: "Node", kind: "type" }],
+        },
+      },
+      {
+        id: "transformer-gen-id",
+        type: "transformer",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "generateUniqueId",
+          scope: "global",
+        },
+      },
+      {
+        id: "web-app-1",
+        type: "webApp",
+        position: { x: 0, y: 0 },
+        data: { label: "Web App" },
+      },
+      {
+        id: "service-1",
+        type: "service",
+        position: { x: 0, y: 0 },
+        data: { label: "Conversation Service" },
+      },
+    ];
+
+    const edges: LayoutEdge[] = [
+      {
+        id: "e-web-service",
+        source: "web-app-1",
+        target: "service-1",
+        type: "connection",
+      },
+    ];
+
+    let appliedChanges: PositionNodeChange[] = [];
+    const onNodesChange = (changes: PositionNodeChange[]) => {
+      appliedChanges = changes;
+    };
+    const fitView = vi.fn();
+
+    performGraphLayout({
+      nodes,
+      edges,
+      onNodesChange,
+      fitView,
+      direction: "LR",
+    });
+
+    const posMap = new Map(appliedChanges.map((c) => [c.id, c.position]));
+    const typesPos = posMap.get("types-pkg-1")!;
+    const transPos = posMap.get("transformer-gen-id")!;
+    const webAppPos = posMap.get("web-app-1")!;
+
+    // 1. Types node is in Column 1 at x: 60
+    expect(typesPos.x).toBe(60);
+    expect(typesPos.y).toBe(60);
+
+    // 2. Transformer node floats in the column immediately next to the Types node
+    // Types width (270) + gap (80) = 410
+    expect(transPos.x).toBe(410);
+    expect(transPos.y).toBe(60);
+
+    // 3. WebApp begins safely past the Types + Transformer section
+    expect(webAppPos.x).toBeGreaterThan(transPos.x);
+
+    // 4. Transformer node handles are Right / Left
+    const transChange = appliedChanges.find((c) => c.id === "transformer-gen-id")!;
+    expect(transChange.sourcePosition).toBe("right");
+    expect(transChange.targetPosition).toBe("left");
+  });
 });

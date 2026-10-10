@@ -195,13 +195,14 @@ export function performSchemaLayout({
   onNodesChange,
   fitView,
 }: PerformSchemaLayoutOptions) {
-  // Filter for Schema nodes (entity, redis_schema, database, redis_instance) and schema edges
+  // Filter for Schema nodes (entity, redis_schema, database, redis_instance, transformer) and schema edges
   const schemaNodes = nodes.filter(
     (n) =>
       n.type === "entity" ||
       n.type === "database" ||
       n.type === "redis_instance" ||
-      n.type === "redis_schema",
+      n.type === "redis_schema" ||
+      n.type === "transformer",
   );
   if (schemaNodes.length === 0) return;
 
@@ -215,13 +216,17 @@ export function performSchemaLayout({
   const isDatabaseNode = (n: LayoutNode) => n.type === "database";
   const isRedisNode = (n: LayoutNode) => n.type === "redis_instance";
   const isStorageNode = (n: LayoutNode) => isDatabaseNode(n) || isRedisNode(n);
+  const isTransformerNode = (n: LayoutNode) => n.type === "transformer";
 
   const dbNodes = schemaNodes.filter(isDatabaseNode);
   const redisNodes = schemaNodes.filter(isRedisNode);
+  const transformerNodes = schemaNodes.filter(isTransformerNode);
   const storageNodes = [...dbNodes, ...redisNodes];
   const storageNodeIdSet = new Set(storageNodes.map((n) => n.id));
 
-  const entityNodes = schemaNodes.filter((n) => !isStorageNode(n));
+  const entityNodes = schemaNodes.filter(
+    (n) => !isStorageNode(n) && !isTransformerNode(n),
+  );
 
   // 1. Initialize dedicated cluster for each Database and each Redis instance
   const clustersMap = new Map<string, StorageCluster>();
@@ -491,6 +496,28 @@ export function performSchemaLayout({
     curX += res.width;
   });
 
+  const dbRowEndX = curX;
+
+  // Place Transformer nodes next to the DB nodes row along the top row (y = START_Y) without affecting topology
+  if (transformerNodes.length > 0) {
+    const TRANSFORMER_GAP_X = 60;
+    let transX = wrapRedisToNextRow
+      ? dbRowEndX + (dbResults.length > 0 ? SECTION_GAP_X : 0)
+      : curX + ((dbResults.length > 0 || redisResults.length > 0) ? SECTION_GAP_X : 0);
+
+    transformerNodes.forEach((tNode, idx) => {
+      if (idx > 0) transX += TRANSFORMER_GAP_X;
+      const dim = getNodeDimensions(tNode);
+      positionsMap.set(tNode.id, {
+        x: transX,
+        y: START_Y,
+      });
+      transX += dim.width;
+    });
+
+    curX = Math.max(curX, transX);
+  }
+
   // Place Unassigned entities (if any) to the far right
   if (unassignedResult) {
     curX += SECTION_GAP_X;
@@ -537,12 +564,13 @@ export function performSchemaLayout({
           y: node.position.y,
         };
         const isDb = storageNodeIdSet.has(node.id);
+        const isTrans = node.type === "transformer";
         return {
           id: node.id,
           type: "position",
           position: pos,
-          sourcePosition: isDb ? Position.Bottom : Position.Right,
-          targetPosition: isDb ? Position.Top : Position.Left,
+          sourcePosition: isDb ? Position.Bottom : isTrans ? Position.Right : Position.Right,
+          targetPosition: isDb ? Position.Top : isTrans ? Position.Left : Position.Left,
         };
       },
     );
@@ -553,11 +581,12 @@ export function performSchemaLayout({
         const pos = positionsMap.get(node.id);
         if (!pos) return node;
         const isDb = storageNodeIdSet.has(node.id);
+        const isTrans = node.type === "transformer";
         return {
           ...node,
           position: pos,
-          sourcePosition: isDb ? Position.Bottom : Position.Right,
-          targetPosition: isDb ? Position.Top : Position.Left,
+          sourcePosition: isDb ? Position.Bottom : isTrans ? Position.Right : Position.Right,
+          targetPosition: isDb ? Position.Top : isTrans ? Position.Left : Position.Left,
         };
       });
 
