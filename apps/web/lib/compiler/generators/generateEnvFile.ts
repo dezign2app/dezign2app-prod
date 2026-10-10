@@ -732,8 +732,12 @@ export function collectEnvSections(
     });
   }
 
-  // Ensure default app vars if the node has canvas-defined vars, connected package sections, or is a service
-  const hasCanvasSections = ownVars.length > 0 || packageSectionsMap.size > 0 || appNode.type === "service";
+  // Ensure default app vars if the node has canvas-defined vars, connected package sections, or is a service/webApp
+  const hasCanvasSections =
+    ownVars.length > 0 ||
+    packageSectionsMap.size > 0 ||
+    appNode.type === "service" ||
+    appNode.type === "webApp";
   if (hasCanvasSections) {
     if (appNode.type === "service") {
       const rawData = appNode.data;
@@ -770,12 +774,28 @@ export function collectEnvSections(
       }
     }
 
-    if (appNode.type === "webApp" && !ownVarNames.has("NEXT_PUBLIC_LOG_LEVEL")) {
-      appVars.push({
-        name: "NEXT_PUBLIC_LOG_LEVEL",
-        description: "Client logging level",
-        exampleValue: "info",
-      });
+    if (appNode.type === "webApp") {
+      if (!ownVarNames.has("NEXT_PUBLIC_LOG_LEVEL")) {
+        appVars.push({
+          name: "NEXT_PUBLIC_LOG_LEVEL",
+          description: "Client logging level",
+          exampleValue: "info",
+        });
+      }
+      if (!ownVarNames.has("NEXT_PUBLIC_ENABLE_DEBUG_LOGS")) {
+        appVars.push({
+          name: "NEXT_PUBLIC_ENABLE_DEBUG_LOGS",
+          description: "Enable/disable output logs on web pages (true/false)",
+          exampleValue: "false",
+        });
+      }
+      if (!ownVarNames.has("NEXT_PUBLIC_ENABLE_DEBUG_STATE")) {
+        appVars.push({
+          name: "NEXT_PUBLIC_ENABLE_DEBUG_STATE",
+          description: "Enable/disable state variables preview on web pages (true/false)",
+          exampleValue: "false",
+        });
+      }
     }
   }
 

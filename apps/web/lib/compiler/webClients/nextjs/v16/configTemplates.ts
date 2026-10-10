@@ -113,7 +113,9 @@ export default nextConfig;
     envLines.push("DATABASE_PATH=../../packages/db/sqlite.db");
     envLines.push("DATABASE_URL=../../packages/db/sqlite.db");
   }
-  envLines.push("NEXT_PUBLIC_LOG_LEVEL=info\n");
+  envLines.push("NEXT_PUBLIC_LOG_LEVEL=info");
+  envLines.push("NEXT_PUBLIC_ENABLE_DEBUG_LOGS=false");
+  envLines.push("NEXT_PUBLIC_ENABLE_DEBUG_STATE=false\n");
   const envContent = envLines.join("\n");
 
   return [

@@ -1,6 +1,9 @@
 export function generateTriggerLogsState(hasLogsSection: boolean): string {
   if (!hasLogsSection) return "";
-  return `  const [triggerLogs, setTriggerLogs] = useState<Array<{
+  return `  const showDebugLogs =
+    process.env.NEXT_PUBLIC_ENABLE_DEBUG_LOGS?.trim().toLowerCase() === "true" ||
+    process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI?.trim().toLowerCase() === "true";
+  const [triggerLogs, setTriggerLogs] = useState<Array<{
     id: string;
     eventName: string;
     eventType: string;
@@ -91,6 +94,7 @@ export function generateTriggerLogsSection(options: {
   if (!hasLogsSection) return "";
 
   return `        {/* Section: Trigger Output Logs */}
+        {showDebugLogs && (
         <Card className="border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <div className="flex items-center gap-3">
@@ -166,5 +170,6 @@ export function generateTriggerLogsSection(options: {
             )}
           </CardContent>
         </Card>
+        )}
 `;
 }

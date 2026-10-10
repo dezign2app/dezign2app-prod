@@ -268,17 +268,31 @@ export const ExternalEnvVarsDrawer: React.FC<ExternalEnvVarsDrawerProps> = ({
     }
   }, [isOpen, nodeId, updateNodeInternals, envVars.length]);
 
-  // Auto-seed default env vars if this node has never had envVars defined
+  // Auto-seed default env vars if this node has never had envVars defined,
+  // or merge missing default env vars for webApp nodes
   useEffect(() => {
-    if (node?.data && node.data.envVars === undefined) {
+    if (node?.data) {
       const defaults = getDefaultNodeEnvVars(node.type, node.data);
-      if (defaults.length > 0) {
-        updateNode(nodeId, {
-          data: {
-            ...node.data,
-            envVars: defaults,
-          },
-        });
+      if (node.data.envVars === undefined) {
+        if (defaults.length > 0) {
+          updateNode(nodeId, {
+            data: {
+              ...node.data,
+              envVars: defaults,
+            },
+          });
+        }
+      } else if (node.type === "webApp" && defaults.length > 0) {
+        const existingNames = new Set((node.data.envVars || []).map((v) => v.name));
+        const missingDefaults = defaults.filter((d) => !existingNames.has(d.name));
+        if (missingDefaults.length > 0) {
+          updateNode(nodeId, {
+            data: {
+              ...node.data,
+              envVars: [...(node.data.envVars || []), ...missingDefaults],
+            },
+          });
+        }
       }
     }
   }, [nodeId, node?.type, node?.data, updateNode]);
