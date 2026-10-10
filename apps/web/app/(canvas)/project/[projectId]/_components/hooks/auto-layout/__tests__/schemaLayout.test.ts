@@ -458,4 +458,118 @@ describe("schemaLayout - Isolated Multi-Cluster Auto-Layout for N Databases & M 
       }
     }
   });
+
+  it("aligns TransformerNode next to the db nodes row without affecting entity topology", () => {
+    const recordedChanges: PositionNodeChange[] = [];
+    const onNodesChange = (changes: PositionNodeChange[]) => {
+      recordedChanges.push(...changes);
+    };
+    const fitView = vi.fn();
+
+    const dbNodesAndEntities: LayoutNode[] = [
+      {
+        id: "db-primary",
+        type: "database",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "Primary DB",
+          dbType: "relational",
+          isDefault: true,
+        },
+      },
+      {
+        id: "table-user",
+        type: "entity",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "user",
+          tableName: "user",
+          databaseId: "db-primary",
+          columns: [
+            { name: "id", type: "string", isPrimaryKey: true },
+            { name: "email", type: "string" },
+          ],
+        },
+      },
+      {
+        id: "table-profile",
+        type: "entity",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "profile",
+          tableName: "profile",
+          databaseId: "db-primary",
+          columns: [
+            { name: "id", type: "string", isPrimaryKey: true },
+            { name: "userId", type: "string" },
+          ],
+        },
+      },
+    ];
+
+    const edges: LayoutEdge[] = [
+      {
+        id: "fk-profile-user",
+        source: "table-user",
+        target: "table-profile",
+        sourceHandle: "id",
+        targetHandle: "userId",
+        type: "foreign-key",
+      },
+    ];
+
+    // 1. Run layout without transformer
+    performSchemaLayout({
+      nodes: dbNodesAndEntities,
+      edges,
+      onNodesChange,
+      fitView,
+    });
+
+    const baselineUserPos = recordedChanges.find((c) => c.id === "table-user")!.position;
+    const baselineProfilePos = recordedChanges.find((c) => c.id === "table-profile")!.position;
+    const baselineDbPos = recordedChanges.find((c) => c.id === "db-primary")!.position;
+
+    // 2. Run layout with transformer
+    recordedChanges.length = 0;
+    const transformerNode: LayoutNode = {
+      id: "transformer-custom",
+      type: "transformer",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "customTransformer",
+        scope: "global",
+      },
+    };
+
+    performSchemaLayout({
+      nodes: [...dbNodesAndEntities, transformerNode],
+      edges,
+      onNodesChange,
+      fitView,
+    });
+
+    const withTransUserPos = recordedChanges.find((c) => c.id === "table-user")!.position;
+    const withTransProfilePos = recordedChanges.find((c) => c.id === "table-profile")!.position;
+    const withTransDbPos = recordedChanges.find((c) => c.id === "db-primary")!.position;
+    const transChange = recordedChanges.find((c) => c.id === "transformer-custom")!;
+
+    // Transformer is in the db nodes row (same Y coordinate)
+    expect(transChange.position.y).toBe(withTransDbPos.y);
+
+    // Transformer is placed to the right of the DB cluster (next to the DB nodes row)
+    expect(transChange.position.x).toBeGreaterThan(withTransDbPos.x);
+
+    // Entity tables and foreign-key topology are completely unaffected
+    expect(withTransUserPos.x).toBe(baselineUserPos.x);
+    expect(withTransUserPos.y).toBe(baselineUserPos.y);
+    expect(withTransProfilePos.x).toBe(baselineProfilePos.x);
+    expect(withTransProfilePos.y).toBe(baselineProfilePos.y);
+    expect(withTransDbPos.x).toBe(baselineDbPos.x);
+    expect(withTransDbPos.y).toBe(baselineDbPos.y);
+
+    // Transformer handles are configured as Right / Left
+    expect(transChange.sourcePosition).toBe(Position.Right);
+    expect(transChange.targetPosition).toBe(Position.Left);
+  });
 });

@@ -209,6 +209,18 @@ export function getNodeDimensions(node: LayoutNode): {
     case "eventConsumer": {
       return { width: 280, height: 160 };
     }
+    case "transformer":
+    case "transformer_ref": {
+      const estWidth = 260;
+      const estHeight = 65;
+      if (isMeasured && measuredWidth !== undefined && measuredHeight !== undefined) {
+        return {
+          width: Math.max(measuredWidth, estWidth),
+          height: Math.max(measuredHeight, estHeight),
+        };
+      }
+      return { width: estWidth, height: estHeight };
+    }
     case "database":
     case "redis_instance": {
       return { width: 280, height: 160 };

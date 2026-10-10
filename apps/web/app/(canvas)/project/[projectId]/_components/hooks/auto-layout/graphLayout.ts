@@ -325,6 +325,14 @@ export function performGraphLayout({
     hangingTransformerNodeIdSet.has(n.id),
   );
 
+  const transformerDefNodes: LayoutNode[] = graphNodes.filter(
+    (n: LayoutNode) =>
+      n.type === "transformer" && !hangingTransformerNodeIdSet.has(n.id),
+  );
+  const transformerDefNodeIdSet = new Set<string>(
+    transformerDefNodes.map((n) => n.id),
+  );
+
   const hangingRefNodeIdSet = new Set<string>();
   graphNodes.forEach((n: LayoutNode) => {
     if (REFERENCE_NODE_TYPES.has(n.type ?? "")) {
@@ -568,7 +576,8 @@ export function performGraphLayout({
       !hangingRefNodeIdSet.has(n.id) &&
       !paymentsPluginNodeIdSet.has(n.id) &&
       !hangingStateStoreNodeIdSet.has(n.id) &&
-      !stackedSecondaryNodeIdSet.has(n.id),
+      !stackedSecondaryNodeIdSet.has(n.id) &&
+      !transformerDefNodeIdSet.has(n.id),
   );
 
   // 3.9. Compute topological tier ranks:
@@ -826,10 +835,11 @@ export function performGraphLayout({
     });
   }
 
-  // 6.7. Layout TypesNodes in dedicated away column(s) on the left margin
-  if (typesNodes.length > 0) {
+  // 6.7. Layout TypesNodes and Transformer definition nodes in dedicated away column(s) on the left margin
+  if (typesNodes.length > 0 || transformerDefNodes.length > 0) {
     layoutTypesNodes({
       typesNodes,
+      transformerNodes: transformerDefNodes,
       positionsMap,
       edges,
       startMarginX: 60,
@@ -847,20 +857,21 @@ export function performGraphLayout({
       };
       const isAttachedHead = attachedHeadNodeIdSet.has(node.id);
       const isTypesNode = node.type === "types";
+      const isTransformerDef = transformerDefNodeIdSet.has(node.id);
       return {
         id: node.id,
         type: "position",
         position: pos,
         sourcePosition: isAttachedHead
           ? Position.Bottom
-          : isTypesNode
+          : isTypesNode || isTransformerDef
             ? Position.Right
             : isHorizontal
               ? Position.Right
               : Position.Bottom,
         targetPosition: isAttachedHead
           ? Position.Top
-          : isTypesNode
+          : isTypesNode || isTransformerDef
             ? Position.Left
             : isHorizontal
               ? Position.Left
@@ -875,19 +886,20 @@ export function performGraphLayout({
         if (!pos) return node;
         const isAttachedHead = attachedHeadNodeIdSet.has(node.id);
         const isTypesNode = node.type === "types";
+        const isTransformerDef = transformerDefNodeIdSet.has(node.id);
         return {
           ...node,
           position: pos,
           sourcePosition: isAttachedHead
             ? Position.Bottom
-            : isTypesNode
+            : isTypesNode || isTransformerDef
               ? Position.Right
               : isHorizontal
                 ? Position.Right
                 : Position.Bottom,
           targetPosition: isAttachedHead
             ? Position.Top
-            : isTypesNode
+            : isTypesNode || isTransformerDef
               ? Position.Left
               : isHorizontal
                 ? Position.Left

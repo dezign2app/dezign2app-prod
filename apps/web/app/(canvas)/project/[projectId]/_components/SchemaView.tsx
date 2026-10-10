@@ -65,7 +65,8 @@ export function SchemaView({ projectId }: SchemaViewProps) {
           n.type === "entity" ||
           n.type === "database" ||
           n.type === "redis_instance" ||
-          n.type === "redis_schema",
+          n.type === "redis_schema" ||
+          n.type === "transformer",
       ),
     [nodes],
   );
