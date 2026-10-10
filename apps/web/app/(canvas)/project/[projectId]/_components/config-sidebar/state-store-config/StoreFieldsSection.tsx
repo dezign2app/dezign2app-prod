@@ -3,8 +3,15 @@
 import React, { useMemo, useCallback } from "react";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
-import { Layers, Plus, Trash2, AlertCircle } from "lucide-react";
+import { Layers, Plus, Trash2, AlertCircle, Type } from "lucide-react";
 import { GlobalStoreField, JsonValue } from "@workspace/canvas/types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select";
 import { TypeCombobox } from "../TypeCombobox";
 import { LocalInput } from "../../backend-nodes/graph-nodes/shared";
 import { cn } from "@workspace/ui/lib/utils";
@@ -206,6 +213,43 @@ const StoreFieldRow = React.memo(function StoreFieldRow({
           placeholder={placeholder}
           className="h-6 text-[11px] font-mono bg-background/50 flex-1"
         />
+      </div>
+
+      <div className="flex items-center gap-2 pt-1 border-t border-border/30">
+        <span className="text-[10px] text-muted-foreground font-mono w-16 shrink-0 flex items-center gap-1">
+          <Type size={10} className="text-primary" />
+          <span>UI Render:</span>
+        </span>
+        <div className="flex items-center gap-1 flex-1">
+          <Select
+            value={field.suggestedComponent || (baseType === "boolean" ? "switch" : baseType === "number" || baseType === "string" ? "input" : "badge")}
+            onValueChange={(val: any) => onUpdateField(field.id, { suggestedComponent: val })}
+          >
+            <SelectTrigger className="h-6 text-[10px] font-mono bg-background/50 flex-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="input" className="text-xs">
+                Input (Two-way sync, debounce & placeholder)
+              </SelectItem>
+              <SelectItem value="badge" className="text-xs">
+                Badge (Compact state tag)
+              </SelectItem>
+              <SelectItem value="button" className="text-xs">
+                Button (Clickable state button)
+              </SelectItem>
+              <SelectItem value="switch" className="text-xs">
+                Switch (Toggle switch)
+              </SelectItem>
+              <SelectItem value="card" className="text-xs">
+                Card (Metric card)
+              </SelectItem>
+              <SelectItem value="progress" className="text-xs">
+                Progress (Progress bar)
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
   );

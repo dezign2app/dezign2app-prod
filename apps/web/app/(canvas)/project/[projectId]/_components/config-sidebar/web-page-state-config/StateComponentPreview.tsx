@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { Sparkles, MousePointerClick, AlertTriangle } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Sparkles, MousePointerClick, AlertTriangle, Timer, X, Check } from "lucide-react";
 import {
   StateRenderComponent,
   StateRenderConfig,
@@ -50,6 +50,39 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
   targetActionId,
 }) => {
   const labelToRender = customLabel?.trim() || "";
+
+  // Live interactive state for Input component preview
+  const [liveInputValue, setLiveInputValue] = useState<string>(String(formattedPreviewValue ?? ""));
+  const [debouncedLiveValue, setDebouncedLiveValue] = useState<string>(String(formattedPreviewValue ?? ""));
+  const [isDebouncing, setIsDebouncing] = useState(false);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    setLiveInputValue(String(formattedPreviewValue ?? ""));
+    setDebouncedLiveValue(String(formattedPreviewValue ?? ""));
+    setIsDebouncing(false);
+  }, [formattedPreviewValue]);
+
+  const handlePreviewInputChange = (val: string) => {
+    setLiveInputValue(val);
+    if (propMappings.debounceUpdate) {
+      setIsDebouncing(true);
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      const delay = propMappings.debounceMs ?? 300;
+      debounceTimerRef.current = setTimeout(() => {
+        setDebouncedLiveValue(val);
+        setIsDebouncing(false);
+      }, delay);
+    } else {
+      setDebouncedLiveValue(val);
+    }
+  };
+
+  const handlePreviewInputCommit = () => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    setDebouncedLiveValue(liveInputValue);
+    setIsDebouncing(false);
+  };
 
   return (
     <Card className="border-cyan-500/30 bg-cyan-500/[0.02] shadow-xs overflow-hidden">
@@ -163,28 +196,144 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
         )}
 
         {currentComponent === "input" && (
-          <div className="w-full max-w-xs flex flex-col gap-1.5">
+          <div className="w-full max-w-xs flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <Label className="text-[11px] text-muted-foreground">{displayLabel}</Label>
-              <span className="text-[10px] font-mono text-muted-foreground/70">
-                type="{propMappings.inputType || "text"}"
-              </span>
-            </div>
-            <Input
-              type={propMappings.inputType || "text"}
-              value={String(formattedPreviewValue)}
-              placeholder={propMappings.placeholder || `Enter ${displayLabel}...`}
-              readOnly={propMappings.readOnly !== false}
-              disabled={Boolean(propMappings.disabled)}
-              className="h-8 text-xs bg-muted/20 font-mono shadow-2xs"
-            />
-            {(propMappings.readOnly !== false || propMappings.disabled) && (
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/80">
-                {propMappings.readOnly !== false && (
-                  <span className="px-1.5 py-0.2 rounded bg-muted text-[9px] font-mono">readOnly</span>
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] font-mono text-cyan-500 bg-cyan-500/10 px-1 py-0.2 rounded border border-cyan-500/20">
+                  type="{propMappings.inputType || "text"}"
+                </span>
+                {propMappings.debounceUpdate && (
+                  <span className="text-[9px] font-mono text-indigo-400 bg-indigo-500/10 px-1 py-0.2 rounded border border-indigo-500/20 flex items-center gap-0.5">
+                    <Timer size={9} />
+                    {propMappings.debounceMs ?? 300}ms
+                  </span>
                 )}
-                {propMappings.disabled && (
-                  <span className="px-1.5 py-0.2 rounded bg-muted text-[9px] font-mono text-amber-500">disabled</span>
+              </div>
+            </div>
+
+            {/* Input Element */}
+            {(() => {
+              const isReadOnlyPreview = Boolean(
+                propMappings.readOnly ||
+                (propMappings.readOnlyMode === "state_binding" && propMappings.readOnlyBinding)
+              );
+              const isDisabledPreview = Boolean(
+                propMappings.disabled ||
+                (propMappings.disabledMode === "state_binding" && propMappings.disabledBinding)
+              );
+
+              return (
+                <div className="relative flex items-center">
+                  <Input
+                    type={propMappings.inputType || "text"}
+                    value={isReadOnlyPreview ? String(formattedPreviewValue) : liveInputValue}
+                    onChange={(e) => handlePreviewInputChange(e.target.value)}
+                    placeholder={propMappings.placeholder || `Enter ${displayLabel}...`}
+                    readOnly={isReadOnlyPreview}
+                    disabled={isDisabledPreview}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && propMappings.commitOnEnter !== false) {
+                        handlePreviewInputCommit();
+                        toast.info(`Committed input: "${liveInputValue}"`);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (propMappings.commitOnBlur !== false && isDebouncing) {
+                        handlePreviewInputCommit();
+                      }
+                    }}
+                    className={cn(
+                      "h-8 text-xs font-mono shadow-2xs transition-colors",
+                      propMappings.clearable && "pr-7",
+                      isReadOnlyPreview ? "bg-muted/30 cursor-default" : "bg-background focus:ring-1 focus:ring-primary/40",
+                    )}
+                  />
+                  {propMappings.clearable && !isReadOnlyPreview && !isDisabledPreview && liveInputValue && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handlePreviewInputChange("");
+                        handlePreviewInputCommit();
+                      }}
+                      className="absolute right-2 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                      title="Clear input"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Reactive Feedback & Debounce Indicator */}
+            {!propMappings.readOnly && !propMappings.disabled && (
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5">
+                {propMappings.debounceUpdate ? (
+                  isDebouncing ? (
+                    <span className="text-amber-500 flex items-center gap-1 font-mono text-[9px] animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                      Debouncing ({propMappings.debounceMs ?? 300}ms)...
+                    </span>
+                  ) : (
+                    <span className="text-emerald-500 flex items-center gap-1 font-mono text-[9px]">
+                      <Check size={10} />
+                      Committed: &quot;{debouncedLiveValue}&quot;
+                    </span>
+                  )
+                ) : (
+                  <span className="text-muted-foreground/80 font-mono text-[9px]">
+                    Direct sync: &quot;{liveInputValue}&quot;
+                  </span>
+                )}
+                {propMappings.commitOnEnter !== false && (
+                  <span className="text-[9px] text-muted-foreground/60 font-mono">
+                    ↵ Enter to commit
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* ReadOnly & Disabled Status Indicators (Dynamic & Static) */}
+            {(propMappings.readOnly ||
+              propMappings.disabled ||
+              propMappings.readOnlyMode === "state_binding" ||
+              propMappings.readOnlyMode === "expression" ||
+              propMappings.disabledMode === "state_binding" ||
+              propMappings.disabledMode === "expression") && (
+              <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground/80 pt-0.5">
+                {/* ReadOnly indicator */}
+                {propMappings.readOnlyMode === "state_binding" && propMappings.readOnlyBinding && (
+                  <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-[9px] font-mono text-indigo-400 border border-indigo-500/20">
+                    readOnly={`{${propMappings.readOnlyInverted ? "!" : ""}${propMappings.readOnlyBinding}}`}
+                  </span>
+                )}
+                {propMappings.readOnlyMode === "expression" && propMappings.readOnlyExpression && (
+                  <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-[9px] font-mono text-indigo-400 border border-indigo-500/20">
+                    readOnly={`{${propMappings.readOnlyExpression}}`}
+                  </span>
+                )}
+                {(!propMappings.readOnlyMode || propMappings.readOnlyMode === "static") && propMappings.readOnly && (
+                  <span className="px-1.5 py-0.5 rounded bg-muted text-[9px] font-mono text-muted-foreground border border-border/40">
+                    readOnly
+                  </span>
+                )}
+
+                {/* Disabled indicator */}
+                {propMappings.disabledMode === "state_binding" && propMappings.disabledBinding && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-[9px] font-mono text-amber-500 border border-amber-500/20">
+                    disabled={`{${propMappings.disabledInverted ? "!" : ""}${propMappings.disabledBinding}}`}
+                  </span>
+                )}
+                {propMappings.disabledMode === "expression" && propMappings.disabledExpression && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-[9px] font-mono text-amber-500 border border-amber-500/20">
+                    disabled={`{${propMappings.disabledExpression}}`}
+                  </span>
+                )}
+                {(!propMappings.disabledMode || propMappings.disabledMode === "static") && propMappings.disabled && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-[9px] font-mono text-amber-500 border border-amber-500/20">
+                    disabled
+                  </span>
                 )}
               </div>
             )}

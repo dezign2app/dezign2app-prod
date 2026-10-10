@@ -106,6 +106,46 @@ function toPascalCase(str: string): string {
   return camel.charAt(0).toUpperCase() + camel.slice(1);
 }
 
+function resolveDisabledAttr(props?: {
+  disabled?: boolean;
+  disabledMode?: "static" | "state_binding" | "expression";
+  disabledBinding?: string;
+  disabledInverted?: boolean;
+  disabledExpression?: string;
+}): string {
+  if (!props) return "";
+  if (props.disabledMode === "expression" && props.disabledExpression?.trim()) {
+    return ` disabled={Boolean(${props.disabledExpression.trim()})}`;
+  }
+  if (props.disabledMode === "state_binding" && props.disabledBinding?.trim()) {
+    const rawBinding = props.disabledBinding.trim();
+    const isInverted = Boolean(props.disabledInverted || rawBinding.startsWith("!"));
+    const cleanVar = toCamelCase(rawBinding.replace(/^!/, ""));
+    return isInverted ? ` disabled={!${cleanVar}}` : ` disabled={Boolean(${cleanVar})}`;
+  }
+  return props.disabled ? " disabled" : "";
+}
+
+function resolveReadOnlyAttr(props?: {
+  readOnly?: boolean;
+  readOnlyMode?: "static" | "state_binding" | "expression";
+  readOnlyBinding?: string;
+  readOnlyInverted?: boolean;
+  readOnlyExpression?: string;
+}): string {
+  if (!props) return "";
+  if (props.readOnlyMode === "expression" && props.readOnlyExpression?.trim()) {
+    return ` readOnly={Boolean(${props.readOnlyExpression.trim()})}`;
+  }
+  if (props.readOnlyMode === "state_binding" && props.readOnlyBinding?.trim()) {
+    const rawBinding = props.readOnlyBinding.trim();
+    const isInverted = Boolean(props.readOnlyInverted || rawBinding.startsWith("!"));
+    const cleanVar = toCamelCase(rawBinding.replace(/^!/, ""));
+    return isInverted ? ` readOnly={!${cleanVar}}` : ` readOnly={Boolean(${cleanVar})}`;
+  }
+  return props.readOnly ? " readOnly" : "";
+}
+
 export function generateSectionComponent(
   section: PageSection,
   sectionCompName: string,
@@ -139,7 +179,11 @@ export function generateSectionComponent(
   const stateStoreNames = (section.stateObjects || [])
     .map((s) => s.storeName)
     .filter((n): n is string => Boolean(n));
-  const uniqueStoreNames = Array.from(new Set([...actionStoreNames, ...stateStoreNames]));
+  const guardStoreNames = (section.stateObjects || []).flatMap((s) => {
+    const pm = s.renderConfig?.propMappings;
+    return [pm?.readOnlyStoreName, pm?.disabledStoreName].filter((n): n is string => Boolean(n));
+  });
+  const uniqueStoreNames = Array.from(new Set([...actionStoreNames, ...stateStoreNames, ...guardStoreNames]));
 
   const storeImports = uniqueStoreNames
     .map((sName) => {
@@ -155,17 +199,108 @@ export function generateSectionComponent(
     return `  const ${toCamelCase(clean)}Store = ${hookName}();`;
   });
 
+  const declaredVars = new Set<string>(
+    (section.stateObjects || []).map((st) => toCamelCase(st.name || "state"))
+  );
+  const guardHookCalls: string[] = [];
+  (section.stateObjects || []).forEach((st) => {
+    const props = st.renderConfig?.propMappings;
+    if (props?.disabledMode === "state_binding" && props.disabledBinding) {
+      const cleanVar = toCamelCase(props.disabledBinding.replace(/^!/, ""));
+      if (props.disabledStoreName && !declaredVars.has(cleanVar)) {
+        declaredVars.add(cleanVar);
+        const cleanStore = props.disabledStoreName.replace(/Store$/i, "");
+        const hookName = `use${cleanStore.charAt(0).toUpperCase() + cleanStore.slice(1)}Store`;
+        guardHookCalls.push(`  const ${cleanVar} = ${hookName}((s) => s.${cleanVar});`);
+      }
+    }
+    if (props?.readOnlyMode === "state_binding" && props.readOnlyBinding) {
+      const cleanVar = toCamelCase(props.readOnlyBinding.replace(/^!/, ""));
+      if (props.readOnlyStoreName && !declaredVars.has(cleanVar)) {
+        declaredVars.add(cleanVar);
+        const cleanStore = props.readOnlyStoreName.replace(/Store$/i, "");
+        const hookName = `use${cleanStore.charAt(0).toUpperCase() + cleanStore.slice(1)}Store`;
+        guardHookCalls.push(`  const ${cleanVar} = ${hookName}((s) => s.${cleanVar});`);
+      }
+    }
+  });
+
+  const declaredSetters = new Set<string>();
+  const debouncedStateObjectSetups: string[] = [];
+
   const stateObjectHookCalls = (section.stateObjects || []).map((st) => {
     const varName = toCamelCase(st.name || "state");
+    const cfg = st.renderConfig;
+    const props = cfg?.propMappings;
+    const isInteractiveInput =
+      cfg?.component === "input" &&
+      (props?.readOnly === false ||
+        props?.readOnlyMode === "state_binding" ||
+        props?.readOnlyMode === "expression" ||
+        Boolean(props?.debounceUpdate) ||
+        props?.onChangeMode === "two_way" ||
+        props?.onChangeMode === "action");
+
+    const setterName = props?.targetSetterName || `set${toPascalCase(st.name || "state")}`;
+
     if (st.storeName) {
       const clean = st.storeName.replace(/Store$/i, "");
       const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
+      if (isInteractiveInput && !declaredSetters.has(setterName)) {
+        declaredSetters.add(setterName);
+        return `  const ${varName} = ${hookName}((s) => s.${st.name});\n  const ${setterName} = ${hookName}((s) => s.${setterName});`;
+      }
       return `  const ${varName} = ${hookName}((s) => s.${st.name});`;
     }
+
     const tsType = mapStateTypeToTs(st.type || "string");
     const defaultVal = formatStateDefaultValue(st.type || "string", st.defaultValue);
+    if (isInteractiveInput && !declaredSetters.has(setterName)) {
+      declaredSetters.add(setterName);
+      return `  const [${varName}, ${setterName}] = useState<${tsType}>(${defaultVal});`;
+    }
     return `  const [${varName}] = useState<${tsType}>(${defaultVal});`;
   });
+
+  // Debounced input buffer setups
+  (section.stateObjects || []).forEach((st) => {
+    const cfg = st.renderConfig;
+    const props = cfg?.propMappings;
+    if (
+      cfg?.component === "input" &&
+      (props?.readOnly === false ||
+        props?.readOnlyMode === "state_binding" ||
+        props?.readOnlyMode === "expression" ||
+        Boolean(props?.debounceUpdate) ||
+        props?.onChangeMode === "two_way") &&
+      Boolean(props?.debounceUpdate)
+    ) {
+      const varName = toCamelCase(st.name || "state");
+      const bufferName = `${varName}Input`;
+      const setBufferName = `set${toPascalCase(varName)}Input`;
+      const inType = props?.inputType || (st.type === "number" ? "number" : "text");
+      const setterName = props?.targetSetterName || `set${toPascalCase(st.name || "state")}`;
+      const debounceMs = props?.debounceMs ?? 300;
+      const commitCall = inType === "number"
+        ? `${setterName}(Number(${bufferName}) || 0);`
+        : `${setterName}(${bufferName});`;
+
+      debouncedStateObjectSetups.push(`  const [${bufferName}, ${setBufferName}] = useState<string>(String(${varName} ?? ""));
+  useEffect(() => {
+    ${setBufferName}(String(${varName} ?? ""));
+  }, [${varName}]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (${bufferName} !== String(${varName} ?? "")) {
+        ${commitCall}
+      }
+    }, ${debounceMs});
+    return () => clearTimeout(timer);
+  }, [${bufferName}]);`);
+    }
+  });
+
+  const hasDebouncedStateObject = debouncedStateObjectSetups.length > 0;
 
   const hasActions = eventComponents.length > 0;
   const isNavOnly =
@@ -177,9 +312,14 @@ export function generateSectionComponent(
 
   const needsUseState =
     hasStates ||
+    hasDebouncedStateObject ||
     (section.stateObjects || []).some((st) => !st.storeName);
 
-  const reactImport = needsUseState
+  const needsUseEffect = hasDebouncedStateObject;
+
+  const reactImport = needsUseEffect
+    ? `import React, { useState, useEffect } from "react";`
+    : needsUseState
     ? `import React, { useState } from "react";`
     : `import React from "react";`;
 
@@ -206,6 +346,8 @@ export function generateSectionComponent(
     debugStateSetup,
     stateDeclarations,
     ...stateObjectHookCalls,
+    ...guardHookCalls,
+    ...debouncedStateObjectSetups,
     ...actionStoreHookCalls,
   ].filter(Boolean).join("\n");
 
@@ -270,12 +412,12 @@ export default ${sectionCompName};
           if (comp === "button") {
             neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
             const btnSize = props?.buttonSize || "sm";
-            const disabledAttr = props?.disabled ? " disabled" : "";
+            const disabledAttr = resolveDisabledAttr(props);
             return `          <Button key="${st.id}" variant="${variant}" size="${btnSize}"${disabledAttr}${clickAttr}>{showDebugState && "${label}: "}{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</Button>`;
           }
           if (comp === "switch") {
             neededShadcnImports.add('import { Switch } from "@workspace/ui/components/switch";');
-            const disabledAttr = props?.disabled ? " disabled" : "";
+            const disabledAttr = resolveDisabledAttr(props);
             return `          <div key="${st.id}" className="flex items-center gap-2 text-xs"><Switch checked={Boolean(${varName})}${disabledAttr} />{showDebugState && <span>${label}</span>}</div>`;
           }
           if (comp === "progress") {
@@ -297,12 +439,64 @@ export default ${sectionCompName};
           }
           if (comp === "input") {
             neededShadcnImports.add('import { Input } from "@workspace/ui/components/input";');
-            const inType = props?.inputType || "text";
+            const inType = props?.inputType || (st.type === "number" ? "number" : "text");
             const ph = props?.placeholder ? ` placeholder="${props.placeholder}"` : "";
-            const ro = props?.readOnly !== false ? " readOnly" : "";
-            const dis = props?.disabled ? " disabled" : "";
+            const dis = resolveDisabledAttr(props);
+            const readOnlyAttr = resolveReadOnlyAttr(props);
             const valExpr = props?.valueBinding ? props.valueBinding : `String(${varName})`;
-            return `          <Input key="${st.id}" type="${inType}" value={${valExpr}}${ph}${ro}${dis} className="h-8 text-xs max-w-xs" />`;
+            const setterName = props?.targetSetterName || `set${toPascalCase(st.name || "state")}`;
+
+            const autoFocusAttr = props?.autoFocus ? " autoFocus" : "";
+            const autoCompAttr = props?.autoComplete ? ` autoComplete="${props.autoComplete}"` : "";
+            const maxLenAttr = props?.maxLength !== undefined ? ` maxLength={${props.maxLength}}` : "";
+            const uxAttrs = `${autoFocusAttr}${autoCompAttr}${maxLenAttr}`;
+
+            const isDynamicReadOnly =
+              props?.readOnlyMode === "state_binding" || props?.readOnlyMode === "expression";
+            const isInteractive =
+              isDynamicReadOnly ||
+              props?.readOnly === false ||
+              Boolean(props?.debounceUpdate) ||
+              props?.onChangeMode === "two_way" ||
+              props?.onChangeMode === "action";
+
+            if (!isInteractive || (props?.readOnly === true && !isDynamicReadOnly)) {
+              return `          <Input key="${st.id}" type="${inType}" value={${valExpr}}${ph}${readOnlyAttr || " readOnly"}${dis}${uxAttrs} className="h-8 text-xs max-w-xs" />`;
+            }
+
+            if (props?.debounceUpdate) {
+              const bufferName = `${varName}Input`;
+              const setBufferName = `set${toPascalCase(varName)}Input`;
+              const commitCall = inType === "number"
+                ? `${setterName}(Number(${bufferName}) || 0)`
+                : `${setterName}(${bufferName})`;
+              let enterAttr = "";
+              if (props?.commitOnEnter !== false) {
+                enterAttr = ` onKeyDown={(e) => { if (e.key === "Enter") { ${commitCall}; } }}`;
+              }
+              let blurAttr = "";
+              if (props?.commitOnBlur !== false) {
+                blurAttr = ` onBlur={() => { if (${bufferName} !== String(${varName} ?? "")) { ${commitCall}; } }}`;
+              }
+              return `          <Input key="${st.id}" type="${inType}" value={${bufferName}} onChange={(e) => ${setBufferName}(e.target.value)}${ph}${readOnlyAttr}${dis}${uxAttrs}${enterAttr}${blurAttr} className="h-8 text-xs max-w-xs" />`;
+            }
+
+            if (props?.onChangeMode === "action" && props?.onChangeActionId) {
+              const act = (section.actions || []).find((a) => a.id === props.onChangeActionId);
+              const actName = act?.name || "inputChange";
+              const actUrl = ((act as Record<string, unknown>)?.url as string) || "";
+              const actMethod = ((act as Record<string, unknown>)?.method as string) || "POST";
+              return `          <Input key="${st.id}" type="${inType}" value={${valExpr}} onChange={(e) => onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", { value: e.target.value })}${ph}${readOnlyAttr}${dis}${uxAttrs} className="h-8 text-xs max-w-xs" />`;
+            }
+
+            if (props?.onChangeMode === "custom" && props?.customOnChange) {
+              return `          <Input key="${st.id}" type="${inType}" value={${valExpr}} onChange={${props.customOnChange}}${ph}${readOnlyAttr}${dis}${uxAttrs} className="h-8 text-xs max-w-xs" />`;
+            }
+
+            const commitExpr = inType === "number"
+              ? `${setterName}(Number(e.target.value) || 0)`
+              : `${setterName}(e.target.value)`;
+            return `          <Input key="${st.id}" type="${inType}" value={${valExpr}} onChange={(e) => ${commitExpr}}${ph}${readOnlyAttr}${dis}${uxAttrs} className="h-8 text-xs max-w-xs" />`;
           }
           if (comp === "avatar") {
             const fallbackText = props?.avatarFallback || (label ? label.slice(0, 2).toUpperCase() : "AV");

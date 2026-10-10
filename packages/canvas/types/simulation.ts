@@ -68,11 +68,47 @@ export type StateRenderComponent =
 
 export interface ComponentPropMappings {
   // Input
-  inputType?: "text" | "number" | "password" | "email" | "tel" | "url" | "date";
+  inputType?: "text" | "number" | "password" | "email" | "tel" | "url" | "date" | "search";
   placeholder?: string;
+
+  // Input ReadOnly Flag & Dynamic Binding
+  readOnlyMode?: "static" | "state_binding" | "expression";
   readOnly?: boolean;
+  readOnlyBinding?: string;
+  readOnlyInverted?: boolean;
+  readOnlyExpression?: string;
+  readOnlyStoreId?: string;
+  readOnlyStoreName?: string;
+
+  // Disabled Flag & Dynamic Binding
+  disabledMode?: "static" | "state_binding" | "expression";
   disabled?: boolean;
+  disabledBinding?: string;
+  disabledInverted?: boolean;
+  disabledExpression?: string;
+  disabledStoreId?: string;
+  disabledStoreName?: string;
+
   valueBinding?: string;
+  defaultValue?: string | number;
+
+  // Input onChange & Interactivity
+  onChangeMode?: "two_way" | "action" | "custom";
+  targetSetterName?: string;
+  onChangeActionId?: string;
+  customOnChange?: string;
+
+  // Input Debounce Configuration
+  debounceUpdate?: boolean;
+  debounceMs?: number;
+  commitOnEnter?: boolean;
+  commitOnBlur?: boolean;
+
+  // Input UX
+  clearable?: boolean;
+  autoFocus?: boolean;
+  autoComplete?: string;
+  maxLength?: number;
 
   // Card
   titleBinding?: string;
