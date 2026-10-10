@@ -7,6 +7,7 @@ import type {
   PageStateObject,
   StoreActionType,
   StoreActionBinding,
+  StateRenderComponent,
 } from "./simulation";
 import type { WebAppZone, ProtectionRule, PaymentsPlanConfig } from "./auth";
 import type { ClientDeliveryProtocol } from "./messaging";
@@ -111,6 +112,7 @@ export interface GlobalStoreField {
   required?: boolean;
   defaultValue?: JsonValue;
   description?: string;
+  suggestedComponent?: StateRenderComponent;
 }
 
 export interface GlobalStoreAction {

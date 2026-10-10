@@ -595,5 +595,340 @@ describe("compileNextjsV16SectionState", () => {
     expect(isTruthy(undefined)).toBe(false);
     expect(isTruthy("0")).toBe(false);
   });
+
+  it("compiles interactive Input with two-way store setter binding", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-search",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/search",
+        appSlug: "search-app",
+        sections: [
+          {
+            id: "sec-search-input",
+            name: "Search Bar Section",
+            renderMode: "client",
+            actions: [],
+            stateObjects: [
+              {
+                id: "st-query",
+                name: "query",
+                type: "string",
+                storeName: "Search",
+                renderConfig: {
+                  enabled: true,
+                  component: "input",
+                  propMappings: {
+                    inputType: "search",
+                    placeholder: "Search catalog...",
+                    readOnly: false,
+                    onChangeMode: "two_way",
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const file = result.files.find((f) => f.filename.includes("SearchBarSection.tsx"));
+    expect(file).toBeDefined();
+    const code = file!.content;
+
+    expect(code).toContain('"use client";');
+    expect(code).toContain('import { useSearchStore } from "@/lib/stores";');
+    expect(code).toContain('const query = useSearchStore((s) => s.query);');
+    expect(code).toContain('const setQuery = useSearchStore((s) => s.setQuery);');
+    expect(code).toContain('import { Input } from "@workspace/ui/components/input";');
+    expect(code).toContain(
+      '<Input key="st-query" type="search" value={String(query)} onChange={(e) => setQuery(e.target.value)} placeholder="Search catalog..." className="h-8 text-xs max-w-xs" />',
+    );
+  });
+
+  it("compiles interactive Input with debounced updates, local buffer state, and Enter key commit", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-filter",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/filter",
+        appSlug: "filter-app",
+        sections: [
+          {
+            id: "sec-filter-input",
+            name: "Filter Section",
+            renderMode: "client",
+            actions: [],
+            stateObjects: [
+              {
+                id: "st-filter-text",
+                name: "filterText",
+                type: "string",
+                storeName: "Catalog",
+                renderConfig: {
+                  enabled: true,
+                  component: "input",
+                  propMappings: {
+                    inputType: "text",
+                    placeholder: "Filter products...",
+                    readOnly: false,
+                    debounceUpdate: true,
+                    debounceMs: 300,
+                    commitOnEnter: true,
+                    commitOnBlur: true,
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const file = result.files.find((f) => f.filename.includes("FilterSection.tsx"));
+    expect(file).toBeDefined();
+    const code = file!.content;
+
+    expect(code).toContain('"use client";');
+    expect(code).toContain('import React, { useState, useEffect } from "react";');
+    expect(code).toContain('const filterText = useCatalogStore((s) => s.filterText);');
+    expect(code).toContain('const setFilterText = useCatalogStore((s) => s.setFilterText);');
+    expect(code).toContain('const [filterTextInput, setFilterTextInput] = useState<string>(String(filterText ?? ""));');
+    expect(code).toContain('setFilterTextInput(String(filterText ?? ""));');
+    expect(code).toContain('const timer = setTimeout(() => {');
+    expect(code).toContain('setFilterText(filterTextInput);');
+    expect(code).toContain('}, 300);');
+    expect(code).toContain('value={filterTextInput}');
+    expect(code).toContain('onChange={(e) => setFilterTextInput(e.target.value)}');
+    expect(code).toContain('if (e.key === "Enter") { setFilterText(filterTextInput); }');
+  });
+
+  it("compiles numeric Input with number casting in onChange", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-qty",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/quantity",
+        appSlug: "qty-app",
+        sections: [
+          {
+            id: "sec-qty",
+            name: "Quantity Section",
+            renderMode: "client",
+            actions: [],
+            stateObjects: [
+              {
+                id: "st-qty",
+                name: "quantity",
+                type: "number",
+                defaultValue: 1,
+                renderConfig: {
+                  enabled: true,
+                  component: "input",
+                  propMappings: {
+                    inputType: "number",
+                    placeholder: "Qty",
+                    readOnly: false,
+                    onChangeMode: "two_way",
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const file = result.files.find((f) => f.filename.includes("QuantitySection.tsx"));
+    expect(file).toBeDefined();
+    const code = file!.content;
+
+    expect(code).toContain('const [quantity, setQuantity] = useState<number>(1);');
+    expect(code).toContain('type="number"');
+    expect(code).toContain('onChange={(e) => setQuantity(Number(e.target.value) || 0)}');
+  });
+
+  it("compiles Input and Button with dynamic state-driven disabled, readOnly flags, and UX attributes", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-dynamic-flags",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/profile",
+        appSlug: "profile-app",
+        sections: [
+          {
+            id: "sec-profile-form",
+            name: "Profile Form Section",
+            renderMode: "client",
+            actions: [],
+            states: [
+              {
+                id: "st-is-editing",
+                name: "isEditing",
+                type: "boolean",
+                defaultValue: true,
+              },
+              {
+                id: "st-is-loading",
+                name: "isLoading",
+                type: "boolean",
+                defaultValue: false,
+              },
+            ],
+            stateObjects: [
+              {
+                id: "st-username",
+                name: "username",
+                type: "string",
+                defaultValue: "antigravity",
+                renderConfig: {
+                  enabled: true,
+                  component: "input",
+                  propMappings: {
+                    inputType: "text",
+                    placeholder: "Enter username...",
+                    readOnlyMode: "state_binding",
+                    readOnlyBinding: "isEditing",
+                    readOnlyInverted: true,
+                    disabledMode: "state_binding",
+                    disabledBinding: "isLoading",
+                    disabledInverted: false,
+                    onChangeMode: "two_way",
+                    autoFocus: true,
+                    autoComplete: "username",
+                    maxLength: 50,
+                  },
+                },
+              },
+              {
+                id: "st-email-field",
+                name: "email",
+                type: "string",
+                defaultValue: "dev@example.com",
+                renderConfig: {
+                  enabled: true,
+                  component: "input",
+                  propMappings: {
+                    inputType: "email",
+                    disabledMode: "expression",
+                    disabledExpression: "isLoading || !isEditing",
+                    readOnly: false,
+                    onChangeMode: "two_way",
+                  },
+                },
+              },
+              {
+                id: "st-save-btn",
+                name: "canSave",
+                type: "boolean",
+                renderConfig: {
+                  enabled: true,
+                  component: "button",
+                  propMappings: {
+                    buttonSize: "sm",
+                    disabledMode: "state_binding",
+                    disabledBinding: "canSave",
+                    disabledInverted: true,
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const file = result.files.find((f) => f.filename.includes("ProfileFormSection.tsx"));
+    expect(file).toBeDefined();
+    const code = file!.content;
+
+    // Check dynamic readOnly and disabled binding
+    expect(code).toContain("readOnly={!isEditing}");
+    expect(code).toContain("disabled={Boolean(isLoading)}");
+    expect(code).toContain("autoFocus");
+    expect(code).toContain('autoComplete="username"');
+    expect(code).toContain("maxLength={50}");
+
+    // Check expression disabled
+    expect(code).toContain("disabled={Boolean(isLoading || !isEditing)}");
+
+    // Check button dynamic inverted disabled
+    expect(code).toContain("<Button");
+    expect(code).toContain("disabled={!canSave}");
+  });
+
+  it("compiles Input bound to State Store guard fields with hook imports and extractions", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-store-guards",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/settings",
+        appSlug: "settings-app",
+        sections: [
+          {
+            id: "sec-settings",
+            name: "Settings Form Section",
+            renderMode: "client",
+            actions: [],
+            stateObjects: [
+              {
+                id: "st-input-key",
+                name: "apiKey",
+                type: "string",
+                defaultValue: "sk-12345",
+                renderConfig: {
+                  enabled: true,
+                  component: "input",
+                  propMappings: {
+                    readOnlyMode: "state_binding",
+                    readOnlyStoreName: "UserStore",
+                    readOnlyBinding: "isLocked",
+                    readOnlyInverted: false,
+                    disabledMode: "state_binding",
+                    disabledStoreName: "AuthStore",
+                    disabledBinding: "isLoading",
+                    disabledInverted: true,
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const file = result.files.find((f) => f.filename.includes("SettingsFormSection.tsx"));
+    expect(file).toBeDefined();
+    const code = file!.content;
+
+    // Must import store hooks
+    expect(code).toContain('import { useUserStore } from "@/lib/stores";');
+    expect(code).toContain('import { useAuthStore } from "@/lib/stores";');
+
+    // Must extract store variables
+    expect(code).toContain("const isLocked = useUserStore((s) => s.isLocked);");
+    expect(code).toContain("const isLoading = useAuthStore((s) => s.isLoading);");
+
+    // Must generate dynamic guard JSX
+    expect(code).toContain("readOnly={Boolean(isLocked)}");
+    expect(code).toContain("disabled={!isLoading}");
+  });
 });
+
+
 

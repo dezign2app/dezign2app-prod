@@ -5,7 +5,6 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useShallow } from "zustand/react/shallow";
 import { Eye, EyeOff, AlertTriangle } from "lucide-react";
 import {
-  BackendNode,
   PageSection,
   PageStateObject,
   StateRenderConfig,
@@ -51,6 +50,11 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
     useShallow((s) => s.nodes.filter((n) => n.type === "webPage" && n.id !== nodeId)),
   );
 
+  // All state store nodes on canvas for state guard bindings
+  const stateStoreNodes = useBackendCanvasStore(
+    useShallow((s) => s.nodes.filter((n) => n.type === "state_store")),
+  );
+
   const sections: PageSection[] = parentNode?.data?.sections || [];
 
   // Find target section containing this state variable
@@ -64,7 +68,13 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
     : (parentNode?.data?.stateObjects || []).find((st: PageStateObject) => st.id === id);
 
   const renderConfig: StateRenderConfig = stateObj?.renderConfig || {};
-  const isEnabled = renderConfig.enabled !== false;
+  const serverIsEnabled = renderConfig.enabled !== false;
+  const [optimisticEnabled, setOptimisticEnabled] = React.useState(serverIsEnabled);
+  React.useEffect(() => {
+    setOptimisticEnabled(serverIsEnabled);
+  }, [serverIsEnabled]);
+  const isEnabled = optimisticEnabled;
+
   const currentComponent = renderConfig.component || "badge";
   const currentVariant = renderConfig.variant || "secondary";
   const currentClickAction = renderConfig.clickAction || "none";
@@ -77,6 +87,22 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
 
   // Section actions available for interactive triggering
   const availableActions: UIEventItem[] = targetSection?.actions || [];
+
+  // Other state variables in section available for conditional bindings (disabled, readOnly, etc.)
+  const availableStateVars = useMemo(() => {
+    const list: Array<{ name: string; type?: string; source: "store" | "local" }> = [];
+    (targetSection?.stateObjects || []).forEach((s) => {
+      if (s.name && s.id !== id) {
+        list.push({ name: s.name, type: s.type, source: s.storeName ? "store" : "local" });
+      }
+    });
+    (targetSection?.states || []).forEach((s) => {
+      if (s.name && !list.some((existing) => existing.name === s.name)) {
+        list.push({ name: s.name, type: s.type, source: "local" });
+      }
+    });
+    return list;
+  }, [targetSection, id]);
 
   // Helper to persist changes
   const handleUpdateRenderConfig = useCallback(
@@ -255,7 +281,10 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
             </div>
             <Switch
               checked={isEnabled}
-              onCheckedChange={(checked) => handleUpdateRenderConfig({ enabled: checked })}
+              onCheckedChange={(checked) => {
+                setOptimisticEnabled(checked);
+                handleUpdateRenderConfig({ enabled: checked });
+              }}
             />
           </div>
         </CardHeader>
@@ -302,6 +331,12 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
             selectedOption={selectedOption}
             displayLabel={displayLabel}
             stateName={stateObj.name}
+            stateType={stateObj.type}
+            storeName={stateObj.storeName}
+            storeId={stateObj.storeId}
+            availableActions={availableActions}
+            availableStateVars={availableStateVars}
+            stateStoreNodes={stateStoreNodes}
             propMappings={propMappings}
             onUpdatePropMapping={handleUpdatePropMapping}
           />

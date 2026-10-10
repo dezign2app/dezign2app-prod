@@ -331,6 +331,7 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
         (s) => !(s.fieldId === field.id || (s.storeId === store.id && s.name === field.name)),
       );
     } else {
+      const comp = field.suggestedComponent || (field.type === "boolean" ? "switch" : (field.type === "string" || field.type === "number") ? "input" : "badge");
       const newObj: PageStateObject = {
         id: `state-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         name: field.name,
@@ -339,6 +340,20 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
         storeId: store.id,
         storeName,
         fieldId: field.id,
+        renderConfig: {
+          enabled: true,
+          component: comp,
+          propMappings: comp === "input" ? {
+            inputType: field.type === "number" ? "number" : "text",
+            placeholder: `Enter ${field.name}...`,
+            readOnly: false,
+            onChangeMode: "two_way",
+            debounceUpdate: true,
+            debounceMs: 300,
+            commitOnEnter: true,
+            commitOnBlur: true,
+          } : undefined,
+        },
       };
       nextStates = [...current, newObj];
     }
@@ -355,15 +370,32 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
 
     const toAdd: PageStateObject[] = fields
       .filter((f) => !existingFieldIds.has(f.id))
-      .map((f) => ({
-        id: `state-${Date.now()}-${Math.random().toString(36).substr(2, 4)}-${f.id}`,
-        name: f.name,
-        type: f.type,
-        defaultValue: f.defaultValue,
-        storeId: store.id,
-        storeName,
-        fieldId: f.id,
-      }));
+      .map((f) => {
+        const comp = f.suggestedComponent || (f.type === "boolean" ? "switch" : (f.type === "string" || f.type === "number") ? "input" : "badge");
+        return {
+          id: `state-${Date.now()}-${Math.random().toString(36).substr(2, 4)}-${f.id}`,
+          name: f.name,
+          type: f.type,
+          defaultValue: f.defaultValue,
+          storeId: store.id,
+          storeName,
+          fieldId: f.id,
+          renderConfig: {
+            enabled: true,
+            component: comp,
+            propMappings: comp === "input" ? {
+              inputType: f.type === "number" ? "number" : "text",
+              placeholder: `Enter ${f.name}...`,
+              readOnly: false,
+              onChangeMode: "two_way",
+              debounceUpdate: true,
+              debounceMs: 300,
+              commitOnEnter: true,
+              commitOnBlur: true,
+            } : undefined,
+          },
+        };
+      });
 
     if (toAdd.length === 0) return;
     const nextStates = [...current, ...toAdd];

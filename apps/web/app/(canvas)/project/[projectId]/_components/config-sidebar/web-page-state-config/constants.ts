@@ -74,7 +74,7 @@ export const COMPONENT_OPTIONS: ComponentOption[] = [
   {
     id: "input",
     label: "Input",
-    description: "Read-only styled form field display",
+    description: "Interactive form input with two-way binding & debounced updates",
     icon: Type,
     recommendedFor: ["string", "number"],
   },
@@ -135,7 +135,11 @@ export const isInputType = (val: string): val is NonNullable<ComponentPropMappin
   val === "email" ||
   val === "tel" ||
   val === "url" ||
-  val === "date";
+  val === "date" ||
+  val === "search";
+
+export const isOnChangeMode = (val: string): val is NonNullable<ComponentPropMappings["onChangeMode"]> =>
+  val === "two_way" || val === "action" || val === "custom";
 
 export const isButtonSize = (val: string): val is NonNullable<ComponentPropMappings["buttonSize"]> =>
   val === "default" || val === "sm" || val === "lg" || val === "icon";
