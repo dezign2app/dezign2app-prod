@@ -174,7 +174,8 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
   }, [stateObj]);
 
   // Formatted string for preview
-  const displayLabel = renderConfig.label || stateObj?.name || "State";
+  const customLabel = renderConfig.label?.trim() || "";
+  const displayLabel = customLabel || stateObj?.name || "State";
   const prefix = renderConfig.prefix || "";
   const suffix = renderConfig.suffix || "";
 
@@ -276,6 +277,7 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
             currentVariant={currentVariant}
             currentClickAction={currentClickAction}
             displayLabel={displayLabel}
+            customLabel={customLabel}
             formattedPreviewValue={formattedPreviewValue}
             sampleValue={sampleValue}
             propMappings={propMappings}
