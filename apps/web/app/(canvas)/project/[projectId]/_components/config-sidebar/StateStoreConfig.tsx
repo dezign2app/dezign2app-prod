@@ -10,7 +10,7 @@ import {
   TabsTrigger,
 } from "@workspace/ui/components/tabs";
 import { Database, Sliders, Zap, AlertCircle, AlertTriangle } from "lucide-react";
-import { GlobalStoreField, GlobalStoreAction, StateStoreTestCase } from "@workspace/canvas/types";
+import { GlobalStoreField, GlobalStoreAction, StateStoreTestCase, StoreActionType } from "@workspace/canvas/types";
 import { cn } from "@workspace/ui/lib/utils";
 import { toast } from "sonner";
 import {
@@ -123,16 +123,196 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
     });
   }, [node, fields, updateNode]);
 
-  const handleUpdateField = useCallback((fieldId: string, patch: Partial<GlobalStoreField>) => {
-    if (!node) return;
-    const updated = fields.map((f) => (f.id === fieldId ? { ...f, ...patch } : f));
-    updateNode(node.id, {
-      data: {
-        ...node.data,
-        fields: updated,
-      },
-    });
-  }, [node, fields, updateNode]);
+  const handleUpdateField = useCallback(
+    (fieldId: string, patch: Partial<GlobalStoreField>) => {
+      if (!node) return;
+      const oldField = fields.find((f) => f.id === fieldId);
+      let updatedActions = actions;
+
+      if (patch.name && oldField && patch.name.trim() !== oldField.name.trim()) {
+        const oldCap = oldField.name.charAt(0).toUpperCase() + oldField.name.slice(1);
+        const newCap = patch.name.trim().charAt(0).toUpperCase() + patch.name.trim().slice(1);
+        updatedActions = actions.map((a) => {
+          if (a.targetFieldId === fieldId) {
+            let updatedName = a.name;
+            if (a.name === `set${oldCap}`) updatedName = `set${newCap}`;
+            else if (a.name === `toggle${oldCap}`) updatedName = `toggle${newCap}`;
+            else if (a.name === `append${oldCap}`) updatedName = `append${newCap}`;
+            else if (a.name === `pop${oldCap}`) updatedName = `pop${newCap}`;
+            else if (a.name === `remove${oldCap}`) updatedName = `remove${newCap}`;
+            else if (a.name === `increment${oldCap}`) updatedName = `increment${newCap}`;
+            else if (a.name === `decrement${oldCap}`) updatedName = `decrement${newCap}`;
+            else if (a.name === `reset${oldCap}`) updatedName = `reset${newCap}`;
+            return {
+              ...a,
+              name: updatedName,
+              targetFieldName: patch.name?.trim(),
+            };
+          }
+          return a;
+        });
+      }
+
+      const updated = fields.map((f) => (f.id === fieldId ? { ...f, ...patch } : f));
+      updateNode(node.id, {
+        data: {
+          ...node.data,
+          fields: updated,
+          actions: updatedActions,
+        },
+      });
+    },
+    [node, fields, actions, updateNode],
+  );
+
+  const handleSelectFieldAction = useCallback(
+    (fieldId: string, actionType: StoreActionType | "none", selectedActionId?: string) => {
+      if (!node) return;
+      const targetField = fields.find((f) => f.id === fieldId);
+      if (!targetField) return;
+
+      const capitalized = targetField.name
+        ? targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1)
+        : "Field";
+
+      // If "none", remove any specific action tied to this field
+      if (actionType === "none") {
+        const filteredActions = actions.filter((a) => a.targetFieldId !== fieldId && a.id !== selectedActionId);
+        const handlesToRemove = [
+          `setter-in-left-${fieldId}`,
+          `setter-in-${fieldId}`,
+          `setter-out-${fieldId}`,
+          `append-in-left-${fieldId}`,
+          `append-in-${fieldId}`,
+          `append-out-${fieldId}`,
+          `pop-in-left-${fieldId}`,
+          `pop-in-${fieldId}`,
+          `pop-out-${fieldId}`,
+          `mutate-in-left-${fieldId}`,
+          `mutate-out-${fieldId}`,
+        ];
+        allEdges
+          .filter(
+            (e) =>
+              (e.source === node.id && handlesToRemove.includes(e.sourceHandle || "")) ||
+              (e.target === node.id && handlesToRemove.includes(e.targetHandle || "")),
+          )
+          .forEach((e) => deleteEdge(e.id));
+
+        updateNode(node.id, {
+          data: {
+            ...node.data,
+            actions: filteredActions,
+            fields: fields.map((f) =>
+              f.id === fieldId ? { ...f, actionType: "none", actionId: undefined } : f,
+            ),
+          },
+        });
+        toast.info(`Action disabled for "${targetField.name}"`);
+        return;
+      }
+
+      // Generate standard action name based on actionType
+      let actionName = `set${capitalized}`;
+      let description = `Sets ${targetField.name}`;
+      let manipulatorType: "setter" | "append" | "pop" | undefined = undefined;
+
+      if (actionType === "set") {
+        actionName = `set${capitalized}`;
+        description = `Sets ${targetField.name}`;
+        manipulatorType = "setter";
+      } else if (actionType === "toggle") {
+        actionName = `toggle${capitalized}`;
+        description = `Toggles ${targetField.name} boolean`;
+      } else if (actionType === "append") {
+        actionName = `append${capitalized}`;
+        description = `Appends item to ${targetField.name}`;
+        manipulatorType = "append";
+      } else if (actionType === "pop") {
+        actionName = `pop${capitalized}`;
+        description = `Removes last item from ${targetField.name}`;
+        manipulatorType = "pop";
+      } else if (actionType === "remove") {
+        actionName = `remove${capitalized}`;
+        description = `Removes item from ${targetField.name}`;
+      } else if (actionType === "increment") {
+        actionName = `increment${capitalized}`;
+        description = `Increments ${targetField.name}`;
+      } else if (actionType === "reset") {
+        actionName = `reset${capitalized}`;
+        description = `Resets ${targetField.name} to default`;
+      }
+
+      // Check if action already exists for this field or has selectedActionId
+      const existingActionIndex = actions.findIndex(
+        (a) => (selectedActionId && a.id === selectedActionId) || a.targetFieldId === fieldId,
+      );
+      const existingAction = existingActionIndex >= 0 ? actions[existingActionIndex] : undefined;
+
+      let updatedActions: GlobalStoreAction[];
+      let targetActionId: string;
+
+      if (existingAction) {
+        targetActionId = existingAction.id;
+        updatedActions = actions.map((a, idx) =>
+          idx === existingActionIndex
+            ? {
+                ...a,
+                name: actionName,
+                actionType,
+                targetFieldId: fieldId,
+                targetFieldName: targetField.name,
+                description,
+                defaultManipulatorType: manipulatorType,
+              }
+            : a,
+        );
+      } else {
+        targetActionId = `act-${Date.now()}`;
+        const newAction: GlobalStoreAction = {
+          id: targetActionId,
+          name: actionName,
+          actionType,
+          targetFieldId: fieldId,
+          targetFieldName: targetField.name,
+          description,
+          defaultManipulatorType: manipulatorType,
+        };
+        updatedActions = [...actions, newAction];
+      }
+
+      // Ensure this manipulator is not marked as disabled or deleted
+      const nextDisabled = (node.data?.disabledDefaultManipulators || []).filter(
+        (k: string) =>
+          k !== `setter-${fieldId}` &&
+          k !== `append-${fieldId}` &&
+          k !== `pop-${fieldId}` &&
+          k !== actionName,
+      );
+      const nextDeleted = (node.data?.deletedDefaultManipulators || []).filter(
+        (k: string) =>
+          k !== `setter-${fieldId}` &&
+          k !== `append-${fieldId}` &&
+          k !== `pop-${fieldId}` &&
+          k !== actionName,
+      );
+
+      updateNode(node.id, {
+        data: {
+          ...node.data,
+          actions: updatedActions,
+          disabledDefaultManipulators: nextDisabled,
+          deletedDefaultManipulators: nextDeleted,
+          fields: fields.map((f) =>
+            f.id === fieldId ? { ...f, actionType, actionId: targetActionId } : f,
+          ),
+        },
+      });
+
+      toast.success(`Selected action "${actionName}" for "${targetField.name}"`);
+    },
+    [node, fields, actions, allEdges, deleteEdge, updateNode],
+  );
 
   const handleRemoveField = useCallback((fieldId: string) => {
     if (!node) return;
@@ -912,9 +1092,11 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
 
           <StoreFieldsSection
             fields={fields}
+            actions={actions}
             onAddField={handleAddField}
             onUpdateField={handleUpdateField}
             onRemoveField={handleRemoveField}
+            onSelectFieldAction={handleSelectFieldAction}
           />
 
           <StoreDefaultManipulatorsSection

@@ -185,6 +185,79 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
     [handleUpdateRenderConfig, id, nodeId, sectionId],
   );
 
+  const handleOpenEventConfig = useCallback(
+    (actionId: string) => {
+      if (!actionId || !targetSection) return;
+      setActiveConfigItem({
+        type: "pageEvent",
+        id: actionId,
+        nodeId,
+        sectionId: targetSection.id,
+      });
+    },
+    [setActiveConfigItem, nodeId, targetSection],
+  );
+
+  const handleCreateAction = useCallback(
+    (actionName?: string, eventType: string = "click") => {
+      if (!parentNode || !targetSection) return;
+      const defaultName =
+        actionName ||
+        `on${stateObj?.name ? stateObj.name.charAt(0).toUpperCase() + stateObj.name.slice(1) : "Click"}Action`;
+      const newActionId = crypto.randomUUID();
+      const newAction: UIEventItem = {
+        id: newActionId,
+        name: defaultName,
+        event: eventType,
+      };
+
+      const updatedSections = (parentNode.data?.sections || []).map((sec: PageSection) => {
+        if (sec.id !== targetSection.id) return sec;
+        const currentActions = sec.actions || [];
+        return {
+          ...sec,
+          actions: [...currentActions, newAction],
+        };
+      });
+
+      updateNode(nodeId, {
+        data: {
+          ...parentNode.data,
+          sections: updatedSections,
+        },
+      });
+
+      if (eventType === "change") {
+        handleUpdatePropMapping({
+          onChangeMode: "action",
+          onChangeActionId: newActionId,
+        });
+      } else {
+        handleUpdateRenderConfig({
+          clickAction: "trigger_event",
+          targetActionId: newActionId,
+        });
+      }
+
+      setActiveConfigItem({
+        type: "pageEvent",
+        id: newActionId,
+        nodeId,
+        sectionId: targetSection.id,
+      });
+    },
+    [
+      parentNode,
+      targetSection,
+      stateObj?.name,
+      updateNode,
+      nodeId,
+      handleUpdatePropMapping,
+      handleUpdateRenderConfig,
+      setActiveConfigItem,
+    ],
+  );
+
   // Derive sample value for preview
   const sampleValue = useMemo(() => {
     if (!stateObj) return "Sample value";
@@ -200,10 +273,13 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
   }, [stateObj]);
 
   // Formatted string for preview
-  const customLabel = renderConfig.label?.trim() || "";
+  const customLabel =
+    renderConfig.labelMode === "store_var" && renderConfig.labelStoreVar
+      ? `${renderConfig.labelStoreName || "Store"}.${renderConfig.labelStoreVar}`
+      : renderConfig.label?.trim() || "";
   const displayLabel = customLabel || stateObj?.name || "State";
-  const prefix = renderConfig.prefix || "";
-  const suffix = renderConfig.suffix || "";
+  const prefix = propMappings.prefix ?? renderConfig.prefix ?? "";
+  const suffix = propMappings.suffix ?? renderConfig.suffix ?? "";
 
   const formattedPreviewValue = useMemo(() => {
     if (sampleValue === undefined || sampleValue === null) {
@@ -339,6 +415,8 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
             stateStoreNodes={stateStoreNodes}
             propMappings={propMappings}
             onUpdatePropMapping={handleUpdatePropMapping}
+            onOpenEventConfig={handleOpenEventConfig}
+            onCreateAction={(name, eventType) => handleCreateAction(name, eventType || "change")}
           />
 
           <Separator className="bg-border/50" />
@@ -346,13 +424,17 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
           {/* Label & Display Formatting */}
           <DisplayFormattingSection
             label={renderConfig.label || ""}
+            labelMode={renderConfig.labelMode}
+            labelStoreId={renderConfig.labelStoreId}
+            labelStoreName={renderConfig.labelStoreName}
+            labelStoreVar={renderConfig.labelStoreVar}
             stateName={stateObj.name}
             currentComponent={currentComponent}
             currentVariant={currentVariant}
             formatter={renderConfig.formatter || "none"}
             fallbackText={renderConfig.fallbackText || ""}
-            prefix={prefix}
-            suffix={suffix}
+            stateStoreNodes={stateStoreNodes}
+            boundStoreId={stateObj.storeId}
             onUpdateRenderConfig={handleUpdateRenderConfig}
           />
 
@@ -362,13 +444,25 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
           <ClickInteractivitySection
             currentClickAction={currentClickAction}
             copyToastMessage={renderConfig.copyToastMessage}
+            copySourceMode={renderConfig.copySourceMode}
+            copyStaticValue={renderConfig.copyStaticValue}
+            copyStoreId={renderConfig.copyStoreId}
+            copyStoreName={renderConfig.copyStoreName}
+            copyStoreVar={renderConfig.copyStoreVar}
             targetActionId={renderConfig.targetActionId}
             targetRoute={renderConfig.targetRoute}
+            targetStoreId={renderConfig.targetStoreId}
+            targetStoreActionId={renderConfig.targetStoreActionId}
+            targetStoreActionName={renderConfig.targetStoreActionName}
             stateName={stateObj.name}
             availableActions={availableActions}
             availablePages={availablePages}
+            stateStoreNodes={stateStoreNodes}
+            boundStoreId={stateObj.storeId}
             sectionName={targetSection?.name}
             onUpdateRenderConfig={handleUpdateRenderConfig}
+            onOpenEventConfig={handleOpenEventConfig}
+            onCreateAction={handleCreateAction}
           />
         </>
       )}

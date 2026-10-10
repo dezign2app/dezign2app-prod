@@ -183,7 +183,19 @@ export function generateSectionComponent(
     const pm = s.renderConfig?.propMappings;
     return [pm?.readOnlyStoreName, pm?.disabledStoreName].filter((n): n is string => Boolean(n));
   });
-  const uniqueStoreNames = Array.from(new Set([...actionStoreNames, ...stateStoreNames, ...guardStoreNames]));
+  const copyStoreNames = (section.stateObjects || []).flatMap((s) => {
+    const cfg = s.renderConfig;
+    return cfg?.clickAction === "copy_to_clipboard" && cfg.copySourceMode === "store_var" && cfg.copyStoreName
+      ? [cfg.copyStoreName]
+      : [];
+  });
+  const labelStoreNames = (section.stateObjects || []).flatMap((s) => {
+    const cfg = s.renderConfig;
+    return cfg?.labelMode === "store_var" && cfg.labelStoreName
+      ? [cfg.labelStoreName]
+      : [];
+  });
+  const uniqueStoreNames = Array.from(new Set([...actionStoreNames, ...stateStoreNames, ...guardStoreNames, ...copyStoreNames, ...labelStoreNames]));
 
   const storeImports = uniqueStoreNames
     .map((sName) => {
@@ -223,6 +235,34 @@ export function generateSectionComponent(
         guardHookCalls.push(`  const ${cleanVar} = ${hookName}((s) => s.${cleanVar});`);
       }
     }
+    const cfg = st.renderConfig;
+    if (
+      cfg?.clickAction === "copy_to_clipboard" &&
+      cfg.copySourceMode === "store_var" &&
+      cfg.copyStoreVar
+    ) {
+      const cleanVar = toCamelCase(cfg.copyStoreVar);
+      const storeName = cfg.copyStoreName || st.storeName;
+      if (storeName && !declaredVars.has(cleanVar)) {
+        declaredVars.add(cleanVar);
+        const cleanStore = storeName.replace(/Store$/i, "");
+        const hookName = `use${cleanStore.charAt(0).toUpperCase() + cleanStore.slice(1)}Store`;
+        guardHookCalls.push(`  const ${cleanVar} = ${hookName}((s) => s.${cfg.copyStoreVar});`);
+      }
+    }
+    if (
+      cfg?.labelMode === "store_var" &&
+      cfg.labelStoreVar
+    ) {
+      const cleanVar = toCamelCase(cfg.labelStoreVar);
+      const storeName = cfg.labelStoreName || st.storeName;
+      if (storeName && !declaredVars.has(cleanVar)) {
+        declaredVars.add(cleanVar);
+        const cleanStore = storeName.replace(/Store$/i, "");
+        const hookName = `use${cleanStore.charAt(0).toUpperCase() + cleanStore.slice(1)}Store`;
+        guardHookCalls.push(`  const ${cleanVar} = ${hookName}((s) => s.${cfg.labelStoreVar});`);
+      }
+    }
   });
 
   const declaredSetters = new Set<string>();
@@ -242,15 +282,25 @@ export function generateSectionComponent(
         props?.onChangeMode === "action");
 
     const setterName = props?.targetSetterName || `set${toPascalCase(st.name || "state")}`;
+    const clickStoreAction =
+      cfg?.clickAction === "dispatch_store_action" && cfg.targetStoreActionName
+        ? cfg.targetStoreActionName
+        : undefined;
 
     if (st.storeName) {
       const clean = st.storeName.replace(/Store$/i, "");
       const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
+      const lines: string[] = [`  const ${varName} = ${hookName}((s) => s.${st.name});`];
+
       if (isInteractiveInput && !declaredSetters.has(setterName)) {
         declaredSetters.add(setterName);
-        return `  const ${varName} = ${hookName}((s) => s.${st.name});\n  const ${setterName} = ${hookName}((s) => s.${setterName});`;
+        lines.push(`  const ${setterName} = ${hookName}((s) => s.${setterName});`);
       }
-      return `  const ${varName} = ${hookName}((s) => s.${st.name});`;
+      if (clickStoreAction && !declaredSetters.has(clickStoreAction)) {
+        declaredSetters.add(clickStoreAction);
+        lines.push(`  const ${clickStoreAction} = ${hookName}((s) => s.${clickStoreAction});`);
+      }
+      return lines.join("\n");
     }
 
     const tsType = mapStateTypeToTs(st.type || "string");
@@ -392,7 +442,22 @@ export default ${sectionCompName};
         .map((st) => {
           const varName = toCamelCase(st.name || "state");
           const cfg = st.renderConfig;
-          const label = cfg?.label || st.name;
+          const props = cfg?.propMappings;
+
+          const isStoreLabel = cfg?.labelMode === "store_var" && Boolean(cfg.labelStoreVar);
+          const labelVar = isStoreLabel ? toCamelCase(cfg!.labelStoreVar!) : "";
+          const staticLabel = cfg?.label || st.name;
+          const label = staticLabel;
+          const labelInline = isStoreLabel ? `{String(${labelVar})}: ` : `${staticLabel}: `;
+
+          const prefix = props?.prefix || cfg?.prefix || "";
+          const suffix = props?.suffix || cfg?.suffix || "";
+          const hasAffix = Boolean(prefix || suffix);
+          const rawValExpr = `typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})`;
+          const valExprWithAffix = hasAffix
+            ? `${prefix ? `"${prefix}" + ` : ""}(${rawValExpr})${suffix ? ` + "${suffix}"` : ""}`
+            : rawValExpr;
+
           const comp = cfg?.component;
           const variant = cfg?.variant || (comp === "badge" ? "secondary" : "default");
 
@@ -400,36 +465,55 @@ export default ${sectionCompName};
           if (cfg?.clickAction === "copy_to_clipboard") {
             needsToast = true;
             const toastMsg = cfg.copyToastMessage || `Copied ${st.name} to clipboard!`;
-            clickAttr = ` onClick={() => { navigator.clipboard?.writeText(typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})); toast.success("${toastMsg}"); }}`;
+            let copyExpr = `typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})`;
+            if (cfg.copySourceMode === "static") {
+              const staticVal = cfg.copyStaticValue ?? "";
+              copyExpr = JSON.stringify(staticVal);
+            } else if (cfg.copySourceMode === "store_var" && cfg.copyStoreVar) {
+              const cleanVar = toCamelCase(cfg.copyStoreVar);
+              copyExpr = `typeof ${cleanVar} === "object" ? JSON.stringify(${cleanVar}) : String(${cleanVar})`;
+            }
+            clickAttr = ` onClick={() => { navigator.clipboard?.writeText(${copyExpr}); toast.success("${toastMsg}"); }}`;
+          } else if (cfg?.clickAction === "dispatch_store_action" && cfg.targetStoreActionName) {
+            clickAttr = ` onClick={() => ${cfg.targetStoreActionName}()}`;
+          } else if (cfg?.clickAction === "trigger_event" && cfg.targetActionId) {
+            const act = (section.actions || []).find((a) => a.id === cfg.targetActionId);
+            const actName = act?.name || "action";
+            const actEvent = act?.event || "click";
+            const actUrl = ((act as Record<string, unknown>)?.url as string) || "";
+            const actMethod = ((act as Record<string, unknown>)?.method as string) || "POST";
+            clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", "${actUrl}", "${actMethod}")}`;
+          } else if (cfg?.clickAction === "navigate" && cfg.targetRoute) {
+            clickAttr = ` onClick={() => { window.location.href = "${cfg.targetRoute}"; }}`;
           }
-
-          const props = cfg?.propMappings;
 
           if (comp === "badge") {
             neededShadcnImports.add('import { Badge } from "@workspace/ui/components/badge";');
-            return `          <Badge key="${st.id}" variant="${variant}" className="text-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>{showDebugState && <span className="text-muted-foreground mr-1">${label}: </span>}{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</Badge>`;
+            return `          <Badge key="${st.id}" variant="${variant}" className="text-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>{showDebugState && <span className="text-muted-foreground mr-1">${labelInline}</span>}{${valExprWithAffix}}</Badge>`;
           }
           if (comp === "button") {
             neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
             const btnSize = props?.buttonSize || "sm";
             const disabledAttr = resolveDisabledAttr(props);
-            return `          <Button key="${st.id}" variant="${variant}" size="${btnSize}"${disabledAttr}${clickAttr}>{showDebugState && "${label}: "}{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</Button>`;
+            return `          <Button key="${st.id}" variant="${variant}" size="${btnSize}"${disabledAttr}${clickAttr}>{showDebugState && <>{${isStoreLabel ? `String(${labelVar})` : `"${staticLabel}"`}}: </>}{${valExprWithAffix}}</Button>`;
           }
           if (comp === "switch") {
             neededShadcnImports.add('import { Switch } from "@workspace/ui/components/switch";');
             const disabledAttr = resolveDisabledAttr(props);
-            return `          <div key="${st.id}" className="flex items-center gap-2 text-xs"><Switch checked={Boolean(${varName})}${disabledAttr} />{showDebugState && <span>${label}</span>}</div>`;
+            return `          <div key="${st.id}" className="flex items-center gap-2 text-xs"><Switch checked={Boolean(${varName})}${disabledAttr} />{showDebugState && <span>${labelInline}</span>}</div>`;
           }
           if (comp === "progress") {
             neededShadcnImports.add('import { Progress } from "@workspace/ui/components/progress";');
             const maxVal = props?.max || 100;
             const showPct = props?.showPercent !== false;
-            return `          <div key="${st.id}" className="flex flex-col gap-1 min-w-[120px] text-xs"><span>{showDebugState && "${label}"}{showPct ? (showDebugState ? \`: \${String(${varName})}%\` : \`\${String(${varName})}%\`) : ""}</span><Progress value={Number(${varName}) || 0} max={${maxVal}} /></div>`;
+            const progLabelExpr = isStoreLabel ? `{String(${labelVar})}` : `"${staticLabel}"`;
+            return `          <div key="${st.id}" className="flex flex-col gap-1 min-w-[120px] text-xs"><span>{showDebugState && ${progLabelExpr}}{showPct ? (showDebugState ? \`: \${String(${varName})}%\` : \`\${String(${varName})}%\`) : ""}</span><Progress value={Number(${varName}) || 0} max={${maxVal}} /></div>`;
           }
           if (comp === "alert") {
             neededShadcnImports.add('import { Alert, AlertDescription } from "@workspace/ui/components/alert";');
             const alertTitle = props?.alertTitle ? `<strong>${props.alertTitle}</strong> ` : "";
-            return `          <Alert key="${st.id}" className="py-2 px-3 text-xs"${clickAttr}><AlertDescription>${alertTitle}{showDebugState && <strong>${label}: </strong>}{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</AlertDescription></Alert>`;
+            const alertLabelExpr = isStoreLabel ? `{String(${labelVar})}` : `"${staticLabel}"`;
+            return `          <Alert key="${st.id}" className="py-2 px-3 text-xs"${clickAttr}><AlertDescription>${alertTitle}{showDebugState && <strong>{${alertLabelExpr}}: </strong>}{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</AlertDescription></Alert>`;
           }
           if (comp === "skeleton") {
             neededShadcnImports.add('import { Skeleton } from "@workspace/ui/components/skeleton";');
@@ -508,12 +592,12 @@ export default ${sectionCompName};
             return `          <Avatar key="${st.id}" className="h-8 w-8"><AvatarFallback>${fallbackText}</AvatarFallback></Avatar>`;
           }
           if (comp === "card") {
-            const cardTitle = props?.titleBinding || label;
+            const cardTitle = isStoreLabel ? `{String(${labelVar})}` : (props?.titleBinding || staticLabel);
             const cardDesc = props?.descriptionBinding ? `\n            <div className="text-[10px] text-muted-foreground">${props.descriptionBinding}</div>` : "";
-            return `          <div key="${st.id}" className="p-3 rounded-lg border bg-card text-card-foreground shadow-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>{showDebugState && <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">${cardTitle}</div>}${cardDesc}\n            <div className="text-sm font-bold mt-0.5 font-mono">{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</div>\n          </div>`;
+            return `          <div key="${st.id}" className="p-3 rounded-lg border bg-card text-card-foreground shadow-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>{showDebugState && <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">${cardTitle}</div>}${cardDesc}\n            <div className="text-sm font-bold mt-0.5 font-mono">{${valExprWithAffix}}</div>\n          </div>`;
           }
 
-          return `          <div key="${st.id}" className="text-xs px-2.5 py-1 rounded bg-secondary/50 border border-border text-foreground font-mono${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>{showDebugState && <span className="text-muted-foreground">${label}: </span>}{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</div>`;
+          return `          <div key="${st.id}" className="text-xs px-2.5 py-1 rounded bg-secondary/50 border border-border text-foreground font-mono${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>{showDebugState && <span className="text-muted-foreground">${labelInline}</span>}{${valExprWithAffix}}</div>`;
         })
         .join("\n")}\n        </div>`
     : "";

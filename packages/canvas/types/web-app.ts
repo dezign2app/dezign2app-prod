@@ -113,6 +113,8 @@ export interface GlobalStoreField {
   defaultValue?: JsonValue;
   description?: string;
   suggestedComponent?: StateRenderComponent;
+  actionId?: string;
+  actionType?: StoreActionType | "none";
 }
 
 export interface GlobalStoreAction {
