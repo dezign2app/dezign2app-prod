@@ -273,10 +273,13 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
   }, [stateObj]);
 
   // Formatted string for preview
-  const customLabel = renderConfig.label?.trim() || "";
+  const customLabel =
+    renderConfig.labelMode === "store_var" && renderConfig.labelStoreVar
+      ? `${renderConfig.labelStoreName || "Store"}.${renderConfig.labelStoreVar}`
+      : renderConfig.label?.trim() || "";
   const displayLabel = customLabel || stateObj?.name || "State";
-  const prefix = renderConfig.prefix || "";
-  const suffix = renderConfig.suffix || "";
+  const prefix = propMappings.prefix ?? renderConfig.prefix ?? "";
+  const suffix = propMappings.suffix ?? renderConfig.suffix ?? "";
 
   const formattedPreviewValue = useMemo(() => {
     if (sampleValue === undefined || sampleValue === null) {
@@ -421,13 +424,17 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
           {/* Label & Display Formatting */}
           <DisplayFormattingSection
             label={renderConfig.label || ""}
+            labelMode={renderConfig.labelMode}
+            labelStoreId={renderConfig.labelStoreId}
+            labelStoreName={renderConfig.labelStoreName}
+            labelStoreVar={renderConfig.labelStoreVar}
             stateName={stateObj.name}
             currentComponent={currentComponent}
             currentVariant={currentVariant}
             formatter={renderConfig.formatter || "none"}
             fallbackText={renderConfig.fallbackText || ""}
-            prefix={prefix}
-            suffix={suffix}
+            stateStoreNodes={stateStoreNodes}
+            boundStoreId={stateObj.storeId}
             onUpdateRenderConfig={handleUpdateRenderConfig}
           />
 

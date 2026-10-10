@@ -1071,7 +1071,66 @@ describe("compileNextjsV16SectionState", () => {
     expect(code).toContain('navigator.clipboard?.writeText(typeof sessionToken === "object" ? JSON.stringify(sessionToken) : String(sessionToken))');
     expect(code).toContain('toast.success("Token copied!")');
   });
+
+  it("supports mapping display label to store variables and renders prefix and suffix from propMappings", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-label-affix",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/pricing",
+        appSlug: "pricing-app",
+        sections: [
+          {
+            id: "sec-pricing",
+            name: "Pricing Section",
+            renderMode: "client",
+            actions: [],
+            stateObjects: [
+              {
+                id: "st-price",
+                name: "monthlyRate",
+                type: "number",
+                defaultValue: 99,
+                renderConfig: {
+                  enabled: true,
+                  component: "badge",
+                  labelMode: "store_var",
+                  labelStoreName: "BillingStore",
+                  labelStoreVar: "planName",
+                  propMappings: {
+                    prefix: "$",
+                    suffix: "/mo",
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const file = result.files.find((f) => f.filename.includes("PricingSection.tsx"));
+    expect(file).toBeDefined();
+    const code = file!.content;
+
+    // Must import BillingStore
+    expect(code).toContain('import { useBillingStore } from "@/lib/stores";');
+
+    // Must extract planName from BillingStore
+    expect(code).toContain("const planName = useBillingStore((s) => s.planName);");
+
+    // Must render label mapped to planName
+    expect(code).toContain("{String(planName)}:");
+
+    // Must render value with prefix "$" and suffix "/mo"
+    expect(code).toContain('"$" +');
+    expect(code).toContain('+ "/mo"');
+  });
 });
+
 
 
 

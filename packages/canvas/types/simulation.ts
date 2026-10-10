@@ -132,6 +132,10 @@ export interface ComponentPropMappings {
   skeletonWidth?: string;
   skeletonHeight?: string;
 
+  // Prefix & Suffix
+  prefix?: string;
+  suffix?: string;
+
   // Custom props
   customProps?: Record<string, string>;
 }
@@ -141,6 +145,10 @@ export interface StateRenderConfig {
   component?: StateRenderComponent;
   variant?: "default" | "secondary" | "outline" | "destructive";
   label?: string;
+  labelMode?: "static" | "store_var";
+  labelStoreId?: string;
+  labelStoreName?: string;
+  labelStoreVar?: string;
   prefix?: string;
   suffix?: string;
   fallbackText?: string;
