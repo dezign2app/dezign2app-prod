@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BackendNode } from "@/types/canvas";
+import { BackendEdge, BackendNode } from "@/types/canvas";
 import { compileNextjsV16WebClient } from "../webClients/nextjs/v16";
 
 describe("compileNextjsV16SectionState", () => {
@@ -416,6 +416,184 @@ describe("compileNextjsV16SectionState", () => {
     expect(code).toContain('size="lg" disabled');
     expect(code).toContain('<AvatarImage src="https://example.com/pic.jpg" alt="avatarUrl" />');
     expect(code).toContain('<AvatarFallback>JD</AvatarFallback>');
+  });
+
+  it("guards stateObjects with showDebugState and NEXT_PUBLIC_ENABLE_DEBUG_STATE to preserve clean layout", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-debug-toggle",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/admin",
+        appSlug: "admin-app",
+        sections: [
+          {
+            id: "sec-with-actions",
+            name: "Orders Section",
+            renderMode: "client",
+            actions: [
+              {
+                id: "act-refresh",
+                name: "Refresh",
+                event: "click",
+              },
+            ],
+            stateObjects: [
+              {
+                id: "st-order-count",
+                name: "orderCount",
+                type: "number",
+                defaultValue: 42,
+              },
+            ],
+          },
+          {
+            id: "sec-without-actions",
+            name: "Metrics Only Section",
+            renderMode: "client",
+            actions: [],
+            stateObjects: [
+              {
+                id: "st-revenue",
+                name: "revenue",
+                type: "number",
+                defaultValue: 1000,
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+
+    // 1. Verify OrdersSection has showDebugState setup, imports useState, and guards the label prefix while always rendering the value
+    const ordersSecFile = result.files.find((f) => f.filename.includes("OrdersSection.tsx"));
+    expect(ordersSecFile).toBeDefined();
+    const ordersCode = ordersSecFile!.content;
+
+    expect(ordersCode).toContain('import React, { useState } from "react";');
+    expect(ordersCode).toContain("const showDebugState =");
+    expect(ordersCode).toContain("process.env.NEXT_PUBLIC_ENABLE_DEBUG_STATE?.trim().toLowerCase() === \"true\"");
+    expect(ordersCode).toContain("process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI?.trim().toLowerCase() === \"true\"");
+    expect(ordersCode).toContain('{showDebugState && <span className="text-muted-foreground">orderCount: </span>}');
+    expect(ordersCode).toContain('String(orderCount)');
+    expect(ordersCode).toContain("<CardContent>");
+    expect(ordersCode).toContain("<RefreshAction");
+
+    // 2. Verify MetricsOnlySection renders state values in CardContent and guards variable name prefix
+    const metricsSecFile = result.files.find((f) => f.filename.includes("MetricsOnlySection.tsx"));
+    expect(metricsSecFile).toBeDefined();
+    const metricsCode = metricsSecFile!.content;
+
+    expect(metricsCode).toContain("const showDebugState =");
+    expect(metricsCode).toContain('{showDebugState && <span className="text-muted-foreground">revenue: </span>}');
+    expect(metricsCode).toContain('String(revenue)');
+    expect(metricsCode).toContain("<CardContent>");
+
+    // 3. Verify .env and .env.example contain debug toggles
+    const envFile = result.files.find((f) => f.filename === ".env");
+    expect(envFile).toBeDefined();
+    expect(envFile!.content).toContain("NEXT_PUBLIC_ENABLE_DEBUG_LOGS=false");
+    expect(envFile!.content).toContain("NEXT_PUBLIC_ENABLE_DEBUG_STATE=false");
+
+    const envExFile = result.files.find((f) => f.filename === ".env.example");
+    expect(envExFile).toBeDefined();
+    expect(envExFile!.content).toContain("NEXT_PUBLIC_ENABLE_DEBUG_LOGS=");
+    expect(envExFile!.content).toContain("NEXT_PUBLIC_ENABLE_DEBUG_STATE=");
+  });
+
+  it("guards Output Log with showDebugLogs and NEXT_PUBLIC_ENABLE_DEBUG_LOGS in page files", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-logs-guard",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/api-tester",
+        appSlug: "test-app",
+        sections: [
+          {
+            id: "sec-trigger",
+            name: "Trigger Section",
+            actions: [
+              {
+                id: "act-run",
+                name: "Run Test",
+                event: "click",
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-service-test",
+      type: "service",
+      position: { x: 300, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "TesterService",
+        port: "8000",
+      },
+    };
+
+    const endpoints = [
+      {
+        id: "ep-test",
+        nodeId: "node-service-test",
+        name: "/api/test",
+        type: "POST" as const,
+      },
+    ];
+
+    const edges: BackendEdge[] = [
+      {
+        id: "edge-act-to-ep",
+        source: "node-page-logs-guard",
+        target: "node-service-test",
+        sourceHandle: "events-act-run",
+        targetHandle: "endpoint-in-ep-test",
+        type: "connection",
+        fractionalIndex: "a0",
+      },
+    ];
+
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      endpoints,
+      [],
+      [webPageNode, serviceNode],
+      edges,
+    );
+    const pageFile = result.files.find((f) => f.filename.endsWith("page.tsx"));
+    expect(pageFile).toBeDefined();
+    const pageCode = pageFile!.content;
+
+    expect(pageCode).toContain("const showDebugLogs =");
+    expect(pageCode).toContain("process.env.NEXT_PUBLIC_ENABLE_DEBUG_LOGS?.trim().toLowerCase() === \"true\"");
+    expect(pageCode).toContain("process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI?.trim().toLowerCase() === \"true\"");
+    expect(pageCode).toContain("{showDebugLogs && (");
+    expect(pageCode).toContain("Output Log");
+  });
+
+  it("evaluates debug env toggles case-insensitively for TRUE, true, TRue, and trims whitespace", () => {
+    const isTruthy = (val: string | undefined) => val?.trim().toLowerCase() === "true";
+
+    expect(isTruthy("true")).toBe(true);
+    expect(isTruthy("TRUE")).toBe(true);
+    expect(isTruthy("TRue")).toBe(true);
+    expect(isTruthy("TrUe")).toBe(true);
+    expect(isTruthy(" True ")).toBe(true);
+
+    expect(isTruthy(" Tru ")).toBe(false);
+    expect(isTruthy("false")).toBe(false);
+    expect(isTruthy("FALSE")).toBe(false);
+    expect(isTruthy("")).toBe(false);
+    expect(isTruthy(undefined)).toBe(false);
+    expect(isTruthy("0")).toBe(false);
   });
 });
 

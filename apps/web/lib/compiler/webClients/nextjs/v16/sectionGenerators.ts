@@ -114,6 +114,10 @@ export function generateSectionComponent(
   const { libraryImports, requiresClient: libRequiresClient } = resolveLibraryImports(section.libraries);
   const hasStates = Array.isArray(section.states) && section.states.length > 0;
   const hasStateObjects = Array.isArray(section.stateObjects) && section.stateObjects.length > 0;
+  const renderedStateObjects = (section.stateObjects || []).filter(
+    (st) => st.renderConfig?.enabled !== false,
+  );
+  const hasRenderedStateObjects = renderedStateObjects.length > 0;
 
   const boundStores = (section.actions || [])
     .flatMap((a) => a.storeActionBindings || (a.storeActionBinding ? [a.storeActionBinding] : []))
@@ -171,7 +175,11 @@ export function generateSectionComponent(
     !hasStateObjects &&
     !hasStoreBindings;
 
-  const reactImport = hasStates
+  const needsUseState =
+    hasStates ||
+    (section.stateObjects || []).some((st) => !st.storeName);
+
+  const reactImport = needsUseState
     ? `import React, { useState } from "react";`
     : `import React from "react";`;
 
@@ -188,7 +196,14 @@ export function generateSectionComponent(
         .join("\n")
     : "";
 
+  const debugStateSetup = hasRenderedStateObjects
+    ? `  const showDebugState =
+    process.env.NEXT_PUBLIC_ENABLE_DEBUG_STATE?.trim().toLowerCase() === "true" ||
+    process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI?.trim().toLowerCase() === "true";`
+    : "";
+
   const combinedSetupLines = [
+    debugStateSetup,
     stateDeclarations,
     ...stateObjectHookCalls,
     ...actionStoreHookCalls,
@@ -227,16 +242,11 @@ export default ${sectionCompName};
     ? `\n        <CardDescription className="text-xs text-muted-foreground">${section.description}</CardDescription>`
     : "";
 
-  const renderedStateObjects = (section.stateObjects || []).filter(
-    (st) => st.renderConfig?.enabled !== false,
-  );
-  const hasRenderedStateObjects = renderedStateObjects.length > 0;
-
   const neededShadcnImports = new Set<string>();
   let needsToast = false;
 
   const stateObjectsJsx = hasRenderedStateObjects
-    ? `\n        <div className="flex flex-wrap gap-2 mb-3">\n${renderedStateObjects
+    ? `\n        <div className="flex flex-wrap gap-2${hasActions ? " mb-3" : ""}">\n${renderedStateObjects
         .map((st) => {
           const varName = toCamelCase(st.name || "state");
           const cfg = st.renderConfig;
@@ -255,29 +265,29 @@ export default ${sectionCompName};
 
           if (comp === "badge") {
             neededShadcnImports.add('import { Badge } from "@workspace/ui/components/badge";');
-            return `          <Badge key="${st.id}" variant="${variant}" className="text-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}><span className="text-muted-foreground mr-1">${label}: </span>{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</Badge>`;
+            return `          <Badge key="${st.id}" variant="${variant}" className="text-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>{showDebugState && <span className="text-muted-foreground mr-1">${label}: </span>}{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</Badge>`;
           }
           if (comp === "button") {
             neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
             const btnSize = props?.buttonSize || "sm";
             const disabledAttr = props?.disabled ? " disabled" : "";
-            return `          <Button key="${st.id}" variant="${variant}" size="${btnSize}"${disabledAttr}${clickAttr}>${label}: {typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</Button>`;
+            return `          <Button key="${st.id}" variant="${variant}" size="${btnSize}"${disabledAttr}${clickAttr}>{showDebugState && "${label}: "}{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</Button>`;
           }
           if (comp === "switch") {
             neededShadcnImports.add('import { Switch } from "@workspace/ui/components/switch";');
             const disabledAttr = props?.disabled ? " disabled" : "";
-            return `          <div key="${st.id}" className="flex items-center gap-2 text-xs"><Switch checked={Boolean(${varName})}${disabledAttr} /><span>${label}</span></div>`;
+            return `          <div key="${st.id}" className="flex items-center gap-2 text-xs"><Switch checked={Boolean(${varName})}${disabledAttr} />{showDebugState && <span>${label}</span>}</div>`;
           }
           if (comp === "progress") {
             neededShadcnImports.add('import { Progress } from "@workspace/ui/components/progress";');
             const maxVal = props?.max || 100;
             const showPct = props?.showPercent !== false;
-            return `          <div key="${st.id}" className="flex flex-col gap-1 min-w-[120px] text-xs"><span>${label}${showPct ? `: {String(${varName})}%` : ""}</span><Progress value={Number(${varName}) || 0} max={${maxVal}} /></div>`;
+            return `          <div key="${st.id}" className="flex flex-col gap-1 min-w-[120px] text-xs"><span>{showDebugState && "${label}"}{showPct ? (showDebugState ? \`: \${String(${varName})}%\` : \`\${String(${varName})}%\`) : ""}</span><Progress value={Number(${varName}) || 0} max={${maxVal}} /></div>`;
           }
           if (comp === "alert") {
             neededShadcnImports.add('import { Alert, AlertDescription } from "@workspace/ui/components/alert";');
             const alertTitle = props?.alertTitle ? `<strong>${props.alertTitle}</strong> ` : "";
-            return `          <Alert key="${st.id}" className="py-2 px-3 text-xs"${clickAttr}><AlertDescription>${alertTitle}<strong>${label}: </strong>{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</AlertDescription></Alert>`;
+            return `          <Alert key="${st.id}" className="py-2 px-3 text-xs"${clickAttr}><AlertDescription>${alertTitle}{showDebugState && <strong>${label}: </strong>}{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</AlertDescription></Alert>`;
           }
           if (comp === "skeleton") {
             neededShadcnImports.add('import { Skeleton } from "@workspace/ui/components/skeleton";');
@@ -306,10 +316,10 @@ export default ${sectionCompName};
           if (comp === "card") {
             const cardTitle = props?.titleBinding || label;
             const cardDesc = props?.descriptionBinding ? `\n            <div className="text-[10px] text-muted-foreground">${props.descriptionBinding}</div>` : "";
-            return `          <div key="${st.id}" className="p-3 rounded-lg border bg-card text-card-foreground shadow-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}><div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">${cardTitle}</div>${cardDesc}\n            <div className="text-sm font-bold mt-0.5 font-mono">{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</div>\n          </div>`;
+            return `          <div key="${st.id}" className="p-3 rounded-lg border bg-card text-card-foreground shadow-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>{showDebugState && <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">${cardTitle}</div>}${cardDesc}\n            <div className="text-sm font-bold mt-0.5 font-mono">{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</div>\n          </div>`;
           }
 
-          return `          <div key="${st.id}" className="text-xs px-2.5 py-1 rounded bg-secondary/50 border border-border text-foreground font-mono${clickAttr ? " cursor-pointer" : ""}"${clickAttr}><span className="text-muted-foreground">${label}: </span>{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</div>`;
+          return `          <div key="${st.id}" className="text-xs px-2.5 py-1 rounded bg-secondary/50 border border-border text-foreground font-mono${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>{showDebugState && <span className="text-muted-foreground">${label}: </span>}{typeof ${varName} === "object" ? JSON.stringify(${varName}) : String(${varName})}</div>`;
         })
         .join("\n")}\n        </div>`
     : "";
@@ -317,11 +327,18 @@ export default ${sectionCompName};
   const extraComponentImports = Array.from(neededShadcnImports).join("\n");
   const toastImport = needsToast ? `import { toast } from "sonner";\n` : "";
 
-  const contentJsx = (hasActions || hasRenderedStateObjects)
-    ? `\n      <CardContent>${stateObjectsJsx}${hasActions ? `\n        <div className="flex flex-wrap gap-3">\n${eventComponents
-        .map((c) => `          <${c.componentName} onTrigger={onTrigger} />`)
-        .join("\n")}\n        </div>` : ""}\n      </CardContent>`
-    : "";
+  let contentJsx = "";
+  if (hasActions && hasRenderedStateObjects) {
+    contentJsx = `\n      <CardContent>${stateObjectsJsx}\n        <div className="flex flex-wrap gap-3">\n${eventComponents
+      .map((c) => `          <${c.componentName} onTrigger={onTrigger} />`)
+      .join("\n")}\n        </div>\n      </CardContent>`;
+  } else if (hasRenderedStateObjects) {
+    contentJsx = `\n      <CardContent>${stateObjectsJsx}\n      </CardContent>`;
+  } else if (hasActions) {
+    contentJsx = `\n      <CardContent>\n        <div className="flex flex-wrap gap-3">\n${eventComponents
+      .map((c) => `          <${c.componentName} onTrigger={onTrigger} />`)
+      .join("\n")}\n        </div>\n      </CardContent>`;
+  }
 
   return `${isClient ? `"use client";\n\n` : ""}${reactImport}
 import { Card, CardHeader, CardTitle${section.description ? ", CardDescription" : ""}${hasActions || hasRenderedStateObjects ? ", CardContent" : ""} } from "@workspace/ui/components/card";

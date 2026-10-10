@@ -170,6 +170,8 @@ export function getDefaultNodeEnvVars(
     return [
       { id: "app-port", name: "PORT", description: `Web app port (default: ${nodeData?.port || 3000})` },
       { id: "app-url", name: "NEXT_PUBLIC_APP_URL", description: "Canonical public app URL" },
+      { id: "app-debug-logs", name: "NEXT_PUBLIC_ENABLE_DEBUG_LOGS", description: "Enable/disable output logs on web pages (default: false)" },
+      { id: "app-debug-state", name: "NEXT_PUBLIC_ENABLE_DEBUG_STATE", description: "Enable/disable state variables preview on web pages (default: false)" },
     ];
   }
 
