@@ -27,6 +27,7 @@ export interface StateComponentPreviewProps {
   currentVariant: NonNullable<StateRenderConfig["variant"]>;
   currentClickAction: NonNullable<StateRenderConfig["clickAction"]>;
   displayLabel: string;
+  customLabel?: string;
   formattedPreviewValue: string;
   sampleValue: JSONValue | undefined;
   propMappings: ComponentPropMappings;
@@ -40,6 +41,7 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
   currentVariant,
   currentClickAction,
   displayLabel,
+  customLabel,
   formattedPreviewValue,
   sampleValue,
   propMappings,
@@ -47,6 +49,8 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
   copyToastMessage,
   targetActionId,
 }) => {
+  const labelToRender = customLabel?.trim() || "";
+
   return (
     <Card className="border-cyan-500/30 bg-cyan-500/[0.02] shadow-xs overflow-hidden">
       <CardHeader className="p-3.5 pb-2 border-b border-border/40 bg-muted/20">
@@ -78,7 +82,7 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
               }
             }}
           >
-            <span className="font-semibold mr-1">{displayLabel}:</span>
+            {labelToRender && <span className="font-semibold mr-1">{labelToRender}:</span>}
             <span>{formattedPreviewValue}</span>
           </Badge>
         )}
@@ -90,9 +94,11 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
               currentClickAction !== "none" && "cursor-pointer hover:border-cyan-500/60 shadow-sm",
             )}
           >
-            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              {propMappings.titleBinding || displayLabel}
-            </div>
+            {(propMappings.titleBinding || labelToRender) && (
+              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                {propMappings.titleBinding || labelToRender}
+              </div>
+            )}
             {propMappings.descriptionBinding && (
               <div className="text-[10px] text-muted-foreground/80 mt-0.5">
                 {propMappings.descriptionBinding}
@@ -119,7 +125,7 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
               }
             }}
           >
-            <span>{displayLabel}:</span>
+            {labelToRender && <span>{labelToRender}:</span>}
             <span className="font-mono">{formattedPreviewValue}</span>
           </Button>
         )}
@@ -192,7 +198,7 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
               {propMappings.alertTitle && (
                 <div className="font-semibold text-foreground mb-0.5">{propMappings.alertTitle}</div>
               )}
-              <strong className="mr-1">{displayLabel}:</strong>
+              {labelToRender && <strong className="mr-1">{labelToRender}:</strong>}
               <span>{formattedPreviewValue}</span>
             </AlertDescription>
           </Alert>
@@ -204,7 +210,7 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
               {propMappings.avatarSrc ? (
                 <img
                   src={propMappings.avatarSrc}
-                  alt={displayLabel}
+                  alt={labelToRender || displayLabel}
                   className="h-full w-full object-cover rounded-full"
                   onError={(e) => {
                     e.currentTarget.style.display = "none";
@@ -212,11 +218,11 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
                 />
               ) : null}
               <AvatarFallback className="bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 font-bold text-xs">
-                {propMappings.avatarFallback || (displayLabel ? displayLabel.slice(0, 2).toUpperCase() : "AV")}
+                {propMappings.avatarFallback || (labelToRender ? labelToRender.slice(0, 2).toUpperCase() : (displayLabel ? displayLabel.slice(0, 2).toUpperCase() : "AV"))}
               </AvatarFallback>
             </Avatar>
             <div className="flex flex-col">
-              <span className="text-xs font-semibold">{displayLabel}</span>
+              {labelToRender && <span className="text-xs font-semibold">{labelToRender}</span>}
               <span className="text-[10px] text-muted-foreground font-mono">{formattedPreviewValue}</span>
             </div>
           </div>
@@ -225,7 +231,7 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
         {currentComponent === "skeleton" && (
           <div className="flex items-center gap-3">
             <Skeleton className={cn(propMappings.skeletonHeight || "h-7", propMappings.skeletonWidth || "w-28", "rounded-md")} />
-            <span className="text-xs text-muted-foreground font-mono">({displayLabel} loading...)</span>
+            <span className="text-xs text-muted-foreground font-mono">({labelToRender || "State"} loading...)</span>
           </div>
         )}
 
@@ -233,13 +239,15 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
           <pre className="text-[11px] font-mono p-3 rounded-lg bg-muted/50 border border-border/60 max-w-sm w-full overflow-x-auto text-foreground">
             {typeof sampleValue === "object"
               ? JSON.stringify(sampleValue, null, 2)
-              : `${displayLabel}: ${formattedPreviewValue}`}
+              : labelToRender
+              ? `${labelToRender}: ${formattedPreviewValue}`
+              : formattedPreviewValue}
           </pre>
         )}
 
         {currentComponent === "text" && (
           <div className="text-xs px-2.5 py-1.5 rounded-md bg-secondary/50 border border-border text-foreground font-mono">
-            <span className="text-muted-foreground">{displayLabel}: </span>
+            {labelToRender && <span className="text-muted-foreground">{labelToRender}: </span>}
             <span>{formattedPreviewValue}</span>
           </div>
         )}
