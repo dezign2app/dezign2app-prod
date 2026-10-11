@@ -31,7 +31,9 @@ import {
   ComponentBindingType,
   BackendNode,
   UIEventItem,
+  JSONValue,
 } from "@workspace/canvas";
+import { ComponentBindingLivePreview } from "./web-page-component-config/ComponentBindingLivePreview";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -240,6 +242,11 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
 
   const selectedCompType = COMPONENT_TYPES.find((c) => c.id === componentBinding.componentType) || COMPONENT_TYPES[0]!;
 
+  const boundStateObj = targetSection?.stateObjects?.find(
+    (s) => s.name === componentBinding?.valueStateName,
+  );
+  const sampleValue: JSONValue | undefined = boundStateObj?.defaultValue;
+
   return (
     <div className="flex flex-col gap-5 font-sans text-foreground pb-12">
       {/* 1. Breadcrumbs & Header Banner */}
@@ -295,82 +302,27 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
       </div>
 
       {/* 2. Live Interactive Component Preview */}
-      <Card className="border-border/60 shadow-xs">
-        <CardHeader className="p-4 pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
-              <Eye size={13} className="text-primary" />
-              <span>Live Component Preview</span>
-            </CardTitle>
-            <Badge variant="secondary" className="text-[9px] font-mono">
-              Interactive
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="p-4 pt-1">
-          <div className="p-6 rounded-lg bg-muted/25 border border-border/40 flex flex-col items-center justify-center gap-2">
-            {componentBinding.componentType === "button" ? (
-              <Button
-                variant={
-                  componentBinding.variant === "secondary"
-                    ? "secondary"
-                    : componentBinding.variant === "outline"
-                    ? "outline"
-                    : componentBinding.variant === "destructive"
-                    ? "destructive"
-                    : "default"
-                }
-                size="sm"
-                onClick={() => {
-                  if (componentBinding.actionId) {
-                    toast.success(`Simulated trigger: ${componentBinding.actionName || "Action"}`);
-                  } else {
-                    toast.info(`Button clicked: "${componentBinding.label || "Button"}"`);
-                  }
-                }}
-                className="cursor-pointer shadow-xs gap-1.5"
-              >
-                <MousePointerClick size={12} />
-                <span>{componentBinding.label || "Click Me"}</span>
-              </Button>
-            ) : componentBinding.componentType === "input" ? (
-              <div className="flex flex-col gap-1 w-full max-w-xs">
-                <Label className="text-[10px] text-muted-foreground font-mono">
-                  {componentBinding.label || "Input Label"}
-                </Label>
-                <Input
-                  placeholder={componentBinding.label || "Type here..."}
-                  className="h-8 text-xs bg-background"
-                  readOnly
-                />
-              </div>
-            ) : componentBinding.componentType === "card" ? (
-              <div className="p-3.5 rounded-lg border bg-card text-card-foreground shadow-xs w-full max-w-xs">
-                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  {componentBinding.label || "Data Card"}
-                </div>
-                <div className="text-sm font-bold font-mono mt-1 text-foreground">
-                  {componentBinding.valueStateName ? `{${componentBinding.valueStateName}}` : "Sample Value"}
-                </div>
-              </div>
-            ) : (
-              <Badge variant="outline" className="text-xs py-1 px-3">
-                {componentBinding.label || componentBinding.name}
-              </Badge>
-            )}
-
-            <div className="text-[10px] text-muted-foreground font-mono mt-1">
-              {componentBinding.actionId ? (
-                <span className="text-amber-500 font-medium">
-                  Triggers &quot;{componentBinding.actionName || "action"}&quot; on {componentBinding.triggerEvent || "click"}
-                </span>
-              ) : (
-                <span className="italic">No action connected yet</span>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <ComponentBindingLivePreview
+        componentType={componentBinding.componentType}
+        variant={componentBinding.variant}
+        label={componentBinding.label}
+        name={componentBinding.name}
+        valueStateName={componentBinding.valueStateName}
+        valueStoreName={componentBinding.valueStoreName}
+        sampleValue={sampleValue}
+        disabledStateName={componentBinding.disabledStateName}
+        loadingStateName={componentBinding.loadingStateName}
+        actionId={componentBinding.actionId}
+        actionName={componentBinding.actionName}
+        triggerEvent={componentBinding.triggerEvent}
+        onSimulateAction={() => {
+          if (componentBinding.actionId) {
+            handleOpenActionFlow(componentBinding.actionId);
+          } else {
+            toast.info(`Clicked: "${componentBinding.label || componentBinding.name}"`);
+          }
+        }}
+      />
 
       {/* 3. Component Definition Settings */}
       <Card className="border-border/60 shadow-xs">
