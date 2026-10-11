@@ -36,7 +36,7 @@ export interface StateComponentPreviewProps {
   targetActionId?: string;
 }
 
-export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
+export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React.memo(({
   currentComponent,
   currentVariant,
   currentClickAction,
@@ -422,4 +422,5 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
       </CardContent>
     </Card>
   );
-};
+});
+StateComponentPreview.displayName = "StateComponentPreview";

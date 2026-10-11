@@ -52,7 +52,7 @@ export interface ComponentPropMappingsSectionProps {
   onCreateAction?: (name?: string, eventType?: string) => void;
 }
 
-export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSectionProps> = ({
+export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSectionProps> = React.memo(({
   currentComponent,
   selectedOption,
   displayLabel,
@@ -1285,4 +1285,5 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
       )}
     </div>
   );
-};
+});
+ComponentPropMappingsSection.displayName = "ComponentPropMappingsSection";
