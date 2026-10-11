@@ -12,6 +12,7 @@ import {
   Plus,
   Trash2,
   AlertCircle,
+  Tag,
 } from "lucide-react";
 import {
   PageSection,
@@ -32,6 +33,7 @@ import {
   ComponentOption,
 } from "./web-page-state-config";
 import { Button } from "@workspace/ui/components/button";
+import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card";
@@ -425,7 +427,69 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         </Badge>
       </div>
 
-      {/* 2. Live Component Preview Sandbox */}
+      {/* 2. Component Identity & Naming */}
+      <Card className="border-border/60 shadow-xs">
+        <CardHeader className="p-3 pb-2">
+          <CardTitle className="text-xs font-semibold flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-foreground">
+              <Tag size={13} className="text-purple-500" />
+              <span>Component Identity &amp; Naming</span>
+            </div>
+            <span className="text-[10px] font-mono text-muted-foreground">ID: {componentBinding.id}</span>
+          </CardTitle>
+          <CardDescription className="text-[11px] text-muted-foreground">
+            Configure the component identifier and visible display text.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-3 pt-0 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
+                <span>Component Name</span>
+                <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                value={componentBinding.name || ""}
+                onChange={(e) => handleUpdate({ name: e.target.value })}
+                placeholder="e.g. Submit Button"
+                className="h-8 text-xs font-mono"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Internal name shown in canvas graph
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-medium text-foreground">
+                Display Label / Text
+              </Label>
+              <Input
+                value={componentBinding.label ?? ""}
+                onChange={(e) => handleUpdate({ label: e.target.value })}
+                placeholder="e.g. Submit, Search, Details"
+                className="h-8 text-xs font-mono"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Visible text rendered on component
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-[11px] font-medium text-muted-foreground">
+              Description / Notes (Optional)
+            </Label>
+            <Input
+              value={componentBinding.description ?? ""}
+              onChange={(e) => handleUpdate({ description: e.target.value })}
+              placeholder="e.g. Primary call-to-action button for the section..."
+              className="h-7 text-xs"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 3. Live Component Preview Sandbox */}
       <StateComponentPreview
         currentComponent={currentRenderComponent}
         currentVariant={toValidVariant(componentBinding.variant)}
