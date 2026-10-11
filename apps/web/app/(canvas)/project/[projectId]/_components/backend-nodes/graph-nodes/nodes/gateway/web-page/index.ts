@@ -5,3 +5,4 @@ export * from "./RealtimeConnectionList";
 export * from "./useZoneHandLayout";
 export * from "./PageStateObjectsList";
 export * from "./SectionStateObjectsList";
+export * from "./SectionComponentBindingsList";

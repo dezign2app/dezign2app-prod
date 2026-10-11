@@ -1,0 +1,633 @@
+"use client";
+
+import React, { useState, useMemo } from "react";
+import {
+  Play,
+  CheckCircle2,
+  AlertCircle,
+  Database,
+  RefreshCw,
+  Zap,
+  Globe,
+  Bell,
+  Navigation,
+  Upload,
+  Sliders,
+  ChevronDown,
+  ChevronRight,
+  Sparkles,
+} from "lucide-react";
+import { Button } from "@workspace/ui/components/button";
+import { Input } from "@workspace/ui/components/input";
+import { Label } from "@workspace/ui/components/label";
+import { Badge } from "@workspace/ui/components/badge";
+import { Card } from "@workspace/ui/components/card";
+import { toast } from "sonner";
+import { cn } from "@workspace/ui/lib/utils";
+import type { BackendNode, Endpoint, UIEventItem, JSONValue, JSONObject, FrontendFieldSource } from "@workspace/canvas";
+import type { FrontendActionStepDraft } from "./types";
+import type { ActionStepItem } from "../TargetEndpointSection";
+
+export interface ActionSimulatorProps {
+  item: UIEventItem;
+  steps: FrontendActionStepDraft[];
+  canvasSteps?: ActionStepItem[];
+  allNodes: BackendNode[];
+  endpoints: (Endpoint & { nodeId: string })[];
+  webPageNodeId?: string;
+  actionId?: string;
+}
+
+interface SimulatedStepLog {
+  stepIndex: number;
+  stepId: string;
+  type: string;
+  name: string;
+  status: "success" | "skipped" | "failed";
+  details?: {
+    request?: {
+      method: string;
+      url: string;
+      headers: Record<string, string>;
+      body?: JSONValue;
+      params?: Record<string, string>;
+    };
+    response?: {
+      status: number;
+      data: JSONValue;
+    };
+    mutation?: {
+      targetStore?: string;
+      field: string;
+      prevValue?: JSONValue;
+      nextValue?: JSONValue;
+    };
+    notification?: {
+      level: string;
+      message: string;
+    };
+    navigation?: {
+      targetRoute: string;
+    };
+  };
+}
+
+export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
+  item,
+  steps = [],
+  canvasSteps = [],
+  allNodes = [],
+  endpoints = [],
+  webPageNodeId = "",
+}) => {
+  const currentPageNode = useMemo(
+    () => allNodes.find((n) => n.id === webPageNodeId),
+    [allNodes, webPageNodeId],
+  );
+
+  const stateStores = useMemo(
+    () => allNodes.filter((n) => n.type === "state_store"),
+    [allNodes],
+  );
+
+  // Discover all inputs required across all steps
+  const initialContext = useMemo(() => {
+    const ctx: {
+      stores: Record<string, Record<string, JSONValue>>;
+      localState: Record<string, JSONValue>;
+      inputs: Record<string, JSONValue>;
+      routeParams: Record<string, string>;
+      queryParams: Record<string, string>;
+    } = {
+      stores: {},
+      localState: {},
+      inputs: {},
+      routeParams: {},
+      queryParams: {},
+    };
+
+    // Initialize stores with their actual node field default values
+    stateStores.forEach((st) => {
+      const sName = st.data?.label || st.data?.storeName || st.id;
+      ctx.stores[sName] = {};
+      (st.data?.fields || []).forEach((f) => {
+        ctx.stores[sName]![f.name] = f.defaultValue ?? (f.type === "number" ? 0 : f.type === "boolean" ? false : f.type === "array" ? [] : "");
+      });
+    });
+
+    // Initialize local section state
+    (currentPageNode?.data?.sections || []).forEach((sec) => {
+      (sec.stateObjects || []).forEach((st) => {
+        ctx.localState[st.name] = st.defaultValue ?? (st.type === "number" ? 0 : st.type === "boolean" ? false : "");
+      });
+      (sec.states || []).forEach((st) => {
+        ctx.localState[st.name] = st.defaultValue ?? "";
+      });
+    });
+
+    // Initialize route and query params
+    (currentPageNode?.data?.pathParams || []).forEach((p) => {
+      ctx.routeParams[p.name] = p.defaultValue || "sample-id";
+    });
+    (currentPageNode?.data?.queryParams || []).forEach((q) => {
+      ctx.queryParams[q.name] = q.defaultValue || "sample-query";
+    });
+
+    // Scan steps for specific form inputs or values used
+    steps.forEach((s) => {
+      (s.requestBindings || []).forEach((b) => {
+        if (b.source.kind === "user_input" && b.source.fieldName) {
+          if (!(b.source.fieldName in ctx.inputs)) {
+            ctx.inputs[b.source.fieldName] = `test_${b.source.fieldName}`;
+          }
+        }
+      });
+      if (s.stateValueSource?.kind === "user_input" && s.stateValueSource.fieldName) {
+        if (!(s.stateValueSource.fieldName in ctx.inputs)) {
+          ctx.inputs[s.stateValueSource.fieldName] = `test_${s.stateValueSource.fieldName}`;
+        }
+      }
+    });
+
+    return ctx;
+  }, [stateStores, currentPageNode, steps]);
+
+  const [testContext, setTestContext] = useState(initialContext);
+  const [isRunning, setIsRunning] = useState(false);
+  const [executionLogs, setExecutionLogs] = useState<SimulatedStepLog[] | null>(null);
+  const [expandedLogIdx, setExpandedLogIdx] = useState<number | null>(null);
+
+  const handleResetContext = () => {
+    setTestContext(initialContext);
+    setExecutionLogs(null);
+  };
+
+  const runSimulation = async () => {
+    setIsRunning(true);
+    setExecutionLogs(null);
+
+    const logs: SimulatedStepLog[] = [];
+    const runtimeState: {
+      stores: Record<string, Record<string, JSONValue>>;
+      localState: Record<string, JSONValue>;
+      inputs: Record<string, JSONValue>;
+      routeParams: Record<string, string>;
+      queryParams: Record<string, string>;
+    } = JSON.parse(JSON.stringify(testContext));
+    const stepResponses: Record<string, JSONValue> = {};
+
+    // Helper to evaluate source
+    const resolveSourceValue = (source: FrontendFieldSource | undefined): JSONValue | undefined => {
+      if (!source) return undefined;
+      if (source.kind === "literal") return source.value;
+      if (source.kind === "state_var") {
+        const storeObj = source.storeName ? runtimeState.stores[source.storeName] : undefined;
+        if (storeObj) {
+          return storeObj[source.stateKey];
+        }
+        return runtimeState.localState[source.stateKey];
+      }
+      if (source.kind === "user_input") {
+        return runtimeState.inputs[source.fieldName];
+      }
+      if (source.kind === "route_param") {
+        return runtimeState.routeParams[source.paramName];
+      }
+      if (source.kind === "query_param") {
+        return runtimeState.queryParams[source.paramName];
+      }
+      if (source.kind === "prev_response") {
+        const resp = stepResponses[source.stepId];
+        if (resp === undefined) return undefined;
+        if (!source.fieldPath) return resp;
+        const parts = source.fieldPath.split(".");
+        let cur: JSONValue | undefined = resp;
+        for (const p of parts) {
+          if (cur !== null && typeof cur === "object" && !Array.isArray(cur)) {
+            const obj: JSONObject = cur;
+            cur = obj[p];
+          } else {
+            return undefined;
+          }
+        }
+        return cur;
+      }
+      return undefined;
+    };
+
+    // Sequential step evaluation
+    for (let idx = 0; idx < steps.length; idx++) {
+      const step = steps[idx]!;
+      const stepName = step.name || `${step.type} (Step ${idx + 1})`;
+
+      if (step.type === "api_call") {
+        const targetEpId = step.endpointId;
+        const targetEndpoint = endpoints.find((ep) => ep.id === targetEpId);
+
+        const payload: Record<string, JSONValue> = {};
+        (step.requestBindings || []).forEach((b) => {
+          if (b.targetField) {
+            const resolvedVal = resolveSourceValue(b.source);
+            if (resolvedVal !== undefined) {
+              payload[b.targetField] = resolvedVal;
+            }
+          }
+        });
+
+        // Mock response resolution
+        let mockResponseData: JSONValue = {
+          success: true,
+          data: {
+            id: `sim-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            ...payload,
+          },
+        };
+
+        if (targetEndpoint?.simulationOutput) {
+          mockResponseData = JSON.parse(JSON.stringify(targetEndpoint.simulationOutput));
+        } else if (targetEndpoint?.responseBody?.rawJson) {
+          try {
+            mockResponseData = JSON.parse(targetEndpoint.responseBody.rawJson);
+          } catch {
+            // fallback
+          }
+        }
+
+        stepResponses[step.id] = mockResponseData;
+
+        logs.push({
+          stepIndex: idx + 1,
+          stepId: step.id,
+          type: "api_call",
+          name: stepName,
+          status: "success",
+          details: {
+            request: {
+              method: targetEndpoint?.type || "POST",
+              url: targetEndpoint?.name || "/api/endpoint",
+              headers: { "Content-Type": "application/json" },
+              body: Object.keys(payload).length > 0 ? payload : undefined,
+            },
+            response: {
+              status: 200,
+              data: mockResponseData,
+            },
+          },
+        });
+      } else if (step.type === "state_mutation") {
+        const storeNode = allNodes.find((n) => n.id === step.stateStoreNodeId);
+        const storeName = storeNode?.data?.label || storeNode?.data?.storeName || "Store";
+        const fKey = step.stateKey || "data";
+
+        const prevVal =
+          step.stateTargetKind === "store"
+            ? runtimeState.stores[storeName]?.[fKey]
+            : runtimeState.localState[fKey];
+
+        let nextVal: JSONValue = prevVal ?? "";
+        const resolvedVal = resolveSourceValue(step.stateValueSource);
+
+        if (step.stateUpdateType === "toggle") {
+          nextVal = !prevVal;
+        } else if (step.stateUpdateType === "increment") {
+          nextVal = (Number(prevVal) || 0) + (Number(resolvedVal) || 1);
+        } else if (step.stateUpdateType === "reset") {
+          nextVal = "";
+        } else {
+          nextVal = resolvedVal !== undefined ? resolvedVal : "updated";
+        }
+
+        if (step.stateTargetKind === "store") {
+          if (!runtimeState.stores[storeName]) runtimeState.stores[storeName] = {};
+          runtimeState.stores[storeName][fKey] = nextVal;
+        } else {
+          runtimeState.localState[fKey] = nextVal;
+        }
+
+        logs.push({
+          stepIndex: idx + 1,
+          stepId: step.id,
+          type: "state_mutation",
+          name: stepName,
+          status: "success",
+          details: {
+            mutation: {
+              targetStore: step.stateTargetKind === "store" ? storeName : "Local Page State",
+              field: fKey,
+              prevValue: prevVal,
+              nextValue: nextVal,
+            },
+          },
+        });
+      } else if (step.type === "notification") {
+        const msg = step.notifyMessage || "Action triggered successfully!";
+        const lvl = step.notifyLevel || "success";
+        if (lvl === "error") toast.error(msg);
+        else if (lvl === "warning") toast.warning(msg);
+        else toast.success(msg);
+
+        logs.push({
+          stepIndex: idx + 1,
+          stepId: step.id,
+          type: "notification",
+          name: stepName,
+          status: "success",
+          details: {
+            notification: {
+              level: lvl,
+              message: msg,
+            },
+          },
+        });
+      } else if (step.type === "navigation") {
+        logs.push({
+          stepIndex: idx + 1,
+          stepId: step.id,
+          type: "navigation",
+          name: stepName,
+          status: "success",
+          details: {
+            navigation: {
+              targetRoute: step.targetRoute || "/",
+            },
+          },
+        });
+      } else {
+        logs.push({
+          stepIndex: idx + 1,
+          stepId: step.id,
+          type: step.type,
+          name: stepName,
+          status: "success",
+        });
+      }
+    }
+
+    // Small delay to feel alive
+    await new Promise((r) => setTimeout(r, 200));
+    setExecutionLogs(logs);
+    setExpandedLogIdx(0);
+    setIsRunning(false);
+  };
+
+  const boundStoreKeys = useMemo(() => {
+    const list: Array<{ storeName: string; field: string; value: JSONValue }> = [];
+    steps.forEach((s) => {
+      (s.requestBindings || []).forEach((b) => {
+        const source = b.source;
+        if (source.kind === "state_var" && source.stateKey) {
+          const fieldKey = source.stateKey;
+          const sName = source.storeName || Object.keys(testContext.stores)[0] || "Store";
+          const val = testContext.stores[sName]?.[fieldKey] ?? "";
+          if (!list.some((item) => item.storeName === sName && item.field === fieldKey)) {
+            list.push({ storeName: sName, field: fieldKey, value: val });
+          }
+        }
+      });
+      if (s.type === "state_mutation" && s.stateTargetKind === "store" && s.stateKey) {
+        const fieldKey = s.stateKey;
+        const storeNode = allNodes.find((n) => n.id === s.stateStoreNodeId);
+        const sName = storeNode?.data?.label || storeNode?.data?.storeName || "Store";
+        const val = testContext.stores[sName]?.[fieldKey] ?? "";
+        if (!list.some((item) => item.storeName === sName && item.field === fieldKey)) {
+          list.push({ storeName: sName, field: fieldKey, value: val });
+        }
+      }
+    });
+    return list;
+  }, [steps, testContext, allNodes]);
+
+  return (
+    <div className="flex flex-col gap-4 font-sans text-xs">
+      {/* 1. Header & Trigger */}
+      <div className="flex items-center justify-between p-3 rounded-lg bg-cyan-500/[0.04] border border-cyan-500/25">
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-1.5 font-semibold text-foreground">
+            <Sparkles size={14} className="text-cyan-500" />
+            <span>Interactive Action Test Runner</span>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Execute action steps sequentially with bound state store data.
+          </p>
+        </div>
+
+        <Button
+          type="button"
+          onClick={runSimulation}
+          disabled={isRunning || steps.length === 0}
+          size="sm"
+          className="h-8 gap-1.5 bg-cyan-600 hover:bg-cyan-700 text-white font-medium cursor-pointer shadow-xs"
+        >
+          <Play size={12} className={cn(isRunning && "animate-spin")} />
+          <span>{isRunning ? "Simulating..." : "Run Action"}</span>
+        </Button>
+      </div>
+
+      {/* 2. Test Inputs & State Store Context */}
+      <div className="flex flex-col gap-2.5 p-3 rounded-lg bg-card border border-border/60">
+        <div className="flex items-center justify-between">
+          <Label className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+            <Database size={12} className="text-primary" />
+            <span>Active State Store &amp; Form Inputs</span>
+          </Label>
+          <button
+            type="button"
+            onClick={handleResetContext}
+            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground hover:underline transition-colors cursor-pointer"
+          >
+            <RefreshCw size={10} />
+            <span>Reset Context</span>
+          </button>
+        </div>
+
+        {boundStoreKeys.length === 0 && Object.keys(testContext.inputs).length === 0 ? (
+          <div className="text-[11px] text-muted-foreground/80 py-1 italic">
+            No dynamic store bindings detected. Configure an API request with store variables to test bindings.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2 pt-1">
+            {/* Bound Stores */}
+            {boundStoreKeys.map((item) => (
+              <div
+                key={`${item.storeName}-${item.field}`}
+                className="grid grid-cols-2 items-center gap-2 p-1.5 rounded bg-muted/30 border border-border/40 font-mono text-[11px]"
+              >
+                <div className="flex items-center gap-1 truncate text-muted-foreground">
+                  <span className="text-cyan-500 font-semibold">{item.storeName}</span>
+                  <span>.</span>
+                  <span className="text-foreground">{item.field}</span>
+                </div>
+                <Input
+                  value={
+                    typeof testContext.stores[item.storeName]?.[item.field] === "object"
+                      ? JSON.stringify(testContext.stores[item.storeName]?.[item.field])
+                      : String(testContext.stores[item.storeName]?.[item.field] ?? "")
+                  }
+                  onChange={(e) => {
+                    const nextVal = e.target.value;
+                    setTestContext((prev) => ({
+                      ...prev,
+                      stores: {
+                        ...prev.stores,
+                        [item.storeName]: {
+                          ...prev.stores[item.storeName],
+                          [item.field]: nextVal,
+                        },
+                      },
+                    }));
+                  }}
+                  className="h-6 text-[11px] font-mono bg-background"
+                  placeholder="Test value"
+                />
+              </div>
+            ))}
+
+            {/* Form Inputs */}
+            {Object.entries(testContext.inputs).map(([inputKey, inputVal]) => (
+              <div
+                key={inputKey}
+                className="grid grid-cols-2 items-center gap-2 p-1.5 rounded bg-muted/30 border border-border/40 font-mono text-[11px]"
+              >
+                <div className="flex items-center gap-1 truncate text-muted-foreground">
+                  <span className="text-indigo-400 font-semibold">input</span>
+                  <span>.</span>
+                  <span className="text-foreground">{inputKey}</span>
+                </div>
+                <Input
+                  value={String(inputVal ?? "")}
+                  onChange={(e) => {
+                    const nextVal = e.target.value;
+                    setTestContext((prev) => ({
+                      ...prev,
+                      inputs: {
+                        ...prev.inputs,
+                        [inputKey]: nextVal,
+                      },
+                    }));
+                  }}
+                  className="h-6 text-[11px] font-mono bg-background"
+                  placeholder="Test input"
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 3. Execution Trace Output */}
+      {executionLogs && (
+        <div className="flex flex-col gap-2 p-3 rounded-lg bg-card border border-border/60">
+          <div className="flex items-center justify-between">
+            <Label className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+              <Zap size={12} className="text-amber-500" />
+              <span>Simulation Execution Trace ({executionLogs.length} steps)</span>
+            </Label>
+            <Badge variant="outline" className="text-[10px] text-emerald-500 border-emerald-500/30 font-mono">
+              Completed
+            </Badge>
+          </div>
+
+          <div className="flex flex-col gap-2 pt-1">
+            {executionLogs.map((log, lIdx) => {
+              const isExpanded = expandedLogIdx === lIdx;
+              return (
+                <div
+                  key={log.stepId || lIdx}
+                  className="flex flex-col rounded-md border border-border/50 bg-background/60 overflow-hidden"
+                >
+                  <div
+                    onClick={() => setExpandedLogIdx(isExpanded ? null : lIdx)}
+                    className="flex items-center justify-between p-2 cursor-pointer hover:bg-muted/40 transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center justify-center w-4 h-4 rounded-full bg-emerald-500/15 text-emerald-500 text-[10px] font-bold">
+                        {log.stepIndex}
+                      </span>
+                      <span className="font-medium text-foreground">{log.name}</span>
+                      <Badge variant="secondary" className="text-[9px] uppercase font-mono px-1 py-0">
+                        {log.type}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <CheckCircle2 size={12} className="text-emerald-500" />
+                      {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    </div>
+                  </div>
+
+                  {isExpanded && log.details && (
+                    <div className="p-3 pt-2 border-t border-border/40 bg-muted/15 flex flex-col gap-2 text-[11px] font-mono">
+                      {log.details.request && (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase">
+                            Outbound Request:
+                          </span>
+                          <div className="p-2 rounded bg-background border text-[10px] whitespace-pre-wrap">
+                            <div className="text-cyan-500 font-semibold mb-1">
+                              {log.details.request.method} {log.details.request.url}
+                            </div>
+                            {log.details.request.body && (
+                              <div>
+                                <span className="text-muted-foreground">Payload: </span>
+                                {JSON.stringify(log.details.request.body, null, 2)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {log.details.response && (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase">
+                            Simulated Response:
+                          </span>
+                          <div className="p-2 rounded bg-background border text-[10px] whitespace-pre-wrap text-emerald-600 dark:text-emerald-400">
+                            {JSON.stringify(log.details.response.data, null, 2)}
+                          </div>
+                        </div>
+                      )}
+
+                      {log.details.mutation && (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase">
+                            Store Mutation Effect:
+                          </span>
+                          <div className="p-2 rounded bg-background border text-[10px] flex items-center gap-2">
+                            <span className="text-cyan-500 font-semibold">
+                              {log.details.mutation.targetStore}.{log.details.mutation.field}
+                            </span>
+                            <span className="text-muted-foreground">=&gt;</span>
+                            <span className="text-emerald-500 font-bold">
+                              {JSON.stringify(log.details.mutation.nextValue)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {log.details.notification && (
+                        <div className="flex items-center gap-1.5 p-2 rounded bg-background border text-amber-500">
+                          <Bell size={12} />
+                          <span>Toast: &quot;{log.details.notification.message}&quot;</span>
+                        </div>
+                      )}
+
+                      {log.details.navigation && (
+                        <div className="flex items-center gap-1.5 p-2 rounded bg-background border text-indigo-400">
+                          <Navigation size={12} />
+                          <span>Navigated to: {log.details.navigation.targetRoute}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ActionSimulator;

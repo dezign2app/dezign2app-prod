@@ -171,7 +171,7 @@ export const ClickInteractivitySection: React.FC<ClickInteractivitySectionProps>
                     }}
                   >
                     <ExternalLink size={12} />
-                    <span>Configure Action Flow &amp; Mappings</span>
+                    <span>Configure &amp; Test Action Flow</span>
                     <ArrowRight size={11} className="ml-auto" />
                   </Button>
                 )}

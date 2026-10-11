@@ -152,7 +152,8 @@ function formatDraftStep(
       const formatSource = (src?: FrontendFieldSource): string => {
         if (!src) return "value";
         if (src.kind === "literal") return `"${src.value || ""}"`;
-        if (src.kind === "state_var") return `state.${src.stateKey}`;
+        if (src.kind === "state_var")
+          return src.storeName ? `${src.storeName}.${src.stateKey}` : `state.${src.stateKey}`;
         if (src.kind === "user_input") return `input.${src.fieldName}`;
         if (src.kind === "prev_response") return `step.${src.fieldPath}`;
         if (src.kind === "route_param") return `params.${src.paramName}`;
@@ -290,7 +291,7 @@ export function getActionFlowRuntime(
                     b.source.kind === "literal"
                       ? `"${b.source.value}"`
                       : b.source.kind === "state_var"
-                        ? `state.${b.source.stateKey}`
+                        ? (b.source.storeName ? `${b.source.storeName}.${b.source.stateKey}` : `state.${b.source.stateKey}`)
                         : b.source.kind === "user_input"
                           ? `input.${b.source.fieldName}`
                           : b.source.kind === "route_param"
