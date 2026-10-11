@@ -480,8 +480,8 @@ export default ${sectionCompName};
             const act = (section.actions || []).find((a) => a.id === cfg.targetActionId);
             const actName = act?.name || "action";
             const actEvent = act?.event || "click";
-            const actUrl = ((act as Record<string, unknown>)?.url as string) || "";
-            const actMethod = ((act as Record<string, unknown>)?.method as string) || "POST";
+            const actUrl = act?.url || "";
+            const actMethod = act?.method || "POST";
             clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", "${actUrl}", "${actMethod}")}`;
           } else if (cfg?.clickAction === "navigate" && cfg.targetRoute) {
             clickAttr = ` onClick={() => { window.location.href = "${cfg.targetRoute}"; }}`;
@@ -568,8 +568,8 @@ export default ${sectionCompName};
             if (props?.onChangeMode === "action" && props?.onChangeActionId) {
               const act = (section.actions || []).find((a) => a.id === props.onChangeActionId);
               const actName = act?.name || "inputChange";
-              const actUrl = ((act as Record<string, unknown>)?.url as string) || "";
-              const actMethod = ((act as Record<string, unknown>)?.method as string) || "POST";
+              const actUrl = act?.url || "";
+              const actMethod = act?.method || "POST";
               return `          <Input key="${st.id}" type="${inType}" value={${valExpr}} onChange={(e) => onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", { value: e.target.value })}${ph}${readOnlyAttr}${dis}${uxAttrs} className="h-8 text-xs max-w-xs" />`;
             }
 
@@ -602,24 +602,68 @@ export default ${sectionCompName};
         .join("\n")}\n        </div>`
     : "";
 
+  const hasComponentBindings = Array.isArray(section.componentBindings) && section.componentBindings.length > 0;
+  const componentBindingsJsx = hasComponentBindings
+    ? `\n        <div className="flex flex-wrap gap-2.5 mt-3">\n${(section.componentBindings || [])
+        .map((comp) => {
+          let clickAttr = "";
+          if (comp.actionId) {
+            const act = (section.actions || []).find((a) => a.id === comp.actionId);
+            const actName = act?.name || comp.actionName || "action";
+            const actEvent = act?.event || comp.triggerEvent || "click";
+            const actUrl = act?.url || "";
+            const actMethod = act?.method || "POST";
+            clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", "${actUrl}", "${actMethod}")}`;
+          }
+          let disabledAttr = "";
+          if (comp.disabledStateName) {
+            const cleanVar = toCamelCase(comp.disabledStateName);
+            disabledAttr = ` disabled={Boolean(${cleanVar})}`;
+          }
+
+          if (comp.componentType === "button") {
+            neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
+            return `          <Button key="${comp.id}" variant="${comp.variant || "default"}" size="sm"${disabledAttr}${clickAttr}>${comp.label || comp.name}</Button>`;
+          }
+          if (comp.componentType === "input") {
+            neededShadcnImports.add('import { Input } from "@workspace/ui/components/input";');
+            const valExpr = comp.valueStateName ? `{String(${toCamelCase(comp.valueStateName)})}` : `""`;
+            return `          <Input key="${comp.id}" placeholder="${comp.label || "Enter text..."}" defaultValue=${valExpr}${disabledAttr} className="h-8 text-xs max-w-xs" />`;
+          }
+          if (comp.componentType === "card") {
+            const valExpr = comp.valueStateName ? `{typeof ${toCamelCase(comp.valueStateName)} === "object" ? JSON.stringify(${toCamelCase(comp.valueStateName)}) : String(${toCamelCase(comp.valueStateName)})}` : `"Sample Value"`;
+            return `          <div key="${comp.id}" className="p-3 rounded-lg border bg-card text-card-foreground shadow-xs">\n            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">${comp.label || comp.name}</div>\n            <div className="text-sm font-bold mt-0.5 font-mono">${valExpr}</div>\n          </div>`;
+          }
+          if (comp.componentType === "switch") {
+            neededShadcnImports.add('import { Switch } from "@workspace/ui/components/switch";');
+            const valExpr = comp.valueStateName ? `Boolean(${toCamelCase(comp.valueStateName)})` : `false`;
+            return `          <div key="${comp.id}" className="flex items-center gap-2 text-xs"><Switch checked={${valExpr}}${disabledAttr} /><span>${comp.label || comp.name}</span></div>`;
+          }
+          if (comp.componentType === "badge") {
+            neededShadcnImports.add('import { Badge } from "@workspace/ui/components/badge";');
+            return `          <Badge key="${comp.id}" variant="${comp.variant || "secondary"}" className="text-xs">${comp.label || comp.name}</Badge>`;
+          }
+          return `          <div key="${comp.id}" className="text-xs px-2.5 py-1 rounded bg-secondary/50 border border-border">${comp.label || comp.name}</div>`;
+        })
+        .join("\n")}\n        </div>`
+    : "";
+
   const extraComponentImports = Array.from(neededShadcnImports).join("\n");
   const toastImport = needsToast ? `import { toast } from "sonner";\n` : "";
 
+  const hasContent = hasActions || hasRenderedStateObjects || hasComponentBindings;
   let contentJsx = "";
-  if (hasActions && hasRenderedStateObjects) {
-    contentJsx = `\n      <CardContent>${stateObjectsJsx}\n        <div className="flex flex-wrap gap-3">\n${eventComponents
-      .map((c) => `          <${c.componentName} onTrigger={onTrigger} />`)
-      .join("\n")}\n        </div>\n      </CardContent>`;
-  } else if (hasRenderedStateObjects) {
-    contentJsx = `\n      <CardContent>${stateObjectsJsx}\n      </CardContent>`;
-  } else if (hasActions) {
-    contentJsx = `\n      <CardContent>\n        <div className="flex flex-wrap gap-3">\n${eventComponents
-      .map((c) => `          <${c.componentName} onTrigger={onTrigger} />`)
-      .join("\n")}\n        </div>\n      </CardContent>`;
+  if (hasContent) {
+    const actionsPart = hasActions
+      ? `\n        <div className="flex flex-wrap gap-3">\n${eventComponents
+          .map((c) => `          <${c.componentName} onTrigger={onTrigger} />`)
+          .join("\n")}\n        </div>`
+      : "";
+    contentJsx = `\n      <CardContent>${stateObjectsJsx}${actionsPart}${componentBindingsJsx}\n      </CardContent>`;
   }
 
   return `${isClient ? `"use client";\n\n` : ""}${reactImport}
-import { Card, CardHeader, CardTitle${section.description ? ", CardDescription" : ""}${hasActions || hasRenderedStateObjects ? ", CardContent" : ""} } from "@workspace/ui/components/card";
+import { Card, CardHeader, CardTitle${section.description ? ", CardDescription" : ""}${hasContent ? ", CardContent" : ""} } from "@workspace/ui/components/card";
 ${extraComponentImports ? `${extraComponentImports}\n` : ""}${toastImport}${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${actionImports}\n` : ""}export interface ${sectionCompName}Props {
   onTrigger?: (
     eventName: string,

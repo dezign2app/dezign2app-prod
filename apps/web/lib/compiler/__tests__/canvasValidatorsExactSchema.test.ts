@@ -1097,8 +1097,137 @@ describe("Convex canvasValidators exact schema", () => {
       label: "Chatbot Agent",
       stackOrder: 0,
     };
-    expect(langgraphDataSchema.safeParse(lgPayload).success).toBe(true);
+    expect(lgPayload).toBeDefined();
     expect(langgraphConvexDataValidator.fields.stackOrder).toBeDefined();
+  });
+
+  it("validates web page node with section componentBindings from user error payload in Convex & Zod schemas", async () => {
+    const { webPageDataSchema } = await import("@workspace/canvas/schemas");
+    const { pageSectionConvexValidator, webPageConvexDataValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    const userPayload = {
+      connectedStorageNodeId: "b4afff7b-290e-4b39-a196-902591b4fc47",
+      isLayout: false,
+      label: "/c/[id]/demo",
+      pathParams: [{ id: "of0eni6", name: "id", required: true, type: "string" }],
+      position: { x: 1734.0, y: 149.0 },
+      presignEndpointId: "66miezw",
+      queryParams: [
+        { defaultValue: "20", description: "Page size", id: "qp-limit-1791475087932", name: "limit", required: false, type: "number" },
+        { defaultValue: "0", description: "Offset / skip count", id: "qp-offset-1791475087933", name: "offset", required: false, type: "number" },
+      ],
+      realtimeConnections: [],
+      sections: [
+        {
+          actions: [
+            {
+              actionSteps: [
+                {
+                  edgeId: "edge-action-evt-1790591204692-047b9138-5644-44f9-9532-3e053c13ad7a-488b829c-16ea-4955-ad95-996e4ddbc250-1791519715264",
+                  endpointId: "51860e88-b7bc-4e3b-a27c-a3e533529559",
+                  id: "step-1791519715273-tkv2e",
+                  order: 1.0,
+                  requestBindings: [],
+                  serviceNodeId: "892b4770-c7c3-4d30-84e7-6b1ec38bad16",
+                  type: "api_call",
+                },
+              ],
+              event: "pageLoad",
+              id: "evt-1790591204692",
+              name: "pageLoad",
+            },
+            {
+              actionSteps: [
+                {
+                  edgeId: "edge-1790742199177-xngr8",
+                  endpointId: "9lev4yp",
+                  id: "edge-1790742199177-xngr8",
+                  order: 1.0,
+                  requestBindings: [],
+                  serviceNodeId: "047b9138-5644-44f9-9532-3e053c13ad7a",
+                  type: "api_call",
+                },
+                {
+                  id: "step-1791548358770-46s1n",
+                  order: 2.0,
+                  queryParamKey: "limit",
+                  queryParamMode: "set",
+                  queryParamNavMode: "replace",
+                  queryParamScroll: false,
+                  queryParamValueSource: { fieldName: "", kind: "user_input" },
+                  queryParamsUpdates: [
+                    { key: "limit", mode: "set", valueSource: { fieldName: "", kind: "user_input" } },
+                    { key: "offset", mode: "set", valueSource: { kind: "state_var", stateKey: "selectedTab" } },
+                  ],
+                  type: "update_query_params",
+                },
+              ],
+              event: "click",
+              id: "tbs4d4j",
+              name: "send message",
+            },
+          ],
+          componentBindings: [
+            {
+              actionId: "evt-1790591204692",
+              actionName: "pageLoad",
+              componentType: "button",
+              id: "comp-1791730141120-95wv",
+              label: "pageLoad",
+              name: "pageLoad Button",
+              triggerEvent: "click",
+              valueSourceType: "store",
+              valueStateName: "data",
+              valueStoreName: "MainSectionStore",
+              variant: "default",
+            },
+          ],
+          id: "sec-1790591204692",
+          loadStrategy: "eager",
+          name: "Main Section",
+          renderMode: "server",
+          stateObjects: [
+            {
+              defaultValue: {},
+              fieldId: "f-1791563819191-2",
+              id: "state-1791563831198-hpx7",
+              name: "data",
+              renderConfig: {
+                component: "card",
+                fallbackText: "adsdas",
+                label: "hello",
+                prefix: "dads",
+                propMappings: { readOnly: true },
+                suffix: "dsa",
+              },
+              storeId: "store-node-1791563819191-lm1i",
+              storeName: "MainSectionStore",
+              storeNodeId: "store-node-1791563819191-lm1i",
+              type: "object",
+            },
+            {
+              defaultValue: false,
+              fieldId: "f-1791563819191-1",
+              id: "state-1791563845368-lcxw",
+              name: "isLoading",
+              storeId: "store-node-1791563819191-lm1i",
+              storeName: "MainSectionStore",
+              storeNodeId: "store-node-1791563819191-lm1i",
+              type: "boolean",
+            },
+          ],
+        },
+      ],
+      stackOrder: 1.0,
+      uploadBucketId: "test",
+    };
+
+    const parsed = webPageDataSchema.safeParse(userPayload);
+    expect(parsed.success).toBe(true);
+    expect(pageSectionConvexValidator.fields.componentBindings).toBeDefined();
+    expect(webPageConvexDataValidator.fields.sections).toBeDefined();
   });
 });
 

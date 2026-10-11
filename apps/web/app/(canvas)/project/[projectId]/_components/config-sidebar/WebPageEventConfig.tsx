@@ -11,6 +11,7 @@ import { Endpoint, WEB_PAGE_EVENTS } from "@workspace/canvas";
 import {
   EventNavigationSection,
   ActionFlowEditor,
+  ActionSimulator,
 } from "./web-page-event-config";
 import { ActionStepItem } from "./web-page-event-config/TargetEndpointSection";
 import { isStorageRefNode } from "@/lib/stores/backendCanvas/edge/utils";
@@ -24,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Radio, Wifi, Video, RefreshCw, Layers, Zap } from "lucide-react";
+import { Radio, Wifi, Video, RefreshCw, Layers, Zap, Play } from "lucide-react";
 
 const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
 
@@ -381,45 +382,78 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
         defaultValue={
           isNavigateToPage
             ? ["navigation"]
-            : ["connection", "sse_config", "ws_config", "webrtc_config", "polling_config"]
+            : ["connection", "simulator", "sse_config", "ws_config", "webrtc_config", "polling_config"]
         }
         className="w-full flex flex-col gap-3 border-none"
       >
         {!isNavigateToPage && (
-          <AccordionItem
-            value="connection"
-            className="border rounded-xl overflow-hidden bg-card"
-          >
-            <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-secondary/20 transition-colors [&>svg]:shrink-0">
-              <div className="flex items-center gap-2">
-                <Layers size={14} className="text-primary" />
-                <span className="text-xs font-semibold">
-                  Pipeline Steps
-                </span>
-                <Badge
-                  variant="secondary"
-                  className="text-[9px] px-1.5 py-0 font-mono"
-                >
-                  {(item?.actionSteps?.length || steps.length)} {((item?.actionSteps?.length || steps.length) === 1 ? "step" : "steps")}
-                </Badge>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="px-4 pb-5 pt-2">
-              <ActionFlowEditor
-                item={item}
-                canvasSteps={steps}
-                serviceNodes={serviceNodes}
-                allNodes={nodes}
-                endpoints={endpoints}
-                webPageNodeId={nodeId}
-                actionId={id}
-                onSave={(drafts) =>
-                  updateActionInParent({ actionSteps: drafts })
-                }
-                onDeleteStep={handleDeleteStep}
-              />
-            </AccordionContent>
-          </AccordionItem>
+          <>
+            <AccordionItem
+              value="connection"
+              className="border rounded-xl overflow-hidden bg-card"
+            >
+              <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-secondary/20 transition-colors [&>svg]:shrink-0">
+                <div className="flex items-center gap-2">
+                  <Layers size={14} className="text-primary" />
+                  <span className="text-xs font-semibold">
+                    Pipeline Steps
+                  </span>
+                  <Badge
+                    variant="secondary"
+                    className="text-[9px] px-1.5 py-0 font-mono"
+                  >
+                    {(item?.actionSteps?.length || steps.length)} {((item?.actionSteps?.length || steps.length) === 1 ? "step" : "steps")}
+                  </Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-4 pb-5 pt-2">
+                <ActionFlowEditor
+                  item={item}
+                  canvasSteps={steps}
+                  serviceNodes={serviceNodes}
+                  allNodes={nodes}
+                  endpoints={endpoints}
+                  webPageNodeId={nodeId}
+                  actionId={id}
+                  onSave={(drafts) =>
+                    updateActionInParent({ actionSteps: drafts })
+                  }
+                  onDeleteStep={handleDeleteStep}
+                />
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem
+              value="simulator"
+              className="border border-cyan-500/30 rounded-xl overflow-hidden bg-card"
+            >
+              <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-secondary/20 transition-colors [&>svg]:shrink-0">
+                <div className="flex items-center gap-2">
+                  <Play size={14} className="text-cyan-500 fill-cyan-500/20" />
+                  <span className="text-xs font-semibold">
+                    Simulate &amp; Test Action
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] px-1.5 py-0 font-mono text-cyan-600 dark:text-cyan-400 border-cyan-500/30"
+                  >
+                    Interactive
+                  </Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-4 pb-5 pt-2">
+                <ActionSimulator
+                  item={item}
+                  steps={item?.actionSteps && item.actionSteps.length > 0 ? item.actionSteps : []}
+                  canvasSteps={steps}
+                  allNodes={nodes}
+                  endpoints={endpoints}
+                  webPageNodeId={nodeId}
+                  actionId={id}
+                />
+              </AccordionContent>
+            </AccordionItem>
+          </>
         )}
 
         {isSse && (

@@ -1,4 +1,5 @@
 export { ActionFlowEditor } from "./ActionFlowEditor";
+export { ActionSimulator } from "./ActionSimulator";
 export { ActionFlowStep } from "./ActionFlowStep";
 export { FrontendStepRow } from "./FrontendStepRow";
 export { FrontendStepRowHeader } from "./FrontendStepRowHeader";

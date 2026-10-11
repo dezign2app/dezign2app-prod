@@ -509,19 +509,32 @@ export const SectionActionRow = ({
             className="flex items-center gap-1 shrink-0"
             onClick={(e) => e.stopPropagation()}
           >
-            {triggerTarget && (
+            {(triggerTarget || Boolean(action.actionSteps?.length)) && (
               <button
                 type="button"
                 className="flex items-center justify-center p-1 rounded hover:bg-green-500/10 text-green-500 transition-all cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onTriggerEvent({
-                    event: action,
-                    targetNode: triggerTarget.targetNode,
-                    endpoint: triggerTarget.endpoint,
-                  });
+                  if (triggerTarget) {
+                    onTriggerEvent({
+                      event: action,
+                      targetNode: triggerTarget.targetNode,
+                      endpoint: triggerTarget.endpoint,
+                    });
+                  } else {
+                    setActiveConfigItem({
+                      type: "pageEvent",
+                      id: action.id,
+                      nodeId,
+                      sectionId,
+                    });
+                  }
                 }}
-                title={`Trigger simulated request: ${triggerTarget.endpoint.type || "GET"} ${triggerTarget.endpoint.name}`}
+                title={
+                  triggerTarget
+                    ? `Trigger simulated request: ${triggerTarget.endpoint.type || "GET"} ${triggerTarget.endpoint.name}`
+                    : `Simulate action pipeline (${action.actionSteps?.length} steps)`
+                }
               >
                 <Play size={10} className="fill-green-600 text-green-600" />
               </button>

@@ -136,6 +136,7 @@ export type ConfigItemType =
   | "pageSection"
   | "pageEvent"
   | "pageState"
+  | "sectionComponent"
   | "eventTesting"
   | "langgraphRoute"
   | "payments"

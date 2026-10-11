@@ -638,6 +638,28 @@ export const pageStateObjectConvexValidator = v.object({
   renderConfig: v.optional(v.any()),
 });
 
+// Section Component Binding Validator
+export const sectionComponentBindingConvexValidator = v.object({
+  id: v.string(),
+  name: v.string(),
+  componentType: v.string(),
+  label: v.optional(v.string()),
+  variant: v.optional(v.string()),
+  valueStateName: v.optional(v.string()),
+  valueStateId: v.optional(v.string()),
+  valueSourceType: v.optional(v.union(v.literal("store"), v.literal("local"))),
+  valueStoreName: v.optional(v.string()),
+  disabledStateName: v.optional(v.string()),
+  disabledStoreName: v.optional(v.string()),
+  loadingStateName: v.optional(v.string()),
+  loadingStoreName: v.optional(v.string()),
+  triggerEvent: v.optional(v.string()),
+  actionId: v.optional(v.string()),
+  actionName: v.optional(v.string()),
+  description: v.optional(v.string()),
+  propMappings: v.optional(v.any()),
+});
+
 // Page Section Validator
 export const pageSectionConvexValidator = v.object({
   id: v.string(),
@@ -665,6 +687,9 @@ export const pageSectionConvexValidator = v.object({
     ),
   ),
   stateObjects: v.optional(v.array(pageStateObjectConvexValidator)),
+  componentBindings: v.optional(
+    v.array(sectionComponentBindingConvexValidator),
+  ),
   description: v.optional(v.string()),
   uiPrompt: v.optional(v.string()),
   libraries: v.optional(v.array(v.string())),

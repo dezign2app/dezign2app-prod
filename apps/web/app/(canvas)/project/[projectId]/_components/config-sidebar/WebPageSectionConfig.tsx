@@ -11,6 +11,7 @@ import {
   SectionDependenciesTab,
   SectionActionsTab,
   SectionStateTab,
+  SectionComponentBindingsTab,
   SectionUiDesignTab,
   useSectionState,
   useSectionActions,
@@ -108,6 +109,7 @@ export const WebPageSectionConfig: React.FC<WebPageSectionConfigProps> = ({ id, 
           packagesCount={libraries.length}
           actionsCount={currentActions.length}
           statesCount={section.stateObjects?.length || 0}
+          componentsCount={section.componentBindings?.length || 0}
         />
 
         {/* 1. General Tab */}
@@ -194,7 +196,16 @@ export const WebPageSectionConfig: React.FC<WebPageSectionConfigProps> = ({ id, 
           />
         </TabsContent>
 
-        {/* 5. UI Design Tab */}
+        {/* 5. UI Components & Bindings Tab */}
+        <TabsContent value="components" className="flex-1 overflow-hidden p-0 m-0 outline-none flex flex-col">
+          <SectionComponentBindingsTab
+            nodeId={nodeId}
+            section={section}
+            onUpdateSection={handleUpdate}
+          />
+        </TabsContent>
+
+        {/* 6. UI Design Tab */}
         <TabsContent value="ui-design" className="flex-1 overflow-hidden p-0 m-0 outline-none flex flex-col">
           <SectionUiDesignTab
             sectionName={section.name}

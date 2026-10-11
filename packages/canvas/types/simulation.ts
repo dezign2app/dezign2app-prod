@@ -181,6 +181,47 @@ export interface PageStateObject {
   renderConfig?: StateRenderConfig;
 }
 
+export type ComponentBindingType =
+  | "button"
+  | "input"
+  | "card"
+  | "badge"
+  | "switch"
+  | "progress"
+  | "alert"
+  | "table"
+  | "form"
+  | "select"
+  | (string & {});
+
+export interface SectionComponentBinding {
+  id: string;
+  name: string;
+  componentType: ComponentBindingType;
+  label?: string;
+  variant?: string;
+  
+  // State variable mappings
+  valueStateName?: string;
+  valueStateId?: string;
+  valueSourceType?: "store" | "local";
+  valueStoreName?: string;
+  
+  // Guard / status state bindings
+  disabledStateName?: string;
+  disabledStoreName?: string;
+  loadingStateName?: string;
+  loadingStoreName?: string;
+  
+  // Action trigger binding
+  triggerEvent?: "click" | "change" | "submit" | "select" | (string & {});
+  actionId?: string;
+  actionName?: string;
+
+  description?: string;
+  propMappings?: ComponentPropMappings;
+}
+
 export type PageSection = {
   id: string;
   name: string;
@@ -189,6 +230,7 @@ export type PageSection = {
   actions: UIEventItem[];
   states?: SectionStateVariable[];
   stateObjects?: PageStateObject[];
+  componentBindings?: SectionComponentBinding[];
   description?: string;
   uiPrompt?: string;
   libraries?: string[];
@@ -242,7 +284,14 @@ export type QueryParamUpdateItem = {
 
 export type FrontendFieldSource =
   | { kind: "literal"; value: string }
-  | { kind: "state_var"; stateKey: string }
+  | {
+      kind: "state_var";
+      stateKey: string;
+      sourceType?: "store" | "local";
+      storeNodeId?: string;
+      storeName?: string;
+      fieldPath?: string;
+    }
   | { kind: "prev_response"; stepId: string; fieldPath: string }
   | { kind: "user_input"; fieldName: string }
   | { kind: "route_param"; paramName: string }
@@ -325,6 +374,8 @@ export type UIEventItem = {
   id: string;
   name: string;
   event?: string;
+  url?: string;
+  method?: string;
   schema?: string;
   headers?: Parameter[];
   pathParams?: Parameter[];

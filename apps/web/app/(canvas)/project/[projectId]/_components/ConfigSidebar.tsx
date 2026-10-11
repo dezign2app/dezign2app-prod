@@ -38,6 +38,7 @@ import { HookConfig } from "./config-sidebar/HookConfig";
 import { TypesConfig } from "./config-sidebar/TypesConfig";
 import { WebPageRealtimeConnectionConfig } from "./config-sidebar/WebPageRealtimeConnectionConfig";
 import { WebPageStateConfig } from "./config-sidebar/WebPageStateConfig";
+import { WebPageComponentConfig } from "./config-sidebar/WebPageComponentConfig";
 import { StateStoreConfig } from "./config-sidebar/StateStoreConfig";
 import { StorageNodeConfig } from "./config-sidebar/StorageNodeConfig";
 import { StorageOperationRefConfig } from "./config-sidebar/StorageOperationRefConfig";
@@ -260,6 +261,13 @@ export const ConfigSidebar = () => {
             <WebPageSectionConfig id={id} nodeId={nodeId} />
           ) : type === "pageState" ? (
             <WebPageStateConfig
+              key={`${nodeId}-${id}`}
+              id={id}
+              nodeId={nodeId}
+              sectionId={activeConfigItem.sectionId}
+            />
+          ) : type === "sectionComponent" ? (
+            <WebPageComponentConfig
               key={`${nodeId}-${id}`}
               id={id}
               nodeId={nodeId}

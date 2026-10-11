@@ -11,6 +11,7 @@ import {
   User,
   Loader2,
   Code2,
+  Table as TableIcon,
 } from "lucide-react";
 import {
   StateRenderComponent,
@@ -112,6 +113,13 @@ export const COMPONENT_OPTIONS: ComponentOption[] = [
     description: "Minimal inline key-value element",
     icon: Type,
     recommendedFor: ["string", "number"],
+  },
+  {
+    id: "table",
+    label: "Data Table",
+    description: "Structured table displaying collection & array items",
+    icon: TableIcon,
+    recommendedFor: ["array", "object"],
   },
 ];
 

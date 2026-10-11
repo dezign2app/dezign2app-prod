@@ -8,6 +8,7 @@ import { generateId } from "../../../common";
 import { Input } from "@workspace/ui/components/input";
 import { SectionActionRow } from "./SectionActionRow";
 import { SectionStateObjectsList } from "./SectionStateObjectsList";
+import { SectionComponentBindingsList } from "./SectionComponentBindingsList";
 
 import { useSectionCollapseStore } from "@/lib/stores/sectionCollapseStore";
 import { NodeDeletionDialog } from "../../../../../node-deletion-dialog";
@@ -585,13 +586,21 @@ export const SectionBlock = ({
                 onClick={handleAddAction}
                 className={cn(
                   "flex items-center justify-center gap-1 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors cursor-pointer nodrag",
-                  isLastSection && "rounded-b-[10px]",
                 )}
               >
                 <Plus size={10} /> Add action
               </button>
             )}
           </div>
+
+          {/* Subsection 3: UI Components & Bindings */}
+          <SectionComponentBindingsList
+            nodeId={nodeId}
+            section={section}
+            sections={sections}
+            updateSections={updateSections}
+            isLastSubsection={isLastSection}
+          />
         </div>
       )}
 

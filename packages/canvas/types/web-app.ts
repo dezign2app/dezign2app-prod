@@ -8,13 +8,15 @@ import type {
   StoreActionType,
   StoreActionBinding,
   StateRenderComponent,
+  SectionComponentBinding,
+  ComponentBindingType,
 } from "./simulation";
 import type { WebAppZone, ProtectionRule, PaymentsPlanConfig } from "./auth";
 import type { ClientDeliveryProtocol } from "./messaging";
 import type { RealtimeProtocol, JsonValue } from "./realtime";
 import type { NodeDependencyItem } from "./services";
 
-export type { StoreActionType, StoreActionBinding };
+export type { StoreActionType, StoreActionBinding, SectionComponentBinding, ComponentBindingType };
 
 export type SectionIconName =
   | "layout-grid"

@@ -401,6 +401,18 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = ({
           </div>
         )}
 
+        {currentComponent === "table" && (
+          <div className="w-full max-w-sm rounded-lg border border-border/70 overflow-hidden bg-card text-xs">
+            <div className="px-3 py-2 bg-muted/40 font-semibold border-b border-border/60 flex items-center justify-between">
+              <span>{displayLabel}</span>
+              <Badge variant="outline" className="text-[9px] font-mono">Data Table</Badge>
+            </div>
+            <div className="p-3 text-[11px] text-muted-foreground font-mono">
+              {formattedPreviewValue || "Array / Collection"}
+            </div>
+          </div>
+        )}
+
         {currentClickAction !== "none" && (
           <div className="mt-3 flex items-center gap-1 text-[10px] text-muted-foreground/80">
             <MousePointerClick size={10} className="text-cyan-500" />

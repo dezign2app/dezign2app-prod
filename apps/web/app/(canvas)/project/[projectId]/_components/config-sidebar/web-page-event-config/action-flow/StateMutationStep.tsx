@@ -60,6 +60,54 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
     }));
   }, [currentPageNode?.data?.queryParams]);
 
+  const sectionStateVars = React.useMemo(() => {
+    const sections = currentPageNode?.data?.sections || [];
+    const list: Array<{ name: string; type?: string; storeName?: string; storeId?: string }> = [];
+    sections.forEach((sec) => {
+      (sec.stateObjects || []).forEach((st) => {
+        if (st.name && !list.some((existing) => existing.name === st.name)) {
+          list.push({ name: st.name, type: st.type, storeName: st.storeName, storeId: st.storeId });
+        }
+      });
+      (sec.states || []).forEach((st) => {
+        if (st.name && !list.some((existing) => existing.name === st.name)) {
+          list.push({ name: st.name, type: st.type });
+        }
+      });
+    });
+    return list;
+  }, [currentPageNode]);
+
+  const selectedTargetStore = React.useMemo(() => {
+    return stateStores.find((s) => s.id === draft.stateStoreNodeId);
+  }, [stateStores, draft.stateStoreNodeId]);
+
+  const targetStoreFieldOptions = React.useMemo(() => {
+    if (!selectedTargetStore) return [];
+    return (selectedTargetStore.data?.fields || []).map((f) => ({
+      value: f.name,
+      label: `${f.name} (${f.type || "string"})`,
+      type: f.type || "string",
+    }));
+  }, [selectedTargetStore]);
+
+  const allStateVarOptions = React.useMemo(() => {
+    return [
+      ...stateStores.flatMap((s) =>
+        (s.data?.fields || []).map((f) => ({
+          value: f.name,
+          label: `${s.data?.label || s.data?.storeName || "Store"}.${f.name}`,
+          type: f.type || "string",
+        })),
+      ),
+      ...sectionStateVars.map((v) => ({
+        value: v.name,
+        label: `Local: ${v.name}`,
+        type: v.type || "string",
+      })),
+    ];
+  }, [stateStores, sectionStateVars]);
+
   const targetKind = draft.stateTargetKind || "local";
   const updateType = draft.stateUpdateType || "set";
   const stateKey = draft.stateKey || "";
@@ -98,9 +146,15 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
             </Label>
             <Select
               value={draft.stateStoreNodeId || ""}
-              onValueChange={(val) =>
-                onChange({ ...draft, stateStoreNodeId: val })
-              }
+              onValueChange={(val) => {
+                const storeObj = stateStores.find((s) => s.id === val);
+                const firstField = storeObj?.data?.fields?.[0]?.name || "";
+                onChange({
+                  ...draft,
+                  stateStoreNodeId: val,
+                  stateKey: firstField || draft.stateKey,
+                });
+              }}
             >
               <SelectTrigger className="h-7 text-xs bg-background">
                 <SelectValue placeholder="Choose store node" />
@@ -108,7 +162,7 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
               <SelectContent>
                 {stateStores.map((st) => (
                   <SelectItem key={st.id} value={st.id}>
-                    {st.data?.label || st.data?.storeName || st.id}
+                    ⚡ {st.data?.label || st.data?.storeName || st.id}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -117,7 +171,7 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
         ) : (
           <div className="space-y-1">
             <Label className="text-[10px] text-muted-foreground">
-              State Key / Property Name
+              Local State Key / Property Name
             </Label>
             <ActionFlowCombobox
               value={stateKey}
@@ -126,20 +180,30 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
               }
               placeholder="e.g. currentUser, selectedItem, isSubmitting"
               headerLabel="Suggested State Keys"
-              options={[
-                { value: "currentUser", type: "object" },
-                { value: "selectedItem", type: "object" },
-                { value: "items", type: "array" },
-                { value: "selectedFile", type: "file" },
-                { value: "isSubmitting", type: "boolean" },
-                { value: "isLoading", type: "boolean" },
-                { value: "error", type: "string" },
-                { value: "count", type: "number" },
-              ]}
+              options={sectionStateVars.map((v) => ({
+                value: v.name,
+                label: `${v.name} (${v.type || "state"})`,
+                type: v.type || "string",
+              }))}
             />
           </div>
         )}
       </div>
+
+      {targetKind === "store" && (
+        <div className="space-y-1">
+          <Label className="text-[10px] text-muted-foreground">
+            Target Field in Store to Mutate
+          </Label>
+          <ActionFlowCombobox
+            value={stateKey}
+            onChange={(val) => onChange({ ...draft, stateKey: val })}
+            placeholder="e.g. searchResults, items, count"
+            headerLabel="Fields in Selected Store"
+            options={targetStoreFieldOptions}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
@@ -335,14 +399,8 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
                   })
                 }
                 placeholder="e.g. otherState"
-                headerLabel="Suggested State Keys"
-                options={[
-                  { value: "currentUser", type: "object" },
-                  { value: "selectedItem", type: "object" },
-                  { value: "items", type: "array" },
-                  { value: "count", type: "number" },
-                  { value: "selectedFile", type: "file" },
-                ]}
+                headerLabel="Available State Variables"
+                options={allStateVarOptions}
               />
             </div>
           )}

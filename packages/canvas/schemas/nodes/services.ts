@@ -319,6 +319,30 @@ export const pageSectionSchema = z.object({
     .array(pageStateObjectSchema)
     .optional()
     .describe("Dynamic Zustand store state objects rendered in this section"),
+  componentBindings: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        componentType: z.string(),
+        label: z.string().optional(),
+        variant: z.string().optional(),
+        valueStateName: z.string().optional(),
+        valueStateId: z.string().optional(),
+        valueSourceType: z.enum(["store", "local"]).optional(),
+        valueStoreName: z.string().optional(),
+        disabledStateName: z.string().optional(),
+        disabledStoreName: z.string().optional(),
+        loadingStateName: z.string().optional(),
+        loadingStoreName: z.string().optional(),
+        triggerEvent: z.string().optional(),
+        actionId: z.string().optional(),
+        actionName: z.string().optional(),
+        description: z.string().optional(),
+      })
+    )
+    .optional()
+    .describe("UI component mappings binding state variables and actions"),
   description: z.string().optional().describe("Functional description of what this section does"),
   uiPrompt: z.string().optional().describe("Visual styling and theme prompt for this section"),
   libraries: z.array(z.string()).optional().describe("Third-party libraries used in this section"),

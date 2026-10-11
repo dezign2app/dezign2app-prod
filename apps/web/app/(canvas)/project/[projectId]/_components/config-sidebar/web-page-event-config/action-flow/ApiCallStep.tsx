@@ -141,6 +141,29 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
     }));
   }, [currentPageNode?.data?.queryParams]);
 
+  const stateStores = React.useMemo(() => {
+    return allNodes.filter((n) => n.type === "state_store");
+  }, [allNodes]);
+
+  const sectionStateVars = React.useMemo(() => {
+    const pageNode = allNodes.find((n) => n.id === webPageNodeId);
+    const sections = pageNode?.data?.sections || [];
+    const list: Array<{ name: string; type?: string; storeName?: string; storeId?: string }> = [];
+    sections.forEach((sec: any) => {
+      (sec.stateObjects || []).forEach((st: any) => {
+        if (st.name && !list.some((existing) => existing.name === st.name)) {
+          list.push({ name: st.name, type: st.type, storeName: st.storeName, storeId: st.storeId });
+        }
+      });
+      (sec.states || []).forEach((st: any) => {
+        if (st.name && !list.some((existing) => existing.name === st.name)) {
+          list.push({ name: st.name, type: st.type });
+        }
+      });
+    });
+    return list;
+  }, [allNodes, webPageNodeId]);
+
   const handleServiceSelect = (newServiceId: string) => {
     const eps = endpoints.filter((ep) => ep.nodeId === newServiceId);
     const defaultEpId = eps[0]?.id || "";
@@ -259,7 +282,15 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
       if (newKind === "literal") {
         nextSource = { kind: "literal", value: "" };
       } else if (newKind === "state_var") {
-        nextSource = { kind: "state_var", stateKey: "" };
+        const firstStore = stateStores[0];
+        const firstField = firstStore?.data?.fields?.[0]?.name || sectionStateVars[0]?.name || "";
+        nextSource = {
+          kind: "state_var",
+          sourceType: firstStore ? "store" : "local",
+          storeNodeId: firstStore?.id,
+          storeName: firstStore?.data?.label || firstStore?.data?.storeName || "Store",
+          stateKey: firstField,
+        };
       } else if (newKind === "route_param") {
         nextSource = {
           kind: "route_param",
@@ -494,33 +525,144 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                     </div>
                   )}
 
-                  {binding.source.kind === "state_var" && (
-                    <div className="space-y-1">
-                      <Label className="text-[10px] text-muted-foreground">
-                        State Variable Key
-                      </Label>
-                      <ActionFlowCombobox
-                        value={binding.source.stateKey}
-                        onChange={(key) => {
-                          handleUpdateBinding(binding.id, (prev) => ({
-                            ...prev,
-                            source: { kind: "state_var", stateKey: key },
-                          }));
-                        }}
-                        placeholder="e.g. currentUser, selectedItem"
-                        headerLabel="Suggested State Keys"
-                        options={[
-                          { value: "currentUser", type: "object" },
-                          { value: "selectedItem", type: "object" },
-                          { value: "items", type: "array" },
-                          { value: "selectedFile", type: "file" },
-                          { value: "isLoading", type: "boolean" },
-                          { value: "isSubmitting", type: "boolean" },
-                          { value: "token", type: "string" },
-                        ]}
-                      />
-                    </div>
-                  )}
+                  {binding.source.kind === "state_var" && (() => {
+                    const source = binding.source;
+                    if (source.kind !== "state_var") return null;
+
+                    const currentStoreId = source.storeNodeId;
+                    const selectedStore = stateStores.find((s) => s.id === currentStoreId);
+                    const isLocal =
+                      source.sourceType === "local" ||
+                      (!selectedStore &&
+                        !source.storeName &&
+                        sectionStateVars.some((v) => v.name === source.stateKey));
+
+                    const storeFieldOptions: ComboboxOption[] = selectedStore
+                      ? (selectedStore.data?.fields || []).map((f) => ({
+                          value: f.name,
+                          label: `${f.name} (${f.type || "string"})`,
+                          type: f.type || "string",
+                        }))
+                      : isLocal
+                      ? sectionStateVars.map((v) => ({
+                          value: v.name,
+                          label: `${v.name} (${v.type || "state"})`,
+                          type: v.type || "string",
+                        }))
+                      : [
+                          ...stateStores.flatMap((s) =>
+                            (s.data?.fields || []).map((f) => ({
+                              value: f.name,
+                              label: `${s.data?.label || s.data?.storeName || "Store"}.${f.name}`,
+                              type: f.type || "string",
+                            })),
+                          ),
+                          ...sectionStateVars.map((v) => ({
+                            value: v.name,
+                            label: `Local: ${v.name}`,
+                            type: v.type || "string",
+                          })),
+                        ];
+
+                    return (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">
+                            Source Store
+                          </Label>
+                          <Select
+                            value={
+                              isLocal
+                                ? "__local__"
+                                : selectedStore?.id || (stateStores[0]?.id ?? "__local__")
+                            }
+                            onValueChange={(val) => {
+                              if (val === "__local__") {
+                                const firstLocal = sectionStateVars[0]?.name || "";
+                                handleUpdateBinding(binding.id, (prev) => ({
+                                  ...prev,
+                                  source: {
+                                    kind: "state_var",
+                                    sourceType: "local",
+                                    storeNodeId: undefined,
+                                    storeName: undefined,
+                                    stateKey:
+                                      firstLocal ||
+                                      (prev.source.kind === "state_var"
+                                        ? prev.source.stateKey
+                                        : ""),
+                                  },
+                                }));
+                              } else {
+                                const targetStore = stateStores.find((s) => s.id === val);
+                                const storeName =
+                                  targetStore?.data?.label ||
+                                  targetStore?.data?.storeName ||
+                                  "Store";
+                                const firstField = targetStore?.data?.fields?.[0]?.name || "";
+                                handleUpdateBinding(binding.id, (prev) => ({
+                                  ...prev,
+                                  source: {
+                                    kind: "state_var",
+                                    sourceType: "store",
+                                    storeNodeId: targetStore?.id,
+                                    storeName,
+                                    stateKey:
+                                      firstField ||
+                                      (prev.source.kind === "state_var"
+                                        ? prev.source.stateKey
+                                        : ""),
+                                  },
+                                }));
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-xs bg-background">
+                              <SelectValue placeholder="Choose store..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {stateStores.map((st) => (
+                                <SelectItem key={st.id} value={st.id}>
+                                  ⚡ {st.data?.label || st.data?.storeName || "Store"} (Zustand)
+                                </SelectItem>
+                              ))}
+                              <SelectItem value="__local__">
+                                📄 Page / Section State
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">
+                            Store Field / Property
+                          </Label>
+                          <ActionFlowCombobox
+                            value={source.stateKey}
+                            onChange={(key) => {
+                              handleUpdateBinding(binding.id, (prev) => {
+                                const prevSrc =
+                                  prev.source.kind === "state_var"
+                                    ? prev.source
+                                    : { kind: "state_var", stateKey: key };
+                                return {
+                                  ...prev,
+                                  source: {
+                                    ...prevSrc,
+                                    kind: "state_var",
+                                    stateKey: key,
+                                  },
+                                };
+                              });
+                            }}
+                            placeholder="e.g. keyword, userId"
+                            headerLabel="Available Store Fields"
+                            options={storeFieldOptions}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {binding.source.kind === "user_input" && (
                     <div className="space-y-1">
