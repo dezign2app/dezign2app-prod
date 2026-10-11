@@ -1,31 +1,35 @@
 "use client";
 
-import React, { useMemo, useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { useShallow } from "zustand/react/shallow";
-import { Eye, EyeOff, AlertTriangle } from "lucide-react";
+import {
+  AlertTriangle,
+  Database,
+  Type,
+  Hash,
+  Binary,
+  Braces,
+  CheckCircle2,
+  Sliders,
+} from "lucide-react";
 import {
   PageSection,
   PageStateObject,
-  StateRenderConfig,
-  ComponentPropMappings,
-  UIEventItem,
+  SectionComponentBinding,
+  ComponentBindingType,
+  JSONValue,
 } from "@/types/canvas";
-import { Switch } from "@workspace/ui/components/switch";
 import { Button } from "@workspace/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card";
+import { Badge } from "@workspace/ui/components/badge";
+import { Input } from "@workspace/ui/components/input";
+import { Textarea } from "@workspace/ui/components/textarea";
+import { Label } from "@workspace/ui/components/label";
 import { Separator } from "@workspace/ui/components/separator";
 import {
-  ComponentOption,
-  COMPONENT_OPTIONS,
-  DEFAULT_COMPONENT_OPTION,
   StateHeaderBanner,
-  StateComponentPreview,
-  ComponentSelector,
-  ComponentPropMappingsSection,
-  DisplayFormattingSection,
-  ClickInteractivitySection,
   BoundStoreLink,
+  ConnectedComponentsSection,
 } from "./web-page-state-config";
 
 export interface WebPageStateConfigProps {
@@ -45,16 +49,6 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
-  // All web pages in project for navigation action
-  const availablePages = useBackendCanvasStore(
-    useShallow((s) => s.nodes.filter((n) => n.type === "webPage" && n.id !== nodeId)),
-  );
-
-  // All state store nodes on canvas for state guard bindings
-  const stateStoreNodes = useBackendCanvasStore(
-    useShallow((s) => s.nodes.filter((n) => n.type === "state_store")),
-  );
-
   const sections: PageSection[] = parentNode?.data?.sections || [];
 
   // Find target section containing this state variable
@@ -67,158 +61,39 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
     ? (targetSection.stateObjects || []).find((st) => st.id === id)
     : (parentNode?.data?.stateObjects || []).find((st: PageStateObject) => st.id === id);
 
-  const renderConfig: StateRenderConfig = stateObj?.renderConfig || {};
-  const serverIsEnabled = renderConfig.enabled !== false;
-  const [optimisticEnabled, setOptimisticEnabled] = React.useState(serverIsEnabled);
-  React.useEffect(() => {
-    setOptimisticEnabled(serverIsEnabled);
-  }, [serverIsEnabled]);
-  const isEnabled = optimisticEnabled;
+  // Local draft states for editable fields
+  const [defaultValDraft, setDefaultValDraft] = useState<string>(
+    stateObj?.defaultValue !== undefined ? JSON.stringify(stateObj.defaultValue) : "",
+  );
+  const [descriptionDraft, setDescriptionDraft] = useState<string>(
+    stateObj?.description || "",
+  );
+  const [isSaved, setIsSaved] = useState(false);
 
-  const currentComponent = renderConfig.component || "badge";
-  const currentVariant = renderConfig.variant || "secondary";
-  const currentClickAction = renderConfig.clickAction || "none";
-  const propMappings: ComponentPropMappings = renderConfig.propMappings || {};
-
-  const selectedOption: ComponentOption = useMemo(
-    () => COMPONENT_OPTIONS.find((opt) => opt.id === currentComponent) ?? DEFAULT_COMPONENT_OPTION,
-    [currentComponent],
+  // Filter connected UI components in this section
+  const sectionBindings: SectionComponentBinding[] = targetSection?.componentBindings || [];
+  const matchingComponents = sectionBindings.filter(
+    (c) =>
+      c.valueStateName === stateObj?.name ||
+      c.valueStateId === stateObj?.id ||
+      c.disabledStateName === stateObj?.name ||
+      c.loadingStateName === stateObj?.name,
   );
 
-  // Section actions available for interactive triggering
-  const availableActions: UIEventItem[] = targetSection?.actions || [];
+  // Helper to persist updates to state object
+  const handleSaveState = useCallback(
+    (updates: { defaultValue?: JSONValue; description?: string }) => {
+      if (!parentNode || !targetSection || !stateObj) return;
 
-  // Other state variables in section available for conditional bindings (disabled, readOnly, etc.)
-  const availableStateVars = useMemo(() => {
-    const list: Array<{ name: string; type?: string; source: "store" | "local" }> = [];
-    (targetSection?.stateObjects || []).forEach((s) => {
-      if (s.name && s.id !== id) {
-        list.push({ name: s.name, type: s.type, source: s.storeName ? "store" : "local" });
-      }
-    });
-    (targetSection?.states || []).forEach((s) => {
-      if (s.name && !list.some((existing) => existing.name === s.name)) {
-        list.push({ name: s.name, type: s.type, source: "local" });
-      }
-    });
-    return list;
-  }, [targetSection, id]);
+      const updatedStateObjects = (targetSection.stateObjects || []).map((st) =>
+        st.id === id ? { ...st, ...updates } : st,
+      );
 
-  // Helper to persist changes
-  const handleUpdateRenderConfig = useCallback(
-    (changes: Partial<StateRenderConfig>) => {
-      const store = useBackendCanvasStore.getState();
-      const currentParent = store.nodes.find((n) => n.id === nodeId);
-      if (!currentParent) return;
-
-      const currentSections: PageSection[] = currentParent.data?.sections || [];
-      const currentTargetSec =
-        currentSections.find((s) => (s.stateObjects || []).some((st) => st.id === id)) ||
-        currentSections.find((s) => s.id === sectionId) ||
-        currentSections[0];
-
-      const currentStObj: PageStateObject | undefined = currentTargetSec
-        ? (currentTargetSec.stateObjects || []).find((st) => st.id === id)
-        : (currentParent.data?.stateObjects || []).find((st: PageStateObject) => st.id === id);
-
-      if (!currentStObj) return;
-
-      const nextConfig: StateRenderConfig = {
-        ...(currentStObj.renderConfig || {}),
-        ...changes,
-      };
-
-      if (currentTargetSec) {
-        const updatedSections = currentSections.map((sec) => {
-          if (sec.id !== currentTargetSec.id) return sec;
-          const updatedStateObjects = (sec.stateObjects || []).map((st) => {
-            if (st.id !== id) return st;
-            return { ...st, renderConfig: nextConfig };
-          });
-          return { ...sec, stateObjects: updatedStateObjects };
-        });
-
-        store.updateNode(nodeId, {
-          data: {
-            ...currentParent.data,
-            sections: updatedSections,
-          },
-        });
-      } else if (currentParent.data?.stateObjects) {
-        const updatedStateObjects = currentParent.data.stateObjects.map((st: PageStateObject) => {
-          if (st.id !== id) return st;
-          return { ...st, renderConfig: nextConfig };
-        });
-        store.updateNode(nodeId, {
-          data: {
-            ...currentParent.data,
-            stateObjects: updatedStateObjects,
-          },
-        });
-      }
-    },
-    [id, nodeId, sectionId],
-  );
-
-  const handleUpdatePropMapping = useCallback(
-    (changes: Partial<ComponentPropMappings>) => {
-      const store = useBackendCanvasStore.getState();
-      const currentParent = store.nodes.find((n) => n.id === nodeId);
-      const currentSections: PageSection[] = currentParent?.data?.sections || [];
-      const currentTargetSec =
-        currentSections.find((s) => (s.stateObjects || []).some((st) => st.id === id)) ||
-        currentSections.find((s) => s.id === sectionId) ||
-        currentSections[0];
-      const currentStObj: PageStateObject | undefined = currentTargetSec
-        ? (currentTargetSec.stateObjects || []).find((st) => st.id === id)
-        : (currentParent?.data?.stateObjects || []).find((st: PageStateObject) => st.id === id);
-
-      const currentProps = currentStObj?.renderConfig?.propMappings || {};
-
-      handleUpdateRenderConfig({
-        propMappings: {
-          ...currentProps,
-          ...changes,
-        },
-      });
-    },
-    [handleUpdateRenderConfig, id, nodeId, sectionId],
-  );
-
-  const handleOpenEventConfig = useCallback(
-    (actionId: string) => {
-      if (!actionId || !targetSection) return;
-      setActiveConfigItem({
-        type: "pageEvent",
-        id: actionId,
-        nodeId,
-        sectionId: targetSection.id,
-      });
-    },
-    [setActiveConfigItem, nodeId, targetSection],
-  );
-
-  const handleCreateAction = useCallback(
-    (actionName?: string, eventType: string = "click") => {
-      if (!parentNode || !targetSection) return;
-      const defaultName =
-        actionName ||
-        `on${stateObj?.name ? stateObj.name.charAt(0).toUpperCase() + stateObj.name.slice(1) : "Click"}Action`;
-      const newActionId = crypto.randomUUID();
-      const newAction: UIEventItem = {
-        id: newActionId,
-        name: defaultName,
-        event: eventType,
-      };
-
-      const updatedSections = (parentNode.data?.sections || []).map((sec: PageSection) => {
-        if (sec.id !== targetSection.id) return sec;
-        const currentActions = sec.actions || [];
-        return {
-          ...sec,
-          actions: [...currentActions, newAction],
-        };
-      });
+      const updatedSections = sections.map((sec) =>
+        sec.id === targetSection.id
+          ? { ...sec, stateObjects: updatedStateObjects }
+          : sec,
+      );
 
       updateNode(nodeId, {
         data: {
@@ -227,76 +102,99 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
         },
       });
 
-      if (eventType === "change") {
-        handleUpdatePropMapping({
-          onChangeMode: "action",
-          onChangeActionId: newActionId,
-        });
-      } else {
-        handleUpdateRenderConfig({
-          clickAction: "trigger_event",
-          targetActionId: newActionId,
-        });
-      }
-
-      setActiveConfigItem({
-        type: "pageEvent",
-        id: newActionId,
-        nodeId,
-        sectionId: targetSection.id,
-      });
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
     },
-    [
-      parentNode,
-      targetSection,
-      stateObj?.name,
-      updateNode,
-      nodeId,
-      handleUpdatePropMapping,
-      handleUpdateRenderConfig,
-      setActiveConfigItem,
-    ],
+    [parentNode, targetSection, stateObj, id, sections, nodeId, updateNode],
   );
 
-  // Derive sample value for preview
-  const sampleValue = useMemo(() => {
-    if (!stateObj) return "Sample value";
-    if (stateObj.defaultValue !== undefined && stateObj.defaultValue !== null && stateObj.defaultValue !== "") {
-      return stateObj.defaultValue;
+  // Parse and commit default value change
+  const handleCommitDefaultVal = () => {
+    let parsed: JSONValue = defaultValDraft;
+    try {
+      parsed = JSON.parse(defaultValDraft);
+    } catch {
+      parsed = defaultValDraft;
     }
-    const t = (stateObj.type || "").toLowerCase();
-    if (t.includes("bool")) return true;
-    if (t.includes("num") || t.includes("int") || t.includes("float")) return 42;
-    if (t.includes("array") || t.includes("[]")) return ["Item 1", "Item 2"];
-    if (t.includes("object")) return { status: "active", count: 10 };
-    return "Sample value";
-  }, [stateObj]);
+    handleSaveState({ defaultValue: parsed });
+  };
 
-  // Formatted string for preview
-  const customLabel =
-    renderConfig.labelMode === "store_var" && renderConfig.labelStoreVar
-      ? `${renderConfig.labelStoreName || "Store"}.${renderConfig.labelStoreVar}`
-      : renderConfig.label?.trim() || "";
-  const displayLabel = customLabel || stateObj?.name || "State";
-  const prefix = propMappings.prefix ?? renderConfig.prefix ?? "";
-  const suffix = propMappings.suffix ?? renderConfig.suffix ?? "";
+  // Commit description change
+  const handleCommitDescription = () => {
+    handleSaveState({ description: descriptionDraft });
+  };
 
-  const formattedPreviewValue = useMemo(() => {
-    if (sampleValue === undefined || sampleValue === null) {
-      return renderConfig.fallbackText || "—";
+  // Add a new UI Component directly mapped to this state variable
+  const handleBindNewComponent = () => {
+    if (!parentNode || !targetSection || !stateObj) return;
+
+    const newCompId = `comp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const lowerType = (stateObj.type || "").toLowerCase();
+    const defaultCompType: ComponentBindingType = lowerType.includes("bool")
+      ? "switch"
+      : lowerType.includes("object") || lowerType.includes("array") || lowerType.includes("[]")
+        ? "card"
+        : "input";
+
+    const isStore = Boolean(stateObj.storeName);
+
+    const newBinding: SectionComponentBinding = {
+      id: newCompId,
+      name: `${stateObj.name} ${defaultCompType.charAt(0).toUpperCase() + defaultCompType.slice(1)}`,
+      componentType: defaultCompType,
+      label: stateObj.name,
+      variant: "default",
+      valueStateName: stateObj.name,
+      valueStateId: stateObj.id,
+      valueSourceType: isStore ? "store" : "local",
+      valueStoreName: stateObj.storeName,
+      triggerEvent: defaultCompType === "switch" ? "change" : "click",
+    };
+
+    const nextBindings = [...sectionBindings, newBinding];
+    const updatedSections = sections.map((sec) =>
+      sec.id === targetSection.id
+        ? { ...sec, componentBindings: nextBindings }
+        : sec,
+    );
+
+    updateNode(nodeId, {
+      data: {
+        ...parentNode.data,
+        sections: updatedSections,
+      },
+    });
+
+    // Immediately open the newly created component binding in the sidebar
+    setActiveConfigItem({
+      type: "sectionComponent",
+      id: newCompId,
+      nodeId,
+      sectionId: targetSection.id,
+    });
+  };
+
+  // Open an existing component binding editor
+  const handleOpenComponent = (compBindingId: string) => {
+    if (!targetSection) return;
+    setActiveConfigItem({
+      type: "sectionComponent",
+      id: compBindingId,
+      nodeId,
+      sectionId: targetSection.id,
+    });
+  };
+
+  // Open the connected Zustand store node
+  const handleOpenStore = () => {
+    if (stateObj?.storeId) {
+      setActiveConfigItem({
+        type: "state_store",
+        id: stateObj.storeId,
+        nodeId: stateObj.storeId,
+      });
     }
-    const formatter = renderConfig.formatter || "none";
-    if (formatter === "currency") {
-      return `$${Number(sampleValue) || 0}`;
-    }
-    if (formatter === "number") {
-      return Number(sampleValue).toLocaleString();
-    }
-    if (formatter === "json" || typeof sampleValue === "object") {
-      return JSON.stringify(sampleValue);
-    }
-    return `${prefix}${sampleValue}${suffix}`;
-  }, [sampleValue, renderConfig, prefix, suffix]);
+  };
 
   if (!parentNode || !stateObj) {
     return (
@@ -318,14 +216,23 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
     );
   }
 
+  const typeIcon = (stateObj.type || "").toLowerCase().includes("num")
+    ? Hash
+    : (stateObj.type || "").toLowerCase().includes("bool")
+      ? Binary
+      : (stateObj.type || "").toLowerCase().includes("obj")
+        ? Braces
+        : Type;
+  const TypeIconComponent = typeIcon;
+
   return (
-    <div className="flex flex-col gap-6 font-sans text-foreground pb-12">
+    <div className="flex flex-col gap-5 font-sans text-foreground pb-12">
       {/* 1. Header & Breadcrumbs Banner */}
       <StateHeaderBanner
         pageLabel={parentNode.data?.label || "Page"}
         targetSection={targetSection}
         stateObj={stateObj}
-        isEnabled={isEnabled}
+        connectedCount={matchingComponents.length}
         onNavigatePage={() => setActiveConfigItem({ type: "webPage", id: nodeId, nodeId })}
         onNavigateSection={
           targetSection
@@ -340,149 +247,121 @@ export const WebPageStateConfig: React.FC<WebPageStateConfigProps> = ({
         }
       />
 
-      {/* 2. Render in UI Toggle */}
+      {/* 2. State Variable Schema & Details Card */}
       <Card className="border-border/60 shadow-xs">
         <CardHeader className="p-4 pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-md bg-primary/10 text-primary">
-                {isEnabled ? <Eye size={14} /> : <EyeOff size={14} />}
+              <div className="p-1.5 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
+                <Sliders size={14} />
               </div>
               <div>
-                <CardTitle className="text-xs font-semibold">Render in UI</CardTitle>
+                <CardTitle className="text-xs font-semibold">State Variable Properties</CardTitle>
                 <CardDescription className="text-[11px]">
-                  Controls whether this state variable is rendered into the section JSX
+                  Reactive model identity, data type, and initial value
                 </CardDescription>
               </div>
             </div>
-            <Switch
-              checked={isEnabled}
-              onCheckedChange={(checked) => {
-                setOptimisticEnabled(checked);
-                handleUpdateRenderConfig({ enabled: checked });
-              }}
-            />
+            {isSaved && (
+              <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] gap-1">
+                <CheckCircle2 size={10} />
+                <span>Saved</span>
+              </Badge>
+            )}
           </div>
         </CardHeader>
-        {!isEnabled && (
-          <CardContent className="p-4 pt-0">
-            <div className="text-[11px] text-muted-foreground bg-muted/40 p-2.5 rounded-lg border border-border/40">
-              When disabled, this state variable remains reactive and subscribed via Zustand in the component code (e.g. <code>const {stateObj.name} = useStore(...)</code>), but is not displayed visually.
+
+        <CardContent className="p-4 pt-0 space-y-3.5 text-xs">
+          {/* Variable Name */}
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">Variable Identifier</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                value={stateObj.name}
+                readOnly
+                className="h-8 text-xs font-mono bg-muted/30 cursor-default"
+              />
+              <Badge variant="outline" className="h-8 px-2 text-[10px] font-mono shrink-0">
+                {stateObj.storeName ? "Zustand Field" : "Local State"}
+              </Badge>
             </div>
-          </CardContent>
-        )}
+          </div>
+
+          {/* Data Type */}
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">Data Type</Label>
+            <div className="flex items-center gap-2 p-2 rounded-lg border border-border/60 bg-muted/20">
+              <TypeIconComponent size={14} className="text-cyan-500" />
+              <span className="font-mono text-xs font-medium">{stateObj.type || "string"}</span>
+            </div>
+          </div>
+
+          {/* Default Value */}
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">Initial / Default Value</Label>
+            <Input
+              value={defaultValDraft}
+              onChange={(e) => setDefaultValDraft(e.target.value)}
+              onBlur={handleCommitDefaultVal}
+              placeholder="e.g. 0, true, or {}"
+              className="h-8 text-xs font-mono bg-background"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              JSON literal or primitive used as initial state in Zustand / useState.
+            </p>
+          </div>
+
+          {/* Description */}
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">Notes / Description (Optional)</Label>
+            <Textarea
+              value={descriptionDraft}
+              onChange={(e) => setDescriptionDraft(e.target.value)}
+              onBlur={handleCommitDescription}
+              placeholder="Describe purpose of this reactive variable..."
+              rows={2}
+              className="text-xs resize-none bg-background"
+            />
+          </div>
+        </CardContent>
       </Card>
 
-      {/* Render Configuration Controls (When Enabled) */}
-      {isEnabled && (
-        <>
-          {/* Live Component Preview */}
-          <StateComponentPreview
-            currentComponent={currentComponent}
-            currentVariant={currentVariant}
-            currentClickAction={currentClickAction}
-            displayLabel={displayLabel}
-            customLabel={customLabel}
-            formattedPreviewValue={formattedPreviewValue}
-            sampleValue={sampleValue}
-            propMappings={propMappings}
-            stateName={stateObj.name}
-            copyToastMessage={renderConfig.copyToastMessage}
-            targetActionId={renderConfig.targetActionId}
-          />
-
-          {/* Component Selector */}
-          <ComponentSelector
-            currentComponent={currentComponent}
-            selectedOption={selectedOption}
-            stateType={stateObj.type}
-            onSelectComponent={(componentId) => handleUpdateRenderConfig({ component: componentId })}
-          />
-
-          <Separator className="bg-border/50" />
-
-          {/* Component Prop Mappings */}
-          <ComponentPropMappingsSection
-            currentComponent={currentComponent}
-            selectedOption={selectedOption}
-            displayLabel={displayLabel}
-            stateName={stateObj.name}
-            stateType={stateObj.type}
-            storeName={stateObj.storeName}
-            storeId={stateObj.storeId}
-            availableActions={availableActions}
-            availableStateVars={availableStateVars}
-            stateStoreNodes={stateStoreNodes}
-            propMappings={propMappings}
-            onUpdatePropMapping={handleUpdatePropMapping}
-            onOpenEventConfig={handleOpenEventConfig}
-            onCreateAction={(name, eventType) => handleCreateAction(name, eventType || "change")}
-          />
-
-          <Separator className="bg-border/50" />
-
-          {/* Label & Display Formatting */}
-          <DisplayFormattingSection
-            label={renderConfig.label || ""}
-            labelMode={renderConfig.labelMode}
-            labelStoreId={renderConfig.labelStoreId}
-            labelStoreName={renderConfig.labelStoreName}
-            labelStoreVar={renderConfig.labelStoreVar}
-            stateName={stateObj.name}
-            currentComponent={currentComponent}
-            currentVariant={currentVariant}
-            formatter={renderConfig.formatter || "none"}
-            fallbackText={renderConfig.fallbackText || ""}
-            stateStoreNodes={stateStoreNodes}
-            boundStoreId={stateObj.storeId}
-            onUpdateRenderConfig={handleUpdateRenderConfig}
-          />
-
-          <Separator className="bg-border/50" />
-
-          {/* Click Interactivity & Events */}
-          <ClickInteractivitySection
-            currentClickAction={currentClickAction}
-            copyToastMessage={renderConfig.copyToastMessage}
-            copySourceMode={renderConfig.copySourceMode}
-            copyStaticValue={renderConfig.copyStaticValue}
-            copyStoreId={renderConfig.copyStoreId}
-            copyStoreName={renderConfig.copyStoreName}
-            copyStoreVar={renderConfig.copyStoreVar}
-            targetActionId={renderConfig.targetActionId}
-            targetRoute={renderConfig.targetRoute}
-            targetStoreId={renderConfig.targetStoreId}
-            targetStoreActionId={renderConfig.targetStoreActionId}
-            targetStoreActionName={renderConfig.targetStoreActionName}
-            stateName={stateObj.name}
-            availableActions={availableActions}
-            availablePages={availablePages}
-            stateStoreNodes={stateStoreNodes}
-            boundStoreId={stateObj.storeId}
-            sectionName={targetSection?.name}
-            onUpdateRenderConfig={handleUpdateRenderConfig}
-            onOpenEventConfig={handleOpenEventConfig}
-            onCreateAction={handleCreateAction}
-          />
-        </>
-      )}
-
-      {/* 3. Bound Store Navigation Link */}
+      {/* 3. Bound Zustand Store Link Card (When store-backed) */}
       {stateObj.storeId && (
-        <BoundStoreLink
-          storeId={stateObj.storeId}
-          storeName={stateObj.storeName}
-          onOpenStore={() => {
-            if (stateObj.storeId) {
-              setActiveConfigItem({
-                type: "state_store",
-                id: stateObj.storeId,
-                nodeId: stateObj.storeId,
-              });
-            }
-          }}
-        />
+        <Card className="border-border/60 shadow-xs">
+          <CardHeader className="p-4 pb-2">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
+                <Database size={14} />
+              </div>
+              <div>
+                <CardTitle className="text-xs font-semibold">Zustand Store Subscription</CardTitle>
+                <CardDescription className="text-[11px]">
+                  Synced from canvas state store node
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 pt-1 space-y-2">
+            <BoundStoreLink
+              storeId={stateObj.storeId}
+              storeName={stateObj.storeName}
+              onOpenStore={handleOpenStore}
+            />
+          </CardContent>
+        </Card>
       )}
+
+      <Separator className="bg-border/50" />
+
+      {/* 4. Connected UI Components Section with shortcut to create/bind */}
+      <ConnectedComponentsSection
+        stateName={stateObj.name}
+        stateId={stateObj.id}
+        componentBindings={sectionBindings}
+        onOpenComponent={handleOpenComponent}
+        onBindNewComponent={handleBindNewComponent}
+      />
     </div>
   );
 };

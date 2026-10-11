@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useMemo } from "react";
 import {
   Layers,
   Plus,
@@ -16,6 +16,8 @@ import {
   BadgeAlert,
   ChevronDownSquare,
   Sparkles,
+  Search,
+  X,
 } from "lucide-react";
 import {
   PageSection,
@@ -53,7 +55,24 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
 }) => {
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
   const componentBindings = section.componentBindings || [];
+
+  const visibleBindings = useMemo(() => {
+    if (!searchQuery.trim()) return componentBindings;
+    const q = searchQuery.toLowerCase().trim();
+    return componentBindings.filter((c) => {
+      return (
+        (c.label || "").toLowerCase().includes(q) ||
+        (c.name || "").toLowerCase().includes(q) ||
+        (c.componentType || "").toLowerCase().includes(q) ||
+        (c.valueStateName || "").toLowerCase().includes(q) ||
+        (c.actionName || "").toLowerCase().includes(q)
+      );
+    });
+  }, [componentBindings, searchQuery]);
 
   const handleAddComponent = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -140,21 +159,64 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
           </span>
           {Boolean(componentBindings.length) && (
             <span className="text-[8px] font-mono text-muted-foreground">
-              ({componentBindings.length})
+              ({visibleBindings.length !== componentBindings.length ? `${visibleBindings.length}/${componentBindings.length}` : componentBindings.length})
             </span>
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={handleAddComponent}
-          className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 text-purple-600 dark:text-purple-400 border border-purple-500/30 text-[8px] font-semibold transition-colors cursor-pointer"
-          title="Add a UI component with state & action bindings"
-        >
-          <Plus size={9} />
-          <span>Add Component</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          {componentBindings.length > 2 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSearchOpen(!searchOpen);
+              }}
+              className={cn(
+                "p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer",
+                searchOpen && "text-purple-600 dark:text-purple-400 bg-purple-500/10",
+              )}
+              title="Search components"
+            >
+              <Search size={10} />
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleAddComponent}
+            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 text-purple-600 dark:text-purple-400 border border-purple-500/30 text-[8px] font-semibold transition-colors cursor-pointer"
+            title="Add a UI component with state & action bindings"
+          >
+            <Plus size={9} />
+            <span>Add Component</span>
+          </button>
+        </div>
       </div>
+
+      {/* Inline Search Bar on Canvas Node Card */}
+      {searchOpen && (
+        <div className="px-2 py-1 bg-purple-500/[0.03] border-b border-border/20 flex items-center gap-1">
+          <Search size={9} className="text-muted-foreground shrink-0" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Filter components..."
+            className="w-full bg-transparent text-[9px] font-mono outline-none text-foreground placeholder:text-muted-foreground/50"
+            autoFocus
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+            >
+              <X size={9} />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Component List */}
       {componentBindings.length === 0 ? (
@@ -171,9 +233,20 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
             + Add component
           </button>
         </div>
+      ) : visibleBindings.length === 0 ? (
+        <div className="py-2 px-2.5 text-center text-[9px] text-muted-foreground bg-muted/10 mx-2.5 my-1 rounded border border-border/20">
+          <span>No components match &quot;{searchQuery}&quot;. </span>
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            className="text-purple-600 dark:text-purple-400 hover:underline font-semibold"
+          >
+            Clear
+          </button>
+        </div>
       ) : (
         <div className="flex flex-col divide-y divide-border/20">
-          {componentBindings.map((comp) => {
+          {visibleBindings.map((comp) => {
             const Icon = COMPONENT_ICON_MAP[comp.componentType] || Layout;
             const boundAction = section.actions.find((a) => a.id === comp.actionId);
 

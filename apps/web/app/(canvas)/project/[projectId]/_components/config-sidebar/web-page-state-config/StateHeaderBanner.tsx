@@ -9,7 +9,8 @@ export interface StateHeaderBannerProps {
   pageLabel: string;
   targetSection?: PageSection;
   stateObj: PageStateObject;
-  isEnabled: boolean;
+  isEnabled?: boolean;
+  connectedCount?: number;
   onNavigatePage: () => void;
   onNavigateSection?: () => void;
 }
@@ -19,6 +20,7 @@ export const StateHeaderBanner: React.FC<StateHeaderBannerProps> = ({
   targetSection,
   stateObj,
   isEnabled,
+  connectedCount,
   onNavigatePage,
   onNavigateSection,
 }) => {
@@ -81,15 +83,25 @@ export const StateHeaderBanner: React.FC<StateHeaderBannerProps> = ({
 
         {/* Quick status pill */}
         <div className="shrink-0">
-          {isEnabled ? (
-            <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] gap-1 font-medium">
-              <Eye size={10} />
-              <span>Rendered</span>
+          {connectedCount !== undefined ? (
+            <Badge className="bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30 text-[10px] gap-1 font-medium">
+              <span>{connectedCount === 1 ? "1 Component" : `${connectedCount} Components`}</span>
             </Badge>
+          ) : isEnabled !== undefined ? (
+            isEnabled ? (
+              <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] gap-1 font-medium">
+                <Eye size={10} />
+                <span>Rendered</span>
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="text-[10px] gap-1 font-medium text-muted-foreground">
+                <EyeOff size={10} />
+                <span>Hidden</span>
+              </Badge>
+            )
           ) : (
-            <Badge variant="secondary" className="text-[10px] gap-1 font-medium text-muted-foreground">
-              <EyeOff size={10} />
-              <span>Hidden</span>
+            <Badge variant="secondary" className="text-[10px] font-mono">
+              Reactive State
             </Badge>
           )}
         </div>

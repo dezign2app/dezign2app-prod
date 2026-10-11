@@ -18,6 +18,9 @@ import {
   Database,
   Zap,
   Sparkles,
+  Search,
+  X,
+  Filter,
 } from "lucide-react";
 import {
   PageSection,
@@ -66,10 +69,37 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
 }) => {
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+
   const componentBindings = useMemo(
     () => section?.componentBindings || [],
     [section?.componentBindings],
   );
+
+  const filteredBindings = useMemo(() => {
+    return componentBindings.filter((comp) => {
+      if (typeFilter !== "all" && comp.componentType !== typeFilter) {
+        return false;
+      }
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase().trim();
+      const label = (comp.label || "").toLowerCase();
+      const name = (comp.name || "").toLowerCase();
+      const type = (comp.componentType || "").toLowerCase();
+      const stateName = (comp.valueStateName || "").toLowerCase();
+      const actionName = (comp.actionName || "").toLowerCase();
+      const storeName = (comp.valueStoreName || "").toLowerCase();
+      return (
+        label.includes(q) ||
+        name.includes(q) ||
+        type.includes(q) ||
+        stateName.includes(q) ||
+        actionName.includes(q) ||
+        storeName.includes(q)
+      );
+    });
+  }, [componentBindings, searchQuery, typeFilter]);
 
   const handleAddComponent = () => {
     if (!section || !onUpdateSection) return;
@@ -147,6 +177,64 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
         </Button>
       </div>
 
+      {/* Search Bar & Type Filters */}
+      {componentBindings.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <div className="relative">
+            <Search
+              size={12}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search components by label, type, state, or action..."
+              className="h-8 text-xs pl-8 pr-7 bg-secondary/20 border-border/50"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Quick Category Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px]">
+            {[
+              { id: "all", label: `All (${componentBindings.length})` },
+              { id: "button", label: "Buttons" },
+              { id: "input", label: "Inputs" },
+              { id: "card", label: "Cards" },
+              { id: "switch", label: "Switches" },
+              { id: "badge", label: "Badges" },
+              { id: "table", label: "Tables" },
+              { id: "select", label: "Selects" },
+            ].map((tab) => {
+              const isActive = typeFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setTypeFilter(tab.id)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md border font-medium transition-colors cursor-pointer shrink-0",
+                    isActive
+                      ? "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30"
+                      : "bg-secondary/30 text-muted-foreground border-border/40 hover:text-foreground hover:bg-secondary/60",
+                  )}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Component Cards */}
       {componentBindings.length === 0 ? (
         <Card className="border-dashed border-border/60 p-8 text-center flex flex-col items-center justify-center gap-3">
@@ -169,9 +257,29 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
             <span>Create First Component</span>
           </Button>
         </Card>
+      ) : filteredBindings.length === 0 ? (
+        <div className="p-8 rounded-xl border border-dashed border-border/70 text-center flex flex-col items-center gap-2 bg-secondary/10">
+          <Search size={18} className="text-muted-foreground" />
+          <div className="text-xs font-semibold text-foreground">No matching components</div>
+          <p className="text-[11px] text-muted-foreground">
+            No UI components match &quot;{searchQuery}&quot; {typeFilter !== "all" ? `in category "${typeFilter}"` : ""}.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setSearchQuery("");
+              setTypeFilter("all");
+            }}
+            className="h-7 text-xs text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 cursor-pointer"
+          >
+            Clear filters
+          </Button>
+        </div>
       ) : (
         <div className="flex flex-col gap-2.5">
-          {componentBindings.map((comp) => {
+          {filteredBindings.map((comp) => {
             const compTypeInfo = COMPONENT_TYPES.find((c) => c.id === comp.componentType) || COMPONENT_TYPES[0]!;
             const Icon = compTypeInfo.icon;
             const boundAction = section?.actions.find((a) => a.id === comp.actionId);

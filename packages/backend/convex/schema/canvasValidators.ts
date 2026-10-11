@@ -657,6 +657,7 @@ export const sectionComponentBindingConvexValidator = v.object({
   actionId: v.optional(v.string()),
   actionName: v.optional(v.string()),
   description: v.optional(v.string()),
+  propMappings: v.optional(v.any()),
 });
 
 // Page Section Validator

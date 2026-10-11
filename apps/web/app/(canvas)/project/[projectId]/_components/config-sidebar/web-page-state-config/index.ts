@@ -6,3 +6,4 @@ export * from "./ComponentPropMappingsSection";
 export * from "./DisplayFormattingSection";
 export * from "./ClickInteractivitySection";
 export * from "./BoundStoreLink";
+export * from "./ConnectedComponentsSection";

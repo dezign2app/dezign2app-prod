@@ -5,37 +5,33 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useShallow } from "zustand/react/shallow";
 import {
   Layers,
-  Sparkles,
   Play,
   ArrowRight,
-  Database,
   Zap,
-  Sliders,
   ChevronLeft,
   Plus,
   Trash2,
   AlertCircle,
-  MousePointerClick,
-  FormInput,
-  Layout,
-  ToggleLeft,
-  Table,
-  BadgeAlert,
-  ChevronDownSquare,
-  Eye,
-  CheckCircle2,
 } from "lucide-react";
 import {
   PageSection,
   SectionComponentBinding,
-  ComponentBindingType,
   BackendNode,
   UIEventItem,
   JSONValue,
+  StateRenderComponent,
+  StateRenderConfig,
+  ComponentPropMappings,
 } from "@workspace/canvas";
-import { ComponentBindingLivePreview } from "./web-page-component-config/ComponentBindingLivePreview";
+import {
+  StateComponentPreview,
+  ComponentSelector,
+  ComponentPropMappingsSection,
+  COMPONENT_OPTIONS,
+  DEFAULT_COMPONENT_OPTION,
+  ComponentOption,
+} from "./web-page-state-config";
 import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card";
@@ -48,7 +44,6 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { toast } from "sonner";
-import { cn } from "@workspace/ui/lib/utils";
 
 export interface WebPageComponentConfigProps {
   id: string; // Component binding ID
@@ -56,23 +51,37 @@ export interface WebPageComponentConfigProps {
   sectionId?: string; // Section ID
 }
 
-const COMPONENT_TYPES: Array<{
-  id: ComponentBindingType;
-  label: string;
-  icon: React.ElementType;
-  description: string;
-}> = [
-  { id: "button", label: "Button", icon: MousePointerClick, description: "Clickable button to trigger actions" },
-  { id: "input", label: "Text Input", icon: FormInput, description: "Text/number field for user entries" },
-  { id: "card", label: "Card", icon: Layout, description: "Displays formatted data or summary metric" },
-  { id: "switch", label: "Switch", icon: ToggleLeft, description: "Toggle switch for boolean state" },
-  { id: "badge", label: "Badge", icon: BadgeAlert, description: "Small status indicator pill" },
-  { id: "table", label: "Data Table", icon: Table, description: "Displays list or array collection" },
-  { id: "select", label: "Select Dropdown", icon: ChevronDownSquare, description: "Dropdown menu to select an option" },
-];
+const toStateRenderComponent = (val: string): StateRenderComponent => {
+  switch (val) {
+    case "badge":
+    case "card":
+    case "button":
+    case "switch":
+    case "checkbox":
+    case "progress":
+    case "input":
+    case "alert":
+    case "avatar":
+    case "skeleton":
+    case "table":
+    case "code":
+    case "text":
+      return val;
+    default:
+      return "input";
+  }
+};
 
-const isComponentBindingType = (val: string): val is ComponentBindingType => {
-  return COMPONENT_TYPES.some((c) => c.id === val);
+const toValidVariant = (val?: string): NonNullable<StateRenderConfig["variant"]> => {
+  if (val === "secondary" || val === "outline" || val === "destructive") {
+    return val;
+  }
+  return "default";
+};
+
+const toClickAction = (actId?: string): NonNullable<StateRenderConfig["clickAction"]> => {
+  if (actId) return "trigger_event";
+  return "none";
 };
 
 export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
@@ -158,67 +167,151 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
     return list;
   }, [targetSection]);
 
-  const booleanStates = useMemo(() => {
-    const list: Array<{ label: string; fieldName: string; storeName?: string }> = [];
-    storeFields
-      .filter((f) => f.type === "boolean" || f.fieldName.toLowerCase().startsWith("is") || f.fieldName.toLowerCase().startsWith("has"))
-      .forEach((f) => {
-        list.push({ label: f.label, fieldName: f.fieldName, storeName: f.storeName });
-      });
-    localStates
-      .filter((s) => s.type === "boolean" || s.name.toLowerCase().startsWith("is") || s.name.toLowerCase().startsWith("has"))
-      .forEach((s) => {
-        list.push({ label: `Local: ${s.name}`, fieldName: s.name });
-      });
+  const availableStateVars = useMemo(() => {
+    const list: Array<{ name: string; type?: string; source: "store" | "local" }> = [];
+    storeFields.forEach((f) => {
+      list.push({ name: f.label, type: f.type, source: "store" });
+    });
+    localStates.forEach((s) => {
+      list.push({ name: s.name, type: s.type, source: "local" });
+    });
     return list;
   }, [storeFields, localStates]);
 
   const availableActions: UIEventItem[] = targetSection?.actions || [];
 
-  const handleCreateAction = () => {
-    if (!parentNode || !targetSection || !componentBinding) return;
-    const newActId = `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const actionName = `${componentBinding.label || componentBinding.name || "trigger"}Action`;
+  const handleCreateAction = useCallback(
+    (name?: string, eventType?: string) => {
+      if (!parentNode || !targetSection || !componentBinding) return;
+      const newActId = `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const actionName = name || `${componentBinding.label || componentBinding.name || "trigger"}Action`;
 
-    const newAction: UIEventItem = {
-      id: newActId,
-      name: actionName,
-      event: componentBinding.triggerEvent || "click",
-      actionSteps: [],
-    };
+      const newAction: UIEventItem = {
+        id: newActId,
+        name: actionName,
+        event: eventType || componentBinding.triggerEvent || "click",
+        actionSteps: [],
+      };
 
-    const updatedActions = [...(targetSection.actions || []), newAction];
-    const updatedBindings = (targetSection.componentBindings || []).map((c) =>
-      c.id === id
-        ? { ...c, actionId: newActId, actionName }
-        : c,
+      const updatedActions = [...(targetSection.actions || []), newAction];
+      const updatedBindings = (targetSection.componentBindings || []).map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              actionId: newActId,
+              actionName,
+              propMappings: {
+                ...(c.propMappings || {}),
+                onChangeActionId: newActId,
+              },
+            }
+          : c,
+      );
+
+      const updatedSections = sections.map((sec) =>
+        sec.id === targetSection.id
+          ? { ...sec, actions: updatedActions, componentBindings: updatedBindings }
+          : sec,
+      );
+
+      updateNode(nodeId, {
+        data: {
+          ...parentNode.data,
+          sections: updatedSections,
+        },
+      });
+
+      toast.success(`Created action "${actionName}"!`);
+    },
+    [parentNode, targetSection, componentBinding, id, sections, nodeId, updateNode],
+  );
+
+  const handleOpenActionFlow = useCallback(
+    (actionId: string) => {
+      setActiveConfigItem({
+        type: "pageEvent",
+        id: actionId,
+        nodeId,
+        sectionId: targetSection?.id,
+        initialTab: "simulate",
+      });
+    },
+    [setActiveConfigItem, nodeId, targetSection?.id],
+  );
+
+  const currentRenderComponent = toStateRenderComponent(
+    componentBinding?.componentType || "input",
+  );
+
+  const selectedOption: ComponentOption = useMemo(() => {
+    const found = COMPONENT_OPTIONS.find((opt) => opt.id === currentRenderComponent);
+    return found || DEFAULT_COMPONENT_OPTION;
+  }, [currentRenderComponent]);
+
+  const selectedStore = useMemo(() => {
+    if (!componentBinding?.valueStoreName) return undefined;
+    return stateStores.find(
+      (st) =>
+        st.data?.label === componentBinding.valueStoreName ||
+        st.data?.storeName === componentBinding.valueStoreName,
     );
+  }, [componentBinding?.valueStoreName, stateStores]);
 
-    const updatedSections = sections.map((sec) =>
-      sec.id === targetSection.id
-        ? { ...sec, actions: updatedActions, componentBindings: updatedBindings }
-        : sec,
-    );
+  const bindingStateType = useMemo(() => {
+    if (!componentBinding) return undefined;
+    if (componentBinding.valueStoreName && componentBinding.valueStateName) {
+      const match = storeFields.find(
+        (f) =>
+          f.storeName === componentBinding.valueStoreName &&
+          f.fieldName === componentBinding.valueStateName,
+      );
+      if (match) return match.type;
+    }
+    if (componentBinding.valueStateName) {
+      const match = localStates.find((s) => s.name === componentBinding.valueStateName);
+      if (match) return match.type;
+    }
+    return undefined;
+  }, [componentBinding, storeFields, localStates]);
 
-    updateNode(nodeId, {
-      data: {
-        ...parentNode.data,
-        sections: updatedSections,
-      },
-    });
+  const propMappings: ComponentPropMappings = useMemo(() => {
+    return componentBinding?.propMappings || {};
+  }, [componentBinding?.propMappings]);
 
-    toast.success(`Created action "${actionName}"!`);
-  };
+  const handleUpdatePropMapping = useCallback(
+    (changes: Partial<ComponentPropMappings>) => {
+      if (!componentBinding) return;
+      const currentProps = componentBinding.propMappings || {};
+      const updatedProps: ComponentPropMappings = {
+        ...currentProps,
+        ...changes,
+      };
 
-  const handleOpenActionFlow = (actionId: string) => {
-    setActiveConfigItem({
-      type: "pageEvent",
-      id: actionId,
-      nodeId,
-      sectionId: targetSection?.id,
-      initialTab: "simulate",
-    });
-  };
+      const topLevelUpdates: Partial<SectionComponentBinding> = {
+        propMappings: updatedProps,
+      };
+
+      if (changes.valueBinding && !componentBinding.valueStateName) {
+        topLevelUpdates.valueStateName = changes.valueBinding;
+      }
+      if (changes.onChangeActionId) {
+        topLevelUpdates.actionId = changes.onChangeActionId;
+        const matched = availableActions.find((a) => a.id === changes.onChangeActionId);
+        if (matched) {
+          topLevelUpdates.actionName = matched.name;
+        }
+      }
+      if (changes.disabledBinding) {
+        topLevelUpdates.disabledStateName = changes.disabledBinding;
+      }
+      if (changes.disabledStoreName) {
+        topLevelUpdates.disabledStoreName = changes.disabledStoreName;
+      }
+
+      handleUpdate(topLevelUpdates);
+    },
+    [componentBinding, availableActions, handleUpdate],
+  );
 
   if (!parentNode || !targetSection || !componentBinding) {
     return (
@@ -240,12 +333,21 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
     );
   }
 
-  const selectedCompType = COMPONENT_TYPES.find((c) => c.id === componentBinding.componentType) || COMPONENT_TYPES[0]!;
-
   const boundStateObj = targetSection?.stateObjects?.find(
     (s) => s.name === componentBinding?.valueStateName,
   );
   const sampleValue: JSONValue | undefined = boundStateObj?.defaultValue;
+
+  const displayLabel = componentBinding.label || componentBinding.name || "Component";
+  const stateName = componentBinding.valueStateName || componentBinding.name || "value";
+
+  const formattedPreviewValue = String(
+    sampleValue !== undefined && sampleValue !== null
+      ? typeof sampleValue === "object"
+        ? JSON.stringify(sampleValue)
+        : sampleValue
+      : componentBinding.valueStateName || displayLabel,
+  );
 
   return (
     <div className="flex flex-col gap-5 font-sans text-foreground pb-12">
@@ -253,8 +355,30 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
       <div className="flex items-center justify-between p-3.5 rounded-xl bg-purple-500/[0.05] border border-purple-500/20">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                setActiveConfigItem({
+                  type: "pageSection",
+                  id: targetSection.id,
+                  nodeId,
+                })
+              }
+              className="h-5 px-1 text-muted-foreground hover:text-foreground -ml-1 gap-1 cursor-pointer"
+            >
+              <ChevronLeft size={12} />
+              <span>Back</span>
+            </Button>
+            <span>/</span>
             <span
-              onClick={() => setActiveConfigItem({ type: "webPage", id: nodeId, nodeId })}
+              onClick={() =>
+                setActiveConfigItem({
+                  type: "webPage",
+                  id: nodeId,
+                  nodeId,
+                })
+              }
               className="hover:text-foreground cursor-pointer transition-colors"
             >
               {parentNode.data?.label || "Page"}
@@ -274,7 +398,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
             </span>
             <span>/</span>
             <span className="text-purple-600 dark:text-purple-400 font-semibold">
-              {componentBinding.label || componentBinding.name}
+              {displayLabel}
             </span>
           </div>
 
@@ -284,7 +408,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
             </div>
             <div className="flex flex-col">
               <span className="text-xs font-bold text-foreground">
-                {componentBinding.label || componentBinding.name}
+                {displayLabel}
               </span>
               <span className="text-[10px] text-muted-foreground">
                 UI Component, State Binding &amp; Action Trigger
@@ -301,60 +425,134 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         </Badge>
       </div>
 
-      {/* 2. Live Interactive Component Preview */}
-      <ComponentBindingLivePreview
-        componentType={componentBinding.componentType}
-        variant={componentBinding.variant}
-        label={componentBinding.label}
-        name={componentBinding.name}
-        valueStateName={componentBinding.valueStateName}
-        valueStoreName={componentBinding.valueStoreName}
+      {/* 2. Live Component Preview Sandbox */}
+      <StateComponentPreview
+        currentComponent={currentRenderComponent}
+        currentVariant={toValidVariant(componentBinding.variant)}
+        currentClickAction={toClickAction(componentBinding.actionId)}
+        displayLabel={displayLabel}
+        customLabel={componentBinding.label}
+        formattedPreviewValue={formattedPreviewValue}
         sampleValue={sampleValue}
-        disabledStateName={componentBinding.disabledStateName}
-        loadingStateName={componentBinding.loadingStateName}
-        actionId={componentBinding.actionId}
-        actionName={componentBinding.actionName}
-        triggerEvent={componentBinding.triggerEvent}
-        onSimulateAction={() => {
-          if (componentBinding.actionId) {
-            handleOpenActionFlow(componentBinding.actionId);
-          } else {
-            toast.info(`Clicked: "${componentBinding.label || componentBinding.name}"`);
-          }
-        }}
+        propMappings={propMappings}
+        stateName={stateName}
+        copyToastMessage={`Copied ${stateName} to clipboard!`}
+        targetActionId={componentBinding.actionId}
       />
 
-      {/* 3. Component Definition Settings */}
+      {/* 3. Searchable Component Selector Combobox */}
+      <ComponentSelector
+        currentComponent={currentRenderComponent}
+        selectedOption={selectedOption}
+        stateType={bindingStateType}
+        onSelectComponent={(componentId) => handleUpdate({ componentType: componentId })}
+      />
+
+      <Separator className="bg-border/50" />
+
+      {/* 4. Component Prop Mappings Section */}
+      <ComponentPropMappingsSection
+        currentComponent={currentRenderComponent}
+        selectedOption={selectedOption}
+        displayLabel={displayLabel}
+        stateName={stateName}
+        stateType={bindingStateType}
+        storeName={componentBinding.valueStoreName}
+        storeId={selectedStore?.id}
+        availableActions={availableActions}
+        availableStateVars={availableStateVars}
+        stateStoreNodes={stateStores}
+        propMappings={propMappings}
+        onUpdatePropMapping={handleUpdatePropMapping}
+        onOpenEventConfig={handleOpenActionFlow}
+        onCreateAction={(name, eventType) => handleCreateAction(name, eventType || "change")}
+      />
+
+      <Separator className="bg-border/50" />
+
+      {/* 5. Event & Action Trigger Binding */}
       <Card className="border-border/60 shadow-xs">
         <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
-            <Sliders size={13} className="text-primary" />
-            <span>Component Identity &amp; Type</span>
+          <CardTitle className="text-xs font-semibold flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Zap size={13} className="text-amber-500" />
+              <span>Event &amp; Action Trigger Binding</span>
+            </span>
+            {componentBinding.actionId && (
+              <Badge variant="outline" className="text-[10px] text-amber-600 dark:text-amber-400 border-amber-500/30">
+                Wired
+              </Badge>
+            )}
           </CardTitle>
           <CardDescription className="text-[11px]">
-            Choose the UI component type and display label
+            Execute section actions and workflows when interacting with this component
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 pt-1 space-y-3 text-xs">
           <div className="space-y-1">
-            <Label className="text-[11px] text-muted-foreground">UI Component Type</Label>
+            <Label className="text-[11px] text-muted-foreground flex items-center justify-between">
+              <span>Trigger Event</span>
+              <span className="text-[10px] text-muted-foreground/70 font-normal">
+                DOM or interaction event
+              </span>
+            </Label>
             <Select
-              value={componentBinding.componentType}
-              onValueChange={(val) => {
-                if (isComponentBindingType(val)) {
-                  handleUpdate({ componentType: val });
-                }
-              }}
+              value={componentBinding.triggerEvent || "click"}
+              onValueChange={(val) => handleUpdate({ triggerEvent: val })}
             >
               <SelectTrigger className="h-8 text-xs bg-background">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {COMPONENT_TYPES.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    <div className="flex items-center gap-2">
-                      <c.icon size={12} className="text-purple-500" />
-                      <span>{c.label}</span>
+                <SelectItem value="click">onClick (Button click / tap)</SelectItem>
+                <SelectItem value="change">onChange (Input change / toggle)</SelectItem>
+                <SelectItem value="submit">onSubmit (Form submission)</SelectItem>
+                <SelectItem value="select">onSelect (Dropdown option chosen)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] text-muted-foreground">Target Action Workflow</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleCreateAction()}
+                className="h-6 text-[11px] text-purple-600 dark:text-purple-400 hover:text-purple-700 p-0 hover:bg-transparent flex items-center gap-1 cursor-pointer"
+              >
+                <Plus size={11} />
+                <span>New Action</span>
+              </Button>
+            </div>
+            <Select
+              value={componentBinding.actionId || "__none__"}
+              onValueChange={(val) => {
+                if (val === "__none__") {
+                  handleUpdate({ actionId: undefined, actionName: undefined });
+                } else {
+                  const act = availableActions.find((a) => a.id === val);
+                  handleUpdate({
+                    actionId: val,
+                    actionName: act?.name || "Action",
+                  });
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs bg-background">
+                <SelectValue placeholder="No Action Bound" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None (No Action)</SelectItem>
+                {availableActions.map((act) => (
+                  <SelectItem key={act.id} value={act.id || ""}>
+                    <div className="flex items-center gap-1.5">
+                      <Zap size={11} className="text-amber-500" />
+                      <span>{act.name}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        ({act.actionSteps?.length || 0} steps)
+                      </span>
                     </div>
                   </SelectItem>
                 ))}
@@ -362,263 +560,56 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
             </Select>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground">Component Label / Text</Label>
-              <Input
-                value={componentBinding.label ?? ""}
-                onChange={(e) => handleUpdate({ label: e.target.value })}
-                placeholder="e.g. Send Message, Search"
-                className="h-8 text-xs bg-background"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground">Style Variant</Label>
-              <Select
-                value={componentBinding.variant || "default"}
-                onValueChange={(val) => handleUpdate({ variant: val })}
-              >
-                <SelectTrigger className="h-8 text-xs bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">Default (Primary)</SelectItem>
-                  <SelectItem value="secondary">Secondary</SelectItem>
-                  <SelectItem value="outline">Outline</SelectItem>
-                  <SelectItem value="destructive">Destructive (Red)</SelectItem>
-                  <SelectItem value="ghost">Ghost</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 4. State Variable Mappings (Value & Guard) */}
-      <Card className="border-border/60 shadow-xs">
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
-            <Database size={13} className="text-cyan-500" />
-            <span>State Variable Mappings</span>
-          </CardTitle>
-          <CardDescription className="text-[11px]">
-            Bind values from Zustand stores or local page state
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 pt-1 space-y-3 text-xs">
-          {/* Value / Data Binding */}
-          <div className="space-y-1">
-            <Label className="text-[11px] text-muted-foreground flex items-center justify-between">
-              <span>Main Data / Value Binding</span>
-              <span className="text-[10px] text-muted-foreground/70 font-normal">
-                (value, children, or data source)
-              </span>
-            </Label>
-            <Select
-              value={
-                componentBinding.valueStateName
-                  ? componentBinding.valueStoreName
-                    ? `${componentBinding.valueStoreName}.${componentBinding.valueStateName}`
-                    : `local.${componentBinding.valueStateName}`
-                  : "__none__"
-              }
-              onValueChange={(val) => {
-                if (val === "__none__") {
-                  handleUpdate({
-                    valueStateName: undefined,
-                    valueStoreName: undefined,
-                    valueSourceType: undefined,
-                  });
-                } else if (val.startsWith("local.")) {
-                  const stateName = val.replace("local.", "");
-                  handleUpdate({
-                    valueStateName: stateName,
-                    valueStoreName: undefined,
-                    valueSourceType: "local",
-                  });
-                } else {
-                  const [sName, fName] = val.split(".");
-                  handleUpdate({
-                    valueStateName: fName,
-                    valueStoreName: sName,
-                    valueSourceType: "store",
-                  });
-                }
-              }}
-            >
-              <SelectTrigger className="h-8 text-xs bg-background font-mono">
-                <SelectValue placeholder="Select state variable..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">-- None (Static component) --</SelectItem>
-                {storeFields.map((f) => (
-                  <SelectItem key={f.id} value={`${f.storeName}.${f.fieldName}`} className="font-mono text-xs">
-                    ⚡ {f.label} ({f.type})
-                  </SelectItem>
-                ))}
-                {localStates.map((s) => (
-                  <SelectItem key={s.name} value={`local.${s.name}`} className="font-mono text-xs">
-                    📄 Page State: {s.name} ({s.type || "state"})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Disabled Guard Binding */}
-          <div className="space-y-1">
-            <Label className="text-[11px] text-muted-foreground flex items-center justify-between">
-              <span>Disabled State Guard</span>
-              <span className="text-[10px] text-rose-500/80 font-normal">
-                (e.g. disabled when isLoading)
-              </span>
-            </Label>
-            <Select
-              value={
-                componentBinding.disabledStateName
-                  ? componentBinding.disabledStoreName
-                    ? `${componentBinding.disabledStoreName}.${componentBinding.disabledStateName}`
-                    : `local.${componentBinding.disabledStateName}`
-                  : "__none__"
-              }
-              onValueChange={(val) => {
-                if (val === "__none__") {
-                  handleUpdate({
-                    disabledStateName: undefined,
-                    disabledStoreName: undefined,
-                  });
-                } else if (val.startsWith("local.")) {
-                  const stateName = val.replace("local.", "");
-                  handleUpdate({
-                    disabledStateName: stateName,
-                    disabledStoreName: undefined,
-                  });
-                } else {
-                  const [sName, fName] = val.split(".");
-                  handleUpdate({
-                    disabledStateName: fName,
-                    disabledStoreName: sName,
-                  });
-                }
-              }}
-            >
-              <SelectTrigger className="h-8 text-xs bg-background font-mono">
-                <SelectValue placeholder="Select boolean state guard..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">-- Never Disabled --</SelectItem>
-                {booleanStates.map((b) => (
-                  <SelectItem
-                    key={b.storeName ? `${b.storeName}.${b.fieldName}` : `local.${b.fieldName}`}
-                    value={b.storeName ? `${b.storeName}.${b.fieldName}` : `local.${b.fieldName}`}
-                    className="font-mono text-xs"
-                  >
-                    🔒 {b.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 5. Action / Event Trigger Mapping */}
-      <Card className="border-border/60 shadow-xs">
-        <CardHeader className="p-4 pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
-              <Zap size={13} className="text-amber-500" />
-              <span>Action / Trigger Binding</span>
-            </CardTitle>
-            <button
-              type="button"
-              onClick={handleCreateAction}
-              className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-0.5 cursor-pointer"
-            >
-              <Plus size={10} />
-              <span>New Action</span>
-            </button>
-          </div>
-          <CardDescription className="text-[11px]">
-            Action executed when user interacts with this component
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 pt-1 space-y-3 text-xs">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground">Trigger Event</Label>
-              <Select
-                value={componentBinding.triggerEvent || "click"}
-                onValueChange={(val) => handleUpdate({ triggerEvent: val })}
-              >
-                <SelectTrigger className="h-8 text-xs bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="click">onClick</SelectItem>
-                  <SelectItem value="change">onChange</SelectItem>
-                  <SelectItem value="submit">onSubmit</SelectItem>
-                  <SelectItem value="select">onSelect</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground">Target Section Action</Label>
-              <Select
-                value={componentBinding.actionId || "__none__"}
-                onValueChange={(val) => {
-                  if (val === "__none__") {
-                    handleUpdate({ actionId: undefined, actionName: undefined });
-                  } else {
-                    const act = availableActions.find((a) => a.id === val);
-                    handleUpdate({
-                      actionId: val,
-                      actionName: act?.name || "action",
-                    });
-                  }
-                }}
-              >
-                <SelectTrigger className="h-8 text-xs bg-background font-mono">
-                  <SelectValue placeholder="Choose action..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">-- No Action Attached --</SelectItem>
-                  {availableActions.map((a) => (
-                    <SelectItem key={a.id} value={a.id} className="font-mono text-xs">
-                      ⚡ {a.name} ({a.event})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
           {componentBinding.actionId && (
-            <div className="p-2.5 rounded-lg bg-amber-500/[0.04] border border-amber-500/25 flex items-center justify-between">
-              <div className="flex items-center gap-1.5 font-mono text-[11px]">
-                <ArrowRight size={11} className="text-amber-500" />
-                <span className="text-muted-foreground">Flow:</span>
-                <span className="font-bold text-foreground">
-                  {componentBinding.actionName || "Action"}
-                </span>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => handleOpenActionFlow(componentBinding.actionId!)}
-                className="h-7 text-[11px] gap-1 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 cursor-pointer"
-              >
-                <Play size={10} />
-                <span>Configure Steps &amp; Simulate</span>
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (componentBinding.actionId) {
+                  handleOpenActionFlow(componentBinding.actionId);
+                }
+              }}
+              className="w-full h-8 text-xs flex items-center justify-between border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 cursor-pointer"
+            >
+              <span className="flex items-center gap-1.5">
+                <Play size={12} className="text-purple-500" />
+                <span>Open Action Flow Editor</span>
+              </span>
+              <ArrowRight size={12} />
+            </Button>
           )}
         </CardContent>
       </Card>
+
+      {/* 6. Delete Component Binding Button */}
+      <div className="pt-2 border-t border-border/40 flex justify-end">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            const currentBindings = targetSection.componentBindings || [];
+            const updatedBindings = currentBindings.filter((c) => c.id !== id);
+            const updatedSections = sections.map((sec) =>
+              sec.id === targetSection.id
+                ? { ...sec, componentBindings: updatedBindings }
+                : sec,
+            );
+            updateNode(nodeId, {
+              data: {
+                ...parentNode.data,
+                sections: updatedSections,
+              },
+            });
+            setActiveConfigItem(null);
+            toast.success("Component binding removed");
+          }}
+          className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive flex items-center gap-1.5 cursor-pointer"
+        >
+          <Trash2 size={12} />
+          <span>Delete Component Binding</span>
+        </Button>
+      </div>
     </div>
   );
 };
-
-export default WebPageComponentConfig;

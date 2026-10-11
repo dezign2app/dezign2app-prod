@@ -219,6 +219,7 @@ export interface SectionComponentBinding {
   actionName?: string;
 
   description?: string;
+  propMappings?: ComponentPropMappings;
 }
 
 export type PageSection = {
