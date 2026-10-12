@@ -29,16 +29,12 @@ import {
   ComponentBindingType,
 } from "@workspace/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { toPascalCase } from "@/lib/utils";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@workspace/ui/components/popover";
 import {
   Select,
   SelectContent,
@@ -78,13 +74,28 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
 
-  const [addPopoverOpen, setAddPopoverOpen] = useState(false);
-  const [newCompType, setNewCompType] = useState<ComponentBindingType>("button");
-  const [newCompName, setNewCompName] = useState("");
-  const [newCompLabel, setNewCompLabel] = useState("");
-
   const [editingCompId, setEditingCompId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  // Auto-activate (focus & select) name input when adding or editing a component
+  React.useEffect(() => {
+    if (editingCompId) {
+      const focus = () => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.select();
+        }
+      };
+      focus();
+      const raf = requestAnimationFrame(focus);
+      const timer = setTimeout(focus, 50);
+      return () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(timer);
+      };
+    }
+  }, [editingCompId]);
 
   const componentBindings = useMemo(
     () => section?.componentBindings || [],
@@ -115,48 +126,15 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
     });
   }, [componentBindings, searchQuery, typeFilter]);
 
-  const handleOpenAddPopover = () => {
-    const count = componentBindings.filter((c) => c.componentType === "button").length;
-    setNewCompType("button");
-    setNewCompName(`Button ${count + 1}`);
-    setNewCompLabel("Button");
-    setAddPopoverOpen(true);
-  };
-
-  const handleSelectArchetype = (typeId: ComponentBindingType, typeLabel: string) => {
-    setNewCompType(typeId);
-    const count = componentBindings.filter((c) => c.componentType === typeId).length;
-    setNewCompName(`${typeLabel} ${count + 1}`);
-    setNewCompLabel(typeLabel);
-  };
-
-  const handleCreateComponent = (customValues?: {
-    name?: string;
-    label?: string;
-    componentType?: ComponentBindingType;
-  }) => {
+  // When adding a new component, activate the name input field immediately
+  const handleAddComponent = () => {
     if (!section || !onUpdateSection) return;
-    const compType = customValues?.componentType || newCompType || "button";
     const newId = `comp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
 
-    // Real user actions, strictly excluding lifecycle hooks like pageLoad
     const realActions = (section.actions || []).filter(
       (a) => a.name !== "pageLoad" && a.name !== "init",
     );
     const chosenAction = realActions[0];
-
-    const sameTypeCount = componentBindings.filter((c) => c.componentType === compType).length;
-    const typeTitle = compType.charAt(0).toUpperCase() + compType.slice(1);
-
-    const resolvedName =
-      customValues?.name?.trim() ||
-      newCompName.trim() ||
-      (chosenAction ? `${chosenAction.name} ${typeTitle}` : `${typeTitle} ${sameTypeCount + 1}`);
-
-    const resolvedLabel =
-      customValues?.label?.trim() ||
-      newCompLabel.trim() ||
-      (chosenAction ? chosenAction.name : typeTitle);
 
     const firstStateObj = section.stateObjects?.[0];
     const firstVar = section.states?.[0];
@@ -166,13 +144,13 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
 
     const newBinding: SectionComponentBinding = {
       id: newId,
-      name: resolvedName,
-      componentType: compType,
-      label: resolvedLabel,
+      name: "",
+      componentType: "button",
+      label: "",
       variant: "default",
       actionId: chosenAction?.id,
       actionName: chosenAction?.name,
-      triggerEvent: compType === "input" || compType === "switch" ? "change" : "click",
+      triggerEvent: "click",
       valueStateName: defaultStateName,
       valueSourceType: isStore ? "store" : "local",
       valueStoreName: defaultStoreName,
@@ -182,37 +160,95 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
       componentBindings: [...componentBindings, newBinding],
     });
 
-    setAddPopoverOpen(false);
-    setNewCompName("");
-    setNewCompLabel("");
+    setEditingCompId(newId);
+    setEditingText("");
+  };
 
-    if (nodeId) {
-      setActiveConfigItem({
-        type: "sectionComponent",
-        id: newId,
-        nodeId,
-        sectionId: section.id,
-      });
+  const debounceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleTextChange = (val: string) => {
+    setEditingText(val);
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    // Do not format while user has trailing whitespace (still typing next word)
+    if (val.trim() && !/\s$/.test(val)) {
+      debounceTimerRef.current = setTimeout(() => {
+        debounceTimerRef.current = null;
+        const formatted = toPascalCase(val);
+        if (formatted) {
+          setEditingText(formatted);
+        }
+      }, 500);
     }
   };
 
   const handleStartRename = (comp: SectionComponentBinding) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
     setEditingCompId(comp.id);
-    setEditingText(comp.label || comp.name || "");
+    setEditingText(comp.name || comp.label || "");
   };
 
   const handleSaveRename = (compId: string) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    if (!onUpdateSection) return;
+    const comp = componentBindings.find((c) => c.id === compId);
     const trimmed = editingText.trim();
-    if (!trimmed || !onUpdateSection) {
+    const olderName = comp?.name || comp?.label || "";
+
+    if (!trimmed) {
+      if (olderName) {
+        // while renaming if the name field is empty switch back to older name
+        setEditingCompId(null);
+        return;
+      }
+      // if they enter the name keep it else remove it
+      // olderName was empty (new component) -> remove it!
+      onUpdateSection({
+        componentBindings: componentBindings.filter((c) => c.id !== compId),
+      });
       setEditingCompId(null);
       return;
     }
+
+    const pascal = toPascalCase(trimmed);
     const updated = componentBindings.map((c) =>
       c.id === compId
-        ? { ...c, label: trimmed, name: c.name || trimmed }
+        ? { ...c, label: pascal, name: pascal }
         : c,
     );
     onUpdateSection({ componentBindings: updated });
+    setEditingCompId(null);
+  };
+
+  const handleCancelRename = (compId: string) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    if (!onUpdateSection) return;
+    const comp = componentBindings.find((c) => c.id === compId);
+    const olderName = comp?.name || comp?.label || "";
+    if (!olderName) {
+      onUpdateSection({
+        componentBindings: componentBindings.filter((c) => c.id !== compId),
+      });
+    }
     setEditingCompId(null);
   };
 
@@ -258,107 +294,15 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
           </p>
         </div>
 
-        <Popover open={addPopoverOpen} onOpenChange={setAddPopoverOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleOpenAddPopover}
-              className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-medium cursor-pointer shadow-xs"
-            >
-              <Plus size={12} />
-              <span>Add Component</span>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            side="bottom"
-            sideOffset={5}
-            className="w-72 p-3 bg-popover border border-border/80 shadow-xl rounded-xl z-50 text-foreground"
-          >
-            <div className="flex flex-col gap-2.5 text-xs">
-              <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
-                <span className="font-semibold text-foreground flex items-center gap-1.5 text-xs">
-                  <Layers size={13} className="text-purple-500" />
-                  <span>Add UI Component</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setAddPopoverOpen(false)}
-                  className="text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <Label className="text-[10px] font-medium text-muted-foreground">Archetype</Label>
-                <div className="grid grid-cols-4 gap-1">
-                  {COMPONENT_TYPES.map((item) => {
-                    const ItemIcon = item.icon;
-                    const isSelected = newCompType === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => handleSelectArchetype(item.id, item.label)}
-                        className={cn(
-                          "flex flex-col items-center justify-center p-1 rounded border text-[9px] gap-0.5 transition-colors cursor-pointer",
-                          isSelected
-                            ? "bg-purple-500/15 border-purple-500/40 text-purple-600 dark:text-purple-400 font-semibold"
-                            : "bg-secondary/30 border-border/40 text-muted-foreground hover:text-foreground hover:bg-secondary/60",
-                        )}
-                      >
-                        <ItemIcon size={12} />
-                        <span className="text-[8px] truncate">{item.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <Label className="text-[10px] font-medium text-muted-foreground">Component Name</Label>
-                <Input
-                  value={newCompName}
-                  onChange={(e) => setNewCompName(e.target.value)}
-                  placeholder="e.g. Submit Button"
-                  className="h-8 text-xs font-mono"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handleCreateComponent();
-                    }
-                  }}
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <Label className="text-[10px] font-medium text-muted-foreground">Display Label / Text</Label>
-                <Input
-                  value={newCompLabel}
-                  onChange={(e) => setNewCompLabel(e.target.value)}
-                  placeholder="e.g. Submit"
-                  className="h-8 text-xs font-mono"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handleCreateComponent();
-                    }
-                  }}
-                />
-              </div>
-
-              <Button
-                type="button"
-                onClick={() => handleCreateComponent()}
-                className="mt-1 w-full h-8 bg-purple-600 hover:bg-purple-700 text-white font-medium text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-              >
-                <Plus size={12} />
-                <span>Create Component</span>
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
+        <Button
+          type="button"
+          size="sm"
+          onClick={handleAddComponent}
+          className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-medium cursor-pointer shadow-xs"
+        >
+          <Plus size={12} />
+          <span>Add Component</span>
+        </Button>
       </div>
 
       {/* Search Bar & Type Filters */}
@@ -434,7 +378,7 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
           <Button
             size="sm"
             variant="outline"
-            onClick={handleOpenAddPopover}
+            onClick={handleAddComponent}
             className="h-8 gap-1.5 border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 cursor-pointer"
           >
             <Plus size={12} />
@@ -483,19 +427,23 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
                       <div className="flex items-center gap-2">
                         {editingCompId === comp.id ? (
                           <input
+                            ref={inputRef}
                             type="text"
                             value={editingText}
-                            onChange={(e) => setEditingText(e.target.value)}
+                            placeholder="Component name..."
+                            onChange={(e) => handleTextChange(e.target.value)}
                             onBlur={() => handleSaveRename(comp.id)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
+                                e.preventDefault();
                                 handleSaveRename(comp.id);
                               } else if (e.key === "Escape") {
-                                setEditingCompId(null);
+                                e.preventDefault();
+                                handleCancelRename(comp.id);
                               }
                             }}
                             autoFocus
-                            className="h-5 px-1.5 text-xs font-semibold bg-background border border-purple-500 rounded outline-none w-36 text-foreground"
+                            className="h-5 px-1.5 text-xs font-semibold bg-background border border-purple-500 rounded outline-none w-36 text-foreground font-mono"
                           />
                         ) : (
                           <span
@@ -503,7 +451,7 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
                             title="Double-click to rename"
                             className="font-semibold text-foreground text-xs truncate cursor-text hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
                           >
-                            {comp.label || comp.name}
+                            {comp.label || comp.name || "Untitled"}
                           </span>
                         )}
                         <Badge variant="secondary" className="text-[9px] font-mono px-1.5 py-0 uppercase">
