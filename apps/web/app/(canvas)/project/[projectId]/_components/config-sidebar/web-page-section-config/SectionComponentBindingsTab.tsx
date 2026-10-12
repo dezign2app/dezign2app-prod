@@ -29,6 +29,7 @@ import {
   ComponentBindingType,
 } from "@workspace/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { toPascalCase } from "@/lib/utils";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -81,7 +82,6 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
   const [addPopoverOpen, setAddPopoverOpen] = useState(false);
   const [newCompType, setNewCompType] = useState<ComponentBindingType>("button");
   const [newCompName, setNewCompName] = useState("");
-  const [newCompLabel, setNewCompLabel] = useState("");
 
   const [editingCompId, setEditingCompId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
@@ -118,16 +118,15 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
   const handleOpenAddPopover = () => {
     const count = componentBindings.filter((c) => c.componentType === "button").length;
     setNewCompType("button");
-    setNewCompName(`Button ${count + 1}`);
-    setNewCompLabel("Button");
+    setNewCompName(`Button${count + 1}`);
     setAddPopoverOpen(true);
   };
 
   const handleSelectArchetype = (typeId: ComponentBindingType, typeLabel: string) => {
     setNewCompType(typeId);
     const count = componentBindings.filter((c) => c.componentType === typeId).length;
-    setNewCompName(`${typeLabel} ${count + 1}`);
-    setNewCompLabel(typeLabel);
+    const pascal = toPascalCase(typeLabel);
+    setNewCompName(`${pascal}${count + 1}`);
   };
 
   const handleCreateComponent = (customValues?: {
@@ -146,17 +145,16 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
     const chosenAction = realActions[0];
 
     const sameTypeCount = componentBindings.filter((c) => c.componentType === compType).length;
-    const typeTitle = compType.charAt(0).toUpperCase() + compType.slice(1);
+    const typeTitle = toPascalCase(compType);
 
-    const resolvedName =
+    const rawName =
       customValues?.name?.trim() ||
-      newCompName.trim() ||
-      (chosenAction ? `${chosenAction.name} ${typeTitle}` : `${typeTitle} ${sameTypeCount + 1}`);
-
-    const resolvedLabel =
       customValues?.label?.trim() ||
-      newCompLabel.trim() ||
-      (chosenAction ? chosenAction.name : typeTitle);
+      newCompName.trim() ||
+      `${typeTitle}${sameTypeCount + 1}`;
+
+    const resolvedName = toPascalCase(rawName) || `${typeTitle}${sameTypeCount + 1}`;
+    const resolvedLabel = resolvedName;
 
     const firstStateObj = section.stateObjects?.[0];
     const firstVar = section.states?.[0];
@@ -184,7 +182,6 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
 
     setAddPopoverOpen(false);
     setNewCompName("");
-    setNewCompLabel("");
 
     if (nodeId) {
       setActiveConfigItem({
@@ -198,7 +195,7 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
 
   const handleStartRename = (comp: SectionComponentBinding) => {
     setEditingCompId(comp.id);
-    setEditingText(comp.label || comp.name || "");
+    setEditingText(comp.name || comp.label || "");
   };
 
   const handleSaveRename = (compId: string) => {
@@ -207,9 +204,10 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
       setEditingCompId(null);
       return;
     }
+    const pascal = toPascalCase(trimmed) || trimmed;
     const updated = componentBindings.map((c) =>
       c.id === compId
-        ? { ...c, label: trimmed, name: c.name || trimmed }
+        ? { ...c, label: pascal, name: pascal }
         : c,
     );
     onUpdateSection({ componentBindings: updated });
@@ -318,28 +316,16 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
               </div>
 
               <div className="flex flex-col gap-1">
-                <Label className="text-[10px] font-medium text-muted-foreground">Component Name</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-[10px] font-medium text-muted-foreground">Component Name</Label>
+                  <span className="text-[9px] font-mono text-purple-600 dark:text-purple-400">PascalCase</span>
+                </div>
                 <Input
                   value={newCompName}
                   onChange={(e) => setNewCompName(e.target.value)}
-                  placeholder="e.g. Submit Button"
+                  placeholder="e.g. SubmitButton, ActionCard"
                   className="h-8 text-xs font-mono"
                   autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handleCreateComponent();
-                    }
-                  }}
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <Label className="text-[10px] font-medium text-muted-foreground">Display Label / Text</Label>
-                <Input
-                  value={newCompLabel}
-                  onChange={(e) => setNewCompLabel(e.target.value)}
-                  placeholder="e.g. Submit"
-                  className="h-8 text-xs font-mono"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       handleCreateComponent();

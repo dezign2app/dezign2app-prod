@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, useEffect, useState } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -13,6 +13,7 @@ import {
   Trash2,
   AlertCircle,
   Tag,
+  Sparkles,
 } from "lucide-react";
 import {
   PageSection,
@@ -33,6 +34,7 @@ import {
   ComponentOption,
 } from "./web-page-state-config";
 import { Button } from "@workspace/ui/components/button";
+import { Input } from "@workspace/ui/components/input";
 import { LocalInput } from "../backend-nodes/graph-nodes/shared";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
@@ -52,6 +54,9 @@ export interface WebPageComponentConfigProps {
   nodeId: string; // WebPageNode ID
   sectionId?: string; // Section ID
 }
+
+import { toPascalCase } from "@/lib/utils";
+export { toPascalCase };
 
 const toStateRenderComponent = (val: string): StateRenderComponent => {
   switch (val) {
@@ -129,9 +134,18 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
       if (!currentTargetSec) return;
 
       const currentBindings = currentTargetSec.componentBindings || [];
-      const updatedBindings = currentBindings.map((c) =>
-        c.id === id ? { ...c, ...changes } : c,
-      );
+      const updatedBindings = currentBindings.map((c) => {
+        if (c.id !== id) return c;
+        const next = { ...c, ...changes };
+        if (changes.name !== undefined) {
+          const pascal = toPascalCase(changes.name);
+          next.name = pascal;
+          if (changes.label !== undefined || !next.label) {
+            next.label = pascal;
+          }
+        }
+        return next;
+      });
 
       const updatedSections = currentSections.map((sec) =>
         sec.id === currentTargetSec.id
@@ -148,6 +162,18 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
     },
     [nodeId, id, sectionId, updateNode],
   );
+
+  // Auto-normalize component name and label to PascalCase
+  useEffect(() => {
+    if (!componentBinding) return;
+    const currentName = componentBinding.name || componentBinding.label;
+    if (currentName) {
+      const pascal = toPascalCase(currentName);
+      if (pascal && (componentBinding.name !== pascal || componentBinding.label !== pascal)) {
+        handleUpdate({ name: pascal, label: pascal });
+      }
+    }
+  }, [componentBinding?.name, componentBinding?.label, handleUpdate]);
 
   // Available state variables across section and state stores
   const storeFields = useMemo(() => {
@@ -210,7 +236,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
       if (!currentBinding) return;
 
       const newActId = `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-      const actionName = name || `${currentBinding.label || currentBinding.name || "trigger"}Action`;
+      const actionName = name || `${currentBinding.name || currentBinding.label || "trigger"}Action`;
 
       const newAction: UIEventItem = {
         id: newActId,
@@ -371,8 +397,51 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
   );
   const sampleValue: JSONValue | undefined = boundStateObj?.defaultValue;
 
-  const displayLabel = componentBinding.label || componentBinding.name || "Component";
-  const stateName = componentBinding.valueStateName || componentBinding.name || "value";
+  const rawName = componentBinding.name || componentBinding.label || "";
+  const displayLabel = toPascalCase(rawName) || "Component";
+  const stateName = componentBinding.valueStateName || displayLabel || "value";
+
+  // Controlled input value for live typing & immediate PascalCase feedback
+  const [nameInputValue, setNameInputValue] = useState(
+    displayLabel !== "Component" ? displayLabel : (componentBinding.name || "")
+  );
+
+  useEffect(() => {
+    setNameInputValue(displayLabel !== "Component" ? displayLabel : (componentBinding.name || ""));
+  }, [componentBinding.id, displayLabel]);
+
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setNameInputValue(raw);
+    const pascal = toPascalCase(raw);
+    handleUpdate({ name: pascal, label: pascal });
+  };
+
+  const handleNameBlur = () => {
+    const pascal = toPascalCase(nameInputValue);
+    setNameInputValue(pascal);
+    if (pascal) {
+      handleUpdate({ name: pascal, label: pascal });
+    }
+  };
+
+  const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      const pascal = toPascalCase(nameInputValue);
+      setNameInputValue(pascal);
+      if (pascal) {
+        handleUpdate({ name: pascal, label: pascal });
+      }
+    }
+  };
+
+  const handleFormatPascalCase = () => {
+    const pascal = toPascalCase(nameInputValue || displayLabel);
+    setNameInputValue(pascal);
+    if (pascal) {
+      handleUpdate({ name: pascal, label: pascal });
+    }
+  };
 
   const formattedPreviewValue = String(
     sampleValue !== undefined && sampleValue !== null
@@ -430,7 +499,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
               {targetSection.name}
             </span>
             <span>/</span>
-            <span className="text-purple-600 dark:text-purple-400 font-semibold">
+            <span className="text-purple-600 dark:text-purple-400 font-semibold font-mono">
               {displayLabel}
             </span>
           </div>
@@ -440,7 +509,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
               <Layers size={14} />
             </div>
             <div className="flex flex-col">
-              <span className="text-xs font-bold text-foreground">
+              <span className="text-xs font-bold text-foreground font-mono">
                 {displayLabel}
               </span>
               <span className="text-[10px] text-muted-foreground">
@@ -452,9 +521,9 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
 
         <Badge
           variant="outline"
-          className="text-[10px] font-mono px-2 py-0.5 text-purple-600 dark:text-purple-400 border-purple-500/30 uppercase"
+          className="text-[10px] font-mono px-2 py-0.5 text-purple-600 dark:text-purple-400 border-purple-500/30 font-semibold"
         >
-          &lt;{componentBinding.componentType} /&gt;
+          &lt;{displayLabel} /&gt;
         </Badge>
       </div>
 
@@ -469,43 +538,49 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
             <span className="text-[10px] font-mono text-muted-foreground">ID: {componentBinding.id}</span>
           </CardTitle>
           <CardDescription className="text-[11px] text-muted-foreground">
-            Configure the component identifier and visible display text.
+            Configure the component name and visible display text in PascalCase format.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-3 pt-0 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
               <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
                 <span>Component Name</span>
                 <span className="text-destructive">*</span>
               </Label>
-              <LocalInput
-                key={`${componentBinding.id}-name`}
-                value={componentBinding.name || ""}
-                onChange={(e) => handleUpdate({ name: e.target.value })}
-                placeholder="e.g. Submit Button"
-                className="h-8 text-xs font-mono"
-              />
-              <p className="text-[10px] text-muted-foreground">
-                Internal name shown in canvas graph
-              </p>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleFormatPascalCase}
+                  className="h-5 px-1.5 text-[10px] font-mono text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 cursor-pointer"
+                  title="Format component name as PascalCase"
+                >
+                  <Sparkles size={10} className="mr-1" />
+                  Format PascalCase
+                </Button>
+                <Badge variant="outline" className="text-[9px] font-mono text-purple-600 dark:text-purple-400 border-purple-500/30">
+                  PascalCase
+                </Badge>
+              </div>
             </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-[11px] font-medium text-foreground">
-                Display Label / Text
-              </Label>
-              <LocalInput
-                key={`${componentBinding.id}-label`}
-                value={componentBinding.label ?? ""}
-                onChange={(e) => handleUpdate({ label: e.target.value })}
-                placeholder="e.g. Submit, Search, Details"
-                className="h-8 text-xs font-mono"
-              />
-              <p className="text-[10px] text-muted-foreground">
-                Visible text rendered on component
-              </p>
-            </div>
+            <Input
+              value={nameInputValue}
+              onChange={handleNameChange}
+              onBlur={handleNameBlur}
+              onKeyDown={handleNameKeyDown}
+              placeholder="e.g. SubmitButton, UserProfileCard"
+              className="h-8 text-xs font-mono bg-background"
+            />
+            <p className="text-[10px] text-muted-foreground flex items-center justify-between">
+              <span>Formatted in PascalCase (e.g. PrimaryButton, SectionHeader)</span>
+              {displayLabel !== "Component" && (
+                <span className="font-mono text-[9px] text-purple-600 dark:text-purple-400 font-semibold">
+                  &lt;{displayLabel} /&gt;
+                </span>
+              )}
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -529,7 +604,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         currentVariant={toValidVariant(componentBinding.variant)}
         currentClickAction={toClickAction(componentBinding.actionId)}
         displayLabel={displayLabel}
-        customLabel={componentBinding.label}
+        customLabel={displayLabel}
         formattedPreviewValue={formattedPreviewValue}
         sampleValue={sampleValue}
         propMappings={propMappings}
