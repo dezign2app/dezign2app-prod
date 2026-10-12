@@ -21,7 +21,7 @@ export interface ComponentSelectorProps {
   onSelectComponent: (componentId: StateRenderComponent) => void;
 }
 
-export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
+export const ComponentSelector: React.FC<ComponentSelectorProps> = React.memo(({
   currentComponent,
   selectedOption,
   stateType,
@@ -194,4 +194,5 @@ export const ComponentSelector: React.FC<ComponentSelectorProps> = ({
       </div>
     </div>
   );
-};
+});
+ComponentSelector.displayName = "ComponentSelector";

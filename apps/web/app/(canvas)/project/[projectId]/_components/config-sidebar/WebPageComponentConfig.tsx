@@ -33,7 +33,7 @@ import {
   ComponentOption,
 } from "./web-page-state-config";
 import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../backend-nodes/graph-nodes/shared";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card";
@@ -116,27 +116,37 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
   // Helper to persist updates to component binding
   const handleUpdate = useCallback(
     (changes: Partial<SectionComponentBinding>) => {
-      if (!parentNode || !targetSection || !componentBinding) return;
+      const currentParent = useBackendCanvasStore
+        .getState()
+        .nodes.find((n) => n.id === nodeId);
+      if (!currentParent) return;
 
-      const currentBindings = targetSection.componentBindings || [];
+      const currentSections: PageSection[] = currentParent.data?.sections || [];
+      const currentTargetSec =
+        currentSections.find((s) => (s.componentBindings || []).some((c) => c.id === id)) ||
+        currentSections.find((s) => s.id === sectionId) ||
+        currentSections[0];
+      if (!currentTargetSec) return;
+
+      const currentBindings = currentTargetSec.componentBindings || [];
       const updatedBindings = currentBindings.map((c) =>
         c.id === id ? { ...c, ...changes } : c,
       );
 
-      const updatedSections = sections.map((sec) =>
-        sec.id === targetSection.id
+      const updatedSections = currentSections.map((sec) =>
+        sec.id === currentTargetSec.id
           ? { ...sec, componentBindings: updatedBindings }
           : sec,
       );
 
       updateNode(nodeId, {
         data: {
-          ...parentNode.data,
+          ...currentParent.data,
           sections: updatedSections,
         },
       });
     },
-    [parentNode, targetSection, componentBinding, sections, nodeId, id, updateNode],
+    [nodeId, id, sectionId, updateNode],
   );
 
   // Available state variables across section and state stores
@@ -184,19 +194,33 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
 
   const handleCreateAction = useCallback(
     (name?: string, eventType?: string) => {
-      if (!parentNode || !targetSection || !componentBinding) return;
+      const currentParent = useBackendCanvasStore
+        .getState()
+        .nodes.find((n) => n.id === nodeId);
+      if (!currentParent) return;
+
+      const currentSections: PageSection[] = currentParent.data?.sections || [];
+      const currentTargetSec =
+        currentSections.find((s) => (s.componentBindings || []).some((c) => c.id === id)) ||
+        currentSections.find((s) => s.id === sectionId) ||
+        currentSections[0];
+      if (!currentTargetSec) return;
+
+      const currentBinding = currentTargetSec.componentBindings?.find((c) => c.id === id);
+      if (!currentBinding) return;
+
       const newActId = `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-      const actionName = name || `${componentBinding.label || componentBinding.name || "trigger"}Action`;
+      const actionName = name || `${currentBinding.label || currentBinding.name || "trigger"}Action`;
 
       const newAction: UIEventItem = {
         id: newActId,
         name: actionName,
-        event: eventType || componentBinding.triggerEvent || "click",
+        event: eventType || currentBinding.triggerEvent || "click",
         actionSteps: [],
       };
 
-      const updatedActions = [...(targetSection.actions || []), newAction];
-      const updatedBindings = (targetSection.componentBindings || []).map((c) =>
+      const updatedActions = [...(currentTargetSec.actions || []), newAction];
+      const updatedBindings = (currentTargetSec.componentBindings || []).map((c) =>
         c.id === id
           ? {
               ...c,
@@ -210,22 +234,29 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
           : c,
       );
 
-      const updatedSections = sections.map((sec) =>
-        sec.id === targetSection.id
+      const updatedSections = currentSections.map((sec) =>
+        sec.id === currentTargetSec.id
           ? { ...sec, actions: updatedActions, componentBindings: updatedBindings }
           : sec,
       );
 
       updateNode(nodeId, {
         data: {
-          ...parentNode.data,
+          ...currentParent.data,
           sections: updatedSections,
         },
       });
 
       toast.success(`Created action "${actionName}"!`);
     },
-    [parentNode, targetSection, componentBinding, id, sections, nodeId, updateNode],
+    [id, nodeId, sectionId, updateNode],
+  );
+
+  const handleCreateComponentAction = useCallback(
+    (name?: string, eventType?: string) => {
+      handleCreateAction(name, eventType || "change");
+    },
+    [handleCreateAction],
   );
 
   const handleOpenActionFlow = useCallback(
@@ -448,7 +479,8 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
                 <span>Component Name</span>
                 <span className="text-destructive">*</span>
               </Label>
-              <Input
+              <LocalInput
+                key={`${componentBinding.id}-name`}
                 value={componentBinding.name || ""}
                 onChange={(e) => handleUpdate({ name: e.target.value })}
                 placeholder="e.g. Submit Button"
@@ -463,7 +495,8 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
               <Label className="text-[11px] font-medium text-foreground">
                 Display Label / Text
               </Label>
-              <Input
+              <LocalInput
+                key={`${componentBinding.id}-label`}
                 value={componentBinding.label ?? ""}
                 onChange={(e) => handleUpdate({ label: e.target.value })}
                 placeholder="e.g. Submit, Search, Details"
@@ -479,7 +512,8 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
             <Label className="text-[11px] font-medium text-muted-foreground">
               Description / Notes (Optional)
             </Label>
-            <Input
+            <LocalInput
+              key={`${componentBinding.id}-description`}
               value={componentBinding.description ?? ""}
               onChange={(e) => handleUpdate({ description: e.target.value })}
               placeholder="e.g. Primary call-to-action button for the section..."
@@ -529,7 +563,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         propMappings={propMappings}
         onUpdatePropMapping={handleUpdatePropMapping}
         onOpenEventConfig={handleOpenActionFlow}
-        onCreateAction={(name, eventType) => handleCreateAction(name, eventType || "change")}
+        onCreateAction={handleCreateComponentAction}
       />
 
       <Separator className="bg-border/50" />
