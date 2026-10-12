@@ -178,8 +178,10 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
     setEditingText(val);
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
     }
-    if (val.trim()) {
+    // Do not format while user has trailing whitespace (still typing next word)
+    if (val.trim() && !/\s$/.test(val)) {
       debounceTimerRef.current = setTimeout(() => {
         debounceTimerRef.current = null;
         const formatted = toPascalCase(val);

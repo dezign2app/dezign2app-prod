@@ -409,6 +409,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
   const displayLabel = toPascalCase(rawName) || "Component";
   const stateName = componentBinding.valueStateName || displayLabel || "value";
 
+  const isFocusedRef = React.useRef(false);
   const debounceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -425,8 +426,8 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
   );
 
   useEffect(() => {
-    // Only sync if not actively debouncing an in-progress edit
-    if (!debounceTimerRef.current) {
+    // Only sync if not actively focused and not actively debouncing
+    if (!isFocusedRef.current && !debounceTimerRef.current) {
       setNameInputValue(
         componentBinding.name || componentBinding.label || (displayLabel !== "Component" ? displayLabel : "")
       );
@@ -438,8 +439,10 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
     setNameInputValue(raw);
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
     }
-    if (raw.trim()) {
+    // Do not format while user has trailing whitespace (still typing next word)
+    if (raw.trim() && !/\s$/.test(raw)) {
       debounceTimerRef.current = setTimeout(() => {
         debounceTimerRef.current = null;
         const pascal = toPascalCase(raw);
@@ -451,7 +454,12 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
     }
   };
 
+  const handleNameFocus = () => {
+    isFocusedRef.current = true;
+  };
+
   const handleNameBlur = () => {
+    isFocusedRef.current = false;
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
@@ -470,6 +478,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
 
   const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
+      isFocusedRef.current = false;
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;
@@ -486,6 +495,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         e.currentTarget.blur();
       }
     } else if (e.key === "Escape") {
+      isFocusedRef.current = false;
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;
@@ -638,6 +648,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
             <Input
               value={nameInputValue}
               onChange={handleNameChange}
+              onFocus={handleNameFocus}
               onBlur={handleNameBlur}
               onKeyDown={handleNameKeyDown}
               placeholder="e.g. SubmitButton, UserProfileCard"
