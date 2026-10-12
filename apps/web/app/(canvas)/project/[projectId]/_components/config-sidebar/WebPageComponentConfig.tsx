@@ -37,6 +37,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { LocalInput } from "../backend-nodes/graph-nodes/shared";
 import { Label } from "@workspace/ui/components/label";
+import { cn } from "@workspace/ui/lib/utils";
 import { Badge } from "@workspace/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card";
 import { Separator } from "@workspace/ui/components/separator";
@@ -101,6 +102,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
   );
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
+  const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
 
   // All state store nodes for state binding dropdowns
   const stateStores = useBackendCanvasStore(
@@ -132,6 +134,12 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         currentSections.find((s) => s.id === sectionId) ||
         currentSections[0];
       if (!currentTargetSec) return;
+
+      // CRITICAL: component name must never be empty!
+      if (changes.name !== undefined) {
+        const pascal = toPascalCase(changes.name);
+        if (!pascal) return;
+      }
 
       const currentBindings = currentTargetSec.componentBindings || [];
       const updatedBindings = currentBindings.map((c) => {
@@ -401,45 +409,107 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
   const displayLabel = toPascalCase(rawName) || "Component";
   const stateName = componentBinding.valueStateName || displayLabel || "value";
 
-  // Controlled input value for live typing & immediate PascalCase feedback
+  const debounceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Controlled input value for live typing & debounced PascalCase formatting
   const [nameInputValue, setNameInputValue] = useState(
-    displayLabel !== "Component" ? displayLabel : (componentBinding.name || "")
+    componentBinding.name || componentBinding.label || (displayLabel !== "Component" ? displayLabel : "")
   );
 
   useEffect(() => {
-    setNameInputValue(displayLabel !== "Component" ? displayLabel : (componentBinding.name || ""));
-  }, [componentBinding.id, displayLabel]);
+    // Only sync if not actively debouncing an in-progress edit
+    if (!debounceTimerRef.current) {
+      setNameInputValue(
+        componentBinding.name || componentBinding.label || (displayLabel !== "Component" ? displayLabel : "")
+      );
+    }
+  }, [componentBinding.id, componentBinding.name, componentBinding.label, displayLabel]);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
     setNameInputValue(raw);
-    const pascal = toPascalCase(raw);
-    handleUpdate({ name: pascal, label: pascal });
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    if (raw.trim()) {
+      debounceTimerRef.current = setTimeout(() => {
+        debounceTimerRef.current = null;
+        const pascal = toPascalCase(raw);
+        if (pascal) {
+          setNameInputValue(pascal);
+          handleUpdate({ name: pascal, label: pascal });
+        }
+      }, 500);
+    }
   };
 
   const handleNameBlur = () => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
     const pascal = toPascalCase(nameInputValue);
-    setNameInputValue(pascal);
     if (pascal) {
+      setNameInputValue(pascal);
       handleUpdate({ name: pascal, label: pascal });
+    } else {
+      // while renaming if the name field is empty switch back to older name
+      const olderName = componentBinding.name || componentBinding.label || "Component";
+      setNameInputValue(olderName);
+      handleUpdate({ name: olderName, label: olderName });
     }
   };
 
   const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
-      const pascal = toPascalCase(nameInputValue);
-      setNameInputValue(pascal);
-      if (pascal) {
-        handleUpdate({ name: pascal, label: pascal });
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
       }
+      const pascal = toPascalCase(nameInputValue);
+      if (pascal) {
+        setNameInputValue(pascal);
+        handleUpdate({ name: pascal, label: pascal });
+        e.currentTarget.blur();
+      } else {
+        const olderName = componentBinding.name || componentBinding.label || "Component";
+        setNameInputValue(olderName);
+        handleUpdate({ name: olderName, label: olderName });
+        e.currentTarget.blur();
+      }
+    } else if (e.key === "Escape") {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+      const olderName = componentBinding.name || componentBinding.label || "Component";
+      setNameInputValue(olderName);
+      handleUpdate({ name: olderName, label: olderName });
+      e.currentTarget.blur();
     }
   };
 
   const handleFormatPascalCase = () => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
     const pascal = toPascalCase(nameInputValue || displayLabel);
-    setNameInputValue(pascal);
     if (pascal) {
+      setNameInputValue(pascal);
       handleUpdate({ name: pascal, label: pascal });
+    } else {
+      const olderName = componentBinding.name || componentBinding.label || "Component";
+      setNameInputValue(olderName);
+      handleUpdate({ name: olderName, label: olderName });
     }
   };
 
@@ -571,16 +641,26 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
               onBlur={handleNameBlur}
               onKeyDown={handleNameKeyDown}
               placeholder="e.g. SubmitButton, UserProfileCard"
-              className="h-8 text-xs font-mono bg-background"
-            />
-            <p className="text-[10px] text-muted-foreground flex items-center justify-between">
-              <span>Formatted in PascalCase (e.g. PrimaryButton, SectionHeader)</span>
-              {displayLabel !== "Component" && (
-                <span className="font-mono text-[9px] text-purple-600 dark:text-purple-400 font-semibold">
-                  &lt;{displayLabel} /&gt;
-                </span>
+              className={cn(
+                "h-8 text-xs font-mono bg-background",
+                !nameInputValue.trim() && "border-destructive focus-visible:ring-destructive",
               )}
-            </p>
+            />
+            {!nameInputValue.trim() ? (
+              <p className="text-[10px] text-destructive flex items-center gap-1 font-medium">
+                <AlertCircle size={10} />
+                <span>Component name cannot be empty</span>
+              </p>
+            ) : (
+              <p className="text-[10px] text-muted-foreground flex items-center justify-between">
+                <span>Formatted in PascalCase (e.g. PrimaryButton, SectionHeader)</span>
+                {displayLabel !== "Component" && (
+                  <span className="font-mono text-[9px] text-purple-600 dark:text-purple-400 font-semibold">
+                    &lt;{displayLabel} /&gt;
+                  </span>
+                )}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
