@@ -195,7 +195,19 @@ export function generateSectionComponent(
       ? [cfg.labelStoreName]
       : [];
   });
-  const uniqueStoreNames = Array.from(new Set([...actionStoreNames, ...stateStoreNames, ...guardStoreNames, ...copyStoreNames, ...labelStoreNames]));
+  const componentStoreNames = (section.componentBindings || []).flatMap((comp) => {
+    const list: string[] = [];
+    if (comp.valueStoreName) list.push(comp.valueStoreName);
+    if (comp.disabledStoreName) list.push(comp.disabledStoreName);
+    if (comp.elements) {
+      comp.elements.forEach((el) => {
+        if (el.valueStoreName) list.push(el.valueStoreName);
+        if (el.disabledStoreName) list.push(el.disabledStoreName);
+      });
+    }
+    return list;
+  });
+  const uniqueStoreNames = Array.from(new Set([...actionStoreNames, ...stateStoreNames, ...guardStoreNames, ...copyStoreNames, ...labelStoreNames, ...componentStoreNames]));
 
   const storeImports = uniqueStoreNames
     .map((sName) => {
@@ -392,11 +404,38 @@ export function generateSectionComponent(
     process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI?.trim().toLowerCase() === "true";`
     : "";
 
+  const componentHookCalls: string[] = [];
+  (section.componentBindings || []).forEach((comp) => {
+    if (comp.valueStoreName && comp.valueStateName) {
+      const cleanVar = toCamelCase(comp.valueStateName);
+      if (!declaredVars.has(cleanVar)) {
+        declaredVars.add(cleanVar);
+        const cleanStore = comp.valueStoreName.replace(/Store$/i, "");
+        const hookName = `use${cleanStore.charAt(0).toUpperCase() + cleanStore.slice(1)}Store`;
+        componentHookCalls.push(`  const ${cleanVar} = ${hookName}((s) => s.${comp.valueStateName});`);
+      }
+    }
+    if (comp.elements) {
+      comp.elements.forEach((el) => {
+        if (el.valueStoreName && el.valueStateName) {
+          const cleanVar = toCamelCase(el.valueStateName);
+          if (!declaredVars.has(cleanVar)) {
+            declaredVars.add(cleanVar);
+            const cleanStore = el.valueStoreName.replace(/Store$/i, "");
+            const hookName = `use${cleanStore.charAt(0).toUpperCase() + cleanStore.slice(1)}Store`;
+            componentHookCalls.push(`  const ${cleanVar} = ${hookName}((s) => s.${el.valueStateName});`);
+          }
+        }
+      });
+    }
+  });
+
   const combinedSetupLines = [
     debugStateSetup,
     stateDeclarations,
     ...stateObjectHookCalls,
     ...guardHookCalls,
+    ...componentHookCalls,
     ...debouncedStateObjectSetups,
     ...actionStoreHookCalls,
   ].filter(Boolean).join("\n");
@@ -619,6 +658,49 @@ export default ${sectionCompName};
           if (comp.disabledStateName) {
             const cleanVar = toCamelCase(comp.disabledStateName);
             disabledAttr = ` disabled={Boolean(${cleanVar})}`;
+          }
+
+          if (comp.elements && comp.elements.length > 1) {
+            const elementsJsx = comp.elements
+              .map((el) => {
+                let elClickAttr = "";
+                if (el.actionId) {
+                  const act = (section.actions || []).find((a) => a.id === el.actionId);
+                  const actName = act?.name || el.actionName || "action";
+                  const actEvent = act?.event || el.triggerEvent || "click";
+                  const actUrl = act?.url || "";
+                  const actMethod = act?.method || "POST";
+                  elClickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", "${actUrl}", "${actMethod}")}`;
+                }
+                let elDisabledAttr = "";
+                if (el.disabledStateName) {
+                  const cleanVar = toCamelCase(el.disabledStateName);
+                  elDisabledAttr = ` disabled={Boolean(${cleanVar})}`;
+                }
+                const elType = el.elementType || "input";
+                if (elType === "button") {
+                  neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
+                  return `              <Button key="${el.id}" variant="${el.variant || "default"}" size="sm"${elDisabledAttr}${elClickAttr}>${el.label || el.name}</Button>`;
+                }
+                if (elType === "input") {
+                  neededShadcnImports.add('import { Input } from "@workspace/ui/components/input";');
+                  const valExpr = el.valueStateName ? `{String(${toCamelCase(el.valueStateName)})}` : `""`;
+                  return `              <Input key="${el.id}" placeholder="${el.placeholder || el.label || "Enter text..."}" defaultValue=${valExpr}${elDisabledAttr} className="h-8 text-xs max-w-xs" />`;
+                }
+                if (elType === "switch") {
+                  neededShadcnImports.add('import { Switch } from "@workspace/ui/components/switch";');
+                  const valExpr = el.valueStateName ? `Boolean(${toCamelCase(el.valueStateName)})` : `false`;
+                  return `              <div key="${el.id}" className="flex items-center gap-2 text-xs"><Switch checked={${valExpr}}${elDisabledAttr} /><span>${el.label || el.name}</span></div>`;
+                }
+                if (elType === "badge") {
+                  neededShadcnImports.add('import { Badge } from "@workspace/ui/components/badge";');
+                  return `              <Badge key="${el.id}" variant="${el.variant || "secondary"}" className="text-xs">${el.label || el.name}</Badge>`;
+                }
+                return `              <div key="${el.id}" className="text-xs px-2.5 py-1 rounded bg-secondary/50 border border-border">${el.label || el.name}</div>`;
+              })
+              .join("\n");
+
+            return `          <div key="${comp.id}" className="flex flex-col gap-2 p-3 rounded-lg border bg-card text-card-foreground shadow-xs">\n            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">${comp.label || comp.name}</div>\n${elementsJsx}\n          </div>`;
           }
 
           if (comp.componentType === "button") {

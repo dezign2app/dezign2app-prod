@@ -424,12 +424,21 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
                         {comp.label || comp.name || "Untitled"}
                       </span>
                     )}
-                    <Badge
-                      variant="secondary"
-                      className="text-[8px] px-1 py-0 h-3.5 uppercase font-mono font-normal text-muted-foreground shrink-0"
-                    >
-                      {comp.componentType}
-                    </Badge>
+                    {comp.elements && comp.elements.length > 1 ? (
+                      <Badge
+                        variant="outline"
+                        className="text-[8px] px-1 py-0 h-3.5 font-mono text-purple-600 dark:text-purple-400 border-purple-500/30 shrink-0 font-semibold"
+                      >
+                        {comp.elements.length} elements
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="secondary"
+                        className="text-[8px] px-1 py-0 h-3.5 uppercase font-mono font-normal text-muted-foreground shrink-0"
+                      >
+                        {comp.componentType}
+                      </Badge>
+                    )}
                   </div>
 
                   {/* Right: Quick Actions - pinned cleanly inside the card */}

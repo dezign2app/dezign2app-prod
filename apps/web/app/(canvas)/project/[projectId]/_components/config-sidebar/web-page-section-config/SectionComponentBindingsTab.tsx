@@ -454,9 +454,15 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
                             {comp.label || comp.name || "Untitled"}
                           </span>
                         )}
-                        <Badge variant="secondary" className="text-[9px] font-mono px-1.5 py-0 uppercase">
-                          {comp.componentType}
-                        </Badge>
+                        {comp.elements && comp.elements.length > 1 ? (
+                          <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 text-purple-600 dark:text-purple-400 border-purple-500/30 font-semibold">
+                            {comp.elements.length} elements
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-[9px] font-mono px-1.5 py-0 uppercase">
+                            {comp.componentType}
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono mt-0.5">
                         {comp.actionId ? (
