@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
   Database,
   ArrowRight,
@@ -49,6 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
+import { Switch } from "@workspace/ui/components/switch";
 import { toast } from "sonner";
 import { toPascalCase, toCamelCase, toHumanLabel } from "@/lib/utils";
 import {
@@ -147,6 +148,7 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
   const [selectedStoreNodeId, setSelectedStoreNodeId] = useState<string>(
     defaultStoreNode?.id || "",
   );
+  const [autoAddUiElements, setAutoAddUiElements] = useState<boolean>(false);
 
   const activeStoreNode = useMemo(() => {
     return stateStores.find((st) => st.id === (selectedStoreNodeId || defaultStoreNode?.id));
@@ -167,6 +169,18 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
     }
     return [];
   }, [currentAction]);
+
+  // Master toggle state per action/component key
+  const [enabledByAction, setEnabledByAction] = useState<Record<string, boolean>>({});
+
+  const actionKey = currentAction?.id || activeElement?.id || componentBinding.id || "default";
+
+  const isResponseMappingEnabled = useMemo(() => {
+    if (enabledByAction[actionKey] !== undefined) {
+      return enabledByAction[actionKey];
+    }
+    return currentActionBindings.length > 0;
+  }, [enabledByAction, actionKey, currentActionBindings.length]);
 
   // Elements currently inside this component
   const currentElements: ComponentElementBinding[] = useMemo(() => {
@@ -213,6 +227,17 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
       });
     },
     [currentAction, parentNode, targetSection, sections, nodeId, updateNode],
+  );
+
+  const handleToggleResponseMapping = useCallback(
+    (checked: boolean) => {
+      setEnabledByAction((prev) => ({ ...prev, [actionKey]: checked }));
+      if (!checked && currentActionBindings.length > 0) {
+        persistStoreActionBindings([]);
+        toast.info("Disabled response mapping for this action.");
+      }
+    },
+    [actionKey, currentActionBindings.length, persistStoreActionBindings],
   );
 
   // Helper to ensure target state variable exists in Zustand store and section stateObjects
@@ -465,7 +490,7 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
 
     persistStoreActionBindings(nextBindings);
 
-    if (elementsToAdd.length > 0) {
+    if (autoAddUiElements && elementsToAdd.length > 0) {
       const updatedElements = [...currentElements, ...elementsToAdd];
       onUpdateElements(updatedElements);
       if (componentBinding.componentType === "button" && updatedElements.length > 1) {
@@ -474,7 +499,9 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
     }
 
     toast.success(
-      `Successfully mapped ${responseFields.length} response fields into ${activeStoreName} and UI!`,
+      autoAddUiElements && elementsToAdd.length > 0
+        ? `Successfully mapped ${responseFields.length} response fields into ${activeStoreName} and UI!`
+        : `Successfully mapped ${responseFields.length} response fields into ${activeStoreName}!`,
     );
   }, [
     activeStoreNode,
@@ -485,6 +512,7 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
     currentElements,
     activeStoreName,
     componentBinding.componentType,
+    autoAddUiElements,
     ensureStoreVariable,
     persistStoreActionBindings,
     onUpdateElements,
@@ -493,24 +521,43 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
 
   return (
     <Card className="border-border/60 shadow-xs">
-      <CardHeader className="p-4 pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
-            <Database size={13} className="text-cyan-500" />
-            <span>API Response &amp; State Store Mapping</span>
-          </CardTitle>
-          {activeEndpoint && responseFields.length > 0 && (
-            <Badge variant="outline" className="text-[10px] text-cyan-600 dark:text-cyan-400 border-cyan-500/30">
-              {responseFields.length} Properties
-            </Badge>
-          )}
+      <CardHeader className={cn("p-4", isResponseMappingEnabled ? "pb-3" : "py-3")}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 shrink-0">
+              <Database size={15} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-xs font-semibold text-foreground truncate">
+                  API Response &amp; State Store Mapping
+                </CardTitle>
+                {isResponseMappingEnabled && activeEndpoint && responseFields.length > 0 && (
+                  <Badge variant="outline" className="text-[10px] text-cyan-600 dark:text-cyan-400 border-cyan-500/30">
+                    {responseFields.length} Properties
+                  </Badge>
+                )}
+              </div>
+              <CardDescription className="text-[11px] truncate">
+                Capture and store API response data into Zustand store variables
+              </CardDescription>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[10px] font-medium text-muted-foreground">
+              {isResponseMappingEnabled ? "Enabled" : "Disabled"}
+            </span>
+            <Switch
+              checked={isResponseMappingEnabled}
+              onCheckedChange={handleToggleResponseMapping}
+              aria-label="Toggle API Response Mapping"
+            />
+          </div>
         </div>
-        <CardDescription className="text-[11px]">
-          Store incoming API response properties into Zustand State Store variables and auto-bind UI display elements
-        </CardDescription>
       </CardHeader>
 
-      <CardContent className="p-4 pt-1 space-y-3.5 text-xs">
+      {isResponseMappingEnabled && (
+        <CardContent className="p-4 pt-3 space-y-3.5 text-xs border-t border-border/40">
         {/* Source Endpoint Selector / Detector */}
         <div className="space-y-1.5">
           <Label className="text-[11px] text-muted-foreground flex items-center justify-between">
@@ -603,22 +650,33 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
 
         {/* 1-Click Auto Map All Action Button */}
         {activeEndpoint && responseFields.length > 0 && activeStoreNode && (
-          <div className="flex items-center justify-between p-2.5 rounded-lg bg-cyan-500/[0.07] border border-cyan-500/20">
-            <div className="text-[11px]">
-              <span className="font-semibold text-foreground">Quick Setup:</span>
-              <span className="text-muted-foreground ml-1">
-                Auto-map all {responseFields.length} properties to {activeStoreName} &amp; UI
-              </span>
+          <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-cyan-500/[0.07] border border-cyan-500/20">
+            <div className="flex items-center justify-between">
+              <div className="text-[11px]">
+                <span className="font-semibold text-foreground">Quick Setup:</span>
+                <span className="text-muted-foreground ml-1">
+                  Map all {responseFields.length} properties to {activeStoreName}
+                </span>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleAutoMapAll}
+                className="h-6 text-[11px] px-2.5 bg-cyan-600 hover:bg-cyan-700 text-white cursor-pointer font-medium"
+              >
+                <Sparkles size={11} className="mr-1" />
+                Auto-Map Store
+              </Button>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleAutoMapAll}
-              className="h-6 text-[11px] px-2.5 bg-cyan-600 hover:bg-cyan-700 text-white cursor-pointer font-medium"
-            >
-              <Sparkles size={11} className="mr-1" />
-              Auto-Map All
-            </Button>
+            <div className="flex items-center justify-between pt-1 border-t border-cyan-500/20 text-xs">
+              <span className="text-[11px] text-muted-foreground">
+                Also auto-generate UI display elements (Cards/Badges)
+              </span>
+              <Switch
+                checked={autoAddUiElements}
+                onCheckedChange={setAutoAddUiElements}
+              />
+            </div>
           </div>
         )}
 
@@ -751,6 +809,7 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
           </div>
         )}
       </CardContent>
-    </Card>
+    )}
+  </Card>
   );
 };

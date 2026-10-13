@@ -142,7 +142,7 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
   const [newStoreName, setNewStoreName] = useState<string>("");
   const [fieldConfigs, setFieldConfigs] = useState<FieldConfigItem[]>([]);
   const [responseFieldConfigs, setResponseFieldConfigs] = useState<ResponseFieldConfigItem[]>([]);
-  const [autoGenerateResponseUi, setAutoGenerateResponseUi] = useState<boolean>(true);
+  const [autoGenerateResponseUi, setAutoGenerateResponseUi] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Auto-select initial endpoint
@@ -670,6 +670,61 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
                   </div>
                 ))}
               </div>
+
+              {/* Optional Response Variables when inputs exist */}
+              {responseFieldConfigs.length > 0 && (
+                <div className="p-3 rounded-xl bg-purple-500/[0.04] border border-purple-500/20 space-y-2.5 mt-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <Database size={13} className="text-purple-500" />
+                      <span>Response Variables (Zustand Store)</span>
+                    </Label>
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      ({enabledResponseCount}/{responseFieldConfigs.length} selected)
+                    </span>
+                  </div>
+                  <p className="text-[10.5px] text-muted-foreground">
+                    Save response fields returned by this endpoint into your Zustand store:
+                  </p>
+                  <div className="border border-border/70 rounded-lg overflow-hidden divide-y divide-border/40 bg-card">
+                    {responseFieldConfigs.map((rf, idx) => (
+                      <div
+                        key={rf.id}
+                        className={cn(
+                          "p-2 flex items-center justify-between text-xs transition-colors",
+                          rf.enabled ? "bg-background/80" : "bg-muted/15 opacity-60",
+                        )}
+                      >
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox
+                            checked={rf.enabled}
+                            onCheckedChange={(chk) => handleResponseFieldToggle(idx, Boolean(chk))}
+                          />
+                          <span className="font-mono text-foreground font-medium text-xs">{rf.name}</span>
+                        </label>
+                        <Badge variant="outline" className="text-[9px] font-mono px-1 py-0 border-muted">
+                          {rf.type}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-background/60 border border-border/50 text-xs">
+                    <div className="flex flex-col">
+                      <span className="font-medium text-foreground text-[11px]">
+                        Render Response Variables on UI
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        Auto-generate reactive display cards/badges bound to response store variables
+                      </span>
+                    </div>
+                    <Switch
+                      checked={autoGenerateResponseUi}
+                      onCheckedChange={setAutoGenerateResponseUi}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
