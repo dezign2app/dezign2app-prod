@@ -292,8 +292,7 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
               }
             }}
           >
-            {labelToRender && <span>{labelToRender}:</span>}
-            <span className="font-mono">{formattedPreviewValue}</span>
+            <span>{labelToRender || formattedPreviewValue || "Button"}</span>
           </Button>
         )}
 
