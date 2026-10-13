@@ -15,6 +15,7 @@ export function generateProjectConfigFiles(
     next: "^16.0.0",
     react: "^19.0.0",
     "react-dom": "^19.0.0",
+    sonner: "^2.0.7",
     zod: "^3.24.2",
   };
 
