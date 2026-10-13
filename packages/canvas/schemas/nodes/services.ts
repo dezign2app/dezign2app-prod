@@ -295,6 +295,50 @@ export const pageStateObjectSchema = z.object({
   renderConfig: stateRenderConfigSchema.describe("Rendering and interaction configuration for this state variable"),
 });
 
+export const componentElementBindingSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  elementType: z.string(),
+  label: z.string().optional(),
+  placeholder: z.string().optional(),
+  variant: z.string().optional(),
+  valueStateName: z.string().optional(),
+  valueStateId: z.string().optional(),
+  valueSourceType: z.enum(["store", "local"]).optional(),
+  valueStoreName: z.string().optional(),
+  disabledStateName: z.string().optional(),
+  disabledStoreName: z.string().optional(),
+  loadingStateName: z.string().optional(),
+  loadingStoreName: z.string().optional(),
+  triggerEvent: z.string().optional(),
+  actionId: z.string().optional(),
+  actionName: z.string().optional(),
+  description: z.string().optional(),
+  propMappings: z.any().optional(),
+});
+
+export const sectionComponentBindingSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  componentType: z.string(),
+  label: z.string().optional(),
+  variant: z.string().optional(),
+  valueStateName: z.string().optional(),
+  valueStateId: z.string().optional(),
+  valueSourceType: z.enum(["store", "local"]).optional(),
+  valueStoreName: z.string().optional(),
+  disabledStateName: z.string().optional(),
+  disabledStoreName: z.string().optional(),
+  loadingStateName: z.string().optional(),
+  loadingStoreName: z.string().optional(),
+  triggerEvent: z.string().optional(),
+  actionId: z.string().optional(),
+  actionName: z.string().optional(),
+  description: z.string().optional(),
+  propMappings: z.any().optional(),
+  elements: z.array(componentElementBindingSchema).optional(),
+});
+
 export const pageSectionSchema = z.object({
   id: z.string().describe("Unique identifier for this page section / component"),
   name: z.string().describe("Component name / section title"),
@@ -320,27 +364,7 @@ export const pageSectionSchema = z.object({
     .optional()
     .describe("Dynamic Zustand store state objects rendered in this section"),
   componentBindings: z
-    .array(
-      z.object({
-        id: z.string(),
-        name: z.string(),
-        componentType: z.string(),
-        label: z.string().optional(),
-        variant: z.string().optional(),
-        valueStateName: z.string().optional(),
-        valueStateId: z.string().optional(),
-        valueSourceType: z.enum(["store", "local"]).optional(),
-        valueStoreName: z.string().optional(),
-        disabledStateName: z.string().optional(),
-        disabledStoreName: z.string().optional(),
-        loadingStateName: z.string().optional(),
-        loadingStoreName: z.string().optional(),
-        triggerEvent: z.string().optional(),
-        actionId: z.string().optional(),
-        actionName: z.string().optional(),
-        description: z.string().optional(),
-      })
-    )
+    .array(sectionComponentBindingSchema)
     .optional()
     .describe("UI component mappings binding state variables and actions"),
   description: z.string().optional().describe("Functional description of what this section does"),

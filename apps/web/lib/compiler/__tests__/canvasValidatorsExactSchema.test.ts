@@ -1229,6 +1229,58 @@ describe("Convex canvasValidators exact schema", () => {
     expect(pageSectionConvexValidator.fields.componentBindings).toBeDefined();
     expect(webPageConvexDataValidator.fields.sections).toBeDefined();
   });
+
+  it("validates web page node with composite multi-component componentBindings containing elements", async () => {
+    const compositePayload = {
+      label: "/c/[id]/demo",
+      position: { x: 1744.0, y: 462.0 },
+      isLayout: false,
+      connectedStorageNodeId: "b4afff7b-290e-4b39-a196-902591b4fc47",
+      presignEndpointId: "66miezw",
+      pathParams: [{ id: "of0eni6", name: "id", required: true, type: "string" }],
+      queryParams: [{ defaultValue: "20", id: "qp-1", name: "limit", required: false, type: "number" }],
+      realtimeConnections: [],
+      sections: [
+        {
+          id: "sec-composite-1",
+          name: "Composite Section",
+          actions: [],
+          componentBindings: [
+            {
+              id: "comp-composite-1",
+              name: "UserForm",
+              componentType: "input",
+              label: "User Form",
+              elements: [
+                {
+                  id: "el-1",
+                  name: "EmailInput",
+                  elementType: "input",
+                  label: "Email",
+                  placeholder: "Enter email...",
+                  valueStateName: "email",
+                  valueStoreName: "UserStore",
+                  propMappings: { inputType: "email", debounceUpdate: true },
+                },
+                {
+                  id: "el-2",
+                  name: "SubmitButton",
+                  elementType: "button",
+                  label: "Submit",
+                  variant: "default",
+                  actionId: "act-submit",
+                  actionName: "submitAction",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const parsed = webPageDataSchema.safeParse(compositePayload);
+    expect(parsed.success).toBe(true);
+  });
 });
 
 

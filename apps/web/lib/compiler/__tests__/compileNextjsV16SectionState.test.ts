@@ -1129,6 +1129,223 @@ describe("compileNextjsV16SectionState", () => {
     expect(code).toContain('"$" +');
     expect(code).toContain('+ "/mo"');
   });
+
+  it("compiles componentBindings as primary UI and suppresses duplicate actions and state badges", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-component-bindings",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/products",
+        appSlug: "product-store",
+        sections: [
+          {
+            id: "sec-search",
+            name: "Product Search",
+            renderMode: "client",
+            actions: [
+              {
+                id: "act-search",
+                name: "searchProducts",
+                event: "click",
+                url: "/api/products/search",
+                method: "POST",
+              },
+              {
+                id: "act-unmapped-export",
+                name: "exportCsv",
+                event: "click",
+                url: "/api/products/export",
+                method: "GET",
+              },
+            ],
+            stateObjects: [
+              {
+                id: "st-query",
+                name: "searchQuery",
+                type: "string",
+                storeName: "ProductStore",
+                defaultValue: "",
+                renderConfig: {
+                  enabled: true,
+                  component: "badge",
+                  label: "Search Query",
+                },
+              },
+              {
+                id: "st-unmapped-status",
+                name: "indexingStatus",
+                type: "string",
+                storeName: "ProductStore",
+                defaultValue: "idle",
+                renderConfig: {
+                  enabled: true,
+                  component: "badge",
+                  label: "Index Status",
+                },
+              },
+            ],
+            componentBindings: [
+              {
+                id: "bind-search-input",
+                name: "Search Input",
+                componentType: "input",
+                label: "Search Products",
+                valueStateId: "st-query",
+                valueStateName: "searchQuery",
+                valueStoreName: "ProductStore",
+              },
+              {
+                id: "bind-search-btn",
+                name: "Search Button",
+                componentType: "button",
+                label: "Search Now",
+                actionId: "act-search",
+                actionName: "searchProducts",
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const file = result.files.find((f) => f.filename.includes("ProductSearchSection.tsx"));
+    expect(file).toBeDefined();
+    const code = file!.content;
+
+    // 1. Must use client
+    expect(code).toContain('"use client";');
+
+    // 2. Zustand store imports and hooks
+    expect(code).toContain('import { useProductStore } from "@/lib/stores";');
+    expect(code).toContain("const searchQuery = useProductStore((s) => s.searchQuery);");
+    expect(code).toContain("const setSearchQuery = useProductStore((s) => s.setSearchQuery);");
+
+    // 3. Shadcn UI imports
+    expect(code).toContain('import { Input } from "@workspace/ui/components/input";');
+    expect(code).toContain('import { Button } from "@workspace/ui/components/button";');
+
+    // 4. Primary UI: Controlled Input with two-way binding
+    expect(code).toContain('value={String(searchQuery ?? "")}');
+    expect(code).toContain('onChange={(e) => setSearchQuery(e.target.value)}');
+
+    // 5. Primary UI: Button triggering action directly
+    expect(code).toContain('onClick={() => onTrigger?.("searchProducts", "click", "/api/products/search", "POST")}');
+    expect(code).toContain('>Search Now</Button>');
+
+    // 6. Suppressed: NO duplicate standalone <SearchProductsAction />
+    expect(code).not.toContain("<SearchProductsAction");
+    expect(code).not.toContain('import { SearchProductsAction }');
+
+    // 7. Suppressed: NO duplicate debug badge for bound searchQuery
+    expect(code).not.toContain('Search Query:');
+
+    // 8. Fallback: Unmapped action exportCsv IS rendered as standalone component
+    expect(code).toContain("<ExportcsvAction onTrigger={onTrigger} />");
+    expect(code).toContain('import { ExportcsvAction } from "./ExportcsvAction";');
+
+    // 9. Fallback: Unmapped state indexingStatus IS rendered in debug badges
+    expect(code).toContain("Index Status:");
+  });
+
+  it("compiles multi-element container components with two-way bindings for switch and checkbox", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-filters",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/settings",
+        appSlug: "settings-app",
+        sections: [
+          {
+            id: "sec-pref",
+            name: "Preferences",
+            renderMode: "client",
+            actions: [
+              {
+                id: "act-save",
+                name: "saveSettings",
+                event: "click",
+                url: "/api/settings",
+                method: "PUT",
+              },
+            ],
+            stateObjects: [],
+            componentBindings: [
+              {
+                id: "bind-card-panel",
+                name: "Notification Settings",
+                componentType: "card",
+                label: "Notification Settings",
+                description: "Configure notifications",
+                elements: [
+                  {
+                    id: "el-email-switch",
+                    name: "Email Notifications",
+                    elementType: "switch",
+                    label: "Email Notifications",
+                    valueStateName: "emailAlerts",
+                    valueStoreName: "SettingsStore",
+                  },
+                  {
+                    id: "el-sms-check",
+                    name: "SMS Notifications",
+                    elementType: "checkbox",
+                    label: "SMS Notifications",
+                    valueStateName: "smsAlerts",
+                    valueStoreName: "SettingsStore",
+                  },
+                  {
+                    id: "el-save-btn",
+                    name: "Save Button",
+                    elementType: "button",
+                    label: "Save Changes",
+                    variant: "default",
+                    actionId: "act-save",
+                    actionName: "saveSettings",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient([webPageNode]);
+    const file = result.files.find((f) => f.filename.includes("PreferencesSection.tsx"));
+    expect(file).toBeDefined();
+    const code = file!.content;
+
+    // 1. Store hooks
+    expect(code).toContain('import { useSettingsStore } from "@/lib/stores";');
+    expect(code).toContain("const emailAlerts = useSettingsStore((s) => s.emailAlerts);");
+    expect(code).toContain("const setEmailAlerts = useSettingsStore((s) => s.setEmailAlerts);");
+    expect(code).toContain("const smsAlerts = useSettingsStore((s) => s.smsAlerts);");
+    expect(code).toContain("const setSmsAlerts = useSettingsStore((s) => s.setSmsAlerts);");
+
+    // 2. Component imports
+    expect(code).toContain('import { Switch } from "@workspace/ui/components/switch";');
+    expect(code).toContain('import { Checkbox } from "@workspace/ui/components/checkbox";');
+    expect(code).toContain('import { Button } from "@workspace/ui/components/button";');
+
+    // 3. Two-way bindings
+    expect(code).toContain("checked={Boolean(emailAlerts)}");
+    expect(code).toContain("onCheckedChange={(checked) => setEmailAlerts(checked)}");
+    expect(code).toContain("checked={Boolean(smsAlerts)}");
+    expect(code).toContain("onCheckedChange={(checked) => setSmsAlerts(Boolean(checked))}");
+
+    // 4. Action button inside card
+    expect(code).toContain('onClick={() => onTrigger?.("saveSettings", "click", "/api/settings", "PUT")}');
+    expect(code).toContain('>Save Changes</Button>');
+
+    // 5. Zero duplicate action imports or standalone buttons
+    expect(code).not.toContain("<SaveSettingsAction");
+    expect(code).not.toContain('import { SaveSettingsAction }');
+  });
 });
 
 

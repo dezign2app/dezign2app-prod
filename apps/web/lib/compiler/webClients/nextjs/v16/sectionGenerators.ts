@@ -158,6 +158,67 @@ export function generateSectionComponent(
     (st) => st.renderConfig?.enabled !== false,
   );
   const hasRenderedStateObjects = renderedStateObjects.length > 0;
+  const hasComponentBindings = Array.isArray(section.componentBindings) && section.componentBindings.length > 0;
+
+  // Track bound action IDs and names to suppress duplicate default action buttons
+  const boundActionIds = new Set<string>();
+  const boundActionNames = new Set<string>();
+  if (hasComponentBindings) {
+    (section.componentBindings || []).forEach((comp) => {
+      if (comp.actionId) boundActionIds.add(comp.actionId);
+      if (comp.actionName) boundActionNames.add(comp.actionName.trim().toLowerCase());
+      if (comp.elements) {
+        comp.elements.forEach((el) => {
+          if (el.actionId) boundActionIds.add(el.actionId);
+          if (el.actionName) boundActionNames.add(el.actionName.trim().toLowerCase());
+        });
+      }
+    });
+  }
+
+  const isActionBound = (c: EventComponentMeta) => {
+    if (c.eventItem?.id && boundActionIds.has(c.eventItem.id)) return true;
+    if (boundActionNames.has(c.eventName.trim().toLowerCase())) return true;
+    const baseName = c.componentName.replace(/Action$/i, "").trim().toLowerCase();
+    if (boundActionNames.has(baseName)) return true;
+    return false;
+  };
+
+  const unmappedEventComponents = hasComponentBindings
+    ? eventComponents.filter((c) => !isActionBound(c))
+    : eventComponents;
+  const hasUnmappedActions = unmappedEventComponents.length > 0;
+
+  // Track bound state variable names and IDs to suppress duplicate debug state badges/cards
+  const boundStateIds = new Set<string>();
+  const boundStateVarNames = new Set<string>();
+  if (hasComponentBindings) {
+    (section.componentBindings || []).forEach((comp) => {
+      if (comp.valueStateId) boundStateIds.add(comp.valueStateId);
+      if (comp.valueStateName) boundStateVarNames.add(toCamelCase(comp.valueStateName));
+      if (comp.disabledStateName) boundStateVarNames.add(toCamelCase(comp.disabledStateName));
+      if (comp.loadingStateName) boundStateVarNames.add(toCamelCase(comp.loadingStateName));
+      if (comp.elements) {
+        comp.elements.forEach((el) => {
+          if (el.valueStateId) boundStateIds.add(el.valueStateId);
+          if (el.valueStateName) boundStateVarNames.add(toCamelCase(el.valueStateName));
+          if (el.disabledStateName) boundStateVarNames.add(toCamelCase(el.disabledStateName));
+          if (el.loadingStateName) boundStateVarNames.add(toCamelCase(el.loadingStateName));
+        });
+      }
+    });
+  }
+
+  const isStateBound = (st: { id: string; name: string }) => {
+    if (boundStateIds.has(st.id)) return true;
+    if (boundStateVarNames.has(toCamelCase(st.name || "state"))) return true;
+    return false;
+  };
+
+  const unmappedStateObjects = hasComponentBindings
+    ? renderedStateObjects.filter((st) => !isStateBound(st))
+    : renderedStateObjects;
+  const hasUnmappedStateObjects = unmappedStateObjects.length > 0;
 
   const boundStores = (section.actions || [])
     .flatMap((a) => a.storeActionBindings || (a.storeActionBinding ? [a.storeActionBinding] : []))
@@ -169,9 +230,11 @@ export function generateSectionComponent(
     libRequiresClient ||
     hasStates ||
     hasStateObjects ||
-    hasStoreBindings;
+    hasStoreBindings ||
+    hasComponentBindings;
 
-  const actionImports = eventComponents
+  // Only import action components that are actually rendered as unmapped fallbacks
+  const actionImports = unmappedEventComponents
     .map((c) => `import { ${c.componentName} } from "./${c.componentName}";`)
     .join("\n");
 
@@ -195,7 +258,45 @@ export function generateSectionComponent(
       ? [cfg.labelStoreName]
       : [];
   });
-  const uniqueStoreNames = Array.from(new Set([...actionStoreNames, ...stateStoreNames, ...guardStoreNames, ...copyStoreNames, ...labelStoreNames]));
+
+  const findStoreNameForState = (stateName?: string, stateId?: string): string | undefined => {
+    if (!stateName && !stateId) return undefined;
+    const found = (section.stateObjects || []).find(
+      (s) => (stateId && s.id === stateId) || (stateName && s.name === stateName),
+    );
+    return found?.storeName;
+  };
+
+  const componentStoreNames = (section.componentBindings || []).flatMap((comp) => {
+    const list: string[] = [];
+    const valStore = comp.valueStoreName || findStoreNameForState(comp.valueStateName, comp.valueStateId);
+    if (valStore) list.push(valStore);
+    const disStore = comp.disabledStoreName || findStoreNameForState(comp.disabledStateName);
+    if (disStore) list.push(disStore);
+    const loadStore = comp.loadingStoreName || findStoreNameForState(comp.loadingStateName);
+    if (loadStore) list.push(loadStore);
+
+    if (comp.elements) {
+      comp.elements.forEach((el) => {
+        const elValStore = el.valueStoreName || findStoreNameForState(el.valueStateName, el.valueStateId);
+        if (elValStore) list.push(elValStore);
+        const elDisStore = el.disabledStoreName || findStoreNameForState(el.disabledStateName);
+        if (elDisStore) list.push(elDisStore);
+        const elLoadStore = el.loadingStoreName || findStoreNameForState(el.loadingStateName);
+        if (elLoadStore) list.push(elLoadStore);
+      });
+    }
+    return list;
+  });
+
+  const uniqueStoreNames = Array.from(new Set([
+    ...actionStoreNames,
+    ...stateStoreNames,
+    ...guardStoreNames,
+    ...copyStoreNames,
+    ...labelStoreNames,
+    ...componentStoreNames,
+  ]));
 
   const storeImports = uniqueStoreNames
     .map((sName) => {
@@ -211,9 +312,9 @@ export function generateSectionComponent(
     return `  const ${toCamelCase(clean)}Store = ${hookName}();`;
   });
 
-  const declaredVars = new Set<string>(
-    (section.stateObjects || []).map((st) => toCamelCase(st.name || "state"))
-  );
+  const declaredVars = new Set<string>();
+  const declaredSetters = new Set<string>();
+
   const guardHookCalls: string[] = [];
   (section.stateObjects || []).forEach((st) => {
     const props = st.renderConfig?.propMappings;
@@ -265,7 +366,6 @@ export function generateSectionComponent(
     }
   });
 
-  const declaredSetters = new Set<string>();
   const debouncedStateObjectSetups: string[] = [];
 
   const stateObjectHookCalls = (section.stateObjects || []).map((st) => {
@@ -287,12 +387,29 @@ export function generateSectionComponent(
         ? cfg.targetStoreActionName
         : undefined;
 
+    // Check if this state is used by an interactive component in componentBindings
+    const isBoundToInteractiveComponent = (section.componentBindings || []).some((comp) => {
+      const matchComp = (comp.valueStateName && toCamelCase(comp.valueStateName) === varName) || comp.valueStateId === st.id;
+      if (matchComp && ["input", "switch", "checkbox", "textarea", "select"].includes(comp.componentType || "")) return true;
+      return (comp.elements || []).some((el) => {
+        const matchEl = (el.valueStateName && toCamelCase(el.valueStateName) === varName) || el.valueStateId === st.id;
+        return matchEl && ["input", "switch", "checkbox", "textarea", "select"].includes(el.elementType || "");
+      });
+    });
+
+    const needsSetter = isInteractiveInput || isBoundToInteractiveComponent;
+
     if (st.storeName) {
       const clean = st.storeName.replace(/Store$/i, "");
       const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
-      const lines: string[] = [`  const ${varName} = ${hookName}((s) => s.${st.name});`];
+      const lines: string[] = [];
 
-      if (isInteractiveInput && !declaredSetters.has(setterName)) {
+      if (!declaredVars.has(varName)) {
+        declaredVars.add(varName);
+        lines.push(`  const ${varName} = ${hookName}((s) => s.${st.name});`);
+      }
+
+      if (needsSetter && !declaredSetters.has(setterName)) {
         declaredSetters.add(setterName);
         lines.push(`  const ${setterName} = ${hookName}((s) => s.${setterName});`);
       }
@@ -305,12 +422,16 @@ export function generateSectionComponent(
 
     const tsType = mapStateTypeToTs(st.type || "string");
     const defaultVal = formatStateDefaultValue(st.type || "string", st.defaultValue);
-    if (isInteractiveInput && !declaredSetters.has(setterName)) {
-      declaredSetters.add(setterName);
-      return `  const [${varName}, ${setterName}] = useState<${tsType}>(${defaultVal});`;
+    if (!declaredVars.has(varName)) {
+      declaredVars.add(varName);
+      if (needsSetter && !declaredSetters.has(setterName)) {
+        declaredSetters.add(setterName);
+        return `  const [${varName}, ${setterName}] = useState<${tsType}>(${defaultVal});`;
+      }
+      return `  const [${varName}] = useState<${tsType}>(${defaultVal});`;
     }
-    return `  const [${varName}] = useState<${tsType}>(${defaultVal});`;
-  });
+    return "";
+  }).filter(Boolean);
 
   // Debounced input buffer setups
   (section.stateObjects || []).forEach((st) => {
@@ -358,10 +479,142 @@ export function generateSectionComponent(
     eventComponents.every((c) => c.eventType === "navigateToPage") &&
     !hasStates &&
     !hasStateObjects &&
-    !hasStoreBindings;
+    !hasStoreBindings &&
+    !hasComponentBindings;
+
+  // Generate useState statements for section.states
+  const stateDeclarations = hasStates
+    ? (section.states || [])
+        .map((st) => {
+          const varName = toCamelCase(st.name || "state");
+          const setterName = `set${toPascalCase(st.name || "state")}`;
+          declaredVars.add(varName);
+          declaredSetters.add(setterName);
+          const tsType = mapStateTypeToTs(st.type || "string");
+          const defaultVal = formatStateDefaultValue(st.type || "string", st.defaultValue);
+          return `  const [${varName}, ${setterName}] = useState<${tsType}>(${defaultVal});`;
+        })
+        .join("\n")
+    : "";
+
+  const debugStateSetup = hasUnmappedStateObjects
+    ? `  const showDebugState =
+    process.env.NEXT_PUBLIC_ENABLE_DEBUG_STATE?.trim().toLowerCase() === "true" ||
+    process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI?.trim().toLowerCase() === "true";`
+    : "";
+
+  let needsExtraUseState = false;
+  const componentHookCalls: string[] = [];
+
+  const processComponentBindingState = (item: {
+    valueStateName?: string;
+    valueStateId?: string;
+    valueStoreName?: string;
+    disabledStateName?: string;
+    disabledStoreName?: string;
+    loadingStateName?: string;
+    loadingStoreName?: string;
+    type?: string;
+  }) => {
+    // 1. Value state
+    if (item.valueStateName) {
+      const cleanVar = toCamelCase(item.valueStateName);
+      const setterName = `set${toPascalCase(item.valueStateName)}`;
+      const storeName = item.valueStoreName || findStoreNameForState(item.valueStateName, item.valueStateId);
+      const isInteractive = ["input", "switch", "checkbox", "textarea", "select"].includes(item.type || "");
+
+      if (storeName) {
+        const cleanStore = storeName.replace(/Store$/i, "");
+        const hookName = `use${cleanStore.charAt(0).toUpperCase() + cleanStore.slice(1)}Store`;
+        if (!declaredVars.has(cleanVar)) {
+          declaredVars.add(cleanVar);
+          componentHookCalls.push(`  const ${cleanVar} = ${hookName}((s) => s.${item.valueStateName});`);
+        }
+        if (isInteractive && !declaredSetters.has(setterName)) {
+          declaredSetters.add(setterName);
+          componentHookCalls.push(`  const ${setterName} = ${hookName}((s) => s.${setterName});`);
+        }
+      } else {
+        if (!declaredVars.has(cleanVar)) {
+          declaredVars.add(cleanVar);
+          needsExtraUseState = true;
+          const defaultVal = item.type === "switch" || item.type === "checkbox" ? "false" : '""';
+          const tsType = item.type === "switch" || item.type === "checkbox" ? "boolean" : "string";
+          if (isInteractive) {
+            declaredSetters.add(setterName);
+            componentHookCalls.push(`  const [${cleanVar}, ${setterName}] = useState<${tsType}>(${defaultVal});`);
+          } else {
+            componentHookCalls.push(`  const [${cleanVar}] = useState<${tsType}>(${defaultVal});`);
+          }
+        }
+      }
+    }
+
+    // 2. Disabled state
+    if (item.disabledStateName) {
+      const cleanVar = toCamelCase(item.disabledStateName);
+      const storeName = item.disabledStoreName || findStoreNameForState(item.disabledStateName);
+      if (!declaredVars.has(cleanVar)) {
+        declaredVars.add(cleanVar);
+        if (storeName) {
+          const cleanStore = storeName.replace(/Store$/i, "");
+          const hookName = `use${cleanStore.charAt(0).toUpperCase() + cleanStore.slice(1)}Store`;
+          componentHookCalls.push(`  const ${cleanVar} = ${hookName}((s) => s.${item.disabledStateName});`);
+        } else {
+          needsExtraUseState = true;
+          componentHookCalls.push(`  const [${cleanVar}] = useState<boolean>(false);`);
+        }
+      }
+    }
+
+    // 3. Loading state
+    if (item.loadingStateName) {
+      const cleanVar = toCamelCase(item.loadingStateName);
+      const storeName = item.loadingStoreName || findStoreNameForState(item.loadingStateName);
+      if (!declaredVars.has(cleanVar)) {
+        declaredVars.add(cleanVar);
+        if (storeName) {
+          const cleanStore = storeName.replace(/Store$/i, "");
+          const hookName = `use${cleanStore.charAt(0).toUpperCase() + cleanStore.slice(1)}Store`;
+          componentHookCalls.push(`  const ${cleanVar} = ${hookName}((s) => s.${item.loadingStateName});`);
+        } else {
+          needsExtraUseState = true;
+          componentHookCalls.push(`  const [${cleanVar}] = useState<boolean>(false);`);
+        }
+      }
+    }
+  };
+
+  (section.componentBindings || []).forEach((comp) => {
+    processComponentBindingState({
+      valueStateName: comp.valueStateName,
+      valueStateId: comp.valueStateId,
+      valueStoreName: comp.valueStoreName,
+      disabledStateName: comp.disabledStateName,
+      disabledStoreName: comp.disabledStoreName,
+      loadingStateName: comp.loadingStateName,
+      loadingStoreName: comp.loadingStoreName,
+      type: comp.componentType,
+    });
+    if (comp.elements) {
+      comp.elements.forEach((el) => {
+        processComponentBindingState({
+          valueStateName: el.valueStateName,
+          valueStateId: el.valueStateId,
+          valueStoreName: el.valueStoreName,
+          disabledStateName: el.disabledStateName,
+          disabledStoreName: el.disabledStoreName,
+          loadingStateName: el.loadingStateName,
+          loadingStoreName: el.loadingStoreName,
+          type: el.elementType,
+        });
+      });
+    }
+  });
 
   const needsUseState =
     hasStates ||
+    needsExtraUseState ||
     hasDebouncedStateObject ||
     (section.stateObjects || []).some((st) => !st.storeName);
 
@@ -373,30 +626,12 @@ export function generateSectionComponent(
     ? `import React, { useState } from "react";`
     : `import React from "react";`;
 
-  // Generate useState statements
-  const stateDeclarations = hasStates
-    ? (section.states || [])
-        .map((st) => {
-          const varName = toCamelCase(st.name || "state");
-          const setterName = `set${toPascalCase(st.name || "state")}`;
-          const tsType = mapStateTypeToTs(st.type || "string");
-          const defaultVal = formatStateDefaultValue(st.type || "string", st.defaultValue);
-          return `  const [${varName}, ${setterName}] = useState<${tsType}>(${defaultVal});`;
-        })
-        .join("\n")
-    : "";
-
-  const debugStateSetup = hasRenderedStateObjects
-    ? `  const showDebugState =
-    process.env.NEXT_PUBLIC_ENABLE_DEBUG_STATE?.trim().toLowerCase() === "true" ||
-    process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI?.trim().toLowerCase() === "true";`
-    : "";
-
   const combinedSetupLines = [
     debugStateSetup,
     stateDeclarations,
     ...stateObjectHookCalls,
     ...guardHookCalls,
+    ...componentHookCalls,
     ...debouncedStateObjectSetups,
     ...actionStoreHookCalls,
   ].filter(Boolean).join("\n");
@@ -437,8 +672,8 @@ export default ${sectionCompName};
   const neededShadcnImports = new Set<string>();
   let needsToast = false;
 
-  const stateObjectsJsx = hasRenderedStateObjects
-    ? `\n        <div className="flex flex-wrap gap-2${hasActions ? " mb-3" : ""}">\n${renderedStateObjects
+  const stateObjectsJsx = hasUnmappedStateObjects
+    ? `\n        <div className="flex flex-wrap gap-2${hasComponentBindings ? " mt-3" : ""}">\n${unmappedStateObjects
         .map((st) => {
           const varName = toCamelCase(st.name || "state");
           const cfg = st.renderConfig;
@@ -602,48 +837,184 @@ export default ${sectionCompName};
         .join("\n")}\n        </div>`
     : "";
 
-  const hasComponentBindings = Array.isArray(section.componentBindings) && section.componentBindings.length > 0;
+  const renderComponentItem = (
+    item: {
+      id: string;
+      name: string;
+      type: string;
+      label?: string;
+      placeholder?: string;
+      variant?: string;
+      valueStateName?: string;
+      disabledStateName?: string;
+      actionId?: string;
+      actionName?: string;
+      triggerEvent?: string;
+      description?: string;
+    },
+    isChild: boolean = false,
+  ): string => {
+    const act = (section.actions || []).find((a) => a.id === item.actionId || a.name === item.actionName);
+    const actName = act?.name || item.actionName || "action";
+    const actEvent = act?.event || item.triggerEvent || "click";
+    const actUrl = act?.url || "";
+    const actMethod = act?.method || "POST";
+    const hasAction = Boolean(item.actionId || item.actionName);
+
+    const clickAttr = hasAction
+      ? ` onClick={() => onTrigger?.("${actName}", "${actEvent}", "${actUrl}", "${actMethod}")}`
+      : "";
+
+    const disabledAttr = item.disabledStateName
+      ? ` disabled={Boolean(${toCamelCase(item.disabledStateName)})}`
+      : "";
+
+    const valVar = item.valueStateName ? toCamelCase(item.valueStateName) : "";
+    const setterVar = item.valueStateName ? `set${toPascalCase(item.valueStateName)}` : "";
+    const hasSetter = valVar && declaredSetters.has(setterVar);
+
+    const labelText = item.label || item.name;
+
+    if (item.type === "button") {
+      neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
+      return `<Button key="${item.id}" variant="${item.variant || "default"}" size="sm"${disabledAttr}${clickAttr}>${labelText}</Button>`;
+    }
+
+    if (item.type === "input") {
+      neededShadcnImports.add('import { Input } from "@workspace/ui/components/input";');
+      const ph = item.placeholder || item.label || "Enter text...";
+      if (valVar && hasSetter) {
+        let changeAttr = ` onChange={(e) => ${setterVar}(e.target.value)}`;
+        if (hasAction) {
+          changeAttr = ` onChange={(e) => { ${setterVar}(e.target.value); onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", { value: e.target.value }); }}`;
+        }
+        return `<Input key="${item.id}" placeholder="${ph}" value={String(${valVar} ?? "")}${changeAttr}${disabledAttr} className="h-8 text-xs max-w-xs" />`;
+      }
+      if (valVar) {
+        return `<Input key="${item.id}" placeholder="${ph}" defaultValue={String(${valVar} ?? "")}${disabledAttr} className="h-8 text-xs max-w-xs" />`;
+      }
+      return `<Input key="${item.id}" placeholder="${ph}"${disabledAttr} className="h-8 text-xs max-w-xs" />`;
+    }
+
+    if (item.type === "switch") {
+      neededShadcnImports.add('import { Switch } from "@workspace/ui/components/switch";');
+      if (valVar && hasSetter) {
+        let changeAttr = ` onCheckedChange={(checked) => ${setterVar}(checked)}`;
+        if (hasAction) {
+          changeAttr = ` onCheckedChange={(checked) => { ${setterVar}(checked); onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", { checked }); }}`;
+        }
+        return `<div key="${item.id}" className="flex items-center gap-2 text-xs"><Switch checked={Boolean(${valVar})}${changeAttr}${disabledAttr} /><span>${labelText}</span></div>`;
+      }
+      const checkedExpr = valVar ? `Boolean(${valVar})` : "false";
+      return `<div key="${item.id}" className="flex items-center gap-2 text-xs"><Switch checked={${checkedExpr}}${disabledAttr} /><span>${labelText}</span></div>`;
+    }
+
+    if (item.type === "checkbox") {
+      neededShadcnImports.add('import { Checkbox } from "@workspace/ui/components/checkbox";');
+      if (valVar && hasSetter) {
+        const changeAttr = ` onCheckedChange={(checked) => ${setterVar}(Boolean(checked))}`;
+        return `<div key="${item.id}" className="flex items-center gap-2 text-xs"><Checkbox checked={Boolean(${valVar})}${changeAttr}${disabledAttr} /><span>${labelText}</span></div>`;
+      }
+      const checkedExpr = valVar ? `Boolean(${valVar})` : "false";
+      return `<div key="${item.id}" className="flex items-center gap-2 text-xs"><Checkbox checked={${checkedExpr}}${disabledAttr} /><span>${labelText}</span></div>`;
+    }
+
+    if (item.type === "badge") {
+      neededShadcnImports.add('import { Badge } from "@workspace/ui/components/badge";');
+      if (valVar) {
+        const prefix = item.label ? `<span className="text-muted-foreground mr-1">${item.label}:</span>` : "";
+        return `<Badge key="${item.id}" variant="${item.variant || "secondary"}" className="text-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>${prefix}{typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})}</Badge>`;
+      }
+      return `<Badge key="${item.id}" variant="${item.variant || "secondary"}" className="text-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>${labelText}</Badge>`;
+    }
+
+    if (item.type === "card") {
+      if (valVar) {
+        return `<div key="${item.id}" className="p-3 rounded-lg border bg-card text-card-foreground shadow-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>\n            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">${labelText}</div>\n            <div className="text-sm font-bold mt-0.5 font-mono">{typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})}</div>\n          </div>`;
+      }
+      return `<div key="${item.id}" className="p-3 rounded-lg border bg-card text-card-foreground shadow-xs${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>\n            <div className="text-xs font-semibold text-card-foreground">${labelText}</div>\n          </div>`;
+    }
+
+    if (item.type === "progress") {
+      neededShadcnImports.add('import { Progress } from "@workspace/ui/components/progress";');
+      const valExpr = valVar ? `Number(${valVar}) || 0` : "50";
+      return `<div key="${item.id}" className="flex flex-col gap-1 min-w-[120px] text-xs"><span>${labelText}</span><Progress value={${valExpr}} /></div>`;
+    }
+
+    if (item.type === "alert") {
+      neededShadcnImports.add('import { Alert, AlertDescription, AlertTitle } from "@workspace/ui/components/alert";');
+      const desc = valVar ? `{typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})}` : (item.description || item.name);
+      return `<Alert key="${item.id}" className="py-2 px-3 text-xs"${clickAttr}><AlertTitle className="text-xs font-semibold">${labelText}</AlertTitle><AlertDescription className="text-xs">${desc}</AlertDescription></Alert>`;
+    }
+
+    if (item.type === "avatar") {
+      neededShadcnImports.add('import { Avatar, AvatarFallback } from "@workspace/ui/components/avatar";');
+      const fallback = labelText.slice(0, 2).toUpperCase();
+      return `<Avatar key="${item.id}" className="h-8 w-8"><AvatarFallback>${fallback}</AvatarFallback></Avatar>`;
+    }
+
+    if (item.type === "skeleton") {
+      neededShadcnImports.add('import { Skeleton } from "@workspace/ui/components/skeleton";');
+      return `<Skeleton key="${item.id}" className="h-8 w-24" />`;
+    }
+
+    if (item.type === "textarea") {
+      neededShadcnImports.add('import { Textarea } from "@workspace/ui/components/textarea";');
+      const ph = item.placeholder || item.label || "Enter text...";
+      if (valVar && hasSetter) {
+        return `<Textarea key="${item.id}" placeholder="${ph}" value={String(${valVar} ?? "")} onChange={(e) => ${setterVar}(e.target.value)}${disabledAttr} className="text-xs max-w-sm" />`;
+      }
+      return `<Textarea key="${item.id}" placeholder="${ph}"${disabledAttr} className="text-xs max-w-sm" />`;
+    }
+
+    // Default fallback
+    if (valVar) {
+      return `<div key="${item.id}" className="text-xs px-2.5 py-1 rounded bg-secondary/50 border border-border text-foreground font-mono${clickAttr ? " cursor-pointer" : ""}"${clickAttr}><span className="text-muted-foreground mr-1">${labelText}:</span>{typeof ${valVar} === "object" ? JSON.stringify(${valVar}) : String(${valVar})}</div>`;
+    }
+    return `<div key="${item.id}" className="text-xs px-2.5 py-1 rounded bg-secondary/50 border border-border text-foreground font-mono${clickAttr ? " cursor-pointer" : ""}"${clickAttr}>${labelText}</div>`;
+  };
+
   const componentBindingsJsx = hasComponentBindings
-    ? `\n        <div className="flex flex-wrap gap-2.5 mt-3">\n${(section.componentBindings || [])
+    ? `\n        <div className="flex flex-wrap items-center gap-2.5">\n${(section.componentBindings || [])
         .map((comp) => {
-          let clickAttr = "";
-          if (comp.actionId) {
-            const act = (section.actions || []).find((a) => a.id === comp.actionId);
-            const actName = act?.name || comp.actionName || "action";
-            const actEvent = act?.event || comp.triggerEvent || "click";
-            const actUrl = act?.url || "";
-            const actMethod = act?.method || "POST";
-            clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", "${actUrl}", "${actMethod}")}`;
-          }
-          let disabledAttr = "";
-          if (comp.disabledStateName) {
-            const cleanVar = toCamelCase(comp.disabledStateName);
-            disabledAttr = ` disabled={Boolean(${cleanVar})}`;
+          if (comp.elements && comp.elements.length > 0) {
+            const childElementsJsx = comp.elements
+              .map((el) => `              ${renderComponentItem({
+                id: el.id,
+                name: el.name,
+                type: el.elementType || "input",
+                label: el.label,
+                placeholder: el.placeholder,
+                variant: el.variant,
+                valueStateName: el.valueStateName,
+                disabledStateName: el.disabledStateName,
+                actionId: el.actionId,
+                actionName: el.actionName,
+                triggerEvent: el.triggerEvent,
+                description: el.description,
+              }, true)}`)
+              .join("\n");
+
+            const descJsx = comp.description
+              ? `\n            <div className="text-[10px] text-muted-foreground">${comp.description}</div>`
+              : "";
+
+            return `          <div key="${comp.id}" className="flex flex-col gap-2 p-3 rounded-lg border bg-card text-card-foreground shadow-xs">\n            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">${comp.label || comp.name}</div>${descJsx}\n            <div className="flex flex-wrap items-center gap-2">\n${childElementsJsx}\n            </div>\n          </div>`;
           }
 
-          if (comp.componentType === "button") {
-            neededShadcnImports.add('import { Button } from "@workspace/ui/components/button";');
-            return `          <Button key="${comp.id}" variant="${comp.variant || "default"}" size="sm"${disabledAttr}${clickAttr}>${comp.label || comp.name}</Button>`;
-          }
-          if (comp.componentType === "input") {
-            neededShadcnImports.add('import { Input } from "@workspace/ui/components/input";');
-            const valExpr = comp.valueStateName ? `{String(${toCamelCase(comp.valueStateName)})}` : `""`;
-            return `          <Input key="${comp.id}" placeholder="${comp.label || "Enter text..."}" defaultValue=${valExpr}${disabledAttr} className="h-8 text-xs max-w-xs" />`;
-          }
-          if (comp.componentType === "card") {
-            const valExpr = comp.valueStateName ? `{typeof ${toCamelCase(comp.valueStateName)} === "object" ? JSON.stringify(${toCamelCase(comp.valueStateName)}) : String(${toCamelCase(comp.valueStateName)})}` : `"Sample Value"`;
-            return `          <div key="${comp.id}" className="p-3 rounded-lg border bg-card text-card-foreground shadow-xs">\n            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">${comp.label || comp.name}</div>\n            <div className="text-sm font-bold mt-0.5 font-mono">${valExpr}</div>\n          </div>`;
-          }
-          if (comp.componentType === "switch") {
-            neededShadcnImports.add('import { Switch } from "@workspace/ui/components/switch";');
-            const valExpr = comp.valueStateName ? `Boolean(${toCamelCase(comp.valueStateName)})` : `false`;
-            return `          <div key="${comp.id}" className="flex items-center gap-2 text-xs"><Switch checked={${valExpr}}${disabledAttr} /><span>${comp.label || comp.name}</span></div>`;
-          }
-          if (comp.componentType === "badge") {
-            neededShadcnImports.add('import { Badge } from "@workspace/ui/components/badge";');
-            return `          <Badge key="${comp.id}" variant="${comp.variant || "secondary"}" className="text-xs">${comp.label || comp.name}</Badge>`;
-          }
-          return `          <div key="${comp.id}" className="text-xs px-2.5 py-1 rounded bg-secondary/50 border border-border">${comp.label || comp.name}</div>`;
+          return `          ${renderComponentItem({
+            id: comp.id,
+            name: comp.name,
+            type: comp.componentType || "button",
+            label: comp.label,
+            variant: comp.variant,
+            valueStateName: comp.valueStateName,
+            disabledStateName: comp.disabledStateName,
+            actionId: comp.actionId,
+            actionName: comp.actionName,
+            triggerEvent: comp.triggerEvent,
+            description: comp.description,
+          }, false)}`;
         })
         .join("\n")}\n        </div>`
     : "";
@@ -651,15 +1022,15 @@ export default ${sectionCompName};
   const extraComponentImports = Array.from(neededShadcnImports).join("\n");
   const toastImport = needsToast ? `import { toast } from "sonner";\n` : "";
 
-  const hasContent = hasActions || hasRenderedStateObjects || hasComponentBindings;
+  const hasContent = hasUnmappedActions || hasUnmappedStateObjects || hasComponentBindings;
   let contentJsx = "";
   if (hasContent) {
-    const actionsPart = hasActions
-      ? `\n        <div className="flex flex-wrap gap-3">\n${eventComponents
+    const actionsPart = hasUnmappedActions
+      ? `\n        <div className="flex flex-wrap gap-3${hasComponentBindings || hasUnmappedStateObjects ? " mt-3" : ""}">\n${unmappedEventComponents
           .map((c) => `          <${c.componentName} onTrigger={onTrigger} />`)
           .join("\n")}\n        </div>`
       : "";
-    contentJsx = `\n      <CardContent>${stateObjectsJsx}${actionsPart}${componentBindingsJsx}\n      </CardContent>`;
+    contentJsx = `\n      <CardContent>${componentBindingsJsx}${stateObjectsJsx}${actionsPart}\n      </CardContent>`;
   }
 
   return `${isClient ? `"use client";\n\n` : ""}${reactImport}

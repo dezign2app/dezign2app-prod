@@ -194,12 +194,44 @@ export type ComponentBindingType =
   | "select"
   | (string & {});
 
+export interface ComponentElementBinding {
+  id: string;
+  name: string;
+  elementType: ComponentBindingType;
+  label?: string;
+  placeholder?: string;
+  variant?: string;
+  
+  // State variable mappings
+  valueStateName?: string;
+  valueStateId?: string;
+  valueSourceType?: "store" | "local";
+  valueStoreName?: string;
+  
+  // Guard / status state bindings
+  disabledStateName?: string;
+  disabledStoreName?: string;
+  loadingStateName?: string;
+  loadingStoreName?: string;
+  
+  // Action trigger binding
+  triggerEvent?: "click" | "change" | "submit" | "select" | (string & {});
+  actionId?: string;
+  actionName?: string;
+
+  description?: string;
+  propMappings?: ComponentPropMappings;
+}
+
 export interface SectionComponentBinding {
   id: string;
   name: string;
   componentType: ComponentBindingType;
   label?: string;
   variant?: string;
+  
+  // Multiple Shadcn UI elements within this component (e.g. 2 inputs and a button)
+  elements?: ComponentElementBinding[];
   
   // State variable mappings
   valueStateName?: string;

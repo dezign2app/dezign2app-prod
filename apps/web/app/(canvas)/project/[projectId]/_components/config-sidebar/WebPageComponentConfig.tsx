@@ -1,24 +1,15 @@
 "use client";
 
-import React, { useMemo, useCallback, useEffect, useState } from "react";
+import React, { useMemo, useCallback, useState, useEffect } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useShallow } from "zustand/react/shallow";
-import {
-  Layers,
-  Play,
-  ArrowRight,
-  Zap,
-  ChevronLeft,
-  Plus,
-  Trash2,
-  AlertCircle,
-  Tag,
-  Sparkles,
-} from "lucide-react";
+import { Trash2, AlertCircle, SlidersHorizontal } from "lucide-react";
+import { cn } from "@workspace/ui/lib/utils";
 import {
   PageSection,
   SectionComponentBinding,
-  BackendNode,
+  ComponentElementBinding,
+  ComponentBindingType,
   UIEventItem,
   JSONValue,
   StateRenderComponent,
@@ -33,31 +24,24 @@ import {
   DEFAULT_COMPONENT_OPTION,
   ComponentOption,
 } from "./web-page-state-config";
-import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
-import { LocalInput } from "../backend-nodes/graph-nodes/shared";
-import { Label } from "@workspace/ui/components/label";
-import { cn } from "@workspace/ui/lib/utils";
-import { Badge } from "@workspace/ui/components/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card";
-import { Separator } from "@workspace/ui/components/separator";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
+  ComponentBreadcrumbsHeader,
+  ComponentIdentityCard,
+  ComponentEventActionCard,
+} from "./web-page-component-config";
+import { Button } from "@workspace/ui/components/button";
+import { Separator } from "@workspace/ui/components/separator";
 import { toast } from "sonner";
+import { toPascalCase } from "@/lib/utils";
+import { Badge } from "@workspace/ui/components/badge";
+
+export { toPascalCase };
 
 export interface WebPageComponentConfigProps {
   id: string; // Component binding ID
   nodeId: string; // WebPageNode ID
   sectionId?: string; // Section ID
 }
-
-import { toPascalCase } from "@/lib/utils";
-export { toPascalCase };
 
 const toStateRenderComponent = (val: string): StateRenderComponent => {
   switch (val) {
@@ -102,7 +86,6 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
   );
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
-  const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
 
   // All state store nodes for state binding dropdowns
   const stateStores = useBackendCanvasStore(
@@ -380,6 +363,299 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
     [componentBinding, availableActions, handleUpdate],
   );
 
+  // Normalized multiple Shadcn UI elements within this component
+  const currentElements: ComponentElementBinding[] = useMemo(() => {
+    if (componentBinding?.elements && componentBinding.elements.length > 0) {
+      return componentBinding.elements;
+    }
+    if (!componentBinding) return [];
+    return [
+      {
+        id: `el-${componentBinding.id}`,
+        name: componentBinding.name || "Element1",
+        elementType: componentBinding.componentType || "input",
+        label: componentBinding.label || componentBinding.name || "Element 1",
+        variant: componentBinding.variant,
+        valueStateName: componentBinding.valueStateName,
+        valueStoreName: componentBinding.valueStoreName,
+        valueSourceType: componentBinding.valueSourceType,
+        actionId: componentBinding.actionId,
+        actionName: componentBinding.actionName,
+        triggerEvent: componentBinding.triggerEvent || "click",
+        disabledStateName: componentBinding.disabledStateName,
+        disabledStoreName: componentBinding.disabledStoreName,
+        propMappings: componentBinding.propMappings,
+      },
+    ];
+  }, [componentBinding]);
+
+  const [activeElementId, setActiveElementId] = useState<string>("");
+
+  useEffect(() => {
+    if (!currentElements.some((e) => e.id === activeElementId) && currentElements[0]) {
+      setActiveElementId(currentElements[0].id);
+    }
+  }, [currentElements, activeElementId]);
+
+  const handleUpdateElements = useCallback(
+    (nextElements: ComponentElementBinding[]) => {
+      const first = nextElements[0];
+      handleUpdate({
+        elements: nextElements,
+        componentType: first?.elementType || componentBinding?.componentType || "button",
+        valueStateName: first?.valueStateName,
+        valueStoreName: first?.valueStoreName,
+        valueSourceType: first?.valueSourceType,
+        actionId: first?.actionId,
+        actionName: first?.actionName,
+        triggerEvent: first?.triggerEvent,
+      });
+    },
+    [handleUpdate, componentBinding?.componentType],
+  );
+
+  const handleAddElement = useCallback(
+    (type: StateRenderComponent = "input") => {
+      const elIndex = currentElements.length + 1;
+      const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
+      const newElName = `${typeLabel}${elIndex}`;
+      const newElId = `el-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
+      const newElement: ComponentElementBinding = {
+        id: newElId,
+        name: newElName,
+        elementType: type,
+        label: `${typeLabel} ${elIndex}`,
+        placeholder: type === "input" ? `Enter ${newElName.toLowerCase()}...` : undefined,
+        variant: type === "button" ? "default" : type === "badge" ? "secondary" : undefined,
+        triggerEvent: type === "button" ? "click" : "change",
+      };
+
+      const updated = [...currentElements, newElement];
+      handleUpdateElements(updated);
+      setActiveElementId(newElId);
+      toast.success(`Added ${typeLabel} component!`);
+    },
+    [currentElements, handleUpdateElements],
+  );
+
+  const handleUpdateElement = useCallback(
+    (elId: string, changes: Partial<ComponentElementBinding>) => {
+      const updated = currentElements.map((el) => {
+        if (el.id !== elId) return el;
+        const next = { ...el, ...changes };
+        if (changes.name) {
+          const pascal = toPascalCase(changes.name);
+          if (pascal) {
+            next.name = pascal;
+            if (!next.label || changes.label !== undefined) next.label = pascal;
+          }
+        }
+        return next;
+      });
+      handleUpdateElements(updated);
+    },
+    [currentElements, handleUpdateElements],
+  );
+
+  const handleChangeElementType = useCallback(
+    (elId: string, type: StateRenderComponent) => {
+      const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
+      handleUpdateElement(elId, {
+        elementType: type,
+        variant: type === "button" ? "default" : type === "badge" ? "secondary" : undefined,
+        triggerEvent: type === "button" ? "click" : "change",
+      });
+      toast.success(`Changed to ${typeLabel}`);
+    },
+    [handleUpdateElement],
+  );
+
+  const handleDeleteElement = useCallback(
+    (elId: string) => {
+      if (currentElements.length <= 1) {
+        toast.error("Component must contain at least one UI component.");
+        return;
+      }
+      const updated = currentElements.filter((el) => el.id !== elId);
+      handleUpdateElements(updated);
+      if (activeElementId === elId) {
+        setActiveElementId(updated[0]?.id || "");
+      }
+      toast.success("Component removed");
+    },
+    [currentElements, activeElementId, handleUpdateElements],
+  );
+
+  const handleMoveElement = useCallback(
+    (index: number, direction: "up" | "down") => {
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= currentElements.length) return;
+      const copy = [...currentElements];
+      const temp = copy[index]!;
+      copy[index] = copy[targetIndex]!;
+      copy[targetIndex] = temp;
+      handleUpdateElements(copy);
+    },
+    [currentElements, handleUpdateElements],
+  );
+
+  const activeElement: ComponentElementBinding = useMemo(() => {
+    return (
+      currentElements.find((e) => e.id === activeElementId) ||
+      currentElements[0] || {
+        id: `el-${componentBinding?.id || "default"}`,
+        name: componentBinding?.name || "Component",
+        elementType: componentBinding?.componentType || "input",
+        label: componentBinding?.label || componentBinding?.name || "Component",
+      }
+    );
+  }, [currentElements, activeElementId, componentBinding]);
+
+  const activeRenderComponent = toStateRenderComponent(
+    activeElement.elementType || "input",
+  );
+
+  const activeOption: ComponentOption = useMemo(() => {
+    const found = COMPONENT_OPTIONS.find((opt) => opt.id === activeRenderComponent);
+    return found || DEFAULT_COMPONENT_OPTION;
+  }, [activeRenderComponent]);
+
+  const activeSelectedStore = useMemo(() => {
+    if (!activeElement.valueStoreName) return undefined;
+    return stateStores.find(
+      (st) =>
+        st.data?.label === activeElement.valueStoreName ||
+        st.data?.storeName === activeElement.valueStoreName,
+    );
+  }, [activeElement.valueStoreName, stateStores]);
+
+  const activeBindingStateType = useMemo(() => {
+    if (activeElement.valueStoreName && activeElement.valueStateName) {
+      const match = storeFields.find(
+        (f) =>
+          f.storeName === activeElement.valueStoreName &&
+          f.fieldName === activeElement.valueStateName,
+      );
+      if (match) return match.type;
+    }
+    if (activeElement.valueStateName) {
+      const match = localStates.find((s) => s.name === activeElement.valueStateName);
+      if (match) return match.type;
+    }
+    return undefined;
+  }, [activeElement.valueStoreName, activeElement.valueStateName, storeFields, localStates]);
+
+  const activePropMappings: ComponentPropMappings = useMemo(() => {
+    return activeElement.propMappings || {};
+  }, [activeElement.propMappings]);
+
+  const handleUpdateActivePropMapping = useCallback(
+    (changes: Partial<ComponentPropMappings>) => {
+      const currentProps = activeElement.propMappings || {};
+      const updatedProps: ComponentPropMappings = {
+        ...currentProps,
+        ...changes,
+      };
+
+      const elementChanges: Partial<ComponentElementBinding> = {
+        propMappings: updatedProps,
+      };
+
+      if (changes.valueBinding !== undefined) {
+        elementChanges.valueStateName = changes.valueBinding;
+      }
+      if (changes.onChangeActionId !== undefined) {
+        elementChanges.actionId = changes.onChangeActionId;
+        const matched = availableActions.find((a) => a.id === changes.onChangeActionId);
+        if (matched) {
+          elementChanges.actionName = matched.name;
+        }
+      }
+      if (changes.disabledBinding !== undefined) {
+        elementChanges.disabledStateName = changes.disabledBinding;
+      }
+      if (changes.disabledStoreName !== undefined) {
+        elementChanges.disabledStoreName = changes.disabledStoreName;
+      }
+
+      handleUpdateElement(activeElement.id, elementChanges);
+    },
+    [activeElement, availableActions, handleUpdateElement],
+  );
+
+  const handleCreateActionForElement = useCallback(
+    (elId: string, defaultName?: string, eventType?: string) => {
+      const currentParent = useBackendCanvasStore
+        .getState()
+        .nodes.find((n) => n.id === nodeId);
+      if (!currentParent) return;
+
+      const currentSections: PageSection[] = currentParent.data?.sections || [];
+      const currentTargetSec =
+        currentSections.find((s) => (s.componentBindings || []).some((c) => c.id === id)) ||
+        currentSections.find((s) => s.id === sectionId) ||
+        currentSections[0];
+      if (!currentTargetSec) return;
+
+      const targetEl = currentElements.find((e) => e.id === elId);
+      const actionName = defaultName || `${targetEl?.name || "button"}Action`;
+      const newActId = `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
+      const newAction: UIEventItem = {
+        id: newActId,
+        name: actionName,
+        event: eventType || targetEl?.triggerEvent || "click",
+        actionSteps: [],
+      };
+
+      const updatedActions = [...(currentTargetSec.actions || []), newAction];
+      const updatedElements = currentElements.map((el) =>
+        el.id === elId
+          ? {
+              ...el,
+              actionId: newActId,
+              actionName,
+            }
+          : el,
+      );
+
+      const updatedBindings = (currentTargetSec.componentBindings || []).map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              elements: updatedElements,
+              actionId: updatedElements[0]?.actionId,
+              actionName: updatedElements[0]?.actionName,
+            }
+          : c,
+      );
+
+      const updatedSections = currentSections.map((sec) =>
+        sec.id === currentTargetSec.id
+          ? { ...sec, actions: updatedActions, componentBindings: updatedBindings }
+          : sec,
+      );
+
+      updateNode(nodeId, {
+        data: {
+          ...currentParent.data,
+          sections: updatedSections,
+        },
+      });
+
+      toast.success(`Created and wired action "${actionName}"!`);
+    },
+    [currentElements, nodeId, id, sectionId, updateNode],
+  );
+
+  const handleCreateActiveElementAction = useCallback(
+    (name?: string, eventType?: string) => {
+      handleCreateActionForElement(activeElement.id, name, eventType);
+    },
+    [activeElement.id, handleCreateActionForElement],
+  );
+
   if (!parentNode || !targetSection || !componentBinding) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground gap-3">
@@ -409,120 +685,6 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
   const displayLabel = toPascalCase(rawName) || "Component";
   const stateName = componentBinding.valueStateName || displayLabel || "value";
 
-  const isFocusedRef = React.useRef(false);
-  const debounceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
-  }, []);
-
-  // Controlled input value for live typing & debounced PascalCase formatting
-  const [nameInputValue, setNameInputValue] = useState(
-    componentBinding.name || componentBinding.label || (displayLabel !== "Component" ? displayLabel : "")
-  );
-
-  useEffect(() => {
-    // Only sync if not actively focused and not actively debouncing
-    if (!isFocusedRef.current && !debounceTimerRef.current) {
-      setNameInputValue(
-        componentBinding.name || componentBinding.label || (displayLabel !== "Component" ? displayLabel : "")
-      );
-    }
-  }, [componentBinding.id, componentBinding.name, componentBinding.label, displayLabel]);
-
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    setNameInputValue(raw);
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
-    // Do not format while user has trailing whitespace (still typing next word)
-    if (raw.trim() && !/\s$/.test(raw)) {
-      debounceTimerRef.current = setTimeout(() => {
-        debounceTimerRef.current = null;
-        const pascal = toPascalCase(raw);
-        if (pascal) {
-          setNameInputValue(pascal);
-          handleUpdate({ name: pascal, label: pascal });
-        }
-      }, 500);
-    }
-  };
-
-  const handleNameFocus = () => {
-    isFocusedRef.current = true;
-  };
-
-  const handleNameBlur = () => {
-    isFocusedRef.current = false;
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
-    const pascal = toPascalCase(nameInputValue);
-    if (pascal) {
-      setNameInputValue(pascal);
-      handleUpdate({ name: pascal, label: pascal });
-    } else {
-      // while renaming if the name field is empty switch back to older name
-      const olderName = componentBinding.name || componentBinding.label || "Component";
-      setNameInputValue(olderName);
-      handleUpdate({ name: olderName, label: olderName });
-    }
-  };
-
-  const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      isFocusedRef.current = false;
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-        debounceTimerRef.current = null;
-      }
-      const pascal = toPascalCase(nameInputValue);
-      if (pascal) {
-        setNameInputValue(pascal);
-        handleUpdate({ name: pascal, label: pascal });
-        e.currentTarget.blur();
-      } else {
-        const olderName = componentBinding.name || componentBinding.label || "Component";
-        setNameInputValue(olderName);
-        handleUpdate({ name: olderName, label: olderName });
-        e.currentTarget.blur();
-      }
-    } else if (e.key === "Escape") {
-      isFocusedRef.current = false;
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-        debounceTimerRef.current = null;
-      }
-      const olderName = componentBinding.name || componentBinding.label || "Component";
-      setNameInputValue(olderName);
-      handleUpdate({ name: olderName, label: olderName });
-      e.currentTarget.blur();
-    }
-  };
-
-  const handleFormatPascalCase = () => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
-    const pascal = toPascalCase(nameInputValue || displayLabel);
-    if (pascal) {
-      setNameInputValue(pascal);
-      handleUpdate({ name: pascal, label: pascal });
-    } else {
-      const olderName = componentBinding.name || componentBinding.label || "Component";
-      setNameInputValue(olderName);
-      handleUpdate({ name: olderName, label: olderName });
-    }
-  };
-
   const formattedPreviewValue = String(
     sampleValue !== undefined && sampleValue !== null
       ? typeof sampleValue === "object"
@@ -534,317 +696,152 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
   return (
     <div className="flex flex-col gap-5 font-sans text-foreground pb-12">
       {/* 1. Breadcrumbs & Header Banner */}
-      <div className="flex items-center justify-between p-3.5 rounded-xl bg-purple-500/[0.05] border border-purple-500/20">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                setActiveConfigItem({
-                  type: "pageSection",
-                  id: targetSection.id,
-                  nodeId,
-                })
-              }
-              className="h-5 px-1 text-muted-foreground hover:text-foreground -ml-1 gap-1 cursor-pointer"
-            >
-              <ChevronLeft size={12} />
-              <span>Back</span>
-            </Button>
-            <span>/</span>
-            <span
-              onClick={() =>
-                setActiveConfigItem({
-                  type: "webPage",
-                  id: nodeId,
-                  nodeId,
-                })
-              }
-              className="hover:text-foreground cursor-pointer transition-colors"
-            >
-              {parentNode.data?.label || "Page"}
-            </span>
-            <span>/</span>
-            <span
-              onClick={() =>
-                setActiveConfigItem({
-                  type: "pageSection",
-                  id: targetSection.id,
-                  nodeId,
-                })
-              }
-              className="hover:text-foreground cursor-pointer transition-colors"
-            >
-              {targetSection.name}
-            </span>
-            <span>/</span>
-            <span className="text-purple-600 dark:text-purple-400 font-semibold font-mono">
-              {displayLabel}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-400">
-              <Layers size={14} />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-foreground font-mono">
-                {displayLabel}
-              </span>
-              <span className="text-[10px] text-muted-foreground">
-                UI Component, State Binding &amp; Action Trigger
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <Badge
-          variant="outline"
-          className="text-[10px] font-mono px-2 py-0.5 text-purple-600 dark:text-purple-400 border-purple-500/30 font-semibold"
-        >
-          &lt;{displayLabel} /&gt;
-        </Badge>
-      </div>
+      <ComponentBreadcrumbsHeader
+        pageLabel={parentNode.data?.label || "Page"}
+        sectionId={targetSection.id}
+        sectionName={targetSection.name}
+        displayLabel={displayLabel}
+        nodeId={nodeId}
+        onNavigateBack={() =>
+          setActiveConfigItem({
+            type: "pageSection",
+            id: targetSection.id,
+            nodeId,
+          })
+        }
+        onNavigateToPage={() =>
+          setActiveConfigItem({
+            type: "webPage",
+            id: nodeId,
+            nodeId,
+          })
+        }
+        onNavigateToSection={() =>
+          setActiveConfigItem({
+            type: "pageSection",
+            id: targetSection.id,
+            nodeId,
+          })
+        }
+      />
 
       {/* 2. Component Identity & Naming */}
-      <Card className="border-border/60 shadow-xs">
-        <CardHeader className="p-3 pb-2">
-          <CardTitle className="text-xs font-semibold flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-foreground">
-              <Tag size={13} className="text-purple-500" />
-              <span>Component Identity &amp; Naming</span>
-            </div>
-            <span className="text-[10px] font-mono text-muted-foreground">ID: {componentBinding.id}</span>
-          </CardTitle>
-          <CardDescription className="text-[11px] text-muted-foreground">
-            Configure the component name and visible display text in PascalCase format.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-3 pt-0 space-y-3">
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
-                <span>Component Name</span>
-                <span className="text-destructive">*</span>
-              </Label>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleFormatPascalCase}
-                  className="h-5 px-1.5 text-[10px] font-mono text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 cursor-pointer"
-                  title="Format component name as PascalCase"
-                >
-                  <Sparkles size={10} className="mr-1" />
-                  Format PascalCase
-                </Button>
-                <Badge variant="outline" className="text-[9px] font-mono text-purple-600 dark:text-purple-400 border-purple-500/30">
-                  PascalCase
-                </Badge>
-              </div>
-            </div>
-            <Input
-              value={nameInputValue}
-              onChange={handleNameChange}
-              onFocus={handleNameFocus}
-              onBlur={handleNameBlur}
-              onKeyDown={handleNameKeyDown}
-              placeholder="e.g. SubmitButton, UserProfileCard"
-              className={cn(
-                "h-8 text-xs font-mono bg-background",
-                !nameInputValue.trim() && "border-destructive focus-visible:ring-destructive",
-              )}
-            />
-            {!nameInputValue.trim() ? (
-              <p className="text-[10px] text-destructive flex items-center gap-1 font-medium">
-                <AlertCircle size={10} />
-                <span>Component name cannot be empty</span>
-              </p>
-            ) : (
-              <p className="text-[10px] text-muted-foreground flex items-center justify-between">
-                <span>Formatted in PascalCase (e.g. PrimaryButton, SectionHeader)</span>
-                {displayLabel !== "Component" && (
-                  <span className="font-mono text-[9px] text-purple-600 dark:text-purple-400 font-semibold">
-                    &lt;{displayLabel} /&gt;
-                  </span>
-                )}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-[11px] font-medium text-muted-foreground">
-              Description / Notes (Optional)
-            </Label>
-            <LocalInput
-              key={`${componentBinding.id}-description`}
-              value={componentBinding.description ?? ""}
-              onChange={(e) => handleUpdate({ description: e.target.value })}
-              placeholder="e.g. Primary call-to-action button for the section..."
-              className="h-7 text-xs"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <ComponentIdentityCard
+        componentId={componentBinding.id}
+        name={componentBinding.name}
+        label={componentBinding.label}
+        displayLabel={displayLabel}
+        description={componentBinding.description}
+        onUpdate={handleUpdate}
+      />
 
       {/* 3. Live Component Preview Sandbox */}
       <StateComponentPreview
-        currentComponent={currentRenderComponent}
-        currentVariant={toValidVariant(componentBinding.variant)}
-        currentClickAction={toClickAction(componentBinding.actionId)}
+        currentComponent={activeRenderComponent}
+        currentVariant={toValidVariant(activeElement.variant || componentBinding.variant)}
+        currentClickAction={toClickAction(activeElement.actionId || componentBinding.actionId)}
         displayLabel={displayLabel}
-        customLabel={displayLabel}
+        customLabel={activeElement.label || activeElement.name || displayLabel}
         formattedPreviewValue={formattedPreviewValue}
         sampleValue={sampleValue}
-        propMappings={propMappings}
-        stateName={stateName}
+        propMappings={activePropMappings}
+        stateName={activeElement.valueStateName || stateName}
         copyToastMessage={`Copied ${stateName} to clipboard!`}
-        targetActionId={componentBinding.actionId}
+        targetActionId={activeElement.actionId || componentBinding.actionId}
+        elements={currentElements}
+        activeElementId={activeElement.id}
+        onSelectElement={setActiveElementId}
       />
 
-      {/* 3. Searchable Component Selector Combobox */}
+      {/* 4. Select Shadcn Component (Supports Multiple Components, Adding, and Type Switching) */}
       <ComponentSelector
-        currentComponent={currentRenderComponent}
-        selectedOption={selectedOption}
-        stateType={bindingStateType}
-        onSelectComponent={(componentId) => handleUpdate({ componentType: componentId })}
+        elements={currentElements}
+        activeElementId={activeElement.id}
+        onSelectActiveElement={setActiveElementId}
+        onAddComponent={handleAddElement}
+        onChangeComponentType={handleChangeElementType}
+        onDeleteElement={handleDeleteElement}
+        stateType={activeBindingStateType}
+        currentComponent={activeRenderComponent}
+        selectedOption={activeOption}
       />
 
       <Separator className="bg-border/50" />
 
-      {/* 4. Component Prop Mappings Section */}
-      <ComponentPropMappingsSection
-        currentComponent={currentRenderComponent}
-        selectedOption={selectedOption}
-        displayLabel={displayLabel}
-        stateName={stateName}
-        stateType={bindingStateType}
-        storeName={componentBinding.valueStoreName}
-        storeId={selectedStore?.id}
-        availableActions={availableActions}
-        availableStateVars={availableStateVars}
-        stateStoreNodes={stateStores}
-        propMappings={propMappings}
-        onUpdatePropMapping={handleUpdatePropMapping}
-        onOpenEventConfig={handleOpenActionFlow}
-        onCreateAction={handleCreateComponentAction}
-      />
-
-      <Separator className="bg-border/50" />
-
-      {/* 5. Event & Action Trigger Binding */}
-      <Card className="border-border/60 shadow-xs">
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-xs font-semibold flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <Zap size={13} className="text-amber-500" />
-              <span>Event &amp; Action Trigger Binding</span>
-            </span>
-            {componentBinding.actionId && (
-              <Badge variant="outline" className="text-[10px] text-amber-600 dark:text-amber-400 border-amber-500/30">
-                Wired
-              </Badge>
-            )}
-          </CardTitle>
-          <CardDescription className="text-[11px]">
-            Execute section actions and workflows when interacting with this component
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 pt-1 space-y-3 text-xs">
-          <div className="space-y-1">
-            <Label className="text-[11px] text-muted-foreground flex items-center justify-between">
-              <span>Trigger Event</span>
-              <span className="text-[10px] text-muted-foreground/70 font-normal">
-                DOM or interaction event
+      {/* 5. Component Prop Mappings Section with Switcher between Selected Components */}
+      <div className="flex flex-col gap-3">
+        {currentElements.length > 1 && (
+          <div className="flex flex-col gap-2 p-2.5 rounded-xl bg-muted/20 border border-border/50">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-semibold text-foreground flex items-center gap-1.5">
+                <SlidersHorizontal size={13} className="text-primary" />
+                <span>Switch Component to Map:</span>
               </span>
-            </Label>
-            <Select
-              value={componentBinding.triggerEvent || "click"}
-              onValueChange={(val) => handleUpdate({ triggerEvent: val })}
-            >
-              <SelectTrigger className="h-8 text-xs bg-background">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="click">onClick (Button click / tap)</SelectItem>
-                <SelectItem value="change">onChange (Input change / toggle)</SelectItem>
-                <SelectItem value="submit">onSubmit (Form submission)</SelectItem>
-                <SelectItem value="select">onSelect (Dropdown option chosen)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <Label className="text-[11px] text-muted-foreground">Target Action Workflow</Label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => handleCreateAction()}
-                className="h-6 text-[11px] text-purple-600 dark:text-purple-400 hover:text-purple-700 p-0 hover:bg-transparent flex items-center gap-1 cursor-pointer"
-              >
-                <Plus size={11} />
-                <span>New Action</span>
-              </Button>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {currentElements.findIndex((e) => e.id === activeElement.id) + 1} of {currentElements.length}
+              </span>
             </div>
-            <Select
-              value={componentBinding.actionId || "__none__"}
-              onValueChange={(val) => {
-                if (val === "__none__") {
-                  handleUpdate({ actionId: undefined, actionName: undefined });
-                } else {
-                  const act = availableActions.find((a) => a.id === val);
-                  handleUpdate({
-                    actionId: val,
-                    actionName: act?.name || "Action",
-                  });
-                }
-              }}
-            >
-              <SelectTrigger className="h-8 text-xs bg-background">
-                <SelectValue placeholder="No Action Bound" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">None (No Action)</SelectItem>
-                {availableActions.map((act) => (
-                  <SelectItem key={act.id} value={act.id || ""}>
-                    <div className="flex items-center gap-1.5">
-                      <Zap size={11} className="text-amber-500" />
-                      <span>{act.name}</span>
-                      <span className="text-[10px] text-muted-foreground">
-                        ({act.actionSteps?.length || 0} steps)
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {currentElements.map((el, idx) => {
+                const isActive = el.id === activeElement.id;
+                const opt =
+                  COMPONENT_OPTIONS.find((o) => o.id === toStateRenderComponent(el.elementType)) ||
+                  DEFAULT_COMPONENT_OPTION;
+                const Icon = opt.icon;
+                return (
+                  <button
+                    key={el.id}
+                    type="button"
+                    onClick={() => setActiveElementId(el.id)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer",
+                      isActive
+                        ? "bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/40 shadow-xs font-semibold ring-1 ring-cyan-500/30"
+                        : "bg-background/80 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50",
+                    )}
+                  >
+                    <Icon size={13} className={isActive ? "text-cyan-500" : "text-muted-foreground"} />
+                    <span>{el.label || el.name || `Component ${idx + 1}`}</span>
+                    <Badge variant="outline" className="text-[9px] font-mono px-1 py-0 capitalize border-current/30">
+                      {el.elementType}
+                    </Badge>
+                  </button>
+                );
+              })}
+            </div>
           </div>
+        )}
 
-          {componentBinding.actionId && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (componentBinding.actionId) {
-                  handleOpenActionFlow(componentBinding.actionId);
-                }
-              }}
-              className="w-full h-8 text-xs flex items-center justify-between border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 cursor-pointer"
-            >
-              <span className="flex items-center gap-1.5">
-                <Play size={12} className="text-purple-500" />
-                <span>Open Action Flow Editor</span>
-              </span>
-              <ArrowRight size={12} />
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+        <ComponentPropMappingsSection
+          currentComponent={activeRenderComponent}
+          selectedOption={activeOption}
+          displayLabel={activeElement.label || activeElement.name || displayLabel}
+          stateName={activeElement.valueStateName || activeElement.label || stateName}
+          stateType={activeBindingStateType}
+          storeName={activeElement.valueStoreName}
+          storeId={activeSelectedStore?.id}
+          availableActions={availableActions}
+          availableStateVars={availableStateVars}
+          stateStoreNodes={stateStores}
+          propMappings={activePropMappings}
+          onUpdatePropMapping={handleUpdateActivePropMapping}
+          onOpenEventConfig={handleOpenActionFlow}
+          onCreateAction={handleCreateActiveElementAction}
+        />
+      </div>
+
+      <Separator className="bg-border/50" />
+
+      {/* 6. Event & Action Trigger Binding for Active Component */}
+      <ComponentEventActionCard
+        triggerEvent={activeElement.triggerEvent || (activeElement.elementType === "button" ? "click" : "change")}
+        actionId={activeElement.actionId}
+        actionName={activeElement.actionName}
+        availableActions={availableActions}
+        onUpdate={(changes) => handleUpdateElement(activeElement.id, changes)}
+        onCreateAction={handleCreateActiveElementAction}
+        onOpenActionFlow={handleOpenActionFlow}
+      />
 
       {/* 6. Delete Component Binding Button */}
       <div className="pt-2 border-t border-border/40 flex justify-end">

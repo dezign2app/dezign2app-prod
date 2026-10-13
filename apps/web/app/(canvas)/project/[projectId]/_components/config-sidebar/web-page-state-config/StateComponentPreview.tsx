@@ -6,6 +6,7 @@ import {
   StateRenderComponent,
   StateRenderConfig,
   ComponentPropMappings,
+  ComponentElementBinding,
   JSONValue,
 } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -34,6 +35,9 @@ export interface StateComponentPreviewProps {
   stateName: string;
   copyToastMessage?: string;
   targetActionId?: string;
+  elements?: ComponentElementBinding[];
+  activeElementId?: string;
+  onSelectElement?: (elId: string) => void;
 }
 
 export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React.memo(({
@@ -48,8 +52,12 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
   stateName,
   copyToastMessage,
   targetActionId,
+  elements,
+  activeElementId,
+  onSelectElement,
 }) => {
   const labelToRender = customLabel?.trim() || "";
+  const isMultiElement = Boolean(elements && elements.length > 1);
 
   // Live interactive state for Input component preview
   const [liveInputValue, setLiveInputValue] = useState<string>(String(formattedPreviewValue ?? ""));
@@ -93,11 +101,137 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
             <span>Live Component Preview</span>
           </div>
           <Badge variant="outline" className="text-[10px] font-mono capitalize">
-            {currentComponent}
+            {isMultiElement ? `${elements!.length} Selected Components` : currentComponent}
           </Badge>
         </div>
       </CardHeader>
       <CardContent className="p-5 flex flex-col items-center justify-center min-h-[100px] bg-background/50">
+        {/* If multiple elements: render ALL selected components together in a composite card */}
+        {isMultiElement ? (
+          <div className="w-full max-w-sm flex flex-col gap-3 p-4 rounded-xl border border-border/70 bg-card shadow-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-border/40">
+              <span className="text-xs font-bold text-foreground font-mono">
+                &lt;{displayLabel} /&gt;
+              </span>
+              <Badge variant="outline" className="text-[9px] font-mono text-cyan-600 dark:text-cyan-400 border-cyan-500/30 font-semibold">
+                {elements!.length} Components
+              </Badge>
+            </div>
+            <div className="flex flex-col gap-2.5 pt-1">
+              {elements!.map((el) => {
+                const elType = el.elementType || "input";
+                const isActive = el.id === activeElementId;
+
+                return (
+                  <div
+                    key={el.id}
+                    onClick={() => onSelectElement?.(el.id)}
+                    className={cn(
+                      "transition-all rounded-lg cursor-pointer p-1.5",
+                      isActive
+                        ? "ring-1 ring-cyan-500/60 bg-cyan-500/[0.05] border border-cyan-500/30"
+                        : "hover:bg-muted/30 border border-transparent",
+                    )}
+                  >
+                    {elType === "button" && (
+                      <Button
+                        variant={(el.variant as any) || "default"}
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (el.actionName || el.actionId) {
+                            toast.info(`Simulated: Trigger action "${el.actionName || el.actionId}"`);
+                          } else {
+                            toast.info(`Button "${el.name || el.label}" clicked`);
+                          }
+                        }}
+                        className="w-full text-xs font-medium cursor-pointer"
+                      >
+                        {el.label || el.name || "Button"}
+                      </Button>
+                    )}
+
+                    {elType === "input" && (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-medium text-foreground">{el.label || el.name}</Label>
+                          {el.valueStateName && (
+                            <span className="text-[9px] font-mono text-cyan-600 dark:text-cyan-400">
+                              {el.valueStoreName ? `${el.valueStoreName}.` : ""}{el.valueStateName}
+                            </span>
+                          )}
+                        </div>
+                        <Input
+                          type={el.propMappings?.inputType || "text"}
+                          placeholder={el.placeholder || `Enter ${el.label || el.name}...`}
+                          defaultValue={el.valueStateName ? `${el.valueStateName}Value` : ""}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-8 text-xs font-mono bg-background"
+                        />
+                      </div>
+                    )}
+
+                    {elType === "switch" && (
+                      <div className="flex items-center justify-between p-1.5 rounded-lg bg-muted/20 border border-border/40">
+                        <Label className="text-xs font-medium cursor-pointer">{el.label || el.name}</Label>
+                        <Switch onClick={(e) => e.stopPropagation()} />
+                      </div>
+                    )}
+
+                    {elType === "checkbox" && (
+                      <div className="flex items-center gap-2 p-1">
+                        <Checkbox onClick={(e) => e.stopPropagation()} />
+                        <Label className="text-xs font-medium cursor-pointer">{el.label || el.name}</Label>
+                      </div>
+                    )}
+
+                    {elType === "badge" && (
+                      <div className="flex items-center justify-between p-1">
+                        <span className="text-xs text-muted-foreground">{el.label || el.name}:</span>
+                        <Badge variant={(el.variant as any) || "secondary"} className="text-xs font-mono">
+                          {el.valueStateName || "Badge"}
+                        </Badge>
+                      </div>
+                    )}
+
+                    {elType === "card" && (
+                      <div className="p-2.5 rounded-lg border border-border/60 bg-muted/15 flex flex-col gap-1">
+                        <div className="text-[10px] font-semibold text-muted-foreground uppercase">{el.label || el.name}</div>
+                        <div className="text-sm font-bold font-mono text-foreground">{el.valueStateName || "Card Content"}</div>
+                      </div>
+                    )}
+
+                    {elType === "progress" && (
+                      <div className="space-y-1 p-1">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span>{el.label || el.name}</span>
+                          <span className="font-mono text-cyan-500">65%</span>
+                        </div>
+                        <Progress value={65} className="h-2" />
+                      </div>
+                    )}
+
+                    {elType === "alert" && (
+                      <Alert className="py-2 px-3">
+                        <AlertDescription className="text-xs">
+                          {el.label || el.name || "Notice message"}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {!["button", "input", "switch", "checkbox", "badge", "card", "progress", "alert"].includes(elType) && (
+                      <div className="text-xs p-2 rounded bg-muted/20 border border-border/30 flex items-center justify-between">
+                        <span className="font-medium">{el.label || el.name}</span>
+                        <Badge variant="outline" className="text-[9px] font-mono">{elType}</Badge>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <>
         {/* Dynamic Component Preview Rendering */}
         {currentComponent === "badge" && (
           <Badge
@@ -418,6 +552,8 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
             <MousePointerClick size={10} className="text-cyan-500" />
             <span>Click to test interactive action ({currentClickAction})</span>
           </div>
+        )}
+          </>
         )}
       </CardContent>
     </Card>
