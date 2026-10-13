@@ -41,8 +41,12 @@ import { toast } from "sonner";
 import { toPascalCase, toCamelCase, toHumanLabel } from "@/lib/utils";
 import {
   extractEndpointFields,
+  extractEndpointResponseFields,
+  inferDefaultButtonLabel,
+  inferDefaultComponentName,
   generateFormFromEndpoint,
   ExtractedEndpointField,
+  ExtractedEndpointResponseField,
 } from "@/lib/utils/endpointFormGenerator";
 import { Endpoint, BackendNode, ComponentBindingType } from "@/types/canvas";
 
@@ -66,6 +70,10 @@ const METHOD_COLORS: Record<string, string> = {
 interface FieldConfigItem extends ExtractedEndpointField {
   enabled: boolean;
   stateVarName: string;
+}
+
+interface ResponseFieldConfigItem extends ExtractedEndpointResponseField {
+  enabled: boolean;
 }
 
 export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDialogProps> = ({
@@ -132,6 +140,7 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
   const [targetStoreNodeId, setTargetStoreNodeId] = useState<string>("");
   const [newStoreName, setNewStoreName] = useState<string>("");
   const [fieldConfigs, setFieldConfigs] = useState<FieldConfigItem[]>([]);
+  const [responseFieldConfigs, setResponseFieldConfigs] = useState<ResponseFieldConfigItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Auto-select initial endpoint
@@ -152,11 +161,14 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
   useEffect(() => {
     if (!selectedItem) {
       setFieldConfigs([]);
+      setResponseFieldConfigs([]);
       return;
     }
 
     const ep = selectedItem.endpoint;
     const extracted = extractEndpointFields(ep);
+    const extractedResponses = extractEndpointResponseFields(ep);
+    const hasInputs = extracted.length > 0;
 
     const initialConfigs: FieldConfigItem[] = extracted.map((f) => ({
       ...f,
@@ -165,28 +177,22 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
     }));
 
     setFieldConfigs(initialConfigs);
+    setResponseFieldConfigs(
+      extractedResponses.map((rf) => ({
+        ...rf,
+        enabled: true,
+      })),
+    );
 
     // Derive smart default names
-    const rawRoute = ep.name.replace(/^\/api\/(?:v\d+\/)?/, "").replace(/[^a-zA-Z0-9]/g, " ");
-    const entityName = toPascalCase(rawRoute) || "Data";
-    const defaultForm = `${entityName}Form`;
-    setFormName(defaultForm);
-
-    const isPost = (ep.type || "POST").toUpperCase() === "POST";
-    const isPut = (ep.type || "").toUpperCase() === "PUT" || (ep.type || "").toUpperCase() === "PATCH";
-    const isDelete = (ep.type || "").toUpperCase() === "DELETE";
-
-    if (isPost) {
-      setSubmitButtonLabel(`Create ${toHumanLabel(rawRoute)}`.trim() || "Submit");
-    } else if (isPut) {
-      setSubmitButtonLabel(`Save Changes`);
-    } else if (isDelete) {
-      setSubmitButtonLabel(`Delete`);
-    } else {
-      setSubmitButtonLabel("Submit");
-    }
+    const smartFormName = inferDefaultComponentName(ep, hasInputs);
+    const smartButtonLabel = inferDefaultButtonLabel(ep, hasInputs);
+    setFormName(smartFormName);
+    setSubmitButtonLabel(smartButtonLabel);
 
     // Set default store
+    const rawRoute = ep.name.replace(/^\/api\/(?:v\d+\/)?/, "").replace(/[^a-zA-Z0-9]/g, " ");
+    const entityName = toPascalCase(rawRoute) || "Data";
     if (stateStoreNodes.length > 0) {
       const matchStore = stateStoreNodes.find(
         (s) =>
@@ -208,6 +214,12 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
     return fieldConfigs.filter((f) => f.required).length;
   }, [fieldConfigs]);
 
+  const enabledResponseCount = useMemo(() => {
+    return responseFieldConfigs.filter((rf) => rf.enabled).length;
+  }, [responseFieldConfigs]);
+
+  const hasInputFields = fieldConfigs.length > 0;
+
   const handleToggleAll = useCallback(
     (checked: boolean) => {
       setFieldConfigs((prev) => prev.map((f) => ({ ...f, enabled: checked })));
@@ -228,14 +240,23 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
     [],
   );
 
+  const handleResponseFieldToggle = useCallback((idx: number, enabled: boolean) => {
+    setResponseFieldConfigs((prev) => {
+      const copy = [...prev];
+      if (copy[idx]) {
+        copy[idx] = { ...copy[idx]!, enabled };
+      }
+      return copy;
+    });
+  }, []);
+
   const handleGenerate = async () => {
     if (!selectedItem || !webPageNode || !targetSection) return;
 
     const enabledFields = fieldConfigs.filter((f) => f.enabled);
-    if (enabledFields.length === 0) {
-      toast.error("Please select at least one field to generate form inputs.");
-      return;
-    }
+    const enabledResponseFields = responseFieldConfigs
+      .filter((rf) => rf.enabled)
+      .map((rf) => rf.name);
 
     setIsSubmitting(true);
     try {
@@ -244,8 +265,12 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
         serviceNode: selectedItem.serviceNode,
         webPageNode,
         sectionId: targetSection.id,
-        formName: formName.trim() || "DataForm",
-        submitButtonLabel: submitButtonLabel.trim() || "Submit",
+        formName:
+          formName.trim() ||
+          inferDefaultComponentName(selectedItem.endpoint, enabledFields.length > 0),
+        submitButtonLabel:
+          submitButtonLabel.trim() ||
+          inferDefaultButtonLabel(selectedItem.endpoint, enabledFields.length > 0),
         stateStorageMode: "store",
         targetStoreNodeId,
         newStoreName,
@@ -260,6 +285,7 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
           placeholder: f.placeholder,
           stateVarName: f.stateVarName,
         })),
+        responseFieldsToStore: enabledResponseFields,
         existingComponentId,
         nodes,
         edges,
@@ -447,42 +473,95 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
             </div>
           </div>
 
-          {/* 3. Fields Table */}
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <Layers size={13} className="text-indigo-500" />
-                  <span>Fields to Include in Form</span>
-                </Label>
-                <span className="text-[11px] text-muted-foreground font-mono">
-                  ({enabledCount}/{fieldConfigs.length} selected, {requiredCount} required)
-                </span>
+          {/* 3. Fields or Action Button Details */}
+          {!hasInputFields ? (
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-xl border border-blue-500/25 bg-blue-500/[0.05] space-y-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                  <div className="p-1 rounded bg-blue-500/10 text-blue-500">
+                    <Sparkles size={13} />
+                  </div>
+                  <span>Trigger Action Button (0 Input Parameters)</span>
+                  <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-blue-500/30 text-blue-500 font-mono ml-auto">
+                    {selectedItem?.endpoint.type || "GET"}
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  This endpoint does not require any request body or parameters. 
+                  Generating will create a standalone <strong>Action Button</strong> wired directly to trigger this request.
+                </p>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleToggleAll(true)}
-                  className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-                >
-                  Select All
-                </button>
-                <span className="text-muted-foreground/40">•</span>
-                <button
-                  type="button"
-                  onClick={() => handleToggleAll(false)}
-                  className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
 
-            {fieldConfigs.length === 0 ? (
-              <div className="p-4 rounded-xl border border-dashed text-center text-xs text-muted-foreground">
-                No fields defined in this endpoint contract. You can add required fields in EndpointConfig first.
+              {responseFieldConfigs.length > 0 && (
+                <div className="space-y-2 p-3 rounded-xl border bg-secondary/15">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <Database size={13} className="text-purple-500" />
+                      <span>Response Variables (Zustand Store)</span>
+                    </Label>
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      ({enabledResponseCount}/{responseFieldConfigs.length} selected)
+                    </span>
+                  </div>
+                  <p className="text-[10.5px] text-muted-foreground">
+                    Save response fields returned by this endpoint into your Zustand store:
+                  </p>
+                  <div className="border border-border/70 rounded-lg overflow-hidden divide-y divide-border/40 bg-card">
+                    {responseFieldConfigs.map((rf, idx) => (
+                      <div
+                        key={rf.id}
+                        className={cn(
+                          "p-2 flex items-center justify-between text-xs transition-colors",
+                          rf.enabled ? "bg-background/80" : "bg-muted/15 opacity-60",
+                        )}
+                      >
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox
+                            checked={rf.enabled}
+                            onCheckedChange={(chk) => handleResponseFieldToggle(idx, Boolean(chk))}
+                          />
+                          <span className="font-mono text-foreground font-medium text-xs">{rf.name}</span>
+                        </label>
+                        <Badge variant="outline" className="text-[9px] font-mono px-1 py-0 border-muted">
+                          {rf.type}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <Layers size={13} className="text-indigo-500" />
+                    <span>Fields to Include in Form</span>
+                  </Label>
+                  <span className="text-[11px] text-muted-foreground font-mono">
+                    ({enabledCount}/{fieldConfigs.length} selected, {requiredCount} required)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleAll(true)}
+                    className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-muted-foreground/40">•</span>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleAll(false)}
+                    className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                </div>
               </div>
-            ) : (
+
               <div className="border border-border/70 rounded-xl overflow-hidden divide-y divide-border/40 max-h-[260px] overflow-y-auto bg-card">
                 {fieldConfigs.map((f, idx) => (
                   <div
@@ -525,7 +604,6 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
 
                     {/* Right: Component Type Override & State Var */}
                     <div className="flex items-center gap-2 shrink-0">
-                      {/* Component Selector */}
                       <Select
                         value={f.suggestedComponentType}
                         onValueChange={(val) =>
@@ -563,7 +641,6 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
                         </SelectContent>
                       </Select>
 
-                      {/* State variable name */}
                       <Input
                         value={f.stateVarName}
                         onChange={(e) => handleFieldChange(idx, { stateVarName: e.target.value })}
@@ -575,26 +652,30 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* 4. Form Name & Submit Label */}
+          {/* 4. Form/Button Name & Button Label */}
           <div className="grid grid-cols-2 gap-3 pt-1">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground font-medium">Form Component Name</Label>
+              <Label className="text-xs text-muted-foreground font-medium">
+                {hasInputFields ? "Form Component Name" : "Button Component Name"}
+              </Label>
               <Input
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                placeholder="e.g. UserForm"
+                placeholder={hasInputFields ? "e.g. UserForm" : "e.g. HealthButton"}
                 className="h-8 text-xs bg-background font-mono"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground font-medium">Submit Button Label</Label>
+              <Label className="text-xs text-muted-foreground font-medium">
+                {hasInputFields ? "Submit Button Label" : "Button Display Label"}
+              </Label>
               <Input
                 value={submitButtonLabel}
                 onChange={(e) => setSubmitButtonLabel(e.target.value)}
-                placeholder="e.g. Create Account"
+                placeholder={hasInputFields ? "e.g. Create Account" : "e.g. Check Health"}
                 className="h-8 text-xs bg-background"
               />
             </div>
@@ -604,14 +685,22 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
         {/* Footer */}
         <DialogFooter className="p-4 border-t border-border/50 bg-secondary/10 flex items-center justify-between sm:justify-between">
           <div className="text-[11px] text-muted-foreground">
-            {enabledCount > 0 ? (
+            {hasInputFields && enabledCount > 0 ? (
               <span>
                 Will generate <strong className="text-foreground">{enabledCount} inputs</strong> +{" "}
                 <strong className="text-foreground">1 submit button</strong>
               </span>
+            ) : hasInputFields && enabledCount === 0 ? (
+              <span>
+                Will generate <strong className="text-foreground">1 trigger button</strong> (no inputs)
+              </span>
             ) : (
-              <span className="text-amber-500 flex items-center gap-1">
-                <AlertCircle size={12} /> Select at least 1 field
+              <span className="text-foreground flex items-center gap-1.5 font-medium">
+                <Sparkles size={12} className="text-blue-500" />
+                Will generate <strong>{submitButtonLabel || "Action"}</strong> button wired to{" "}
+                <code className="text-[10px] bg-muted px-1 py-0.5 rounded font-mono">
+                  {selectedItem?.endpoint.type} {selectedItem?.endpoint.name}
+                </code>
               </span>
             )}
           </div>
@@ -629,12 +718,18 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
             <Button
               type="button"
               size="sm"
-              disabled={isSubmitting || enabledCount === 0 || !selectedItem}
+              disabled={isSubmitting || !selectedItem}
               onClick={handleGenerate}
               className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium cursor-pointer shadow-xs gap-1.5"
             >
               <Sparkles size={12} />
-              <span>{isSubmitting ? "Generating..." : "Generate Form & Store"}</span>
+              <span>
+                {isSubmitting
+                  ? "Generating..."
+                  : hasInputFields && enabledCount > 0
+                    ? "Generate Form & Store"
+                    : "Generate Button & Store"}
+              </span>
             </Button>
           </div>
         </DialogFooter>

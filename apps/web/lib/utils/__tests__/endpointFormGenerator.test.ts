@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   extractEndpointFields,
+  extractEndpointResponseFields,
+  inferDefaultButtonLabel,
+  inferDefaultComponentName,
   generateFormFromEndpoint,
 } from "../endpointFormGenerator";
 import { Endpoint, BackendNode, BackendEdge } from "@/types/canvas";
@@ -252,5 +255,174 @@ describe("endpointFormGenerator", () => {
     expect(result.newStoreNode?.data?.storeName).toBe("Account");
     expect(result.newStoreNode?.data?.fields).toHaveLength(2);
     expect(result.newStoreNode?.data?.actions).toHaveLength(2);
+  });
+
+  describe("label and name inference", () => {
+    it("infers smart button labels based on route semantics and input presence", () => {
+      expect(inferDefaultButtonLabel({ id: "1", name: "/health", type: "GET" }, false)).toBe("Check Health");
+      expect(inferDefaultButtonLabel({ id: "2", name: "/api/v1/auth/logout", type: "POST" }, false)).toBe("Log Out");
+      expect(inferDefaultButtonLabel({ id: "3", name: "/sync", type: "POST" }, false)).toBe("Sync Now");
+      expect(inferDefaultButtonLabel({ id: "4", name: "/users", type: "GET" }, false)).toBe("Fetch Users");
+      expect(inferDefaultButtonLabel({ id: "5", name: "/users", type: "GET" }, true)).toBe("Search Users");
+      expect(inferDefaultButtonLabel({ id: "6", name: "/users", type: "POST" }, true)).toBe("Create Users");
+      expect(inferDefaultButtonLabel({ id: "7", name: "/users/1", type: "PUT" }, true)).toBe("Save Changes");
+      expect(inferDefaultButtonLabel({ id: "8", name: "/items/1", type: "DELETE" }, false)).toBe("Delete 1");
+    });
+
+    it("infers smart component names (Button for parameterless, Form for inputs)", () => {
+      expect(inferDefaultComponentName({ id: "1", name: "/health", type: "GET" }, false)).toBe("HealthButton");
+      expect(inferDefaultComponentName({ id: "2", name: "/health", type: "GET" }, true)).toBe("HealthForm");
+      expect(inferDefaultComponentName({ id: "3", name: "/api/users", type: "POST" }, false)).toBe("UsersButton");
+      expect(inferDefaultComponentName({ id: "4", name: "/api/users", type: "POST" }, true)).toBe("UsersForm");
+    });
+  });
+
+  describe("extractEndpointResponseFields", () => {
+    it("extracts from responseBody.fields", () => {
+      const ep: Endpoint = {
+        id: "ep-res-1",
+        name: "/status",
+        type: "GET",
+        responseBody: {
+          id: "rb-1",
+          fields: [
+            { id: "rf-1", name: "status", type: "string", required: false },
+            { id: "rf-2", name: "uptime", type: "number", required: false },
+          ],
+        },
+      };
+
+      const fields = extractEndpointResponseFields(ep);
+      expect(fields).toHaveLength(2);
+      expect(fields[0]?.name).toBe("status");
+      expect(fields[0]?.type).toBe("string");
+      expect(fields[1]?.name).toBe("uptime");
+      expect(fields[1]?.type).toBe("number");
+    });
+
+    it("extracts from responseBody.rawJson fallback", () => {
+      const ep: Endpoint = {
+        id: "ep-raw-res",
+        name: "/health",
+        type: "GET",
+        responseBody: {
+          id: "rb-raw",
+          rawJson: JSON.stringify({ alive: true, version: "1.0.0" }),
+        },
+      };
+
+      const fields = extractEndpointResponseFields(ep);
+      expect(fields).toHaveLength(2);
+      expect(fields.find((f) => f.name === "alive")?.type).toBe("boolean");
+      expect(fields.find((f) => f.name === "version")?.type).toBe("string");
+    });
+  });
+
+  describe("parameterless GET / action button generation", () => {
+    it("generates standalone Action Button (componentType: 'button') and stores response fields", () => {
+      const healthEndpoint: Endpoint = {
+        id: "ep-health-check",
+        name: "/health",
+        type: "GET",
+        summary: "Health check",
+        responseBody: {
+          id: "res-health",
+          fields: [
+            { id: "rf-status", name: "serverStatus", type: "string", required: false },
+            { id: "rf-timestamp", name: "checkedAt", type: "string", required: false },
+          ],
+        },
+      };
+
+      const webPageNode: BackendNode = {
+        id: "node-page-health",
+        type: "webPage",
+        position: { x: 400, y: 150 },
+        fractionalIndex: "a0",
+        data: {
+          label: "/dashboard",
+          sections: [
+            {
+              id: "sec-health",
+              name: "SystemOverview",
+              renderMode: "server",
+              actions: [],
+              componentBindings: [],
+            },
+          ],
+        },
+      };
+
+      const serviceNode: BackendNode = {
+        id: "node-service-health",
+        type: "service",
+        position: { x: 800, y: 150 },
+        fractionalIndex: "a1",
+        data: { label: "HealthService" },
+      };
+
+      const storeNode: BackendNode = {
+        id: "node-store-health",
+        type: "state_store",
+        position: { x: 100, y: 150 },
+        fractionalIndex: "a2",
+        data: {
+          label: "HealthStore",
+          storeName: "Health",
+          fields: [],
+          actions: [],
+        },
+      };
+
+      const result = generateFormFromEndpoint({
+        endpoint: healthEndpoint,
+        serviceNode,
+        webPageNode,
+        sectionId: "sec-health",
+        formName: "HealthButton",
+        submitButtonLabel: "Check Health",
+        stateStorageMode: "store",
+        targetStoreNodeId: storeNode.id,
+        selectedFields: [], // 0 input parameters!
+        responseFieldsToStore: ["serverStatus", "checkedAt"],
+        nodes: [webPageNode, serviceNode, storeNode],
+        edges: [],
+      });
+
+      // 1. Should create componentType: "button"
+      const section = result.updatedWebPageNode.data?.sections?.[0];
+      expect(section).toBeDefined();
+      expect(section?.componentBindings).toHaveLength(1);
+      const buttonComp = section?.componentBindings?.[0];
+      expect(buttonComp?.name).toBe("HealthButton");
+      expect(buttonComp?.componentType).toBe("button");
+      expect(buttonComp?.elements).toHaveLength(1);
+      expect(buttonComp?.elements?.[0]?.elementType).toBe("button");
+      expect(buttonComp?.elements?.[0]?.label).toBe("Check Health");
+      expect(buttonComp?.elements?.[0]?.actionId).toBe(result.createdActionId);
+
+      // 2. Action wiring to service endpoint
+      const actionEdge = result.newEdges.find(
+        (e) => e.source === webPageNode.id && e.target === serviceNode.id
+      );
+      expect(actionEdge).toBeDefined();
+      expect(actionEdge?.targetHandle).toBe("endpoint-in-ep-health-check");
+
+      // 3. Store fields created for response variables
+      expect(result.updatedStoreNode).toBeDefined();
+      expect(result.updatedStoreNode?.data?.fields).toHaveLength(2);
+      expect(result.updatedStoreNode?.data?.actions).toHaveLength(2);
+      const statusField = result.updatedStoreNode?.data?.fields?.find((f) => f.name === "serverStatus");
+      expect(statusField).toBeDefined();
+      const statusSetter = result.updatedStoreNode?.data?.actions?.find((a) => a.name === "setServerStatus");
+      expect(statusSetter).toBeDefined();
+
+      // 4. Section subscribed to response state variables
+      expect(section?.stateObjects).toHaveLength(2);
+      expect(section?.stateObjects?.find((s) => s.name === "serverStatus")).toBeDefined();
+
+      // 5. Summary message mentions button
+      expect(result.summaryMessage).toContain("action button");
+    });
   });
 });
