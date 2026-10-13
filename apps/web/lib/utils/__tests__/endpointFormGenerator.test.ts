@@ -421,8 +421,105 @@ describe("endpointFormGenerator", () => {
       expect(section?.stateObjects).toHaveLength(2);
       expect(section?.stateObjects?.find((s) => s.name === "serverStatus")).toBeDefined();
 
-      // 5. Summary message mentions button
+      // 5. Action has storeActionBindings for API response mapping
+      const action = section?.actions?.find((a) => a.id === result.createdActionId);
+      expect(action).toBeDefined();
+      expect(action?.storeActionBindings).toHaveLength(2);
+      const statusBinding = action?.storeActionBindings?.find((b) => b.valuePath === "serverStatus");
+      expect(statusBinding).toBeDefined();
+      expect(statusBinding?.updateSource).toBe("response_property");
+      expect(statusBinding?.actionName).toBe("setServerStatus");
+      expect(statusBinding?.targetFieldName).toBe("serverStatus");
+
+      // 6. Summary message mentions button
       expect(result.summaryMessage).toContain("action button");
+    });
+
+    it("generates compound component with reactive response display elements when autoGenerateResponseUi is true", () => {
+      const ep: Endpoint = {
+        id: "ep-status",
+        name: "/api/status",
+        type: "GET",
+        responseBody: {
+          id: "rb-status",
+          fields: [
+            { id: "rf-online", name: "isOnline", type: "boolean" },
+            { id: "rf-latency", name: "latencyMs", type: "number" },
+          ],
+        },
+      };
+
+      const webPageNode: BackendNode = {
+        id: "node-page-status",
+        type: "webPage",
+        position: { x: 300, y: 100 },
+        fractionalIndex: "a0",
+        data: {
+          label: "/system",
+          sections: [
+            {
+              id: "sec-status",
+              name: "SystemSection",
+              actions: [],
+              componentBindings: [],
+            },
+          ],
+        },
+      };
+
+      const serviceNode: BackendNode = {
+        id: "node-service-status",
+        type: "service",
+        position: { x: 700, y: 100 },
+        fractionalIndex: "a1",
+        data: { label: "SystemService" },
+      };
+
+      const storeNode: BackendNode = {
+        id: "node-store-status",
+        type: "state_store",
+        position: { x: 100, y: 100 },
+        fractionalIndex: "a2",
+        data: {
+          label: "SystemStore",
+          storeName: "System",
+          fields: [],
+          actions: [],
+        },
+      };
+
+      const result = generateFormFromEndpoint({
+        endpoint: ep,
+        serviceNode,
+        webPageNode,
+        sectionId: "sec-status",
+        formName: "StatusWidget",
+        submitButtonLabel: "Check Status",
+        stateStorageMode: "store",
+        targetStoreNodeId: storeNode.id,
+        selectedFields: [],
+        responseFieldsToStore: ["isOnline", "latencyMs"],
+        autoGenerateResponseUi: true,
+        nodes: [webPageNode, serviceNode, storeNode],
+        edges: [],
+      });
+
+      const section = result.updatedWebPageNode.data?.sections?.[0];
+      const comp = section?.componentBindings?.[0];
+      expect(comp).toBeDefined();
+      expect(comp?.componentType).toBe("card"); // upgraded to card because it has multiple elements
+      expect(comp?.elements).toHaveLength(3); // 1 button + 2 response display elements
+
+      const btnEl = comp?.elements?.find((el) => el.elementType === "button");
+      expect(btnEl).toBeDefined();
+
+      const boolEl = comp?.elements?.find((el) => el.valueStateName === "isOnline");
+      expect(boolEl).toBeDefined();
+      expect(boolEl?.elementType).toBe("badge"); // boolean response maps to badge
+
+      const numEl = comp?.elements?.find((el) => el.valueStateName === "latencyMs");
+      expect(numEl).toBeDefined();
+      expect(numEl?.elementType).toBe("card"); // number response maps to card
     });
   });
 });

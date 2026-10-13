@@ -355,6 +355,7 @@ export interface EndpointFormGeneratorOptions {
   newStoreName?: string;
   selectedFields?: SelectedEndpointFormField[];
   responseFieldsToStore?: string[];
+  autoGenerateResponseUi?: boolean;
   existingComponentId?: string;
   nodes: BackendNode[];
   edges: BackendEdge[];
@@ -388,6 +389,7 @@ export function generateFormFromEndpoint({
   newStoreName,
   selectedFields = [],
   responseFieldsToStore = [],
+  autoGenerateResponseUi = false,
   existingComponentId,
   nodes,
   edges,
@@ -640,6 +642,37 @@ export function generateFormFromEndpoint({
     });
   }
 
+  // 3b. Configure storeActionBindings on targetAction for API response mapping
+  if (targetAction && stateStorageMode === "store" && activeStoreName && safeResponseFieldsToStore.length > 0) {
+    const existingBindings = Array.isArray(targetAction.storeActionBindings)
+      ? [...targetAction.storeActionBindings]
+      : targetAction.storeActionBinding
+      ? [targetAction.storeActionBinding]
+      : [];
+
+    safeResponseFieldsToStore.forEach((rfName) => {
+      const cleanVar = toCamelCase(rfName);
+      const setterName = `set${toPascalCase(cleanVar)}`;
+      if (!existingBindings.some((b) => b.valuePath === rfName)) {
+        existingBindings.push({
+          id: `bind-${Date.now()}-${cleanVar}`,
+          storeNodeId: activeStoreId,
+          storeName: activeStoreName,
+          actionName: setterName,
+          actionType: "set",
+          targetFieldName: cleanVar,
+          updateSource: "response_property",
+          valuePath: rfName,
+        });
+      }
+    });
+
+    targetAction.storeActionBindings = existingBindings;
+    if (!targetAction.storeActionBinding && existingBindings[0]) {
+      targetAction.storeActionBinding = existingBindings[0];
+    }
+  }
+
   // 4. Update Section State Subscriptions
   let updatedStateObjects: PageStateObject[] = [...(targetSection.stateObjects || [])];
   let updatedStates: SectionStateVariable[] = [...(targetSection.states || [])];
@@ -718,12 +751,42 @@ export function generateFormFromEndpoint({
     });
   }
 
+  // 5b. Append Response Display Elements if requested
+  if (autoGenerateResponseUi && safeResponseFieldsToStore.length > 0) {
+    safeResponseFieldsToStore.forEach((rfName, idx) => {
+      const cleanVar = toCamelCase(rfName);
+      const rfDef = allResponseFields.find((f) => f.name === rfName);
+      const isBool = rfDef?.type === "boolean";
+      const displayType: ComponentBindingType = isBool ? "badge" : "card";
+
+      generatedElements.push({
+        id: `el-res-${Date.now()}-${idx}-${cleanVar}`,
+        name: `${toPascalCase(cleanVar)}Display`,
+        elementType: displayType,
+        label: toHumanLabel(cleanVar),
+        valueStateName: cleanVar,
+        valueStoreName: activeStoreName,
+        valueSourceType: "store",
+        variant: isBool ? "secondary" : undefined,
+        propMappings: {
+          valueBinding: cleanVar,
+          readOnly: true,
+        },
+      });
+    });
+  }
+
   // 6. Update or Create Component Binding
   const currentBindings: SectionComponentBinding[] = [...(targetSection.componentBindings || [])];
   let targetComponentId = existingComponentId;
 
-  const compType: ComponentBindingType = isButtonOnly ? "button" : "card";
-  const compTriggerEvent = isButtonOnly ? "click" : "submit";
+  const hasMultipleElements = generatedElements.length > 1;
+  const compType: ComponentBindingType = hasMultipleElements
+    ? "card"
+    : isButtonOnly
+    ? "button"
+    : "card";
+  const compTriggerEvent = isButtonOnly && !hasMultipleElements ? "click" : "submit";
 
   if (targetComponentId) {
     const existingIdx = currentBindings.findIndex((c) => c.id === targetComponentId);

@@ -29,6 +29,7 @@ import {
   ComponentIdentityCard,
   ComponentEventActionCard,
   GenerateFormFromEndpointDialog,
+  ComponentResponseMappingCard,
 } from "./web-page-component-config";
 import { Button } from "@workspace/ui/components/button";
 import { Separator } from "@workspace/ui/components/separator";
@@ -871,7 +872,21 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         onOpenActionFlow={handleOpenActionFlow}
       />
 
-      {/* 6. Delete Component Binding Button */}
+      <Separator className="bg-border/50" />
+
+      {/* 6.5 API Response & State Store Mapping */}
+      <ComponentResponseMappingCard
+        nodeId={nodeId}
+        sectionId={targetSection.id}
+        componentBinding={componentBinding}
+        activeElement={activeElement}
+        availableActions={availableActions}
+        stateStores={stateStores}
+        onUpdateComponent={handleUpdate}
+        onUpdateElements={handleUpdateElements}
+      />
+
+      {/* 7. Delete Component Binding Button */}
       <div className="pt-2 border-t border-border/40 flex justify-end">
         <Button
           variant="ghost"

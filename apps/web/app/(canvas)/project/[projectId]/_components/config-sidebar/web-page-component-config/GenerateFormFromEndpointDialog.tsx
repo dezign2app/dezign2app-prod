@@ -14,6 +14,7 @@ import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import { Checkbox } from "@workspace/ui/components/checkbox";
+import { Switch } from "@workspace/ui/components/switch";
 import {
   Select,
   SelectContent,
@@ -141,6 +142,7 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
   const [newStoreName, setNewStoreName] = useState<string>("");
   const [fieldConfigs, setFieldConfigs] = useState<FieldConfigItem[]>([]);
   const [responseFieldConfigs, setResponseFieldConfigs] = useState<ResponseFieldConfigItem[]>([]);
+  const [autoGenerateResponseUi, setAutoGenerateResponseUi] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Auto-select initial endpoint
@@ -286,6 +288,7 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
           stateVarName: f.stateVarName,
         })),
         responseFieldsToStore: enabledResponseFields,
+        autoGenerateResponseUi: enabledResponseFields.length > 0 && autoGenerateResponseUi,
         existingComponentId,
         nodes,
         edges,
@@ -527,6 +530,21 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
                         </Badge>
                       </div>
                     ))}
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-background/60 border border-border/50 text-xs">
+                    <div className="flex flex-col">
+                      <span className="font-medium text-foreground text-[11px]">
+                        Render Response Variables on UI
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        Auto-generate reactive display cards/badges bound to response store variables
+                      </span>
+                    </div>
+                    <Switch
+                      checked={autoGenerateResponseUi}
+                      onCheckedChange={setAutoGenerateResponseUi}
+                    />
                   </div>
                 </div>
               )}
