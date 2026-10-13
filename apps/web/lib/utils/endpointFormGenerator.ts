@@ -343,6 +343,25 @@ export interface SelectedEndpointFormField {
   stateVarName: string;
 }
 
+export interface SelectedEndpointResponseField {
+  name: string;
+  type: string;
+  componentType?: ComponentBindingType;
+  stateVarName?: string;
+  renderUi?: boolean;
+}
+
+/**
+ * Infers a sensible default UI display component type for an API response field based on its type.
+ */
+export function inferDefaultResponseComponentType(type: string): ComponentBindingType {
+  const lower = (type || "").toLowerCase();
+  if (lower === "boolean" || lower.startsWith("bool")) return "badge";
+  if (lower === "number" || lower === "integer" || lower === "float") return "card";
+  if (lower.includes("[]") || lower.includes("array") || lower.includes("list")) return "table";
+  return "card";
+}
+
 export interface EndpointFormGeneratorOptions {
   endpoint: Endpoint;
   serviceNode: BackendNode;
@@ -355,6 +374,7 @@ export interface EndpointFormGeneratorOptions {
   newStoreName?: string;
   selectedFields?: SelectedEndpointFormField[];
   responseFieldsToStore?: string[];
+  selectedResponseFields?: SelectedEndpointResponseField[];
   autoGenerateResponseUi?: boolean;
   existingComponentId?: string;
   nodes: BackendNode[];
@@ -389,6 +409,7 @@ export function generateFormFromEndpoint({
   newStoreName,
   selectedFields = [],
   responseFieldsToStore = [],
+  selectedResponseFields = [],
   autoGenerateResponseUi = false,
   existingComponentId,
   nodes,
@@ -402,7 +423,11 @@ export function generateFormFromEndpoint({
   let activeStoreId: string | undefined;
 
   const safeSelectedFields = selectedFields || [];
-  const safeResponseFieldsToStore = responseFieldsToStore || [];
+  const safeSelectedResponseFields = selectedResponseFields || [];
+  const safeResponseFieldsToStore =
+    safeSelectedResponseFields.length > 0
+      ? safeSelectedResponseFields.map((rf) => rf.name)
+      : responseFieldsToStore || [];
   const allResponseFields = extractEndpointResponseFields(endpoint);
 
   // Combine items to add into Zustand store (inputs + selected response fields)
@@ -425,7 +450,8 @@ export function generateFormFromEndpoint({
   });
 
   safeResponseFieldsToStore.forEach((rfName) => {
-    const cleanVar = toCamelCase(rfName);
+    const rfConfig = safeSelectedResponseFields.find((f) => f.name === rfName);
+    const cleanVar = toCamelCase(rfConfig?.stateVarName || rfName);
     if (!storeItemsToAdd.some((f) => f.name.toLowerCase() === cleanVar.toLowerCase())) {
       const matched = allResponseFields.find((rf) => rf.name === rfName);
       storeItemsToAdd.push({
@@ -651,7 +677,8 @@ export function generateFormFromEndpoint({
       : [];
 
     safeResponseFieldsToStore.forEach((rfName) => {
-      const cleanVar = toCamelCase(rfName);
+      const rfConfig = safeSelectedResponseFields.find((f) => f.name === rfName);
+      const cleanVar = toCamelCase(rfConfig?.stateVarName || rfName);
       const setterName = `set${toPascalCase(cleanVar)}`;
       if (!existingBindings.some((b) => b.valuePath === rfName)) {
         existingBindings.push({
@@ -754,10 +781,15 @@ export function generateFormFromEndpoint({
   // 5b. Append Response Display Elements if requested
   if (autoGenerateResponseUi && safeResponseFieldsToStore.length > 0) {
     safeResponseFieldsToStore.forEach((rfName, idx) => {
-      const cleanVar = toCamelCase(rfName);
+      const rfConfig = safeSelectedResponseFields.find((f) => f.name === rfName);
+      if (rfConfig && rfConfig.renderUi === false) {
+        return;
+      }
+      const cleanVar = toCamelCase(rfConfig?.stateVarName || rfName);
       const rfDef = allResponseFields.find((f) => f.name === rfName);
       const isBool = rfDef?.type === "boolean";
-      const displayType: ComponentBindingType = isBool ? "badge" : "card";
+      const displayType: ComponentBindingType =
+        rfConfig?.componentType || (isBool ? "badge" : "card");
 
       generatedElements.push({
         id: `el-res-${Date.now()}-${idx}-${cleanVar}`,
@@ -767,7 +799,7 @@ export function generateFormFromEndpoint({
         valueStateName: cleanVar,
         valueStoreName: activeStoreName,
         valueSourceType: "store",
-        variant: isBool ? "secondary" : undefined,
+        variant: displayType === "badge" ? "secondary" : undefined,
         propMappings: {
           valueBinding: cleanVar,
           readOnly: true,

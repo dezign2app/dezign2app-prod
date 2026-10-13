@@ -29,6 +29,7 @@ import {
   ComponentIdentityCard,
   ComponentEventActionCard,
   GenerateFormFromEndpointDialog,
+  ComponentResponseMappingCard,
 } from "./web-page-component-config";
 import { Button } from "@workspace/ui/components/button";
 import { Separator } from "@workspace/ui/components/separator";
@@ -869,6 +870,20 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         onUpdate={(changes) => handleUpdateElement(activeElement.id, changes)}
         onCreateAction={handleCreateActiveElementAction}
         onOpenActionFlow={handleOpenActionFlow}
+      />
+
+      <Separator className="bg-border/50" />
+
+      {/* 6.5 API Response & State Store Mapping */}
+      <ComponentResponseMappingCard
+        nodeId={nodeId}
+        sectionId={targetSection.id}
+        componentBinding={componentBinding}
+        activeElement={activeElement}
+        availableActions={availableActions}
+        stateStores={stateStores}
+        onUpdateComponent={handleUpdate}
+        onUpdateElements={handleUpdateElements}
       />
 
 
