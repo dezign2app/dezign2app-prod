@@ -18,6 +18,7 @@ import {
   REFERENCE_NODE_TYPES,
 } from "./hangingReferenceLayout";
 import { layoutPaymentsPluginNodes } from "./paymentsPluginLayout";
+import { layoutAuthNodes } from "./authNodeLayout";
 import { layoutHangingStateStoreNodes } from "./hangingStateStoreLayout";
 import { layoutTypesNodes } from "./typesNodeLayout";
 import { computeTierRanks } from "./serviceTierLayout";
@@ -304,11 +305,34 @@ export function performGraphLayout({
     );
   };
 
+  const isAuthWebAppEdge = (edge: LayoutEdge): boolean => {
+    const sourceNode = graphNodes.find((n: LayoutNode) => n.id === edge.source);
+    const targetNode = graphNodes.find((n: LayoutNode) => n.id === edge.target);
+    if (!sourceNode || !targetNode) return false;
+
+    if (sourceNode.type === "auth" && targetNode.type === "webApp") {
+      return (
+        edge.targetHandle === "auth-in" ||
+        edge.sourceHandle === "auth-out" ||
+        !edge.targetHandle
+      );
+    }
+    if (targetNode.type === "auth" && sourceNode.type === "webApp") {
+      return (
+        edge.sourceHandle === "auth-in" ||
+        edge.targetHandle === "auth-out" ||
+        !edge.sourceHandle
+      );
+    }
+    return false;
+  };
+
   const headEdges: LayoutEdge[] = graphEdges.filter(isHeadConnectionEdge);
   const hangingEdges: LayoutEdge[] = graphEdges.filter(isHangingTransformerEdge);
   const hangingRefEdges: LayoutEdge[] = graphEdges.filter(isHangingReferenceEdge);
   const paymentsPluginEdges: LayoutEdge[] = graphEdges.filter(isPaymentsPluginEdge);
   const hangingStateStoreEdges: LayoutEdge[] = graphEdges.filter(isHangingStateStoreEdge);
+  const authWebAppEdges: LayoutEdge[] = graphEdges.filter(isAuthWebAppEdge);
 
   // 3. Identify attached head nodes, hanging transformer nodes, and hanging reference nodes
   const attachedHeadNodeIdSet = new Set<string>(
@@ -378,6 +402,31 @@ export function performGraphLayout({
   });
   const hangingStateStoreNodes: LayoutNode[] = graphNodes.filter((n: LayoutNode) =>
     hangingStateStoreNodeIdSet.has(n.id),
+  );
+
+  const connectedAuthNodeIdSet = new Set<string>();
+  authWebAppEdges.forEach((e) => {
+    const sourceNode = graphNodes.find((n) => n.id === e.source);
+    const targetNode = graphNodes.find((n) => n.id === e.target);
+    if (sourceNode?.type === "auth") connectedAuthNodeIdSet.add(sourceNode.id);
+    if (targetNode?.type === "auth") connectedAuthNodeIdSet.add(targetNode.id);
+  });
+  graphNodes.forEach((n) => {
+    if (
+      n.type === "webApp" &&
+      n.data &&
+      typeof n.data === "object" &&
+      "authNodeId" in n.data &&
+      typeof (n.data as any).authNodeId === "string"
+    ) {
+      const authId = (n.data as any).authNodeId;
+      if (graphNodes.some((gn) => gn.id === authId && gn.type === "auth")) {
+        connectedAuthNodeIdSet.add(authId);
+      }
+    }
+  });
+  const connectedAuthNodes: LayoutNode[] = graphNodes.filter((n: LayoutNode) =>
+    connectedAuthNodeIdSet.has(n.id),
   );
 
   // 3.5. Identify stacked WebPage zones attached to WebApp nodes
@@ -469,12 +518,15 @@ export function performGraphLayout({
       !isHangingReferenceEdge(e) &&
       !isPaymentsPluginEdge(e) &&
       !isHangingStateStoreEdge(e) &&
+      !isAuthWebAppEdge(e) &&
       !hangingRefNodeIdSet.has(e.source) &&
       !hangingRefNodeIdSet.has(e.target) &&
       !paymentsPluginNodeIdSet.has(e.source) &&
       !paymentsPluginNodeIdSet.has(e.target) &&
       !hangingStateStoreNodeIdSet.has(e.source) &&
       !hangingStateStoreNodeIdSet.has(e.target) &&
+      !connectedAuthNodeIdSet.has(e.source) &&
+      !connectedAuthNodeIdSet.has(e.target) &&
       !stackedSecondaryEdgeIdSet.has(e.id),
   );
 
@@ -576,6 +628,7 @@ export function performGraphLayout({
       !hangingRefNodeIdSet.has(n.id) &&
       !paymentsPluginNodeIdSet.has(n.id) &&
       !hangingStateStoreNodeIdSet.has(n.id) &&
+      !connectedAuthNodeIdSet.has(n.id) &&
       !stackedSecondaryNodeIdSet.has(n.id) &&
       !transformerDefNodeIdSet.has(n.id),
   );
@@ -703,6 +756,15 @@ export function performGraphLayout({
       storeEndpoints,
       storeEvents,
     }) || {};
+
+  // 6.64. Layout connected Auth nodes immediately behind their connected WebApp node
+  layoutAuthNodes({
+    nodes: graphNodes,
+    positionsMap,
+    authEdges: authWebAppEdges,
+    authNodes: connectedAuthNodes,
+    isHorizontal,
+  });
 
   // 6.65. Layout Payments plugin nodes (Creem Payments) immediately preceding their connected Better Auth node
   layoutPaymentsPluginNodes({

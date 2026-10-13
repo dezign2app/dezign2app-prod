@@ -300,8 +300,6 @@ export function getNodeDimensions(node: LayoutNode): {
       }
       return { width: estWidth, height: Math.max(260, estHeight) };
     }
-    case "transformer":
-    case "transformer_ref":
     case "hook":
     case "hook_ref": {
       return { width: 240, height: 50 };
