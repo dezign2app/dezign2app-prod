@@ -466,7 +466,7 @@ export const ComponentResponseMappingCard: React.FC<ComponentResponseMappingCard
     persistStoreActionBindings(nextBindings);
 
     if (elementsToAdd.length > 0) {
-      const updatedElements = [...currentElements, elementsToAdd[0], ...elementsToAdd.slice(1)];
+      const updatedElements = [...currentElements, ...elementsToAdd];
       onUpdateElements(updatedElements);
       if (componentBinding.componentType === "button" && updatedElements.length > 1) {
         onUpdateComponent({ componentType: "card" });

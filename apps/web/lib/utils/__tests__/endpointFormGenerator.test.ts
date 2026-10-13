@@ -443,8 +443,8 @@ describe("endpointFormGenerator", () => {
         responseBody: {
           id: "rb-status",
           fields: [
-            { id: "rf-online", name: "isOnline", type: "boolean" },
-            { id: "rf-latency", name: "latencyMs", type: "number" },
+            { id: "rf-online", name: "isOnline", type: "boolean", required: false },
+            { id: "rf-latency", name: "latencyMs", type: "number", required: false },
           ],
         },
       };
