@@ -29,6 +29,7 @@ import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { toPascalCase } from "@/lib/utils";
 import { Badge } from "@workspace/ui/components/badge";
+import { GenerateFormFromEndpointDialog } from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/web-page-component-config";
 
 export interface SectionComponentBindingsListProps {
   nodeId: string;
@@ -59,6 +60,7 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
 
   const [editingCompId, setEditingCompId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
@@ -311,6 +313,19 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
 
           <button
             type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setGenerateDialogOpen(true);
+            }}
+            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 text-[8px] font-semibold transition-colors cursor-pointer"
+            title="Auto-generate form & state store from endpoint contract"
+          >
+            <Sparkles size={9} />
+            <span>From Endpoint</span>
+          </button>
+
+          <button
+            type="button"
             onClick={handleAddComponent}
             className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 text-purple-600 dark:text-purple-400 border border-purple-500/30 text-[8px] font-semibold transition-colors cursor-pointer"
             title="Add a UI component"
@@ -350,15 +365,26 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
         <div className="py-2 px-2.5 flex items-center justify-between rounded bg-muted/10 border border-dashed border-border/40 text-[9px] text-muted-foreground/70 mx-2.5 my-1.5">
           <div className="flex items-center gap-1.5">
             <Sparkles size={11} className="text-purple-400 shrink-0" />
-            <span>Map components (e.g. Button, Input) to state &amp; actions.</span>
+            <span>Map components to state &amp; actions.</span>
           </div>
-          <button
-            type="button"
-            onClick={handleAddComponent}
-            className="text-purple-600 dark:text-purple-400 hover:underline cursor-pointer font-medium"
-          >
-            + Add component
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setGenerateDialogOpen(true)}
+              className="text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer font-medium flex items-center gap-0.5"
+            >
+              <Sparkles size={9} />
+              <span>From Endpoint</span>
+            </button>
+            <span className="text-muted-foreground/30">•</span>
+            <button
+              type="button"
+              onClick={handleAddComponent}
+              className="text-purple-600 dark:text-purple-400 hover:underline cursor-pointer font-medium"
+            >
+              + Add
+            </button>
+          </div>
         </div>
       ) : visibleBindings.length === 0 ? (
         <div className="py-2 px-2.5 text-center text-[9px] text-muted-foreground bg-muted/10 mx-2.5 my-1 rounded border border-border/20">
@@ -526,6 +552,23 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
             );
           })}
         </div>
+      )}
+
+      {generateDialogOpen && (
+        <GenerateFormFromEndpointDialog
+          open={generateDialogOpen}
+          onOpenChange={setGenerateDialogOpen}
+          nodeId={nodeId}
+          sectionId={section.id}
+          onSuccess={(compId) => {
+            setActiveConfigItem({
+              type: "sectionComponent",
+              id: compId,
+              nodeId,
+              sectionId: section.id,
+            });
+          }}
+        />
       )}
     </div>
   );

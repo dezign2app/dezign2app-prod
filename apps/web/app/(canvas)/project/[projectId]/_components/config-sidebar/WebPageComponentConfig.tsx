@@ -28,12 +28,14 @@ import {
   ComponentBreadcrumbsHeader,
   ComponentIdentityCard,
   ComponentEventActionCard,
+  GenerateFormFromEndpointDialog,
 } from "./web-page-component-config";
 import { Button } from "@workspace/ui/components/button";
 import { Separator } from "@workspace/ui/components/separator";
 import { toast } from "sonner";
 import { toPascalCase } from "@/lib/utils";
 import { Badge } from "@workspace/ui/components/badge";
+import { Sparkles } from "lucide-react";
 
 export { toPascalCase };
 
@@ -390,6 +392,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
   }, [componentBinding]);
 
   const [activeElementId, setActiveElementId] = useState<string>("");
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!currentElements.some((e) => e.id === activeElementId) && currentElements[0]) {
@@ -735,6 +738,31 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         onUpdate={handleUpdate}
       />
 
+      {/* 2.5 Quick Auto-Generate / Sync from Endpoint */}
+      <div className="flex items-center justify-between p-3 rounded-xl bg-purple-500/[0.06] border border-purple-500/20">
+        <div className="flex items-center gap-2.5">
+          <div className="p-1.5 rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-400">
+            <Sparkles size={15} />
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-foreground">Sync with Endpoint Contract</div>
+            <div className="text-[11px] text-muted-foreground">
+              Auto-populate fields and Zustand state variables from an API schema
+            </div>
+          </div>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => setGenerateDialogOpen(true)}
+          className="h-7 text-xs font-medium border-purple-500/30 hover:bg-purple-500/10 text-purple-600 dark:text-purple-400 cursor-pointer shrink-0 ml-2"
+        >
+          <Sparkles size={11} className="mr-1.5" />
+          Auto-Generate Form
+        </Button>
+      </div>
+
       {/* 3. Live Component Preview Sandbox */}
       <StateComponentPreview
         currentComponent={activeRenderComponent}
@@ -843,7 +871,8 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         onOpenActionFlow={handleOpenActionFlow}
       />
 
-      {/* 6. Delete Component Binding Button */}
+
+      {/* 7. Delete Component Binding Button */}
       <div className="pt-2 border-t border-border/40 flex justify-end">
         <Button
           variant="ghost"
@@ -871,6 +900,20 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
           <span>Delete Component Binding</span>
         </Button>
       </div>
+
+      {/* 7. Generate Form Dialog */}
+      {generateDialogOpen && (
+        <GenerateFormFromEndpointDialog
+          open={generateDialogOpen}
+          onOpenChange={setGenerateDialogOpen}
+          nodeId={nodeId}
+          sectionId={targetSection?.id}
+          existingComponentId={componentBinding.id}
+          onSuccess={() => {
+            setGenerateDialogOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };

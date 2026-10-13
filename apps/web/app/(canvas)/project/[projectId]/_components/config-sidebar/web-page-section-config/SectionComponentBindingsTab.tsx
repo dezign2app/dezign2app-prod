@@ -35,14 +35,8 @@ import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
 import { cn } from "@workspace/ui/lib/utils";
+import { GenerateFormFromEndpointDialog } from "../web-page-component-config";
 
 export interface SectionComponentBindingsTabProps {
   nodeId?: string;
@@ -73,6 +67,7 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
 
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
 
   const [editingCompId, setEditingCompId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
@@ -294,15 +289,27 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
           </p>
         </div>
 
-        <Button
-          type="button"
-          size="sm"
-          onClick={handleAddComponent}
-          className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-medium cursor-pointer shadow-xs"
-        >
-          <Plus size={12} />
-          <span>Add Component</span>
-        </Button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setGenerateDialogOpen(true)}
+            className="h-8 gap-1.5 border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 font-medium cursor-pointer"
+          >
+            <Sparkles size={12} />
+            <span>From Endpoint</span>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleAddComponent}
+            className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-medium cursor-pointer shadow-xs"
+          >
+            <Plus size={12} />
+            <span>Add Component</span>
+          </Button>
+        </div>
       </div>
 
       {/* Search Bar & Type Filters */}
@@ -375,15 +382,25 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
               Add a button, input, or card to link user interactions with section actions and Zustand store data.
             </p>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleAddComponent}
-            className="h-8 gap-1.5 border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 cursor-pointer"
-          >
-            <Plus size={12} />
-            <span>Create First Component</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => setGenerateDialogOpen(true)}
+              className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white cursor-pointer font-medium"
+            >
+              <Sparkles size={12} />
+              <span>Auto-Generate from Endpoint</span>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleAddComponent}
+              className="h-8 gap-1.5 border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 cursor-pointer"
+            >
+              <Plus size={12} />
+              <span>Create Empty Component</span>
+            </Button>
+          </div>
         </Card>
       ) : filteredBindings.length === 0 ? (
         <div className="p-8 rounded-xl border border-dashed border-border/70 text-center flex flex-col items-center gap-2 bg-secondary/10">
@@ -532,6 +549,23 @@ export const SectionComponentBindingsTab: React.FC<SectionComponentBindingsTabPr
             );
           })}
         </div>
+      )}
+
+      {nodeId && section && generateDialogOpen && (
+        <GenerateFormFromEndpointDialog
+          open={generateDialogOpen}
+          onOpenChange={setGenerateDialogOpen}
+          nodeId={nodeId}
+          sectionId={section.id}
+          onSuccess={(compId) => {
+            setActiveConfigItem({
+              type: "sectionComponent",
+              id: compId,
+              nodeId,
+              sectionId: section.id,
+            });
+          }}
+        />
       )}
     </div>
   );
