@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,6 @@ import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import { Checkbox } from "@workspace/ui/components/checkbox";
-import { Switch } from "@workspace/ui/components/switch";
 import {
   Select,
   SelectContent,
@@ -36,6 +35,11 @@ import {
   ToggleLeft,
   ChevronDownSquare,
   SquareCheck,
+  CreditCard,
+  Tag,
+  AlertTriangle,
+  BarChart3,
+  Table,
 } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import { toast } from "sonner";
@@ -45,6 +49,7 @@ import {
   extractEndpointResponseFields,
   inferDefaultButtonLabel,
   inferDefaultComponentName,
+  inferDefaultResponseComponentType,
   generateFormFromEndpoint,
   ExtractedEndpointField,
   ExtractedEndpointResponseField,
@@ -75,7 +80,230 @@ interface FieldConfigItem extends ExtractedEndpointField {
 
 interface ResponseFieldConfigItem extends ExtractedEndpointResponseField {
   enabled: boolean;
+  stateVarName: string;
+  suggestedComponentType: ComponentBindingType | "none";
+  renderUi: boolean;
 }
+
+const FieldConfigRow = React.memo(function FieldConfigRow({
+  field,
+  idx,
+  onToggle,
+  onChange,
+}: {
+  field: FieldConfigItem;
+  idx: number;
+  onToggle: (idx: number, enabled: boolean) => void;
+  onChange: (idx: number, changes: Partial<FieldConfigItem>) => void;
+}) {
+  const inputId = `input-field-${field.source}-${field.name}`;
+  return (
+    <div
+      className={cn(
+        "p-2.5 flex items-center justify-between gap-3 select-none",
+        field.enabled ? "bg-background/80" : "bg-muted/15 opacity-60",
+      )}
+    >
+      {/* Left: Checkbox & Name */}
+      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+        <Checkbox
+          id={inputId}
+          checked={field.enabled}
+          onCheckedChange={(c) => onToggle(idx, Boolean(c))}
+        />
+        <Label
+          htmlFor={inputId}
+          className="flex flex-col min-w-0 cursor-pointer"
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-xs font-semibold text-foreground truncate">
+              {field.name}
+            </span>
+            {field.required ? (
+              <Badge
+                variant="outline"
+                className="text-[8.5px] px-1 py-0 border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 font-medium"
+              >
+                Required
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="text-[8.5px] px-1 py-0 text-muted-foreground">
+                Optional
+              </Badge>
+            )}
+            <span className="text-[9px] text-muted-foreground/70 font-mono">
+              [{field.source}]
+            </span>
+          </div>
+          <span className="text-[10px] text-muted-foreground truncate">{field.label}</span>
+        </Label>
+      </div>
+
+      {/* Right: Component Type Override & State Var */}
+      <div className="flex items-center gap-2 shrink-0">
+        <Select
+          value={field.suggestedComponentType}
+          onValueChange={(val) =>
+            onChange(idx, { suggestedComponentType: val as ComponentBindingType })
+          }
+          disabled={!field.enabled}
+        >
+          <SelectTrigger className="h-7 text-[11px] bg-background w-28" disabled={!field.enabled}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="input">
+              <div className="flex items-center gap-1.5">
+                <FormInput size={11} />
+                <span>Input</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="switch">
+              <div className="flex items-center gap-1.5">
+                <ToggleLeft size={11} />
+                <span>Switch</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="checkbox">
+              <div className="flex items-center gap-1.5">
+                <SquareCheck size={11} />
+                <span>Checkbox</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="select">
+              <div className="flex items-center gap-1.5">
+                <ChevronDownSquare size={11} />
+                <span>Select</span>
+              </div>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Input
+          value={field.stateVarName}
+          onChange={(e) => onChange(idx, { stateVarName: e.target.value })}
+          placeholder="varName"
+          className="h-7 text-[11px] font-mono bg-background w-28"
+          title="State variable name"
+          disabled={!field.enabled}
+        />
+      </div>
+    </div>
+  );
+});
+
+const ResponseFieldConfigRow = React.memo(function ResponseFieldConfigRow({
+  field,
+  idx,
+  onToggle,
+  onChange,
+  onSelectComponentType,
+}: {
+  field: ResponseFieldConfigItem;
+  idx: number;
+  onToggle: (idx: number, enabled: boolean) => void;
+  onChange: (idx: number, changes: Partial<ResponseFieldConfigItem>) => void;
+  onSelectComponentType: (idx: number, newType: ComponentBindingType | "none") => void;
+}) {
+  const respId = `resp-field-${field.name}`;
+  return (
+    <div
+      className={cn(
+        "p-2.5 flex items-center justify-between gap-3 text-xs select-none",
+        field.enabled ? "bg-background/80" : "bg-muted/15 opacity-60",
+      )}
+    >
+      {/* Left: Checkbox & Name */}
+      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+        <Checkbox
+          id={respId}
+          checked={field.enabled}
+          onCheckedChange={(chk) => onToggle(idx, Boolean(chk))}
+        />
+        <Label
+          htmlFor={respId}
+          className="flex flex-col min-w-0 cursor-pointer"
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-xs font-semibold text-foreground truncate">
+              {field.name}
+            </span>
+            <Badge variant="outline" className="text-[8.5px] font-mono px-1 py-0 border-muted text-muted-foreground">
+              {field.type}
+            </Badge>
+          </div>
+          <span className="text-[10px] text-muted-foreground truncate">
+            {!field.enabled
+              ? "Excluded (Not stored or rendered)"
+              : field.suggestedComponentType !== "none"
+              ? `Render as <${field.suggestedComponentType}> + Store`
+              : "Zustand store only (No UI)"}
+          </span>
+        </Label>
+      </div>
+
+      {/* Right: Response UI Component Type & State Var Name */}
+      <div className="flex items-center gap-2 shrink-0">
+        <Select
+          value={field.suggestedComponentType}
+          onValueChange={(val) => onSelectComponentType(idx, val as ComponentBindingType | "none")}
+          disabled={!field.enabled}
+        >
+          <SelectTrigger className="h-7 text-[11px] bg-background w-32" title="Response UI Display Type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Database size={11} className="text-purple-500" />
+                <span>Store Only</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="card">
+              <div className="flex items-center gap-1.5">
+                <CreditCard size={11} className="text-purple-500" />
+                <span>Card</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="badge">
+              <div className="flex items-center gap-1.5">
+                <Tag size={11} className="text-emerald-500" />
+                <span>Badge</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="alert">
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle size={11} className="text-amber-500" />
+                <span>Alert</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="progress">
+              <div className="flex items-center gap-1.5">
+                <BarChart3 size={11} className="text-blue-500" />
+                <span>Progress</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="table">
+              <div className="flex items-center gap-1.5">
+                <Table size={11} className="text-indigo-500" />
+                <span>Table</span>
+              </div>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Input
+          value={field.stateVarName}
+          onChange={(e) => onChange(idx, { stateVarName: e.target.value })}
+          placeholder="varName"
+          className="h-7 text-[11px] font-mono bg-background w-28"
+          title="State variable name"
+          disabled={!field.enabled}
+        />
+      </div>
+    </div>
+  );
+});
 
 export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDialogProps> = ({
   open,
@@ -142,7 +370,6 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
   const [newStoreName, setNewStoreName] = useState<string>("");
   const [fieldConfigs, setFieldConfigs] = useState<FieldConfigItem[]>([]);
   const [responseFieldConfigs, setResponseFieldConfigs] = useState<ResponseFieldConfigItem[]>([]);
-  const [autoGenerateResponseUi, setAutoGenerateResponseUi] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Auto-select initial endpoint
@@ -159,13 +386,26 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
     return allEndpoints.find((e) => e.endpoint.id === selectedEndpointId);
   }, [allEndpoints, selectedEndpointId]);
 
+  const lastEndpointIdRef = useRef<string>("");
+
   // When endpoint changes, extract fields and reset names
   useEffect(() => {
+    if (!open) {
+      lastEndpointIdRef.current = "";
+      return;
+    }
+
     if (!selectedItem) {
       setFieldConfigs([]);
       setResponseFieldConfigs([]);
       return;
     }
+
+    // Only re-initialize if the endpoint actually changed!
+    if (lastEndpointIdRef.current === selectedItem.endpoint.id) {
+      return;
+    }
+    lastEndpointIdRef.current = selectedItem.endpoint.id;
 
     const ep = selectedItem.endpoint;
     const extracted = extractEndpointFields(ep);
@@ -183,6 +423,9 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
       extractedResponses.map((rf) => ({
         ...rf,
         enabled: true,
+        stateVarName: toCamelCase(rf.name),
+        suggestedComponentType: inferDefaultResponseComponentType(rf.type),
+        renderUi: true,
       })),
     );
 
@@ -206,7 +449,7 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
       setTargetStoreNodeId("__new__");
       setNewStoreName(`${entityName}Store`);
     }
-  }, [selectedItem, stateStoreNodes]);
+  }, [open, selectedItem, stateStoreNodes]);
 
   const enabledCount = useMemo(() => {
     return fieldConfigs.filter((f) => f.enabled).length;
@@ -220,6 +463,12 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
     return responseFieldConfigs.filter((rf) => rf.enabled).length;
   }, [responseFieldConfigs]);
 
+  const enabledResponseUiCount = useMemo(() => {
+    return responseFieldConfigs.filter(
+      (rf) => rf.enabled && rf.suggestedComponentType !== "none",
+    ).length;
+  }, [responseFieldConfigs]);
+
   const hasInputFields = fieldConfigs.length > 0;
 
   const handleToggleAll = useCallback(
@@ -228,6 +477,22 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
     },
     [],
   );
+
+  const handleToggleAllResponses = useCallback(
+    (checked: boolean) => {
+      setResponseFieldConfigs((prev) => prev.map((rf) => ({ ...rf, enabled: checked })));
+    },
+    [],
+  );
+
+  const handleFieldToggle = useCallback((idx: number, enabled: boolean) => {
+    setFieldConfigs((prev) => {
+      if (prev[idx]?.enabled === enabled) return prev;
+      const copy = [...prev];
+      copy[idx] = { ...copy[idx]!, enabled };
+      return copy;
+    });
+  }, []);
 
   const handleFieldChange = useCallback(
     (idx: number, changes: Partial<FieldConfigItem>) => {
@@ -244,13 +509,35 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
 
   const handleResponseFieldToggle = useCallback((idx: number, enabled: boolean) => {
     setResponseFieldConfigs((prev) => {
+      if (prev[idx]?.enabled === enabled) return prev;
       const copy = [...prev];
-      if (copy[idx]) {
-        copy[idx] = { ...copy[idx]!, enabled };
-      }
+      copy[idx] = { ...copy[idx]!, enabled };
       return copy;
     });
   }, []);
+
+  const handleResponseFieldChange = useCallback(
+    (idx: number, changes: Partial<ResponseFieldConfigItem>) => {
+      setResponseFieldConfigs((prev) => {
+        const copy = [...prev];
+        if (copy[idx]) {
+          copy[idx] = { ...copy[idx]!, ...changes };
+        }
+        return copy;
+      });
+    },
+    [],
+  );
+
+  const handleSelectResponseComponentType = useCallback(
+    (idx: number, newType: ComponentBindingType | "none") => {
+      handleResponseFieldChange(idx, {
+        suggestedComponentType: newType,
+        renderUi: newType !== "none",
+      });
+    },
+    [handleResponseFieldChange],
+  );
 
   const handleGenerate = async () => {
     if (!selectedItem || !webPageNode || !targetSection) return;
@@ -287,8 +574,19 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
           placeholder: f.placeholder,
           stateVarName: f.stateVarName,
         })),
+        selectedResponseFields: responseFieldConfigs
+          .filter((rf) => rf.enabled)
+          .map((rf) => ({
+            name: rf.name,
+            type: rf.type,
+            stateVarName: rf.stateVarName,
+            componentType: rf.suggestedComponentType === "none" ? undefined : rf.suggestedComponentType,
+            renderUi: rf.suggestedComponentType !== "none",
+          })),
         responseFieldsToStore: enabledResponseFields,
-        autoGenerateResponseUi: enabledResponseFields.length > 0 && autoGenerateResponseUi,
+        autoGenerateResponseUi: responseFieldConfigs.some(
+          (rf) => rf.enabled && rf.suggestedComponentType !== "none",
+        ),
         existingComponentId,
         nodes,
         edges,
@@ -325,6 +623,60 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const renderResponseVariablesSection = () => {
+    if (responseFieldConfigs.length === 0) return null;
+
+    return (
+      <div className="p-3.5 rounded-xl bg-purple-500/[0.04] border border-purple-500/20 space-y-3 mt-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Database size={13} className="text-purple-500" />
+              <span>Response Variables (Zustand Store)</span>
+            </Label>
+            <span className="text-[10px] text-muted-foreground font-mono">
+              ({enabledResponseCount}/{responseFieldConfigs.length} selected)
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleToggleAllResponses(true)}
+              className="text-[11px] text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
+            >
+              Select All
+            </button>
+            <span className="text-muted-foreground/40">•</span>
+            <button
+              type="button"
+              onClick={() => handleToggleAllResponses(false)}
+              className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+        <p className="text-[10.5px] text-muted-foreground">
+          Save response fields returned by this endpoint into your Zustand store:
+        </p>
+
+        {/* List of Response Fields */}
+        <div className="border border-border/70 rounded-xl overflow-hidden divide-y divide-border/40 max-h-[220px] overflow-y-auto bg-card">
+          {responseFieldConfigs.map((rf, idx) => (
+            <ResponseFieldConfigRow
+              key={rf.id}
+              field={rf}
+              idx={idx}
+              onToggle={handleResponseFieldToggle}
+              onChange={handleResponseFieldChange}
+              onSelectComponentType={handleSelectResponseComponentType}
+            />
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -495,59 +847,7 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
                 </p>
               </div>
 
-              {responseFieldConfigs.length > 0 && (
-                <div className="space-y-2 p-3 rounded-xl border bg-secondary/15">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      <Database size={13} className="text-purple-500" />
-                      <span>Response Variables (Zustand Store)</span>
-                    </Label>
-                    <span className="text-[10px] text-muted-foreground font-mono">
-                      ({enabledResponseCount}/{responseFieldConfigs.length} selected)
-                    </span>
-                  </div>
-                  <p className="text-[10.5px] text-muted-foreground">
-                    Save response fields returned by this endpoint into your Zustand store:
-                  </p>
-                  <div className="border border-border/70 rounded-lg overflow-hidden divide-y divide-border/40 bg-card">
-                    {responseFieldConfigs.map((rf, idx) => (
-                      <div
-                        key={rf.id}
-                        className={cn(
-                          "p-2 flex items-center justify-between text-xs transition-colors",
-                          rf.enabled ? "bg-background/80" : "bg-muted/15 opacity-60",
-                        )}
-                      >
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox
-                            checked={rf.enabled}
-                            onCheckedChange={(chk) => handleResponseFieldToggle(idx, Boolean(chk))}
-                          />
-                          <span className="font-mono text-foreground font-medium text-xs">{rf.name}</span>
-                        </label>
-                        <Badge variant="outline" className="text-[9px] font-mono px-1 py-0 border-muted">
-                          {rf.type}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-background/60 border border-border/50 text-xs">
-                    <div className="flex flex-col">
-                      <span className="font-medium text-foreground text-[11px]">
-                        Render Response Variables on UI
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        Auto-generate reactive display cards/badges bound to response store variables
-                      </span>
-                    </div>
-                    <Switch
-                      checked={autoGenerateResponseUi}
-                      onCheckedChange={setAutoGenerateResponseUi}
-                    />
-                  </div>
-                </div>
-              )}
+              {renderResponseVariablesSection()}
             </div>
           ) : (
             <div className="space-y-2.5">
@@ -582,149 +882,17 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
 
               <div className="border border-border/70 rounded-xl overflow-hidden divide-y divide-border/40 max-h-[260px] overflow-y-auto bg-card">
                 {fieldConfigs.map((f, idx) => (
-                  <div
+                  <FieldConfigRow
                     key={`${f.source}-${f.name}`}
-                    className={cn(
-                      "p-2.5 flex items-center justify-between gap-3 transition-colors",
-                      f.enabled ? "bg-background/80" : "bg-muted/15 opacity-60",
-                    )}
-                  >
-                    {/* Left: Checkbox & Name */}
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <Checkbox
-                        checked={f.enabled}
-                        onCheckedChange={(c) => handleFieldChange(idx, { enabled: Boolean(c) })}
-                      />
-                      <div className="flex flex-col min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-xs font-semibold text-foreground truncate">
-                            {f.name}
-                          </span>
-                          {f.required ? (
-                            <Badge
-                              variant="outline"
-                              className="text-[8.5px] px-1 py-0 border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 font-medium"
-                            >
-                              Required
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary" className="text-[8.5px] px-1 py-0 text-muted-foreground">
-                              Optional
-                            </Badge>
-                          )}
-                          <span className="text-[9px] text-muted-foreground/70 font-mono">
-                            [{f.source}]
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-muted-foreground truncate">{f.label}</span>
-                      </div>
-                    </div>
-
-                    {/* Right: Component Type Override & State Var */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Select
-                        value={f.suggestedComponentType}
-                        onValueChange={(val) =>
-                          handleFieldChange(idx, { suggestedComponentType: val as ComponentBindingType })
-                        }
-                      >
-                        <SelectTrigger className="h-7 text-[11px] bg-background w-28">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="input">
-                            <div className="flex items-center gap-1.5">
-                              <FormInput size={11} />
-                              <span>Input</span>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="switch">
-                            <div className="flex items-center gap-1.5">
-                              <ToggleLeft size={11} />
-                              <span>Switch</span>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="checkbox">
-                            <div className="flex items-center gap-1.5">
-                              <SquareCheck size={11} />
-                              <span>Checkbox</span>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="select">
-                            <div className="flex items-center gap-1.5">
-                              <ChevronDownSquare size={11} />
-                              <span>Select</span>
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      <Input
-                        value={f.stateVarName}
-                        onChange={(e) => handleFieldChange(idx, { stateVarName: e.target.value })}
-                        placeholder="varName"
-                        className="h-7 text-[11px] font-mono bg-background w-28"
-                        title="State variable name"
-                      />
-                    </div>
-                  </div>
+                    field={f}
+                    idx={idx}
+                    onToggle={handleFieldToggle}
+                    onChange={handleFieldChange}
+                  />
                 ))}
               </div>
 
-              {/* Optional Response Variables when inputs exist */}
-              {responseFieldConfigs.length > 0 && (
-                <div className="p-3 rounded-xl bg-purple-500/[0.04] border border-purple-500/20 space-y-2.5 mt-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      <Database size={13} className="text-purple-500" />
-                      <span>Response Variables (Zustand Store)</span>
-                    </Label>
-                    <span className="text-[10px] text-muted-foreground font-mono">
-                      ({enabledResponseCount}/{responseFieldConfigs.length} selected)
-                    </span>
-                  </div>
-                  <p className="text-[10.5px] text-muted-foreground">
-                    Save response fields returned by this endpoint into your Zustand store:
-                  </p>
-                  <div className="border border-border/70 rounded-lg overflow-hidden divide-y divide-border/40 bg-card">
-                    {responseFieldConfigs.map((rf, idx) => (
-                      <div
-                        key={rf.id}
-                        className={cn(
-                          "p-2 flex items-center justify-between text-xs transition-colors",
-                          rf.enabled ? "bg-background/80" : "bg-muted/15 opacity-60",
-                        )}
-                      >
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <Checkbox
-                            checked={rf.enabled}
-                            onCheckedChange={(chk) => handleResponseFieldToggle(idx, Boolean(chk))}
-                          />
-                          <span className="font-mono text-foreground font-medium text-xs">{rf.name}</span>
-                        </label>
-                        <Badge variant="outline" className="text-[9px] font-mono px-1 py-0 border-muted">
-                          {rf.type}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-background/60 border border-border/50 text-xs">
-                    <div className="flex flex-col">
-                      <span className="font-medium text-foreground text-[11px]">
-                        Render Response Variables on UI
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        Auto-generate reactive display cards/badges bound to response store variables
-                      </span>
-                    </div>
-                    <Switch
-                      checked={autoGenerateResponseUi}
-                      onCheckedChange={setAutoGenerateResponseUi}
-                    />
-                  </div>
-                </div>
-              )}
+              {renderResponseVariablesSection()}
             </div>
           )}
 
@@ -756,29 +924,62 @@ export const GenerateFormFromEndpointDialog: React.FC<GenerateFormFromEndpointDi
         </div>
 
         {/* Footer */}
-        <DialogFooter className="p-4 border-t border-border/50 bg-secondary/10 flex items-center justify-between sm:justify-between">
-          <div className="text-[11px] text-muted-foreground">
+        <DialogFooter className="p-3.5 px-5 border-t border-border/50 bg-secondary/10 flex items-center justify-between sm:justify-between gap-4">
+          <div className="flex items-center gap-2 min-w-0 flex-1 text-xs text-muted-foreground">
             {hasInputFields && enabledCount > 0 ? (
-              <span>
-                Will generate <strong className="text-foreground">{enabledCount} inputs</strong> +{" "}
-                <strong className="text-foreground">1 submit button</strong>
-              </span>
+              <>
+                <Sparkles size={13} className="text-indigo-500 shrink-0" />
+                <span className="truncate">
+                  Will generate <strong className="text-foreground font-semibold">{enabledCount} {enabledCount === 1 ? "input" : "inputs"}</strong> +{" "}
+                  <strong className="text-foreground font-semibold">1 submit button</strong>
+                  {enabledResponseUiCount > 0 && (
+                    <>
+                      {" "}+{" "}
+                      <strong className="text-purple-600 dark:text-purple-400 font-semibold">
+                        {enabledResponseUiCount} response {enabledResponseUiCount === 1 ? "element" : "elements"}
+                      </strong>
+                    </>
+                  )}
+                </span>
+              </>
             ) : hasInputFields && enabledCount === 0 ? (
-              <span>
-                Will generate <strong className="text-foreground">1 trigger button</strong> (no inputs)
-              </span>
+              <>
+                <Sparkles size={13} className="text-amber-500 shrink-0" />
+                <span className="truncate">
+                  Will generate <strong className="text-foreground font-semibold">1 trigger button</strong> (no form inputs)
+                  {enabledResponseUiCount > 0 && (
+                    <>
+                      {" "}+{" "}
+                      <strong className="text-purple-600 dark:text-purple-400 font-semibold">
+                        {enabledResponseUiCount} response {enabledResponseUiCount === 1 ? "element" : "elements"}
+                      </strong>
+                    </>
+                  )}
+                </span>
+              </>
             ) : (
-              <span className="text-foreground flex items-center gap-1.5 font-medium">
-                <Sparkles size={12} className="text-blue-500" />
-                Will generate <strong>{submitButtonLabel || "Action"}</strong> button wired to{" "}
-                <code className="text-[10px] bg-muted px-1 py-0.5 rounded font-mono">
-                  {selectedItem?.endpoint.type} {selectedItem?.endpoint.name}
-                </code>
-              </span>
+              <>
+                <Sparkles size={13} className="text-blue-500 shrink-0" />
+                <span className="truncate">
+                  Will generate <strong className="text-foreground font-semibold">{submitButtonLabel || "Action"}</strong> button
+                  {enabledResponseUiCount > 0 && (
+                    <>
+                      {" "}+{" "}
+                      <strong className="text-purple-600 dark:text-purple-400 font-semibold">
+                        {enabledResponseUiCount} response {enabledResponseUiCount === 1 ? "element" : "elements"}
+                      </strong>
+                    </>
+                  )}
+                  {" "}wired to{" "}
+                  <code className="text-[10px] bg-muted/80 border border-border/50 px-1.5 py-0.5 rounded font-mono font-medium text-foreground">
+                    {selectedItem?.endpoint.type} {selectedItem?.endpoint.name}
+                  </code>
+                </span>
+              </>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Button
               type="button"
               variant="outline"

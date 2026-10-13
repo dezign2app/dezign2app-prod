@@ -521,5 +521,108 @@ describe("endpointFormGenerator", () => {
       expect(numEl).toBeDefined();
       expect(numEl?.elementType).toBe("card"); // number response maps to card
     });
+
+    it("honors custom componentType and stateVarName specified in selectedResponseFields", () => {
+      const ep: Endpoint = {
+        id: "ep-chat",
+        name: "/api/chat",
+        type: "POST",
+        responseBody: {
+          id: "rb-chat",
+          fields: [
+            { id: "rf-msg", name: "replyText", type: "string", required: false },
+            { id: "rf-err", name: "errorMessage", type: "string", required: false },
+          ],
+        },
+      };
+
+      const webPageNode: BackendNode = {
+        id: "node-page-chat",
+        type: "webPage",
+        position: { x: 300, y: 100 },
+        fractionalIndex: "a0",
+        data: {
+          label: "/chat",
+          sections: [
+            {
+              id: "sec-chat",
+              name: "ChatSection",
+              actions: [],
+              componentBindings: [],
+            },
+          ],
+        },
+      };
+
+      const serviceNode: BackendNode = {
+        id: "node-service-chat",
+        type: "service",
+        position: { x: 700, y: 100 },
+        fractionalIndex: "a1",
+        data: { label: "ChatService" },
+      };
+
+      const storeNode: BackendNode = {
+        id: "node-store-chat",
+        type: "state_store",
+        position: { x: 100, y: 100 },
+        fractionalIndex: "a2",
+        data: {
+          label: "ChatStore",
+          storeName: "Chat",
+          fields: [],
+          actions: [],
+        },
+      };
+
+      const result = generateFormFromEndpoint({
+        endpoint: ep,
+        serviceNode,
+        webPageNode,
+        sectionId: "sec-chat",
+        formName: "ChatWidget",
+        submitButtonLabel: "Send Message",
+        stateStorageMode: "store",
+        targetStoreNodeId: storeNode.id,
+        selectedFields: [],
+        selectedResponseFields: [
+          {
+            name: "replyText",
+            type: "string",
+            componentType: "card",
+            stateVarName: "lastBotMessage",
+            renderUi: true,
+          },
+          {
+            name: "errorMessage",
+            type: "string",
+            componentType: "alert",
+            stateVarName: "chatError",
+            renderUi: true,
+          },
+        ],
+        autoGenerateResponseUi: true,
+        nodes: [webPageNode, serviceNode, storeNode],
+        edges: [],
+      });
+
+      const section = result.updatedWebPageNode.data?.sections?.[0];
+      const comp = section?.componentBindings?.[0];
+      expect(comp).toBeDefined();
+
+      const replyEl = comp?.elements?.find((el) => el.valueStateName === "lastBotMessage");
+      expect(replyEl).toBeDefined();
+      expect(replyEl?.elementType).toBe("card");
+
+      const errorEl = comp?.elements?.find((el) => el.valueStateName === "chatError");
+      expect(errorEl).toBeDefined();
+      expect(errorEl?.elementType).toBe("alert");
+
+      // Verify action binding uses custom stateVarName
+      const action = section?.actions?.find((a) => a.id === result.createdActionId);
+      const replyBinding = action?.storeActionBindings?.find((b) => b.valuePath === "replyText");
+      expect(replyBinding?.targetFieldName).toBe("lastBotMessage");
+      expect(replyBinding?.actionName).toBe("setLastBotMessage");
+    });
   });
 });
