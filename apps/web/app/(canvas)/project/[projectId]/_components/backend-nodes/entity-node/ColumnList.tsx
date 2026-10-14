@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, Clock } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { ColumnItem, ColumnRow } from "./ColumnRow";
 import { EntityRenameDialog } from "./EntityRenameDialog";
@@ -50,6 +50,8 @@ export const ColumnList = ({
   const hasLiveConnection = Boolean(
     dbData.connectionString ||
       dbData.connectionStringEnv ||
+      dbData.connectionStringPooled ||
+      dbData.connectionStringPooledEnv ||
       dbData.host ||
       dbData.dbFilePath ||
       dbData.dbFilePathEnv,
@@ -77,6 +79,26 @@ export const ColumnList = ({
     setEditingName("");
     setEditingType("TEXT");
     setNameError(false);
+  };
+
+  const hasCreatedAt = items.some(
+    (c) => c.name?.toLowerCase().replace(/[^a-z0-9]/g, "") === "createdat",
+  );
+  const hasUpdatedAt = items.some(
+    (c) => c.name?.toLowerCase().replace(/[^a-z0-9]/g, "") === "updatedat",
+  );
+  const missingTimestamps = !isVector && data?.dbType !== "redis" && (!hasCreatedAt || !hasUpdatedAt);
+
+  const handleAddTimestamps = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const toAdd: ColumnItem[] = [];
+    if (!hasCreatedAt) toAdd.push({ name: "created_at", type: "TIMESTAMPTZ" });
+    if (!hasUpdatedAt) toAdd.push({ name: "updated_at", type: "TIMESTAMPTZ" });
+    if (toAdd.length > 0) {
+      updateNode(nodeId, { data: syncNodeData([...items, ...toAdd]) });
+      syncDerivedTypesForEntity(nodeId, { openConfig: false });
+      toast.success("Added timestamp columns (created_at, updated_at)");
+    }
   };
 
   const applyColumnUpdate = (index: number, changes: Partial<ColumnItem>) => {
@@ -162,8 +184,12 @@ export const ColumnList = ({
           database: dbData.database,
           user: dbData.user || dbData.username,
           password: dbData.password,
-          connectionString: dbData.connectionString,
+          connectionString: dbData.connectionString || dbData.connectionStringPooled,
           connectionStringEnv: dbData.connectionStringEnv,
+          connectionStringPooled: dbData.connectionStringPooled,
+          connectionStringPooledEnv: dbData.connectionStringPooledEnv,
+          sslMode: dbData.sslMode,
+          provider: dbData.provider,
           dbFilePath: dbData.dbFilePath,
           dbFilePathEnv: dbData.dbFilePathEnv,
         },
@@ -226,15 +252,26 @@ export const ColumnList = ({
           )}
         </div>
         {!data?.readOnly && (
-          <div
-            className="opacity-0 group-hover:opacity-100 cursor-pointer text-muted-foreground hover:text-foreground transition-all p-0.5"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleAdd();
-            }}
-            title="Add Column"
-          >
-            <Plus size={12} />
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+            {missingTimestamps && (
+              <div
+                className="cursor-pointer text-muted-foreground hover:text-amber-500 p-0.5"
+                onClick={handleAddTimestamps}
+                title="Add timestamp columns (created_at, updated_at)"
+              >
+                <Clock size={12} />
+              </div>
+            )}
+            <div
+              className="cursor-pointer text-muted-foreground hover:text-foreground transition-all p-0.5"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAdd();
+              }}
+              title="Add Column"
+            >
+              <Plus size={12} />
+            </div>
           </div>
         )}
       </div>

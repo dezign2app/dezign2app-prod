@@ -38,12 +38,22 @@ export function generateDefaultDbOperations(
   const pkType = sqlColumnToTsType(pkCol.type);
 
   const writableCols: RawTableColumn[] = columns.filter((c) => !c.isPrimaryKey);
+  const isCreatedAt = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === "createdat";
+  const isUpdatedAt = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === "updatedat";
+
   const isStringPk = pkType === "string";
   const insertColList: RawTableColumn[] = isStringPk ? [pkCol, ...writableCols] : writableCols;
   const insertCols = insertColList.map((c) => c.name).join(", ");
   const insertPlaceholders = insertColList.map(() => "?").join(", ");
   const insertBindArgs = insertColList
-    .map((c) => (c.isPrimaryKey ? `_rowId` : `data.${toVarName(c.name)}`))
+    .map((c) => {
+      if (c.isPrimaryKey) return `_rowId`;
+      const v = `data.${toVarName(c.name)}`;
+      if (isCreatedAt(c.name) || isUpdatedAt(c.name)) {
+        return `(${v} || new Date().toISOString())`;
+      }
+      return v;
+    })
     .join(", ");
 
   const rowIdExpr =
@@ -66,8 +76,19 @@ export function generateDefaultDbOperations(
       }  return { ${pkColName}: _rowId, ${createMsgSnippet}...data } as unknown as ${pascal};\n}`
     : `export function create${pascalSingular}(): ${pascal} {\n  const info = db.prepare("INSERT INTO ${tableName} DEFAULT VALUES").run();\n  const _rowId = ${rowIdExpr};\n  return { ${pkColName}: _rowId${createDefaultMsgSnippet} } as unknown as ${pascal};\n}`;
 
-  const updateCode = writableCols.length > 0
-    ? `export function update${pascalSingular}(${pkVarName}: ${pkType}, data: Update${pascal}Data): ${pascal} | undefined {\n  const current = find${pascalSingular}ById(${pkVarName});\n  if (!current) return undefined;\n  const updated = { ...current, ...data };\n  stmtUpdate.run(${writableCols.map((c) => `updated.${toVarName(c.name)}`).join(", ")}, ${pkVarName});\n  const fresh = find${pascalSingular}ById(${pkVarName});\n  return fresh ? ({ ...fresh${updateMsgSnippet} } as unknown as ${pascal}) : undefined;\n}`
+  const updateCols = writableCols.filter((c) => !isCreatedAt(c.name));
+  const updateBindArgs = updateCols
+    .map((c) => {
+      const v = `updated.${toVarName(c.name)}`;
+      if (isUpdatedAt(c.name)) {
+        return `(${v} || new Date().toISOString())`;
+      }
+      return v;
+    })
+    .join(", ");
+
+  const updateCode = updateCols.length > 0
+    ? `export function update${pascalSingular}(${pkVarName}: ${pkType}, data: Update${pascal}Data): ${pascal} | undefined {\n  const current = find${pascalSingular}ById(${pkVarName});\n  if (!current) return undefined;\n  const updated = { ...current, ...data };\n  stmtUpdate.run(${updateBindArgs}, ${pkVarName});\n  const fresh = find${pascalSingular}ById(${pkVarName});\n  return fresh ? ({ ...fresh${updateMsgSnippet} } as unknown as ${pascal}) : undefined;\n}`
     : `export function update${pascalSingular}(${pkVarName}: ${pkType}): ${pascal} | undefined {\n  const fresh = find${pascalSingular}ById(${pkVarName});\n  return fresh ? ({ ...fresh${updateMsgSnippet} } as unknown as ${pascal}) : undefined;\n}`;
 
   const upsertConflictList = writableCols.length > 0

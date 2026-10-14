@@ -40,14 +40,48 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
 
   const columns = data.columns || [];
   const indexes = data.indexes || [];
+  const isVector = data.dbType === "vector";
+
+  // Ensure default columns (id, created_at, updated_at) for relational tables
+  React.useEffect(() => {
+    if (isVector || data.dbType === "redis" || data.readOnly) return;
+
+    if (!data.columns || data.columns.length === 0) {
+      updateNode(id, {
+        data: {
+          ...data,
+          columns: [
+            { name: "id", type: "TEXT", isPrimaryKey: true },
+            { name: "created_at", type: "TIMESTAMPTZ" },
+            { name: "updated_at", type: "TIMESTAMPTZ" },
+          ],
+        },
+      });
+      return;
+    }
+
+    if (
+      data.columns.length === 1 &&
+      data.columns[0]?.name?.toLowerCase() === "id"
+    ) {
+      updateNode(id, {
+        data: {
+          ...data,
+          columns: [
+            ...data.columns,
+            { name: "created_at", type: "TIMESTAMPTZ" },
+            { name: "updated_at", type: "TIMESTAMPTZ" },
+          ],
+        },
+      });
+    }
+  }, [id, isVector, data.dbType, data.readOnly, data.columns, updateNode]);
 
   const [renameDialogOpen, setRenameDialogOpen] = React.useState(false);
   const [pendingRename, setPendingRename] = React.useState<{
     oldName: string;
     newName: string;
   } | null>(null);
-
-  const isVector = data.dbType === "vector";
 
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
@@ -61,6 +95,8 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const hasLiveConnection = Boolean(
     dbData.connectionString ||
       dbData.connectionStringEnv ||
+      dbData.connectionStringPooled ||
+      dbData.connectionStringPooledEnv ||
       dbData.host ||
       dbData.dbFilePath ||
       dbData.dbFilePathEnv,
@@ -77,8 +113,12 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
           database: dbData.database,
           user: dbData.user || dbData.username,
           password: dbData.password,
-          connectionString: dbData.connectionString,
+          connectionString: dbData.connectionString || dbData.connectionStringPooled,
           connectionStringEnv: dbData.connectionStringEnv,
+          connectionStringPooled: dbData.connectionStringPooled,
+          connectionStringPooledEnv: dbData.connectionStringPooledEnv,
+          sslMode: dbData.sslMode,
+          provider: dbData.provider,
           dbFilePath: dbData.dbFilePath,
           dbFilePathEnv: dbData.dbFilePathEnv,
         },

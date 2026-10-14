@@ -58,6 +58,8 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
   const hasConnectionConfig = Boolean(
     dbData.connectionString ||
       dbData.connectionStringEnv ||
+      dbData.connectionStringPooled ||
+      dbData.connectionStringPooledEnv ||
       dbData.host ||
       dbData.dbFilePath ||
       dbData.dbFilePathEnv,
@@ -81,8 +83,12 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
           database: dbData.database,
           user: dbData.user || dbData.username,
           password: dbData.password,
-          connectionString: dbData.connectionString,
+          connectionString: dbData.connectionString || dbData.connectionStringPooled,
           connectionStringEnv: dbData.connectionStringEnv,
+          connectionStringPooled: dbData.connectionStringPooled,
+          connectionStringPooledEnv: dbData.connectionStringPooledEnv,
+          sslMode: dbData.sslMode,
+          provider: dbData.provider,
           dbFilePath: dbData.dbFilePath,
           dbFilePathEnv: dbData.dbFilePathEnv,
         },
@@ -209,7 +215,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
     );
   }
 
-  const isMissingTable = syncStatus?.tableExists === false;
+  const isMissingTable = Boolean(syncStatus?.serverReachable && syncStatus?.tableExists === false);
   const missingCols = syncStatus?.missingColumns || [];
   const extraCols = syncStatus?.extraColumns || [];
   const hasRemovalsOnly = missingCols.length === 0 && extraCols.length > 0;

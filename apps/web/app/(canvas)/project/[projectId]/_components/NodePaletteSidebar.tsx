@@ -524,7 +524,11 @@ function SchemaViewBody({ nodes, addNode, getCenterPosition }: SchemaViewBodyPro
       position: { x, y },
       data: {
         label: "",
-        columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
+        columns: [
+          { name: "id", type: "TEXT", isPrimaryKey: true },
+          { name: "created_at", type: "TIMESTAMPTZ" },
+          { name: "updated_at", type: "TIMESTAMPTZ" },
+        ],
         indexes: [],
         databaseId: dbId,
       },
