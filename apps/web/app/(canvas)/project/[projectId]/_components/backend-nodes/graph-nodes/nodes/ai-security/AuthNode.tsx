@@ -156,7 +156,7 @@ export const AuthNode = ({
             </SelectItem>
             {databaseNodes.map((db) => (
               <SelectItem key={db.id} value={db.id} className="text-xs font-mono">
-                {db.data?.label || "Database"} ({db.data?.dbEngine || "sqlite"})
+                {db.data?.label || "Database"} ({db.data?.dbEngine || "postgres"})
               </SelectItem>
             ))}
           </SelectContent>

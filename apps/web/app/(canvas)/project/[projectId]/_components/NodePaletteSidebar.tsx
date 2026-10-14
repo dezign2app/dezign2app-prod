@@ -30,6 +30,7 @@ import {
   DEFAULT_DATABASE_NODE_LABEL,
   DEFAULT_DATABASE_ENGINE,
   DEFAULT_DATABASE_ENV_VARS,
+  getDefaultNodeEnvVars,
 } from "@workspace/canvas";
 import { useCanvasCenterPosition } from "./hooks/useCanvasCenterPosition";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -473,6 +474,10 @@ function SchemaViewBody({ nodes, addNode, getCenterPosition }: SchemaViewBodyPro
         dbFilePathEnv: DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv,
         color: "#f59e0b",
         isDefault: true,
+        envVars: getDefaultNodeEnvVars("database", {
+          dbEngine: DEFAULT_DATABASE_ENGINE,
+          connectionStringEnv: DEFAULT_DATABASE_ENV_VARS.connectionStringEnv,
+        }),
       },
     });
   };
@@ -504,6 +509,10 @@ function SchemaViewBody({ nodes, addNode, getCenterPosition }: SchemaViewBodyPro
           dbFilePathEnv: DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv,
           color: "#f59e0b",
           isDefault: true,
+          envVars: getDefaultNodeEnvVars("database", {
+            dbEngine: DEFAULT_DATABASE_ENGINE,
+            connectionStringEnv: DEFAULT_DATABASE_ENV_VARS.connectionStringEnv,
+          }),
         },
       });
     }

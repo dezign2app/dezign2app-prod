@@ -279,10 +279,17 @@ function resolveEnvValue(name: string, packageNode?: BackendNode): string {
   }
 
   if (packageNode?.type === "database") {
-    if (name === "DATABASE_URL" && packageNode.data?.connectionString) {
+    const directKey = packageNode.data?.connectionStringEnv || "DATABASE_URL";
+    const pooledKey = packageNode.data?.connectionStringPooledEnv || "DATABASE_URL_POOLED";
+    const fileKey = packageNode.data?.dbFilePathEnv || "DB_FILE_PATH";
+
+    if ((name === directKey || name === "DATABASE_URL") && packageNode.data?.connectionString) {
       return packageNode.data.connectionString;
     }
-    if ((name === "DATABASE_PATH" || name === "DB_FILE_PATH") && packageNode.data?.dbFilePath) {
+    if ((name === pooledKey || name === "DATABASE_URL_POOLED") && packageNode.data?.connectionStringPooled) {
+      return packageNode.data.connectionStringPooled;
+    }
+    if ((name === fileKey || name === "DATABASE_PATH" || name === "DB_FILE_PATH") && packageNode.data?.dbFilePath) {
       return packageNode.data.dbFilePath;
     }
   }
@@ -377,6 +384,9 @@ export function inferExampleValue(name: string, nodeType?: string): string {
   if (n === "DATABASE_URL") {
     if (nodeType === "database") return "postgresql://user:password@localhost:5432/mydb";
     return "file:./local.db";
+  }
+  if (n === "DATABASE_URL_POOLED" || (n.includes("DATABASE") && n.includes("POOLED"))) {
+    return "postgresql://user:password@ep-pooler.aws.neon.tech/mydb?sslmode=require";
   }
   if (n === "DATABASE_PATH" || n === "DB_FILE_PATH") return "../../packages/db/sqlite.db";
   if (n === "REDIS_URL" || (n.endsWith("_URL") && n.includes("REDIS"))) return "redis://localhost:6379";

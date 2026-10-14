@@ -24,7 +24,7 @@ export const DbOperationsList: React.FC<DbOperationsListProps> = ({
 
   // Fallback to auto-generated operations if not explicitly initialized
   const parentDb = allNodes.find((n) => n.id === data.databaseId);
-  const engine = parentDb?.data?.dbEngine || "sqlite";
+  const engine = parentDb?.data?.dbEngine || "postgres";
   const dbOps: DbOperationFunction[] = getEntityDbOperations({ data }, allNodes, engine);
 
   const activeOps = dbOps.filter((op) => op.enabled !== false);

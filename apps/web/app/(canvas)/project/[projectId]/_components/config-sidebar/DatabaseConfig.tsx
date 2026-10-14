@@ -13,10 +13,14 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { BackendNode, DEFAULT_DATABASE_ENV_VARS, getUniqueNodeLabel, getDefaultNodeEnvVars } from "@workspace/canvas";
+import { BackendNode, DEFAULT_DATABASE_ENV_VARS, DEFAULT_DATABASE_ENGINE, getUniqueNodeLabel, getDefaultNodeEnvVars } from "@workspace/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+import { toast } from "sonner";
 import { DatabaseConnectionCheckCard } from "./database-config/DatabaseConnectionCheckCard";
+import { DatabaseProviderSection } from "./database-config/DatabaseProviderSection";
 import { NodeEnvVarsSection } from "./NodeEnvVarsSection";
+import { syncDatabaseEnvVarsList, syncDatabaseLocalEnv } from "@/lib/utils/databaseEnvSync";
+import { deleteLocalEnvVariable, saveLocalEnvVariable } from "@/lib/utils/localEnvSync";
 
 interface DatabaseConfigProps {
   id: string;
@@ -68,21 +72,46 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
 
   const data = dbNode.data || {};
   const label = data.label || "Primary Database";
-  const engine = data.dbEngine || "sqlite";
+  const engine = data.dbEngine || DEFAULT_DATABASE_ENGINE;
   const connStringEnv = data.connectionStringEnv || (engine === "redis" ? "REDIS_URL" : DEFAULT_DATABASE_ENV_VARS.connectionStringEnv);
   const dbFilePathEnv = data.dbFilePathEnv || DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv;
 
   const [showPassword, setShowPassword] = useState(false);
 
-  // Auto-seed default env vars if missing
+  // Reconcile and synchronize env vars whenever database configurations change
   useEffect(() => {
-    if (data.envVars === undefined) {
-      const defaults = getDefaultNodeEnvVars("database", data);
+    const desired = syncDatabaseEnvVarsList(data, data.envVars);
+    const current = (data.envVars as any[]) || [];
+    const isDifferent =
+      desired.length !== current.length ||
+      desired.some((d, idx) => d.name !== current[idx]?.name || d.id !== current[idx]?.id);
+
+    if (isDifferent) {
       updateNode(nodeId, {
-        data: { ...dbNode.data, envVars: defaults },
+        data: {
+          ...dbNode.data,
+          envVars: desired,
+        },
       });
     }
-  }, [nodeId, data.envVars, dbNode?.data, updateNode]);
+
+    // Ensure active connection values are synchronized to local .env
+    if (data.connectionString || data.connectionStringPooled || data.dbFilePath) {
+      syncDatabaseLocalEnv(data, data, id).catch(() => {});
+    }
+  }, [
+    nodeId,
+    id,
+    data.dbEngine,
+    data.provider,
+    data.connectionString,
+    data.connectionStringPooled,
+    data.connectionStringEnv,
+    data.connectionStringPooledEnv,
+    data.dbFilePathEnv,
+    data.dbFilePath,
+    updateNode,
+  ]);
 
   const isRedis = dbNode.type === "redis_instance" || engine === "redis";
   const isSqlite = engine === "sqlite";
@@ -122,16 +151,58 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
         : n.type !== "redis_schema" && n.data?.dbType !== "redis"),
   );
 
-  const handleUpdateField = <K extends keyof BackendNode["data"]>(
+  const handleUpdateField = async <K extends keyof BackendNode["data"]>(
     field: K,
     value: BackendNode["data"][K],
   ) => {
+    const nextData = {
+      ...data,
+      [field]: value,
+    };
+    nextData.envVars = syncDatabaseEnvVarsList(nextData, nextData.envVars);
+
     updateNode(nodeId, {
-      data: {
-        ...data,
-        [field]: value,
-      },
+      data: nextData,
     });
+
+    try {
+      await syncDatabaseLocalEnv(data, nextData, id);
+    } catch (err) {
+      console.warn("Failed to sync database env var to .env:", err);
+    }
+  };
+
+  const handleUpdateMultiple = async (fields: Partial<BackendNode["data"]>) => {
+    const nextData = {
+      ...data,
+      ...fields,
+    };
+    nextData.envVars = syncDatabaseEnvVarsList(nextData, nextData.envVars);
+
+    updateNode(nodeId, {
+      data: nextData,
+    });
+
+    try {
+      const { created, updated, deleted } = await syncDatabaseLocalEnv(data, nextData, id);
+      if (created.length > 0) {
+        toast.success(`Configured ${created.join(", ")} in .env`);
+      }
+      if (deleted.length > 0) {
+        toast.info(`Removed ${deleted.join(", ")} from .env`);
+      }
+    } catch (err) {
+      console.warn("Failed to sync database env vars to .env:", err);
+    }
+  };
+
+  const handleRemovePooledConnection = async () => {
+    const pooledKey = data.connectionStringPooledEnv || "DATABASE_URL_POOLED";
+    await deleteLocalEnvVariable(pooledKey, id);
+    await handleUpdateMultiple({
+      connectionStringPooled: "",
+    });
+    toast.info(`Removed ${pooledKey} from configuration and .env`);
   };
 
   const handleAddTableToDb = () => {
@@ -282,13 +353,13 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="sqlite" className="text-xs">
-                SQLite 3.x (Relational)
-              </SelectItem>
               <SelectItem value="postgres" className="text-xs">
                 PostgreSQL (Relational)
               </SelectItem>
-              <SelectItem value="mysql" className="text-xs">
+              <SelectItem value="sqlite" className="text-xs">
+                SQLite 3.x (Relational)
+              </SelectItem>
+              {/* <SelectItem value="mysql" className="text-xs">
                 MySQL (Relational)
               </SelectItem>
               <SelectItem value="mongodb" className="text-xs">
@@ -299,7 +370,7 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
               </SelectItem>
               <SelectItem value="pinecone" className="text-xs">
                 Pinecone (Vector)
-              </SelectItem>
+              </SelectItem> */}
             </SelectContent>
           </Select>
         </div>
@@ -466,108 +537,131 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
-            {/* Host & Port */}
-            <div className="grid grid-cols-3 gap-3">
-              {/* Host */}
-              <div className="col-span-2 space-y-1.5">
-                <Label className="text-xs font-semibold">Host / Hostname</Label>
-                <Input
-                  value={data.host || "localhost"}
-                  onChange={(e) => handleUpdateField("host", e.target.value)}
-                  placeholder="localhost or 127.0.0.1"
-                  className="h-8 text-xs font-mono"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  {isRedis ? "Redis daemon binding host (local or remote)." : "Database host address."}
-                </p>
-              </div>
+          <div className="space-y-4">
+            {/* Database Provider Presets & Cloud Config for PostgreSQL */}
+            {isPostgres && (
+              <DatabaseProviderSection
+                data={data}
+                onUpdateField={handleUpdateField}
+                onUpdateMultiple={handleUpdateMultiple}
+              />
+            )}
 
-              {/* Port */}
-              <div className="col-span-1 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-semibold">Port</Label>
-                  {portConflict && (
-                    <span title={`Conflict with ${portConflict.data?.label || "another instance"}`}>
-                      <AlertTriangle size={12} className="text-amber-500" />
-                    </span>
-                  )}
-                </div>
-                <Input
-                  type="number"
-                  value={data.port ?? (isRedis ? "6379" : "5432")}
-                  onChange={(e) => {
-                    const val = e.target.value ? e.target.value : undefined;
-                    handleUpdateField("port", val);
-                  }}
-                  placeholder={isRedis ? "6379" : "5432"}
-                  className={cn(
-                    "h-8 text-xs font-mono",
-                    portConflict && "border-amber-500/70 focus-visible:ring-amber-500/50"
-                  )}
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  {isRedis ? "Default: 6379" : "Port"}
-                </p>
-              </div>
-            </div>
-
-            {/* Relational / PostgreSQL Credentials: Database Name, Username, Password */}
-            {isRelational && !isSqlite && (
+            {/* Manual Host & Port Parameters (shown for non-Postgres or when in params mode or local) */}
+            {(!isPostgres || data.dbConnectionType !== "connection_string" || data.provider === "local") && (
               <div className="space-y-3 pt-2 border-t border-border/40">
-                {/* Database Name */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Database Name</Label>
-                  <Input
-                    value={data.database ?? (isPostgres ? "postgres" : "")}
-                    onChange={(e) => handleUpdateField("database", e.target.value)}
-                    placeholder={isPostgres ? "postgres" : "my_database"}
-                    className="h-8 text-xs font-mono"
-                  />
-                  <p className="text-[10px] text-muted-foreground">
-                    Target database on the server (default: {isPostgres ? "postgres" : "database"}).
-                  </p>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    {isPostgres ? "Host & Port Parameters" : "Connection Parameters"}
+                  </span>
+                  <Badge variant="outline" className="text-[9px] font-mono">
+                    Manual Config
+                  </Badge>
                 </div>
 
-                {/* Username & Password */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Username</Label>
+                {/* Host & Port */}
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Host */}
+                  <div className="col-span-2 space-y-1.5">
+                    <Label className="text-xs font-semibold">Host / Hostname</Label>
                     <Input
-                      value={data.user ?? data.username ?? (isPostgres ? "postgres" : "root")}
-                      onChange={(e) => handleUpdateField("user", e.target.value)}
-                      placeholder={isPostgres ? "postgres" : "root"}
+                      value={data.host || "localhost"}
+                      onChange={(e) => handleUpdateField("host", e.target.value)}
+                      placeholder="localhost or 127.0.0.1"
                       className="h-8 text-xs font-mono"
                     />
                     <p className="text-[10px] text-muted-foreground">
-                      User role with read/write access.
+                      {isRedis ? "Redis daemon binding host (local or remote)." : "Database host address."}
                     </p>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Password</Label>
-                    <div className="relative">
-                      <Input
-                        type={showPassword ? "text" : "password"}
-                        value={data.password || ""}
-                        onChange={(e) => handleUpdateField("password", e.target.value)}
-                        placeholder="••••••••"
-                        className="h-8 text-xs font-mono pr-8"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        tabIndex={-1}
-                      >
-                        {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
+                  {/* Port */}
+                  <div className="col-span-1 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold">Port</Label>
+                      {portConflict && (
+                        <span title={`Conflict with ${portConflict.data?.label || "another instance"}`}>
+                          <AlertTriangle size={12} className="text-amber-500" />
+                        </span>
+                      )}
                     </div>
+                    <Input
+                      type="number"
+                      value={data.port ?? (isRedis ? "6379" : "5432")}
+                      onChange={(e) => {
+                        const val = e.target.value ? e.target.value : undefined;
+                        handleUpdateField("port", val);
+                      }}
+                      placeholder={isRedis ? "6379" : "5432"}
+                      className={cn(
+                        "h-8 text-xs font-mono",
+                        portConflict && "border-amber-500/70 focus-visible:ring-amber-500/50"
+                      )}
+                    />
                     <p className="text-[10px] text-muted-foreground">
-                      User password (leave empty if none).
+                      {isRedis ? "Default: 6379" : "Port"}
                     </p>
                   </div>
                 </div>
+
+                {/* Relational / PostgreSQL Credentials: Database Name, Username, Password */}
+                {isRelational && !isSqlite && (
+                  <div className="space-y-3 pt-2 border-t border-border/40">
+                    {/* Database Name */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">Database Name</Label>
+                      <Input
+                        value={data.database ?? (isPostgres ? "postgres" : "")}
+                        onChange={(e) => handleUpdateField("database", e.target.value)}
+                        placeholder={isPostgres ? "postgres" : "my_database"}
+                        className="h-8 text-xs font-mono"
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        Target database on the server (default: {isPostgres ? "postgres" : "database"}).
+                      </p>
+                    </div>
+
+                    {/* Username & Password */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Username</Label>
+                        <Input
+                          value={data.user ?? data.username ?? (isPostgres ? "postgres" : "root")}
+                          onChange={(e) => handleUpdateField("user", e.target.value)}
+                          placeholder={isPostgres ? "postgres" : "root"}
+                          className="h-8 text-xs font-mono"
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                          User role with read/write access.
+                        </p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Password</Label>
+                        <div className="relative">
+                          <Input
+                            type={showPassword ? "text" : "password"}
+                            value={data.password || ""}
+                            onChange={(e) => handleUpdateField("password", e.target.value)}
+                            placeholder="••••••••"
+                            className="h-8 text-xs font-mono pr-8"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            tabIndex={-1}
+                          >
+                            {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">
+                          User password (leave empty if none).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -593,16 +687,56 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
           </div>
         )}
 
-        {/* Connection URL Live Preview for PostgreSQL */}
+        {/* Connection URL Live Preview for PostgreSQL (Direct & Pooled) */}
         {isPostgres && (
-          <div className="p-2.5 rounded-lg bg-secondary/30 border border-border/40 flex items-center justify-between text-xs font-mono">
-            <span className="text-muted-foreground text-[10px] uppercase font-sans font-bold">URI Preview:</span>
-            <code
-              className="text-blue-600 dark:text-blue-400 text-xs font-bold truncate"
-              title={`postgresql://${data.user || data.username || "postgres"}:${data.password ? "••••••••" : ""}@${currentHost}:${currentPort}/${data.database || "postgres"}`}
-            >
-              postgresql://{data.user || data.username || "postgres"}:{data.password ? "••••••••" : ""}@{currentHost}:{currentPort}/{data.database || "postgres"}
-            </code>
+          <div className="space-y-2">
+            <div className="p-2.5 rounded-lg bg-secondary/30 border border-border/40 flex items-center justify-between text-xs font-mono">
+              <span className="text-muted-foreground text-[10px] uppercase font-sans font-bold flex items-center gap-1.5">
+                <span>Direct URI:</span>
+                {data.provider && data.provider !== "local" && (
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30">
+                    {data.provider}
+                  </Badge>
+                )}
+              </span>
+              <code
+                className="text-blue-600 dark:text-blue-400 text-xs font-bold truncate max-w-[280px]"
+                title={data.connectionString || `postgresql://${data.user || data.username || "postgres"}:${data.password ? "••••••••" : ""}@${currentHost}:${currentPort}/${data.database || "postgres"}`}
+              >
+                {data.connectionString
+                  ? data.connectionString.replace(/:([^:@]+)@/, ":••••••••@")
+                  : `postgresql://${data.user || data.username || "postgres"}:${data.password ? "••••••••" : ""}@${currentHost}:${currentPort}/${data.database || "postgres"}`}
+              </code>
+            </div>
+
+            {data.connectionStringPooled && (
+              <div className="p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/25 flex items-center justify-between text-xs font-mono">
+                <span className="text-emerald-600 dark:text-emerald-400 text-[10px] uppercase font-sans font-bold flex items-center gap-1.5">
+                  <span>Pooled URI:</span>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-semibold">
+                    Pooler
+                  </Badge>
+                </span>
+                <div className="flex items-center gap-1.5 max-w-[280px]">
+                  <code
+                    className="text-emerald-600 dark:text-emerald-400 text-xs font-bold truncate"
+                    title={data.connectionStringPooled}
+                  >
+                    {data.connectionStringPooled.replace(/:([^:@]+)@/, ":••••••••@")}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0 cursor-pointer"
+                    title="Remove Pooled Connection (.env)"
+                    onClick={handleRemovePooledConnection}
+                  >
+                    <Trash size={12} />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -615,6 +749,7 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
           database={data.database}
           user={data.user || data.username}
           password={data.password}
+          connectionString={data.connectionString}
           connectionStringEnv={connStringEnv}
           dbFilePath={dbFilePath}
           dbFilePathEnv={dbFilePathEnv}
@@ -642,6 +777,39 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
             Environment variable holding the connection URI (`process.env.{connStringEnv}`).
           </p>
         </div>
+
+        {/* Optional Pooled Connection String ENV Key for Neon & Supabase */}
+        {isPostgres && (data.connectionStringPooled || data.provider === "neon" || data.provider === "supabase") && (
+          <div className="space-y-1.5 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <DatabaseZap size={12} />
+                Pooled Connection String ENV Key
+              </Label>
+              {data.connectionStringPooled && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 text-[10px] text-destructive hover:bg-destructive/10 px-1.5 gap-1 cursor-pointer"
+                  onClick={handleRemovePooledConnection}
+                >
+                  <Trash size={10} />
+                  Remove from .env
+                </Button>
+              )}
+            </div>
+            <Input
+              value={data.connectionStringPooledEnv || "DATABASE_URL_POOLED"}
+              onChange={(e) => handleUpdateField("connectionStringPooledEnv", e.target.value)}
+              placeholder="DATABASE_URL_POOLED or DIRECT_URL"
+              className="h-8 text-xs font-mono bg-background"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Environment variable for serverless pooler (`process.env.{data.connectionStringPooledEnv || "DATABASE_URL_POOLED"}`).
+            </p>
+          </div>
+        )}
 
         {engine === "sqlite" && (
           <div className="space-y-1.5">

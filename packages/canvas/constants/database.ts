@@ -1,5 +1,5 @@
-export const DEFAULT_DATABASE_NODE_LABEL = "Primary SQLite DB";
-export const DEFAULT_DATABASE_ENGINE = "sqlite" as const;
+export const DEFAULT_DATABASE_NODE_LABEL = "Primary PostgreSQL DB";
+export const DEFAULT_DATABASE_ENGINE = "postgres" as const;
 
 export const DEFAULT_DATABASE_ENV_VARS = {
   connectionStringEnv: "DATABASE_URL",

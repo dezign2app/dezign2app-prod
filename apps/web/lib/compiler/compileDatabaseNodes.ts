@@ -598,7 +598,7 @@ export function compileDatabaseNodes(
     const rootDbPkg: CompiledDatabasePackage = {
       packageName: "@workspace/db",
       packageFolder: "",
-      dbEngine: primaryDbNode.data?.dbEngine || "sqlite",
+      dbEngine: primaryDbNode.data?.dbEngine || "postgres",
       databaseNodeId: primaryDbNode.id,
       databaseLabel: "db",
       files: centralFiles,

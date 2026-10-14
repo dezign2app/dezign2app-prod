@@ -25,9 +25,48 @@ export interface ExternalEnvVarsDrawerProps {
   className?: string;
 }
 
+export function getFallbackEnvVarValue(node: any, varName: string): string {
+  if (!node || !node.data || !varName) return "";
+  const name = cleanEnvVarName(varName);
+
+  if (node.type === "database") {
+    const directKey = cleanEnvVarName(node.data.connectionStringEnv || "DATABASE_URL");
+    const pooledKey = cleanEnvVarName(node.data.connectionStringPooledEnv || "DATABASE_URL_POOLED");
+    const fileKey = cleanEnvVarName(node.data.dbFilePathEnv || "DB_FILE_PATH");
+
+    if (name === directKey || name === "DATABASE_URL") {
+      return node.data.connectionString || "";
+    }
+    if (name === pooledKey || name === "DATABASE_URL_POOLED") {
+      return node.data.connectionStringPooled || "";
+    }
+    if (name === fileKey || name === "DB_FILE_PATH") {
+      return node.data.dbFilePath || "";
+    }
+  }
+
+  if (node.type === "storage") {
+    const accessKeyEnv = cleanEnvVarName(node.data.accessKeyIdEnv || "AWS_ACCESS_KEY_ID");
+    const secretKeyEnv = cleanEnvVarName(node.data.secretAccessKeyEnv || "AWS_SECRET_ACCESS_KEY");
+    if (name === accessKeyEnv) return node.data.accessKeyId || "";
+    if (name === secretKeyEnv) return node.data.secretAccessKey || "";
+    if (name === "AWS_REGION") return node.data.defaultRegion || "";
+    if (name === "S3_ENDPOINT_URL") return node.data.endpointUrl || "";
+  }
+
+  if (node.type === "external") {
+    const apiKeyEnv = cleanEnvVarName(node.data.apiKeyEnv || "API_KEY");
+    if (name === apiKeyEnv || name === "API_KEY") return node.data.apiKey || "";
+  }
+
+  return "";
+}
+
 interface EnvVarRowProps {
   id: string;
   name: string;
+  fallbackValue?: string;
+  onSaveSecretValue?: (val: string) => void;
   projectId?: string;
   isEditing: boolean;
   onStartEdit: () => void;
@@ -39,6 +78,8 @@ interface EnvVarRowProps {
 const EnvVarRow: React.FC<EnvVarRowProps> = ({
   id,
   name,
+  fallbackValue,
+  onSaveSecretValue,
   projectId,
   isEditing,
   onStartEdit,
@@ -47,9 +88,10 @@ const EnvVarRow: React.FC<EnvVarRowProps> = ({
   onDelete,
 }) => {
   const [tempName, setTempName] = useState(name);
-  const [secretVal, setSecretVal] = useState<string>(() =>
-    getLocalEnvVariable(name),
-  );
+  const [secretVal, setSecretVal] = useState<string>(() => {
+    const cached = getLocalEnvVariable(name);
+    return cached || fallbackValue || "";
+  });
   const [showSecret, setShowSecret] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -57,13 +99,26 @@ const EnvVarRow: React.FC<EnvVarRowProps> = ({
   useEffect(() => {
     setTempName(name);
     const cached = getLocalEnvVariable(name);
-    setSecretVal(cached);
+    const resolved = cached || fallbackValue || "";
+    setSecretVal(resolved);
+
+    // If fallback exists (e.g. from node.data.connectionString) and wasn't cached yet,
+    // persist it to local .env and localStorage
+    if (fallbackValue && !cached && name) {
+      saveLocalEnvVariable(name, fallbackValue, projectId).catch(() => {});
+    }
+
     if (name) {
       fetchLocalEnvVariable(name, projectId).then((val) => {
-        if (val) setSecretVal(val);
+        if (val) {
+          setSecretVal(val);
+        } else if (fallbackValue) {
+          setSecretVal(fallbackValue);
+          saveLocalEnvVariable(name, fallbackValue, projectId).catch(() => {});
+        }
       });
     }
-  }, [name, projectId]);
+  }, [name, projectId, fallbackValue]);
 
   const handleSaveSecret = useCallback(
     async (val: string, varName: string = name) => {
@@ -73,11 +128,14 @@ const EnvVarRow: React.FC<EnvVarRowProps> = ({
         await saveLocalEnvVariable(targetName, val, projectId);
         setIsSaved(true);
         setTimeout(() => setIsSaved(false), 2000);
+        if (onSaveSecretValue) {
+          onSaveSecretValue(val);
+        }
       } catch {
         toast.error("Failed to save to local .env");
       }
     },
-    [name, projectId],
+    [name, projectId, onSaveSecretValue],
   );
 
   const handleFinishEdit = useCallback(async () => {
@@ -422,22 +480,44 @@ export const ExternalEnvVarsDrawer: React.FC<ExternalEnvVarsDrawerProps> = ({
               </button>
             </div>
           ) : (
-            envVars.map((v) => (
-              <EnvVarRow
-                key={v.id}
-                id={v.id}
-                name={v.name}
-                projectId={projectId}
-                isEditing={editingId === v.id}
-                onStartEdit={() => {
-                  setEditingId(v.id);
-                  setEditingName(v.name);
-                }}
-                onSaveName={(name) => handleUpdateName(v.id, name)}
-                onCancelEdit={() => setEditingId(null)}
-                onDelete={() => handleDeleteVariable(v.id)}
-              />
-            ))
+            envVars.map((v) => {
+              const fallbackVal = getFallbackEnvVarValue(node, v.name);
+              return (
+                <EnvVarRow
+                  key={v.id}
+                  id={v.id}
+                  name={v.name}
+                  fallbackValue={fallbackVal}
+                  onSaveSecretValue={(val) => {
+                    if (node && node.data) {
+                      const clean = cleanEnvVarName(v.name);
+                      if (node.type === "database") {
+                        const directKey = cleanEnvVarName(node.data.connectionStringEnv || "DATABASE_URL");
+                        const pooledKey = cleanEnvVarName(node.data.connectionStringPooledEnv || "DATABASE_URL_POOLED");
+                        const fileKey = cleanEnvVarName(node.data.dbFilePathEnv || "DB_FILE_PATH");
+
+                        if (clean === directKey || clean === "DATABASE_URL") {
+                          updateNode(nodeId, { data: { ...node.data, connectionString: val } });
+                        } else if (clean === pooledKey || clean === "DATABASE_URL_POOLED") {
+                          updateNode(nodeId, { data: { ...node.data, connectionStringPooled: val } });
+                        } else if (clean === fileKey || clean === "DB_FILE_PATH") {
+                          updateNode(nodeId, { data: { ...node.data, dbFilePath: val } });
+                        }
+                      }
+                    }
+                  }}
+                  projectId={projectId}
+                  isEditing={editingId === v.id}
+                  onStartEdit={() => {
+                    setEditingId(v.id);
+                    setEditingName(v.name);
+                  }}
+                  onSaveName={(name) => handleUpdateName(v.id, name)}
+                  onCancelEdit={() => setEditingId(null)}
+                  onDelete={() => handleDeleteVariable(v.id)}
+                />
+              );
+            })
           )}
         </div>
       )}

@@ -52,7 +52,7 @@ export function useFunctionEditorState({
 
   const effectiveDbType: string =
     externalDbType ||
-    (isRedis ? "redis" : (parentDb?.data?.dbEngine || parentDb?.data?.dbType || "sqlite"));
+    (isRedis ? "redis" : (parentDb?.data?.dbEngine || parentDb?.data?.dbType || "postgres"));
 
   const pendingChangesRef = useRef<Partial<DbOperationFunction>>({});
   const debouncedSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -677,7 +677,7 @@ export function useFunctionEditorState({
           n.data?.dbType !== "redis",
       )
       .map((n) => {
-        const engine = n.data?.dbEngine || n.data?.dbType || "sqlite";
+        const engine = n.data?.dbEngine || n.data?.dbType || "postgres";
         const rawLabel = n.data?.label || `${engine.toUpperCase()} DB`;
         const cleanVar = `${toVarName(rawLabel)}Db`;
         return {

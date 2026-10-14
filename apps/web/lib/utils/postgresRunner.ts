@@ -183,8 +183,13 @@ export async function executePostgresLiveOperation(
   const pool = new Pool({
     connectionString,
     max: 3,
-    connectionTimeoutMillis: 5000,
-    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
+    ssl:
+      connectionString.includes("sslmode=require") ||
+      connectionString.includes("neon.tech") ||
+      connectionString.includes("supabase.co") ||
+      process.env.NODE_ENV === "production"
+        ? { rejectUnauthorized: false }
+        : undefined,
   });
 
   let client: import("pg").PoolClient | undefined;
@@ -410,8 +415,13 @@ export async function checkPostgresConnection(
   const pool = new Pool({
     connectionString,
     max: 1,
-    connectionTimeoutMillis: 5000,
-    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
+    ssl:
+      connectionString.includes("sslmode=require") ||
+      connectionString.includes("neon.tech") ||
+      connectionString.includes("supabase.co") ||
+      process.env.NODE_ENV === "production"
+        ? { rejectUnauthorized: false }
+        : undefined,
   });
 
   let client: import("pg").PoolClient | undefined;

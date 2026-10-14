@@ -19,7 +19,7 @@ export function generateDatabaseConnectionTest(
   engine: string,
   packageName: string = "@workspace/db",
 ): CompiledFile {
-  const normEngine = (engine || "sqlite").toLowerCase();
+  const normEngine = (engine || "postgres").toLowerCase();
 
   let testBody = "";
   if (normEngine.includes("postgres") || normEngine.includes("pg")) {
@@ -101,7 +101,7 @@ export function generateTableHelperTest(
     "table";
 
   const tableName = toTableName(rawLabel);
-  const normEngine = (engine || "sqlite").toLowerCase();
+  const normEngine = (engine || "postgres").toLowerCase();
   const isPostgresOrMysql =
     normEngine.includes("postgres") ||
     normEngine.includes("mysql") ||

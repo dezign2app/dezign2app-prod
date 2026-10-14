@@ -83,7 +83,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
 
   const dbType = isRedis
     ? "redis"
-    : (parentDb?.data?.dbEngine || parentDb?.data?.dbType || "sqlite");
+    : (parentDb?.data?.dbEngine || parentDb?.data?.dbType || "postgres");
 
   const currentOps: DbOperationFunction[] =
     node.data.dbOperations && node.data.dbOperations.length > 0
