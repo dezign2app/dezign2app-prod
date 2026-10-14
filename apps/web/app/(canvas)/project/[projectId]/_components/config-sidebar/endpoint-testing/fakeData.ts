@@ -268,8 +268,9 @@ export function getExpectedResponseBody(
 
       // Single spread or unnamed binding
       if (bindings.length === 1 && first && (first.argName === "_spread" || !first.argName)) {
-        if (first.source?.kind === "inline") {
-          const v = first.source.value;
+        const firstSource = first.source;
+        if (firstSource?.kind === "inline") {
+          const v = firstSource.value;
           if (typeof v === "string" && (v.trim().startsWith("{") || v.trim().startsWith("["))) {
             try {
               return JSON.parse(v);
@@ -277,7 +278,7 @@ export function getExpectedResponseBody(
           }
           return v ?? "success";
         }
-        if (first.source?.kind === "req_body") {
+        if (firstSource?.kind === "req_body") {
           return getInitialBody(endpoint);
         }
         return { data: "success" };
@@ -291,40 +292,59 @@ export function getExpectedResponseBody(
       for (const b of bindings) {
         const key = b.argName?.trim();
         if (!key) continue;
-
-        if (b.source?.kind === "inline") {
-          const v = b.source.value;
-          if (typeof v === "number" || typeof v === "boolean") {
-            obj[key] = v;
-          } else {
-            const strVal = String(v ?? "");
-            if (strVal === "${new Date().toISOString()}" || strVal.includes("toISOString")) {
-              obj[key] = new Date().toISOString();
-            } else if (strVal.includes("${") && strVal.includes("PORT")) {
-              obj[key] = servicePort;
-            } else if (strVal.includes("${") && (strVal.includes("service") || strVal.includes("name"))) {
-              obj[key] = serviceName;
-            } else if (!strVal.includes("${")) {
-              obj[key] = strVal;
-            } else {
-              obj[key] = generateFakeDataForField(key);
-            }
-          }
-        } else if (b.source?.kind === "req_body") {
-          const body = getInitialBody(endpoint);
-          if (b.source.field && typeof body === "object" && body !== null && !Array.isArray(body)) {
-            obj[key] = (body as JSONObject)[b.source.field] ?? generateFakeDataForField(key);
-          } else {
-            obj[key] = body;
-          }
-        } else if (b.source?.kind === "req_params") {
-          const param = endpoint.pathParams?.find((p) => p.name === b.source.field || p.key === b.source.field);
-          obj[key] = param?.defaultValue || param?.value || "1";
-        } else if (b.source?.kind === "req_query") {
-          const query = endpoint.queryParams?.find((p) => p.name === b.source.field || p.key === b.source.field);
-          obj[key] = query?.defaultValue || query?.value || "sample";
-        } else {
+        const source = b.source;
+        if (!source) {
           obj[key] = generateFakeDataForField(key);
+          continue;
+        }
+
+        switch (source.kind) {
+          case "inline": {
+            const v = source.value;
+            if (typeof v === "number" || typeof v === "boolean") {
+              obj[key] = v;
+            } else {
+              const strVal = String(v ?? "");
+              if (strVal === "${new Date().toISOString()}" || strVal.includes("toISOString")) {
+                obj[key] = new Date().toISOString();
+              } else if (strVal.includes("${") && strVal.includes("PORT")) {
+                obj[key] = servicePort;
+              } else if (strVal.includes("${") && (strVal.includes("service") || strVal.includes("name"))) {
+                obj[key] = serviceName;
+              } else if (!strVal.includes("${")) {
+                obj[key] = strVal;
+              } else {
+                obj[key] = generateFakeDataForField(key);
+              }
+            }
+            break;
+          }
+          case "req_body": {
+            const body = getInitialBody(endpoint);
+            const field = source.field;
+            if (field && typeof body === "object" && body !== null && !Array.isArray(body)) {
+              obj[key] = (body as JSONObject)[field] ?? generateFakeDataForField(key);
+            } else {
+              obj[key] = body;
+            }
+            break;
+          }
+          case "req_params": {
+            const field = source.field;
+            const param = endpoint.pathParams?.find((p) => p.name === field || p.key === field);
+            obj[key] = param?.defaultValue || param?.value || "1";
+            break;
+          }
+          case "req_query": {
+            const field = source.field;
+            const query = endpoint.queryParams?.find((p) => p.name === field || p.key === field);
+            obj[key] = query?.defaultValue || query?.value || "sample";
+            break;
+          }
+          default: {
+            obj[key] = generateFakeDataForField(key);
+            break;
+          }
         }
       }
 
