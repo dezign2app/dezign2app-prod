@@ -1,4 +1,5 @@
 import type { BetterAuthTableDefinition, AuthLifecycleHookDefinition, PaymentsTableDefinition } from "../types/auth";
+import type { AuthNodeData } from "../schemas/nodes/auth";
 import { DB_COLUMN_TYPES } from "./database";
 
 // ─── Auth Framework & Better Auth Options ───────────────────────────────────────
@@ -589,42 +590,49 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
 export interface BetterAuthTableRequirementOptions {
   isOrgEnabled?: boolean;
   enabledPlugins?: string[];
-  providers?: {
-    passkey?: boolean;
-    emailPassword?: {
-      enabled?: boolean;
-      rateLimit?: Record<string, unknown>;
-    };
-    [key: string]: unknown;
-  };
+  tableMappings?: Record<string, string | undefined>;
+  providers?: AuthNodeData["providers"];
 }
 
 export function isBetterAuthTableRequired(
   def: BetterAuthTableDefinition,
   options: BetterAuthTableRequirementOptions = {},
 ): boolean {
-  const { isOrgEnabled = true, enabledPlugins = [], providers } = options;
+  const { isOrgEnabled = true, enabledPlugins = [], tableMappings, providers } = options;
+
+  if (tableMappings && (tableMappings[def.key] || tableMappings[def.name])) {
+    return true;
+  }
 
   if (def.category === BETTER_AUTH_CATEGORIES.CORE) return true;
   if (def.category === BETTER_AUTH_CATEGORIES.ORGANIZATION) return isOrgEnabled;
 
   if (def.key === BETTER_AUTH_TABLE_KEYS.PASSKEY) {
-    return enabledPlugins.includes(BETTER_AUTH_PLUGINS.PASSKEY) || Boolean(providers?.passkey);
+    return (
+      enabledPlugins.includes(BETTER_AUTH_PLUGINS.PASSKEY) ||
+      Boolean(providers?.passkey) ||
+      Boolean(tableMappings?.passkeyEntityId)
+    );
   }
   if (def.key === BETTER_AUTH_TABLE_KEYS.TWO_FACTOR) {
-    return enabledPlugins.includes(BETTER_AUTH_PLUGINS.TWO_FACTOR);
+    return (
+      enabledPlugins.includes(BETTER_AUTH_PLUGINS.TWO_FACTOR) ||
+      Boolean(tableMappings?.twoFactorEntityId)
+    );
   }
   if (def.key === BETTER_AUTH_TABLE_KEYS.JWKS) {
     return (
       enabledPlugins.includes(BETTER_AUTH_PLUGINS.JWT) ||
-      enabledPlugins.includes(BETTER_AUTH_PLUGINS.BEARER)
+      enabledPlugins.includes(BETTER_AUTH_PLUGINS.BEARER) ||
+      Boolean(tableMappings?.jwksEntityId)
     );
   }
   if (def.key === BETTER_AUTH_TABLE_KEYS.RATE_LIMIT) {
     return (
       enabledPlugins.includes(BETTER_AUTH_PLUGINS.RATE_LIMIT) ||
       providers?.emailPassword?.enabled !== false ||
-      Boolean(providers?.emailPassword?.rateLimit)
+      Boolean(providers?.emailPassword?.rateLimit) ||
+      Boolean(tableMappings?.rateLimitEntityId)
     );
   }
 

@@ -150,6 +150,7 @@ export function compileDatabaseNodes(
             isOrgEnabled,
             enabledPlugins,
             providers: authNode.data?.providers,
+            tableMappings: authNode.data?.tableMappings,
           })
         ) {
           return;
@@ -195,6 +196,7 @@ export function compileDatabaseNodes(
             isOrgEnabled,
             enabledPlugins,
             providers: authNode.data?.providers,
+            tableMappings: authNode.data?.tableMappings,
           }) &&
           !existingEntityNames.has(def.name.toLowerCase()) &&
           !existingEntityNames.has(toSingular(def.name).toLowerCase()) &&

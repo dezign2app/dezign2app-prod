@@ -13,7 +13,14 @@ import {
   Sparkles,
   AlertTriangle,
 } from "lucide-react";
+import { CanvasEntityColumn } from "@workspace/canvas";
 import { BetterAuthTableRowProps } from "./types";
+
+interface CanvasEntityIndex {
+  name: string;
+  columns: string;
+  isUnique?: boolean;
+}
 
 export const BetterAuthTableRow: React.FC<BetterAuthTableRowProps> = ({
   def,
@@ -25,25 +32,25 @@ export const BetterAuthTableRow: React.FC<BetterAuthTableRowProps> = ({
 }) => {
   const mappedEntity = schemaEntities.find((e) => e.id === mappedId);
 
-  const existingCols =
+  const existingCols: CanvasEntityColumn[] =
     mappedEntity?.type === "entity" ? mappedEntity.data?.columns || [] : [];
   const missingColumns = mappedEntity
     ? def.defaultColumns.filter(
         (reqCol) =>
           !existingCols.some(
-            (c: any) => c.name.toLowerCase() === reqCol.name.toLowerCase(),
+            (c) => c.name.toLowerCase() === reqCol.name.toLowerCase(),
           ),
       )
     : [];
 
-  const existingIdxs =
+  const existingIdxs: CanvasEntityIndex[] =
     mappedEntity?.type === "entity" ? mappedEntity.data?.indexes || [] : [];
   const missingIndexes =
     mappedEntity && def.defaultIndexes
       ? def.defaultIndexes.filter(
           (reqIdx) =>
             !existingIdxs.some(
-              (idx: any) =>
+              (idx) =>
                 idx.name.toLowerCase() === reqIdx.name.toLowerCase() ||
                 idx.columns.replace(/\s+/g, "").toLowerCase() ===
                   reqIdx.columns.replace(/\s+/g, "").toLowerCase(),
