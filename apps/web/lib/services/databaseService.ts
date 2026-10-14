@@ -4,6 +4,9 @@ import {
   checkDbConnectionAction,
   checkDbTableSyncAction,
   applyDbTableSyncAction,
+  dropDbTableAction,
+  renameDbTableAction,
+  renameDbColumnAction,
   type TestDbOperationPayload,
   type TestDbOperationResult,
   type CheckDbConnectionPayload,
@@ -12,6 +15,12 @@ import {
   type CheckDbTableSyncResult,
   type ApplyDbTableSyncPayload,
   type ApplyDbTableSyncResult,
+  type DropDbTablePayload,
+  type DropDbTableResult,
+  type RenameDbTablePayload,
+  type RenameDbTableResult,
+  type RenameDbColumnPayload,
+  type RenameDbColumnResult,
   type JsonValue,
   type JsonObject,
   type JsonArray,
@@ -26,6 +35,12 @@ export type {
   CheckDbTableSyncResult,
   ApplyDbTableSyncPayload,
   ApplyDbTableSyncResult,
+  DropDbTablePayload,
+  DropDbTableResult,
+  RenameDbTablePayload,
+  RenameDbTableResult,
+  RenameDbColumnPayload,
+  RenameDbColumnResult,
   JsonValue,
   JsonObject,
   JsonArray,
@@ -97,9 +112,9 @@ export async function checkDbTableSync(
   payload: CheckDbTableSyncPayload,
 ): Promise<CheckDbTableSyncResult> {
   const electron = getElectronAPI();
-  if (electron && (electron.db as any)?.checkTableSync) {
+  if (electron?.db?.checkTableSync) {
     try {
-      return await (electron.db as any).checkTableSync(payload);
+      return await electron.db.checkTableSync(payload);
     } catch (err) {
       return {
         success: false,
@@ -124,9 +139,9 @@ export async function applyDbTableSync(
   payload: ApplyDbTableSyncPayload,
 ): Promise<ApplyDbTableSyncResult> {
   const electron = getElectronAPI();
-  if (electron && (electron.db as any)?.applyTableSync) {
+  if (electron?.db?.applyTableSync) {
     try {
-      return await (electron.db as any).applyTableSync(payload);
+      return await electron.db.applyTableSync(payload);
     } catch (err) {
       return {
         success: false,
@@ -138,5 +153,74 @@ export async function applyDbTableSync(
   }
 
   return applyDbTableSyncAction(payload);
+}
+
+/**
+ * Drop a physical table from the connected live database.
+ */
+export async function dropDbTable(
+  payload: DropDbTablePayload,
+): Promise<DropDbTableResult> {
+  const electron = getElectronAPI();
+  if (electron?.db?.dropTable) {
+    try {
+      return await electron.db.dropTable(payload);
+    } catch (err) {
+      return {
+        success: false,
+        droppedTable: payload.tableName,
+        error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  return dropDbTableAction(payload);
+}
+
+/**
+ * Rename a physical table in the connected live database.
+ */
+export async function renameDbTable(
+  payload: RenameDbTablePayload,
+): Promise<RenameDbTableResult> {
+  const electron = getElectronAPI();
+  if (electron?.db?.renameTable) {
+    try {
+      return await electron.db.renameTable(payload);
+    } catch (err) {
+      return {
+        success: false,
+        oldTableName: payload.oldTableName,
+        newTableName: payload.newTableName,
+        error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  return renameDbTableAction(payload);
+}
+
+/**
+ * Rename a physical column in the connected live database.
+ */
+export async function renameDbColumn(
+  payload: RenameDbColumnPayload,
+): Promise<RenameDbColumnResult> {
+  const electron = getElectronAPI();
+  if (electron?.db?.renameColumn) {
+    try {
+      return await electron.db.renameColumn(payload);
+    } catch (err) {
+      return {
+        success: false,
+        tableName: payload.tableName,
+        oldColumnName: payload.oldColumnName,
+        newColumnName: payload.newColumnName,
+        error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  return renameDbColumnAction(payload);
 }
 

@@ -105,6 +105,7 @@ export const entityColumnSchema = z.object({
 export const entityDataSchema = baseNodeDataSchema
   .extend({
     tableName: z.string().optional(),
+    schema: z.string().optional(),
     isSchemaGroup: z.boolean().optional(),
     variant: z.string().optional(),
     tableRef: z.string().optional(),

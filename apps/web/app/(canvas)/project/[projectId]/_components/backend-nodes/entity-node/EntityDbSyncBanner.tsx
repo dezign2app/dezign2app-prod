@@ -25,6 +25,7 @@ import { toast } from "sonner";
 export interface EntityDbSyncBannerProps {
   entityId: string;
   tableName: string;
+  schema?: string;
   columns: Array<{
     name: string;
     type: string;
@@ -38,6 +39,7 @@ export interface EntityDbSyncBannerProps {
 export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
   entityId,
   tableName,
+  schema,
   columns,
   databaseNode,
 }) => {
@@ -85,6 +87,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
           dbFilePathEnv: dbData.dbFilePathEnv,
         },
         tableName,
+        schema,
         columns,
       });
 
@@ -94,7 +97,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
     } finally {
       setIsChecking(false);
     }
-  }, [databaseNode, isSupportedEngine, hasConnectionConfig, tableName, columns, engine, dbData]);
+  }, [databaseNode, isSupportedEngine, hasConnectionConfig, tableName, schema, columns, engine, dbData]);
 
   // Debounced check on entity schema change or DB configuration change
   useEffect(() => {
@@ -128,6 +131,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
           dbFilePathEnv: dbData.dbFilePathEnv,
         },
         tableName,
+        schema,
         columns,
       });
 

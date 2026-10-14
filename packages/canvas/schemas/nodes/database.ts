@@ -23,6 +23,7 @@ export const databaseTableDefinitionSchema = z.object({
   id: z.string().optional(),
   name: z.string().optional(),
   label: z.string().optional(),
+  schema: z.string().optional(),
   tableRef: z.string().optional(),
   columns: z.array(databaseTableColumnSchema).optional(),
   fields: z.array(databaseTableColumnSchema).optional(),
@@ -33,6 +34,7 @@ export const databaseTableDefinitionSchema = z.object({
 
 export const databaseDataSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
+  schema: z.string().optional(),
   dbEngine: z.string().optional(),
   dbType: z
     .enum(["relational", "document", "vector", "key-value", "redis", "nosql"])

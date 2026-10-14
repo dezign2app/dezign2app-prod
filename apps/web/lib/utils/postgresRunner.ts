@@ -1,5 +1,3 @@
-"use server";
-
 import { sanitizeForConvex } from "@/lib/utils/convexSanitizer";
 import {
   TestDbOperationPayload,
@@ -83,18 +81,52 @@ function resolveConnectionString(config: PostgresConnectionConfig): string {
 // ---------------------------------------------------------------------------
 // Ensure table exists (auto-create for live testing)
 // ---------------------------------------------------------------------------
+// Schema and Identifier Helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolves schema and table name.
+ * If tableName includes a dot (e.g. "billing.users"), schema and table are parsed from it.
+ * If schema isn't configured, defaults to "public" for backward compatibility.
+ */
+export function resolveTableAndSchema(
+  rawTableName: string,
+  explicitSchema?: string,
+): { safeTable: string; targetSchema: string } {
+  let table = (rawTableName || "").trim();
+  let schema = (explicitSchema || "").trim();
+
+  if (table.includes(".")) {
+    const parts = table.split(".");
+    if (!schema) {
+      schema = parts[0] || "";
+    }
+    table = parts.slice(1).join(".");
+  }
+
+  const safeSchema =
+    (schema || "public").replace(/[^a-zA-Z0-9_]/g, "").toLowerCase() || "public";
+  const safeTable = table.replace(/[^a-zA-Z0-9_]/g, "");
+
+  return { safeTable, targetSchema: safeSchema };
+}
 
 async function ensurePostgresTable(
   client: import("pg").PoolClient,
   tableName: string,
   columns?: Array<{ name?: string; type?: string; isPrimaryKey?: boolean; isPrimary?: boolean; primaryKey?: boolean }>,
+  schema?: string,
 ): Promise<void> {
-  const safeTable = tableName.replace(/[^a-zA-Z0-9_]/g, "");
+  const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
   if (!safeTable) return;
 
   const checkRes = await client.query<{ exists: boolean }>(
-    `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1) AS exists`,
-    [safeTable],
+    `SELECT EXISTS (
+      SELECT 1 FROM information_schema.tables 
+      WHERE LOWER(table_name) = LOWER($1)
+        AND table_schema = $2
+    ) AS exists`,
+    [safeTable, targetSchema],
   );
   const exists = checkRes.rows[0]?.exists;
 
@@ -117,14 +149,21 @@ async function ensurePostgresTable(
     if (!colDefs.some((d) => d.startsWith('"updated_at"'))) {
       colDefs.push(`"updated_at" TIMESTAMPTZ DEFAULT NOW()`);
     }
+
+    if (targetSchema && targetSchema !== "public") {
+      await client.query(`CREATE SCHEMA IF NOT EXISTS "${targetSchema}"`);
+    }
+
     await client.query(
-      `CREATE TABLE IF NOT EXISTS "${safeTable}" (${colDefs.join(", ")})`,
+      `CREATE TABLE IF NOT EXISTS "${targetSchema}"."${safeTable}" (${colDefs.join(", ")})`,
     );
   } else if (columns && columns.length > 0) {
     // Auto-add missing columns
     const infoRes = await client.query<{ column_name: string }>(
-      `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
-      [safeTable],
+      `SELECT column_name FROM information_schema.columns 
+       WHERE LOWER(table_name) = LOWER($1)
+         AND table_schema = $2`,
+      [safeTable, targetSchema],
     );
     const existingCols = new Set(infoRes.rows.map((r) => r.column_name.toLowerCase()));
     for (const col of columns) {
@@ -133,7 +172,7 @@ async function ensurePostgresTable(
       const pgType = normalizeToPostgresType(col.type);
       try {
         await client.query(
-          `ALTER TABLE "${safeTable}" ADD COLUMN IF NOT EXISTS "${colName}" ${pgType}`,
+          `ALTER TABLE "${targetSchema}"."${safeTable}" ADD COLUMN IF NOT EXISTS "${colName}" ${pgType}`,
         );
       } catch {
         // Column may already exist in a race condition
@@ -491,10 +530,11 @@ export async function checkPostgresTableSync(
   connection: PostgresConnectionConfig,
   tableName: string,
   columns?: Array<{ name?: string; type?: string; isPrimaryKey?: boolean; isNotNull?: boolean; isUnique?: boolean }>,
+  schema?: string,
 ): Promise<PostgresTableSyncResult> {
   const { Pool } = await import("pg");
   const connectionString = resolveConnectionString(connection);
-  const safeTable = tableName.replace(/[^a-zA-Z0-9_]/g, "");
+  const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
 
   if (!safeTable) {
     return {
@@ -526,14 +566,14 @@ export async function checkPostgresTableSync(
   try {
     client = await pool.connect();
 
-    // Check if table exists in active PostgreSQL schemas
+    // Check if table exists in the configured schema
     const checkRes = await client.query<{ exists: boolean }>(
       `SELECT EXISTS (
         SELECT 1 FROM information_schema.tables 
         WHERE LOWER(table_name) = LOWER($1)
-        AND table_schema NOT IN ('pg_catalog', 'information_schema')
+          AND table_schema = $2
       ) AS exists`,
-      [safeTable],
+      [safeTable, targetSchema],
     );
     const tableExists = Boolean(checkRes.rows[0]?.exists);
 
@@ -554,13 +594,13 @@ export async function checkPostgresTableSync(
       };
     }
 
-    // Table exists, query existing columns from information_schema
+    // Table exists, query existing columns from the configured schema
     const colsRes = await client.query<{ column_name: string; data_type: string }>(
       `SELECT column_name, data_type 
        FROM information_schema.columns 
        WHERE LOWER(table_name) = LOWER($1)
-       AND table_schema NOT IN ('pg_catalog', 'information_schema')`,
-      [safeTable],
+         AND table_schema = $2`,
+      [safeTable, targetSchema],
     );
 
     const existingColumns = colsRes.rows.map((r) => ({
@@ -617,10 +657,11 @@ export async function applyPostgresTableSync(
   connection: PostgresConnectionConfig,
   tableName: string,
   columns?: Array<{ name?: string; type?: string; isPrimaryKey?: boolean; isNotNull?: boolean; isUnique?: boolean }>,
+  schema?: string,
 ): Promise<PostgresApplySyncResult> {
   const { Pool } = await import("pg");
   const connectionString = resolveConnectionString(connection);
-  const safeTable = tableName.replace(/[^a-zA-Z0-9_]/g, "");
+  const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
 
   if (!safeTable) {
     return {
@@ -648,19 +689,19 @@ export async function applyPostgresTableSync(
   try {
     client = await pool.connect();
 
-    // Check if table exists
+    // Check if table exists in the configured schema
     const checkRes = await client.query<{ exists: boolean }>(
       `SELECT EXISTS (
         SELECT 1 FROM information_schema.tables 
         WHERE LOWER(table_name) = LOWER($1)
-        AND table_schema NOT IN ('pg_catalog', 'information_schema')
+          AND table_schema = $2
       ) AS exists`,
-      [safeTable],
+      [safeTable, targetSchema],
     );
     const tableExists = Boolean(checkRes.rows[0]?.exists);
 
     if (!tableExists) {
-      await ensurePostgresTable(client, safeTable, columns);
+      await ensurePostgresTable(client, safeTable, columns, targetSchema);
       return {
         success: true,
         createdTable: true,
@@ -668,12 +709,12 @@ export async function applyPostgresTableSync(
       };
     }
 
-    // Table exists, query existing columns and apply missing ones
+    // Table exists, query existing columns from the configured schema
     const infoRes = await client.query<{ column_name: string }>(
       `SELECT column_name FROM information_schema.columns 
        WHERE LOWER(table_name) = LOWER($1)
-       AND table_schema NOT IN ('pg_catalog', 'information_schema')`,
-      [safeTable],
+         AND table_schema = $2`,
+      [safeTable, targetSchema],
     );
     const existingCols = new Set(infoRes.rows.map((r) => r.column_name.toLowerCase()));
     const canvasColNames = new Set((columns || []).map((c) => (c.name || "").toLowerCase()));
@@ -687,7 +728,7 @@ export async function applyPostgresTableSync(
       const pgType = normalizeToPostgresType(col.type);
 
       await client.query(
-        `ALTER TABLE "${safeTable}" ADD COLUMN IF NOT EXISTS "${colName}" ${pgType}`,
+        `ALTER TABLE "${targetSchema}"."${safeTable}" ADD COLUMN IF NOT EXISTS "${colName}" ${pgType}`,
       );
       appliedColumns.push(colName);
     }
@@ -701,7 +742,7 @@ export async function applyPostgresTableSync(
         dbColLower !== "updated_at"
       ) {
         await client.query(
-          `ALTER TABLE "${safeTable}" DROP COLUMN IF EXISTS "${row.column_name}" CASCADE`,
+          `ALTER TABLE "${targetSchema}"."${safeTable}" DROP COLUMN IF EXISTS "${row.column_name}" CASCADE`,
         );
         droppedColumns.push(row.column_name);
       }
@@ -718,6 +759,203 @@ export async function applyPostgresTableSync(
       success: false,
       createdTable: false,
       appliedColumns: [],
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (client) client.release();
+    await pool.end().catch(() => {});
+  }
+}
+
+export interface PostgresDropTableResult {
+  success: boolean;
+  droppedTable: string;
+  error?: string;
+}
+
+/**
+ * Drops a physical table and dependent foreign keys from the live PostgreSQL database.
+ */
+export async function dropPostgresTable(
+  connection: PostgresConnectionConfig,
+  tableName: string,
+  schema?: string,
+): Promise<PostgresDropTableResult> {
+  const { Pool } = await import("pg");
+  const connectionString = resolveConnectionString(connection);
+  const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
+
+  if (!safeTable) {
+    return {
+      success: false,
+      droppedTable: tableName,
+      error: "Invalid table name",
+    };
+  }
+
+  const pool = new Pool({
+    connectionString,
+    max: 1,
+    connectionTimeoutMillis: 6000,
+    ssl:
+      connectionString.includes("sslmode=require") ||
+      connectionString.includes("neon.tech") ||
+      connectionString.includes("supabase.co") ||
+      process.env.NODE_ENV === "production"
+        ? { rejectUnauthorized: false }
+        : undefined,
+  });
+
+  let client: import("pg").PoolClient | undefined;
+  try {
+    client = await pool.connect();
+    await client.query(`DROP TABLE IF EXISTS "${targetSchema}"."${safeTable}" CASCADE`);
+    return {
+      success: true,
+      droppedTable: safeTable,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      droppedTable: safeTable,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (client) client.release();
+    await pool.end().catch(() => {});
+  }
+}
+
+export interface PostgresRenameTableResult {
+  success: boolean;
+  oldTableName: string;
+  newTableName: string;
+  error?: string;
+}
+
+/**
+ * Renames a physical table in the live PostgreSQL database.
+ */
+export async function renamePostgresTable(
+  connection: PostgresConnectionConfig,
+  oldTableName: string,
+  newTableName: string,
+  schema?: string,
+): Promise<PostgresRenameTableResult> {
+  const { Pool } = await import("pg");
+  const connectionString = resolveConnectionString(connection);
+  const { safeTable: safeOld, targetSchema } = resolveTableAndSchema(oldTableName, schema);
+  const { safeTable: safeNew } = resolveTableAndSchema(newTableName, targetSchema);
+
+  if (!safeOld || !safeNew) {
+    return {
+      success: false,
+      oldTableName,
+      newTableName,
+      error: "Invalid table name",
+    };
+  }
+
+  const pool = new Pool({
+    connectionString,
+    max: 1,
+    connectionTimeoutMillis: 6000,
+    ssl:
+      connectionString.includes("sslmode=require") ||
+      connectionString.includes("neon.tech") ||
+      connectionString.includes("supabase.co") ||
+      process.env.NODE_ENV === "production"
+        ? { rejectUnauthorized: false }
+        : undefined,
+  });
+
+  let client: import("pg").PoolClient | undefined;
+  try {
+    client = await pool.connect();
+    await client.query(`ALTER TABLE "${targetSchema}"."${safeOld}" RENAME TO "${safeNew}"`);
+    return {
+      success: true,
+      oldTableName: safeOld,
+      newTableName: safeNew,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      oldTableName: safeOld,
+      newTableName: safeNew,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (client) client.release();
+    await pool.end().catch(() => {});
+  }
+}
+
+export interface PostgresRenameColumnResult {
+  success: boolean;
+  tableName: string;
+  oldColumnName: string;
+  newColumnName: string;
+  error?: string;
+}
+
+/**
+ * Renames a physical column in the live PostgreSQL database.
+ */
+export async function renamePostgresColumn(
+  connection: PostgresConnectionConfig,
+  tableName: string,
+  oldColumnName: string,
+  newColumnName: string,
+  schema?: string,
+): Promise<PostgresRenameColumnResult> {
+  const { Pool } = await import("pg");
+  const connectionString = resolveConnectionString(connection);
+  const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
+  const safeOldCol = oldColumnName.replace(/[^a-zA-Z0-9_]/g, "");
+  const safeNewCol = newColumnName.replace(/[^a-zA-Z0-9_]/g, "");
+
+  if (!safeTable || !safeOldCol || !safeNewCol) {
+    return {
+      success: false,
+      tableName,
+      oldColumnName,
+      newColumnName,
+      error: "Invalid identifier for table or column",
+    };
+  }
+
+  const pool = new Pool({
+    connectionString,
+    max: 1,
+    connectionTimeoutMillis: 6000,
+    ssl:
+      connectionString.includes("sslmode=require") ||
+      connectionString.includes("neon.tech") ||
+      connectionString.includes("supabase.co") ||
+      process.env.NODE_ENV === "production"
+        ? { rejectUnauthorized: false }
+        : undefined,
+  });
+
+  let client: import("pg").PoolClient | undefined;
+  try {
+    client = await pool.connect();
+    await client.query(
+      `ALTER TABLE "${targetSchema}"."${safeTable}" RENAME COLUMN "${safeOldCol}" TO "${safeNewCol}"`,
+    );
+    return {
+      success: true,
+      tableName: safeTable,
+      oldColumnName: safeOldCol,
+      newColumnName: safeNewCol,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      tableName: safeTable,
+      oldColumnName: safeOldCol,
+      newColumnName: safeNewCol,
       error: error instanceof Error ? error.message : String(error),
     };
   } finally {

@@ -865,3 +865,190 @@ export function applySqliteTableSync(
   }
 }
 
+export interface SqliteDropTableResult {
+  success: boolean;
+  droppedTable: string;
+  error?: string;
+}
+
+/**
+ * Drops a table from the local SQLite database file.
+ */
+export function dropSqliteTable(
+  dbFilePath: string,
+  tableName: string,
+  projectDir?: string,
+): SqliteDropTableResult {
+  const safeTable = tableName.replace(/[^a-zA-Z0-9_]/g, "");
+  if (!safeTable) {
+    return {
+      success: false,
+      droppedTable: tableName,
+      error: "Invalid table name",
+    };
+  }
+
+  const resolvedPath = resolveSqlitePath(dbFilePath, projectDir);
+  if (!fs.existsSync(resolvedPath)) {
+    return {
+      success: true,
+      droppedTable: safeTable,
+    };
+  }
+
+  let db: DatabaseSync | null = null;
+  try {
+    db = new DatabaseSync(resolvedPath);
+    db.exec(`DROP TABLE IF EXISTS "${safeTable}"`);
+    return {
+      success: true,
+      droppedTable: safeTable,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      droppedTable: safeTable,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (db) {
+      try {
+        db.close();
+      } catch {}
+    }
+  }
+}
+
+export interface SqliteRenameTableResult {
+  success: boolean;
+  oldTableName: string;
+  newTableName: string;
+  error?: string;
+}
+
+/**
+ * Renames a table in the local SQLite database file.
+ */
+export function renameSqliteTable(
+  dbFilePath: string,
+  oldTableName: string,
+  newTableName: string,
+  projectDir?: string,
+): SqliteRenameTableResult {
+  const safeOld = oldTableName.replace(/[^a-zA-Z0-9_]/g, "");
+  const safeNew = newTableName.replace(/[^a-zA-Z0-9_]/g, "");
+
+  if (!safeOld || !safeNew) {
+    return {
+      success: false,
+      oldTableName,
+      newTableName,
+      error: "Invalid table name",
+    };
+  }
+
+  const resolvedPath = resolveSqlitePath(dbFilePath, projectDir);
+  if (!fs.existsSync(resolvedPath)) {
+    return {
+      success: true,
+      oldTableName: safeOld,
+      newTableName: safeNew,
+    };
+  }
+
+  let db: DatabaseSync | null = null;
+  try {
+    db = new DatabaseSync(resolvedPath);
+    db.exec(`ALTER TABLE "${safeOld}" RENAME TO "${safeNew}"`);
+    return {
+      success: true,
+      oldTableName: safeOld,
+      newTableName: safeNew,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      oldTableName: safeOld,
+      newTableName: safeNew,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (db) {
+      try {
+        db.close();
+      } catch {}
+    }
+  }
+}
+
+export interface SqliteRenameColumnResult {
+  success: boolean;
+  tableName: string;
+  oldColumnName: string;
+  newColumnName: string;
+  error?: string;
+}
+
+/**
+ * Renames a column in the local SQLite database file.
+ */
+export function renameSqliteColumn(
+  dbFilePath: string,
+  tableName: string,
+  oldColumnName: string,
+  newColumnName: string,
+  projectDir?: string,
+): SqliteRenameColumnResult {
+  const safeTable = tableName.replace(/[^a-zA-Z0-9_]/g, "");
+  const safeOldCol = oldColumnName.replace(/[^a-zA-Z0-9_]/g, "");
+  const safeNewCol = newColumnName.replace(/[^a-zA-Z0-9_]/g, "");
+
+  if (!safeTable || !safeOldCol || !safeNewCol) {
+    return {
+      success: false,
+      tableName,
+      oldColumnName,
+      newColumnName,
+      error: "Invalid identifier for table or column",
+    };
+  }
+
+  const resolvedPath = resolveSqlitePath(dbFilePath, projectDir);
+  if (!fs.existsSync(resolvedPath)) {
+    return {
+      success: true,
+      tableName: safeTable,
+      oldColumnName: safeOldCol,
+      newColumnName: safeNewCol,
+    };
+  }
+
+  let db: DatabaseSync | null = null;
+  try {
+    db = new DatabaseSync(resolvedPath);
+    db.exec(
+      `ALTER TABLE "${safeTable}" RENAME COLUMN "${safeOldCol}" TO "${safeNewCol}"`,
+    );
+    return {
+      success: true,
+      tableName: safeTable,
+      oldColumnName: safeOldCol,
+      newColumnName: safeNewCol,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      tableName: safeTable,
+      oldColumnName: safeOldCol,
+      newColumnName: safeNewCol,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (db) {
+      try {
+        db.close();
+      } catch {}
+    }
+  }
+}
+

@@ -606,3 +606,5 @@ export function createTypesNodeFromEntity(
     );
   }
 }
+
+export const syncDerivedTypesForEntity = createTypesNodeFromEntity;

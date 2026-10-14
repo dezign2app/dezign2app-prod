@@ -113,6 +113,11 @@ export interface ElectronAPI {
   db?: {
     executeOperation(payload: ElectronTestDbOperationPayload): Promise<ElectronTestDbOperationResult>;
     checkConnection(payload: ElectronCheckDbConnectionPayload): Promise<ElectronCheckDbConnectionResult>;
+    checkTableSync?(payload: ElectronCheckDbTableSyncPayload): Promise<ElectronCheckDbTableSyncResult>;
+    applyTableSync?(payload: ElectronApplyDbTableSyncPayload): Promise<ElectronApplyDbTableSyncResult>;
+    dropTable?(payload: ElectronDropDbTablePayload): Promise<ElectronDropDbTableResult>;
+    renameTable?(payload: ElectronRenameDbTablePayload): Promise<ElectronRenameDbTableResult>;
+    renameColumn?(payload: ElectronRenameDbColumnPayload): Promise<ElectronRenameDbColumnResult>;
   };
 
   workspace?: {
@@ -236,6 +241,86 @@ export interface ElectronCheckDbConnectionResult {
     reachable?: boolean;
     socket?: string;
   };
+}
+
+export interface ElectronCheckDbTableSyncPayload {
+  engine?: string;
+  connection?: Record<string, string | number | undefined>;
+  tableName: string;
+  schema?: string;
+  columns?: Array<{
+    name: string;
+    type: string;
+    isPrimaryKey?: boolean;
+    isNotNull?: boolean;
+    isUnique?: boolean;
+  }>;
+}
+
+export interface ElectronCheckDbTableSyncResult {
+  success: boolean;
+  serverReachable: boolean;
+  tableExists: boolean;
+  inSync: boolean;
+  missingColumns: Array<{ name: string; type: string }>;
+  extraColumns: Array<{ name: string; type: string }>;
+  existingColumns: Array<{ name: string; type: string }>;
+  error?: string;
+}
+
+export interface ElectronApplyDbTableSyncPayload extends ElectronCheckDbTableSyncPayload {}
+
+export interface ElectronApplyDbTableSyncResult {
+  success: boolean;
+  createdTable: boolean;
+  appliedColumns: string[];
+  droppedColumns?: string[];
+  error?: string;
+}
+
+export interface ElectronDropDbTablePayload {
+  engine?: string;
+  connection?: Record<string, string | number | undefined>;
+  tableName: string;
+  schema?: string;
+}
+
+export interface ElectronDropDbTableResult {
+  success: boolean;
+  droppedTable: string;
+  error?: string;
+}
+
+export interface ElectronRenameDbTablePayload {
+  engine?: string;
+  connection?: Record<string, string | number | undefined>;
+  oldTableName: string;
+  newTableName: string;
+  schema?: string;
+}
+
+export interface ElectronRenameDbTableResult {
+  success: boolean;
+  oldTableName: string;
+  newTableName: string;
+  error?: string;
+}
+
+export interface ElectronRenameDbColumnPayload {
+  engine?: string;
+  connection?: Record<string, string | number | undefined>;
+  tableName: string;
+  oldColumnName: string;
+  newColumnName: string;
+  schema?: string;
+}
+
+export interface ElectronRenameDbColumnResult {
+  success: boolean;
+  tableName: string;
+  oldColumnName: string;
+  newColumnName: string;
+  error?: string;
 }
 
 declare global {

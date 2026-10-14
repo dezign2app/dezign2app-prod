@@ -2,6 +2,10 @@ import React, { useState } from "react";
 import { Plus, ChevronDown, ChevronRight } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { ColumnItem, ColumnRow } from "./ColumnRow";
+import { EntityRenameDialog } from "./EntityRenameDialog";
+import { renameDbColumn } from "@/lib/services/databaseService";
+import { syncDerivedTypesForEntity } from "@/lib/stores/backendCanvas/packageTypesSync";
+import { toast } from "sonner";
 
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
@@ -33,6 +37,23 @@ export const ColumnList = ({
   const [editingName, setEditingName] = useState("");
   const [editingType, setEditingType] = useState("TEXT");
   const [nameError, setNameError] = useState(false);
+  const [pendingColRename, setPendingColRename] = useState<{
+    oldName: string;
+    newName: string;
+    index: number;
+    changes: Partial<ColumnItem>;
+  } | null>(null);
+
+  const parentDb = allNodes.find((n) => n.id === data.databaseId);
+  const dbData = (parentDb?.data || {}) as NonNullable<BackendNode["data"]>;
+  const engine = (dbData.dbEngine || "postgres").toLowerCase();
+  const hasLiveConnection = Boolean(
+    dbData.connectionString ||
+      dbData.connectionStringEnv ||
+      dbData.host ||
+      dbData.dbFilePath ||
+      dbData.dbFilePathEnv,
+  );
 
   const syncNodeData = (newCols: ColumnItem[], newIndexes?: BackendNode["data"]["indexes"]) => {
     const nextData: BackendNode["data"] = {
@@ -58,24 +79,10 @@ export const ColumnList = ({
     setNameError(false);
   };
 
-  const handleUpdate = (index: number, changes: Partial<ColumnItem>) => {
+  const applyColumnUpdate = (index: number, changes: Partial<ColumnItem>) => {
     let newCols = [...items];
     const oldCol = items[index];
     const oldColName = oldCol?.name;
-    if (
-      changes.name &&
-      changes.name.trim() !== "" &&
-      changes.name !== items[index]?.name
-    ) {
-      const isDuplicate = newCols.some(
-        (c, idx) =>
-          idx !== index && c.name.toLowerCase() === changes.name!.toLowerCase(),
-      );
-      if (isDuplicate) {
-        setNameError(true);
-        return;
-      }
-    }
     newCols[index] = { ...newCols[index]!, ...changes };
     const newColName = newCols[index]?.name;
 
@@ -101,6 +108,85 @@ export const ColumnList = ({
     }
 
     updateNode(nodeId, { data: syncNodeData(newCols, newIndexes) });
+  };
+
+  const handleUpdate = (index: number, changes: Partial<ColumnItem>) => {
+    let newCols = [...items];
+    const oldCol = items[index];
+    const oldColName = oldCol?.name?.trim();
+    const newColName = changes.name?.trim();
+
+    if (
+      changes.name &&
+      changes.name.trim() !== "" &&
+      changes.name !== items[index]?.name
+    ) {
+      const isDuplicate = newCols.some(
+        (c, idx) =>
+          idx !== index && c.name.toLowerCase() === changes.name!.toLowerCase(),
+      );
+      if (isDuplicate) {
+        setNameError(true);
+        return;
+      }
+    }
+
+    if (
+      hasLiveConnection &&
+      oldColName &&
+      newColName &&
+      oldColName !== newColName
+    ) {
+      setPendingColRename({
+        oldName: oldColName,
+        newName: newColName,
+        index,
+        changes,
+      });
+      return;
+    }
+
+    applyColumnUpdate(index, changes);
+  };
+
+  const executeColumnRename = async (renameLive: boolean) => {
+    if (!pendingColRename) return;
+    const { oldName, newName, index, changes } = pendingColRename;
+
+    if (renameLive && parentDb) {
+      const renameRes = await renameDbColumn({
+        engine,
+        connection: {
+          host: dbData.host,
+          port: dbData.port,
+          database: dbData.database,
+          user: dbData.user || dbData.username,
+          password: dbData.password,
+          connectionString: dbData.connectionString,
+          connectionStringEnv: dbData.connectionStringEnv,
+          dbFilePath: dbData.dbFilePath,
+          dbFilePathEnv: dbData.dbFilePathEnv,
+        },
+        tableName: data.tableName || data.label || "table",
+        schema: data.schema || parentDb?.data?.schema || "public",
+        oldColumnName: oldName,
+        newColumnName: newName,
+      });
+
+      if (renameRes.success) {
+        toast.success(
+          `Renamed column "${oldName}" to "${newName}" on live ${engine.toUpperCase()} database`,
+        );
+      } else {
+        toast.error(
+          `Failed to rename column on live database: ${renameRes.error || "Unknown error"}`,
+        );
+      }
+    }
+
+    applyColumnUpdate(index, changes);
+    syncDerivedTypesForEntity(nodeId, { openConfig: false });
+    setPendingColRename(null);
   };
 
   const handleDelete = (index: number) => {
@@ -174,6 +260,27 @@ export const ColumnList = ({
             />
           ))}
         </div>
+      )}
+
+      {/* Column Rename Migration Dialog */}
+      {pendingColRename && (
+        <EntityRenameDialog
+          open={Boolean(pendingColRename)}
+          onOpenChange={(open) => {
+            if (!open) setPendingColRename(null);
+          }}
+          mode="column"
+          tableName={data.tableName || data.label || "table"}
+          schema={data.schema || parentDb?.data?.schema || "public"}
+          oldName={pendingColRename.oldName}
+          newName={pendingColRename.newName}
+          dbEngine={engine}
+          dbLabel={dbData.label || "Database"}
+          hasLiveConnection={hasLiveConnection}
+          onConfirm={async (renameLive) => {
+            await executeColumnRename(renameLive);
+          }}
+        />
       )}
     </div>
   );

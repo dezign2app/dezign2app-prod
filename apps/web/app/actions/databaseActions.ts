@@ -6,12 +6,18 @@ import {
   checkSqliteConnection,
   checkSqliteTableSync,
   applySqliteTableSync,
+  dropSqliteTable,
+  renameSqliteTable,
+  renameSqliteColumn,
 } from "@/lib/utils/sqliteRunner";
 import {
   executePostgresLiveOperation,
   checkPostgresConnection,
   checkPostgresTableSync,
   applyPostgresTableSync,
+  dropPostgresTable,
+  renamePostgresTable,
+  renamePostgresColumn,
 } from "@/lib/utils/postgresRunner";
 import {
   type TestDbOperationPayload,
@@ -50,6 +56,7 @@ export interface CheckDbTableSyncPayload {
     dbFilePathEnv?: string;
   };
   tableName: string;
+  schema?: string;
   columns?: Array<{
     name: string;
     type: string;
@@ -420,11 +427,10 @@ export async function checkDbConnectionAction(
 
 /**
  * Server action to inspect whether a canvas table exists and has all columns in the live DB.
- */
-export async function checkDbTableSyncAction(
+ */export async function checkDbTableSyncAction(
   payload: CheckDbTableSyncPayload,
 ): Promise<CheckDbTableSyncResult> {
-  const { engine = "postgres", connection = {}, tableName, columns = [] } = payload;
+  const { engine = "postgres", connection = {}, tableName, schema, columns = [] } = payload;
   const isPostgres =
     engine === "postgres" ||
     engine === "postgresql" ||
@@ -434,7 +440,7 @@ export async function checkDbTableSyncAction(
 
   try {
     if (isPostgres) {
-      return await checkPostgresTableSync(connection, tableName, columns);
+      return await checkPostgresTableSync(connection, tableName, columns, schema);
     }
 
     if (isSqlite) {
@@ -475,7 +481,7 @@ export async function checkDbTableSyncAction(
 export async function applyDbTableSyncAction(
   payload: ApplyDbTableSyncPayload,
 ): Promise<ApplyDbTableSyncResult> {
-  const { engine = "postgres", connection = {}, tableName, columns = [] } = payload;
+  const { engine = "postgres", connection = {}, tableName, schema, columns = [] } = payload;
   const isPostgres =
     engine === "postgres" ||
     engine === "postgresql" ||
@@ -485,7 +491,7 @@ export async function applyDbTableSyncAction(
 
   try {
     if (isPostgres) {
-      return await applyPostgresTableSync(connection, tableName, columns);
+      return await applyPostgresTableSync(connection, tableName, columns, schema);
     }
 
     if (isSqlite) {
@@ -511,4 +517,212 @@ export async function applyDbTableSyncAction(
     };
   }
 }
+
+export interface DropDbTablePayload {
+  engine?: string;
+  connection?: {
+    host?: string;
+    port?: string | number;
+    database?: string;
+    user?: string;
+    username?: string;
+    password?: string;
+    connectionString?: string;
+    connectionStringEnv?: string;
+    dbFilePath?: string;
+    dbFilePathEnv?: string;
+  };
+  tableName: string;
+  schema?: string;
+}
+
+export interface DropDbTableResult {
+  success: boolean;
+  droppedTable: string;
+  error?: string;
+}
+
+/**
+ * Server action to drop a table from the connected live database.
+ */
+export async function dropDbTableAction(
+  payload: DropDbTablePayload,
+): Promise<DropDbTableResult> {
+  const { engine = "postgres", connection = {}, tableName, schema } = payload;
+  const isPostgres =
+    engine === "postgres" ||
+    engine === "postgresql" ||
+    engine === "pg" ||
+    engine === "cockroachdb";
+  const isSqlite = engine === "sqlite";
+
+  try {
+    if (isPostgres) {
+      return await dropPostgresTable(connection, tableName, schema);
+    }
+
+    if (isSqlite) {
+      let dbFilePath = connection.dbFilePath || "dev.db";
+      if (connection.dbFilePathEnv) {
+        const envVal = resolveEnvValue(connection.dbFilePathEnv);
+        if (envVal) dbFilePath = envVal;
+      }
+      return dropSqliteTable(dbFilePath, tableName);
+    }
+
+    return {
+      success: true,
+      droppedTable: tableName,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      droppedTable: tableName,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+export interface RenameDbTablePayload {
+  engine?: string;
+  connection?: {
+    host?: string;
+    port?: string | number;
+    database?: string;
+    user?: string;
+    username?: string;
+    password?: string;
+    connectionString?: string;
+    connectionStringEnv?: string;
+    dbFilePath?: string;
+    dbFilePathEnv?: string;
+  };
+  oldTableName: string;
+  newTableName: string;
+  schema?: string;
+}
+
+export interface RenameDbTableResult {
+  success: boolean;
+  oldTableName: string;
+  newTableName: string;
+  error?: string;
+}
+
+/**
+ * Server action to rename a physical table in the live database.
+ */
+export async function renameDbTableAction(
+  payload: RenameDbTablePayload,
+): Promise<RenameDbTableResult> {
+  const { engine = "postgres", connection = {}, oldTableName, newTableName, schema } = payload;
+  const isPostgres =
+    engine === "postgres" ||
+    engine === "postgresql" ||
+    engine === "pg" ||
+    engine === "cockroachdb";
+  const isSqlite = engine === "sqlite";
+
+  try {
+    if (isPostgres) {
+      return await renamePostgresTable(connection, oldTableName, newTableName, schema);
+    }
+
+    if (isSqlite) {
+      let dbFilePath = connection.dbFilePath || "dev.db";
+      if (connection.dbFilePathEnv) {
+        const envVal = resolveEnvValue(connection.dbFilePathEnv);
+        if (envVal) dbFilePath = envVal;
+      }
+      return renameSqliteTable(dbFilePath, oldTableName, newTableName);
+    }
+
+    return {
+      success: true,
+      oldTableName,
+      newTableName,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      oldTableName,
+      newTableName,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+export interface RenameDbColumnPayload {
+  engine?: string;
+  connection?: {
+    host?: string;
+    port?: string | number;
+    database?: string;
+    user?: string;
+    username?: string;
+    password?: string;
+    connectionString?: string;
+    connectionStringEnv?: string;
+    dbFilePath?: string;
+    dbFilePathEnv?: string;
+  };
+  tableName: string;
+  oldColumnName: string;
+  newColumnName: string;
+  schema?: string;
+}
+
+export interface RenameDbColumnResult {
+  success: boolean;
+  tableName: string;
+  oldColumnName: string;
+  newColumnName: string;
+  error?: string;
+}
+
+/**
+ * Server action to rename a physical column in the live database.
+ */
+export async function renameDbColumnAction(
+  payload: RenameDbColumnPayload,
+): Promise<RenameDbColumnResult> {
+  const { engine = "postgres", connection = {}, tableName, oldColumnName, newColumnName, schema } = payload;
+  const isPostgres =
+    engine === "postgres" ||
+    engine === "postgresql" ||
+    engine === "pg" ||
+    engine === "cockroachdb";
+  const isSqlite = engine === "sqlite";
+
+  try {
+    if (isPostgres) {
+      return await renamePostgresColumn(connection, tableName, oldColumnName, newColumnName, schema);
+    }
+
+    if (isSqlite) {
+      let dbFilePath = connection.dbFilePath || "dev.db";
+      if (connection.dbFilePathEnv) {
+        const envVal = resolveEnvValue(connection.dbFilePathEnv);
+        if (envVal) dbFilePath = envVal;
+      }
+      return renameSqliteColumn(dbFilePath, tableName, oldColumnName, newColumnName);
+    }
+
+    return {
+      success: true,
+      tableName,
+      oldColumnName,
+      newColumnName,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      tableName,
+      oldColumnName,
+      newColumnName,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 

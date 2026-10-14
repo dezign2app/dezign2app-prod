@@ -82,6 +82,7 @@ export type EntityColumn = CanvasEntityColumn;
 /** Database entity / table schema fields (canvas type). */
 export interface CanvasEntityNodeData {
   tableName?: string;
+  schema?: string;
   isSchemaGroup?: boolean;
   variant?: string;
   dbType?: "relational" | "document" | "vector" | "redis" | "key-value";
@@ -163,6 +164,7 @@ export interface DatabaseTableDefinition {
   id?: string;
   name?: string;
   label?: string;
+  schema?: string;
   tableRef?: string;
   columns?: Array<{
     name?: string;
@@ -187,6 +189,7 @@ export interface DatabaseTableDefinition {
 /** Database node fields — connection configurations, environment variables, engine. */
 export interface CanvasDatabaseNodeData {
   tables?: DatabaseTableDefinition[];
+  schema?: string;
   dbEngine?: DatabaseEngine | string;
   dbType?: "relational" | "document" | "vector" | "redis" | "key-value" | "nosql";
   dbCategory?: "sql" | "nosql" | "vector" | "key-value";
