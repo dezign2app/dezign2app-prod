@@ -509,24 +509,40 @@ export function EndpointTestCasesSection({
         }}
         className="w-full"
       >
-        <TabsList className="grid grid-cols-2 h-8 bg-background/60 p-0.5 rounded-lg border border-border/50 mb-2">
+        <TabsList className="grid grid-cols-2 h-9 bg-zinc-950/80 p-1 rounded-lg border border-border/60 mb-2 shadow-inner">
           <TabsTrigger
             value="auto"
-            className="text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-semibold text-muted-foreground flex items-center gap-1.5 transition-all"
+            className={cn(
+              "text-xs font-medium py-1 px-3 rounded-md transition-all flex items-center justify-center gap-1.5",
+              "text-muted-foreground hover:text-foreground hover:bg-muted/30 border border-transparent",
+              "data-[state=active]:bg-zinc-800 data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-zinc-700/80",
+              activeTab === "auto" && "bg-zinc-800 text-foreground font-semibold shadow-sm border border-zinc-700/80"
+            )}
           >
-            <Zap className="w-3.5 h-3.5 text-muted-foreground" />
+            <Zap className={cn("w-3.5 h-3.5 transition-colors", activeTab === "auto" ? "text-amber-400" : "text-muted-foreground/60")} />
             <span>Auto-Generated</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-secondary/80 text-muted-foreground border border-border/40">
+            <span className={cn(
+              "px-1.5 py-0.2 rounded-full text-[10px] font-mono border transition-colors",
+              activeTab === "auto" ? "bg-amber-400/10 text-amber-300 border-amber-400/30" : "bg-secondary/80 text-muted-foreground border-border/40"
+            )}>
               {autoCases.length}
             </span>
           </TabsTrigger>
           <TabsTrigger
             value="manual"
-            className="text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:font-semibold text-muted-foreground flex items-center gap-1.5 transition-all"
+            className={cn(
+              "text-xs font-medium py-1 px-3 rounded-md transition-all flex items-center justify-center gap-1.5",
+              "text-muted-foreground hover:text-foreground hover:bg-muted/30 border border-transparent",
+              "data-[state=active]:bg-zinc-800 data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-zinc-700/80",
+              activeTab === "manual" && "bg-zinc-800 text-foreground font-semibold shadow-sm border border-zinc-700/80"
+            )}
           >
-            <Settings className="w-3.5 h-3.5 text-muted-foreground" />
+            <Settings className={cn("w-3.5 h-3.5 transition-colors", activeTab === "manual" ? "text-purple-400" : "text-muted-foreground/60")} />
             <span>Manual Cases</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-secondary/80 text-muted-foreground border border-border/40">
+            <span className={cn(
+              "px-1.5 py-0.2 rounded-full text-[10px] font-mono border transition-colors",
+              activeTab === "manual" ? "bg-purple-400/10 text-purple-300 border-purple-400/30" : "bg-secondary/80 text-muted-foreground border-border/40"
+            )}>
               {manualCases.length}
             </span>
           </TabsTrigger>

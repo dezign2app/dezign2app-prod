@@ -290,15 +290,57 @@ export function EndpointTestCaseEditor({
         onValueChange={(v) => setActiveTab(v as "runner" | "request" | "assertions")}
         className="w-full"
       >
-        <TabsList className="grid grid-cols-3 h-8 p-0.5 bg-secondary/30">
-          <TabsTrigger value="runner" className="text-xs gap-1 py-1">
-            <Send className="w-3 h-3 text-primary" /> Live Test
+        <TabsList className="grid grid-cols-3 h-9 p-1 bg-zinc-950/80 rounded-lg border border-border/60 shadow-inner">
+          <TabsTrigger
+            value="runner"
+            className={cn(
+              "text-xs font-medium py-1 px-3 rounded-md transition-all flex items-center justify-center gap-1.5",
+              "text-muted-foreground hover:text-foreground hover:bg-muted/30 border border-transparent",
+              "data-[state=active]:bg-zinc-800 data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-zinc-700/80",
+              activeTab === "runner" && "bg-zinc-800 text-foreground font-semibold shadow-sm border border-zinc-700/80"
+            )}
+          >
+            <Send
+              className={cn(
+                "w-3.5 h-3.5 transition-colors",
+                activeTab === "runner" ? "text-sky-400" : "text-muted-foreground/60"
+              )}
+            />
+            <span>Live Test</span>
           </TabsTrigger>
-          <TabsTrigger value="request" className="text-xs gap-1 py-1">
-            <Settings className="w-3 h-3 text-primary" /> Request
+          <TabsTrigger
+            value="request"
+            className={cn(
+              "text-xs font-medium py-1 px-3 rounded-md transition-all flex items-center justify-center gap-1.5",
+              "text-muted-foreground hover:text-foreground hover:bg-muted/30 border border-transparent",
+              "data-[state=active]:bg-zinc-800 data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-zinc-700/80",
+              activeTab === "request" && "bg-zinc-800 text-foreground font-semibold shadow-sm border border-zinc-700/80"
+            )}
+          >
+            <Settings
+              className={cn(
+                "w-3.5 h-3.5 transition-colors",
+                activeTab === "request" ? "text-purple-400" : "text-muted-foreground/60"
+              )}
+            />
+            <span>Request</span>
           </TabsTrigger>
-          <TabsTrigger value="assertions" className="text-xs gap-1 py-1">
-            <CheckCircle2 className="w-3 h-3 text-primary" /> Expectations
+          <TabsTrigger
+            value="assertions"
+            className={cn(
+              "text-xs font-medium py-1 px-3 rounded-md transition-all flex items-center justify-center gap-1.5",
+              "text-muted-foreground hover:text-foreground hover:bg-muted/30 border border-transparent",
+              "data-[state=active]:bg-zinc-800 data-[state=active]:text-foreground data-[state=active]:font-semibold data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-zinc-700/80",
+              activeTab === "assertions" && "bg-zinc-800 text-foreground font-semibold shadow-sm border border-zinc-700/80"
+            )}
+          >
+            <CheckCircle2
+              className={cn(
+                "w-3.5 h-3.5 transition-colors",
+                activeTab === "assertions" ? "text-emerald-400" : "text-muted-foreground/60"
+              )}
+            />
+            <span>Expectations</span>
           </TabsTrigger>
         </TabsList>
 
