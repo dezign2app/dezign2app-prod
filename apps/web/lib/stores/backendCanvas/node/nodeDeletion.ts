@@ -5,6 +5,7 @@ import { handleNodeDeletionSync } from "@/lib/compiler/nodeDeletionSync";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { useSectionCollapseStore } from "@/lib/stores/sectionCollapseStore";
 import { isSchemaNodeType } from "./types";
+import { resolveCascadeDeletedNodeIds } from "./nodeEntitySync";
 
 /**
  * Handles node deletion by recording a history snapshot, cleaning up UI collapse states,
@@ -16,10 +17,17 @@ export function executeNodeDeletion(
 ): Partial<BackendCanvasState> {
   if (!nodeIds || nodeIds.length === 0) return {};
 
-  useSectionCollapseStore.getState().deleteNodeCollapseState(nodeIds);
+  const allNodeIdsToDelete = resolveCascadeDeletedNodeIds(
+    currentState.nodes,
+    currentState.edges,
+    nodeIds,
+  );
+  if (allNodeIdsToDelete.length === 0) return {};
+
+  useSectionCollapseStore.getState().deleteNodeCollapseState(allNodeIdsToDelete);
 
   const isSchema = currentState.nodes.some(
-    (n) => nodeIds.includes(n.id) && isSchemaNodeType(n.type),
+    (n) => allNodeIdsToDelete.includes(n.id) && isSchemaNodeType(n.type),
   );
   currentState.pushHistorySnapshot(isSchema ? "schema" : "graph");
 
@@ -32,12 +40,12 @@ export function executeNodeDeletion(
       currentState.edges,
       testCases,
       "Dezign2App Monorepo",
-      nodeIds,
+      allNodeIdsToDelete,
     );
     void handleNodeDeletionSync(currentState.projectId || "", diff);
   } catch (e) {
     console.error("[executeNodeDeletion] Failed to compute deletion diff:", e);
   }
 
-  return cleanupDeletedNodesState(currentState, nodeIds);
+  return cleanupDeletedNodesState(currentState, allNodeIdsToDelete);
 }

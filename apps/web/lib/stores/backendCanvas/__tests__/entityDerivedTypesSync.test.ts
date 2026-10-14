@@ -492,4 +492,113 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
       expect(edge?.data?.label).toBe("generates");
     }
   });
+
+  it("deletes the associated TypesNode and edge when an entity node is deleted", () => {
+    const store = useBackendCanvasStore.getState();
+
+    // 1. Add an Entity Node
+    const entityId = "entity-delete-test-1";
+    store.addNode({
+      id: entityId,
+      type: "entity",
+      position: { x: 100, y: 100 },
+      data: {
+        label: "customers",
+        tableName: "customers",
+        columns: [
+          { name: "id", type: "uuid", isPrimaryKey: true },
+          { name: "name", type: "varchar", isNotNull: true },
+        ],
+      },
+    });
+
+    // 2. Generate TypesNode from Entity
+    createTypesNodeFromEntity(entityId);
+
+    const stateWithTypes = useBackendCanvasStore.getState();
+    const typesNode = stateWithTypes.nodes.find(
+      (n) => n.type === "types" && n.data?.sourceEntityId === entityId,
+    );
+    expect(typesNode).toBeDefined();
+
+    const edge = stateWithTypes.edges.find(
+      (e) => e.source === entityId && e.target === typesNode!.id,
+    );
+    expect(edge).toBeDefined();
+
+    // Also add an unrelated TypesNode to ensure it is not deleted
+    store.addNode({
+      id: "unrelated-types",
+      type: "types",
+      position: { x: 500, y: 500 },
+      data: {
+        label: "Unrelated Types",
+        types: [{ id: "custom-type-1", name: "Custom", fields: [], kind:"type" }],
+      },
+    });
+
+    // 3. Delete the Entity Node
+    store.deleteNode(entityId);
+
+    const stateAfterDelete = useBackendCanvasStore.getState();
+
+    // Verify entity node is deleted
+    expect(stateAfterDelete.nodes.find((n) => n.id === entityId)).toBeUndefined();
+
+    // Verify associated TypesNode is deleted
+    expect(
+      stateAfterDelete.nodes.find((n) => n.id === typesNode!.id),
+    ).toBeUndefined();
+
+    // Verify connecting edge is deleted
+    expect(
+      stateAfterDelete.edges.find((e) => e.source === entityId || e.target === typesNode!.id),
+    ).toBeUndefined();
+
+    // Verify unrelated TypesNode is preserved
+    expect(
+      stateAfterDelete.nodes.find((n) => n.id === "unrelated-types"),
+    ).toBeDefined();
+  });
+
+  it("deletes associated TypesNode and extended TypesNode when entity is deleted", () => {
+    const store = useBackendCanvasStore.getState();
+
+    const entityId = "entity-delete-ext-test";
+    store.addNode({
+      id: entityId,
+      type: "entity",
+      position: { x: 100, y: 100 },
+      data: {
+        label: "products",
+        tableName: "products",
+        columns: [{ name: "id", type: "uuid", isPrimaryKey: true }],
+      },
+    });
+
+    createTypesNodeFromEntity(entityId);
+
+    const stateWithBase = useBackendCanvasStore.getState();
+    const baseTypesNode = stateWithBase.nodes.find(
+      (n) => n.data?.sourceEntityId === entityId,
+    )!;
+    expect(baseTypesNode).toBeDefined();
+
+    const baseType = baseTypesNode.data.types![0]!;
+    createExtendedTypeNode(baseTypesNode.id, baseType.id);
+
+    const stateWithExt = useBackendCanvasStore.getState();
+    const extTypesNode = stateWithExt.nodes.find(
+      (n) => n.data?.extendedFromNodeId === baseTypesNode.id,
+    );
+    expect(extTypesNode).toBeDefined();
+
+    // Delete entity
+    store.deleteNode(entityId);
+
+    const finalState = useBackendCanvasStore.getState();
+    expect(finalState.nodes.find((n) => n.id === entityId)).toBeUndefined();
+    expect(finalState.nodes.find((n) => n.id === baseTypesNode.id)).toBeUndefined();
+    expect(finalState.nodes.find((n) => n.id === extTypesNode!.id)).toBeUndefined();
+  });
 });

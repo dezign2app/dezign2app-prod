@@ -151,18 +151,32 @@ export function isNodeDerivedFromEntity(
   if (node.type !== "types") return false;
 
   // Explicit sourceEntityId in data
-  if (node.data.sourceEntityId === entityId) return true;
+  if (node.data?.sourceEntityId === entityId) return true;
 
   // Contains type with entity-derived ID
-  if (node.data.types?.some((t) => t.id === `type-entity-${entityId}`)) {
+  if (
+    node.data?.types?.some(
+      (t) =>
+        t.id === `type-entity-${entityId}` ||
+        t.id.startsWith(`type-entity-${entityId}`),
+    )
+  ) {
     return true;
   }
 
-  // Direct edge from entity
+  // ID follows entity-derived naming conventions
+  if (
+    node.id === `types-entity-${entityId}` ||
+    node.id.startsWith(`types-from-entity-${entityId}`)
+  ) {
+    return true;
+  }
+
+  // Direct edge from entity (either source or target)
   const hasEdge = edges.some(
     (e) =>
-      e.source === entityId &&
-      e.target === node.id &&
+      ((e.source === entityId && e.target === node.id) ||
+        (e.target === entityId && e.source === node.id)) &&
       (e.type === "type-reference" ||
         e.data?.label === "generates" ||
         e.data?.isTypeReference),
@@ -170,6 +184,86 @@ export function isNodeDerivedFromEntity(
   if (hasEdge) return true;
 
   return false;
+}
+
+/**
+ * Resolves the full set of node IDs that should be deleted, including:
+ * 1. The initial node IDs requested for deletion
+ * 2. Nested child nodes (nodes whose parentId is in the deletion set)
+ * 3. Database child entity nodes (tables belonging to deleted database nodes via databaseId or parentId)
+ * 4. Associated TypesNodes derived from any deleted EntityNode (or redis_schema)
+ * 5. Extended TypesNodes extending any deleted TypesNode (via extendedFromNodeId)
+ */
+export function resolveCascadeDeletedNodeIds(
+  nodes: BackendNode[],
+  edges: BackendEdge[] = [],
+  initialIdsToDelete: string[],
+): string[] {
+  const allIdsSet = new Set<string>();
+  initialIdsToDelete.forEach((id) => {
+    if (id) allIdsSet.add(id);
+  });
+
+  if (allIdsSet.size === 0) return [];
+
+  let addedNew = true;
+  while (addedNew) {
+    addedNew = false;
+    for (const node of nodes) {
+      if (!node || allIdsSet.has(node.id)) continue;
+
+      // 1. Nested child nodes via parentId
+      if (node.parentId && allIdsSet.has(node.parentId)) {
+        allIdsSet.add(node.id);
+        addedNew = true;
+        continue;
+      }
+      if (node.data?.parentId && allIdsSet.has(node.data.parentId)) {
+        allIdsSet.add(node.id);
+        addedNew = true;
+        continue;
+      }
+
+      // 2. Entity table nodes belonging to a deleted database node
+      if (
+        (node.type === "entity" || node.type === "redis_schema") &&
+        node.data?.databaseId &&
+        allIdsSet.has(node.data.databaseId)
+      ) {
+        allIdsSet.add(node.id);
+        addedNew = true;
+        continue;
+      }
+
+      // 3. Associated TypesNode derived from any deleted entity / redis_schema node
+      if (node.type === "types") {
+        let isDerivedFromDeletedEntity = false;
+        for (const deletedId of allIdsSet) {
+          if (isNodeDerivedFromEntity(node, deletedId, edges)) {
+            isDerivedFromDeletedEntity = true;
+            break;
+          }
+        }
+        if (isDerivedFromDeletedEntity) {
+          allIdsSet.add(node.id);
+          addedNew = true;
+          continue;
+        }
+
+        // 4. Extended TypesNode extending a deleted TypesNode
+        if (
+          node.data?.extendedFromNodeId &&
+          allIdsSet.has(node.data.extendedFromNodeId)
+        ) {
+          allIdsSet.add(node.id);
+          addedNew = true;
+          continue;
+        }
+      }
+    }
+  }
+
+  return Array.from(allIdsSet);
 }
 
 /**

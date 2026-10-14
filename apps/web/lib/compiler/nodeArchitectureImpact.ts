@@ -7,6 +7,7 @@ import {
   BrokenReferenceInfo,
 } from "@/app/(canvas)/project/[projectId]/_components/node-deletion-dialog/types";
 import { getNodeLabel } from "@/app/(canvas)/project/[projectId]/_components/node-deletion-dialog/utils";
+import { isNodeDerivedFromEntity } from "@/lib/stores/backendCanvas/node/nodeEntitySync";
 
 /**
  * Computes the canvas architecture blast radius when one or more nodes are deleted.
@@ -124,7 +125,35 @@ export function computeNodeArchitectureImpact(
     }
   });
 
-  // 3c. Nested / Child Canvas Nodes
+  // 3c. Nested / Child Canvas Nodes & Associated TypesNodes
+  const deletedEntityIds = new Set<string>();
+  nodes.forEach((node) => {
+    if (node.type === "entity" || node.type === "redis_schema") {
+      if (
+        deleteSet.has(node.id) ||
+        (node.data?.databaseId && deleteSet.has(node.data.databaseId)) ||
+        (node.data?.parentId && deleteSet.has(node.data.parentId)) ||
+        (node.parentId && deleteSet.has(node.parentId))
+      ) {
+        deletedEntityIds.add(node.id);
+      }
+    }
+  });
+
+  const deletedTypesIds = new Set<string>();
+  nodes.forEach((node) => {
+    if (node.type === "types") {
+      if (
+        deleteSet.has(node.id) ||
+        Array.from(deletedEntityIds).some((entId) =>
+          isNodeDerivedFromEntity(node, entId, edges),
+        )
+      ) {
+        deletedTypesIds.add(node.id);
+      }
+    }
+  });
+
   nodes.forEach((node) => {
     if (deleteSet.has(node.id)) return; // Already in target nodes
 
@@ -147,6 +176,21 @@ export function computeNodeArchitectureImpact(
         type: "entity",
         category: "schema",
         description: `Table schema belonging to deleted database`,
+      });
+    }
+
+    // Associated TypesNode of deleted entity or extended TypesNode
+    if (
+      node.type === "types" &&
+      (Array.from(deletedEntityIds).some((entId) => isNodeDerivedFromEntity(node, entId, edges)) ||
+        (node.data?.extendedFromNodeId && deletedTypesIds.has(node.data.extendedFromNodeId)))
+    ) {
+      cascadeElements.push({
+        id: node.id,
+        label: getNodeLabel(node),
+        type: "types",
+        category: "schema",
+        description: `Associated TypesNode of deleted entity`,
       });
     }
   });
