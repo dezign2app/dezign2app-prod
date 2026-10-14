@@ -19,6 +19,10 @@ import { NestedResponseSchemaEditor } from "../NestedResponseSchemaEditor";
 import { BindingSourceEditor } from "./BindingSourceEditor";
 import { PipelineStepDraft, StepBinding, AvailableSource } from "./types";
 import { getAvailableSources, HTTP_STATUS_OPTIONS } from "./utils";
+import {
+  isHealthEndpoint,
+  getHealthCheckResponseBindings,
+} from "@/lib/utils/healthCheckEndpoint";
 
 export interface ReturnResponseStepRowProps {
   step: PipelineStepDraft;
@@ -364,33 +368,48 @@ export const ReturnResponseStepRow = ({
                     <p className="text-[10px] text-muted-foreground/60">
                       Default response envelope will be returned.
                     </p>
-                    <p
-                      className="text-[9px] text-emerald-400/80 mt-0.5 cursor-pointer hover:underline"
-                      onClick={() => {
-                        const lastPrior = priorSteps[priorSteps.length - 1];
-                        const defaultBinding: StepBinding = lastPrior
-                          ? {
-                              argName: "data",
-                              source: {
-                                kind: "step_output",
-                                stepId: lastPrior.id,
-                                field: "",
-                              },
+                    {(() => {
+                      const isHealth = isHealthEndpoint(endpoint);
+                      return (
+                        <p
+                          className="text-[9px] text-emerald-400/80 mt-0.5 cursor-pointer hover:underline"
+                          onClick={() => {
+                            let next: StepBinding[];
+                            if (isHealth) {
+                              const serviceNode = allNodes.find((n) => n.id === serviceNodeId);
+                              const serviceName = serviceNode?.data?.label || "service";
+                              const servicePort = String(serviceNode?.data?.port || "8080");
+                              next = getHealthCheckResponseBindings(serviceName, servicePort);
+                            } else {
+                              const lastPrior = priorSteps[priorSteps.length - 1];
+                              const defaultBinding: StepBinding = lastPrior
+                                ? {
+                                    argName: "data",
+                                    source: {
+                                      kind: "step_output",
+                                      stepId: lastPrior.id,
+                                      field: "",
+                                    },
+                                  }
+                                : {
+                                    argName: "data",
+                                    source: { kind: "req_body", field: "" },
+                                  };
+                              next = [defaultBinding];
                             }
-                          : {
-                              argName: "data",
-                              source: { kind: "req_body", field: "" },
-                            };
-                        const next = [defaultBinding];
-                        onChange({
-                          ...step,
-                          inputBindings: next,
-                        });
-                        syncResponseBody(next);
-                      }}
-                    >
-                      Click here to return the result of the previous step.
-                    </p>
+                            onChange({
+                              ...step,
+                              inputBindings: next,
+                            });
+                            syncResponseBody(next);
+                          }}
+                        >
+                          {isHealth
+                            ? "Click here to populate standard health check response (status, service, port, timestamp)."
+                            : "Click here to return the result of the previous step."}
+                        </p>
+                      );
+                    })()}
                   </div>
                 ) : (
                   (step.inputBindings || []).map((binding, bi) => (

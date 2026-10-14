@@ -1,7 +1,9 @@
 /**
  * Fake data generation and initial request body seeding for endpoint test cases.
  */
-import { Endpoint, JSONValue, JSONObject } from "@/types/canvas";
+import { Endpoint, BackendNode, JSONValue, JSONObject } from "@/types/canvas";
+import { isHealthEndpoint } from "@/lib/utils/healthCheckEndpoint";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
 /**
  * Generates realistic fake data based on field name, type, and defaults.
@@ -240,3 +242,298 @@ export function getInitialBody(endpoint?: Endpoint | null): JSONValue {
 
   return {};
 }
+
+/**
+ * Generates an expected response payload matching the endpoint's configured response contract.
+ * Checks (in priority):
+ * 1. Explicit return_response pipeline step bindings
+ * 2. Configured responseBody schema (fields or rawJson)
+ * 3. responseFields
+ * 4. Health check endpoint standard response ({ status: "UP", service, port, timestamp })
+ * 5. Method-based compiler fallback
+ */
+export function getExpectedResponseBody(
+  endpoint?: Endpoint | null,
+  serviceNode?: BackendNode | null,
+): JSONValue {
+  if (!endpoint) return {};
+
+  const isHealth = isHealthEndpoint(endpoint);
+  const endpointNodeId =
+    (endpoint as { nodeId?: string }).nodeId ||
+    useBackendCanvasStore.getState().endpoints.find((e) => e.id === endpoint.id)?.nodeId;
+
+  const actualServiceNode =
+    serviceNode ??
+    (endpointNodeId
+      ? useBackendCanvasStore.getState().nodes.find((n) => n.id === endpointNodeId)
+      : useBackendCanvasStore.getState().nodes.find((n) =>
+          ((n.data?.endpoints as Endpoint[] | undefined) || []).some((e) => e.id === endpoint.id),  
+        ));
+  const serviceName = actualServiceNode?.data?.label || serviceNode?.data?.label || "service";
+  const servicePort = String(actualServiceNode?.data?.port || serviceNode?.data?.port || "8080");
+
+  // Canonical Health Check endpoint contract
+  if (isHealth) {
+    return {
+      status: "UP",
+      service: serviceName,
+      port: servicePort,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // 1. Pipeline Steps return_response step
+  if (endpoint.pipelineSteps && endpoint.pipelineSteps.length > 0) {
+    const returnStep = endpoint.pipelineSteps.find(
+      (s) => s.type === "return_response" && s.enabled !== false,
+    );
+    if (returnStep && returnStep.inputBindings && returnStep.inputBindings.length > 0) {
+      const bindings = returnStep.inputBindings;
+      const first = bindings[0];
+
+      // Single spread or unnamed binding
+      if (bindings.length === 1 && first && (first.argName === "_spread" || !first.argName)) {
+        const firstSource = first.source;
+        if (firstSource?.kind === "inline") {
+          const v = firstSource.value;
+          if (typeof v === "string" && (v.trim().startsWith("{") || v.trim().startsWith("["))) {
+            try {
+              return JSON.parse(v);
+            } catch {}
+          }
+          return v ?? "success";
+        }
+        if (firstSource?.kind === "req_body") {
+          return getInitialBody(endpoint);
+        }
+        return { data: "success" };
+      }
+
+      // Explicit field-level bindings
+      const obj: JSONObject = {};
+
+      for (const b of bindings) {
+        const key = b.argName?.trim();
+        if (!key) continue;
+        const source = b.source;
+        if (!source) {
+          obj[key] = generateFakeDataForField(key);
+          continue;
+        }
+
+        switch (source.kind) {
+          case "inline": {
+            const v = source.value;
+            if (typeof v === "number" || typeof v === "boolean") {
+              obj[key] = v;
+            } else {
+              const strVal = String(v ?? "");
+              if (strVal === "${new Date().toISOString()}" || strVal.includes("toISOString") || key.toLowerCase().includes("time")) {
+                obj[key] = new Date().toISOString();
+              } else if (
+                (strVal.includes("${") && strVal.includes("PORT")) ||
+                (key.toLowerCase() === "port" && (strVal === "8080" || strVal === "port" || !strVal))
+              ) {
+                obj[key] = servicePort;
+              } else if (
+                (strVal.includes("${") && (strVal.includes("service") || strVal.includes("name"))) ||
+                (key.toLowerCase() === "service" && (strVal === "service" || strVal === "<service name>" || !strVal))
+              ) {
+                obj[key] = serviceName;
+              } else if (!strVal.includes("${")) {
+                obj[key] = strVal;
+              } else {
+                obj[key] = generateFakeDataForField(key);
+              }
+            }
+            break;
+          }
+          case "req_body": {
+            const body = getInitialBody(endpoint);
+            const field = source.field;
+            if (field && typeof body === "object" && body !== null && !Array.isArray(body)) {
+              obj[key] = (body as JSONObject)[field] ?? generateFakeDataForField(key);
+            } else {
+              obj[key] = body;
+            }
+            break;
+          }
+          case "req_params": {
+            const field = source.field;
+            const param = endpoint.pathParams?.find((p) => p.name === field || p.key === field);
+            obj[key] = param?.defaultValue || param?.value || "1";
+            break;
+          }
+          case "req_query": {
+            const field = source.field;
+            const query = endpoint.queryParams?.find((p) => p.name === field || p.key === field);
+            obj[key] = query?.defaultValue || query?.value || "sample";
+            break;
+          }
+          case "req_headers": {
+            const field = source.field;
+            const header = endpoint.headers?.find((h) => h.key === field || h.name === field);
+            obj[key] = header?.defaultValue || header?.value || generateFakeDataForField(key);
+            break;
+          }
+          case "env": {
+            const envKey = source.field || key;
+            const envVars = (actualServiceNode?.data?.envVars as any[]) || [];
+            const envVar = envVars.find((e: any) => e.key === envKey || e.name === envKey);
+            obj[key] = envVar?.value || generateFakeDataForField(key);
+            break;
+          }
+          case "step_output": {
+            const stepId = source.stepId;
+            const priorStep = endpoint.pipelineSteps?.find((s) => s.id === stepId);
+            if (priorStep) {
+              if (priorStep.outputSchema && priorStep.outputSchema.length > 0) {
+                if (source.field) {
+                  const fieldMatch = priorStep.outputSchema.find(
+                    (f) => f.name === source.field,
+                  );
+                  obj[key] = generateFakeDataForField(source.field, fieldMatch?.type || "string");
+                } else {
+                  const stepObj: JSONObject = {};
+                  priorStep.outputSchema.forEach((f) => {
+                    stepObj[f.name] = generateFakeDataForField(f.name, f.type || "string");
+                  });
+                  obj[key] = stepObj;
+                }
+              } else if (priorStep.tableNodeId) {
+                const tableNode = useBackendCanvasStore
+                  .getState()
+                  .nodes.find((n) => n.id === priorStep.tableNodeId);
+                if (tableNode?.data?.columns) {
+                  if (source.field) {
+                    const col = (tableNode.data.columns as any[]).find((c: any) => c.name === source.field);
+                    obj[key] = generateFakeDataForField(source.field, col?.type || "string");
+                  } else {
+                    const row: JSONObject = {};
+                    (tableNode.data.columns as any[]).forEach((c: any) => {
+                      row[c.name] = generateFakeDataForField(c.name, c.type || "string");
+                    });
+                    obj[key] = row;
+                  }
+                } else {
+                  obj[key] = generateFakeDataForField(key);
+                }
+              } else {
+                obj[key] = generateFakeDataForField(key);
+              }
+            } else {
+              obj[key] = generateFakeDataForField(key);
+            }
+            break;
+          }
+          default: {
+            obj[key] = generateFakeDataForField(key);
+            break;
+          }
+        }
+      }
+
+      if (Object.keys(obj).length > 0) {
+        return obj;
+      }
+    }
+  }
+
+  // 2. responseBody configured with schema fields
+  if (endpoint.responseBody?.fields && endpoint.responseBody.fields.length > 0) {
+    const obj: JSONObject = {};
+    endpoint.responseBody.fields.forEach((f) => {
+      const fieldKey = f.key || f.name;
+      if (!fieldKey) return;
+      if (fieldKey.toLowerCase() === "service" && (f.defaultValue === "service" || f.value === "service" || !f.value)) {
+        obj[fieldKey] = serviceName;
+      } else if (fieldKey.toLowerCase() === "port" && (f.defaultValue === "8080" || f.value === "8080" || !f.value)) {
+        obj[fieldKey] = servicePort;
+      } else if (fieldKey.toLowerCase().includes("time") || fieldKey.toLowerCase().includes("date")) {
+        obj[fieldKey] = new Date().toISOString();
+      } else {
+        obj[fieldKey] = generateFakeDataForField(
+          fieldKey,
+          f.type || "string",
+          f.defaultValue,
+          f.required,
+        );
+      }
+    });
+    return obj;
+  }
+
+  // 3. responseBody configured with rawJson
+  if (endpoint.responseBody?.rawJson && endpoint.responseBody.rawJson.trim()) {
+    try {
+      const parsed: JSONValue = JSON.parse(endpoint.responseBody.rawJson);
+      return parsed;
+    } catch {}
+  }
+
+  // 4. responseFields
+  if (endpoint.responseFields && endpoint.responseFields.length > 0) {
+    const obj: JSONObject = {};
+    endpoint.responseFields.forEach((f) => {
+      const fieldKey = f.name;
+      if (!fieldKey) return;
+      if (fieldKey.toLowerCase() === "service") {
+        obj[fieldKey] = serviceName;
+      } else if (fieldKey.toLowerCase() === "port") {
+        obj[fieldKey] = servicePort;
+      } else if (fieldKey.toLowerCase().includes("time") || fieldKey.toLowerCase().includes("date")) {
+        obj[fieldKey] = new Date().toISOString();
+      } else {
+        obj[fieldKey] = generateFakeDataForField(
+          fieldKey,
+          f.type || "string",
+        );
+      }
+    });
+    return obj;
+  }
+
+  // 5. Standard compiler fallback
+  const method = (endpoint.type || "GET").toUpperCase();
+  const rawPath = endpoint.name || "/";
+  return {
+    message: `Successfully executed ${method} ${rawPath}`,
+  };
+}
+
+/**
+ * Generates an expected error response payload matching the endpoint's error contract.
+ */
+export function getExpectedErrorResponseBody(
+  endpoint?: Endpoint | null,
+): JSONValue {
+  if (!endpoint) return { error: "Validation Error" };
+
+  if (endpoint.errorResponseBody?.fields && endpoint.errorResponseBody.fields.length > 0) {
+    const obj: JSONObject = {};
+    endpoint.errorResponseBody.fields.forEach((f) => {
+      const fieldKey = f.key || f.name;
+      if (!fieldKey) return;
+      obj[fieldKey] = generateFakeDataForField(
+        fieldKey,
+        f.type || "string",
+        f.defaultValue,
+        f.required,
+      );
+    });
+    return obj;
+  }
+
+  if (endpoint.errorResponseBody?.rawJson && endpoint.errorResponseBody.rawJson.trim()) {
+    try {
+      const parsed: JSONValue = JSON.parse(endpoint.errorResponseBody.rawJson);
+      return parsed;
+    } catch {}
+  }
+
+  return {
+    error: "Validation Error",
+  };
+}
+

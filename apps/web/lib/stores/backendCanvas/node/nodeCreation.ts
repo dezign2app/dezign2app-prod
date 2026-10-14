@@ -17,6 +17,7 @@ import {
   mapColumnsToTypeFields,
   buildCompanionTypesNodeAndEdge,
 } from "./nodeEntitySync";
+import { createDefaultHealthEndpoint } from "@/lib/utils/healthCheckEndpoint";
 
 /**
  * Prepares and allocates ports, default endpoints, child web pages, and fractional indices
@@ -289,15 +290,19 @@ export function prepareNodeForAddition(
     const existingEndpoints = nextEndpoints.filter((e) => e.nodeId === node.id);
     if (existingEndpoints.length === 0) {
       const isExt = node.type === "external";
-      const defaultEp: EndpointWithNode = {
-        id: crypto.randomUUID(),
-        nodeId: node.id,
-        name: isExt ? "/v1/resource" : "/health",
-        type: isExt ? "POST" : "GET",
-        summary: isExt ? "External API action" : "Health check",
-        businessLogic: isExt ? "External API call" : "Test the health of the server",
-        responseFields: [],
-      };
+      const serviceName = finalNode.data?.label || "service";
+      const servicePort = String(finalNode.data?.port || "8080");
+      const defaultEp: EndpointWithNode = isExt
+        ? {
+            id: crypto.randomUUID(),
+            nodeId: node.id,
+            name: "/v1/resource",
+            type: "POST",
+            summary: "External API action",
+            businessLogic: "External API call",
+            responseFields: [],
+          }
+        : createDefaultHealthEndpoint(node.id, serviceName, servicePort);
       nextEndpoints = [...nextEndpoints, defaultEp];
       pendingEndpoints = [...pendingEndpoints, defaultEp];
     }
