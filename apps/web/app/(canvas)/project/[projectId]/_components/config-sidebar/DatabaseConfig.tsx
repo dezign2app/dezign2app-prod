@@ -215,7 +215,11 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
       position: { x: dbPos.x, y: dbPos.y + 220 },
       data: {
         label: "",
-        columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
+        columns: [
+          { name: "id", type: "TEXT", isPrimaryKey: true },
+          { name: "created_at", type: "TIMESTAMPTZ" },
+          { name: "updated_at", type: "TIMESTAMPTZ" },
+        ],
         indexes: [],
         databaseId: nodeId,
       },
@@ -751,6 +755,10 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
           password={data.password}
           connectionString={data.connectionString}
           connectionStringEnv={connStringEnv}
+          connectionStringPooled={data.connectionStringPooled}
+          connectionStringPooledEnv={data.connectionStringPooledEnv}
+          sslMode={data.sslMode}
+          provider={data.provider}
           dbFilePath={dbFilePath}
           dbFilePathEnv={dbFilePathEnv}
           lastStatus={data.lastConnectionStatus}

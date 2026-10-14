@@ -654,3 +654,401 @@ export function checkSqliteConnection(
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// SQLite Table Schema Sync & Drift Detection
+// ---------------------------------------------------------------------------
+
+export interface SqliteTableSyncResult {
+  success: boolean;
+  serverReachable: boolean;
+  tableExists: boolean;
+  inSync: boolean;
+  missingColumns: Array<{ name: string; type: string }>;
+  extraColumns: Array<{ name: string; type: string }>;
+  existingColumns: Array<{ name: string; type: string }>;
+  error?: string;
+}
+
+export interface SqliteApplySyncResult {
+  success: boolean;
+  createdTable: boolean;
+  appliedColumns: string[];
+  droppedColumns?: string[];
+  error?: string;
+}
+
+/**
+ * Checks if a table and its columns exist in the SQLite database file.
+ */
+export function checkSqliteTableSync(
+  dbFilePath = "dev.db",
+  tableName: string,
+  columns?: CanvasEntityColumn[],
+  projectDir?: string,
+): SqliteTableSyncResult {
+  let db: DatabaseSync | null = null;
+  const canvasCols = (columns || []).map((c) => ({
+    name: c.name,
+    type: c.type || "TEXT",
+  }));
+
+  try {
+    const resolvedPath = resolveSqlitePath(dbFilePath, projectDir);
+    if (!fs.existsSync(resolvedPath)) {
+      return {
+        success: true,
+        serverReachable: true,
+        tableExists: false,
+        inSync: false,
+        missingColumns: canvasCols,
+        extraColumns: [],
+        existingColumns: [],
+      };
+    }
+
+    db = new DatabaseSync(resolvedPath);
+    const safeTable = sanitizeIdentifier(tableName, "records");
+    const checkStmt = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND LOWER(name) = LOWER(?)",
+    );
+    const exists = checkStmt.get(safeTable);
+
+    if (!exists) {
+      return {
+        success: true,
+        serverReachable: true,
+        tableExists: false,
+        inSync: false,
+        missingColumns: canvasCols,
+        extraColumns: [],
+        existingColumns: [],
+      };
+    }
+
+    const infoStmt = db.prepare(`PRAGMA table_info("${safeTable}")`);
+    const existingRows = (infoStmt.all() || []) as Array<{ name: string; type: string }>;
+    const existingColumns = existingRows.map((r) => ({
+      name: r.name,
+      type: r.type,
+    }));
+    const existingColMap = new Map(
+      existingRows.map((r) => [r.name.toLowerCase(), r.type]),
+    );
+
+    const missingColumns = canvasCols.filter(
+      (c) => !existingColMap.has(c.name.toLowerCase()),
+    );
+    const canvasColNames = new Set(canvasCols.map((c) => c.name.toLowerCase()));
+    const extraColumns = existingColumns.filter(
+      (c) =>
+        !canvasColNames.has(c.name.toLowerCase()) &&
+        c.name.toLowerCase() !== "created_at" &&
+        c.name.toLowerCase() !== "updated_at",
+    );
+
+    return {
+      success: true,
+      serverReachable: true,
+      tableExists: true,
+      inSync: missingColumns.length === 0 && extraColumns.length === 0,
+      missingColumns,
+      extraColumns,
+      existingColumns,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      serverReachable: false,
+      tableExists: false,
+      inSync: false,
+      missingColumns: [],
+      extraColumns: [],
+      existingColumns: [],
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (db) {
+      try {
+        db.close();
+      } catch {}
+    }
+  }
+}
+
+/**
+ * Applies table creation or adds missing columns to the live SQLite file,
+ * and drops columns removed from the canvas.
+ */
+export function applySqliteTableSync(
+  dbFilePath = "dev.db",
+  tableName: string,
+  columns?: CanvasEntityColumn[],
+  projectDir?: string,
+): SqliteApplySyncResult {
+  let db: DatabaseSync | null = null;
+  try {
+    const resolvedPath = resolveSqlitePath(dbFilePath, projectDir);
+    const dir = path.dirname(resolvedPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    db = new DatabaseSync(resolvedPath);
+    const safeTable = sanitizeIdentifier(tableName, "records");
+    const checkStmt = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND LOWER(name) = LOWER(?)",
+    );
+    const exists = checkStmt.get(safeTable);
+
+    if (!exists) {
+      ensureSqliteTable(db, safeTable, columns);
+      return {
+        success: true,
+        createdTable: true,
+        appliedColumns: (columns || []).map((c) => c.name),
+      };
+    }
+
+    const infoStmt = db.prepare(`PRAGMA table_info("${safeTable}")`);
+    const existingRows = (infoStmt.all() || []) as Array<{ name: string }>;
+    const existingCols = new Set(existingRows.map((r) => r.name.toLowerCase()));
+    const canvasColNames = new Set((columns || []).map((c) => (c.name || "").toLowerCase()));
+    const appliedColumns: string[] = [];
+    const droppedColumns: string[] = [];
+
+    // 1. Add missing columns
+    for (const col of columns || []) {
+      const colName = sanitizeIdentifier(col.name, "col");
+      if (existingCols.has(colName.toLowerCase())) continue;
+      const colType = mapColumnTypeToSqlite(col.type);
+      db.exec(`ALTER TABLE "${safeTable}" ADD COLUMN "${colName}" ${colType}`);
+      appliedColumns.push(colName);
+    }
+
+    // 2. Drop columns deleted from canvas
+    for (const row of existingRows) {
+      const dbColLower = row.name.toLowerCase();
+      if (
+        !canvasColNames.has(dbColLower) &&
+        dbColLower !== "created_at" &&
+        dbColLower !== "updated_at"
+      ) {
+        try {
+          db.exec(`ALTER TABLE "${safeTable}" DROP COLUMN "${row.name}"`);
+          droppedColumns.push(row.name);
+        } catch {
+          // Ignore if older SQLite doesn't support DROP COLUMN
+        }
+      }
+    }
+
+    return {
+      success: true,
+      createdTable: false,
+      appliedColumns,
+      droppedColumns,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      createdTable: false,
+      appliedColumns: [],
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (db) {
+      try {
+        db.close();
+      } catch {}
+    }
+  }
+}
+
+export interface SqliteDropTableResult {
+  success: boolean;
+  droppedTable: string;
+  error?: string;
+}
+
+/**
+ * Drops a table from the local SQLite database file.
+ */
+export function dropSqliteTable(
+  dbFilePath: string,
+  tableName: string,
+  projectDir?: string,
+): SqliteDropTableResult {
+  const safeTable = tableName.replace(/[^a-zA-Z0-9_]/g, "");
+  if (!safeTable) {
+    return {
+      success: false,
+      droppedTable: tableName,
+      error: "Invalid table name",
+    };
+  }
+
+  const resolvedPath = resolveSqlitePath(dbFilePath, projectDir);
+  if (!fs.existsSync(resolvedPath)) {
+    return {
+      success: true,
+      droppedTable: safeTable,
+    };
+  }
+
+  let db: DatabaseSync | null = null;
+  try {
+    db = new DatabaseSync(resolvedPath);
+    db.exec(`DROP TABLE IF EXISTS "${safeTable}"`);
+    return {
+      success: true,
+      droppedTable: safeTable,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      droppedTable: safeTable,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (db) {
+      try {
+        db.close();
+      } catch {}
+    }
+  }
+}
+
+export interface SqliteRenameTableResult {
+  success: boolean;
+  oldTableName: string;
+  newTableName: string;
+  error?: string;
+}
+
+/**
+ * Renames a table in the local SQLite database file.
+ */
+export function renameSqliteTable(
+  dbFilePath: string,
+  oldTableName: string,
+  newTableName: string,
+  projectDir?: string,
+): SqliteRenameTableResult {
+  const safeOld = oldTableName.replace(/[^a-zA-Z0-9_]/g, "");
+  const safeNew = newTableName.replace(/[^a-zA-Z0-9_]/g, "");
+
+  if (!safeOld || !safeNew) {
+    return {
+      success: false,
+      oldTableName,
+      newTableName,
+      error: "Invalid table name",
+    };
+  }
+
+  const resolvedPath = resolveSqlitePath(dbFilePath, projectDir);
+  if (!fs.existsSync(resolvedPath)) {
+    return {
+      success: true,
+      oldTableName: safeOld,
+      newTableName: safeNew,
+    };
+  }
+
+  let db: DatabaseSync | null = null;
+  try {
+    db = new DatabaseSync(resolvedPath);
+    db.exec(`ALTER TABLE "${safeOld}" RENAME TO "${safeNew}"`);
+    return {
+      success: true,
+      oldTableName: safeOld,
+      newTableName: safeNew,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      oldTableName: safeOld,
+      newTableName: safeNew,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (db) {
+      try {
+        db.close();
+      } catch {}
+    }
+  }
+}
+
+export interface SqliteRenameColumnResult {
+  success: boolean;
+  tableName: string;
+  oldColumnName: string;
+  newColumnName: string;
+  error?: string;
+}
+
+/**
+ * Renames a column in the local SQLite database file.
+ */
+export function renameSqliteColumn(
+  dbFilePath: string,
+  tableName: string,
+  oldColumnName: string,
+  newColumnName: string,
+  projectDir?: string,
+): SqliteRenameColumnResult {
+  const safeTable = tableName.replace(/[^a-zA-Z0-9_]/g, "");
+  const safeOldCol = oldColumnName.replace(/[^a-zA-Z0-9_]/g, "");
+  const safeNewCol = newColumnName.replace(/[^a-zA-Z0-9_]/g, "");
+
+  if (!safeTable || !safeOldCol || !safeNewCol) {
+    return {
+      success: false,
+      tableName,
+      oldColumnName,
+      newColumnName,
+      error: "Invalid identifier for table or column",
+    };
+  }
+
+  const resolvedPath = resolveSqlitePath(dbFilePath, projectDir);
+  if (!fs.existsSync(resolvedPath)) {
+    return {
+      success: true,
+      tableName: safeTable,
+      oldColumnName: safeOldCol,
+      newColumnName: safeNewCol,
+    };
+  }
+
+  let db: DatabaseSync | null = null;
+  try {
+    db = new DatabaseSync(resolvedPath);
+    db.exec(
+      `ALTER TABLE "${safeTable}" RENAME COLUMN "${safeOldCol}" TO "${safeNewCol}"`,
+    );
+    return {
+      success: true,
+      tableName: safeTable,
+      oldColumnName: safeOldCol,
+      newColumnName: safeNewCol,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      tableName: safeTable,
+      oldColumnName: safeOldCol,
+      newColumnName: safeNewCol,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (db) {
+      try {
+        db.close();
+      } catch {}
+    }
+  }
+}
+

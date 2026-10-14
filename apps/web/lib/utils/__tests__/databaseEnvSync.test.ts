@@ -136,7 +136,7 @@ describe("databaseEnvSync", () => {
         connectionString: "postgresql://user:pass@host:5432/db",
       };
 
-      const { deleted, created } = await syncDatabaseLocalEnv(prevData, nextData as any, "proj-1");
+      const { deleted, created } = await syncDatabaseLocalEnv(prevData as any, nextData as any, "proj-1");
       expect(localEnvSync.deleteLocalEnvVariable).toHaveBeenCalledWith("DATABASE_URL", "proj-1");
       expect(localEnvSync.saveLocalEnvVariable).toHaveBeenCalledWith(
         "PRIMARY_DB_URL",
@@ -161,7 +161,7 @@ describe("databaseEnvSync", () => {
         connectionStringPooled: "",
       };
 
-      const { deleted } = await syncDatabaseLocalEnv(prevData, nextData as any, "proj-1");
+      const { deleted } = await syncDatabaseLocalEnv(prevData as any, nextData as any, "proj-1");
       expect(localEnvSync.deleteLocalEnvVariable).toHaveBeenCalledWith("DATABASE_URL_POOLED", "proj-1");
       expect(deleted).toContain("DATABASE_URL_POOLED");
     });

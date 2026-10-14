@@ -13,7 +13,8 @@ export function generatePostgresDbOperations(
   indexes: { name: string; columns: string; isUnique?: boolean }[] = [],
   _allNodes: BackendNode[] = [],
 ): DbOperationFunction[] {
-  const tableName = toTableName(label || "table");
+  const rawCleanLabel = (label || "").trim().replace(/[^a-zA-Z0-9_]/g, "");
+  const tableName = rawCleanLabel || toTableName(label || "table");
   const pascal = toPascal(tableName);
   const pascalSingular = toSingular(pascal);
   const pascalPlural = toPlural(pascal);
@@ -31,21 +32,39 @@ export function generatePostgresDbOperations(
   const pkType = sqlColumnToTsType(pkCol.type);
   const isStringPk = pkType === "string";
   const writableCols = columns.filter((c) => !c.isPrimaryKey);
+  const isCreatedAt = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === "createdat";
+  const isUpdatedAt = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === "updatedat";
 
   // Build param lists
   const insertColList = isStringPk ? [pkCol, ...writableCols] : writableCols;
   const insertColNames = insertColList.map((c) => `"${c.name}"`).join(", ");
   const insertParams = insertColList.map((_, i) => `$${i + 1}`).join(", ");
   const insertArgVals = insertColList
-    .map((c) => (c.isPrimaryKey ? "_id" : `${toVarName(c.name)} ?? null`))
+    .map((c) => {
+      if (c.isPrimaryKey) return "_id";
+      const v = toVarName(c.name);
+      if (isCreatedAt(c.name) || isUpdatedAt(c.name)) {
+        return `${v} || new Date().toISOString()`;
+      }
+      return `${v} ?? null`;
+    })
     .join(", ");
 
   const destructuredFields = insertColList.map((c) => toVarName(c.name)).join(", ") || pkVarName;
   const createDestructuredParam = `{ ${destructuredFields} }`;
 
-  const setClauses = writableCols.map((c, i) => `"${c.name}" = $${i + 2}`).join(", ");
-  const updateDestructured = writableCols.map((c) => toVarName(c.name)).join(", ");
-  const updateArgVals = writableCols.map((c) => `${toVarName(c.name)} ?? null`).join(", ");
+  const updateCols = writableCols.filter((c) => !isCreatedAt(c.name));
+  const setClauses = updateCols.map((c, i) => `"${c.name}" = $${i + 2}`).join(", ");
+  const updateDestructured = updateCols.map((c) => toVarName(c.name)).join(", ");
+  const updateArgVals = updateCols
+    .map((c) => {
+      const v = toVarName(c.name);
+      if (isUpdatedAt(c.name)) {
+        return `${v} || new Date().toISOString()`;
+      }
+      return `${v} ?? null`;
+    })
+    .join(", ");
 
   const pgConflictSets = writableCols.length > 0
     ? `DO UPDATE SET ` + writableCols.map((c) => `"${c.name}" = EXCLUDED."${c.name}"`).join(", ")
@@ -64,7 +83,7 @@ export function generatePostgresDbOperations(
     upsertCode = `export async function upsert${pascalSingular}({ ${destructuredFields} }: Upsert${pascal}Data): Promise<${pascal}> {\n  const res = await query<${pascal}>(\n    'INSERT INTO "${tableName}" (${insertColNames}) VALUES (${insertParams}) ON CONFLICT ("${pkColName}") ${pgConflictSets} RETURNING *',\n    [${insertArgVals}]\n  );\n  const row = res.rows[0];\n  if (!row) {\n    throw new Error("Failed to upsert record into ${tableName}");\n  }\n  return row;\n}`;
   }
 
-  const updateCode = writableCols.length > 0
+  const updateCode = updateCols.length > 0
     ? `export async function update${pascalSingular}(${pkVarName}: ${pkType}, { ${updateDestructured} }: Update${pascal}Data): Promise<${pascal} | null> {\n  const res = await query<${pascal}>(\n    'UPDATE "${tableName}" SET ${setClauses} WHERE "${pkColName}" = $1 RETURNING *',\n    [${pkVarName}, ${updateArgVals}]\n  );\n  return res.rows[0] || null;\n}`
     : `export async function update${pascalSingular}(${pkVarName}: ${pkType}): Promise<${pascal} | null> {\n  const res = await query<${pascal}>('SELECT * FROM "${tableName}" WHERE "${pkColName}" = $1 LIMIT 1', [${pkVarName}]);\n  return res.rows[0] || null;\n}`;
 
@@ -83,7 +102,7 @@ export function generatePostgresDbOperations(
       ],
       returnType: `Promise<${pascal}[]>`,
       pagination: { enabled: true, defaultLimit: 20, maxLimit: 100, mode: "offset" },
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Retrieve all records from the ${tableName} table using parameterized PostgreSQL query with limit and offset.`,
       code: `export async function findAll${pascalPlural}(limit = 20, offset = 0): Promise<${pascal}[]> {\n  const res = await query<${pascal}>('SELECT * FROM "${tableName}" ORDER BY "${pkColName}" LIMIT $1 OFFSET $2', [limit, offset]);\n  return res.rows;\n}`,
       enabled: true,
@@ -97,7 +116,7 @@ export function generatePostgresDbOperations(
       signature: `find${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<${pascal} | null>`,
       params: [{ name: pkVarName, type: pkType, required: true }],
       returnType: `Promise<${pascal} | null>`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Find a single record from the ${tableName} table by primary key (${pkColName}).`,
       code: `export async function find${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<${pascal} | null> {\n  const res = await query<${pascal}>('SELECT * FROM "${tableName}" WHERE "${pkColName}" = $1 LIMIT 1', [${pkVarName}]);\n  return res.rows[0] || null;\n}`,
       enabled: true,
@@ -111,7 +130,7 @@ export function generatePostgresDbOperations(
       signature: `create${pascalSingular}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}>`,
       params: [{ name: createDestructuredParam, type: `Create${pascal}Data`, required: true }],
       returnType: `Promise<${pascal}>`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Insert a new record into the ${tableName} table and return the created row.`,
       code: createCode,
       enabled: true,
@@ -122,19 +141,19 @@ export function generatePostgresDbOperations(
       name: `update${pascalSingular}`,
       kind: "update",
       description: `Update a ${tableName} record by ${pkColName}`,
-      signature: writableCols.length > 0
+      signature: updateCols.length > 0
         ? `update${pascalSingular}(${pkVarName}: ${pkType}, { ${updateDestructured} }: Update${pascal}Data): Promise<${pascal} | null>`
         : `update${pascalSingular}(${pkVarName}: ${pkType}): Promise<${pascal} | null>`,
       params: [
         { name: pkVarName, type: pkType, required: true },
         {
-          name: writableCols.length > 0 ? `{ ${updateDestructured} }` : "data",
+          name: updateCols.length > 0 ? `{ ${updateDestructured} }` : "data",
           type: `Update${pascal}Data`,
           required: true,
         },
       ],
       returnType: `Promise<${pascal} | null>`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Update an existing record in the ${tableName} table by primary key.`,
       code: updateCode,
       enabled: true,
@@ -148,7 +167,7 @@ export function generatePostgresDbOperations(
       signature: `upsert${pascalSingular}({ ${destructuredFields} }: Upsert${pascal}Data): Promise<${pascal}>`,
       params: [{ name: createDestructuredParam, type: `Upsert${pascal}Data`, required: true }],
       returnType: `Promise<${pascal}>`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Insert or update a record in the ${tableName} table on conflict and return the record.`,
       code: upsertCode,
       enabled: true,
@@ -162,7 +181,7 @@ export function generatePostgresDbOperations(
       signature: `delete${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<{ success: boolean; message: string }>`,
       params: [{ name: pkVarName, type: pkType, required: true }],
       returnType: `Promise<{ success: boolean; message: string }>`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Delete a record from the ${tableName} table by primary key.`,
       code: deleteCode,
       enabled: true,

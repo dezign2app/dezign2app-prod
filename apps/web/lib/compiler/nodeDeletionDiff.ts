@@ -3,6 +3,7 @@ import { Endpoint, AnyMessagingResource, CompiledFile } from "@workspace/canvas/
 import { compileMonorepo } from "./compileMonorepo";
 import { cleanupDeletedNodesState } from "@/lib/stores/backendCanvas/stateCleanup";
 import { BackendCanvasState } from "@/lib/stores/backendCanvas/types";
+import { resolveCascadeDeletedNodeIds } from "@/lib/stores/backendCanvas/node/nodeEntitySync";
 
 export interface DeletedNodeInfo {
   id: string;
@@ -57,23 +58,9 @@ export function computeNodeDeletionDiff(
     };
   }
 
-  // 1. Resolve all deleted node IDs including nested children
-  const getChildrenIds = (parentId: string): string[] => {
-    const children = nodes.filter((n) => n && n.parentId === parentId).map((n) => n.id);
-    let all: string[] = [...children];
-    for (const childId of children) {
-      all = [...all, ...getChildrenIds(childId)];
-    }
-    return all;
-  };
-
-  const allDeletedIds = new Set<string>();
-  nodeIdsToDelete.forEach((id) => {
-    if (id) {
-      allDeletedIds.add(id);
-      getChildrenIds(id).forEach((cId) => allDeletedIds.add(cId));
-    }
-  });
+  // 1. Resolve all deleted node IDs including nested children and associated TypesNodes
+  const resolvedIds = resolveCascadeDeletedNodeIds(nodes, edges, nodeIdsToDelete);
+  const allDeletedIds = new Set<string>(resolvedIds);
 
   // Extract deleted node info for user facing display
   const deletedNodes: DeletedNodeInfo[] = nodes
@@ -171,7 +158,7 @@ export function computeNodeDeletionDiff(
 
   const cleanupUpdates = cleanupDeletedNodesState(
     mockCurrentState,
-    nodeIdsToDelete,
+    resolvedIds,
   );
 
   const afterNodes = cleanupUpdates.nodes ?? nodes.filter((n) => !allDeletedIds.has(n.id));

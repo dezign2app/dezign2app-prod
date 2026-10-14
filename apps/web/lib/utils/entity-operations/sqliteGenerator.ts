@@ -38,12 +38,22 @@ export function generateDefaultDbOperations(
   const pkType = sqlColumnToTsType(pkCol.type);
 
   const writableCols: RawTableColumn[] = columns.filter((c) => !c.isPrimaryKey);
+  const isCreatedAt = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === "createdat";
+  const isUpdatedAt = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === "updatedat";
+
   const isStringPk = pkType === "string";
   const insertColList: RawTableColumn[] = isStringPk ? [pkCol, ...writableCols] : writableCols;
   const insertCols = insertColList.map((c) => c.name).join(", ");
   const insertPlaceholders = insertColList.map(() => "?").join(", ");
   const insertBindArgs = insertColList
-    .map((c) => (c.isPrimaryKey ? `_rowId` : `data.${toVarName(c.name)}`))
+    .map((c) => {
+      if (c.isPrimaryKey) return `_rowId`;
+      const v = `data.${toVarName(c.name)}`;
+      if (isCreatedAt(c.name) || isUpdatedAt(c.name)) {
+        return `(${v} || new Date().toISOString())`;
+      }
+      return v;
+    })
     .join(", ");
 
   const rowIdExpr =
@@ -66,8 +76,19 @@ export function generateDefaultDbOperations(
       }  return { ${pkColName}: _rowId, ${createMsgSnippet}...data } as unknown as ${pascal};\n}`
     : `export function create${pascalSingular}(): ${pascal} {\n  const info = db.prepare("INSERT INTO ${tableName} DEFAULT VALUES").run();\n  const _rowId = ${rowIdExpr};\n  return { ${pkColName}: _rowId${createDefaultMsgSnippet} } as unknown as ${pascal};\n}`;
 
-  const updateCode = writableCols.length > 0
-    ? `export function update${pascalSingular}(${pkVarName}: ${pkType}, data: Update${pascal}Data): ${pascal} | undefined {\n  const current = find${pascalSingular}ById(${pkVarName});\n  if (!current) return undefined;\n  const updated = { ...current, ...data };\n  stmtUpdate.run(${writableCols.map((c) => `updated.${toVarName(c.name)}`).join(", ")}, ${pkVarName});\n  const fresh = find${pascalSingular}ById(${pkVarName});\n  return fresh ? ({ ...fresh${updateMsgSnippet} } as unknown as ${pascal}) : undefined;\n}`
+  const updateCols = writableCols.filter((c) => !isCreatedAt(c.name));
+  const updateBindArgs = updateCols
+    .map((c) => {
+      const v = `updated.${toVarName(c.name)}`;
+      if (isUpdatedAt(c.name)) {
+        return `(${v} || new Date().toISOString())`;
+      }
+      return v;
+    })
+    .join(", ");
+
+  const updateCode = updateCols.length > 0
+    ? `export function update${pascalSingular}(${pkVarName}: ${pkType}, data: Update${pascal}Data): ${pascal} | undefined {\n  const current = find${pascalSingular}ById(${pkVarName});\n  if (!current) return undefined;\n  const updated = { ...current, ...data };\n  stmtUpdate.run(${updateBindArgs}, ${pkVarName});\n  const fresh = find${pascalSingular}ById(${pkVarName});\n  return fresh ? ({ ...fresh${updateMsgSnippet} } as unknown as ${pascal}) : undefined;\n}`
     : `export function update${pascalSingular}(${pkVarName}: ${pkType}): ${pascal} | undefined {\n  const fresh = find${pascalSingular}ById(${pkVarName});\n  return fresh ? ({ ...fresh${updateMsgSnippet} } as unknown as ${pascal}) : undefined;\n}`;
 
   const upsertConflictList = writableCols.length > 0
@@ -104,7 +125,7 @@ export function generateDefaultDbOperations(
         maxLimit: 100,
         mode: "offset",
       },
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Retrieve all records from the ${tableName} table using prepared statements with limit and offset pagination.`,
       code: `export function findAll${pascalPlural}(limit: number = 20, offset: number = 0): ${pascal}[] {\n  return stmtFindAll.all(limit, offset) as unknown as ${pascal}[];\n}`,
       enabled: true,
@@ -118,7 +139,7 @@ export function generateDefaultDbOperations(
       signature: `find${pascalSingular}ById(${pkVarName}: ${pkType}): ${pascal} | undefined`,
       params: [{ name: pkVarName, type: pkType, required: true }],
       returnType: `${pascal} | undefined`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Find a single record from the ${tableName} table by primary key (${pkColName}). Returns undefined if not found.`,
       code: `export function find${pascalSingular}ById(${pkVarName}: ${pkType}): ${pascal} | undefined {\n  return stmtFindById.get(${pkVarName}) as unknown as ${pascal} | undefined;\n}`,
       enabled: true,
@@ -132,7 +153,7 @@ export function generateDefaultDbOperations(
       signature: `create${pascalSingular}(data: Create${pascal}Data): ${pascal}`,
       params: [{ name: "data", type: `Create${pascal}Data`, required: true }],
       returnType: `${pascal}`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Insert a new record into the ${tableName} table with provided payload fields and return the created record.`,
       code: createCode,
       enabled: true,
@@ -149,7 +170,7 @@ export function generateDefaultDbOperations(
         { name: "data", type: `Update${pascal}Data`, required: true },
       ],
       returnType: `${pascal} | undefined`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Update an existing record in the ${tableName} table by primary key (${pkColName}) with partial fields data.`,
       code: updateCode,
       enabled: true,
@@ -163,7 +184,7 @@ export function generateDefaultDbOperations(
       signature: `upsert${pascalSingular}(data: Upsert${pascal}Data): ${pascal}`,
       params: [{ name: "data", type: `Upsert${pascal}Data`, required: true }],
       returnType: `${pascal}`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Insert or update a record in the ${tableName} table with provided payload fields and return the upserted record.`,
       code: upsertCode,
       enabled: true,
@@ -177,7 +198,7 @@ export function generateDefaultDbOperations(
       signature: `delete${pascalSingular}ById(${pkVarName}: ${pkType}): { success: boolean; message: string }`,
       params: [{ name: pkVarName, type: pkType, required: true }],
       returnType: `{ success: boolean; message: string }`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Delete a record from the ${tableName} table by primary key (${pkColName}).`,
       code: deleteCode,
       enabled: true,
@@ -298,7 +319,7 @@ export function generateDefaultDbOperations(
             maxLimit: 100,
             mode: "offset",
           },
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Find records from ${tableName} table matching ${whereClause}.`,
       code: indexCode,
       enabled: true,

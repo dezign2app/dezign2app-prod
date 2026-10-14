@@ -27,11 +27,14 @@ export const DB_COLUMN_TYPES = {
   VARCHAR: "VARCHAR",
   TEXT: "TEXT",
   BOOLEAN: "BOOLEAN",
+  TIMESTAMPTZ: "TIMESTAMPTZ",
   TIMESTAMP: "TIMESTAMP",
   INTEGER: "INTEGER",
   BIGINT: "BIGINT",
   SMALLINT: "SMALLINT",
   INT: "INT",
+  SERIAL: "SERIAL",
+  BIGSERIAL: "BIGSERIAL",
   JSON: "JSON",
   JSONB: "JSONB",
   DATE: "DATE",
@@ -39,6 +42,9 @@ export const DB_COLUMN_TYPES = {
   FLOAT: "FLOAT",
   DECIMAL: "DECIMAL",
   NUMERIC: "NUMERIC",
+  REAL: "REAL",
+  DOUBLE_PRECISION: "DOUBLE PRECISION",
+  BYTEA: "BYTEA",
   VECTOR: "VECTOR",
 } as const;
 
@@ -50,11 +56,13 @@ export const SQL_NUMERIC_COLUMN_TYPES = [
   "bigint",
   "number",
   "serial",
+  "bigserial",
   "smallint",
   "tinyint",
   "float",
   "real",
   "double",
+  "double precision",
   "numeric",
   "decimal",
 ] as const;
@@ -73,8 +81,10 @@ export const SQL_STRING_COLUMN_TYPES = [
   "date",
   "time",
   "timestamp",
+  "timestamptz",
   "json",
   "jsonb",
+  "bytea",
 ] as const;
 
 export function isSqlNumericType(type?: string): boolean {
@@ -94,3 +104,8 @@ export function sqlColumnToTsType(type?: string): "number" | "boolean" | "string
   return "string";
 }
 
+export const DEFAULT_ENTITY_COLUMNS = [
+  { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true },
+  { name: "created_at", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
+  { name: "updated_at", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
+] as const;

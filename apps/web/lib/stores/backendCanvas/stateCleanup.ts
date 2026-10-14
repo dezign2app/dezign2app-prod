@@ -7,32 +7,20 @@ import {
 } from "@workspace/canvas/types";
 import { PageSection, UIEventItem } from "@/types/canvas";
 import { BackendCanvasState } from "./types";
+import { resolveCascadeDeletedNodeIds } from "./node/nodeEntitySync";
 
 export function cleanupDeletedNodesState(
   currentState: BackendCanvasState,
   initialIdsToDelete: string[],
 ): Partial<BackendCanvasState> {
-  const getChildrenIds = (parentId: string): string[] => {
-    const children = currentState.nodes
-      .filter((n) => n && n.parentId === parentId)
-      .map((n) => n.id);
-    let allIds = [...children];
-    for (const childId of children) {
-      allIds = [...allIds, ...getChildrenIds(childId)];
-    }
-    return allIds;
-  };
-
-  const allIdsSet = new Set<string>();
-  initialIdsToDelete.forEach((id) => {
-    if (id) {
-      allIdsSet.add(id);
-      getChildrenIds(id).forEach((childId) => allIdsSet.add(childId));
-    }
-  });
-
-  const idsToDeleteArray = Array.from(allIdsSet);
+  const idsToDeleteArray = resolveCascadeDeletedNodeIds(
+    currentState.nodes,
+    currentState.edges,
+    initialIdsToDelete,
+  );
   if (idsToDeleteArray.length === 0) return {};
+
+  const allIdsSet = new Set<string>(idsToDeleteArray);
 
   // 1. Next Nodes (and clean up internal references on auth nodes)
   const nextNodes = currentState.nodes

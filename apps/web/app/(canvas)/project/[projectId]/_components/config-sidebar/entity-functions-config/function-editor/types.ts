@@ -12,6 +12,7 @@ export interface FunctionDetailEditorProps {
   onCancelNew?: () => void;
   onSaveNew?: () => void;
   label: string;
+  schema?: string;
   columns?: CanvasEntityColumn[];
   indexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
   dbType?: string;

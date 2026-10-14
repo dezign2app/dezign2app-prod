@@ -2,10 +2,25 @@ import { getElectronAPI } from "@/lib/electron";
 import {
   testDbOperationAction,
   checkDbConnectionAction,
+  checkDbTableSyncAction,
+  applyDbTableSyncAction,
+  dropDbTableAction,
+  renameDbTableAction,
+  renameDbColumnAction,
   type TestDbOperationPayload,
   type TestDbOperationResult,
   type CheckDbConnectionPayload,
   type CheckDbConnectionResult,
+  type CheckDbTableSyncPayload,
+  type CheckDbTableSyncResult,
+  type ApplyDbTableSyncPayload,
+  type ApplyDbTableSyncResult,
+  type DropDbTablePayload,
+  type DropDbTableResult,
+  type RenameDbTablePayload,
+  type RenameDbTableResult,
+  type RenameDbColumnPayload,
+  type RenameDbColumnResult,
   type JsonValue,
   type JsonObject,
   type JsonArray,
@@ -16,6 +31,16 @@ export type {
   TestDbOperationResult,
   CheckDbConnectionPayload,
   CheckDbConnectionResult,
+  CheckDbTableSyncPayload,
+  CheckDbTableSyncResult,
+  ApplyDbTableSyncPayload,
+  ApplyDbTableSyncResult,
+  DropDbTablePayload,
+  DropDbTableResult,
+  RenameDbTablePayload,
+  RenameDbTableResult,
+  RenameDbColumnPayload,
+  RenameDbColumnResult,
   JsonValue,
   JsonObject,
   JsonArray,
@@ -79,3 +104,123 @@ export async function checkDatabaseConnection(
 
   return checkDbConnectionAction(payload);
 }
+
+/**
+ * Check whether a table and all its columns exist in the connected database.
+ */
+export async function checkDbTableSync(
+  payload: CheckDbTableSyncPayload,
+): Promise<CheckDbTableSyncResult> {
+  const electron = getElectronAPI();
+  if (electron?.db?.checkTableSync) {
+    try {
+      return await electron.db.checkTableSync(payload);
+    } catch (err) {
+      return {
+        success: false,
+        serverReachable: false,
+        tableExists: false,
+        inSync: false,
+        missingColumns: [],
+        extraColumns: [],
+        existingColumns: [],
+        error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  return checkDbTableSyncAction(payload);
+}
+
+/**
+ * Apply table creation or add missing columns to the connected live database.
+ */
+export async function applyDbTableSync(
+  payload: ApplyDbTableSyncPayload,
+): Promise<ApplyDbTableSyncResult> {
+  const electron = getElectronAPI();
+  if (electron?.db?.applyTableSync) {
+    try {
+      return await electron.db.applyTableSync(payload);
+    } catch (err) {
+      return {
+        success: false,
+        createdTable: false,
+        appliedColumns: [],
+        error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  return applyDbTableSyncAction(payload);
+}
+
+/**
+ * Drop a physical table from the connected live database.
+ */
+export async function dropDbTable(
+  payload: DropDbTablePayload,
+): Promise<DropDbTableResult> {
+  const electron = getElectronAPI();
+  if (electron?.db?.dropTable) {
+    try {
+      return await electron.db.dropTable(payload);
+    } catch (err) {
+      return {
+        success: false,
+        droppedTable: payload.tableName,
+        error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  return dropDbTableAction(payload);
+}
+
+/**
+ * Rename a physical table in the connected live database.
+ */
+export async function renameDbTable(
+  payload: RenameDbTablePayload,
+): Promise<RenameDbTableResult> {
+  const electron = getElectronAPI();
+  if (electron?.db?.renameTable) {
+    try {
+      return await electron.db.renameTable(payload);
+    } catch (err) {
+      return {
+        success: false,
+        oldTableName: payload.oldTableName,
+        newTableName: payload.newTableName,
+        error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  return renameDbTableAction(payload);
+}
+
+/**
+ * Rename a physical column in the connected live database.
+ */
+export async function renameDbColumn(
+  payload: RenameDbColumnPayload,
+): Promise<RenameDbColumnResult> {
+  const electron = getElectronAPI();
+  if (electron?.db?.renameColumn) {
+    try {
+      return await electron.db.renameColumn(payload);
+    } catch (err) {
+      return {
+        success: false,
+        tableName: payload.tableName,
+        oldColumnName: payload.oldColumnName,
+        newColumnName: payload.newColumnName,
+        error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  return renameDbColumnAction(payload);
+}
+

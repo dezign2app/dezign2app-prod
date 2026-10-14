@@ -1,7 +1,11 @@
 import React, { useState } from "react";
-import { Plus, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, Clock } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { ColumnItem, ColumnRow } from "./ColumnRow";
+import { EntityRenameDialog } from "./EntityRenameDialog";
+import { renameDbColumn } from "@/lib/services/databaseService";
+import { syncDerivedTypesForEntity } from "@/lib/stores/backendCanvas/packageTypesSync";
+import { toast } from "sonner";
 
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
@@ -33,6 +37,25 @@ export const ColumnList = ({
   const [editingName, setEditingName] = useState("");
   const [editingType, setEditingType] = useState("TEXT");
   const [nameError, setNameError] = useState(false);
+  const [pendingColRename, setPendingColRename] = useState<{
+    oldName: string;
+    newName: string;
+    index: number;
+    changes: Partial<ColumnItem>;
+  } | null>(null);
+
+  const parentDb = allNodes.find((n) => n.id === data.databaseId);
+  const dbData = (parentDb?.data || {}) as NonNullable<BackendNode["data"]>;
+  const engine = (dbData.dbEngine || "postgres").toLowerCase();
+  const hasLiveConnection = Boolean(
+    dbData.connectionString ||
+      dbData.connectionStringEnv ||
+      dbData.connectionStringPooled ||
+      dbData.connectionStringPooledEnv ||
+      dbData.host ||
+      dbData.dbFilePath ||
+      dbData.dbFilePathEnv,
+  );
 
   const syncNodeData = (newCols: ColumnItem[], newIndexes?: BackendNode["data"]["indexes"]) => {
     const nextData: BackendNode["data"] = {
@@ -58,24 +81,30 @@ export const ColumnList = ({
     setNameError(false);
   };
 
-  const handleUpdate = (index: number, changes: Partial<ColumnItem>) => {
+  const hasCreatedAt = items.some(
+    (c) => c.name?.toLowerCase().replace(/[^a-z0-9]/g, "") === "createdat",
+  );
+  const hasUpdatedAt = items.some(
+    (c) => c.name?.toLowerCase().replace(/[^a-z0-9]/g, "") === "updatedat",
+  );
+  const missingTimestamps = !isVector && data?.dbType !== "redis" && (!hasCreatedAt || !hasUpdatedAt);
+
+  const handleAddTimestamps = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const toAdd: ColumnItem[] = [];
+    if (!hasCreatedAt) toAdd.push({ name: "created_at", type: "TIMESTAMPTZ" });
+    if (!hasUpdatedAt) toAdd.push({ name: "updated_at", type: "TIMESTAMPTZ" });
+    if (toAdd.length > 0) {
+      updateNode(nodeId, { data: syncNodeData([...items, ...toAdd]) });
+      syncDerivedTypesForEntity(nodeId, { openConfig: false });
+      toast.success("Added timestamp columns (created_at, updated_at)");
+    }
+  };
+
+  const applyColumnUpdate = (index: number, changes: Partial<ColumnItem>) => {
     let newCols = [...items];
     const oldCol = items[index];
     const oldColName = oldCol?.name;
-    if (
-      changes.name &&
-      changes.name.trim() !== "" &&
-      changes.name !== items[index]?.name
-    ) {
-      const isDuplicate = newCols.some(
-        (c, idx) =>
-          idx !== index && c.name.toLowerCase() === changes.name!.toLowerCase(),
-      );
-      if (isDuplicate) {
-        setNameError(true);
-        return;
-      }
-    }
     newCols[index] = { ...newCols[index]!, ...changes };
     const newColName = newCols[index]?.name;
 
@@ -101,6 +130,89 @@ export const ColumnList = ({
     }
 
     updateNode(nodeId, { data: syncNodeData(newCols, newIndexes) });
+  };
+
+  const handleUpdate = (index: number, changes: Partial<ColumnItem>) => {
+    let newCols = [...items];
+    const oldCol = items[index];
+    const oldColName = oldCol?.name?.trim();
+    const newColName = changes.name?.trim();
+
+    if (
+      changes.name &&
+      changes.name.trim() !== "" &&
+      changes.name !== items[index]?.name
+    ) {
+      const isDuplicate = newCols.some(
+        (c, idx) =>
+          idx !== index && c.name.toLowerCase() === changes.name!.toLowerCase(),
+      );
+      if (isDuplicate) {
+        setNameError(true);
+        return;
+      }
+    }
+
+    if (
+      hasLiveConnection &&
+      oldColName &&
+      newColName &&
+      oldColName !== newColName
+    ) {
+      setPendingColRename({
+        oldName: oldColName,
+        newName: newColName,
+        index,
+        changes,
+      });
+      return;
+    }
+
+    applyColumnUpdate(index, changes);
+  };
+
+  const executeColumnRename = async (renameLive: boolean) => {
+    if (!pendingColRename) return;
+    const { oldName, newName, index, changes } = pendingColRename;
+
+    if (renameLive && parentDb) {
+      const renameRes = await renameDbColumn({
+        engine,
+        connection: {
+          host: dbData.host,
+          port: dbData.port,
+          database: dbData.database,
+          user: dbData.user || dbData.username,
+          password: dbData.password,
+          connectionString: dbData.connectionString || dbData.connectionStringPooled,
+          connectionStringEnv: dbData.connectionStringEnv,
+          connectionStringPooled: dbData.connectionStringPooled,
+          connectionStringPooledEnv: dbData.connectionStringPooledEnv,
+          sslMode: dbData.sslMode,
+          provider: dbData.provider,
+          dbFilePath: dbData.dbFilePath,
+          dbFilePathEnv: dbData.dbFilePathEnv,
+        },
+        tableName: data.tableName || data.label || "table",
+        schema: data.schema || parentDb?.data?.schema || "public",
+        oldColumnName: oldName,
+        newColumnName: newName,
+      });
+
+      if (renameRes.success) {
+        toast.success(
+          `Renamed column "${oldName}" to "${newName}" on live ${engine.toUpperCase()} database`,
+        );
+      } else {
+        toast.error(
+          `Failed to rename column on live database: ${renameRes.error || "Unknown error"}`,
+        );
+      }
+    }
+
+    applyColumnUpdate(index, changes);
+    syncDerivedTypesForEntity(nodeId, { openConfig: false });
+    setPendingColRename(null);
   };
 
   const handleDelete = (index: number) => {
@@ -140,15 +252,26 @@ export const ColumnList = ({
           )}
         </div>
         {!data?.readOnly && (
-          <div
-            className="opacity-0 group-hover:opacity-100 cursor-pointer text-muted-foreground hover:text-foreground transition-all p-0.5"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleAdd();
-            }}
-            title="Add Column"
-          >
-            <Plus size={12} />
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+            {missingTimestamps && (
+              <div
+                className="cursor-pointer text-muted-foreground hover:text-amber-500 p-0.5"
+                onClick={handleAddTimestamps}
+                title="Add timestamp columns (created_at, updated_at)"
+              >
+                <Clock size={12} />
+              </div>
+            )}
+            <div
+              className="cursor-pointer text-muted-foreground hover:text-foreground transition-all p-0.5"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAdd();
+              }}
+              title="Add Column"
+            >
+              <Plus size={12} />
+            </div>
           </div>
         )}
       </div>
@@ -174,6 +297,27 @@ export const ColumnList = ({
             />
           ))}
         </div>
+      )}
+
+      {/* Column Rename Migration Dialog */}
+      {pendingColRename && (
+        <EntityRenameDialog
+          open={Boolean(pendingColRename)}
+          onOpenChange={(open) => {
+            if (!open) setPendingColRename(null);
+          }}
+          mode="column"
+          tableName={data.tableName || data.label || "table"}
+          schema={data.schema || parentDb?.data?.schema || "public"}
+          oldName={pendingColRename.oldName}
+          newName={pendingColRename.newName}
+          dbEngine={engine}
+          dbLabel={dbData.label || "Database"}
+          hasLiveConnection={hasLiveConnection}
+          onConfirm={async (renameLive) => {
+            await executeColumnRename(renameLive);
+          }}
+        />
       )}
     </div>
   );

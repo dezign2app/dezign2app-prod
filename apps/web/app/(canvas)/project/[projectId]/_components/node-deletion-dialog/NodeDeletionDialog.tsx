@@ -3,13 +3,15 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { AlertDialog, AlertDialogContent } from "@workspace/ui/components/alert-dialog";
 import { Button } from "@workspace/ui/components/button";
-import { Trash, Loader2 } from "lucide-react";
+import { Trash, Loader2, AlertTriangle, Database, Layers } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { computeNodeDeletionDiff } from "@/lib/compiler/nodeDeletionDiff";
 import { computeNodeArchitectureImpact } from "@/lib/compiler/nodeArchitectureImpact";
 import { getSavedWorkspaceDir, handleNodeDeletionSync } from "@/lib/compiler/nodeDeletionSync";
 import { isElectron } from "@/lib/electron";
+import { dropDbTable } from "@/lib/services/databaseService";
+import { isNodeDerivedFromEntity } from "@/lib/stores/backendCanvas/node/nodeEntitySync";
 import { toast } from "sonner";
 import { cn } from "@workspace/ui/lib/utils";
 
@@ -152,6 +154,44 @@ function NodeDeletionDialogInner({
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [dropLiveTable, setDropLiveTable] = useState<boolean>(true);
+
+  // Detect entity tables being deleted
+  const deletedEntityNodes = useMemo(() => {
+    if (!effectiveTarget) return EMPTY_NODES;
+    if (effectiveTarget.type === "nodes") {
+      const targetIds = new Set(effectiveTarget.nodes.map((n) => n.id));
+      return nodes.filter(
+        (n) =>
+          n.type === "entity" &&
+          (targetIds.has(n.id) ||
+            (n.data?.databaseId && targetIds.has(n.data.databaseId)) ||
+            (n.data?.parentId && targetIds.has(n.data.parentId)) ||
+            (n.parentId && targetIds.has(n.parentId))),
+      );
+    }
+    return EMPTY_NODES;
+  }, [effectiveTarget, nodes]);
+
+  // Detect associated TypesNodes derived from or linked to deleted entities
+  const associatedTypesNodes = useMemo(() => {
+    if (deletedEntityNodes.length === 0) return EMPTY_NODES;
+    const entityIds = new Set(deletedEntityNodes.map((e) => e.id));
+    const directTypes = nodes.filter(
+      (n) =>
+        n.type === "types" &&
+        (Array.from(entityIds).some((entId) => isNodeDerivedFromEntity(n, entId, edges)) ||
+          (n.data?.sourceEntityId && entityIds.has(n.data.sourceEntityId))),
+    );
+    const directTypesIds = new Set(directTypes.map((n) => n.id));
+    const extTypes = nodes.filter(
+      (n) =>
+        n.type === "types" &&
+        n.data?.extendedFromNodeId &&
+        directTypesIds.has(n.data.extendedFromNodeId),
+    );
+    return [...directTypes, ...extTypes];
+  }, [deletedEntityNodes, nodes, edges]);
 
   const filteredFiles: AffectedItem[] = useMemo(() => {
     const items: AffectedItem[] = [
@@ -275,6 +315,44 @@ function NodeDeletionDialogInner({
   const handleConfirmDelete = async () => {
     setIsDeleting(true);
     try {
+      // 1. If dropping live physical tables from connected DB
+      if (dropLiveTable && deletedEntityNodes.length > 0) {
+        for (const ent of deletedEntityNodes) {
+          const parentDb = nodes.find((n) => n.id === ent.data?.databaseId);
+          if (!parentDb) continue;
+          const dbData = (parentDb.data || {}) as NonNullable<BackendNode["data"]>;
+          const engine = (dbData.dbEngine || "postgres").toLowerCase();
+          const tableName = ent.data?.tableName || ent.data?.label;
+          if (!tableName) continue;
+
+          try {
+            const dropRes = await dropDbTable({
+              engine,
+              connection: {
+                host: dbData.host,
+                port: dbData.port,
+                database: dbData.database,
+                user: dbData.user || dbData.username,
+                password: dbData.password,
+                connectionString: dbData.connectionString,
+                connectionStringEnv: dbData.connectionStringEnv,
+                dbFilePath: dbData.dbFilePath,
+                dbFilePathEnv: dbData.dbFilePathEnv,
+              },
+              tableName,
+              schema: ent.data?.schema || dbData.schema || "public",
+            });
+            if (dropRes.success) {
+              toast.success(`Dropped table "${tableName}" from live ${engine.toUpperCase()} database`);
+            } else {
+              toast.error(`Failed to drop table "${tableName}": ${dropRes.error || "Unknown error"}`);
+            }
+          } catch (err) {
+            console.error(`[NodeDeletionDialog] Error dropping table "${tableName}":`, err);
+          }
+        }
+      }
+
       if (effectiveTarget && "onConfirm" in effectiveTarget && typeof effectiveTarget.onConfirm === "function") {
         if (computationResult.diff && (computationResult.diff.deletedFiles.length > 0 || computationResult.diff.totalAffectedCount > 0)) {
           await handleNodeDeletionSync(projectId, computationResult.diff);
@@ -440,6 +518,102 @@ function NodeDeletionDialogInner({
 
         {/* Content Body */}
         <div className="flex-1 overflow-hidden p-4 flex flex-col gap-3 bg-[#111216]">
+          {/* Prominent Entity & Database Table Drop Warning Banner */}
+          {deletedEntityNodes.length > 0 && (
+            <div className="p-3.5 rounded-xl border border-red-500/40 bg-gradient-to-r from-red-950/60 via-red-900/30 to-amber-950/40 text-red-100 flex flex-col gap-2.5 shadow-lg shrink-0">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 shrink-0 mt-0.5">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm text-red-200">
+                      Live Database Table Drop & Types Deletion Warning
+                    </span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 uppercase tracking-wide">
+                      Destructive Action
+                    </span>
+                  </div>
+                  <p className="text-xs text-red-200/80 mt-1 leading-relaxed">
+                    Deleting {deletedEntityNodes.length === 1 ? `table "${deletedEntityNodes[0]?.data?.label || "table"}"` : `${deletedEntityNodes.length} tables`} will drop the physical table(s) from your live connected database and cascade-delete all associated Types nodes.
+                  </p>
+
+                  {/* Breakdown of Tables to Drop and Types to Delete */}
+                  <div className="mt-2.5 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                    {/* Live DB Table Drop */}
+                    <div className="p-2.5 rounded-lg bg-black/40 border border-red-500/25 flex flex-col gap-1.5">
+                      <span className="text-[10px] uppercase font-bold text-red-400 tracking-wider flex items-center gap-1.5">
+                        <Database className="w-3.5 h-3.5" /> Live Database Table Drop
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 mt-0.5">
+                        {deletedEntityNodes.map((ent) => {
+                          const parentDb = nodes.find((n) => n.id === ent.data?.databaseId);
+                          const engine = (parentDb?.data?.dbEngine || "postgres").toUpperCase();
+                          return (
+                            <span
+                              key={ent.id}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/40 border border-red-700/50 text-red-200 font-mono text-[11px]"
+                            >
+                              DROP TABLE "{ent.data?.tableName || ent.data?.label}" ({engine})
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <span className="text-[10px] text-zinc-400 mt-0.5">
+                        All stored records in these tables will be permanently dropped from the connected database.
+                      </span>
+                    </div>
+
+                    {/* Associated Types Nodes Cascade */}
+                    <div className="p-2.5 rounded-lg bg-black/40 border border-amber-500/25 flex flex-col gap-1.5">
+                      <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5" /> Associated Types Nodes Cascade
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 mt-0.5">
+                        {associatedTypesNodes.length > 0 ? (
+                          associatedTypesNodes.map((tn) => (
+                            <span
+                              key={tn.id}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-900/40 border border-amber-700/50 text-amber-200 font-mono text-[11px]"
+                            >
+                              {tn.data?.label || "Types"}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-zinc-500 text-[11px] italic">No derived types nodes found</span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-zinc-400 mt-0.5">
+                        TypeScript type definitions, model interfaces, and downstream service links will be removed.
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Checkbox option for dropping the live physical table */}
+                  <div className="mt-3 flex items-center gap-2 pt-2 border-t border-red-500/20">
+                    <input
+                      type="checkbox"
+                      id="dropLiveTableCheckbox"
+                      checked={dropLiveTable}
+                      onChange={(e) => setDropLiveTable(e.target.checked)}
+                      className="w-4 h-4 rounded border-red-700 bg-red-950/80 text-red-600 focus:ring-red-500 cursor-pointer"
+                    />
+                    <label
+                      htmlFor="dropLiveTableCheckbox"
+                      className="text-xs font-medium text-red-200 cursor-pointer select-none flex items-center gap-1.5"
+                    >
+                      <span>Also execute</span>
+                      <code className="bg-red-950 px-1.5 py-0.5 rounded text-red-300 font-mono text-[11px]">
+                        DROP TABLE ... CASCADE
+                      </code>
+                      <span>on the live connected database</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* View Tab Switcher: Architecture Impact vs Code & Files Diff */}
           <NodeDeletionTabNav
             activeTab={activeTab}

@@ -57,6 +57,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
     node.data?.dbEngine === "redis";
 
   const label = node.data.label || (isRedis ? "Cache" : "Table");
+  const schema: string | undefined = node.data.schema as string | undefined;
   const columns = node.data.columns || [];
   const indexes = node.data.indexes || [];
   const pascalLabel = label.charAt(0).toUpperCase() + label.slice(1);
@@ -323,6 +324,7 @@ export const EntityFunctionsConfig: React.FC<EntityFunctionsConfigProps> = ({
             setIsNewOp(false);
           }}
           label={label}
+          schema={schema}
           columns={columns}
           indexes={indexes}
           dbType={dbType}

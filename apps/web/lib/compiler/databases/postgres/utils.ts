@@ -1,5 +1,6 @@
 import type { BackendNode } from "@/types/canvas";
 import { sqlColumnToTsType } from "@workspace/canvas/constants";
+import { normalizeToPostgresType } from "@/lib/schema/columnTypes";
 import { toSqlIdentifier } from "../../utils";
 import type { PgColumnMeta } from "./types";
 
@@ -46,30 +47,6 @@ export function getColumns(tableNode: BackendNode, allNodes: BackendNode[] = [])
 /**
  * Maps canvas column data types to PostgreSQL column types.
  */
-export function toPostgresType(type: string | undefined, isPrimaryKey?: boolean): string {
-  if (!type) return "TEXT";
-  const t = type.toLowerCase();
-
-  if (isPrimaryKey) {
-    if (t === "number" || t === "int" || t === "integer" || t === "bigint") {
-      return "BIGSERIAL";
-    }
-    // UUID or text primary key → TEXT with default gen_random_uuid()
-    return "TEXT";
-  }
-
-  if (t === "number" || t === "int" || t === "integer") return "INTEGER";
-  if (t === "bigint") return "BIGINT";
-  if (t === "float" || t === "double" || t === "decimal") return "DOUBLE PRECISION";
-  if (t === "numeric") return "NUMERIC";
-  if (t === "boolean" || t === "bool") return "BOOLEAN";
-  if (t === "timestamp" || t === "datetime") return "TIMESTAMPTZ";
-  if (t === "date") return "DATE";
-  if (t === "time") return "TIME";
-  if (t === "json" || t === "object" || t === "jsonb") return "JSONB";
-  if (t === "array") return "JSONB";
-  if (t === "uuid") return "UUID";
-  return "TEXT";
-}
+export const toPostgresType = normalizeToPostgresType;
 
 export const toTsType = sqlColumnToTsType;

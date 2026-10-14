@@ -20,8 +20,12 @@ import { IndexList } from "./IndexList";
 import { VectorConfig } from "./VectorConfig";
 import { DbOperationsList } from "./DbOperationsList";
 import { EntityAffectedTypesBanner } from "./EntityAffectedTypesBanner";
+import { EntityDbSyncBanner } from "./EntityDbSyncBanner";
 import { getUniqueNodeLabel } from "@workspace/canvas";
 import { NodeHeader } from "../graph-nodes/common";
+import { EntityRenameDialog } from "./EntityRenameDialog";
+import { renameDbTable } from "@/lib/services/databaseService";
+import { syncDerivedTypesForEntity } from "@/lib/stores/backendCanvas/packageTypesSync";
 import { toast } from "sonner";
 
 export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
@@ -36,22 +40,130 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
 
   const columns = data.columns || [];
   const indexes = data.indexes || [];
-
-  const handleSaveName = (finalName: string) => {
-    const latestNode = useBackendCanvasStore
-      .getState()
-      .nodes.find((n) => n.id === id);
-    if (latestNode) {
-      updateNode(id, { data: { ...latestNode.data, label: finalName } });
-    } else {
-      updateNode(id, { data: { ...data, label: finalName } });
-    }
-  };
-
   const isVector = data.dbType === "vector";
+
+  // Ensure default columns (id, created_at, updated_at) for relational tables
+  React.useEffect(() => {
+    if (isVector || data.dbType === "redis" || data.readOnly) return;
+
+    if (!data.columns || data.columns.length === 0) {
+      updateNode(id, {
+        data: {
+          ...data,
+          columns: [
+            { name: "id", type: "TEXT", isPrimaryKey: true },
+            { name: "created_at", type: "TIMESTAMPTZ" },
+            { name: "updated_at", type: "TIMESTAMPTZ" },
+          ],
+        },
+      });
+      return;
+    }
+
+    if (
+      data.columns.length === 1 &&
+      data.columns[0]?.name?.toLowerCase() === "id"
+    ) {
+      updateNode(id, {
+        data: {
+          ...data,
+          columns: [
+            ...data.columns,
+            { name: "created_at", type: "TIMESTAMPTZ" },
+            { name: "updated_at", type: "TIMESTAMPTZ" },
+          ],
+        },
+      });
+    }
+  }, [id, isVector, data.dbType, data.readOnly, data.columns, updateNode]);
+
+  const [renameDialogOpen, setRenameDialogOpen] = React.useState(false);
+  const [pendingRename, setPendingRename] = React.useState<{
+    oldName: string;
+    newName: string;
+  } | null>(null);
 
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
+
+  const parentDbNode = React.useMemo(() => {
+    return allNodes.find((n) => n.id === data.databaseId);
+  }, [allNodes, data.databaseId]);
+
+  const dbData = (parentDbNode?.data || {}) as NonNullable<BackendNode["data"]>;
+  const engine = (dbData.dbEngine || "postgres").toLowerCase();
+  const hasLiveConnection = Boolean(
+    dbData.connectionString ||
+      dbData.connectionStringEnv ||
+      dbData.connectionStringPooled ||
+      dbData.connectionStringPooledEnv ||
+      dbData.host ||
+      dbData.dbFilePath ||
+      dbData.dbFilePathEnv,
+  );
+
+  const executeTableRename = async (finalName: string, renameLive: boolean) => {
+    const currentName = data.tableName || data.label || "";
+    if (renameLive && parentDbNode && currentName) {
+      const renameRes = await renameDbTable({
+        engine,
+        connection: {
+          host: dbData.host,
+          port: dbData.port,
+          database: dbData.database,
+          user: dbData.user || dbData.username,
+          password: dbData.password,
+          connectionString: dbData.connectionString || dbData.connectionStringPooled,
+          connectionStringEnv: dbData.connectionStringEnv,
+          connectionStringPooled: dbData.connectionStringPooled,
+          connectionStringPooledEnv: dbData.connectionStringPooledEnv,
+          sslMode: dbData.sslMode,
+          provider: dbData.provider,
+          dbFilePath: dbData.dbFilePath,
+          dbFilePathEnv: dbData.dbFilePathEnv,
+        },
+        oldTableName: currentName,
+        newTableName: finalName,
+        schema: data.schema || parentDbNode?.data?.schema || "public",
+      });
+
+      if (renameRes.success) {
+        toast.success(
+          `Renamed table "${currentName}" to "${finalName}" on live ${engine.toUpperCase()} database`,
+        );
+      } else {
+        toast.error(
+          `Failed to rename table on live database: ${renameRes.error || "Unknown error"}`,
+        );
+      }
+    }
+
+    const latestNode = useBackendCanvasStore
+      .getState()
+      .nodes.find((n) => n.id === id);
+    const updatedData = {
+      ...(latestNode?.data || data),
+      label: finalName,
+      tableName: finalName,
+    };
+    updateNode(id, { data: updatedData });
+
+    // Sync derived TypesNode interface name and fields immediately
+    syncDerivedTypesForEntity(id, { openConfig: false });
+  };
+
+  const handleSaveName = (finalName: string) => {
+    const cleanNew = finalName.trim();
+    const currentName = data.tableName || data.label || "";
+    if (!cleanNew || cleanNew === currentName) return;
+
+    if (hasLiveConnection && currentName) {
+      setPendingRename({ oldName: currentName, newName: cleanNew });
+      setRenameDialogOpen(true);
+    } else {
+      executeTableRename(cleanNew, false);
+    }
+  };
 
   // Derived TypesNodes generated from or linked to this entity
   const derivedTypesNodes = React.useMemo(() => {
@@ -106,7 +218,6 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const dbNodes = allNodes.filter(
     (n) => n.type === "database" && n.data?.dbEngine !== "redis",
   );
-  const parentDbNode = allNodes.find((n) => n.id === data.databaseId);
   const dbThemeColor = parentDbNode?.data?.color || (isVector ? "#8b5cf6" : undefined);
 
   const openSettings = (e: React.MouseEvent) => {
@@ -300,6 +411,17 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         <VectorConfig id={id} data={data} updateNode={updateNode} />
       )}
 
+      {/* Live Database Schema Sync Banner */}
+      {!isVector && (
+        <EntityDbSyncBanner
+          entityId={id}
+          tableName={data.label || "table"}
+          schema={data.schema || parentDbNode?.data?.schema || "public"}
+          columns={columns}
+          databaseNode={parentDbNode}
+        />
+      )}
+
       {/* Derived Types Warning Banner - only shown when out of sync */}
       <EntityAffectedTypesBanner
         entityId={id}
@@ -333,6 +455,28 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
 
       {/* Database Operations / Helper Functions List */}
       <DbOperationsList nodeId={id} data={data} updateNode={updateNode} />
+
+      {/* Table Rename Migration Dialog */}
+      {pendingRename && (
+        <EntityRenameDialog
+          open={renameDialogOpen}
+          onOpenChange={(open) => {
+            setRenameDialogOpen(open);
+            if (!open) setPendingRename(null);
+          }}
+          mode="table"
+          tableName={pendingRename.oldName}
+          schema={data.schema || parentDbNode?.data?.schema || "public"}
+          oldName={pendingRename.oldName}
+          newName={pendingRename.newName}
+          dbEngine={engine}
+          dbLabel={dbData.label || "Database"}
+          hasLiveConnection={hasLiveConnection}
+          onConfirm={async (renameLive) => {
+            await executeTableRename(pendingRename.newName, renameLive);
+          }}
+        />
+      )}
 
       <div className="h-2 w-full border-t border-transparent rounded-b-[10px]" />
     </div>

@@ -34,6 +34,10 @@ interface DatabaseConnectionCheckCardProps {
   password?: string;
   connectionString?: string;
   connectionStringEnv?: string;
+  connectionStringPooled?: string;
+  connectionStringPooledEnv?: string;
+  sslMode?: string;
+  provider?: string;
   dbFilePath?: string;
   dbFilePathEnv?: string;
   lastStatus?: ConnectionStatusData;
@@ -50,6 +54,10 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
   password,
   connectionString,
   connectionStringEnv,
+  connectionStringPooled,
+  connectionStringPooledEnv,
+  sslMode,
+  provider,
   dbFilePath,
   dbFilePathEnv,
   lastStatus,
@@ -86,8 +94,12 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
           database,
           user,
           password,
-          connectionString,
+          connectionString: connectionString || connectionStringPooled,
           connectionStringEnv,
+          connectionStringPooled,
+          connectionStringPooledEnv,
+          sslMode,
+          provider,
           dbFilePath,
           dbFilePathEnv,
         },
