@@ -1,7 +1,8 @@
 /**
  * Fake data generation and initial request body seeding for endpoint test cases.
  */
-import { Endpoint, JSONValue, JSONObject } from "@/types/canvas";
+import { Endpoint, BackendNode, JSONValue, JSONObject } from "@/types/canvas";
+import { isHealthEndpoint } from "@/lib/utils/healthCheckEndpoint";
 
 /**
  * Generates realistic fake data based on field name, type, and defaults.
@@ -240,3 +241,189 @@ export function getInitialBody(endpoint?: Endpoint | null): JSONValue {
 
   return {};
 }
+
+/**
+ * Generates an expected response payload matching the endpoint's configured response contract.
+ * Checks (in priority):
+ * 1. Explicit return_response pipeline step bindings
+ * 2. Configured responseBody schema (fields or rawJson)
+ * 3. responseFields
+ * 4. Health check endpoint standard response ({ status: "UP", service, port, timestamp })
+ * 5. Method-based compiler fallback
+ */
+export function getExpectedResponseBody(
+  endpoint?: Endpoint | null,
+  serviceNode?: BackendNode | null,
+): JSONValue {
+  if (!endpoint) return {};
+
+  // 1. Pipeline Steps return_response step
+  if (endpoint.pipelineSteps && endpoint.pipelineSteps.length > 0) {
+    const returnStep = endpoint.pipelineSteps.find(
+      (s) => s.type === "return_response" && s.enabled !== false,
+    );
+    if (returnStep && returnStep.inputBindings && returnStep.inputBindings.length > 0) {
+      const bindings = returnStep.inputBindings;
+      const first = bindings[0];
+
+      // Single spread or unnamed binding
+      if (bindings.length === 1 && first && (first.argName === "_spread" || !first.argName)) {
+        if (first.source?.kind === "inline") {
+          const v = first.source.value;
+          if (typeof v === "string" && (v.trim().startsWith("{") || v.trim().startsWith("["))) {
+            try {
+              return JSON.parse(v);
+            } catch {}
+          }
+          return v ?? "success";
+        }
+        if (first.source?.kind === "req_body") {
+          return getInitialBody(endpoint);
+        }
+        return { data: "success" };
+      }
+
+      // Explicit field-level bindings
+      const obj: JSONObject = {};
+      const serviceName = serviceNode?.data?.label || "service";
+      const servicePort = String(serviceNode?.data?.port || "8080");
+
+      for (const b of bindings) {
+        const key = b.argName?.trim();
+        if (!key) continue;
+
+        if (b.source?.kind === "inline") {
+          const v = b.source.value;
+          if (typeof v === "number" || typeof v === "boolean") {
+            obj[key] = v;
+          } else {
+            const strVal = String(v ?? "");
+            if (strVal === "${new Date().toISOString()}" || strVal.includes("toISOString")) {
+              obj[key] = new Date().toISOString();
+            } else if (strVal.includes("${") && strVal.includes("PORT")) {
+              obj[key] = servicePort;
+            } else if (strVal.includes("${") && (strVal.includes("service") || strVal.includes("name"))) {
+              obj[key] = serviceName;
+            } else if (!strVal.includes("${")) {
+              obj[key] = strVal;
+            } else {
+              obj[key] = generateFakeDataForField(key);
+            }
+          }
+        } else if (b.source?.kind === "req_body") {
+          const body = getInitialBody(endpoint);
+          if (b.source.field && typeof body === "object" && body !== null && !Array.isArray(body)) {
+            obj[key] = (body as JSONObject)[b.source.field] ?? generateFakeDataForField(key);
+          } else {
+            obj[key] = body;
+          }
+        } else if (b.source?.kind === "req_params") {
+          const param = endpoint.pathParams?.find((p) => p.name === b.source.field || p.key === b.source.field);
+          obj[key] = param?.defaultValue || param?.value || "1";
+        } else if (b.source?.kind === "req_query") {
+          const query = endpoint.queryParams?.find((p) => p.name === b.source.field || p.key === b.source.field);
+          obj[key] = query?.defaultValue || query?.value || "sample";
+        } else {
+          obj[key] = generateFakeDataForField(key);
+        }
+      }
+
+      if (Object.keys(obj).length > 0) {
+        return obj;
+      }
+    }
+  }
+
+  // 2. responseBody configured with schema fields
+  if (endpoint.responseBody?.fields && endpoint.responseBody.fields.length > 0) {
+    const obj: JSONObject = {};
+    endpoint.responseBody.fields.forEach((f) => {
+      const fieldKey = f.key || f.name;
+      if (!fieldKey) return;
+      obj[fieldKey] = generateFakeDataForField(
+        fieldKey,
+        f.type || "string",
+        f.defaultValue,
+        f.required,
+      );
+    });
+    return obj;
+  }
+
+  // 3. responseBody configured with rawJson
+  if (endpoint.responseBody?.rawJson && endpoint.responseBody.rawJson.trim()) {
+    try {
+      const parsed: JSONValue = JSON.parse(endpoint.responseBody.rawJson);
+      return parsed;
+    } catch {}
+  }
+
+  // 4. responseFields
+  if (endpoint.responseFields && endpoint.responseFields.length > 0) {
+    const obj: JSONObject = {};
+    endpoint.responseFields.forEach((f) => {
+      const fieldKey = f.name;
+      if (!fieldKey) return;
+      obj[fieldKey] = generateFakeDataForField(
+        fieldKey,
+        f.type || "string",
+      );
+    });
+    return obj;
+  }
+
+  // 5. Canonical Health Check endpoint
+  if (isHealthEndpoint(endpoint)) {
+    const serviceName = serviceNode?.data?.label || "service";
+    const servicePort = String(serviceNode?.data?.port || "8080");
+    return {
+      status: "UP",
+      service: serviceName,
+      port: servicePort,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // 6. Standard compiler fallback
+  const method = (endpoint.type || "GET").toUpperCase();
+  const rawPath = endpoint.name || "/";
+  return {
+    message: `Successfully executed ${method} ${rawPath}`,
+  };
+}
+
+/**
+ * Generates an expected error response payload matching the endpoint's error contract.
+ */
+export function getExpectedErrorResponseBody(
+  endpoint?: Endpoint | null,
+): JSONValue {
+  if (!endpoint) return { error: "Validation Error" };
+
+  if (endpoint.errorResponseBody?.fields && endpoint.errorResponseBody.fields.length > 0) {
+    const obj: JSONObject = {};
+    endpoint.errorResponseBody.fields.forEach((f) => {
+      const fieldKey = f.key || f.name;
+      if (!fieldKey) return;
+      obj[fieldKey] = generateFakeDataForField(
+        fieldKey,
+        f.type || "string",
+        f.defaultValue,
+        f.required,
+      );
+    });
+    return obj;
+  }
+
+  if (endpoint.errorResponseBody?.rawJson && endpoint.errorResponseBody.rawJson.trim()) {
+    try {
+      const parsed: JSONValue = JSON.parse(endpoint.errorResponseBody.rawJson);
+      return parsed;
+    } catch {}
+  }
+
+  return {
+    error: "Validation Error",
+  };
+}
+

@@ -4,7 +4,11 @@
 import { Endpoint, BackendNode } from "@/types/canvas";
 import { SimulationTestCase } from "@workspace/canvas";
 import { generateId } from "./helpers";
-import { getInitialBody } from "./fakeData";
+import {
+  getInitialBody,
+  getExpectedResponseBody,
+  getExpectedErrorResponseBody,
+} from "./fakeData";
 import { sanitizeEndpointPath } from "./url";
 
 /**
@@ -35,7 +39,8 @@ function buildDefaultHeaders(
 }
 
 /**
- * Generates default 200 OK and 400 Bad Request test cases for an endpoint.
+ * Generates default 200 OK and 400 Bad Request test cases for an endpoint,
+ * strictly matching the configured response schema.
  */
 export function generateDefaultTestCases(
   endpoint: Endpoint,
@@ -62,6 +67,8 @@ export function generateDefaultTestCases(
 
   const defaultHeaders = buildDefaultHeaders(endpoint, serviceNode);
   const successBody = getInitialBody(endpoint);
+  const expectedSuccessBody = getExpectedResponseBody(endpoint, serviceNode);
+  const expectedErrorBody = getExpectedErrorResponseBody(endpoint);
 
   const successCase: SimulationTestCase = {
     id: `auto-${endpoint.id}-success`,
@@ -76,10 +83,7 @@ export function generateDefaultTestCases(
       body: successBody,
     },
     expectedStatus: expectedSuccessStatus,
-    expectedBody: {
-      success: true,
-      data: successBody,
-    },
+    expectedBody: expectedSuccessBody,
     mocks: {},
   };
 
@@ -96,9 +100,7 @@ export function generateDefaultTestCases(
       body: {},
     },
     expectedStatus: 400,
-    expectedBody: {
-      error: "Validation Error",
-    },
+    expectedBody: expectedErrorBody,
     mocks: {},
   };
 
@@ -144,7 +146,7 @@ export function createTestCaseFromPreset(
         category: "manual",
         request: { headers, params: baseParams, body: defaultBody },
         expectedStatus: 200,
-        expectedBody: { success: true },
+        expectedBody: getExpectedResponseBody(endpoint),
         mocks: {},
       };
     case "201_created":
@@ -157,7 +159,7 @@ export function createTestCaseFromPreset(
         category: "manual",
         request: { headers, params: baseParams, body: defaultBody },
         expectedStatus: 201,
-        expectedBody: { success: true },
+        expectedBody: getExpectedResponseBody(endpoint),
         mocks: {},
       };
     case "400_bad_request":
@@ -170,7 +172,7 @@ export function createTestCaseFromPreset(
         category: "manual",
         request: { headers, params: {}, body: {} },
         expectedStatus: 400,
-        expectedBody: { error: "Bad Request" },
+        expectedBody: getExpectedErrorResponseBody(endpoint),
         mocks: {},
       };
     case "401_unauthorized":

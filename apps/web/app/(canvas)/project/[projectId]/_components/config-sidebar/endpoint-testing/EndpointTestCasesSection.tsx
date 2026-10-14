@@ -49,6 +49,8 @@ import {
   generateDefaultTestCases,
   createTestCaseFromPreset,
   getInitialBody,
+  getExpectedResponseBody,
+  getExpectedErrorResponseBody,
   generateId,
 } from "./utils";
 import { EndpointTestCaseEditor } from "./EndpointTestCaseEditor";
@@ -158,24 +160,51 @@ export function EndpointTestCasesSection({
         }
       });
     } else {
-      // Sync auto-success test case with configured request schema fields
+      // Sync auto-success and auto-validation test cases with configured schemas
       const currentInitialBody = getInitialBody(endpoint);
+      const currentExpectedBody = getExpectedResponseBody(endpoint, serviceNode);
+      const currentExpectedError = getExpectedErrorResponseBody(endpoint);
+
       const existingAutoSuccess = autoCases.find((tc) => tc.id === `auto-${endpoint.id}-success`);
-      if (existingAutoSuccess && currentInitialBody && typeof currentInitialBody === "object") {
-        const schemaKeys = Object.keys(currentInitialBody);
-        const caseKeys = existingAutoSuccess.request?.body ? Object.keys(existingAutoSuccess.request.body) : [];
-        const isMissingFields = schemaKeys.some((k) => !caseKeys.includes(k));
-        if (isMissingFields && schemaKeys.length > 0) {
-          const updated: SimulationTestCase = {
-            ...existingAutoSuccess,
-            request: {
+      if (existingAutoSuccess) {
+        let changed = false;
+        let nextRequest = existingAutoSuccess.request;
+        let nextExpectedBody = existingAutoSuccess.expectedBody;
+
+        if (currentInitialBody && typeof currentInitialBody === "object") {
+          const schemaKeys = Object.keys(currentInitialBody);
+          const caseKeys = existingAutoSuccess.request?.body ? Object.keys(existingAutoSuccess.request.body) : [];
+          const isMissingFields = schemaKeys.some((k) => !caseKeys.includes(k));
+          if (isMissingFields && schemaKeys.length > 0) {
+            nextRequest = {
               ...existingAutoSuccess.request,
               body: currentInitialBody,
-            },
-            expectedBody: {
-              success: true,
-              data: currentInitialBody,
-            },
+            };
+            changed = true;
+          }
+        }
+
+        // Check if expectedBody should sync to the defined response schema
+        const isLegacyExpectedBody =
+          !existingAutoSuccess.expectedBody ||
+          JSON.stringify(existingAutoSuccess.expectedBody) === JSON.stringify({ success: true, data: currentInitialBody }) ||
+          JSON.stringify(existingAutoSuccess.expectedBody) === JSON.stringify({ success: true, data: {} }) ||
+          JSON.stringify(existingAutoSuccess.expectedBody) === JSON.stringify({ success: true });
+
+        const isExpectedMismatch =
+          isLegacyExpectedBody ||
+          JSON.stringify(existingAutoSuccess.expectedBody) !== JSON.stringify(currentExpectedBody);
+
+        if (isExpectedMismatch && currentExpectedBody !== undefined) {
+          nextExpectedBody = currentExpectedBody;
+          changed = true;
+        }
+
+        if (changed) {
+          const updated: SimulationTestCase = {
+            ...existingAutoSuccess,
+            request: nextRequest,
+            expectedBody: nextExpectedBody,
           };
           updateTestCase(existingAutoSuccess.id, updated);
           if (projectId) {
@@ -187,15 +216,42 @@ export function EndpointTestCasesSection({
           }
         }
       }
+
+      const existingAutoValidation = autoCases.find((tc) => tc.id === `auto-${endpoint.id}-validation`);
+      if (existingAutoValidation && currentExpectedError !== undefined) {
+        const isErrorMismatch =
+          JSON.stringify(existingAutoValidation.expectedBody) !== JSON.stringify(currentExpectedError);
+
+        if (isErrorMismatch) {
+          const updated: SimulationTestCase = {
+            ...existingAutoValidation,
+            expectedBody: currentExpectedError,
+          };
+          updateTestCase(existingAutoValidation.id, updated);
+          if (projectId) {
+            upsertBackendTestCase({
+              projectId,
+              testCaseId: existingAutoValidation.id,
+              data: updated,
+            });
+          }
+        }
+      }
     }
   }, [
     endpoint.id,
     endpoint.requestBody,
+    endpoint.responseBody,
+    endpoint.errorResponseBody,
+    endpoint.pipelineSteps,
+    endpoint.responseFields,
     endpoint.params,
     nodeId,
     projectId,
     autoCases.length,
     endpointCases.length,
+    serviceNode?.data?.label,
+    serviceNode?.data?.port,
   ]);
 
   // Create new manual test case
