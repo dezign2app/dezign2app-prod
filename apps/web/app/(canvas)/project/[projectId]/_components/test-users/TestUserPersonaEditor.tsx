@@ -76,16 +76,16 @@ export function TestUserPersonaEditor({
     if (dbs.length === 0) {
       return [
         {
-          id: "primary-sqlite",
-          name: "Primary Database (SQLite)",
-          engine: "sqlite",
+          id: "primary-postgres",
+          name: "Primary Database (PostgreSQL)",
+          engine: "postgres",
         },
       ];
     }
     return dbs.map((d) => ({
       id: d.id,
       name: d.data?.label || "Database",
-      engine: d.data?.dbEngine || "sqlite",
+      engine: d.data?.dbEngine || "postgres",
     }));
   }, [allNodes]);
 
@@ -204,7 +204,7 @@ export function TestUserPersonaEditor({
         setRecords([
           {
             id: userId,
-            databaseName: "Primary Database (SQLite)",
+            databaseName: "Primary Database (PostgreSQL)",
             tableName: "user",
             fields: {
               id: userId,
@@ -215,7 +215,7 @@ export function TestUserPersonaEditor({
           },
           {
             id: sessId,
-            databaseName: "Primary Database (SQLite)",
+            databaseName: "Primary Database (PostgreSQL)",
             tableName: "session",
             fields: {
               id: sessId,
@@ -239,7 +239,7 @@ export function TestUserPersonaEditor({
 
   // Add new table record
   const handleAddRecord = () => {
-    const defaultDb = databaseNodes[0]?.name || "Primary Database (SQLite)";
+    const defaultDb = databaseNodes[0]?.name || "Primary Database (PostgreSQL)";
     const defaultTbl = fallbackTables[0]?.name || "user";
     const newId = generateRecordId(defaultTbl);
 

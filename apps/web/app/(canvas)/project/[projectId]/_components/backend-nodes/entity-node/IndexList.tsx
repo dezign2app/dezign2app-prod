@@ -35,7 +35,7 @@ export const IndexList = ({
     const nextData = { ...data, indexes: nextIndexes };
     if (data.dbOperations && data.dbOperations.length > 0) {
       const parentDb = allNodes.find((n) => n.id === data.databaseId);
-      const engine = parentDb?.data?.dbEngine || parentDb?.data?.dbType || "sqlite";
+      const engine = parentDb?.data?.dbEngine || parentDb?.data?.dbType || "postgres";
       nextData.dbOperations = getEntityDbOperations({ data: nextData }, allNodes, engine);
     }
     return nextData;

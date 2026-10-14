@@ -194,6 +194,9 @@ export interface CanvasDatabaseNodeData {
   dbConnectionType?: "env_var" | "connection_string";
   connectionString?: string;
   connectionStringEnv?: string;
+  connectionStringPooled?: string;
+  connectionStringPooledEnv?: string;
+  sslMode?: string;
   dbFilePath?: string;
   dbFilePathEnv?: string;
   hostEnv?: string;

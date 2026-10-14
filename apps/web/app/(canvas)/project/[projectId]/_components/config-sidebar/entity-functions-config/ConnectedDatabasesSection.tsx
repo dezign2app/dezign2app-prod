@@ -57,7 +57,7 @@ export const ConnectedDatabasesSection: React.FC<ConnectedDatabasesSectionProps>
   onInsertSnippet,
 }) => {
   const primaryDbLabel = parentDb?.data?.label || "Primary Database";
-  const primaryDbEngine = parentDb?.data?.dbEngine || parentDb?.data?.dbType || "sqlite";
+  const primaryDbEngine = parentDb?.data?.dbEngine || parentDb?.data?.dbType || "postgres";
 
   // Tables belonging to the primary database
   const primaryTables: ConnectedDatabaseTableInfo[] = useMemo(() => {
@@ -188,7 +188,7 @@ export const ConnectedDatabasesSection: React.FC<ConnectedDatabasesSectionProps>
           n.id !== parentDb?.id,
       )
       .map((n) => {
-        const engine = n.data?.dbEngine || n.data?.dbType || "sqlite";
+        const engine = n.data?.dbEngine || n.data?.dbType || "postgres";
         const rawLabel = n.data?.label || `${engine.toUpperCase()} DB`;
         const cleanVar = `${toVarName(rawLabel)}Db`;
         const dbTables: ConnectedDatabaseTableInfo[] = allNodes

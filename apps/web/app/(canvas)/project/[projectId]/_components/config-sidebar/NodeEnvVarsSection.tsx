@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   KeyRound,
   Plus,
@@ -21,7 +21,9 @@ import {
   cleanEnvVarName,
   saveLocalEnvVariable,
   getLocalEnvVariable,
+  fetchLocalEnvVariable,
 } from "@/lib/utils/localEnvSync";
+import { getFallbackEnvVarValue } from "../backend-nodes/graph-nodes/nodes/ai-security/ExternalEnvVarsDrawer";
 import { toast } from "sonner";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
@@ -62,6 +64,7 @@ function genId() {
 
 interface EnvVarRowProps {
   entry: EnvVarEntry;
+  fallbackValue?: string;
   projectId?: string;
   onChangeName: (id: string, name: string) => void;
   onChangeDescription: (id: string, desc: string) => void;
@@ -70,17 +73,41 @@ interface EnvVarRowProps {
 
 const EnvVarRow: React.FC<EnvVarRowProps> = ({
   entry,
+  fallbackValue,
   projectId,
   onChangeName,
   onChangeDescription,
   onRemove,
 }) => {
-  const [secretValue, setSecretValue] = useState<string>(() =>
-    getLocalEnvVariable(entry.name),
-  );
+  const [secretValue, setSecretValue] = useState<string>(() => {
+    const cached = getLocalEnvVariable(entry.name);
+    return cached || fallbackValue || "";
+  });
   const [showSecret, setShowSecret] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [localName, setLocalName] = useState(entry.name);
+
+  useEffect(() => {
+    setLocalName(entry.name);
+    const cached = getLocalEnvVariable(entry.name);
+    const resolved = cached || fallbackValue || "";
+    setSecretValue(resolved);
+
+    if (fallbackValue && !cached && entry.name) {
+      saveLocalEnvVariable(entry.name, fallbackValue, projectId).catch(() => {});
+    }
+
+    if (entry.name) {
+      fetchLocalEnvVariable(entry.name, projectId).then((val) => {
+        if (val) {
+          setSecretValue(val);
+        } else if (fallbackValue) {
+          setSecretValue(fallbackValue);
+          saveLocalEnvVariable(entry.name, fallbackValue, projectId).catch(() => {});
+        }
+      });
+    }
+  }, [entry.name, projectId, fallbackValue]);
 
   const handleNameBlur = useCallback(() => {
     const clean = cleanEnvVarName(localName) || entry.name;
@@ -457,6 +484,7 @@ export const NodeEnvVarsSection: React.FC<NodeEnvVarsSectionProps> = ({
             <EnvVarRow
               key={entry.id}
               entry={entry}
+              fallbackValue={getFallbackEnvVarValue(targetNode, entry.name)}
               projectId={projectId}
               onChangeName={handleChangeName}
               onChangeDescription={handleChangeDescription}

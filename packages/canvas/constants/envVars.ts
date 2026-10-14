@@ -78,7 +78,11 @@ export interface NodeEnvDataConfig {
   secretAccessKeyEnv?: string;
   defaultRegion?: string;
   dbEngine?: string;
+  provider?: string;
+  connectionString?: string;
   connectionStringEnv?: string;
+  connectionStringPooled?: string;
+  connectionStringPooledEnv?: string;
   dbFilePathEnv?: string;
   port?: string | number;
   grpcPort?: string | number;
@@ -118,7 +122,7 @@ export function getDefaultNodeEnvVars(
   }
 
   if (nodeType === "database") {
-    const engine = (nodeData?.dbEngine || "sqlite").toLowerCase();
+    const engine = (nodeData?.dbEngine || "postgres").toLowerCase();
     const connEnv = nodeData?.connectionStringEnv;
     const fileEnv = nodeData?.dbFilePathEnv;
 
@@ -137,6 +141,25 @@ export function getDefaultNodeEnvVars(
       return [
         { id: "mongodb-uri", name: connEnv || "MONGODB_URI", description: "MongoDB connection URI" },
       ];
+    }
+    if (engine === "postgres" || engine === "postgresql") {
+      const vars: EnvVarTemplate[] = [
+        { id: "db-url", name: connEnv || "DATABASE_URL", description: "PostgreSQL connection string (direct)" },
+      ];
+      const isCloudProvider =
+        nodeData?.provider === "neon" ||
+        nodeData?.provider === "supabase" ||
+        Boolean(nodeData?.connectionStringPooled) ||
+        Boolean(nodeData?.connectionStringPooledEnv);
+
+      if (isCloudProvider) {
+        vars.push({
+          id: "db-url-pooled",
+          name: nodeData?.connectionStringPooledEnv || "DATABASE_URL_POOLED",
+          description: "PostgreSQL pooled connection string (Neon / Supabase Pooler)",
+        });
+      }
+      return vars;
     }
     return [
       { id: "db-url", name: connEnv || "DATABASE_URL", description: `${engine.toUpperCase()} database connection URL` },

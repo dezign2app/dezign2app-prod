@@ -272,7 +272,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
               </SelectItem>
               {dbNodes.map((db) => (
                 <SelectItem key={db.id} value={db.id} className="text-xs">
-                  {db.data.label || "Database"} ({db.data.dbEngine || "sqlite"})
+                  {db.data.label || "Database"} ({db.data.dbEngine || "postgres"})
                 </SelectItem>
               ))}
             </SelectContent>

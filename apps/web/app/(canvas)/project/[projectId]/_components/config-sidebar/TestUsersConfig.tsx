@@ -72,16 +72,16 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
     if (dbs.length === 0) {
       return [
         {
-          id: "primary-sqlite",
-          name: "Primary Database (SQLite)",
-          engine: "sqlite",
+          id: "primary-postgres",
+          name: "Primary Database (PostgreSQL)",
+          engine: "postgres",
         },
       ];
     }
     return dbs.map((d) => ({
       id: d.id,
       name: d.data?.label || "Database",
-      engine: d.data?.dbEngine || "sqlite",
+      engine: d.data?.dbEngine || "postgres",
     }));
   }, [allNodes]);
 
@@ -195,7 +195,7 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
     setFormRecords([
       {
         id: userId,
-        databaseName: databaseNodes[0]?.name || "Primary Database (SQLite)",
+        databaseName: databaseNodes[0]?.name || "Primary Database (PostgreSQL)",
         tableName: "user",
         fields: {
           id: userId,
@@ -206,7 +206,7 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
       },
       {
         id: sessId,
-        databaseName: databaseNodes[0]?.name || "Primary Database (SQLite)",
+        databaseName: databaseNodes[0]?.name || "Primary Database (PostgreSQL)",
         tableName: "session",
         fields: {
           id: sessId,
@@ -247,7 +247,7 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
 
   // Add another table record
   const handleAddRecordToForm = () => {
-    const defaultDb = databaseNodes[0]?.name || "Primary Database (SQLite)";
+    const defaultDb = databaseNodes[0]?.name || "Primary Database (PostgreSQL)";
     const defaultTbl = fallbackTables[0]?.name || "user";
     const newId = generateRecordId(defaultTbl);
 

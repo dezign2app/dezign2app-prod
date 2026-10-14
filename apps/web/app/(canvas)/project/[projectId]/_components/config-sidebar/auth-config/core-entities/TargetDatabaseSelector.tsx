@@ -28,7 +28,7 @@ export const TargetDatabaseSelector: React.FC<TargetDatabaseSelectorProps> = ({
         </div>
         {selectedDb && (
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase font-semibold">
-            {selectedDb.data?.dbEngine || "sqlite"}
+            {selectedDb.data?.dbEngine || "postgres"}
           </span>
         )}
       </div>
@@ -59,7 +59,7 @@ export const TargetDatabaseSelector: React.FC<TargetDatabaseSelectorProps> = ({
                 value={db.id}
                 className="text-xs font-mono"
               >
-                {db.data?.label || "Database"} ({db.data?.dbEngine || "sqlite"})
+                {db.data?.label || "Database"} ({db.data?.dbEngine || "postgres"})
               </SelectItem>
             ))}
           </SelectContent>

@@ -1,11 +1,12 @@
 import React from "react";
+import { useParams } from "next/navigation";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Trash, Settings, Server, Palette, Key, Table2, KeyRound } from "lucide-react";
+import { Database, Trash, Settings, Server, Palette, Key, Table2, KeyRound, Zap } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Badge } from "@workspace/ui/components/badge";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { DEFAULT_DATABASE_NODE_LABEL } from "@workspace/canvas";
+import { DEFAULT_DATABASE_NODE_LABEL, DEFAULT_DATABASE_ENGINE } from "@workspace/canvas";
 
 import { NodeHeader } from "../graph-nodes/common";
 import { NodeEnvVarsSection } from "../graph-nodes/nodes/ai-security/ExternalEnvVarsDrawer";
@@ -22,6 +23,8 @@ export const DB_COLOR_PRESETS = [
 ];
 
 export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+  const params = useParams();
+  const projectId = (params?.projectId as string) || undefined;
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
@@ -31,7 +34,7 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
   );
   const allNodes = useBackendCanvasStore((s) => s.nodes);
 
-  const engine = data.dbEngine || "sqlite";
+  const engine = data.dbEngine || DEFAULT_DATABASE_ENGINE;
   const color = data.color || "#f59e0b"; // Default to Amber
   const label = data.label || "";
 
@@ -97,6 +100,27 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
             >
               {engine}
             </Badge>
+            {data.provider && data.provider !== "local" && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[9px] px-1.5 py-0 font-mono capitalize",
+                  data.provider === "neon"
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-semibold"
+                    : data.provider === "supabase"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-semibold"
+                      : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30",
+                )}
+              >
+                {data.provider === "neon"
+                  ? "Neon"
+                  : data.provider === "supabase"
+                    ? "Supabase"
+                    : data.provider === "aws_rds"
+                      ? "AWS RDS"
+                      : data.provider}
+              </Badge>
+            )}
             {envVarsCount > 0 && (
               <Badge
                 variant="outline"
@@ -176,6 +200,18 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
           </code>
         </div>
 
+        {(data.connectionStringPooled || data.provider === "neon" || data.provider === "supabase") && (
+          <div className="flex items-center justify-between bg-emerald-500/5 p-1.5 rounded-lg border border-emerald-500/20">
+            <div className="flex items-center text-emerald-600 dark:text-emerald-400 gap-1.5">
+              <Zap size={12} className="shrink-0" />
+              <span className="text-[11px] font-medium">Pooled ENV</span>
+            </div>
+            <code className="text-[10px] font-mono font-semibold bg-background px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+              {data.connectionStringPooledEnv || "DATABASE_URL_POOLED"}
+            </code>
+          </div>
+        )}
+
         {engine === "sqlite" && (
           <div className="flex items-center justify-between bg-muted/30 p-1.5 rounded-lg border border-border/40">
             <div className="flex items-center text-muted-foreground gap-1.5">
@@ -201,7 +237,7 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
       </div>
 
       {/* Environment Variables (.env) Section */}
-      <NodeEnvVarsSection nodeId={id} />
+      <NodeEnvVarsSection nodeId={id} projectId={projectId} />
 
       {/* Outgoing Handle to Hanging Entity Nodes */}
       <Handle

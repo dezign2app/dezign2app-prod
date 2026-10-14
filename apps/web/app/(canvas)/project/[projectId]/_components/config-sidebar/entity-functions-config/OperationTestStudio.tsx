@@ -44,7 +44,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
     parentDb?.data?.dbEngine === "redis" ||
     selectedOp.id.startsWith("redis-");
 
-  const engine = isRedis ? "redis" : parentDb?.data?.dbEngine || "sqlite";
+  const engine = isRedis ? "redis" : parentDb?.data?.dbEngine || "postgres";
   const isSqlite = engine === "sqlite";
   const host = parentDb?.data?.host || "localhost";
   const port: number | string = parentDb?.data?.port ?? (isRedis ? 6379 : isSqlite ? 0 : 5432);
