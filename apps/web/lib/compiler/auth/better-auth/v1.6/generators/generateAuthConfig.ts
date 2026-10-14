@@ -36,8 +36,9 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
     pluginCalls.push("twoFactor()");
   }
 
+  let passkeyImportStr = "";
   if (enabledPlugins.includes("passkey")) {
-    pluginImports.add("passkey");
+    passkeyImportStr = `import { passkey } from "@better-auth/passkey";\n`;
     pluginCalls.push("passkey()");
   }
 
@@ -278,8 +279,7 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
   return `import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 ${adapterConfig.importStatement}
-${createMiddlewareImport}${pluginImportStr}
-export const auth = betterAuth({
+${createMiddlewareImport}${pluginImportStr}${passkeyImportStr}export const auth = betterAuth({
   database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${userBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}
   plugins: [
     ${pluginCalls.join(",\n    ")},

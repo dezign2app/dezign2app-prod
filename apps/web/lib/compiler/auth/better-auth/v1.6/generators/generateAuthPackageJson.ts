@@ -30,6 +30,9 @@ export function generateAuthPackageJson(data: BetterAuthV16NodeData): string {
         "@workspace/db": "workspace:*",
         "@workspace/logger": "workspace:*",
         "better-auth": `^${semverVersion}`,
+        ...(data.plugins?.includes("passkey")
+          ? { "@better-auth/passkey": `^${semverVersion}` }
+          : {}),
         hono: "^4.0.0",
         "@hono/node-server": "^1.11.0",
         "better-sqlite3": "^12.0.0",

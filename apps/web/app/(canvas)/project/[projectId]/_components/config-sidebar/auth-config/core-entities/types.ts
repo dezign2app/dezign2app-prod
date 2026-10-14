@@ -50,6 +50,7 @@ export interface BetterAuthCategoryCardProps {
 
 export interface BetterAuthTableMappingSectionProps {
   categories: CategoryConfig[];
+  targetDefs?: BetterAuthTableDefinition[];
   tableMappings: BetterAuthTableMapping;
   userData: {
     userEntityId?: string;

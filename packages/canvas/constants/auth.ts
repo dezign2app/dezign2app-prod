@@ -589,6 +589,7 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
 
 export interface BetterAuthTableRequirementOptions {
   isOrgEnabled?: boolean;
+  teamsEnabled?: boolean;
   enabledPlugins?: string[];
   tableMappings?: Record<string, string | undefined>;
   providers?: AuthNodeData["providers"];
@@ -598,14 +599,23 @@ export function isBetterAuthTableRequired(
   def: BetterAuthTableDefinition,
   options: BetterAuthTableRequirementOptions = {},
 ): boolean {
-  const { isOrgEnabled = true, enabledPlugins = [], tableMappings, providers } = options;
+  const { isOrgEnabled = true, teamsEnabled, enabledPlugins = [], tableMappings, providers } = options;
 
   if (tableMappings && (tableMappings[def.key] || tableMappings[def.name])) {
     return true;
   }
 
   if (def.category === BETTER_AUTH_CATEGORIES.CORE) return true;
-  if (def.category === BETTER_AUTH_CATEGORIES.ORGANIZATION) return isOrgEnabled;
+  if (def.category === BETTER_AUTH_CATEGORIES.ORGANIZATION) {
+    if (!isOrgEnabled) return false;
+    if (
+      def.key === BETTER_AUTH_TABLE_KEYS.TEAM ||
+      def.key === BETTER_AUTH_TABLE_KEYS.TEAM_MEMBER
+    ) {
+      return Boolean(teamsEnabled);
+    }
+    return true;
+  }
 
   if (def.key === BETTER_AUTH_TABLE_KEYS.PASSKEY) {
     return (
@@ -630,7 +640,6 @@ export function isBetterAuthTableRequired(
   if (def.key === BETTER_AUTH_TABLE_KEYS.RATE_LIMIT) {
     return (
       enabledPlugins.includes(BETTER_AUTH_PLUGINS.RATE_LIMIT) ||
-      providers?.emailPassword?.enabled !== false ||
       Boolean(providers?.emailPassword?.rateLimit) ||
       Boolean(tableMappings?.rateLimitEntityId)
     );

@@ -11,17 +11,30 @@ export function generateAuthClient(options: BetterAuthClientOptions = {}): strin
       ? options.plugins
       : ["adminClient", "organizationClient"];
 
-  const pluginImports =
-    plugins.length > 0
-      ? `\nimport { ${plugins.join(", ")} } from "better-auth/client/plugins";`
+  const hasPasskey = plugins.some((p) => p === "passkey" || p === "passkeyClient");
+  const standardPlugins = plugins.filter(
+    (p) => p !== "passkey" && p !== "passkeyClient"
+  );
+
+  const standardPluginImports =
+    standardPlugins.length > 0
+      ? `\nimport { ${standardPlugins.join(", ")} } from "better-auth/client/plugins";`
       : "";
+  const passkeyImport = hasPasskey
+    ? `\nimport { passkeyClient } from "@better-auth/passkey/client";`
+    : "";
+
+  const allPluginCalls = [
+    ...standardPlugins.map((p) => `    ${p}(),`),
+    ...(hasPasskey ? ["    passkeyClient(),"] : []),
+  ];
 
   const pluginEntries =
-    plugins.length > 0
-      ? `\n  plugins: [\n${plugins.map((p) => `    ${p}(),`).join("\n")}\n  ],`
+    allPluginCalls.length > 0
+      ? `\n  plugins: [\n${allPluginCalls.join("\n")}\n  ],`
       : "";
 
-  return `import { createAuthClient } from "better-auth/react";${pluginImports}
+  return `import { createAuthClient } from "better-auth/react";${standardPluginImports}${passkeyImport}
 
 // Better Auth Browser Client instance initialized with server baseURL and plugins
 export const authClient = createAuthClient({

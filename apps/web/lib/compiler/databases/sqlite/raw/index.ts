@@ -1095,6 +1095,8 @@ try {
     "",
     "/** Singleton synchronous SQLite connection. */",
     "export const db: Database.Database = new Database(dbPath);",
+    "/** Connection pool alias for generic database consumers expecting `pool` */",
+    "export const pool = db;",
     "",
     "// Recommended pragmas for correctness and performance",
     'db.pragma("journal_mode = WAL");',

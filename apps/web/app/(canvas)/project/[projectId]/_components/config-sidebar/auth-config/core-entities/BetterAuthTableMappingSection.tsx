@@ -12,6 +12,7 @@ export const BetterAuthTableMappingSection: React.FC<
   BetterAuthTableMappingSectionProps
 > = ({
   categories,
+  targetDefs,
   tableMappings,
   userData,
   schemaEntities,
@@ -57,9 +58,14 @@ export const BetterAuthTableMappingSection: React.FC<
       {/* Category Groups */}
       <div className="flex flex-col gap-5 pt-1">
         {categories.map((cat) => {
-          const catTables = BETTER_AUTH_TABLE_DEFINITIONS.filter(
+          const availableDefs = targetDefs || BETTER_AUTH_TABLE_DEFINITIONS;
+          const catTables = availableDefs.filter(
             (def) => def.category === cat.id,
           );
+
+          if (catTables.length === 0) {
+            return null;
+          }
 
           return (
             <BetterAuthCategoryCard key={cat.id} category={cat}>
