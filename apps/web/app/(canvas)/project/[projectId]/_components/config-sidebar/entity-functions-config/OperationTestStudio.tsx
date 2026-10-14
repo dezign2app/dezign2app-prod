@@ -24,6 +24,7 @@ import {
 export interface OperationTestStudioProps {
   selectedOp: DbOperationFunction;
   label: string;
+  schema?: string;
   columns?: CanvasEntityColumn[];
   parentDb?: BackendNode;
   updateSelectedOp: (changes: Partial<DbOperationFunction>) => void;
@@ -32,6 +33,7 @@ export interface OperationTestStudioProps {
 export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.memo(({
   selectedOp,
   label,
+  schema,
   columns,
   parentDb,
   updateSelectedOp,
@@ -54,12 +56,15 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
   const user = parentDb?.data?.user || parentDb?.data?.username;
   const password = parentDb?.data?.password;
   const isPostgres = engine === "postgres";
+  const rawConnString = parentDb?.data?.connectionString || parentDb?.data?.connectionStringPooled;
   const connUri = isRedis
     ? `redis://${host}:${port}`
     : isSqlite
       ? `sqlite:${dbFilePath}`
       : isPostgres
-        ? `postgresql://${user || "postgres"}:${password ? "••••" : ""}@${host}:${port}/${database || "postgres"}`
+        ? rawConnString
+          ? rawConnString.replace(/:([^:@]+)@/, ":••••@")
+          : `postgresql://${user || "postgres"}:${password ? "••••" : ""}@${host}:${port}/${database || "postgres"}`
         : `${host}:${port}`;
   const isParentConnected = parentDb?.data?.lastConnectionStatus?.connected === true;
   const isParentFailed = parentDb?.data?.lastConnectionStatus?.connected === false;
@@ -303,8 +308,12 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
           database,
           user,
           password,
-          connectionString: parentDb.data?.connectionString,
-          connectionStringEnv: parentDb.data?.connectionStringEnv,
+          connectionString: parentDb?.data?.connectionString || parentDb?.data?.connectionStringPooled,
+          connectionStringEnv: parentDb?.data?.connectionStringEnv,
+          connectionStringPooled: parentDb?.data?.connectionStringPooled,
+          connectionStringPooledEnv: parentDb?.data?.connectionStringPooledEnv,
+          sslMode: parentDb?.data?.sslMode,
+          provider: parentDb?.data?.provider,
           dbFilePath,
           dbFilePathEnv,
         },
@@ -357,13 +366,18 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
           database,
           user,
           password,
-          connectionString: parentDb?.data?.connectionString,
+          connectionString: parentDb?.data?.connectionString || parentDb?.data?.connectionStringPooled,
           connectionStringEnv: parentDb?.data?.connectionStringEnv,
+          connectionStringPooled: parentDb?.data?.connectionStringPooled,
+          connectionStringPooledEnv: parentDb?.data?.connectionStringPooledEnv,
+          sslMode: parentDb?.data?.sslMode,
+          provider: parentDb?.data?.provider,
           dbFilePath,
           dbFilePathEnv,
         },
         entity: {
           name: label,
+          schema,
           columns,
         },
         operation: {

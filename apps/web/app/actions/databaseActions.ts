@@ -28,6 +28,7 @@ import {
   type JsonObject,
   type JsonArray,
   type CanvasEntityColumn,
+  type DbConnectionConfig,
   isJsonObject,
   resolveEnvValue,
   checkTcpSocket,
@@ -43,18 +44,7 @@ import { executeFunctionCode } from "@/lib/database-runner/functionCodeRunner";
 
 export interface CheckDbTableSyncPayload {
   engine?: string;
-  connection?: {
-    host?: string;
-    port?: string | number;
-    database?: string;
-    user?: string;
-    username?: string;
-    password?: string;
-    connectionString?: string;
-    connectionStringEnv?: string;
-    dbFilePath?: string;
-    dbFilePathEnv?: string;
-  };
+  connection?: DbConnectionConfig;
   tableName: string;
   schema?: string;
   columns?: Array<{
@@ -96,6 +86,7 @@ export type {
   JsonObject,
   JsonArray,
   CanvasEntityColumn,
+  DbConnectionConfig,
 };
 export { isJsonObject };
 
@@ -233,12 +224,17 @@ export async function testDbOperationAction(
           port,
           connectionString: connection.connectionString,
           connectionStringEnv: connection.connectionStringEnv,
+          connectionStringPooled: connection.connectionStringPooled,
+          connectionStringPooledEnv: connection.connectionStringPooledEnv,
+          sslMode: connection.sslMode,
+          provider: connection.provider,
           database: connection.database,
           user: connection.user || connection.username,
           password: connection.password,
         },
         entity: {
           name: entity?.name || extractTableName(operation),
+          schema: entity?.schema,
           columns: entity?.columns,
         },
         operation,
@@ -383,6 +379,10 @@ export async function checkDbConnectionAction(
         port,
         connectionString,
         connectionStringEnv: connection.connectionStringEnv,
+        connectionStringPooled: connection.connectionStringPooled,
+        connectionStringPooledEnv: connection.connectionStringPooledEnv,
+        sslMode: connection.sslMode,
+        provider: connection.provider,
         database: connection.database,
         user: connection.user || connection.username,
         password: connection.password,
@@ -520,18 +520,7 @@ export async function applyDbTableSyncAction(
 
 export interface DropDbTablePayload {
   engine?: string;
-  connection?: {
-    host?: string;
-    port?: string | number;
-    database?: string;
-    user?: string;
-    username?: string;
-    password?: string;
-    connectionString?: string;
-    connectionStringEnv?: string;
-    dbFilePath?: string;
-    dbFilePathEnv?: string;
-  };
+  connection?: DbConnectionConfig;
   tableName: string;
   schema?: string;
 }
@@ -585,18 +574,7 @@ export async function dropDbTableAction(
 
 export interface RenameDbTablePayload {
   engine?: string;
-  connection?: {
-    host?: string;
-    port?: string | number;
-    database?: string;
-    user?: string;
-    username?: string;
-    password?: string;
-    connectionString?: string;
-    connectionStringEnv?: string;
-    dbFilePath?: string;
-    dbFilePathEnv?: string;
-  };
+  connection?: DbConnectionConfig;
   oldTableName: string;
   newTableName: string;
   schema?: string;
@@ -654,18 +632,7 @@ export async function renameDbTableAction(
 
 export interface RenameDbColumnPayload {
   engine?: string;
-  connection?: {
-    host?: string;
-    port?: string | number;
-    database?: string;
-    user?: string;
-    username?: string;
-    password?: string;
-    connectionString?: string;
-    connectionStringEnv?: string;
-    dbFilePath?: string;
-    dbFilePathEnv?: string;
-  };
+  connection?: DbConnectionConfig;
   tableName: string;
   oldColumnName: string;
   newColumnName: string;

@@ -14,22 +14,30 @@ export function isJsonObject(val: unknown): val is JsonObject {
   return typeof val === "object" && val !== null && !Array.isArray(val);
 }
 
+export interface DbConnectionConfig {
+  [key: string]: string | number | undefined;
+  host?: string;
+  port?: number | string;
+  database?: string;
+  user?: string;
+  username?: string;
+  password?: string;
+  connectionString?: string;
+  connectionStringEnv?: string;
+  connectionStringPooled?: string;
+  connectionStringPooledEnv?: string;
+  sslMode?: string;
+  provider?: string;
+  dbFilePath?: string;
+  dbFilePathEnv?: string;
+}
+
 export interface TestDbOperationPayload {
   engine?: string;
-  connection?: {
-    host?: string;
-    port?: number | string;
-    database?: string;
-    user?: string;
-    username?: string;
-    password?: string;
-    connectionString?: string;
-    connectionStringEnv?: string;
-    dbFilePath?: string;
-    dbFilePathEnv?: string;
-  };
+  connection?: DbConnectionConfig;
   entity?: {
     name?: string;
+    schema?: string;
     columns?: CanvasEntityColumn[];
   };
   operation: {
@@ -66,18 +74,7 @@ export interface TestDbOperationResult {
 
 export interface CheckDbConnectionPayload {
   engine?: string;
-  connection?: {
-    host?: string;
-    port?: number | string;
-    database?: string;
-    user?: string;
-    username?: string;
-    password?: string;
-    connectionString?: string;
-    connectionStringEnv?: string;
-    dbFilePath?: string;
-    dbFilePathEnv?: string;
-  };
+  connection?: DbConnectionConfig;
   projectId?: string;
 }
 

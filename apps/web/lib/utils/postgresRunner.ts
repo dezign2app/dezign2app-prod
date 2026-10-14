@@ -19,6 +19,10 @@ export interface PostgresConnectionConfig {
   port?: number | string;
   connectionString?: string;
   connectionStringEnv?: string;
+  connectionStringPooled?: string;
+  connectionStringPooledEnv?: string;
+  sslMode?: string;
+  provider?: string;
   database?: string;
   user?: string;
   username?: string;
@@ -27,7 +31,7 @@ export interface PostgresConnectionConfig {
 
 export interface ExecutePostgresOptions {
   connection: PostgresConnectionConfig;
-  entity?: { name?: string; columns?: Array<{ name?: string; type?: string; isPrimaryKey?: boolean; isPrimary?: boolean; primaryKey?: boolean }> };
+  entity?: { name?: string; schema?: string; columns?: Array<{ name?: string; type?: string; isPrimaryKey?: boolean; isPrimary?: boolean; primaryKey?: boolean }> };
   operation: TestDbOperationPayload["operation"];
   args: Record<string, unknown>;
   mode?: "live" | "sandbox";
@@ -49,10 +53,15 @@ export interface PostgresOperationResult {
 function resolveConnectionString(config: PostgresConnectionConfig): string {
   // 1. Explicit connection string takes highest precedence
   if (config.connectionString) return config.connectionString;
+  if (config.connectionStringPooled) return config.connectionStringPooled;
 
   // 2. From node's explicit env var if set
   if (config.connectionStringEnv) {
     const envVal = process.env[config.connectionStringEnv];
+    if (envVal) return envVal;
+  }
+  if (config.connectionStringPooledEnv) {
+    const envVal = process.env[config.connectionStringPooledEnv];
     if (envVal) return envVal;
   }
 
@@ -75,7 +84,28 @@ function resolveConnectionString(config: PostgresConnectionConfig): string {
     ? `${encodeURIComponent(user)}:${encodeURIComponent(pass)}`
     : encodeURIComponent(user);
 
-  return `postgresql://${authPart}@${host}:${port}/${encodeURIComponent(db)}`;
+  let url = `postgresql://${authPart}@${host}:${port}/${encodeURIComponent(db)}`;
+  if (
+    config.sslMode === "require" ||
+    config.provider === "supabase" ||
+    config.provider === "neon"
+  ) {
+    url += "?sslmode=require";
+  }
+  return url;
+}
+
+function isSslRequiredForConfig(config: PostgresConnectionConfig, connStr: string): boolean {
+  return (
+    config.sslMode === "require" ||
+    config.provider === "supabase" ||
+    config.provider === "neon" ||
+    config.provider === "aws_rds" ||
+    connStr.includes("sslmode=require") ||
+    connStr.includes("neon.tech") ||
+    connStr.includes("supabase.co") ||
+    process.env.NODE_ENV === "production"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -207,29 +237,53 @@ export async function executePostgresLiveOperation(
   // Dynamically import `pg` to avoid bundling issues in non-server contexts
   const { Pool } = await import("pg");
   const connectionString = resolveConnectionString(opts.connection);
-  const tableName = opts.entity?.name || extractTableName(opts.operation);
+  const rawTableName = opts.entity?.name || extractTableName(opts.operation);
+  const { safeTable, targetSchema: hintedSchema } = resolveTableAndSchema(rawTableName, opts.entity?.schema);
+  const tableName = safeTable || "record";
   const start = performance.now();
 
   const pool = new Pool({
     connectionString,
     max: 3,
-    ssl:
-      connectionString.includes("sslmode=require") ||
-      connectionString.includes("neon.tech") ||
-      connectionString.includes("supabase.co") ||
-      process.env.NODE_ENV === "production"
-        ? { rejectUnauthorized: false }
-        : undefined,
+    ssl: isSslRequiredForConfig(opts.connection, connectionString)
+      ? { rejectUnauthorized: false }
+      : undefined,
   });
 
   let client: import("pg").PoolClient | undefined;
   try {
     client = await pool.connect();
 
-    // 1. Ensure table exists so test always has a target to operate on
-    await ensurePostgresTable(client, tableName, opts.entity?.columns);
+    // 1. Discover the real schema and exact table name casing.
+    //    Query information_schema.tables, skipping Supabase/system schemas.
+    let resolvedSchema = hintedSchema;
+    let actualTableName = safeTable;
 
-    // 2. Determine the SQL to run
+    const discoverRes = await client.query<{ table_schema: string; table_name: string }>(
+      `SELECT table_schema, table_name FROM information_schema.tables
+       WHERE LOWER(table_name) = LOWER($1)
+         AND table_schema NOT IN (
+           'information_schema','pg_catalog','pg_toast',
+           'auth','storage','realtime','supabase_functions','vault','extensions'
+         )
+       ORDER BY (table_schema = 'public') DESC, table_schema`,
+      [safeTable],
+    );
+    if (discoverRes.rows.length > 0) {
+      const publicRow = discoverRes.rows.find((r) => r.table_schema === "public");
+      const matched = publicRow ?? discoverRes.rows[0];
+      if (matched) {
+        resolvedSchema = matched.table_schema || hintedSchema;
+        actualTableName = matched.table_name || safeTable;
+      }
+    }
+
+    const qualifiedTable = `"${resolvedSchema}"."${actualTableName}"`;
+
+    // 2. Ensure table exists so test always has a target to operate on
+    await ensurePostgresTable(client, actualTableName, opts.entity?.columns, resolvedSchema);
+
+    // 3. Determine the SQL to run
     const op = opts.operation;
     const args = opts.args || {};
 
@@ -262,10 +316,28 @@ export async function executePostgresLiveOperation(
     ) {
       rawSql = queryMatch[2].trim();
     } else {
-      // Generate SQL from operation kind + args
+      // Generate SQL from operation kind + args, then qualify the table name.
+      // planSqlCommand uses the unqualified table name internally — replace it
+      // with the schema-qualified form so Supabase / custom-schema DBs resolve correctly.
       const plan = planSqlCommand(op, args, "postgres");
-      rawSql = plan.rawSql;
+      rawSql = plan.rawSql.replaceAll(`"${safeTable}"`, qualifiedTable);
     }
+
+    // Align table name in rawSql with the actual discovered table in the database.
+    // Replace any quoted case variations (e.g. "user", "User", "public"."user")
+    // with the real database schema and table name (e.g. "public"."User").
+    const escapedSchema = (resolvedSchema || "public").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escapedTable = safeTable.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escapedActual = actualTableName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    rawSql = rawSql.replace(
+      new RegExp(`"(${escapedSchema}|public)"\\."(${escapedTable}|${escapedActual})"`, "gi"),
+      qualifiedTable,
+    );
+    rawSql = rawSql.replace(
+      new RegExp(`"(${escapedTable}|${escapedActual})"`, "gi"),
+      qualifiedTable,
+    );
 
     // Build parameterized query: replace literal values with $N params when we can
     // For sandbox-generated SQL (has quoted literals), run as-is
@@ -445,13 +517,9 @@ export async function checkPostgresConnection(
   const pool = new Pool({
     connectionString,
     max: 1,
-    ssl:
-      connectionString.includes("sslmode=require") ||
-      connectionString.includes("neon.tech") ||
-      connectionString.includes("supabase.co") ||
-      process.env.NODE_ENV === "production"
-        ? { rejectUnauthorized: false }
-        : undefined,
+    ssl: isSslRequiredForConfig(connection, connectionString)
+      ? { rejectUnauthorized: false }
+      : undefined,
   });
 
   let client: import("pg").PoolClient | undefined;
@@ -676,13 +744,9 @@ export async function applyPostgresTableSync(
     connectionString,
     max: 1,
     connectionTimeoutMillis: 6000,
-    ssl:
-      connectionString.includes("sslmode=require") ||
-      connectionString.includes("neon.tech") ||
-      connectionString.includes("supabase.co") ||
-      process.env.NODE_ENV === "production"
-        ? { rejectUnauthorized: false }
-        : undefined,
+    ssl: isSslRequiredForConfig(connection, connectionString)
+      ? { rejectUnauthorized: false }
+      : undefined,
   });
 
   let client: import("pg").PoolClient | undefined;

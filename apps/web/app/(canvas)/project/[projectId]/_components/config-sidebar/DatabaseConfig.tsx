@@ -755,6 +755,10 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
           password={data.password}
           connectionString={data.connectionString}
           connectionStringEnv={connStringEnv}
+          connectionStringPooled={data.connectionStringPooled}
+          connectionStringPooledEnv={data.connectionStringPooledEnv}
+          sslMode={data.sslMode}
+          provider={data.provider}
           dbFilePath={dbFilePath}
           dbFilePathEnv={dbFilePathEnv}
           lastStatus={data.lastConnectionStatus}

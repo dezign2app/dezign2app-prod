@@ -13,7 +13,8 @@ export function generatePostgresDbOperations(
   indexes: { name: string; columns: string; isUnique?: boolean }[] = [],
   _allNodes: BackendNode[] = [],
 ): DbOperationFunction[] {
-  const tableName = toTableName(label || "table");
+  const rawCleanLabel = (label || "").trim().replace(/[^a-zA-Z0-9_]/g, "");
+  const tableName = rawCleanLabel || toTableName(label || "table");
   const pascal = toPascal(tableName);
   const pascalSingular = toSingular(pascal);
   const pascalPlural = toPlural(pascal);
@@ -83,7 +84,7 @@ export function generatePostgresDbOperations(
       ],
       returnType: `Promise<${pascal}[]>`,
       pagination: { enabled: true, defaultLimit: 20, maxLimit: 100, mode: "offset" },
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Retrieve all records from the ${tableName} table using parameterized PostgreSQL query with limit and offset.`,
       code: `export async function findAll${pascalPlural}(limit = 20, offset = 0): Promise<${pascal}[]> {\n  const res = await query<${pascal}>('SELECT * FROM "${tableName}" ORDER BY "${pkColName}" LIMIT $1 OFFSET $2', [limit, offset]);\n  return res.rows;\n}`,
       enabled: true,
@@ -97,7 +98,7 @@ export function generatePostgresDbOperations(
       signature: `find${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<${pascal} | null>`,
       params: [{ name: pkVarName, type: pkType, required: true }],
       returnType: `Promise<${pascal} | null>`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Find a single record from the ${tableName} table by primary key (${pkColName}).`,
       code: `export async function find${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<${pascal} | null> {\n  const res = await query<${pascal}>('SELECT * FROM "${tableName}" WHERE "${pkColName}" = $1 LIMIT 1', [${pkVarName}]);\n  return res.rows[0] || null;\n}`,
       enabled: true,
@@ -111,7 +112,7 @@ export function generatePostgresDbOperations(
       signature: `create${pascalSingular}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}>`,
       params: [{ name: createDestructuredParam, type: `Create${pascal}Data`, required: true }],
       returnType: `Promise<${pascal}>`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Insert a new record into the ${tableName} table and return the created row.`,
       code: createCode,
       enabled: true,
@@ -134,7 +135,7 @@ export function generatePostgresDbOperations(
         },
       ],
       returnType: `Promise<${pascal} | null>`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Update an existing record in the ${tableName} table by primary key.`,
       code: updateCode,
       enabled: true,
@@ -148,7 +149,7 @@ export function generatePostgresDbOperations(
       signature: `upsert${pascalSingular}({ ${destructuredFields} }: Upsert${pascal}Data): Promise<${pascal}>`,
       params: [{ name: createDestructuredParam, type: `Upsert${pascal}Data`, required: true }],
       returnType: `Promise<${pascal}>`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Insert or update a record in the ${tableName} table on conflict and return the record.`,
       code: upsertCode,
       enabled: true,
@@ -162,7 +163,7 @@ export function generatePostgresDbOperations(
       signature: `delete${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<{ success: boolean; message: string }>`,
       params: [{ name: pkVarName, type: pkType, required: true }],
       returnType: `Promise<{ success: boolean; message: string }>`,
-      logicMode: "natural_language",
+      logicMode: "code",
       prompt: `Delete a record from the ${tableName} table by primary key.`,
       code: deleteCode,
       enabled: true,

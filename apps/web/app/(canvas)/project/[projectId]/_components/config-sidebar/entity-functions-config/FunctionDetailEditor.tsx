@@ -95,7 +95,7 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = (props)
       <BusinessLogicBlock
         title="4. Function Implementation Logic"
         description="Define the function implementation in natural language or write query code. Use AI to generate code from instructions."
-        mode={draftOp.logicMode || "natural_language"}
+        mode={draftOp.logicMode || "code"}
         onModeChange={handleModeChange}
         prompt={draftOp.prompt || draftOp.query || ""}
         onPromptChange={handlePromptChange}
@@ -131,6 +131,7 @@ export const FunctionDetailEditor: React.FC<FunctionDetailEditorProps> = (props)
       <OperationTestStudio
         selectedOp={draftOp}
         label={props.label}
+        schema={props.schema}
         columns={props.columns}
         parentDb={props.parentDb}
         updateSelectedOp={handleUpdateOp}
