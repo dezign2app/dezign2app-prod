@@ -276,7 +276,8 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
     ? `import { createAuthMiddleware } from "better-auth/api";\n`
     : "";
 
-  return `import { betterAuth } from "better-auth";
+  return `import "dotenv/config";
+import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 ${adapterConfig.importStatement}
 ${createMiddlewareImport}${pluginImportStr}${passkeyImportStr}export const auth = betterAuth({

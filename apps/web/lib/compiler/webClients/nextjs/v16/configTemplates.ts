@@ -1,16 +1,19 @@
 import { CompiledFile, NodeDependencyItem } from "@workspace/canvas/types";
+import { BackendNode } from "@/types/canvas";
 
 export function generateProjectConfigFiles(
   appSlug: string = "web-app",
   customDependencies?: NodeDependencyItem[],
   hasDb: boolean = false,
   dbPackageName: string = "@workspace/db",
+  dbNode?: BackendNode,
 ): CompiledFile[] {
   const dependencies: Record<string, string> = {
     ...(hasDb ? { [dbPackageName]: "workspace:*" } : {}),
     "@workspace/logger": "workspace:*",
     "@workspace/types": "workspace:*",
     "@workspace/ui": "workspace:*",
+    dotenv: "^16.4.5",
     "lucide-react": "^0.475.0",
     next: "^16.0.0",
     react: "^19.0.0",
@@ -111,10 +114,29 @@ export default nextConfig;
 
   const envLines: string[] = [];
   if (hasDb) {
-    if (dbPackageName.includes("postgres") || dbPackageName.includes("pg")) {
-      envLines.push("DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres");
-    } else if (dbPackageName.includes("mysql")) {
-      envLines.push("DATABASE_URL=mysql://root:root@localhost:3306/dezign2app");
+    const defaultPg =
+      dbNode?.data?.connectionString ||
+      dbNode?.data?.connectionStringPooled ||
+      "postgresql://postgres:postgres@localhost:5432/postgres";
+    const defaultMysql =
+      dbNode?.data?.connectionString ||
+      "mysql://root:root@localhost:3306/dezign2app";
+
+    const isPostgres =
+      dbPackageName.includes("postgres") ||
+      dbPackageName.includes("pg") ||
+      dbNode?.data?.dbEngine === "postgres" ||
+      dbNode?.data?.provider === "supabase" ||
+      dbNode?.data?.provider === "neon";
+
+    const isMysql =
+      dbPackageName.includes("mysql") ||
+      dbNode?.data?.dbEngine === "mysql";
+
+    if (isPostgres) {
+      envLines.push(`DATABASE_URL=${defaultPg}`);
+    } else if (isMysql) {
+      envLines.push(`DATABASE_URL=${defaultMysql}`);
     } else {
       envLines.push("DATABASE_PATH=../../packages/db/sqlite.db");
       envLines.push("DATABASE_URL=../../packages/db/sqlite.db");

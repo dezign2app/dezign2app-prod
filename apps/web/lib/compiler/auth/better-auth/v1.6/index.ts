@@ -23,7 +23,7 @@ export function compileBetterAuthV16(
   _allNodes: BackendNode[] = [],
   _allEdges: BackendEdge[] = []
 ): CompiledServiceResult & { authNodeId: string } {
-  const rawData = (node.data || {}) as BetterAuthV16NodeData;
+  const rawData: BetterAuthV16NodeData = node.data || {};
   const serviceName = rawData.label || "Auth";
   const authPort = rawData.port || "3000";
   const authBaseUrl = rawData.baseUrl || `http://localhost:${authPort}`;
@@ -41,8 +41,25 @@ export function compileBetterAuthV16(
     : _allNodes.find((n) => n.type === "payments" && _allNodes.filter((x) => x.type === "auth").length <= 1);
 
   // Resolve connected DB node if any to infer dbAdapter
+  const connectedDbEdge = _allEdges.find(
+    (e) =>
+      ((e.target === node.id || e.target === node.nodeId) &&
+        _allNodes.some((n) => (n.id === e.source || n.nodeId === e.source) && n.type === "database")) ||
+      ((e.source === node.id || e.source === node.nodeId) &&
+        _allNodes.some((n) => (n.id === e.target || n.nodeId === e.target) && n.type === "database"))
+  );
+  const connectedEdgeDbNode = connectedDbEdge
+    ? _allNodes.find(
+        (n) =>
+          (n.id === (connectedDbEdge.target === node.id ? connectedDbEdge.source : connectedDbEdge.target) ||
+            n.nodeId === (connectedDbEdge.target === node.id ? connectedDbEdge.source : connectedDbEdge.target)) &&
+          n.type === "database"
+      )
+    : undefined;
+
   const connectedDbNode =
     _allNodes.find((n) => n.id === rawData.databaseId) ||
+    connectedEdgeDbNode ||
     _allNodes.find((n) => n.type === "database" && n.data?.dbEngine !== "redis");
   const resolvedDbEngine = (connectedDbNode?.data?.dbEngine || "").toLowerCase();
   const resolvedDbAdapter =
@@ -53,9 +70,15 @@ export function compileBetterAuthV16(
       ? "mysql"
       : "sqlite-raw");
 
+  const resolvedConnectionString =
+    rawData.connectionString ||
+    connectedDbNode?.data?.connectionString ||
+    connectedDbNode?.data?.connectionStringPooled;
+
   const data: BetterAuthV16NodeData = {
     ...rawData,
     dbAdapter: resolvedDbAdapter,
+    connectionString: resolvedConnectionString,
     paymentsPlugin: rawData.paymentsPlugin || (connectedPaymentsNode
       ? {
           provider: "creem",

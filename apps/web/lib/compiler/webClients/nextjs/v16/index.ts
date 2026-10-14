@@ -279,6 +279,7 @@ export function compileNextjsV16WebClient(
       deduplicatedCustomDeps,
       hasDb,
       dbPackageName,
+      dbNodes[0],
     ),
   );
 

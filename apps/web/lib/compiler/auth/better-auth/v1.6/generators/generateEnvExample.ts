@@ -30,9 +30,15 @@ export function generateEnvExample(data: BetterAuthV16NodeData): string {
   const dbAdapter = String(data.dbAdapter || "sqlite-raw").toLowerCase();
   let dbEnvLines = "";
   if (dbAdapter.includes("postgres") || dbAdapter.includes("pg")) {
-    dbEnvLines = `\n# Centralized Database Connection\nDATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres\n`;
+    const connStr =
+      data.connectionString ||
+      "postgresql://postgres:postgres@localhost:5432/postgres";
+    dbEnvLines = `\n# Centralized Database Connection\nDATABASE_URL=${connStr}\n`;
   } else if (dbAdapter.includes("mysql")) {
-    dbEnvLines = `\n# Centralized Database Connection\nDATABASE_URL=mysql://root:root@localhost:3306/dezign2app\n`;
+    const connStr =
+      data.connectionString ||
+      "mysql://root:root@localhost:3306/dezign2app";
+    dbEnvLines = `\n# Centralized Database Connection\nDATABASE_URL=${connStr}\n`;
   } else {
     dbEnvLines = `\n# Centralized Database Connection (points to packages/db/sqlite.db)\nDATABASE_PATH=../../packages/db/sqlite.db\nDATABASE_URL=../../packages/db/sqlite.db\n`;
   }

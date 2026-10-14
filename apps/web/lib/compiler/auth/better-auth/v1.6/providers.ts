@@ -1,7 +1,10 @@
 import { OAuthProviderConfig } from "@workspace/canvas";
 import { BetterAuthV16NodeData } from "./types";
 
-export function resolveOAuthProviders(data: BetterAuthV16NodeData): OAuthProviderConfig[] {
+export function resolveOAuthProviders(data?: Partial<BetterAuthV16NodeData>): OAuthProviderConfig[] {
+  if (!data) {
+    return [];
+  }
   const providers = data.providers;
   if (!providers) {
     return [];

@@ -105,15 +105,32 @@ export function compilePostgresDatabase(
     "passkey",
     "twofactor",
     "ratelimit",
+    "organization",
+    "member",
+    "team",
+    "teammember",
   ];
   if (!createdTableNames.has("user") && !createdTableNames.has("users")) {
     authDdlStatements.push(...BETTERAUTH_PG_DDL);
     authTableNames.forEach((t) => createdTableNames.add(t));
-    // Supplement tableSchemas for auto-migration
-    Object.entries(BETTERAUTH_PG_SCHEMAS).forEach(([t, s]) => {
-      if (!tableSchemas[t]) tableSchemas[t] = s;
-    });
   }
+
+  // Supplement tableSchemas for startup auto-migration for ALL Better Auth tables and plugin columns
+  Object.entries(BETTERAUTH_PG_SCHEMAS).forEach(([t, s]) => {
+    if (!tableSchemas[t]) {
+      tableSchemas[t] = [...s];
+    } else {
+      const existingColNames = new Set(
+        tableSchemas[t]!.map((c) => c.name.toLowerCase()),
+      );
+      s.forEach((col) => {
+        if (!existingColNames.has(col.name.toLowerCase())) {
+          tableSchemas[t]!.push(col);
+          existingColNames.add(col.name.toLowerCase());
+        }
+      });
+    }
+  });
 
   // ── 3. Payments DDL ───────────────────────────────────────────────────────
   const paymentsDdlStatements: string[] = [];
