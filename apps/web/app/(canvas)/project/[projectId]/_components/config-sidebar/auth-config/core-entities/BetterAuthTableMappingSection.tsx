@@ -6,6 +6,7 @@ import { BETTER_AUTH_TABLE_DEFINITIONS } from "@workspace/canvas";
 import { BetterAuthTableMappingSectionProps } from "./types";
 import { BetterAuthCategoryCard } from "./BetterAuthCategoryCard";
 import { BetterAuthTableRow } from "./BetterAuthTableRow";
+import { isEntityMatch } from "./hooks/useBetterAuthTableSync";
 
 export const BetterAuthTableMappingSection: React.FC<
   BetterAuthTableMappingSectionProps
@@ -67,7 +68,8 @@ export const BetterAuthTableMappingSection: React.FC<
                   tableMappings[def.key] ||
                   (def.key === "userEntityId"
                     ? userData.userEntityId || userData.userSchemaId
-                    : undefined);
+                    : undefined) ||
+                  schemaEntities.find((e) => isEntityMatch(e, def))?.id;
 
                 return (
                   <BetterAuthTableRow

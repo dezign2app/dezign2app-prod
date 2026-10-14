@@ -4,6 +4,8 @@ import {
   BetterAuthTableDefinition,
   BETTER_AUTH_TABLE_DEFINITIONS,
   BETTER_AUTH_TABLE_KEYS,
+  BETTER_AUTH_PLUGINS,
+  BETTER_AUTH_CATEGORIES,
   BACKEND_NODE_ENTITY,
   BACKEND_NODE_DATABASE,
   BACKEND_EDGE_FOREIGN_KEY,
@@ -18,6 +20,30 @@ import {
 import { BackendNode, BackendNodeData } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSchemaAutoLayout } from "../../../../hooks/useAutoLayout";
+import { toTableName, toSingular, toPlural } from "@/lib/compiler/utils";
+
+export function isEntityMatch(
+  entity: BackendNode,
+  def: BetterAuthTableDefinition,
+): boolean {
+  if (entity.type !== BACKEND_NODE_ENTITY) return false;
+  const raw = (entity.data?.label || entity.data?.tableRef || "").trim();
+  if (!raw) return false;
+
+  const rawLower = raw.toLowerCase();
+  const defNameLower = def.name.toLowerCase();
+  if (rawLower === defNameLower) return true;
+
+  const normRaw = rawLower.replace(/[-_\s]/g, "");
+  const normDef = defNameLower.replace(/[-_\s]/g, "");
+  if (normRaw === normDef) return true;
+
+  if (toSingular(normRaw) === normDef || toPlural(normRaw) === normDef) return true;
+
+  const cleanRaw = toTableName(raw).replace(/[-_\s]/g, "");
+  const cleanDef = toTableName(def.name).replace(/[-_\s]/g, "");
+  return cleanRaw === cleanDef;
+}
 
 interface UseBetterAuthTableSyncParams {
   data: BackendNodeData;
@@ -76,12 +102,14 @@ export function useBetterAuthTableSync({
                 (e.source === currentTableId && e.target === targetNodeId),
             );
             if (!hasEdge) {
-              const sourceCols = targetNode.data?.columns || targetDef.defaultColumns;
-              const sourcePkIdx = (sourceCols as CanvasEntityColumn[]).findIndex((c) => c.isPrimaryKey);
+              const sourceCols: CanvasEntityColumn[] =
+                targetNode.data?.columns || targetDef.defaultColumns;
+              const sourcePkIdx = sourceCols.findIndex((c) => c.isPrimaryKey);
               const sourceColIdx = sourcePkIdx !== -1 ? sourcePkIdx : 0;
 
-              const targetCols = currentTableNode.data?.columns || def.defaultColumns;
-              const targetFkIdx = (targetCols as CanvasEntityColumn[]).findIndex((c) => c.name === col.name);
+              const targetCols: CanvasEntityColumn[] =
+                currentTableNode.data?.columns || def.defaultColumns;
+              const targetFkIdx = targetCols.findIndex((c) => c.name === col.name);
               const targetColIdx = targetFkIdx !== -1 ? targetFkIdx : colIdx;
 
               addEdge({
@@ -110,7 +138,7 @@ export function useBetterAuthTableSync({
       (n) =>
         n.type === BACKEND_NODE_ENTITY &&
         (!selectedDatabaseId || n.data?.databaseId === selectedDatabaseId) &&
-        n.data?.label?.toLowerCase().trim() === def.name.toLowerCase().trim(),
+        isEntityMatch(n, def),
     );
 
     let targetEntityId: string;
@@ -199,8 +227,22 @@ export function useBetterAuthTableSync({
       [def.key]: targetEntityId,
     };
 
+    const pluginToAdd =
+      def.key === BETTER_AUTH_TABLE_KEYS.PASSKEY
+        ? BETTER_AUTH_PLUGINS.PASSKEY
+        : def.key === BETTER_AUTH_TABLE_KEYS.TWO_FACTOR
+          ? BETTER_AUTH_PLUGINS.TWO_FACTOR
+          : undefined;
+
+    const currentPlugins = data.plugins || ["bearer", "admin", "organization", "jwt"];
+    const nextPlugins =
+      pluginToAdd && !currentPlugins.includes(pluginToAdd)
+        ? [...currentPlugins, pluginToAdd]
+        : currentPlugins;
+
     updateData({
       tableMappings: updatedMappings,
+      plugins: nextPlugins,
       ...(def.key === BETTER_AUTH_TABLE_KEYS.USER
         ? { userEntityId: targetEntityId, userSchemaId: targetEntityId }
         : {}),
@@ -301,21 +343,16 @@ export function useBetterAuthTableSync({
     let syncedCount = 0;
     let createdCount = 0;
 
-    const requiredDefs = BETTER_AUTH_TABLE_DEFINITIONS.filter((def) =>
-      isBetterAuthTableRequired(def, {
-        isOrgEnabled,
-        enabledPlugins,
-        providers: data.providers,
-      }),
+    // All Better Auth tables (Core, Plugin tables passkey, twoFactor, jwks, rateLimit, and Organization if enabled)
+    const targetDefs = BETTER_AUTH_TABLE_DEFINITIONS.filter(
+      (def) => def.category !== BETTER_AUTH_CATEGORIES.ORGANIZATION || isOrgEnabled,
     );
 
-    requiredDefs.forEach((def) => {
+    targetDefs.forEach((def) => {
       const mappedId = activeMappings[def.key];
       const matchingEntity = mappedId
         ? existingEntities.find((e) => e.id === mappedId)
-        : existingEntities.find(
-            (e) => e.data?.label?.toLowerCase().trim() === def.name.toLowerCase().trim(),
-          );
+        : existingEntities.find((e) => isEntityMatch(e, def));
 
       if (matchingEntity) {
         activeMappings[def.key] = matchingEntity.id;
@@ -379,8 +416,17 @@ export function useBetterAuthTableSync({
       }
     });
 
+    const nextPlugins = Array.from(
+      new Set([
+        ...enabledPlugins,
+        BETTER_AUTH_PLUGINS.PASSKEY,
+        BETTER_AUTH_PLUGINS.TWO_FACTOR,
+      ]),
+    );
+
     updateData({
       tableMappings: activeMappings,
+      plugins: nextPlugins,
       userEntityId: activeMappings.userEntityId || data.userEntityId,
       userSchemaId: activeMappings.userEntityId || data.userSchemaId,
       ...(dbId && !data.databaseId ? { databaseId: dbId } : {}),
@@ -422,8 +468,11 @@ export function useBetterAuthTableSync({
       const rawId =
         tableMappings[def.key] ||
         (def.key === BETTER_AUTH_TABLE_KEYS.USER ? rawUserMapping : undefined);
-      if (rawId && existingEntities.some((e) => e.id === rawId)) {
-        activeMappings[def.key] = rawId;
+      const matching = rawId
+        ? existingEntities.find((e) => e.id === rawId)
+        : existingEntities.find((e) => isEntityMatch(e, def));
+      if (matching) {
+        activeMappings[def.key] = matching.id;
       }
     });
 
@@ -449,8 +498,21 @@ export function useBetterAuthTableSync({
       ...tableMappings,
       [def.key]: nextEntityId,
     };
+    const pluginToAdd =
+      nextEntityId && def.key === BETTER_AUTH_TABLE_KEYS.PASSKEY
+        ? BETTER_AUTH_PLUGINS.PASSKEY
+        : nextEntityId && def.key === BETTER_AUTH_TABLE_KEYS.TWO_FACTOR
+          ? BETTER_AUTH_PLUGINS.TWO_FACTOR
+          : undefined;
+    const currentPlugins = data.plugins || ["bearer", "admin", "organization", "jwt"];
+    const nextPlugins =
+      pluginToAdd && !currentPlugins.includes(pluginToAdd)
+        ? [...currentPlugins, pluginToAdd]
+        : currentPlugins;
+
     updateData({
       tableMappings: updated,
+      plugins: nextPlugins,
       ...(def.key === "userEntityId"
         ? {
             userEntityId: nextEntityId,
@@ -467,7 +529,10 @@ export function useBetterAuthTableSync({
     const rawId =
       tableMappings[def.key] ||
       (def.key === "userEntityId" ? data.userEntityId || data.userSchemaId : undefined);
-    return Boolean(rawId && schemaEntities.some((e) => e.id === rawId));
+    return Boolean(
+      (rawId && schemaEntities.some((e) => e.id === rawId)) ||
+      schemaEntities.some((e) => isEntityMatch(e, def))
+    );
   }).length;
 
   return {
@@ -482,3 +547,4 @@ export function useBetterAuthTableSync({
     runSchemaAutoLayout,
   };
 }
+
