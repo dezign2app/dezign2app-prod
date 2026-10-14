@@ -579,6 +579,9 @@ export interface PostgresTableSyncResult {
   missingColumns: Array<{ name: string; type: string }>;
   extraColumns: Array<{ name: string; type: string }>;
   existingColumns: Array<{ name: string; type: string }>;
+  missingIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
+  extraIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
+  existingIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
   error?: string;
 }
 
@@ -587,22 +590,33 @@ export interface PostgresApplySyncResult {
   createdTable: boolean;
   appliedColumns: string[];
   droppedColumns?: string[];
+  appliedIndexes?: string[];
+  droppedIndexes?: string[];
   error?: string;
 }
 
 /**
  * Checks whether a canvas table entity exists in the live PostgreSQL database
- * and identifies missing or extra columns (schema drift).
+ * and identifies missing or extra columns/indexes (schema drift).
  */
 export async function checkPostgresTableSync(
   connection: PostgresConnectionConfig,
   tableName: string,
   columns?: Array<{ name?: string; type?: string; isPrimaryKey?: boolean; isNotNull?: boolean; isUnique?: boolean }>,
   schema?: string,
+  indexes?: Array<{ name: string; columns: string; isUnique?: boolean }>,
 ): Promise<PostgresTableSyncResult> {
   const { Pool } = await import("pg");
   const connectionString = resolveConnectionString(connection);
   const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
+
+  const validCanvasIndexes = (indexes || [])
+    .filter((i) => (i.name || "").trim().length > 0 && (i.columns || "").trim().length > 0)
+    .map((i) => ({
+      name: i.name.trim(),
+      columns: i.columns.trim(),
+      isUnique: Boolean(i.isUnique),
+    }));
 
   if (!safeTable) {
     return {
@@ -613,6 +627,9 @@ export async function checkPostgresTableSync(
       missingColumns: [],
       extraColumns: [],
       existingColumns: [],
+      missingIndexes: validCanvasIndexes,
+      extraIndexes: [],
+      existingIndexes: [],
       error: "Invalid table name",
     };
   }
@@ -659,6 +676,9 @@ export async function checkPostgresTableSync(
         missingColumns: canvasCols,
         extraColumns: [],
         existingColumns: [],
+        missingIndexes: validCanvasIndexes,
+        extraIndexes: [],
+        existingIndexes: [],
       };
     }
 
@@ -691,14 +711,107 @@ export async function checkPostgresTableSync(
         c.name.toLowerCase() !== "updated_at",
     );
 
+    // Query existing non-primary standalone indexes
+    let existingIndexes: Array<{ name: string; columns: string; isUnique?: boolean }> = [];
+    try {
+      const idxRes = await client.query<{
+        index_name: string;
+        is_unique: boolean;
+        column_names: string;
+      }>(
+        `SELECT
+           i.relname AS index_name,
+           ix.indisunique AS is_unique,
+           ARRAY_TO_STRING(
+             ARRAY(
+               SELECT pg_get_indexdef(ix.indexrelid, k + 1, true)
+               FROM generate_series(0, ix.indnatts - 1) as k
+             ),
+             ', '
+           ) AS column_names
+         FROM pg_class t
+         JOIN pg_namespace n ON n.oid = t.relnamespace
+         JOIN pg_index ix ON ix.indrelid = t.oid
+         JOIN pg_class i ON i.oid = ix.indexrelid
+         WHERE LOWER(t.relname) = LOWER($1)
+           AND n.nspname = $2
+           AND NOT ix.indisprimary
+           AND i.oid NOT IN (
+             SELECT conindid 
+             FROM pg_constraint 
+             WHERE conrelid = t.oid AND conindid > 0
+           )`,
+        [safeTable, targetSchema],
+      );
+
+      existingIndexes = (idxRes.rows || []).map((r) => ({
+        name: r.index_name,
+        columns: r.column_names,
+        isUnique: Boolean(r.is_unique),
+      }));
+    } catch {
+      existingIndexes = [];
+    }
+
+    const missingIndexes = validCanvasIndexes.filter((cIdx) => {
+      const cName = cIdx.name.toLowerCase();
+      const cCols = (cIdx.columns || "")
+        .split(",")
+        .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
+        .filter(Boolean)
+        .join(",");
+      return !existingIndexes.some((dbIdx) => {
+        const dbName = dbIdx.name.toLowerCase();
+        const dbCols = (dbIdx.columns || "")
+          .split(",")
+          .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
+          .filter(Boolean)
+          .join(",");
+        return (
+          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
+          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+        );
+      });
+    });
+
+    const extraIndexes = existingIndexes.filter((dbIdx) => {
+      const dbName = dbIdx.name.toLowerCase();
+      const dbCols = (dbIdx.columns || "")
+        .split(",")
+        .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
+        .filter(Boolean)
+        .join(",");
+      return !validCanvasIndexes.some((cIdx) => {
+        const cName = cIdx.name.toLowerCase();
+        const cCols = (cIdx.columns || "")
+          .split(",")
+          .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
+          .filter(Boolean)
+          .join(",");
+        return (
+          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
+          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+        );
+      });
+    });
+
+    const inSync =
+      missingColumns.length === 0 &&
+      extraColumns.length === 0 &&
+      missingIndexes.length === 0 &&
+      extraIndexes.length === 0;
+
     return {
       success: true,
       serverReachable: true,
       tableExists: true,
-      inSync: missingColumns.length === 0 && extraColumns.length === 0,
+      inSync,
       missingColumns,
       extraColumns,
       existingColumns,
+      missingIndexes,
+      extraIndexes,
+      existingIndexes,
     };
   } catch (error) {
     return {
@@ -709,6 +822,9 @@ export async function checkPostgresTableSync(
       missingColumns: [],
       extraColumns: [],
       existingColumns: [],
+      missingIndexes: [],
+      extraIndexes: [],
+      existingIndexes: [],
       error: error instanceof Error ? error.message : String(error),
     };
   } finally {
@@ -718,18 +834,27 @@ export async function checkPostgresTableSync(
 }
 
 /**
- * Applies missing table or missing columns to the live PostgreSQL database,
- * and drops columns deleted from the canvas.
+ * Applies missing table or missing columns/indexes to the live PostgreSQL database,
+ * and drops columns/indexes deleted from the canvas.
  */
 export async function applyPostgresTableSync(
   connection: PostgresConnectionConfig,
   tableName: string,
   columns?: Array<{ name?: string; type?: string; isPrimaryKey?: boolean; isNotNull?: boolean; isUnique?: boolean }>,
   schema?: string,
+  indexes?: Array<{ name: string; columns: string; isUnique?: boolean }>,
 ): Promise<PostgresApplySyncResult> {
   const { Pool } = await import("pg");
   const connectionString = resolveConnectionString(connection);
   const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
+
+  const validCanvasIndexes = (indexes || [])
+    .filter((i) => (i.name || "").trim().length > 0 && (i.columns || "").trim().length > 0)
+    .map((i) => ({
+      name: i.name.trim(),
+      columns: i.columns.trim(),
+      isUnique: Boolean(i.isUnique),
+    }));
 
   if (!safeTable) {
     return {
@@ -766,11 +891,125 @@ export async function applyPostgresTableSync(
 
     if (!tableExists) {
       await ensurePostgresTable(client, safeTable, columns, targetSchema);
+      const appliedIndexes: string[] = [];
+      for (const idx of validCanvasIndexes) {
+        const safeIdxName = idx.name.replace(/[^a-zA-Z0-9_]/g, "");
+        const colList = idx.columns
+          .split(",")
+          .map((c) => `"${c.trim().replace(/[^a-zA-Z0-9_]/g, "")}"`)
+          .join(", ");
+        if (safeIdxName && colList) {
+          const uniqueStr = idx.isUnique ? "UNIQUE " : "";
+          try {
+            await client.query(
+              `CREATE ${uniqueStr}INDEX IF NOT EXISTS "${safeIdxName}" ON "${targetSchema}"."${safeTable}" (${colList})`
+            );
+            appliedIndexes.push(safeIdxName);
+          } catch {}
+        }
+      }
+
       return {
         success: true,
         createdTable: true,
         appliedColumns: (columns || []).map((c) => c.name || "col"),
+        appliedIndexes,
       };
+    }
+
+    // Inspect existing indexes
+    let existingIndexes: Array<{ name: string; columns: string; isUnique?: boolean }> = [];
+    try {
+      const idxRes = await client.query<{
+        index_name: string;
+        is_unique: boolean;
+        column_names: string;
+      }>(
+        `SELECT
+           i.relname AS index_name,
+           ix.indisunique AS is_unique,
+           ARRAY_TO_STRING(
+             ARRAY(
+               SELECT pg_get_indexdef(ix.indexrelid, k + 1, true)
+               FROM generate_series(0, ix.indnatts - 1) as k
+             ),
+             ', '
+           ) AS column_names
+         FROM pg_class t
+         JOIN pg_namespace n ON n.oid = t.relnamespace
+         JOIN pg_index ix ON ix.indrelid = t.oid
+         JOIN pg_class i ON i.oid = ix.indexrelid
+         WHERE LOWER(t.relname) = LOWER($1)
+           AND n.nspname = $2
+           AND NOT ix.indisprimary
+           AND i.oid NOT IN (
+             SELECT conindid 
+             FROM pg_constraint 
+             WHERE conrelid = t.oid AND conindid > 0
+           )`,
+        [safeTable, targetSchema],
+      );
+
+      existingIndexes = (idxRes.rows || []).map((r) => ({
+        name: r.index_name,
+        columns: r.column_names,
+        isUnique: Boolean(r.is_unique),
+      }));
+    } catch {
+      existingIndexes = [];
+    }
+
+    const missingIndexes = validCanvasIndexes.filter((cIdx) => {
+      const cName = cIdx.name.toLowerCase();
+      const cCols = (cIdx.columns || "")
+        .split(",")
+        .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
+        .filter(Boolean)
+        .join(",");
+      return !existingIndexes.some((dbIdx) => {
+        const dbName = dbIdx.name.toLowerCase();
+        const dbCols = (dbIdx.columns || "")
+          .split(",")
+          .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
+          .filter(Boolean)
+          .join(",");
+        return (
+          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
+          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+        );
+      });
+    });
+
+    const extraIndexes = existingIndexes.filter((dbIdx) => {
+      const dbName = dbIdx.name.toLowerCase();
+      const dbCols = (dbIdx.columns || "")
+        .split(",")
+        .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
+        .filter(Boolean)
+        .join(",");
+      return !validCanvasIndexes.some((cIdx) => {
+        const cName = cIdx.name.toLowerCase();
+        const cCols = (cIdx.columns || "")
+          .split(",")
+          .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
+          .filter(Boolean)
+          .join(",");
+        return (
+          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
+          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+        );
+      });
+    });
+
+    const droppedIndexes: string[] = [];
+    for (const extraIdx of extraIndexes) {
+      const safeIdxName = extraIdx.name.replace(/[^a-zA-Z0-9_]/g, "");
+      if (safeIdxName) {
+        try {
+          await client.query(`DROP INDEX IF EXISTS "${targetSchema}"."${safeIdxName}" CASCADE`);
+          droppedIndexes.push(safeIdxName);
+        } catch {}
+      }
     }
 
     // Table exists, query existing columns from the configured schema
@@ -812,11 +1051,32 @@ export async function applyPostgresTableSync(
       }
     }
 
+    // 3. Create missing indexes
+    const appliedIndexes: string[] = [];
+    for (const missingIdx of missingIndexes) {
+      const safeIdxName = missingIdx.name.replace(/[^a-zA-Z0-9_]/g, "");
+      const colList = missingIdx.columns
+        .split(",")
+        .map((c) => `"${c.trim().replace(/[^a-zA-Z0-9_]/g, "")}"`)
+        .join(", ");
+      if (safeIdxName && colList) {
+        const uniqueStr = missingIdx.isUnique ? "UNIQUE " : "";
+        try {
+          await client.query(
+            `CREATE ${uniqueStr}INDEX IF NOT EXISTS "${safeIdxName}" ON "${targetSchema}"."${safeTable}" (${colList})`
+          );
+          appliedIndexes.push(safeIdxName);
+        } catch {}
+      }
+    }
+
     return {
       success: true,
       createdTable: false,
       appliedColumns,
       droppedColumns,
+      appliedIndexes,
+      droppedIndexes,
     };
   } catch (error) {
     return {

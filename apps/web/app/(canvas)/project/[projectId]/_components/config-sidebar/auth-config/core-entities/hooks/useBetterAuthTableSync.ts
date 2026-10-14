@@ -45,6 +45,134 @@ export function isEntityMatch(
   return cleanRaw === cleanDef;
 }
 
+export type EntityIndexDef = { name: string; columns: string; isUnique?: boolean };
+
+export function repairEntityColumns(
+  currentCols: CanvasEntityColumn[],
+  defCols: BetterAuthTableDefinition["defaultColumns"],
+): { cols: CanvasEntityColumn[]; changed: boolean } {
+  let changed = false;
+  const repaired = currentCols.map((c) => {
+    const defCol = defCols.find(
+      (dc) => dc.name.toLowerCase() === c.name.toLowerCase(),
+    );
+    if (!defCol) return c;
+    let colChanged = false;
+    const patched: CanvasEntityColumn = { ...c };
+    if (defCol.isPrimaryKey && !patched.isPrimaryKey) {
+      patched.isPrimaryKey = true;
+      colChanged = true;
+    }
+    if (defCol.isNotNull && !patched.isNotNull) {
+      patched.isNotNull = true;
+      colChanged = true;
+    }
+    if (defCol.isUnique && !patched.isUnique) {
+      patched.isUnique = true;
+      colChanged = true;
+    }
+    if (defCol.isForeignKey && !patched.isForeignKey) {
+      patched.isForeignKey = true;
+      patched.references = defCol.references;
+      colChanged = true;
+    }
+    if (colChanged) {
+      changed = true;
+      return patched;
+    }
+    return c;
+  });
+
+  const missingCols = defCols.filter(
+    (reqCol) => !repaired.some((c) => c.name.toLowerCase() === reqCol.name.toLowerCase()),
+  );
+  if (missingCols.length > 0) {
+    changed = true;
+    return { cols: [...repaired, ...missingCols], changed: true };
+  }
+  return { cols: repaired, changed };
+}
+
+export function repairEntityIndexes(
+  currentIdxs: EntityIndexDef[],
+  defIdxs: EntityIndexDef[] = [],
+): { indexes: EntityIndexDef[]; changed: boolean } {
+  const missingIdxs = defIdxs.filter(
+    (reqIdx) =>
+      !currentIdxs.some(
+        (idx) =>
+          idx.name.toLowerCase() === reqIdx.name.toLowerCase() ||
+          idx.columns.replace(/\s+/g, "").toLowerCase() ===
+            reqIdx.columns.replace(/\s+/g, "").toLowerCase(),
+      ),
+  );
+  if (missingIdxs.length > 0) {
+    return { indexes: [...currentIdxs, ...missingIdxs], changed: true };
+  }
+  return { indexes: currentIdxs, changed: false };
+}
+
+export function checkEntitySchemaDiscrepancies(
+  entity: BackendNode | undefined,
+  def: BetterAuthTableDefinition,
+): {
+  isMapped: boolean;
+  isValid: boolean;
+  missingColumns: BetterAuthTableDefinition["defaultColumns"];
+  outdatedColumns: BetterAuthTableDefinition["defaultColumns"];
+  missingIndexes: EntityIndexDef[];
+} {
+  if (!entity || entity.type !== BACKEND_NODE_ENTITY) {
+    return {
+      isMapped: false,
+      isValid: false,
+      missingColumns: def.defaultColumns,
+      outdatedColumns: [],
+      missingIndexes: def.defaultIndexes || [],
+    };
+  }
+
+  const existingCols: CanvasEntityColumn[] = entity.data?.columns || [];
+  const missingColumns = def.defaultColumns.filter(
+    (reqCol) => !existingCols.some((c) => c.name.toLowerCase() === reqCol.name.toLowerCase()),
+  );
+
+  const outdatedColumns = def.defaultColumns.filter((reqCol) => {
+    const existing = existingCols.find(
+      (c) => c.name.toLowerCase() === reqCol.name.toLowerCase(),
+    );
+    if (!existing) return false;
+    if (reqCol.isPrimaryKey && !existing.isPrimaryKey) return true;
+    if (reqCol.isNotNull && !existing.isNotNull) return true;
+    if (reqCol.isUnique && !existing.isUnique) return true;
+    return false;
+  });
+
+  const existingIdxs: EntityIndexDef[] = entity.data?.indexes || [];
+  const missingIndexes = (def.defaultIndexes || []).filter(
+    (reqIdx) =>
+      !existingIdxs.some(
+        (idx) =>
+          idx.name.toLowerCase() === reqIdx.name.toLowerCase() ||
+          idx.columns.replace(/\s+/g, "").toLowerCase() ===
+            reqIdx.columns.replace(/\s+/g, "").toLowerCase(),
+      ),
+  );
+
+  const isValid =
+    missingColumns.length === 0 &&
+    outdatedColumns.length === 0 &&
+    missingIndexes.length === 0;
+
+  return {
+    isMapped: true,
+    isValid,
+    missingColumns,
+    outdatedColumns,
+    missingIndexes,
+  };
+}
+
 interface UseBetterAuthTableSyncParams {
   data: BackendNodeData;
   updateData: (changes: Partial<BackendNodeData>) => void;
@@ -146,26 +274,19 @@ export function useBetterAuthTableSync({
     let dbId = selectedDatabaseId;
     if (matchingEntity) {
       targetEntityId = matchingEntity.id;
-      // Inject missing default columns & indexes if any
+      // Inject missing default columns, repair constraints & add indexes if any
       const currentCols: CanvasEntityColumn[] = matchingEntity.data?.columns ?? [];
-      const missingCols = def.defaultColumns.filter(
-        (reqCol) => !currentCols.some((c) => c.name.toLowerCase() === reqCol.name.toLowerCase()),
-      );
-      type EntityIndex = { name: string; columns: string; isUnique?: boolean };
-      const currentIdxs: EntityIndex[] = matchingEntity.data?.indexes ?? [];
-      const missingIdxs = (def.defaultIndexes ?? []).filter(
-        (reqIdx) => !currentIdxs.some((idx) =>
-          idx.name.toLowerCase() === reqIdx.name.toLowerCase() ||
-          idx.columns.replace(/\s+/g, "").toLowerCase() === reqIdx.columns.replace(/\s+/g, "").toLowerCase(),
-        ),
-      );
+      const currentIdxs: EntityIndexDef[] = matchingEntity.data?.indexes ?? [];
 
-      if (missingCols.length > 0 || missingIdxs.length > 0) {
+      const colResult = repairEntityColumns(currentCols, def.defaultColumns);
+      const idxResult = repairEntityIndexes(currentIdxs, def.defaultIndexes ?? []);
+
+      if (colResult.changed || idxResult.changed) {
         updateNode(matchingEntity.id, {
           data: {
             ...matchingEntity.data,
-            columns: missingCols.length > 0 ? [...currentCols, ...missingCols] : currentCols,
-            indexes: missingIdxs.length > 0 ? [...currentIdxs, ...missingIdxs] : currentIdxs,
+            columns: colResult.cols,
+            indexes: idxResult.indexes,
           },
         });
       }
@@ -260,23 +381,23 @@ export function useBetterAuthTableSync({
   const fixEntitySchema = (
     entityId: string,
     def: BetterAuthTableDefinition,
-    missingColumns: BetterAuthTableDefinition["defaultColumns"] = [],
-    missingIndexes: NonNullable<BetterAuthTableDefinition["defaultIndexes"]> = [],
+    _missingColumns: BetterAuthTableDefinition["defaultColumns"] = [],
+    _missingIndexes: NonNullable<BetterAuthTableDefinition["defaultIndexes"]> = [],
   ) => {
     const entityNode = schemaEntities.find((e) => e.id === entityId);
     if (!entityNode || entityNode.type !== BACKEND_NODE_ENTITY) return;
 
-    const currentCols = entityNode.data?.columns || [];
-    const updatedCols = missingColumns.length > 0 ? [...currentCols, ...missingColumns] : currentCols;
+    const currentCols: CanvasEntityColumn[] = entityNode.data?.columns || [];
+    const currentIdxs: EntityIndexDef[] = entityNode.data?.indexes || [];
 
-    const currentIdxs = entityNode.data?.indexes || [];
-    const updatedIdxs = missingIndexes.length > 0 ? [...currentIdxs, ...missingIndexes] : currentIdxs;
+    const colResult = repairEntityColumns(currentCols, def.defaultColumns);
+    const idxResult = repairEntityIndexes(currentIdxs, def.defaultIndexes ?? []);
 
     updateNode(entityId, {
       data: {
         ...entityNode.data,
-        columns: updatedCols,
-        indexes: updatedIdxs,
+        columns: colResult.cols,
+        indexes: idxResult.indexes,
       },
     });
 
@@ -357,27 +478,18 @@ export function useBetterAuthTableSync({
       if (matchingEntity) {
         activeMappings[def.key] = matchingEntity.id;
 
-        // Check if missing any default columns or indexes and backfill them
         const currentCols: CanvasEntityColumn[] = matchingEntity.data?.columns ?? [];
-        const missingCols = def.defaultColumns.filter(
-          (reqCol) => !currentCols.some((c) => c.name.toLowerCase() === reqCol.name.toLowerCase()),
-        );
+        const currentIdxs: EntityIndexDef[] = matchingEntity.data?.indexes ?? [];
 
-        type EntityIndex = { name: string; columns: string; isUnique?: boolean };
-        const currentIdxs: EntityIndex[] = matchingEntity.data?.indexes ?? [];
-        const missingIdxs = (def.defaultIndexes ?? []).filter(
-          (reqIdx) => !currentIdxs.some((idx) =>
-            idx.name.toLowerCase() === reqIdx.name.toLowerCase() ||
-            idx.columns.replace(/\s+/g, "").toLowerCase() === reqIdx.columns.replace(/\s+/g, "").toLowerCase(),
-          ),
-        );
+        const colResult = repairEntityColumns(currentCols, def.defaultColumns);
+        const idxResult = repairEntityIndexes(currentIdxs, def.defaultIndexes ?? []);
 
-        if (missingCols.length > 0 || missingIdxs.length > 0) {
+        if (colResult.changed || idxResult.changed) {
           updateNode(matchingEntity.id, {
             data: {
               ...matchingEntity.data,
-              columns: missingCols.length > 0 ? [...currentCols, ...missingCols] : currentCols,
-              indexes: missingIdxs.length > 0 ? [...currentIdxs, ...missingIdxs] : currentIdxs,
+              columns: colResult.cols,
+              indexes: idxResult.indexes,
             },
           });
           syncedCount++;
@@ -525,7 +637,12 @@ export function useBetterAuthTableSync({
     }
   };
 
-  const mappedCount = BETTER_AUTH_TABLE_DEFINITIONS.filter((def) => {
+  const targetDefs = BETTER_AUTH_TABLE_DEFINITIONS.filter(
+    (def) => def.category !== BETTER_AUTH_CATEGORIES.ORGANIZATION || isOrgEnabled,
+  );
+  const totalTables = targetDefs.length;
+
+  const mappedCount = targetDefs.filter((def) => {
     const rawId =
       tableMappings[def.key] ||
       (def.key === "userEntityId" ? data.userEntityId || data.userSchemaId : undefined);
@@ -538,6 +655,8 @@ export function useBetterAuthTableSync({
   return {
     tableMappings,
     mappedCount,
+    totalTables,
+    targetDefs,
     createEntityForTable,
     fixEntitySchema,
     autoCreateAllMissingTables,

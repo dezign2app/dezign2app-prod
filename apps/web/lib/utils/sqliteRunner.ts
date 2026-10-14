@@ -658,6 +658,21 @@ export function checkSqliteConnection(
 // ---------------------------------------------------------------------------
 // SQLite Table Schema Sync & Drift Detection
 // ---------------------------------------------------------------------------
+// SQLite Table Schema Sync & Drift Detection
+// ---------------------------------------------------------------------------
+
+export interface CanvasEntityIndex {
+  name: string;
+  columns: string;
+  isUnique?: boolean;
+}
+
+function normalizeIndexColumns(colsStr: string): string[] {
+  return (colsStr || "")
+    .split(",")
+    .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
+    .filter(Boolean);
+}
 
 export interface SqliteTableSyncResult {
   success: boolean;
@@ -667,6 +682,9 @@ export interface SqliteTableSyncResult {
   missingColumns: Array<{ name: string; type: string }>;
   extraColumns: Array<{ name: string; type: string }>;
   existingColumns: Array<{ name: string; type: string }>;
+  missingIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
+  extraIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
+  existingIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
   error?: string;
 }
 
@@ -675,23 +693,33 @@ export interface SqliteApplySyncResult {
   createdTable: boolean;
   appliedColumns: string[];
   droppedColumns?: string[];
+  appliedIndexes?: string[];
+  droppedIndexes?: string[];
   error?: string;
 }
 
 /**
- * Checks if a table and its columns exist in the SQLite database file.
+ * Checks if a table, its columns, and indexes exist in the SQLite database file.
  */
 export function checkSqliteTableSync(
   dbFilePath = "dev.db",
   tableName: string,
   columns?: CanvasEntityColumn[],
   projectDir?: string,
+  indexes?: CanvasEntityIndex[],
 ): SqliteTableSyncResult {
   let db: DatabaseSync | null = null;
   const canvasCols = (columns || []).map((c) => ({
     name: c.name,
     type: c.type || "TEXT",
   }));
+  const validCanvasIndexes = (indexes || [])
+    .filter((i) => (i.name || "").trim().length > 0 && (i.columns || "").trim().length > 0)
+    .map((i) => ({
+      name: i.name.trim(),
+      columns: i.columns.trim(),
+      isUnique: Boolean(i.isUnique),
+    }));
 
   try {
     const resolvedPath = resolveSqlitePath(dbFilePath, projectDir);
@@ -704,6 +732,9 @@ export function checkSqliteTableSync(
         missingColumns: canvasCols,
         extraColumns: [],
         existingColumns: [],
+        missingIndexes: validCanvasIndexes,
+        extraIndexes: [],
+        existingIndexes: [],
       };
     }
 
@@ -723,6 +754,9 @@ export function checkSqliteTableSync(
         missingColumns: canvasCols,
         extraColumns: [],
         existingColumns: [],
+        missingIndexes: validCanvasIndexes,
+        extraIndexes: [],
+        existingIndexes: [],
       };
     }
 
@@ -747,14 +781,81 @@ export function checkSqliteTableSync(
         c.name.toLowerCase() !== "updated_at",
     );
 
+    // Check indexes from sqlite_master
+    const indexRows = (db.prepare(
+      "SELECT name, sql FROM sqlite_master WHERE type='index' AND LOWER(tbl_name) = LOWER(?) AND sql IS NOT NULL AND name NOT LIKE 'sqlite_autoindex_%'",
+    ).all(safeTable) || []) as Array<{ name: string; sql: string }>;
+
+    let indexListRows: Array<{ name: string; unique: number }> = [];
+    try {
+      indexListRows = (db.prepare(`PRAGMA index_list("${safeTable}")`).all() || []) as Array<{
+        name: string;
+        unique: number;
+      }>;
+    } catch {}
+    const uniqueMap = new Map(indexListRows.map((r) => [r.name.toLowerCase(), r.unique === 1]));
+
+    const existingIndexes: Array<{ name: string; columns: string; isUnique?: boolean }> = [];
+    for (const row of indexRows) {
+      let colNames = "";
+      try {
+        const idxInfoRows = (db.prepare(`PRAGMA index_info("${row.name}")`).all() || []) as Array<{
+          seqno: number;
+          cid: number;
+          name: string;
+        }>;
+        colNames = idxInfoRows.map((info) => info.name).join(", ");
+      } catch {}
+      existingIndexes.push({
+        name: row.name,
+        columns: colNames,
+        isUnique: uniqueMap.get(row.name.toLowerCase()) ?? false,
+      });
+    }
+
+    const missingIndexes = validCanvasIndexes.filter((cIdx) => {
+      const cName = cIdx.name.toLowerCase();
+      const cCols = normalizeIndexColumns(cIdx.columns).join(",");
+      return !existingIndexes.some((dbIdx) => {
+        const dbName = dbIdx.name.toLowerCase();
+        const dbCols = normalizeIndexColumns(dbIdx.columns).join(",");
+        return (
+          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
+          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+        );
+      });
+    });
+
+    const extraIndexes = existingIndexes.filter((dbIdx) => {
+      const dbName = dbIdx.name.toLowerCase();
+      const dbCols = normalizeIndexColumns(dbIdx.columns).join(",");
+      return !validCanvasIndexes.some((cIdx) => {
+        const cName = cIdx.name.toLowerCase();
+        const cCols = normalizeIndexColumns(cIdx.columns).join(",");
+        return (
+          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
+          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+        );
+      });
+    });
+
+    const inSync =
+      missingColumns.length === 0 &&
+      extraColumns.length === 0 &&
+      missingIndexes.length === 0 &&
+      extraIndexes.length === 0;
+
     return {
       success: true,
       serverReachable: true,
       tableExists: true,
-      inSync: missingColumns.length === 0 && extraColumns.length === 0,
+      inSync,
       missingColumns,
       extraColumns,
       existingColumns,
+      missingIndexes,
+      extraIndexes,
+      existingIndexes,
     };
   } catch (error) {
     return {
@@ -765,6 +866,9 @@ export function checkSqliteTableSync(
       missingColumns: [],
       extraColumns: [],
       existingColumns: [],
+      missingIndexes: [],
+      extraIndexes: [],
+      existingIndexes: [],
       error: error instanceof Error ? error.message : String(error),
     };
   } finally {
@@ -777,16 +881,25 @@ export function checkSqliteTableSync(
 }
 
 /**
- * Applies table creation or adds missing columns to the live SQLite file,
- * and drops columns removed from the canvas.
+ * Applies table creation or adds missing columns/indexes to the live SQLite file,
+ * and drops columns/indexes removed from the canvas.
  */
 export function applySqliteTableSync(
   dbFilePath = "dev.db",
   tableName: string,
   columns?: CanvasEntityColumn[],
   projectDir?: string,
+  indexes?: CanvasEntityIndex[],
 ): SqliteApplySyncResult {
   let db: DatabaseSync | null = null;
+  const validCanvasIndexes = (indexes || [])
+    .filter((i) => (i.name || "").trim().length > 0 && (i.columns || "").trim().length > 0)
+    .map((i) => ({
+      name: i.name.trim(),
+      columns: i.columns.trim(),
+      isUnique: Boolean(i.isUnique),
+    }));
+
   try {
     const resolvedPath = resolveSqlitePath(dbFilePath, projectDir);
     const dir = path.dirname(resolvedPath);
@@ -803,11 +916,95 @@ export function applySqliteTableSync(
 
     if (!exists) {
       ensureSqliteTable(db, safeTable, columns);
+      const appliedIndexes: string[] = [];
+      for (const idx of validCanvasIndexes) {
+        const safeIdxName = sanitizeIdentifier(idx.name, `idx_${safeTable}`);
+        const colList = idx.columns
+          .split(",")
+          .map((c) => `"${sanitizeIdentifier(c.trim(), "col")}"`)
+          .join(", ");
+        if (safeIdxName && colList) {
+          const uniqueStr = idx.isUnique ? "UNIQUE " : "";
+          try {
+            db.exec(`CREATE ${uniqueStr}INDEX IF NOT EXISTS "${safeIdxName}" ON "${safeTable}" (${colList});`);
+            appliedIndexes.push(idx.name);
+          } catch {}
+        }
+      }
+
       return {
         success: true,
         createdTable: true,
         appliedColumns: (columns || []).map((c) => c.name),
+        appliedIndexes,
       };
+    }
+
+    // Inspect existing indexes
+    const indexRows = (db.prepare(
+      "SELECT name, sql FROM sqlite_master WHERE type='index' AND LOWER(tbl_name) = LOWER(?) AND sql IS NOT NULL AND name NOT LIKE 'sqlite_autoindex_%'",
+    ).all(safeTable) || []) as Array<{ name: string; sql: string }>;
+
+    let indexListRows: Array<{ name: string; unique: number }> = [];
+    try {
+      indexListRows = (db.prepare(`PRAGMA index_list("${safeTable}")`).all() || []) as Array<{
+        name: string;
+        unique: number;
+      }>;
+    } catch {}
+    const uniqueMap = new Map(indexListRows.map((r) => [r.name.toLowerCase(), r.unique === 1]));
+
+    const existingIndexes: Array<{ name: string; columns: string; isUnique?: boolean }> = [];
+    for (const row of indexRows) {
+      let colNames = "";
+      try {
+        const idxInfoRows = (db.prepare(`PRAGMA index_info("${row.name}")`).all() || []) as Array<{
+          seqno: number;
+          cid: number;
+          name: string;
+        }>;
+        colNames = idxInfoRows.map((info) => info.name).join(", ");
+      } catch {}
+      existingIndexes.push({
+        name: row.name,
+        columns: colNames,
+        isUnique: uniqueMap.get(row.name.toLowerCase()) ?? false,
+      });
+    }
+
+    const missingIndexes = validCanvasIndexes.filter((cIdx) => {
+      const cName = cIdx.name.toLowerCase();
+      const cCols = normalizeIndexColumns(cIdx.columns).join(",");
+      return !existingIndexes.some((dbIdx) => {
+        const dbName = dbIdx.name.toLowerCase();
+        const dbCols = normalizeIndexColumns(dbIdx.columns).join(",");
+        return (
+          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
+          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+        );
+      });
+    });
+
+    const extraIndexes = existingIndexes.filter((dbIdx) => {
+      const dbName = dbIdx.name.toLowerCase();
+      const dbCols = normalizeIndexColumns(dbIdx.columns).join(",");
+      return !validCanvasIndexes.some((cIdx) => {
+        const cName = cIdx.name.toLowerCase();
+        const cCols = normalizeIndexColumns(cIdx.columns).join(",");
+        return (
+          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
+          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+        );
+      });
+    });
+
+    const droppedIndexes: string[] = [];
+    for (const extraIdx of extraIndexes) {
+      const safeIdxName = sanitizeIdentifier(extraIdx.name, "idx");
+      try {
+        db.exec(`DROP INDEX IF EXISTS "${safeIdxName}";`);
+        droppedIndexes.push(extraIdx.name);
+      } catch {}
     }
 
     const infoStmt = db.prepare(`PRAGMA table_info("${safeTable}")`);
@@ -843,11 +1040,30 @@ export function applySqliteTableSync(
       }
     }
 
+    // 3. Create missing indexes
+    const appliedIndexes: string[] = [];
+    for (const missingIdx of missingIndexes) {
+      const safeIdxName = sanitizeIdentifier(missingIdx.name, `idx_${safeTable}`);
+      const colList = missingIdx.columns
+        .split(",")
+        .map((c) => `"${sanitizeIdentifier(c.trim(), "col")}"`)
+        .join(", ");
+      if (safeIdxName && colList) {
+        const uniqueStr = missingIdx.isUnique ? "UNIQUE " : "";
+        try {
+          db.exec(`CREATE ${uniqueStr}INDEX IF NOT EXISTS "${safeIdxName}" ON "${safeTable}" (${colList});`);
+          appliedIndexes.push(missingIdx.name);
+        } catch {}
+      }
+    }
+
     return {
       success: true,
       createdTable: false,
       appliedColumns,
       droppedColumns,
+      appliedIndexes,
+      droppedIndexes,
     };
   } catch (error) {
     return {

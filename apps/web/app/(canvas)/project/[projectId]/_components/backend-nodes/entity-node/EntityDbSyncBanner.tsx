@@ -33,6 +33,11 @@ export interface EntityDbSyncBannerProps {
     isNotNull?: boolean;
     isUnique?: boolean;
   }>;
+  indexes?: Array<{
+    name: string;
+    columns: string;
+    isUnique?: boolean;
+  }>;
   databaseNode?: BackendNode;
 }
 
@@ -41,6 +46,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
   tableName,
   schema,
   columns,
+  indexes = [],
   databaseNode,
 }) => {
   const [syncStatus, setSyncStatus] = useState<CheckDbTableSyncResult | null>(null);
@@ -95,6 +101,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
         tableName,
         schema,
         columns,
+        indexes,
       });
 
       setSyncStatus(result);
@@ -103,7 +110,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
     } finally {
       setIsChecking(false);
     }
-  }, [databaseNode, isSupportedEngine, hasConnectionConfig, tableName, schema, columns, engine, dbData]);
+  }, [databaseNode, isSupportedEngine, hasConnectionConfig, tableName, schema, columns, indexes, engine, dbData]);
 
   // Debounced check on entity schema change or DB configuration change
   useEffect(() => {
@@ -143,18 +150,28 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
         tableName,
         schema,
         columns,
+        indexes,
       });
 
       if (res.success) {
         if (res.createdTable) {
-          toast.success(`Created table "${tableName}" in ${dbLabel}!`);
+          const idxMsg = res.appliedIndexes && res.appliedIndexes.length > 0
+            ? ` with ${res.appliedIndexes.length} index(es)`
+            : "";
+          toast.success(`Created table "${tableName}" in ${dbLabel}${idxMsg}!`);
         } else {
           const parts: string[] = [];
           if (res.appliedColumns.length > 0) {
-            parts.push(`added ${res.appliedColumns.length} column(s) (${res.appliedColumns.join(", ")})`);
+            parts.push(`added ${res.appliedColumns.length} col(s) (${res.appliedColumns.join(", ")})`);
+          }
+          if (res.appliedIndexes && res.appliedIndexes.length > 0) {
+            parts.push(`created ${res.appliedIndexes.length} index(es) (${res.appliedIndexes.join(", ")})`);
           }
           if (res.droppedColumns && res.droppedColumns.length > 0) {
-            parts.push(`removed ${res.droppedColumns.length} column(s) (${res.droppedColumns.join(", ")})`);
+            parts.push(`removed ${res.droppedColumns.length} col(s) (${res.droppedColumns.join(", ")})`);
+          }
+          if (res.droppedIndexes && res.droppedIndexes.length > 0) {
+            parts.push(`dropped ${res.droppedIndexes.length} index(es) (${res.droppedIndexes.join(", ")})`);
           }
           toast.success(`Updated "${tableName}" in ${dbLabel}: ${parts.join(", ") || "synced"}!`);
         }
@@ -174,18 +191,36 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
   const handlePullFromDb = (e: React.MouseEvent) => {
     e.stopPropagation();
     const extraCols = syncStatus?.extraColumns || [];
-    if (!extraCols.length) return;
+    const extraIdxs = syncStatus?.extraIndexes || [];
+    if (!extraCols.length && !extraIdxs.length) return;
     const store = useBackendCanvasStore.getState();
     const entityNode = store.nodes.find((n) => n.id === entityId);
     if (!entityNode) return;
 
-    const importedCols = extraCols.map((c) => ({
-      name: c.name,
-      type: c.type.toLowerCase().includes("time") ? "TIMESTAMPTZ" : c.type.toUpperCase(),
-    }));
-    const newCols = [...columns, ...importedCols];
-    store.updateNode(entityId, { data: { ...entityNode.data, columns: newCols } });
-    toast.success(`Imported ${importedCols.length} column(s) (${importedCols.map((c) => c.name).join(", ")}) into canvas!`);
+    let updatedData = { ...entityNode.data };
+
+    if (extraCols.length > 0) {
+      const importedCols = extraCols.map((c) => ({
+        name: c.name,
+        type: c.type.toLowerCase().includes("time") ? "TIMESTAMPTZ" : c.type.toUpperCase(),
+      }));
+      updatedData.columns = [...columns, ...importedCols];
+    }
+
+    if (extraIdxs.length > 0) {
+      const importedIdxs = extraIdxs.map((i) => ({
+        name: i.name,
+        columns: i.columns,
+        isUnique: Boolean(i.isUnique),
+      }));
+      updatedData.indexes = [...(indexes || []), ...importedIdxs];
+    }
+
+    store.updateNode(entityId, { data: updatedData });
+    const pulledParts = [];
+    if (extraCols.length > 0) pulledParts.push(`${extraCols.length} column(s)`);
+    if (extraIdxs.length > 0) pulledParts.push(`${extraIdxs.length} index(es)`);
+    toast.success(`Imported ${pulledParts.join(" & ")} into canvas!`);
   };
 
   // If no DB node attached, or not a supported engine, or DB is completely unreachable/untested
@@ -218,8 +253,13 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
   const isMissingTable = Boolean(syncStatus?.serverReachable && syncStatus?.tableExists === false);
   const missingCols = syncStatus?.missingColumns || [];
   const extraCols = syncStatus?.extraColumns || [];
-  const hasRemovalsOnly = missingCols.length === 0 && extraCols.length > 0;
-  const hasAdditionsOnly = missingCols.length > 0 && extraCols.length === 0;
+  const missingIdxs = syncStatus?.missingIndexes || [];
+  const extraIdxs = syncStatus?.extraIndexes || [];
+
+  const totalAdditions = missingCols.length + missingIdxs.length;
+  const totalRemovals = extraCols.length + extraIdxs.length;
+  const hasRemovalsOnly = totalAdditions === 0 && totalRemovals > 0;
+  const hasAdditionsOnly = totalAdditions > 0 && totalRemovals === 0;
 
   return (
     <div className="mx-3 my-1.5 p-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 dark:text-emerald-200 flex flex-col gap-1.5 shadow-xs nodrag transition-all animate-in fade-in duration-200">
@@ -234,10 +274,10 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
             {isMissingTable
               ? "TABLE MISSING"
               : hasRemovalsOnly
-                ? `${extraCols.length} REMOVED`
+                ? `${totalRemovals} REMOVED`
                 : hasAdditionsOnly
-                  ? `${missingCols.length} PENDING`
-                  : `${missingCols.length + extraCols.length} PENDING`}
+                  ? `${totalAdditions} PENDING`
+                  : `${totalAdditions + totalRemovals} PENDING`}
           </span>
         </div>
 
@@ -248,10 +288,10 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
             className="px-2 py-0.5 rounded bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-[9.5px] transition-colors flex items-center gap-1 cursor-pointer shadow-xs disabled:opacity-60"
             title={
               isMissingTable
-                ? "Create table in live database"
+                ? "Create table and indexes in live database"
                 : hasRemovalsOnly
-                  ? "Remove deleted columns from live database"
-                  : "Push schema changes to live database"
+                  ? "Remove deleted columns/indexes from live database"
+                  : "Push schema changes & indexes to live database"
             }
           >
             {isApplying ? (
@@ -296,17 +336,21 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
           </>
         ) : hasRemovalsOnly ? (
           <>
-            {extraCols.length} column{extraCols.length === 1 ? "" : "s"} ({extraCols.map((c) => c.name).join(", ")}) removed from canvas; pending removal in{" "}
+            {totalRemovals} item{totalRemovals === 1 ? "" : "s"} (
+            {[...extraCols.map((c) => c.name), ...extraIdxs.map((i) => `idx:${i.name}`)].join(", ")}
+            ) removed from canvas; pending removal in{" "}
             <span className="font-semibold text-emerald-100">{dbLabel}</span>.
           </>
         ) : hasAdditionsOnly ? (
           <>
-            {missingCols.length} column{missingCols.length === 1 ? "" : "s"} ({missingCols.map((c) => c.name).join(", ")}) not yet applied to{" "}
+            {totalAdditions} item{totalAdditions === 1 ? "" : "s"} (
+            {[...missingCols.map((c) => c.name), ...missingIdxs.map((i) => `idx:${i.name}`)].join(", ")}
+            ) not yet applied to{" "}
             <span className="font-semibold text-emerald-100">{dbLabel}</span>.
           </>
         ) : (
           <>
-            +{missingCols.length} added, -{extraCols.length} removed; pending synchronization with{" "}
+            +{totalAdditions} added, -{totalRemovals} removed; pending synchronization with{" "}
             <span className="font-semibold text-emerald-100">{dbLabel}</span>.
           </>
         )}
@@ -332,47 +376,73 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
             </button>
           </div>
 
-          {/* Pending columns diff list */}
+          {/* Pending columns & indexes diff list */}
           <div className="flex flex-col gap-1 max-h-[95px] overflow-y-auto pr-0.5">
             {isMissingTable ? (
               <span className="text-[8.5px] font-mono text-emerald-300/90 bg-black/40 px-1.5 py-0.5 rounded border border-emerald-500/30">
-                + Entire table &quot;{tableName}&quot; ({columns.length} columns) will be created
+                + Entire table &quot;{tableName}&quot; ({columns.length} columns{indexes.length > 0 ? `, ${indexes.length} indexes` : ""}) will be created
               </span>
             ) : (
               <>
                 {missingCols.map((col) => (
                   <div
-                    key={`add-${col.name}`}
+                    key={`add-col-${col.name}`}
                     className="px-1.5 py-0.5 rounded bg-black/40 border border-emerald-500/30 text-[8.5px] font-mono text-emerald-200 flex items-center justify-between"
                   >
                     <span className="text-emerald-400 font-semibold">+ {col.name}</span>
                     <span className="text-emerald-300/70 uppercase text-[8px]">{col.type}</span>
                   </div>
                 ))}
+                {missingIdxs.map((idx) => (
+                  <div
+                    key={`add-idx-${idx.name}`}
+                    className="px-1.5 py-0.5 rounded bg-black/40 border border-emerald-500/30 text-[8.5px] font-mono text-emerald-200 flex items-center justify-between"
+                  >
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      + <span className="text-[7px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold">IDX</span> {idx.name}
+                    </span>
+                    <span className="text-emerald-300/70 text-[8px] truncate max-w-[120px]">
+                      {idx.isUnique ? "UQ " : ""}({idx.columns})
+                    </span>
+                  </div>
+                ))}
                 {extraCols.map((col) => (
                   <div
-                    key={`drop-${col.name}`}
+                    key={`drop-col-${col.name}`}
                     className="px-1.5 py-0.5 rounded bg-black/40 border border-rose-500/30 text-[8.5px] font-mono text-rose-300 flex items-center justify-between"
                   >
                     <span className="text-rose-400 font-semibold">- {col.name}</span>
                     <span className="text-rose-300/70 uppercase text-[8px]">{col.type} (will be dropped)</span>
                   </div>
                 ))}
+                {extraIdxs.map((idx) => (
+                  <div
+                    key={`drop-idx-${idx.name}`}
+                    className="px-1.5 py-0.5 rounded bg-black/40 border border-rose-500/30 text-[8.5px] font-mono text-rose-300 flex items-center justify-between"
+                  >
+                    <span className="text-rose-400 font-semibold flex items-center gap-1">
+                      - <span className="text-[7px] px-1 py-0.2 rounded bg-rose-500/20 text-rose-300 font-bold">IDX</span> {idx.name}
+                    </span>
+                    <span className="text-rose-300/70 text-[8px] truncate max-w-[120px]">
+                      ({idx.columns}) (will be dropped)
+                    </span>
+                  </div>
+                ))}
               </>
             )}
           </div>
 
-          {/* 2-Way Sync: Option to import live DB columns onto canvas */}
-          {extraCols.length > 0 && !isMissingTable && (
+          {/* 2-Way Sync: Option to import live DB columns/indexes onto canvas */}
+          {totalRemovals > 0 && !isMissingTable && (
             <div className="pt-1.5 flex items-center justify-between border-t border-emerald-500/20 text-[8.5px]">
-              <span className="text-emerald-300/80">Want to keep these columns?</span>
+              <span className="text-emerald-300/80">Want to keep these items?</span>
               <button
                 onClick={handlePullFromDb}
                 className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-semibold text-[8.5px] flex items-center gap-1 cursor-pointer border border-emerald-500/40 transition-colors"
-                title="Import these columns from live database onto the canvas"
+                title="Import these columns & indexes from live database onto the canvas"
               >
                 <Download size={9} />
-                <span>Pull {extraCols.length} to Canvas</span>
+                <span>Pull {totalRemovals} to Canvas</span>
               </button>
             </div>
           )}
