@@ -111,8 +111,14 @@ export default nextConfig;
 
   const envLines: string[] = [];
   if (hasDb) {
-    envLines.push("DATABASE_PATH=../../packages/db/sqlite.db");
-    envLines.push("DATABASE_URL=../../packages/db/sqlite.db");
+    if (dbPackageName.includes("postgres") || dbPackageName.includes("pg")) {
+      envLines.push("DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres");
+    } else if (dbPackageName.includes("mysql")) {
+      envLines.push("DATABASE_URL=mysql://root:root@localhost:3306/dezign2app");
+    } else {
+      envLines.push("DATABASE_PATH=../../packages/db/sqlite.db");
+      envLines.push("DATABASE_URL=../../packages/db/sqlite.db");
+    }
   }
   envLines.push("NEXT_PUBLIC_LOG_LEVEL=info");
   envLines.push("NEXT_PUBLIC_ENABLE_DEBUG_LOGS=false");

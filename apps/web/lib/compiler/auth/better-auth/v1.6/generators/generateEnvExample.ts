@@ -27,6 +27,16 @@ export function generateEnvExample(data: BetterAuthV16NodeData): string {
   const port = data.port || "3001";
   const baseUrl = data.baseUrl || `http://localhost:${port}`;
 
+  const dbAdapter = String(data.dbAdapter || "sqlite-raw").toLowerCase();
+  let dbEnvLines = "";
+  if (dbAdapter.includes("postgres") || dbAdapter.includes("pg")) {
+    dbEnvLines = `\n# Centralized Database Connection\nDATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres\n`;
+  } else if (dbAdapter.includes("mysql")) {
+    dbEnvLines = `\n# Centralized Database Connection\nDATABASE_URL=mysql://root:root@localhost:3306/dezign2app\n`;
+  } else {
+    dbEnvLines = `\n# Centralized Database Connection (points to packages/db/sqlite.db)\nDATABASE_PATH=../../packages/db/sqlite.db\nDATABASE_URL=../../packages/db/sqlite.db\n`;
+  }
+
   return `# =====================================================================
 # Better Auth Core Environment Configuration
 # =====================================================================
@@ -44,9 +54,6 @@ BETTER_AUTH_URL=${baseUrl}
 # Public Server URL — Exposed to Next.js browser client for authClient API calls
 NEXT_PUBLIC_BETTER_AUTH_URL=${baseUrl}
 NEXT_PUBLIC_AUTH_BASE_URL=${baseUrl}
-
-# Centralized Database Connection (points to packages/db/sqlite.db)
-DATABASE_PATH=../../packages/db/sqlite.db
-DATABASE_URL=../../packages/db/sqlite.db${oauthEnvs}
+${dbEnvLines}${oauthEnvs}
 `;
 }

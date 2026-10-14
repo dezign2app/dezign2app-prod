@@ -40,8 +40,22 @@ export function compileBetterAuthV16(
       )
     : _allNodes.find((n) => n.type === "payments" && _allNodes.filter((x) => x.type === "auth").length <= 1);
 
+  // Resolve connected DB node if any to infer dbAdapter
+  const connectedDbNode =
+    _allNodes.find((n) => n.id === rawData.databaseId) ||
+    _allNodes.find((n) => n.type === "database" && n.data?.dbEngine !== "redis");
+  const resolvedDbEngine = (connectedDbNode?.data?.dbEngine || "").toLowerCase();
+  const resolvedDbAdapter =
+    rawData.dbAdapter ||
+    (resolvedDbEngine.includes("postgres") || resolvedDbEngine.includes("pg")
+      ? "postgres"
+      : resolvedDbEngine.includes("mysql")
+      ? "mysql"
+      : "sqlite-raw");
+
   const data: BetterAuthV16NodeData = {
     ...rawData,
+    dbAdapter: resolvedDbAdapter,
     paymentsPlugin: rawData.paymentsPlugin || (connectedPaymentsNode
       ? {
           provider: "creem",

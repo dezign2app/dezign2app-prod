@@ -130,9 +130,48 @@ export const { POST, GET } = toNextJsHandler(auth);
 
     const envFile = compiledAuth.files.find((f) => f.filename.endsWith(".env"));
     if (envFile) {
+      const mergeEnvContent = (existingContent: string, newContent: string) => {
+        const existingKeys = new Set(
+          existingContent
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter((l) => l && !l.startsWith("#") && l.includes("="))
+            .map((l) => l.split("=")[0]!.trim()),
+        );
+
+        const linesToAdd: string[] = [];
+        for (const line of newContent.split(/\r?\n/)) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith("#")) continue;
+          const key = trimmed.split("=")[0]?.trim();
+          if (!key) continue;
+
+          // Never overwrite an existing DATABASE_URL or DATABASE_PATH
+          if ((key === "DATABASE_URL" || key === "DATABASE_PATH") && existingKeys.has(key)) {
+            continue;
+          }
+
+          if (!existingKeys.has(key)) {
+            linesToAdd.push(trimmed);
+            existingKeys.add(key);
+          }
+        }
+
+        if (linesToAdd.length === 0) return existingContent;
+        return (
+          existingContent.trimEnd() +
+          "\n\n# Better Auth Configuration\n" +
+          linesToAdd.join("\n") +
+          "\n"
+        );
+      };
+
       const existingEnvIdx = files.findIndex((f) => f.filename === ".env");
       if (existingEnvIdx !== -1) {
-        files[existingEnvIdx]!.content = envFile.content;
+        files[existingEnvIdx]!.content = mergeEnvContent(
+          files[existingEnvIdx]!.content,
+          envFile.content,
+        );
       } else {
         files.push({
           filename: ".env",
@@ -141,11 +180,19 @@ export const { POST, GET } = toNextJsHandler(auth);
         });
       }
 
-      files.push({
-        filename: ".env.example",
-        language: "dotenv",
-        content: envFile.content,
-      });
+      const existingEnvExIdx = files.findIndex((f) => f.filename === ".env.example");
+      if (existingEnvExIdx !== -1) {
+        files[existingEnvExIdx]!.content = mergeEnvContent(
+          files[existingEnvExIdx]!.content,
+          envFile.content,
+        );
+      } else {
+        files.push({
+          filename: ".env.example",
+          language: "dotenv",
+          content: envFile.content,
+        });
+      }
     }
 
     const enabledPlugins = authNode.data?.plugins || ["admin", "organization"];
