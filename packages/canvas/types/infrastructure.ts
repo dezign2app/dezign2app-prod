@@ -14,6 +14,7 @@ import type {
   RedirectsConfig,
   OrgInvitationsConfig,
   AuthHookConfig,
+  BetterAuthDbAdapter,
 } from "./auth";
 
 /** Background worker node fields (canvas type). */
@@ -82,8 +83,10 @@ export interface CanvasAuthNodeData {
   secretKey?: string;
   baseUrl?: string;
   version?: BetterAuthVersion | string;
-  dbAdapter?: "sqlite-raw" | "custom";
+  dbAdapter?: BetterAuthDbAdapter;
   databaseId?: string;
+  connectionString?: string;
+  connectionStringPooled?: string;
   authFunctions?: AuthFunctionRef[];
   tableMappings?: BetterAuthTableMapping;
   userEntityId?: string;

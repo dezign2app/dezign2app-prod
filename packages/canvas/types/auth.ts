@@ -485,6 +485,16 @@ export interface AuthOrganizationConfig {
 
 import type { CanvasAuthNodeData } from "./infrastructure";
 
+export type BetterAuthDbAdapter =
+  | "sqlite-raw"
+  | "sqlite"
+  | "postgres"
+  | "mysql"
+  | "drizzle"
+  | "prisma"
+  | "custom"
+  | (string & {});
+
 export interface AdapterConfig {
   importStatement: string;
   adapterCall: string;
@@ -494,6 +504,9 @@ export type BetterAuthV16NodeData = CanvasAuthNodeData & {
   label?: string;
   port?: string | number;
   baseUrl?: string;
+  connectionString?: string;
+  connectionStringPooled?: string;
+  dbAdapter?: BetterAuthDbAdapter;
 };
 
 

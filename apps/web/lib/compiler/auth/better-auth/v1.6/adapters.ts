@@ -8,6 +8,9 @@ export const DEFAULT_SQLITE_CONFIG: AdapterConfig = {
 export const ADAPTER_REGISTRY: Record<string, Record<string, AdapterConfig>> = {
   default: {
     "sqlite-raw": DEFAULT_SQLITE_CONFIG,
+    sqlite: DEFAULT_SQLITE_CONFIG,
+    postgres: DEFAULT_SQLITE_CONFIG,
+    mysql: DEFAULT_SQLITE_CONFIG,
     drizzle: {
       importStatement: `import { drizzleAdapter } from "better-auth/adapters/drizzle";\nimport { db } from "./db";`,
       adapterCall: `drizzleAdapter(db, {\n    provider: "pg",\n  })`,

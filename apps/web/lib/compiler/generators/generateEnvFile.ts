@@ -691,10 +691,10 @@ export function collectEnvSections(
     } else {
       let exVal = resolveEnvValue(v.name, appNode) || v.exampleValue;
       if (!exVal && v.name === "PORT") {
-        exVal = String(appNode.data?.port ?? (appNode.data as any)?.server?.port ?? (appNode.data as any)?.serverConfig?.port ?? "8080");
+        exVal = String(appNode.data?.port ?? appNode.data?.server?.port ?? appNode.data?.serverConfig?.port ?? "8080");
       }
       if (!exVal && v.name === "GRPC_PORT") {
-        exVal = String(appNode.data?.grpcPort ?? (appNode.data as any)?.server?.grpcPort ?? (appNode.data as any)?.serverConfig?.grpcPort ?? "50051");
+        exVal = String(appNode.data?.grpcPort ?? appNode.data?.server?.grpcPort ?? appNode.data?.serverConfig?.grpcPort ?? "50051");
       }
       if (!exVal) {
         exVal = inferExampleValue(v.name, appNode.type);
@@ -820,32 +820,70 @@ export function collectEnvSections(
     sections.push(pkgSec);
   });
 
-  // If centralized SQLite database exists in monorepo and service has canvas sections, ensure db env vars
-  if (hasCanvasSections && appNode.type === "service") {
+  // If centralized database exists in monorepo and service/webApp has canvas sections, ensure db env vars
+  if (hasCanvasSections && (appNode.type === "service" || appNode.type === "webApp")) {
     const hasDb = allNodes.some(
       (n) => n.type === "database" || n.type === "entity" || n.type === "db_ref" || n.type === "auth",
     );
-    const isPostgres = allNodes.some(
-      (n) => n.type === "database" && n.data?.dbEngine === "postgres",
+    const postgresNode = allNodes.find(
+      (n) => n.type === "database" && (n.data?.dbEngine === "postgres" || n.data?.provider === "supabase" || n.data?.provider === "neon"),
+    );
+    const mysqlNode = allNodes.find(
+      (n) => n.type === "database" && n.data?.dbEngine === "mysql",
     );
     const hasDbSection = sections.some((s) => s.heading.toLowerCase().includes("database"));
 
-    if (!hasDbSection && hasDb && !isPostgres) {
+    if (!hasDbSection && hasDb) {
       const dbVars: EnvVarEntry[] = [];
-      if (!ownVarNames.has("DATABASE_PATH")) {
-        dbVars.push({
-          name: "DATABASE_PATH",
-          description: "Path to centralized SQLite database",
-          exampleValue: "../../packages/db/sqlite.db",
-        });
+      if (postgresNode) {
+        const pgConn =
+          postgresNode.data?.connectionString ||
+          postgresNode.data?.connectionStringPooled ||
+          "postgresql://postgres:postgres@localhost:5432/postgres";
+        const connKey = postgresNode.data?.connectionStringEnv || "DATABASE_URL";
+        if (!ownVarNames.has(connKey)) {
+          dbVars.push({
+            name: connKey,
+            description: "PostgreSQL database connection URL",
+            exampleValue: pgConn,
+          });
+        }
+        if (postgresNode.data?.connectionStringPooled && !ownVarNames.has("DATABASE_URL_POOLED")) {
+          dbVars.push({
+            name: "DATABASE_URL_POOLED",
+            description: "Pooled PostgreSQL connection URL",
+            exampleValue: postgresNode.data.connectionStringPooled,
+          });
+        }
+      } else if (mysqlNode) {
+        const myConn =
+          mysqlNode.data?.connectionString ||
+          "mysql://root:root@localhost:3306/dezign2app";
+        const connKey = mysqlNode.data?.connectionStringEnv || "DATABASE_URL";
+        if (!ownVarNames.has(connKey)) {
+          dbVars.push({
+            name: connKey,
+            description: "MySQL database connection URL",
+            exampleValue: myConn,
+          });
+        }
+      } else {
+        if (!ownVarNames.has("DATABASE_PATH")) {
+          dbVars.push({
+            name: "DATABASE_PATH",
+            description: "Path to centralized SQLite database",
+            exampleValue: "../../packages/db/sqlite.db",
+          });
+        }
+        if (!ownVarNames.has("DATABASE_URL")) {
+          dbVars.push({
+            name: "DATABASE_URL",
+            description: "URL or path to centralized SQLite database",
+            exampleValue: "../../packages/db/sqlite.db",
+          });
+        }
       }
-      if (!ownVarNames.has("DATABASE_URL")) {
-        dbVars.push({
-          name: "DATABASE_URL",
-          description: "URL or path to centralized SQLite database",
-          exampleValue: "../../packages/db/sqlite.db",
-        });
-      }
+
       if (dbVars.length > 0) {
         sections.push({
           heading: "Database (Centralized)",

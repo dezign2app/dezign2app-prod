@@ -83,9 +83,9 @@ export function compileDatabaseNodes(
 
   let effectiveNodes = [...allNodes];
 
-  // 1. Find connected Auth nodes
-  const connectedAuthNodes = allNodes.filter((n) => {
-    if (n.type !== "auth") return false;
+  // 1. Find Auth nodes
+  const allAuthNodes = allNodes.filter((n) => n.type === "auth");
+  const connectedAuthNodes = allAuthNodes.filter((n) => {
     const hasEdge = allEdges.some((e) => {
       if (e.source !== n.id && e.target !== n.id) return false;
       const otherId = e.source === n.id ? e.target : e.source;
@@ -108,8 +108,9 @@ export function compileDatabaseNodes(
     (n) => n.type === "database" && n.data?.dbEngine !== "redis",
   );
 
-  // 2. Synthesize BetterAuth tables if connected auth nodes exist
-  if (connectedAuthNodes.length > 0) {
+  // 2. Synthesize BetterAuth tables if auth nodes exist
+  const effectiveAuthNodes = connectedAuthNodes.length > 0 ? connectedAuthNodes : allAuthNodes;
+  if (effectiveAuthNodes.length > 0) {
     const existingEntityNames = new Set<string>();
     entityNodes.forEach((n) => {
       const raw = n.data?.label || n.data?.tableRef || "";
@@ -123,7 +124,7 @@ export function compileDatabaseNodes(
 
     const syntheticEntities: BackendNode[] = [];
 
-    connectedAuthNodes.forEach((authNode) => {
+    effectiveAuthNodes.forEach((authNode) => {
       const enabledPlugins: string[] =
         authNode.data?.plugins || ["bearer", "admin", "organization", "jwt"];
       const isOrgEnabled: boolean =
@@ -340,7 +341,7 @@ export function compileDatabaseNodes(
   );
 
   // Check if anything DB-related exists
-  if (dbNodes.length === 0 && allEntityNodes.length === 0 && connectedAuthNodes.length === 0) {
+  if (dbNodes.length === 0 && allEntityNodes.length === 0 && effectiveAuthNodes.length === 0) {
     return {
       files: [],
       packages: [],
@@ -533,6 +534,7 @@ export function compileDatabaseNodes(
         },
         dependencies: {
           "@workspace/logger": "workspace:*",
+          dotenv: "^16.4.5",
           ...childPackageDeps,
         },
         devDependencies: {

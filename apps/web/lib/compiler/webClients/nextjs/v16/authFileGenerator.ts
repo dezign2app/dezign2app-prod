@@ -130,9 +130,48 @@ export const { POST, GET } = toNextJsHandler(auth);
 
     const envFile = compiledAuth.files.find((f) => f.filename.endsWith(".env"));
     if (envFile) {
+      const mergeEnvContent = (existingContent: string, newContent: string) => {
+        const existingKeys = new Set(
+          existingContent
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter((l) => l && !l.startsWith("#") && l.includes("="))
+            .map((l) => l.split("=")[0]!.trim()),
+        );
+
+        const linesToAdd: string[] = [];
+        for (const line of newContent.split(/\r?\n/)) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith("#")) continue;
+          const key = trimmed.split("=")[0]?.trim();
+          if (!key) continue;
+
+          // Never overwrite an existing DATABASE_URL or DATABASE_PATH
+          if ((key === "DATABASE_URL" || key === "DATABASE_PATH") && existingKeys.has(key)) {
+            continue;
+          }
+
+          if (!existingKeys.has(key)) {
+            linesToAdd.push(trimmed);
+            existingKeys.add(key);
+          }
+        }
+
+        if (linesToAdd.length === 0) return existingContent;
+        return (
+          existingContent.trimEnd() +
+          "\n\n# Better Auth Configuration\n" +
+          linesToAdd.join("\n") +
+          "\n"
+        );
+      };
+
       const existingEnvIdx = files.findIndex((f) => f.filename === ".env");
       if (existingEnvIdx !== -1) {
-        files[existingEnvIdx]!.content = envFile.content;
+        files[existingEnvIdx]!.content = mergeEnvContent(
+          files[existingEnvIdx]!.content,
+          envFile.content,
+        );
       } else {
         files.push({
           filename: ".env",
@@ -141,11 +180,19 @@ export const { POST, GET } = toNextJsHandler(auth);
         });
       }
 
-      files.push({
-        filename: ".env.example",
-        language: "dotenv",
-        content: envFile.content,
-      });
+      const existingEnvExIdx = files.findIndex((f) => f.filename === ".env.example");
+      if (existingEnvExIdx !== -1) {
+        files[existingEnvExIdx]!.content = mergeEnvContent(
+          files[existingEnvExIdx]!.content,
+          envFile.content,
+        );
+      } else {
+        files.push({
+          filename: ".env.example",
+          language: "dotenv",
+          content: envFile.content,
+        });
+      }
     }
 
     const enabledPlugins = authNode.data?.plugins || ["admin", "organization"];
@@ -180,7 +227,7 @@ export async function requireSession(redirectTo: string = "/login") {
       headers: await headers(),
     });
   } catch (err) {
-    if (err && typeof err === "object" && "digest" in err && String((err as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")) {
+    if (err && typeof err === "object" && "digest" in err && String(Reflect.get(err, "digest")).startsWith("NEXT_REDIRECT")) {
       throw err;
     }
     session = null;
@@ -203,8 +250,9 @@ import { redirect } from "next/navigation";
 
 export async function requireRole(allowedRoles: string[], redirectTo: string = "/unauthorized") {
   const session = await requireSession();
-  const user = session.user as { role?: string; [key: string]: unknown };
-  const role = typeof user.role === "string" ? user.role : "user";
+  const role = ("role" in session.user && typeof session.user.role === "string")
+    ? session.user.role
+    : "user";
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
     redirect(redirectTo);
@@ -223,9 +271,13 @@ import { redirect } from "next/navigation";
 
 export async function requireOrgRole(allowedOrgRoles: string[], redirectTo: string = "/unauthorized") {
   const session = await requireSession();
-  const sessionData = session.session as { activeOrgRole?: string; [key: string]: unknown };
-  const userData = session.user as { orgRole?: string; [key: string]: unknown };
-  const activeOrgRole = sessionData?.activeOrgRole || userData?.orgRole;
+  const sessionRole = "activeOrgRole" in session.session && typeof session.session.activeOrgRole === "string"
+    ? session.session.activeOrgRole
+    : undefined;
+  const userRole = "orgRole" in session.user && typeof session.user.orgRole === "string"
+    ? session.user.orgRole
+    : undefined;
+  const activeOrgRole = sessionRole || userRole;
 
   if (allowedOrgRoles.length > 0 && (!activeOrgRole || !allowedOrgRoles.includes(activeOrgRole))) {
     redirect(redirectTo);
@@ -244,9 +296,13 @@ import { redirect } from "next/navigation";
 
 export async function requirePlan(requiredPlans: string[], redirectTo: string = "/pricing") {
   const session = await requireSession();
-  const sessionData = session.session as { plan?: string; [key: string]: unknown };
-  const userData = session.user as { plan?: string; [key: string]: unknown };
-  const plan = sessionData?.plan || userData?.plan || "free";
+  const sessionPlan = "plan" in session.session && typeof session.session.plan === "string"
+    ? session.session.plan
+    : undefined;
+  const userPlan = "plan" in session.user && typeof session.user.plan === "string"
+    ? session.user.plan
+    : undefined;
+  const plan = sessionPlan || userPlan || "free";
 
   if (requiredPlans.length > 0 && !requiredPlans.includes(plan)) {
     redirect(redirectTo);
@@ -276,10 +332,11 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
           pkgObj.dependencies["@better-auth/passkey"] = `^${semverVersion}`;
         }
         pkgObj.devDependencies["@better-auth/cli"] = `^${semverVersion}`;
+        pkgObj.dependencies["dotenv"] = "^16.4.5";
         pkgObj.dependencies["zod"] = "^3.24.2";
         pkgObj.scripts["db:migrate"] = "npx @better-auth/cli migrate -y";
-        pkgObj.scripts["predev"] = "pnpm db:migrate";
-        pkgObj.scripts["prestart"] = "pnpm db:migrate";
+        delete pkgObj.scripts["predev"];
+        delete pkgObj.scripts["prestart"];
 
         const dbAdapterKey = String(authNode.data?.dbAdapter || "sqlite-raw");
         if (
@@ -321,9 +378,11 @@ export async function getAuthBearerToken(): Promise<string | null> {
     const { authClient } = await import("@/lib/auth-client");
     if (authClient && typeof authClient.getSession === "function") {
       const sessionRes = await authClient.getSession();
-      const token =
-        sessionRes?.data?.session?.token ||
-        (sessionRes?.data as { token?: string })?.token;
+      const rawData = sessionRes?.data;
+      const directToken = rawData && typeof rawData === "object" && "token" in rawData && typeof rawData.token === "string"
+        ? rawData.token
+        : undefined;
+      const token = sessionRes?.data?.session?.token || directToken;
       if (token) {
         return token.startsWith("Bearer ") ? token : \`Bearer \${token}\`;
       }

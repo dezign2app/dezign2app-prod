@@ -266,6 +266,6 @@ export function shouldGenerateSocialProviders(
     return false;
   }
 
-  const oauthList = resolveOAuthProviders((authNodeData || {}) as any);
+  const oauthList = resolveOAuthProviders(authNodeData);
   return oauthList.length > 0;
 }
