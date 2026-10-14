@@ -26,6 +26,7 @@ import {
   INTER_SERVICE_PROTOCOL_HTTP,
 } from "@workspace/canvas";
 import { NodeEnvVarsSection } from "../ai-security/ExternalEnvVarsDrawer";
+import { createDefaultHealthEndpoint } from "@/lib/utils/healthCheckEndpoint";
 
 
 
@@ -67,13 +68,10 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       .getState()
       .endpoints.filter((e) => e.nodeId === id);
     if (existing.length === 0) {
-      addEndpoint(id, {
-        id: generateId(),
-        name: "/",
-        type: "GET",
-        summary: "Health check",
-        businessLogic: "Test the health of the server",
-      });
+      const serviceName = data?.label || "service";
+      const servicePort = String(data?.port || "8080");
+      const healthEp = createDefaultHealthEndpoint(id, serviceName, servicePort, generateId());
+      addEndpoint(id, healthEp);
     }
   }, [id, addEndpoint]);
 

@@ -16,6 +16,10 @@ import {
 } from "./pipelineStepCanvasCleanup";
 import { isPaginationNeededByOtherSteps } from "./DbOperationStepSection";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import {
+  isHealthEndpoint,
+  getHealthCheckResponseBindings,
+} from "@/lib/utils/healthCheckEndpoint";
 
 export interface UsePipelineStepsProps {
   steps: PipelineStepDraft[];
@@ -80,18 +84,34 @@ export function usePipelineSteps({
         outputVariable: "",
       };
     }
+    const isHealth = isHealthEndpoint(endpoint);
+    const serviceNode = allNodes.find((n) => n.id === serviceNodeId);
+    const serviceName = serviceNode?.data?.label || "service";
+    const servicePort = String(serviceNode?.data?.port || "8080");
+
     const found = steps.find((s) => s.type === "return_response");
-    if (found) return found;
+    if (found) {
+      if ((found.inputBindings && found.inputBindings.length > 0) || !isHealth) {
+        return found;
+      }
+      return {
+        ...found,
+        inputBindings: getHealthCheckResponseBindings(serviceName, servicePort),
+      };
+    }
+
     return {
       id: "return-response-step",
       name: "Return Response",
       type: "return_response",
       enabled: true,
       statusCode: endpoint?.type === "POST" ? 201 : 200,
-      inputBindings: [],
+      inputBindings: isHealth
+        ? getHealthCheckResponseBindings(serviceName, servicePort)
+        : [],
       outputVariable: "",
     };
-  }, [steps, endpoint?.type, isConsumer]);
+  }, [steps, endpoint, isConsumer, allNodes, serviceNodeId]);
 
   const addStep = (type: StepType) => {
     const newStep = createDefaultStepDraft({

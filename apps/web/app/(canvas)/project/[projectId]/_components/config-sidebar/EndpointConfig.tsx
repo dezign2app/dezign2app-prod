@@ -29,6 +29,11 @@ import { isEndpointPipelineUnconfigured } from "@/lib/utils/pipelineValidation";
 import { useBufferedInput } from "@/lib/hooks/useBufferedInput";
 import { cn } from "@workspace/ui/lib/utils";
 import { formatEndpointRoute, sanitizeEndpointRoute } from "@workspace/canvas";
+import {
+  isHealthEndpoint,
+  getHealthCheckPipelineSteps,
+  getHealthCheckResponseBody,
+} from "@/lib/utils/healthCheckEndpoint";
 
 interface EndpointConfigProps {
   id: string;
@@ -206,6 +211,38 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
       }
     }
   }, [isExternal, isAuthEnabled, item?.id, item?.headers, item?.queryParams, updateEndpoint, cleanConnectedWebPageNodes]);
+
+  // Auto-initialize health check endpoints with standard contract if blank
+  React.useEffect(() => {
+    if (!item || isExternal) return;
+    if (isHealthEndpoint(item)) {
+      const needsPipelineInit =
+        !item.pipelineSteps ||
+        item.pipelineSteps.length === 0 ||
+        (item.pipelineSteps.length === 1 &&
+          item.pipelineSteps[0]?.type === "return_response" &&
+          (!item.pipelineSteps[0]?.inputBindings || item.pipelineSteps[0]?.inputBindings.length === 0));
+
+      const needsResponseBodyInit =
+        !item.responseBody ||
+        !item.responseBody.fields ||
+        item.responseBody.fields.length === 0;
+
+      if (needsPipelineInit || needsResponseBodyInit || item.name === "/") {
+        const serviceName = node?.data?.label || "service";
+        const servicePort = String(node?.data?.port || "8080");
+        updateEndpoint(item.id, {
+          ...(item.name === "/" ? { name: "/health" } : {}),
+          ...(needsPipelineInit
+            ? { pipelineSteps: getHealthCheckPipelineSteps(serviceName, servicePort) }
+            : {}),
+          ...(needsResponseBodyInit
+            ? { responseBody: getHealthCheckResponseBody(item.id, serviceName, servicePort) }
+            : {}),
+        });
+      }
+    }
+  }, [item?.id, item?.name, item?.summary, item?.businessLogic, item?.pipelineSteps, item?.responseBody, isExternal, node?.data?.label, node?.data?.port, updateEndpoint]);
 
   const nameBuffer = useBufferedInput(
     formatEndpointRoute(item?.name || ""),
