@@ -79,6 +79,63 @@ export function evaluateAssertions({
 }
 
 /**
+ * Checks whether a given value is a valid ISO 8601 or parseable timestamp.
+ */
+function isValidTimestamp(val: unknown): boolean {
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (trimmed.length < 8) return false;
+    // ISO 8601 regex: e.g. 2026-10-14T13:37:42.257Z or 2026-10-14 13:37:42
+    const isoRegex = /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})?)?$/i;
+    if (isoRegex.test(trimmed)) {
+      return !isNaN(Date.parse(trimmed));
+    }
+    const parsed = Date.parse(trimmed);
+    return !isNaN(parsed);
+  }
+  if (typeof val === "number") {
+    // Unix epoch timestamp in seconds or ms (rough sanity range: > year 2000)
+    return val > 946684800 && !isNaN(new Date(val > 1e11 ? val : val * 1000).getTime());
+  }
+  return false;
+}
+
+/**
+ * Checks whether a field name or expected value signifies a timestamp/date field.
+ */
+function isTimestampField(key: string, expectedVal: unknown): boolean {
+  const lower = key.toLowerCase();
+  const nameMatches =
+    lower === "timestamp" ||
+    lower.endsWith("_at") ||
+    lower.endsWith("at") ||
+    lower.includes("time") ||
+    lower.includes("date");
+
+  if (nameMatches) return true;
+  if (expectedVal !== null && expectedVal !== undefined && isValidTimestamp(expectedVal)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Checks whether a value is a placeholder for a service name.
+ */
+function isServicePlaceholder(val: unknown): boolean {
+  if (typeof val !== "string") return false;
+  const s = val.trim().toLowerCase();
+  return (
+    s === "service" ||
+    s === "<service name>" ||
+    s === "service-name" ||
+    s === "${servicename}" ||
+    s === "${service}" ||
+    s === "${name}"
+  );
+}
+
+/**
  * Checks whether the actual body contains or matches the expected body.
  */
 function checkBodyMatches(
@@ -127,20 +184,56 @@ function checkBodyMatches(
   for (const [key, expVal] of Object.entries(expectedObj)) {
     if (!(key in actualObj)) {
       missingKeys.push(key);
-    } else if (
+      continue;
+    }
+
+    const actVal = actualObj[key];
+
+    // 1. Timestamp validation: check valid time format rather than strict value equality
+    if (isTimestampField(key, expVal)) {
+      if (isValidTimestamp(actVal)) {
+        continue;
+      } else {
+        mismatchedKeys.push(`${key}: expected valid timestamp format, got "${actVal}"`);
+        continue;
+      }
+    }
+
+    // 2. Nested object comparison
+    if (
       expVal !== null &&
       typeof expVal === "object" &&
       !Array.isArray(expVal)
     ) {
-      const sub = checkBodyMatches(actualObj[key] as JSONValue, expVal);
+      const sub = checkBodyMatches(actVal as JSONValue, expVal);
       if (!sub.passed) mismatchedKeys.push(`${key} (${sub.detail})`);
-    } else if (
-      typeof expVal !== "object" &&
-      typeof actualObj[key] === typeof expVal &&
-      expVal !== "" &&
-      actualObj[key] !== expVal
-    ) {
-      mismatchedKeys.push(`${key}: expected "${expVal}", got "${actualObj[key]}"`);
+      continue;
+    }
+
+    // 3. Flexible service placeholder matching (e.g. expected placeholder "service" vs actual service node name "User")
+    if (key.toLowerCase() === "service" && (isServicePlaceholder(expVal) || isServicePlaceholder(actVal))) {
+      if (typeof actVal === "string" && actVal.trim().length > 0) {
+        continue;
+      }
+    }
+
+    // 4. Flexible port matching (e.g. number vs string)
+    if (key.toLowerCase() === "port" && String(expVal) === String(actVal)) {
+      continue;
+    }
+
+    // 5. Primitive equality with number/string coercion
+    const areValuesEqual =
+      actVal === expVal ||
+      (typeof expVal === "number" && typeof actVal === "string" && String(expVal) === actVal) ||
+      (typeof expVal === "string" && typeof actVal === "number" && expVal === String(actVal));
+
+    if (areValuesEqual) {
+      continue;
+    }
+
+    if (typeof expVal !== "object" && expVal !== "") {
+      mismatchedKeys.push(`${key}: expected "${expVal}", got "${actVal}"`);
     }
   }
 

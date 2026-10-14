@@ -191,12 +191,54 @@ export function EndpointTestCasesSection({
           JSON.stringify(existingAutoSuccess.expectedBody) === JSON.stringify({ success: true, data: {} }) ||
           JSON.stringify(existingAutoSuccess.expectedBody) === JSON.stringify({ success: true });
 
+        const areBodiesEqualIgnoringTimestamp = (a: any, b: any): boolean => {
+          if (a === b) return true;
+          if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+          const keysA = Object.keys(a);
+          const keysB = Object.keys(b);
+          if (keysA.length !== keysB.length) return false;
+          for (const k of keysA) {
+            if (!keysB.includes(k)) return false;
+            const lowerK = k.toLowerCase();
+            if (lowerK.includes("time") || lowerK.includes("date") || lowerK.endsWith("at")) {
+              continue;
+            }
+            if (typeof a[k] === "object" && typeof b[k] === "object") {
+              if (!areBodiesEqualIgnoringTimestamp(a[k], b[k])) return false;
+            } else if (a[k] !== b[k]) {
+              return false;
+            }
+          }
+          return true;
+        };
+
         const isExpectedMismatch =
           isLegacyExpectedBody ||
-          JSON.stringify(existingAutoSuccess.expectedBody) !== JSON.stringify(currentExpectedBody);
+          !areBodiesEqualIgnoringTimestamp(existingAutoSuccess.expectedBody, currentExpectedBody);
 
         if (isExpectedMismatch && currentExpectedBody !== undefined) {
-          nextExpectedBody = currentExpectedBody;
+          if (
+            typeof currentExpectedBody === "object" &&
+            currentExpectedBody !== null &&
+            !Array.isArray(currentExpectedBody) &&
+            typeof existingAutoSuccess.expectedBody === "object" &&
+            existingAutoSuccess.expectedBody !== null &&
+            !Array.isArray(existingAutoSuccess.expectedBody)
+          ) {
+            const expObj = { ...(currentExpectedBody as Record<string, any>) };
+            for (const k of Object.keys(expObj)) {
+              const lowerK = k.toLowerCase();
+              if (
+                (lowerK.includes("time") || lowerK.includes("date") || lowerK.endsWith("at")) &&
+                (existingAutoSuccess.expectedBody as Record<string, any>)[k]
+              ) {
+                expObj[k] = (existingAutoSuccess.expectedBody as Record<string, any>)[k];
+              }
+            }
+            nextExpectedBody = expObj;
+          } else {
+            nextExpectedBody = currentExpectedBody;
+          }
           changed = true;
         }
 

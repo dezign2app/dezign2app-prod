@@ -228,15 +228,23 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         !item.responseBody.fields ||
         item.responseBody.fields.length === 0;
 
-      if (needsPipelineInit || needsResponseBodyInit || item.name === "/") {
-        const serviceName = node?.data?.label || "service";
-        const servicePort = String(node?.data?.port || "8080");
+      const serviceName = node?.data?.label || "service";
+      const servicePort = String(node?.data?.port || "8080");
+
+      const returnStep = item.pipelineSteps?.find((s) => s.type === "return_response");
+      const serviceBinding = returnStep?.inputBindings?.find((b) => b.argName === "service");
+      const hasStaleServiceName =
+        serviceBinding?.source.kind === "inline" &&
+        serviceBinding.source.value !== serviceName &&
+        (serviceBinding.source.value === "service" || serviceName !== "service");
+
+      if (needsPipelineInit || needsResponseBodyInit || item.name === "/" || hasStaleServiceName) {
         updateEndpoint(item.id, {
           ...(item.name === "/" ? { name: "/health" } : {}),
-          ...(needsPipelineInit
+          ...(needsPipelineInit || hasStaleServiceName
             ? { pipelineSteps: getHealthCheckPipelineSteps(serviceName, servicePort) }
             : {}),
-          ...(needsResponseBodyInit
+          ...(needsResponseBodyInit || hasStaleServiceName
             ? { responseBody: getHealthCheckResponseBody(item.id, serviceName, servicePort) }
             : {}),
         });
