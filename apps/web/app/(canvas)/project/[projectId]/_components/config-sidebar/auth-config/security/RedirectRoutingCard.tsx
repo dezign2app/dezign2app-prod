@@ -84,6 +84,44 @@ export const RedirectRoutingCard: React.FC<RedirectRoutingCardProps> = ({
           }
         />
 
+        <RedirectRouteSelector
+          label="Unauthorized / 403 Redirect"
+          placeholder="/unauthorized"
+          value={redirects.unauthorizedUrl || ""}
+          nodeIdValue={redirects.unauthorizedNodeId}
+          configuredPages={configuredPages}
+          targetZoneType="public"
+          projectId={projectId}
+          onChange={(val, newId) =>
+            onUpdateRedirects({
+              unauthorizedUrl: val,
+              unauthorizedNodeId: newId,
+            })
+          }
+          onCreatePageNode={() =>
+            onCreatePageNode(redirects.unauthorizedUrl || "/unauthorized", false, "unauthorized")
+          }
+        />
+
+        <RedirectRouteSelector
+          label="Payment-Gated Redirect"
+          placeholder="/pricing"
+          value={redirects.pricingUrl || ""}
+          nodeIdValue={redirects.pricingNodeId}
+          configuredPages={configuredPages}
+          targetZoneType="public"
+          projectId={projectId}
+          onChange={(val, newId) =>
+            onUpdateRedirects({
+              pricingUrl: val,
+              pricingNodeId: newId,
+            })
+          }
+          onCreatePageNode={() =>
+            onCreatePageNode(redirects.pricingUrl || "/pricing", false, "pricing")
+          }
+        />
+
         <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-background/60 border border-border/40">
           <Label className="text-[11px] text-muted-foreground font-medium">
             OAuth Callback Base Route

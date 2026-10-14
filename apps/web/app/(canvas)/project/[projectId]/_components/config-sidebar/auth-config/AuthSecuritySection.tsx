@@ -100,6 +100,20 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
         needsUpdate = true;
       }
     }
+    if (redirects.unauthorizedNodeId) {
+      const page = configuredPages.find((p) => p.id === redirects.unauthorizedNodeId);
+      if (page && page.path !== redirects.unauthorizedUrl) {
+        updatedRedirects.unauthorizedUrl = page.path;
+        needsUpdate = true;
+      }
+    }
+    if (redirects.pricingNodeId) {
+      const page = configuredPages.find((p) => p.id === redirects.pricingNodeId);
+      if (page && page.path !== redirects.pricingUrl) {
+        updatedRedirects.pricingUrl = page.path;
+        needsUpdate = true;
+      }
+    }
 
     if (needsUpdate) {
       updateData({ redirects: updatedRedirects });

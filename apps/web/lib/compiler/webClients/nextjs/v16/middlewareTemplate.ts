@@ -14,6 +14,8 @@ export function generateProxy(pagesInfo: PageInfo[], authNodeData?: BackendNodeD
   const signInPageUrl = redirects.signInPageUrl || "/login";
   const signUpPageUrl = redirects.signUpPageUrl || "/register";
   const signInRedirectUrl = redirects.signInRedirectUrl || "/";
+  const unauthorizedUrl = redirects.unauthorizedUrl || "/unauthorized";
+  const pricingUrl = redirects.pricingUrl || "/pricing";
 
   if (!authNodeData) {
     return `import { NextResponse } from "next/server";
@@ -32,7 +34,15 @@ export const config = {
   const routeRules = protectedPages.map((p) => {
     const route = p.routePath;
     const accessType = p.accessType;
-    const redirect = p.redirectTo || (accessType === "payment-gated" ? "/pricing" : accessType === "org-gated" ? "/select-org" : signInPageUrl);
+    const redirect =
+      p.redirectTo ||
+      (accessType === "payment-gated"
+        ? pricingUrl
+        : accessType === "org-gated"
+        ? "/select-org"
+        : accessType === "role-gated"
+        ? unauthorizedUrl
+        : signInPageUrl);
     const roles = JSON.stringify(p.allowedRoles || []);
     const plans = JSON.stringify(p.requiredPlans || []);
     const orgRoles = JSON.stringify(p.allowedOrgRoles || []);
@@ -87,7 +97,7 @@ export function proxy(request: NextRequest) {
 
   // Tier 1 Optimistic Check using Better Auth cookie helper
   if (!sessionCookie) {
-    const loginUrl = new URL(matchedRule.redirectTo || ${JSON.stringify(signInPageUrl)}, request.url);
+    const loginUrl = new URL(${JSON.stringify(signInPageUrl)}, request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }

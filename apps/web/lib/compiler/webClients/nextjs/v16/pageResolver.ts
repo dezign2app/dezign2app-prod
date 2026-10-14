@@ -44,6 +44,8 @@ export function resolvePagesInfo(
     allNodes.find((n) => n.type === "webApp");
 
   const defaultSignInPage = authNode?.data?.redirects?.signInPageUrl || "/login";
+  const defaultUnauthorizedPage = authNode?.data?.redirects?.unauthorizedUrl || "/unauthorized";
+  const defaultPricingPage = authNode?.data?.redirects?.pricingUrl || "/pricing";
 
   const defaultZones: WebAppZone[] = [
     {
@@ -67,7 +69,13 @@ export function resolvePagesInfo(
         id: "rule-private",
         scope: "zone",
         conditions: { kind: "leaf", condition: { type: "auth", op: "signedIn" } },
-        redirects: { "no-auth": defaultSignInPage, default: defaultSignInPage },
+        redirects: {
+          "no-auth": defaultSignInPage,
+          "wrong-role": defaultUnauthorizedPage,
+          "wrong-plan": defaultPricingPage,
+          "no-access": defaultPricingPage,
+          default: defaultSignInPage,
+        },
       },
     },
   ];
@@ -148,12 +156,9 @@ export function resolvePagesInfo(
         for (const ancestor of zoneAncestors) {
           if (ancestor.rule?.redirects) {
             redirectTo =
-              ancestor.rule.redirects["wrong-role"] ||
-              ancestor.rule.redirects["wrong-plan"] ||
-              ancestor.rule.redirects["no-access"] ||
               ancestor.rule.redirects["no-auth"] ||
               ancestor.rule.redirects["default"] ||
-              redirectTo;
+              defaultSignInPage;
           }
 
           if (ancestor.rule?.conditions) {
@@ -164,10 +169,28 @@ export function resolvePagesInfo(
                 if (cond.type === "orgRole" && Array.isArray(cond.values)) {
                   allowedOrgRoles = [...allowedOrgRoles, ...cond.values];
                   accessType = "org-gated";
+                  redirectTo =
+                    ancestor.rule?.redirects?.["wrong-role"] ||
+                    ancestor.rule?.redirects?.["no-access"] ||
+                    ancestor.rule?.redirects?.["default"] ||
+                    defaultUnauthorizedPage;
+                }
+                if (cond.type === "orgRole" && Array.isArray(cond.values)) {
+                  accessType = "role-gated";
+                  redirectTo =
+                    ancestor.rule?.redirects?.["wrong-role"] ||
+                    ancestor.rule?.redirects?.["no-access"] ||
+                    ancestor.rule?.redirects?.["default"] ||
+                    defaultUnauthorizedPage;
                 }
                 if ((cond.type === "plan" || cond.type === "subscriptionStatus") && Array.isArray(cond.values)) {
                   requiredPlans = [...requiredPlans, ...cond.values];
                   accessType = "payment-gated";
+                  redirectTo =
+                    ancestor.rule?.redirects?.["wrong-plan"] ||
+                    ancestor.rule?.redirects?.["no-access"] ||
+                    ancestor.rule?.redirects?.["default"] ||
+                    defaultPricingPage;
                 }
               } else if (condNode.kind === "group" && Array.isArray(condNode.children)) {
                 condNode.children.forEach(extractConditions);

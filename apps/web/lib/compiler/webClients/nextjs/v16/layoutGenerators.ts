@@ -7,6 +7,7 @@ import {
   ServerGuardConfig,
   PageSection,
   UIEventItem,
+  ConditionNode,
 } from "@workspace/canvas/types";
 import { slugToComponentName } from "./slugUtils";
 
@@ -66,6 +67,7 @@ export function generateSectionLayout(
   layoutDescription?: string,
   zone?: WebAppZone,
   layoutNode?: BackendNode,
+  authNode?: BackendNode,
 ): string {
   const isPublic = groupName === "public";
   const componentName = slugToComponentName(groupName).replace(/Page$/, "") + "Layout";
@@ -112,13 +114,39 @@ ${sectionsJsx ? `${sectionsJsx}\n` : ""}      <div className="flex-1">{children}
 `;
   }
 
-  const failRedirect =
-    zone?.rule?.redirects?.["wrong-role"] ||
-    zone?.rule?.redirects?.["wrong-plan"] ||
-    zone?.rule?.redirects?.["no-access"] ||
-    zone?.rule?.redirects?.["no-auth"] ||
-    zone?.rule?.redirects?.["default"] ||
-    "/login";
+  const authRedirects = authNode?.data?.redirects;
+  const defaultSignIn = authRedirects?.signInPageUrl || "/login";
+  const defaultUnauthorized = authRedirects?.unauthorizedUrl || "/unauthorized";
+  const defaultPricing = authRedirects?.pricingUrl || "/pricing";
+
+  // Check conditions on zone to choose appropriate redirect category
+  const condNode = zone?.rule?.conditions;
+  let hasRoleCond = false;
+  let hasPlanCond = false;
+  const checkCond = (c?: ConditionNode) => {
+    if (!c) return;
+    if (c.kind === "leaf" && c.condition) {
+      if (c.condition.type === "orgRole") hasRoleCond = true;
+      if (c.condition.type === "plan" || c.condition.type === "subscriptionStatus") hasPlanCond = true;
+    } else if (c.kind === "group" && Array.isArray(c.children)) {
+      c.children.forEach(checkCond);
+    }
+  };
+  checkCond(condNode);
+
+  const failRedirect = hasRoleCond
+    ? zone?.rule?.redirects?.["wrong-role"] ||
+      zone?.rule?.redirects?.["no-access"] ||
+      zone?.rule?.redirects?.["default"] ||
+      defaultUnauthorized
+    : hasPlanCond
+    ? zone?.rule?.redirects?.["wrong-plan"] ||
+      zone?.rule?.redirects?.["no-access"] ||
+      zone?.rule?.redirects?.["default"] ||
+      defaultPricing
+    : zone?.rule?.redirects?.["no-auth"] ||
+      zone?.rule?.redirects?.["default"] ||
+      defaultSignIn;
 
   return `import React from "react";
 ${descriptionDoc}
@@ -165,10 +193,11 @@ export function generateServerGuardLayout(
   groupName: string,
   guard: ServerGuardConfig,
   layoutDescription?: string,
+  authNode?: BackendNode,
 ): string {
   const componentName = slugToComponentName(groupName).replace(/Page$/, "") + "Layout";
   const entityLabel = guard.entityLabel || "Entity";
-  const failRedirect = guard.failRedirect || "/unauthorized";
+  const failRedirect = guard.failRedirect || authNode?.data?.redirects?.unauthorizedUrl || "/unauthorized";
   const requireSession = guard.requireSession !== false;
   const headerName = guard.headerName || "x-api-key";
 
@@ -244,6 +273,7 @@ export function generateRouteGroupLayouts(
   webAppNode?: BackendNode,
   allNodes: BackendNode[] = [],
   allEdges: BackendEdge[] = [],
+  authNode?: BackendNode,
 ): CompiledFile[] {
   const files: CompiledFile[] = [];
   const zones: WebAppZone[] = Array.isArray(webAppNode?.data?.zones)
@@ -326,6 +356,7 @@ export function generateRouteGroupLayouts(
           leafGroup,
           matchedZone.serverGuard,
           connectedLayoutNode?.data?.description || matchedZone.layoutDescription,
+          authNode,
         ),
       });
       return; // don't fall through to generateSectionLayout
@@ -341,6 +372,7 @@ export function generateRouteGroupLayouts(
         connectedLayoutNode?.data?.description || matchedZone?.layoutDescription,
         matchedZone,
         connectedLayoutNode,
+        authNode,
       ),
     });
   });

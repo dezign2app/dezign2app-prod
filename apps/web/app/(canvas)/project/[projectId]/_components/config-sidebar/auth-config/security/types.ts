@@ -34,7 +34,14 @@ export interface AuthPagesCardProps {
   onCreatePageNode: (
     targetRoute: string,
     isProtected: boolean,
-    fieldPrefix?: "signInPage" | "signUpPage" | "signInRedirect" | "signUpRedirect" | "signOutRedirect",
+    fieldPrefix?:
+      | "signInPage"
+      | "signUpPage"
+      | "signInRedirect"
+      | "signUpRedirect"
+      | "signOutRedirect"
+      | "unauthorized"
+      | "pricing",
   ) => void;
 }
 
@@ -47,7 +54,14 @@ export interface RedirectRoutingCardProps {
   onCreatePageNode: (
     targetRoute: string,
     isProtected: boolean,
-    fieldPrefix?: "signInPage" | "signUpPage" | "signInRedirect" | "signUpRedirect" | "signOutRedirect",
+    fieldPrefix?:
+      | "signInPage"
+      | "signUpPage"
+      | "signInRedirect"
+      | "signUpRedirect"
+      | "signOutRedirect"
+      | "unauthorized"
+      | "pricing",
   ) => void;
 }
 
