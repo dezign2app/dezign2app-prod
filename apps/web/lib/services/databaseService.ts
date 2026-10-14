@@ -124,6 +124,9 @@ export async function checkDbTableSync(
         missingColumns: [],
         extraColumns: [],
         existingColumns: [],
+        missingIndexes: [],
+        extraIndexes: [],
+        existingIndexes: [],
         error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
@@ -147,6 +150,7 @@ export async function applyDbTableSync(
         success: false,
         createdTable: false,
         appliedColumns: [],
+        appliedIndexes: [],
         error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
       };
     }

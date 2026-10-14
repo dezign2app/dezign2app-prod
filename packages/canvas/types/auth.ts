@@ -1,4 +1,5 @@
 import { AUTH_FRAMEWORK_OPTIONS, BETTER_AUTH_VERSIONS } from "../constants";
+import type { CanvasEntityColumn } from "./database";
 
 export type AuthFramework = (typeof AUTH_FRAMEWORK_OPTIONS)[number]["value"];
 export type BetterAuthVersion = (typeof BETTER_AUTH_VERSIONS)[number]["value"];
@@ -443,14 +444,7 @@ export interface BetterAuthTableDefinition {
   name: BetterAuthTableName;
   category: BetterAuthCategory;
   description: string;
-  defaultColumns: Array<{
-    name: string;
-    type: string;
-    isPrimaryKey?: boolean;
-    isForeignKey?: boolean;
-    isUnique?: boolean;
-    references?: { table: string; column: string };
-  }>;
+  defaultColumns: CanvasEntityColumn[];
   defaultIndexes?: Array<{
     name: string;
     columns: string;
@@ -463,14 +457,7 @@ export interface PaymentsTableDefinition {
   name: string;
   category: "payments";
   description: string;
-  defaultColumns: Array<{
-    name: string;
-    type: string;
-    isPrimaryKey?: boolean;
-    isForeignKey?: boolean;
-    isUnique?: boolean;
-    references?: { table: string; column: string };
-  }>;
+  defaultColumns: CanvasEntityColumn[];
   defaultIndexes?: Array<{
     name: string;
     columns: string;

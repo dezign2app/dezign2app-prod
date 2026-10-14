@@ -292,4 +292,91 @@ describe("databaseActions Table Sync Actions", () => {
       targetSchema: "custom_schema",
     });
   });
+
+  it("should sync table indexes via server actions", async () => {
+    // 1. Create table with columns and an index
+    const createRes = await applyDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "Account",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "userId", type: "TEXT" },
+      ],
+      indexes: [{ name: "idx_account_userId", columns: "userId" }],
+    });
+
+    expect(createRes.success).toBe(true);
+    expect(createRes.createdTable).toBe(true);
+    expect(createRes.appliedIndexes).toEqual(["idx_account_userId"]);
+
+    // 2. Check sync status
+    const check1 = await checkDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "Account",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "userId", type: "TEXT" },
+      ],
+      indexes: [{ name: "idx_account_userId", columns: "userId" }],
+    });
+
+    expect(check1.inSync).toBe(true);
+    expect(check1.missingIndexes).toHaveLength(0);
+
+    // 3. User adds another index on canvas
+    const check2 = await checkDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "Account",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "userId", type: "TEXT" },
+      ],
+      indexes: [
+        { name: "idx_account_userId", columns: "userId" },
+        { name: "idx_account_composite", columns: "id, userId", isUnique: true },
+      ],
+    });
+
+    expect(check2.inSync).toBe(false);
+    expect(check2.missingIndexes?.map((i) => i.name)).toEqual(["idx_account_composite"]);
+
+    // 4. Apply sync
+    const apply2 = await applyDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "Account",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "userId", type: "TEXT" },
+      ],
+      indexes: [
+        { name: "idx_account_userId", columns: "userId" },
+        { name: "idx_account_composite", columns: "id, userId", isUnique: true },
+      ],
+    });
+
+    expect(apply2.success).toBe(true);
+    expect(apply2.appliedIndexes).toEqual(["idx_account_composite"]);
+
+    // 5. Verify in sync
+    const check3 = await checkDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "Account",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "userId", type: "TEXT" },
+      ],
+      indexes: [
+        { name: "idx_account_userId", columns: "userId" },
+        { name: "idx_account_composite", columns: "id, userId", isUnique: true },
+      ],
+    });
+
+    expect(check3.inSync).toBe(true);
+    expect(check3.missingIndexes).toHaveLength(0);
+  });
 });

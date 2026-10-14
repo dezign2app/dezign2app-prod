@@ -142,4 +142,127 @@ describe("Database Table Schema Sync (SQLite)", () => {
     expect(finalCheck.extraColumns).toHaveLength(0);
     expect(finalCheck.missingColumns).toHaveLength(0);
   });
+
+  it("should create, detect drift, and synchronize table indexes", () => {
+    // 1. Initial creation with an index
+    const applyRes = applySqliteTableSync(
+      TEST_SYNC_DB,
+      "User",
+      [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "email", type: "TEXT" },
+      ],
+      undefined,
+      [{ name: "idx_user_email", columns: "email", isUnique: true }],
+    );
+
+    expect(applyRes.success).toBe(true);
+    expect(applyRes.createdTable).toBe(true);
+    expect(applyRes.appliedIndexes).toEqual(["idx_user_email"]);
+
+    // 2. Check sync status - should be fully in sync
+    const status1 = checkSqliteTableSync(
+      TEST_SYNC_DB,
+      "User",
+      [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "email", type: "TEXT" },
+      ],
+      undefined,
+      [{ name: "idx_user_email", columns: "email", isUnique: true }],
+    );
+
+    expect(status1.inSync).toBe(true);
+    expect(status1.missingIndexes).toHaveLength(0);
+    expect(status1.extraIndexes).toHaveLength(0);
+
+    // 3. User adds a second index on canvas
+    const status2 = checkSqliteTableSync(
+      TEST_SYNC_DB,
+      "User",
+      [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "email", type: "TEXT" },
+        { name: "role", type: "TEXT" },
+      ],
+      undefined,
+      [
+        { name: "idx_user_email", columns: "email", isUnique: true },
+        { name: "idx_user_role", columns: "role" },
+      ],
+    );
+
+    expect(status2.inSync).toBe(false);
+    expect(status2.missingColumns.map((c) => c.name)).toEqual(["role"]);
+    expect(status2.missingIndexes?.map((i) => i.name)).toEqual(["idx_user_role"]);
+
+    // 4. Apply migration for role column and index
+    const apply2 = applySqliteTableSync(
+      TEST_SYNC_DB,
+      "User",
+      [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "email", type: "TEXT" },
+        { name: "role", type: "TEXT" },
+      ],
+      undefined,
+      [
+        { name: "idx_user_email", columns: "email", isUnique: true },
+        { name: "idx_user_role", columns: "role" },
+      ],
+    );
+
+    expect(apply2.success).toBe(true);
+    expect(apply2.appliedColumns).toEqual(["role"]);
+    expect(apply2.appliedIndexes).toEqual(["idx_user_role"]);
+
+    // 5. User removes idx_user_role on canvas
+    const status3 = checkSqliteTableSync(
+      TEST_SYNC_DB,
+      "User",
+      [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "email", type: "TEXT" },
+        { name: "role", type: "TEXT" },
+      ],
+      undefined,
+      [{ name: "idx_user_email", columns: "email", isUnique: true }],
+    );
+
+    expect(status3.inSync).toBe(false);
+    expect(status3.extraIndexes?.map((i) => i.name)).toEqual(["idx_user_role"]);
+
+    // 6. Apply deletion of the index
+    const apply3 = applySqliteTableSync(
+      TEST_SYNC_DB,
+      "User",
+      [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "email", type: "TEXT" },
+        { name: "role", type: "TEXT" },
+      ],
+      undefined,
+      [{ name: "idx_user_email", columns: "email", isUnique: true }],
+    );
+
+    expect(apply3.success).toBe(true);
+    expect(apply3.droppedIndexes).toEqual(["idx_user_role"]);
+
+    // 7. Verify back in sync
+    const status4 = checkSqliteTableSync(
+      TEST_SYNC_DB,
+      "User",
+      [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "email", type: "TEXT" },
+        { name: "role", type: "TEXT" },
+      ],
+      undefined,
+      [{ name: "idx_user_email", columns: "email", isUnique: true }],
+    );
+
+    expect(status4.inSync).toBe(true);
+    expect(status4.missingIndexes).toHaveLength(0);
+    expect(status4.extraIndexes).toHaveLength(0);
+  });
 });

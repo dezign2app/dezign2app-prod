@@ -255,6 +255,11 @@ export interface ElectronCheckDbTableSyncPayload {
     isNotNull?: boolean;
     isUnique?: boolean;
   }>;
+  indexes?: Array<{
+    name: string;
+    columns: string;
+    isUnique?: boolean;
+  }>;
 }
 
 export interface ElectronCheckDbTableSyncResult {
@@ -265,6 +270,9 @@ export interface ElectronCheckDbTableSyncResult {
   missingColumns: Array<{ name: string; type: string }>;
   extraColumns: Array<{ name: string; type: string }>;
   existingColumns: Array<{ name: string; type: string }>;
+  missingIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
+  extraIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
+  existingIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
   error?: string;
 }
 
@@ -275,6 +283,8 @@ export interface ElectronApplyDbTableSyncResult {
   createdTable: boolean;
   appliedColumns: string[];
   droppedColumns?: string[];
+  appliedIndexes?: string[];
+  droppedIndexes?: string[];
   error?: string;
 }
 

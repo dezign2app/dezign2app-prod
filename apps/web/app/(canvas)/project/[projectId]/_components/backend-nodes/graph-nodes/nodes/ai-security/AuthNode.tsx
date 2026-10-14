@@ -1,11 +1,12 @@
 import React from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { ShieldCheck, Settings, Database } from "lucide-react";
+import { ShieldCheck, Settings, Database, Table, Wand2, CheckCircle2 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader } from "../../common";
 import { Textarea } from "@workspace/ui/components/textarea";
+import { Button } from "@workspace/ui/components/button";
 import {
   Select,
   SelectContent,
@@ -19,7 +20,9 @@ import {
   DEFAULT_AUTH_FRAMEWORK,
   DEFAULT_BETTER_AUTH_VERSION,
   AuthFramework,
+  BACKEND_NODE_ENTITY,
 } from "@workspace/canvas";
+import { useBetterAuthTableSync } from "../../../../config-sidebar/auth-config/core-entities";
 
 function isAuthFramework(val: string): val is AuthFramework {
   return AUTH_FRAMEWORK_OPTIONS.some((o) => o.value === val);
@@ -55,6 +58,35 @@ export const AuthNode = ({
   );
 
   const enabledPlugins = data.plugins || ["bearer", "admin", "organization"];
+
+  const orgConfig = data.organization || { enabled: true };
+  const isOrgEnabled = orgConfig.enabled ?? true;
+  const selectedDatabaseId = data.databaseId;
+
+  const schemaEntities = React.useMemo(
+    () =>
+      allNodes.filter(
+        (n) =>
+          n.type === BACKEND_NODE_ENTITY &&
+          (!selectedDatabaseId || n.data?.databaseId === selectedDatabaseId),
+      ),
+    [allNodes, selectedDatabaseId],
+  );
+
+  const {
+    mappedCount,
+    totalTables,
+    autoCreateAllMissingTables,
+  } = useBetterAuthTableSync({
+    data,
+    updateData,
+    nodeId: id,
+    selectedDatabaseId,
+    schemaEntities,
+    isOrgEnabled,
+  });
+
+  const isAllTablesMapped = mappedCount >= totalTables && totalTables > 0;
 
   return (
     <div
@@ -162,6 +194,62 @@ export const AuthNode = ({
           </SelectContent>
         </Select>
       </div>
+
+      {/* Auto Table Generator Bar */}
+      {framework === "better_auth" && (
+        <div className="px-3 py-1.5 bg-indigo-500/5 border-t border-border/50 flex items-center justify-between gap-2 nodrag">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Table className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[10.5px] font-medium leading-none text-foreground">
+                Tables:
+              </span>
+              <span
+                className={cn(
+                  "text-[10px] font-mono px-1.5 py-0.5 rounded font-medium",
+                  isAllTablesMapped
+                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                    : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                )}
+              >
+                {mappedCount} / {totalTables}
+              </span>
+            </div>
+          </div>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={(e) => {
+              e.stopPropagation();
+              autoCreateAllMissingTables();
+            }}
+            className={cn(
+              "h-6 px-2 text-[10.5px] font-medium shrink-0 transition-colors gap-1",
+              isAllTablesMapped
+                ? "bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-border"
+                : "bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border-indigo-500/30"
+            )}
+            title={
+              isAllTablesMapped
+                ? "Re-sync tables, column constraints & indexes"
+                : "Auto-generate missing Better Auth tables and link FK relationships"
+            }
+          >
+            {isAllTablesMapped ? (
+              <>
+                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                <span>Sync</span>
+              </>
+            ) : (
+              <>
+                <Wand2 className="w-3 h-3 text-indigo-500" />
+                <span>Auto-Generate</span>
+              </>
+            )}
+          </Button>
+        </div>
+      )}
 
       <div className="p-2.5 border-t border-border/50 flex items-center justify-between gap-2 bg-muted/20 nodrag">
         <div className="flex items-center gap-1.5 flex-1 min-w-0">

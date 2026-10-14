@@ -10,6 +10,7 @@ import {
   BETTER_AUTH_TABLE_DEFINITIONS,
   isBetterAuthTableRequired,
   PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION,
+  CanvasEntityColumn,
 } from "@workspace/canvas";
 import { toTableName, toVarName, toSingular, toPlural } from "./utils";
 import { compileRawSqliteDatabase } from "./databases/sqlite/raw";
@@ -165,9 +166,38 @@ export function compileDatabaseNodes(
         });
 
         if (existingEntity) {
-          const existingCols = existingEntity.data?.columns || [];
+          const existingCols: CanvasEntityColumn[] = existingEntity.data?.columns || [];
+          let hasColChanges = false;
+          const repairedCols: CanvasEntityColumn[] = existingCols.map((c: CanvasEntityColumn) => {
+            const defCol = def.defaultColumns.find(
+              (dc) => (dc.name || "").toLowerCase() === (c.name || "").toLowerCase(),
+            );
+            if (!defCol) return c;
+            let colChanged = false;
+            const updated: CanvasEntityColumn = { ...c };
+            if (defCol.isPrimaryKey && !updated.isPrimaryKey) {
+              updated.isPrimaryKey = true;
+              colChanged = true;
+            }
+            if (defCol.isNotNull && !updated.isNotNull) {
+              updated.isNotNull = true;
+              colChanged = true;
+            }
+            if (defCol.isUnique && !updated.isUnique) {
+              updated.isUnique = true;
+              colChanged = true;
+            }
+            if (defCol.isForeignKey && !updated.isForeignKey) {
+              updated.isForeignKey = true;
+              updated.references = defCol.references;
+              colChanged = true;
+            }
+            if (colChanged) hasColChanges = true;
+            return updated;
+          });
+
           const existingColNames = new Set(
-            existingCols.map((c: { name?: string }) => (c.name || "").toLowerCase()),
+            repairedCols.map((c: { name?: string }) => (c.name || "").toLowerCase()),
           );
           const missingCols = def.defaultColumns.filter(
             (dc) => !existingColNames.has((dc.name || "").toLowerCase()),
@@ -180,10 +210,10 @@ export function compileDatabaseNodes(
             )
           );
 
-          if (missingCols.length > 0 || missingIdxs.length > 0) {
+          if (hasColChanges || missingCols.length > 0 || missingIdxs.length > 0) {
             existingEntity.data = {
               ...existingEntity.data,
-              columns: missingCols.length > 0 ? [...existingCols, ...missingCols] : existingCols,
+              columns: missingCols.length > 0 ? [...repairedCols, ...missingCols] : repairedCols,
               indexes: missingIdxs.length > 0 ? [...existingIdxs, ...missingIdxs] : existingIdxs,
             };
           }

@@ -418,6 +418,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
           tableName={data.label || "table"}
           schema={data.schema || parentDbNode?.data?.schema || "public"}
           columns={columns}
+          indexes={indexes}
           databaseNode={parentDbNode}
         />
       )}

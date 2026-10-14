@@ -22,6 +22,8 @@ interface CanvasEntityIndex {
   isUnique?: boolean;
 }
 
+import { checkEntitySchemaDiscrepancies } from "./hooks/useBetterAuthTableSync";
+
 export const BetterAuthTableRow: React.FC<BetterAuthTableRowProps> = ({
   def,
   mappedId,
@@ -32,34 +34,12 @@ export const BetterAuthTableRow: React.FC<BetterAuthTableRowProps> = ({
 }) => {
   const mappedEntity = schemaEntities.find((e) => e.id === mappedId);
 
-  const existingCols: CanvasEntityColumn[] =
-    mappedEntity?.type === "entity" ? mappedEntity.data?.columns || [] : [];
-  const missingColumns = mappedEntity
-    ? def.defaultColumns.filter(
-        (reqCol) =>
-          !existingCols.some(
-            (c) => c.name.toLowerCase() === reqCol.name.toLowerCase(),
-          ),
-      )
-    : [];
-
-  const existingIdxs: CanvasEntityIndex[] =
-    mappedEntity?.type === "entity" ? mappedEntity.data?.indexes || [] : [];
-  const missingIndexes =
-    mappedEntity && def.defaultIndexes
-      ? def.defaultIndexes.filter(
-          (reqIdx) =>
-            !existingIdxs.some(
-              (idx) =>
-                idx.name.toLowerCase() === reqIdx.name.toLowerCase() ||
-                idx.columns.replace(/\s+/g, "").toLowerCase() ===
-                  reqIdx.columns.replace(/\s+/g, "").toLowerCase(),
-            ),
-        )
-      : [];
-
-  const isSchemaValid =
-    missingColumns.length === 0 && missingIndexes.length === 0;
+  const {
+    isValid: isSchemaValid,
+    missingColumns,
+    outdatedColumns,
+    missingIndexes,
+  } = checkEntitySchemaDiscrepancies(mappedEntity, def);
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -124,22 +104,24 @@ export const BetterAuthTableRow: React.FC<BetterAuthTableRowProps> = ({
                     missingIndexes,
                   )
                 }
-                title={`Add missing: ${[
-                  ...missingColumns.map((c) => c.name),
-                  ...missingIndexes.map((i) => i.name),
+                title={`Fix: ${[
+                  ...missingColumns.map((c: CanvasEntityColumn) => c.name),
+                  ...outdatedColumns.map((c: CanvasEntityColumn) => `${c.name} constraints`),
+                  ...missingIndexes.map((i: { name: string }) => i.name),
                 ].join(", ")}`}
               >
                 <Sparkles className="w-3 h-3 mr-1" />
                 Fix Schema
                 {missingIndexes.length > 0 &&
                   missingColumns.length === 0 &&
+                  outdatedColumns.length === 0 &&
                   ` (+${missingIndexes.length} idxs)`}
                 {missingColumns.length > 0 &&
                   missingIndexes.length === 0 &&
+                  outdatedColumns.length === 0 &&
                   ` (+${missingColumns.length} cols)`}
-                {missingColumns.length > 0 &&
-                  missingIndexes.length > 0 &&
-                  ` (+${missingColumns.length}c, +${missingIndexes.length}i)`}
+                {(missingColumns.length > 0 || outdatedColumns.length > 0) &&
+                  ` (${missingColumns.length > 0 ? `+${missingColumns.length}c` : ""}${outdatedColumns.length > 0 ? `${missingColumns.length > 0 ? ", " : ""}repair` : ""}${missingIndexes.length > 0 ? `, +${missingIndexes.length}i` : ""})`}
               </Button>
             )
           ) : (
@@ -161,15 +143,20 @@ export const BetterAuthTableRow: React.FC<BetterAuthTableRowProps> = ({
           <div className="flex items-center gap-1.5 truncate">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
             <span>
-              Entity <strong>{mappedEntity.data?.label}</strong> missing:{" "}
+              Entity <strong>{mappedEntity.data?.label}</strong> needs:{" "}
               {missingColumns.length > 0 && (
                 <span className="font-bold underline mr-1">
-                  cols ({missingColumns.map((c) => c.name).join(", ")})
+                  cols ({missingColumns.map((c: CanvasEntityColumn) => c.name).join(", ")})
+                </span>
+              )}
+              {outdatedColumns.length > 0 && (
+                <span className="font-bold underline mr-1">
+                  constraints ({outdatedColumns.map((c: CanvasEntityColumn) => `${c.name}${c.isNotNull ? " [not-null]" : ""}${c.isUnique ? " [unique]" : ""}`).join(", ")})
                 </span>
               )}
               {missingIndexes.length > 0 && (
                 <span className="font-bold underline">
-                  indexes ({missingIndexes.map((i) => i.name).join(", ")})
+                  indexes ({missingIndexes.map((i: { name: string }) => i.name).join(", ")})
                 </span>
               )}
             </span>
@@ -185,7 +172,7 @@ export const BetterAuthTableRow: React.FC<BetterAuthTableRowProps> = ({
             }
             className="ml-2 font-bold underline hover:text-amber-500 text-[10px] shrink-0"
           >
-            Inject Missing Schema & Indexes
+            Fix Constraints & Schema
           </button>
         </div>
       )}
