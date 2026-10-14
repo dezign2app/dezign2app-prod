@@ -499,9 +499,10 @@ export function compileDatabaseNodes(
   // Generate the unified central @workspace/db package
   // so that all microservices and web clients can seamlessly depend on @workspace/db
   if (dbNodes.length >= 1 && packages.length > 0) {
-    const primaryFolder =
-      packages.find((p) => p.databaseNodeId === primaryDbNode.id)?.packageFolder ||
-      packages[0]!.packageFolder;
+    const primaryPkg =
+      packages.find((p) => p.databaseNodeId === primaryDbNode.id) ||
+      packages[0]!;
+    const primaryFolder = primaryPkg.packageFolder;
 
     const childPackageDeps: Record<string, string> = {};
     packages.forEach((pkg) => {
@@ -568,14 +569,24 @@ export function compileDatabaseNodes(
       ),
     ].join("\n");
 
-    const rootConnection = [
-      "/**",
-      " * @workspace/db/connection — Central database connection pool & runner.",
-      " * Re-exports connection from primary database.",
-      " */",
-      "/* turbopackIgnore: true */",
-      `export * from "./${primaryFolder}/connection";`,
-    ].join("\n");
+    const hasConnectionFile = primaryPkg.files.some((f) => f.filename === "connection.ts");
+
+    const rootConnection = hasConnectionFile
+      ? [
+          "/**",
+          " * @workspace/db/connection — Central database connection pool & runner.",
+          " * Re-exports connection from primary database.",
+          " */",
+          "/* turbopackIgnore: true */",
+          `export * from "./${primaryFolder}/connection";`,
+        ].join("\n")
+      : [
+          "/**",
+          " * @workspace/db/connection — Central database connection pool & runner.",
+          " */",
+          "/* turbopackIgnore: true */",
+          `export * from "./${primaryFolder}/client";`,
+        ].join("\n");
 
     const rootHelpersIndex = [
       "/**",

@@ -1,3 +1,4 @@
+import React from "react";
 import { toast } from "sonner";
 import {
   BetterAuthTableMapping,
@@ -349,11 +350,9 @@ export function useBetterAuthTableSync({
     };
 
     const pluginToAdd =
-      def.key === BETTER_AUTH_TABLE_KEYS.PASSKEY
-        ? BETTER_AUTH_PLUGINS.PASSKEY
-        : def.key === BETTER_AUTH_TABLE_KEYS.TWO_FACTOR
-          ? BETTER_AUTH_PLUGINS.TWO_FACTOR
-          : undefined;
+      def.key === BETTER_AUTH_TABLE_KEYS.TWO_FACTOR
+        ? BETTER_AUTH_PLUGINS.TWO_FACTOR
+        : undefined;
 
     const currentPlugins = data.plugins || ["bearer", "admin", "organization", "jwt"];
     const nextPlugins =
@@ -464,9 +463,15 @@ export function useBetterAuthTableSync({
     let syncedCount = 0;
     let createdCount = 0;
 
-    // All Better Auth tables (Core, Plugin tables passkey, twoFactor, jwks, rateLimit, and Organization if enabled)
-    const targetDefs = BETTER_AUTH_TABLE_DEFINITIONS.filter(
-      (def) => def.category !== BETTER_AUTH_CATEGORIES.ORGANIZATION || isOrgEnabled,
+    // Only Better Auth tables that are required for this configuration
+    const targetDefs = BETTER_AUTH_TABLE_DEFINITIONS.filter((def) =>
+      isBetterAuthTableRequired(def, {
+        isOrgEnabled,
+        teamsEnabled: Boolean(data.organization?.teams),
+        enabledPlugins,
+        tableMappings: activeMappings,
+        providers: data.providers,
+      }),
     );
 
     targetDefs.forEach((def) => {
@@ -611,11 +616,9 @@ export function useBetterAuthTableSync({
       [def.key]: nextEntityId,
     };
     const pluginToAdd =
-      nextEntityId && def.key === BETTER_AUTH_TABLE_KEYS.PASSKEY
-        ? BETTER_AUTH_PLUGINS.PASSKEY
-        : nextEntityId && def.key === BETTER_AUTH_TABLE_KEYS.TWO_FACTOR
-          ? BETTER_AUTH_PLUGINS.TWO_FACTOR
-          : undefined;
+      nextEntityId && def.key === BETTER_AUTH_TABLE_KEYS.TWO_FACTOR
+        ? BETTER_AUTH_PLUGINS.TWO_FACTOR
+        : undefined;
     const currentPlugins = data.plugins || ["bearer", "admin", "organization", "jwt"];
     const nextPlugins =
       pluginToAdd && !currentPlugins.includes(pluginToAdd)
@@ -637,9 +640,20 @@ export function useBetterAuthTableSync({
     }
   };
 
-  const targetDefs = BETTER_AUTH_TABLE_DEFINITIONS.filter(
-    (def) => def.category !== BETTER_AUTH_CATEGORIES.ORGANIZATION || isOrgEnabled,
-  );
+  const enabledPlugins: string[] = data.plugins || ["bearer", "admin", "organization", "jwt"];
+  const isTeamsEnabled = Boolean(data.organization?.teams);
+
+  const targetDefs = React.useMemo(() => {
+    return BETTER_AUTH_TABLE_DEFINITIONS.filter((def) =>
+      isBetterAuthTableRequired(def, {
+        isOrgEnabled,
+        teamsEnabled: isTeamsEnabled,
+        enabledPlugins,
+        tableMappings,
+        providers: data.providers,
+      }),
+    );
+  }, [isOrgEnabled, isTeamsEnabled, enabledPlugins, tableMappings, data.providers]);
   const totalTables = targetDefs.length;
 
   const mappedCount = targetDefs.filter((def) => {

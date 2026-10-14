@@ -213,6 +213,7 @@ describe("Database Isolation & Multi-Engine Architecture under packages/db/*", (
 
     const connFile = monorepo.files.find((f) => f.filename === "packages/db/primary-mysql/connection.ts");
     expect(connFile?.content).toContain('import mysql from "mysql2/promise"');
+    expect(connFile?.content).toContain("export const db = pool;");
 
     // Central connection re-exports from isolated package
     const rootConnFile = monorepo.files.find((f) => f.filename === "packages/db/connection.ts");

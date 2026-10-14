@@ -71,8 +71,9 @@ export function generateAuthConfig(data: AuthNodeData): string {
     pluginCalls.push("twoFactor()");
   }
 
+  let passkeyImportStr = "";
   if (enabledPlugins.includes("passkey")) {
-    pluginImports.add("passkey");
+    passkeyImportStr = `import { passkey } from "@better-auth/passkey";\n`;
     pluginCalls.push("passkey()");
   }
 
@@ -292,8 +293,7 @@ export function generateAuthConfig(data: AuthNodeData): string {
 
   return `import { betterAuth } from "better-auth";
 ${adapterConfig.importStatement}
-${createMiddlewareImport}${pluginImportStr}
-export const auth = betterAuth({
+${createMiddlewareImport}${pluginImportStr}${passkeyImportStr}export const auth = betterAuth({
   database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}
   plugins: [
     ${pluginCalls.join(",\n    ")}

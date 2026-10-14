@@ -272,6 +272,9 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
         pkgObj.dependencies["@workspace/db"] = "workspace:*";
         pkgObj.dependencies["@workspace/types"] = "workspace:*";
         pkgObj.dependencies["better-auth"] = `^${semverVersion}`;
+        if (authNode.data?.plugins?.includes("passkey")) {
+          pkgObj.dependencies["@better-auth/passkey"] = `^${semverVersion}`;
+        }
         pkgObj.devDependencies["@better-auth/cli"] = `^${semverVersion}`;
         pkgObj.dependencies["zod"] = "^3.24.2";
         pkgObj.scripts["db:migrate"] = "npx @better-auth/cli migrate -y";

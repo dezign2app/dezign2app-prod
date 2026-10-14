@@ -80,6 +80,7 @@ describe("compilePostgresDatabase", () => {
     expect(code).toContain("export async function query");
     expect(code).toContain("export async function withTransaction");
     expect(code).toContain("export async function checkPostgresHealth");
+    expect(code).toContain("export const db = pool;");
     expect(code).toContain("ADD COLUMN IF NOT EXISTS");
   });
 

@@ -50,6 +50,8 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
   const {
     tableMappings,
     mappedCount,
+    totalTables,
+    targetDefs,
     createEntityForTable,
     fixEntitySchema,
     autoCreateAllMissingTables,
@@ -134,7 +136,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/20 font-medium">
-              {mappedCount} / {BETTER_AUTH_TABLE_DEFINITIONS.length} Tables Mapped
+              {mappedCount} / {totalTables} Tables Mapped
             </span>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/40 font-medium">
               {authFunctions.length} Functions
@@ -160,6 +162,7 @@ export const AuthCoreEntitiesSection: React.FC<AuthConfigSectionProps> = ({
           {/* Section 1: Better Auth Required Tables Grouped By Category */}
           <BetterAuthTableMappingSection
             categories={categories}
+            targetDefs={targetDefs}
             tableMappings={tableMappings}
             userData={{
               userEntityId: data.userEntityId,
