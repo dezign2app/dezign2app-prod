@@ -36,9 +36,14 @@ export function generateAuthClient(options: BetterAuthClientOptions = {}): strin
 
   return `import { createAuthClient } from "better-auth/react";${standardPluginImports}${passkeyImport}
 
+const appUrl =
+  typeof window !== "undefined"
+    ? window.location.origin
+    : process.env.NEXT_PUBLIC_BETTER_AUTH_URL || process.env.NEXT_PUBLIC_AUTH_BASE_URL || "${baseUrl}";
+
 // Better Auth Browser Client instance initialized with server baseURL and plugins
 export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_BETTER_AUTH_URL || process.env.NEXT_PUBLIC_AUTH_BASE_URL || "${baseUrl}",${pluginEntries}
+  baseURL: appUrl,${pluginEntries}
 });
 `;
 }
