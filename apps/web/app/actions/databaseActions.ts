@@ -1,10 +1,17 @@
 "use server";
 
 import { sanitizeForConvex } from "@/lib/utils/convexSanitizer";
-import { executeSqliteLiveOperation, checkSqliteConnection } from "@/lib/utils/sqliteRunner";
+import {
+  executeSqliteLiveOperation,
+  checkSqliteConnection,
+  checkSqliteTableSync,
+  applySqliteTableSync,
+} from "@/lib/utils/sqliteRunner";
 import {
   executePostgresLiveOperation,
   checkPostgresConnection,
+  checkPostgresTableSync,
+  applyPostgresTableSync,
 } from "@/lib/utils/postgresRunner";
 import {
   type TestDbOperationPayload,
@@ -27,6 +34,51 @@ import {
   executeInSandbox,
 } from "@/lib/database-runner";
 import { executeFunctionCode } from "@/lib/database-runner/functionCodeRunner";
+
+export interface CheckDbTableSyncPayload {
+  engine?: string;
+  connection?: {
+    host?: string;
+    port?: string | number;
+    database?: string;
+    user?: string;
+    username?: string;
+    password?: string;
+    connectionString?: string;
+    connectionStringEnv?: string;
+    dbFilePath?: string;
+    dbFilePathEnv?: string;
+  };
+  tableName: string;
+  columns?: Array<{
+    name: string;
+    type: string;
+    isPrimaryKey?: boolean;
+    isNotNull?: boolean;
+    isUnique?: boolean;
+  }>;
+}
+
+export interface CheckDbTableSyncResult {
+  success: boolean;
+  serverReachable: boolean;
+  tableExists: boolean;
+  inSync: boolean;
+  missingColumns: Array<{ name: string; type: string }>;
+  extraColumns: Array<{ name: string; type: string }>;
+  existingColumns: Array<{ name: string; type: string }>;
+  error?: string;
+}
+
+export interface ApplyDbTableSyncPayload extends CheckDbTableSyncPayload {}
+
+export interface ApplyDbTableSyncResult {
+  success: boolean;
+  createdTable: boolean;
+  appliedColumns: string[];
+  droppedColumns?: string[];
+  error?: string;
+}
 
 export type {
   TestDbOperationPayload,
@@ -365,3 +417,98 @@ export async function checkDbConnectionAction(
     };
   }
 }
+
+/**
+ * Server action to inspect whether a canvas table exists and has all columns in the live DB.
+ */
+export async function checkDbTableSyncAction(
+  payload: CheckDbTableSyncPayload,
+): Promise<CheckDbTableSyncResult> {
+  const { engine = "postgres", connection = {}, tableName, columns = [] } = payload;
+  const isPostgres =
+    engine === "postgres" ||
+    engine === "postgresql" ||
+    engine === "pg" ||
+    engine === "cockroachdb";
+  const isSqlite = engine === "sqlite";
+
+  try {
+    if (isPostgres) {
+      return await checkPostgresTableSync(connection, tableName, columns);
+    }
+
+    if (isSqlite) {
+      let dbFilePath = connection.dbFilePath || "dev.db";
+      if (connection.dbFilePathEnv) {
+        const envVal = resolveEnvValue(connection.dbFilePathEnv);
+        if (envVal) dbFilePath = envVal;
+      }
+      return checkSqliteTableSync(dbFilePath, tableName, columns);
+    }
+
+    return {
+      success: true,
+      serverReachable: true,
+      tableExists: true,
+      inSync: true,
+      missingColumns: [],
+      extraColumns: [],
+      existingColumns: [],
+    };
+  } catch (err) {
+    return {
+      success: false,
+      serverReachable: false,
+      tableExists: false,
+      inSync: false,
+      missingColumns: [],
+      extraColumns: [],
+      existingColumns: [],
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * Server action to apply missing table schema or columns to the live DB.
+ */
+export async function applyDbTableSyncAction(
+  payload: ApplyDbTableSyncPayload,
+): Promise<ApplyDbTableSyncResult> {
+  const { engine = "postgres", connection = {}, tableName, columns = [] } = payload;
+  const isPostgres =
+    engine === "postgres" ||
+    engine === "postgresql" ||
+    engine === "pg" ||
+    engine === "cockroachdb";
+  const isSqlite = engine === "sqlite";
+
+  try {
+    if (isPostgres) {
+      return await applyPostgresTableSync(connection, tableName, columns);
+    }
+
+    if (isSqlite) {
+      let dbFilePath = connection.dbFilePath || "dev.db";
+      if (connection.dbFilePathEnv) {
+        const envVal = resolveEnvValue(connection.dbFilePathEnv);
+        if (envVal) dbFilePath = envVal;
+      }
+      return applySqliteTableSync(dbFilePath, tableName, columns);
+    }
+
+    return {
+      success: true,
+      createdTable: false,
+      appliedColumns: [],
+    };
+  } catch (err) {
+    return {
+      success: false,
+      createdTable: false,
+      appliedColumns: [],
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+

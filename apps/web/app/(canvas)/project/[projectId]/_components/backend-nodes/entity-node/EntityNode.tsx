@@ -20,6 +20,7 @@ import { IndexList } from "./IndexList";
 import { VectorConfig } from "./VectorConfig";
 import { DbOperationsList } from "./DbOperationsList";
 import { EntityAffectedTypesBanner } from "./EntityAffectedTypesBanner";
+import { EntityDbSyncBanner } from "./EntityDbSyncBanner";
 import { getUniqueNodeLabel } from "@workspace/canvas";
 import { NodeHeader } from "../graph-nodes/common";
 import { toast } from "sonner";
@@ -298,6 +299,16 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       {/* Vector Collection Settings */}
       {isVector && (
         <VectorConfig id={id} data={data} updateNode={updateNode} />
+      )}
+
+      {/* Live Database Schema Sync Banner */}
+      {!isVector && (
+        <EntityDbSyncBanner
+          entityId={id}
+          tableName={data.label || "table"}
+          columns={columns}
+          databaseNode={parentDbNode}
+        />
       )}
 
       {/* Derived Types Warning Banner - only shown when out of sync */}

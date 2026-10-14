@@ -10,6 +10,7 @@ import {
   isJsonObject,
 } from "@/lib/database-runner";
 import { planSqlCommand, extractTableName } from "@/lib/database-runner";
+import { normalizeToPostgresType } from "@/lib/schema/columnTypes";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -103,14 +104,7 @@ async function ensurePostgresTable(
       for (const col of columns) {
         const colName = (col.name || "col").replace(/[^a-zA-Z0-9_]/g, "");
         const isPk = col.isPrimaryKey || col.isPrimary || col.primaryKey || colName === "id";
-        const t = (col.type || "string").toLowerCase();
-        let pgType = "TEXT";
-        if (t === "number" || t === "int" || t === "integer") pgType = "INTEGER";
-        else if (t === "bigint") pgType = "BIGINT";
-        else if (t === "float" || t === "double" || t === "decimal") pgType = "DOUBLE PRECISION";
-        else if (t === "boolean" || t === "bool") pgType = "BOOLEAN";
-        else if (t === "timestamp" || t === "datetime") pgType = "TIMESTAMPTZ";
-        else if (t === "json" || t === "object" || t === "jsonb") pgType = "JSONB";
+        const pgType = normalizeToPostgresType(col.type, isPk);
         colDefs.push(isPk ? `"${colName}" ${pgType} PRIMARY KEY` : `"${colName}" ${pgType}`);
       }
     }
@@ -119,6 +113,9 @@ async function ensurePostgresTable(
     }
     if (!colDefs.some((d) => d.startsWith('"created_at"'))) {
       colDefs.push(`"created_at" TIMESTAMPTZ DEFAULT NOW()`);
+    }
+    if (!colDefs.some((d) => d.startsWith('"updated_at"'))) {
+      colDefs.push(`"updated_at" TIMESTAMPTZ DEFAULT NOW()`);
     }
     await client.query(
       `CREATE TABLE IF NOT EXISTS "${safeTable}" (${colDefs.join(", ")})`,
@@ -133,13 +130,7 @@ async function ensurePostgresTable(
     for (const col of columns) {
       const colName = (col.name || "").replace(/[^a-zA-Z0-9_]/g, "");
       if (!colName || existingCols.has(colName.toLowerCase())) continue;
-      const t = (col.type || "string").toLowerCase();
-      let pgType = "TEXT";
-      if (t === "number" || t === "int" || t === "integer") pgType = "INTEGER";
-      else if (t === "bigint") pgType = "BIGINT";
-      else if (t === "boolean" || t === "bool") pgType = "BOOLEAN";
-      else if (t === "timestamp" || t === "datetime") pgType = "TIMESTAMPTZ";
-      else if (t === "json" || t === "object" || t === "jsonb") pgType = "JSONB";
+      const pgType = normalizeToPostgresType(col.type);
       try {
         await client.query(
           `ALTER TABLE "${safeTable}" ADD COLUMN IF NOT EXISTS "${colName}" ${pgType}`,
@@ -468,3 +459,270 @@ export async function checkPostgresConnection(
     await pool.end().catch(() => {});
   }
 }
+
+// ---------------------------------------------------------------------------
+// Table Schema Sync & Drift Detection
+// ---------------------------------------------------------------------------
+
+export interface PostgresTableSyncResult {
+  success: boolean;
+  serverReachable: boolean;
+  tableExists: boolean;
+  inSync: boolean;
+  missingColumns: Array<{ name: string; type: string }>;
+  extraColumns: Array<{ name: string; type: string }>;
+  existingColumns: Array<{ name: string; type: string }>;
+  error?: string;
+}
+
+export interface PostgresApplySyncResult {
+  success: boolean;
+  createdTable: boolean;
+  appliedColumns: string[];
+  droppedColumns?: string[];
+  error?: string;
+}
+
+/**
+ * Checks whether a canvas table entity exists in the live PostgreSQL database
+ * and identifies missing or extra columns (schema drift).
+ */
+export async function checkPostgresTableSync(
+  connection: PostgresConnectionConfig,
+  tableName: string,
+  columns?: Array<{ name?: string; type?: string; isPrimaryKey?: boolean; isNotNull?: boolean; isUnique?: boolean }>,
+): Promise<PostgresTableSyncResult> {
+  const { Pool } = await import("pg");
+  const connectionString = resolveConnectionString(connection);
+  const safeTable = tableName.replace(/[^a-zA-Z0-9_]/g, "");
+
+  if (!safeTable) {
+    return {
+      success: false,
+      serverReachable: false,
+      tableExists: false,
+      inSync: false,
+      missingColumns: [],
+      extraColumns: [],
+      existingColumns: [],
+      error: "Invalid table name",
+    };
+  }
+
+  const pool = new Pool({
+    connectionString,
+    max: 1,
+    connectionTimeoutMillis: 5000,
+    ssl:
+      connectionString.includes("sslmode=require") ||
+      connectionString.includes("neon.tech") ||
+      connectionString.includes("supabase.co") ||
+      process.env.NODE_ENV === "production"
+        ? { rejectUnauthorized: false }
+        : undefined,
+  });
+
+  let client: import("pg").PoolClient | undefined;
+  try {
+    client = await pool.connect();
+
+    // Check if table exists in active PostgreSQL schemas
+    const checkRes = await client.query<{ exists: boolean }>(
+      `SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables 
+        WHERE LOWER(table_name) = LOWER($1)
+        AND table_schema NOT IN ('pg_catalog', 'information_schema')
+      ) AS exists`,
+      [safeTable],
+    );
+    const tableExists = Boolean(checkRes.rows[0]?.exists);
+
+    const canvasCols = (columns || []).map((c) => ({
+      name: c.name || "col",
+      type: c.type || "string",
+    }));
+
+    if (!tableExists) {
+      return {
+        success: true,
+        serverReachable: true,
+        tableExists: false,
+        inSync: false,
+        missingColumns: canvasCols,
+        extraColumns: [],
+        existingColumns: [],
+      };
+    }
+
+    // Table exists, query existing columns from information_schema
+    const colsRes = await client.query<{ column_name: string; data_type: string }>(
+      `SELECT column_name, data_type 
+       FROM information_schema.columns 
+       WHERE LOWER(table_name) = LOWER($1)
+       AND table_schema NOT IN ('pg_catalog', 'information_schema')`,
+      [safeTable],
+    );
+
+    const existingColumns = colsRes.rows.map((r) => ({
+      name: r.column_name,
+      type: r.data_type,
+    }));
+    const existingColMap = new Map(
+      colsRes.rows.map((r) => [r.column_name.toLowerCase(), r.data_type]),
+    );
+
+    const missingColumns = canvasCols.filter(
+      (c) => !existingColMap.has(c.name.toLowerCase()),
+    );
+
+    const canvasColNames = new Set(canvasCols.map((c) => c.name.toLowerCase()));
+    const extraColumns = existingColumns.filter(
+      (c) =>
+        !canvasColNames.has(c.name.toLowerCase()) &&
+        c.name.toLowerCase() !== "created_at" &&
+        c.name.toLowerCase() !== "updated_at",
+    );
+
+    return {
+      success: true,
+      serverReachable: true,
+      tableExists: true,
+      inSync: missingColumns.length === 0 && extraColumns.length === 0,
+      missingColumns,
+      extraColumns,
+      existingColumns,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      serverReachable: false,
+      tableExists: false,
+      inSync: false,
+      missingColumns: [],
+      extraColumns: [],
+      existingColumns: [],
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (client) client.release();
+    await pool.end().catch(() => {});
+  }
+}
+
+/**
+ * Applies missing table or missing columns to the live PostgreSQL database,
+ * and drops columns deleted from the canvas.
+ */
+export async function applyPostgresTableSync(
+  connection: PostgresConnectionConfig,
+  tableName: string,
+  columns?: Array<{ name?: string; type?: string; isPrimaryKey?: boolean; isNotNull?: boolean; isUnique?: boolean }>,
+): Promise<PostgresApplySyncResult> {
+  const { Pool } = await import("pg");
+  const connectionString = resolveConnectionString(connection);
+  const safeTable = tableName.replace(/[^a-zA-Z0-9_]/g, "");
+
+  if (!safeTable) {
+    return {
+      success: false,
+      createdTable: false,
+      appliedColumns: [],
+      error: "Invalid table name",
+    };
+  }
+
+  const pool = new Pool({
+    connectionString,
+    max: 1,
+    connectionTimeoutMillis: 6000,
+    ssl:
+      connectionString.includes("sslmode=require") ||
+      connectionString.includes("neon.tech") ||
+      connectionString.includes("supabase.co") ||
+      process.env.NODE_ENV === "production"
+        ? { rejectUnauthorized: false }
+        : undefined,
+  });
+
+  let client: import("pg").PoolClient | undefined;
+  try {
+    client = await pool.connect();
+
+    // Check if table exists
+    const checkRes = await client.query<{ exists: boolean }>(
+      `SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables 
+        WHERE LOWER(table_name) = LOWER($1)
+        AND table_schema NOT IN ('pg_catalog', 'information_schema')
+      ) AS exists`,
+      [safeTable],
+    );
+    const tableExists = Boolean(checkRes.rows[0]?.exists);
+
+    if (!tableExists) {
+      await ensurePostgresTable(client, safeTable, columns);
+      return {
+        success: true,
+        createdTable: true,
+        appliedColumns: (columns || []).map((c) => c.name || "col"),
+      };
+    }
+
+    // Table exists, query existing columns and apply missing ones
+    const infoRes = await client.query<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns 
+       WHERE LOWER(table_name) = LOWER($1)
+       AND table_schema NOT IN ('pg_catalog', 'information_schema')`,
+      [safeTable],
+    );
+    const existingCols = new Set(infoRes.rows.map((r) => r.column_name.toLowerCase()));
+    const canvasColNames = new Set((columns || []).map((c) => (c.name || "").toLowerCase()));
+    const appliedColumns: string[] = [];
+    const droppedColumns: string[] = [];
+
+    // 1. Add missing columns
+    for (const col of columns || []) {
+      const colName = (col.name || "").replace(/[^a-zA-Z0-9_]/g, "");
+      if (!colName || existingCols.has(colName.toLowerCase())) continue;
+      const pgType = normalizeToPostgresType(col.type);
+
+      await client.query(
+        `ALTER TABLE "${safeTable}" ADD COLUMN IF NOT EXISTS "${colName}" ${pgType}`,
+      );
+      appliedColumns.push(colName);
+    }
+
+    // 2. Drop columns that were removed from the canvas
+    for (const row of infoRes.rows) {
+      const dbColLower = row.column_name.toLowerCase();
+      if (
+        !canvasColNames.has(dbColLower) &&
+        dbColLower !== "created_at" &&
+        dbColLower !== "updated_at"
+      ) {
+        await client.query(
+          `ALTER TABLE "${safeTable}" DROP COLUMN IF EXISTS "${row.column_name}" CASCADE`,
+        );
+        droppedColumns.push(row.column_name);
+      }
+    }
+
+    return {
+      success: true,
+      createdTable: false,
+      appliedColumns,
+      droppedColumns,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      createdTable: false,
+      appliedColumns: [],
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (client) client.release();
+    await pool.end().catch(() => {});
+  }
+}
+

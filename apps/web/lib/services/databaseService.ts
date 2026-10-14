@@ -2,10 +2,16 @@ import { getElectronAPI } from "@/lib/electron";
 import {
   testDbOperationAction,
   checkDbConnectionAction,
+  checkDbTableSyncAction,
+  applyDbTableSyncAction,
   type TestDbOperationPayload,
   type TestDbOperationResult,
   type CheckDbConnectionPayload,
   type CheckDbConnectionResult,
+  type CheckDbTableSyncPayload,
+  type CheckDbTableSyncResult,
+  type ApplyDbTableSyncPayload,
+  type ApplyDbTableSyncResult,
   type JsonValue,
   type JsonObject,
   type JsonArray,
@@ -16,6 +22,10 @@ export type {
   TestDbOperationResult,
   CheckDbConnectionPayload,
   CheckDbConnectionResult,
+  CheckDbTableSyncPayload,
+  CheckDbTableSyncResult,
+  ApplyDbTableSyncPayload,
+  ApplyDbTableSyncResult,
   JsonValue,
   JsonObject,
   JsonArray,
@@ -79,3 +89,54 @@ export async function checkDatabaseConnection(
 
   return checkDbConnectionAction(payload);
 }
+
+/**
+ * Check whether a table and all its columns exist in the connected database.
+ */
+export async function checkDbTableSync(
+  payload: CheckDbTableSyncPayload,
+): Promise<CheckDbTableSyncResult> {
+  const electron = getElectronAPI();
+  if (electron && (electron.db as any)?.checkTableSync) {
+    try {
+      return await (electron.db as any).checkTableSync(payload);
+    } catch (err) {
+      return {
+        success: false,
+        serverReachable: false,
+        tableExists: false,
+        inSync: false,
+        missingColumns: [],
+        extraColumns: [],
+        existingColumns: [],
+        error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  return checkDbTableSyncAction(payload);
+}
+
+/**
+ * Apply table creation or add missing columns to the connected live database.
+ */
+export async function applyDbTableSync(
+  payload: ApplyDbTableSyncPayload,
+): Promise<ApplyDbTableSyncResult> {
+  const electron = getElectronAPI();
+  if (electron && (electron.db as any)?.applyTableSync) {
+    try {
+      return await (electron.db as any).applyTableSync(payload);
+    } catch (err) {
+      return {
+        success: false,
+        createdTable: false,
+        appliedColumns: [],
+        error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  return applyDbTableSyncAction(payload);
+}
+

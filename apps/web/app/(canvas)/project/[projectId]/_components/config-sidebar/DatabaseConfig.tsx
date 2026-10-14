@@ -215,7 +215,11 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
       position: { x: dbPos.x, y: dbPos.y + 220 },
       data: {
         label: "",
-        columns: [{ name: "id", type: "TEXT", isPrimaryKey: true }],
+        columns: [
+          { name: "id", type: "TEXT", isPrimaryKey: true },
+          { name: "created_at", type: "TIMESTAMPTZ" },
+          { name: "updated_at", type: "TIMESTAMPTZ" },
+        ],
         indexes: [],
         databaseId: nodeId,
       },

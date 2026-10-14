@@ -15,7 +15,7 @@ import {
 import { Switch } from "@workspace/ui/components/switch";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
-import { COLUMN_TYPES } from "@/lib/schema/columnTypes";
+import { COLUMN_TYPES, getColumnTypesForEngine } from "@/lib/schema/columnTypes";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeDeletionDialog } from "../../node-deletion-dialog/NodeDeletionDialog";
 
@@ -58,6 +58,11 @@ export const ColumnRow = ({
   const [isSelectOpen, setIsSelectOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const nodes = useBackendCanvasStore((s) => s.nodes);
+
+  const currentNode = nodes.find((n) => n.id === nodeId);
+  const parentDb = nodes.find((n) => n.id === currentNode?.data?.databaseId);
+  const engine = (parentDb?.data?.dbEngine || "postgres").toLowerCase();
+  const availableColumnTypes = getColumnTypesForEngine(engine);
 
   const entityNodes = nodes.filter((n) => n.type === "entity");
 
@@ -156,13 +161,13 @@ export const ColumnRow = ({
             onValueChange={setEditingType}
             onOpenChange={setIsSelectOpen}
           >
-            <SelectTrigger className="h-6 text-[10px] px-1.5 w-[80px] py-0 nodrag">
+            <SelectTrigger className="h-6 text-[10px] px-1.5 min-w-[95px] max-w-[125px] py-0 nodrag">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
-              {((COLUMN_TYPES as readonly string[]).includes(editingType)
-                ? (COLUMN_TYPES as readonly string[])
-                : [editingType, ...(COLUMN_TYPES as readonly string[])]
+            <SelectContent className="max-h-[220px]">
+              {((availableColumnTypes as readonly string[]).includes(editingType)
+                ? (availableColumnTypes as readonly string[])
+                : [editingType, ...(availableColumnTypes as readonly string[])]
               ).map((t) => (
                 <SelectItem key={t} value={t} className="text-xs">
                   {t}
@@ -211,7 +216,7 @@ export const ColumnRow = ({
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0 ml-2 opacity-100 group-hover/row:opacity-100 transition-all">
-            <span className="text-muted-foreground truncate max-w-[60px]">
+            <span className="text-muted-foreground truncate max-w-[95px] text-[11px]">
               {col.type}
             </span>
             {col.isNotNull && (
