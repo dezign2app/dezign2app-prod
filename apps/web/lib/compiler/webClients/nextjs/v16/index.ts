@@ -104,6 +104,7 @@ export function compileNextjsV16WebClient(
       webAppNode,
       allNodes,
       allEdges,
+      authNode,
     ),
   );
 

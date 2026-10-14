@@ -128,6 +128,10 @@ export const redirectsConfigSchema = z.object({
   signUpRedirectNodeId: z.string().optional(),
   signOutRedirectUrl: z.string().optional(),
   signOutRedirectNodeId: z.string().optional(),
+  unauthorizedUrl: z.string().optional(),
+  unauthorizedNodeId: z.string().optional(),
+  pricingUrl: z.string().optional(),
+  pricingNodeId: z.string().optional(),
   callbackUrl: z.string().optional(),
   callbackNodeId: z.string().optional(),
 });

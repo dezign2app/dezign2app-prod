@@ -68,7 +68,14 @@ export function useAuthPageCreation({
   const handleCreateWebPageNode = (
     targetRoute: string,
     isProtected: boolean,
-    fieldPrefix?: "signInPage" | "signUpPage" | "signInRedirect" | "signUpRedirect" | "signOutRedirect",
+    fieldPrefix?:
+      | "signInPage"
+      | "signUpPage"
+      | "signInRedirect"
+      | "signUpRedirect"
+      | "signOutRedirect"
+      | "unauthorized"
+      | "pricing",
   ) => {
     const cleanPath = targetRoute.startsWith("/") ? targetRoute : `/${targetRoute}`;
 
@@ -143,6 +150,30 @@ export function useAuthPageCreation({
               event: "submit",
             },
           ],
+        },
+      ];
+    } else if (lower === "/unauthorized") {
+      pageLabel = "/unauthorized";
+      description = "Access Denied / 403 Forbidden page";
+      sections = [
+        {
+          id: `sec-${Date.now()}-unauth`,
+          name: "Access Denied Notice",
+          renderMode: "client",
+          loadStrategy: "eager",
+          actions: [],
+        },
+      ];
+    } else if (lower === "/pricing") {
+      pageLabel = "/pricing";
+      description = "Subscription plans and upgrade options";
+      sections = [
+        {
+          id: `sec-${Date.now()}-pricing`,
+          name: "Pricing Plans",
+          renderMode: "client",
+          loadStrategy: "eager",
+          actions: [],
         },
       ];
     } else if (lower === "/dashboard") {

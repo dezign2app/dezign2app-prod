@@ -51,6 +51,8 @@ export const RedirectRouteSelector: React.FC<RedirectRouteSelectorProps> = ({
       : [
           { path: "/login", label: "Sign-In" },
           { path: "/register", label: "Sign-Up" },
+          { path: "/unauthorized", label: "Unauthorized / 403" },
+          { path: "/pricing", label: "Pricing / Plans" },
           { path: "/", label: "Landing / Home" },
         ];
 

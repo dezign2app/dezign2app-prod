@@ -212,6 +212,11 @@ export const { POST, GET } = toNextJsHandler(auth);
       }),
     });
 
+    const redirects = authNode.data?.redirects || {};
+    const defaultSignIn = redirects.signInPageUrl || "/login";
+    const defaultUnauthorized = redirects.unauthorizedUrl || "/unauthorized";
+    const defaultPricing = redirects.pricingUrl || "/pricing";
+
     // Reusable Server Authorization Helpers under lib/auth/
     files.push({
       filename: "lib/auth/require-session.ts",
@@ -220,7 +225,7 @@ export const { POST, GET } = toNextJsHandler(auth);
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 
-export async function requireSession(redirectTo: string = "/login") {
+export async function requireSession(redirectTo: string = "${defaultSignIn}") {
   let session = null;
   try {
     session = await auth.api.getSession({
@@ -248,7 +253,7 @@ export async function requireSession(redirectTo: string = "/login") {
       content: `import { requireSession } from "./require-session";
 import { redirect } from "next/navigation";
 
-export async function requireRole(allowedRoles: string[], redirectTo: string = "/unauthorized") {
+export async function requireRole(allowedRoles: string[], redirectTo: string = "${defaultUnauthorized}") {
   const session = await requireSession();
   const role = ("role" in session.user && typeof session.user.role === "string")
     ? session.user.role
@@ -269,7 +274,7 @@ export async function requireRole(allowedRoles: string[], redirectTo: string = "
       content: `import { requireSession } from "./require-session";
 import { redirect } from "next/navigation";
 
-export async function requireOrgRole(allowedOrgRoles: string[], redirectTo: string = "/unauthorized") {
+export async function requireOrgRole(allowedOrgRoles: string[], redirectTo: string = "${defaultUnauthorized}") {
   const session = await requireSession();
   const sessionRole = "activeOrgRole" in session.session && typeof session.session.activeOrgRole === "string"
     ? session.session.activeOrgRole
@@ -294,7 +299,7 @@ export async function requireOrgRole(allowedOrgRoles: string[], redirectTo: stri
       content: `import { requireSession } from "./require-session";
 import { redirect } from "next/navigation";
 
-export async function requirePlan(requiredPlans: string[], redirectTo: string = "/pricing") {
+export async function requirePlan(requiredPlans: string[], redirectTo: string = "${defaultPricing}") {
   const session = await requireSession();
   const sessionPlan = "plan" in session.session && typeof session.session.plan === "string"
     ? session.session.plan
