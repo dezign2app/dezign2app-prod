@@ -55,6 +55,7 @@ export interface CanvasTypesNodeData {
   /** ID of the EntityNode this TypesNode was auto-generated from. Used for idempotent refresh. */
   sourceEntityId?: string;
   sourceEntityName?: string;
+  isEntitySchemas?: boolean;
   entityUpdatedAt?: number;
   entitySyncWarning?: {
     entityId: string;

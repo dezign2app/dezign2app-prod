@@ -218,26 +218,34 @@ export const TypesNode = ({
 
   const allNodes = useBackendCanvasStore((s) => s.nodes);
 
-  // Check if this TypesNode is derived from an EntityNode
+  // Check if this TypesNode is derived from EntityNode(s)
+  const isConsolidated =
+    data.isEntitySchemas ||
+    id === "types-entity-schemas" ||
+    data.label === "Entity Types";
+
   const isEntityDerived = Boolean(
-    data.sourceEntityId ||
+    isConsolidated ||
+      data.sourceEntityId ||
       data.types?.some((t) => t.id.startsWith("type-entity-")),
   );
 
-  const sourceEntityId =
-    data.sourceEntityId ||
-    data.types?.find((t) => t.id.startsWith("type-entity-"))?.id.replace("type-entity-", "");
+  const sourceEntityId = isConsolidated
+    ? undefined
+    : data.sourceEntityId ||
+      data.types?.find((t) => t.id.startsWith("type-entity-"))?.id.replace("type-entity-", "");
 
   const sourceEntityNode = useMemo(() => {
     if (!sourceEntityId) return undefined;
     return allNodes.find((n) => n.id === sourceEntityId && n.type === "entity");
   }, [allNodes, sourceEntityId]);
 
-  const sourceEntityName =
-    data.sourceEntityName ||
-    sourceEntityNode?.data?.tableName ||
-    sourceEntityNode?.data?.label ||
-    "Entity";
+  const sourceEntityName = isConsolidated
+    ? `All Entities (${rawTypesList.length})`
+    : data.sourceEntityName ||
+      sourceEntityNode?.data?.tableName ||
+      sourceEntityNode?.data?.label ||
+      "Entity";
 
   // Calculate downstream affected nodes (direct outgoing edges from this node)
   const downstreamAffectedNodes = useMemo(() => {

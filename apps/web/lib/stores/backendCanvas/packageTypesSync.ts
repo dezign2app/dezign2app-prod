@@ -509,12 +509,22 @@ export function createTypesNodeFromEntity(
   const pascalName = toPascalCase(tableName);
   const typeId = `type-entity-${entityNodeId}`;
 
-  // ── Idempotency: refresh if a linked TypesNode already exists ──────────────
-  const existing = store.nodes.find(
-    (n) => n.type === "types" && n.data.sourceEntityId === entityNodeId,
-  );
+  // ── Idempotency: find existing consolidated EntityTypes node or legacy entity node ──────────────
+  const existing =
+    store.nodes.find(
+      (n) =>
+        n.type === "types" &&
+        (n.id === "types-entity-schemas" ||
+          Boolean(n.data?.isEntitySchemas) ||
+          n.data?.label === "Entity Types"),
+    ) ||
+    store.nodes.find(
+      (n) => n.type === "types" && n.data.sourceEntityId === entityNodeId,
+    );
 
-  const existingType = (existing?.data.types ?? []).find((t) => t.id === typeId);
+  const existingType = (existing?.data.types ?? []).find(
+    (t) => t.id === typeId || t.name.toLowerCase() === pascalName.toLowerCase(),
+  );
   const fields = mapColumnsToTypeFields(
     columns,
     existingType?.fields ?? [],
@@ -545,6 +555,20 @@ export function createTypesNodeFromEntity(
       });
     }
 
+    const edgeExists = store.edges.some(
+      (e) => e.source === entityNodeId && e.target === existing.id,
+    );
+    if (!edgeExists) {
+      store.addEdge({
+        id: `edge-entity-types-${entityNodeId}-${existing.id}`,
+        source: entityNodeId,
+        target: existing.id,
+        targetHandle: "types-in",
+        type: "type-reference",
+        data: { label: "generates" },
+      });
+    }
+
     if (options?.openConfig !== false) {
       store.setActiveConfigItem({
         id: existing.id,
@@ -554,21 +578,21 @@ export function createTypesNodeFromEntity(
       });
     }
     if (!options?.silent) {
-      toast.success(`Refreshed "${typeItem.name}" types from entity "${tableName}"`);
+      toast.success(`Refreshed "${typeItem.name}" in Entity Types`);
     }
     return;
   }
 
-  // ── Create a new TypesNode positioned in Column 1 ─────────────────────────
-  const existingTypesCount = store.nodes.filter((n) => n.type === "types").length;
-  const newNodeId = `types-from-entity-${entityNodeId}-${now}`;
-  const pos = { x: 60, y: 60 + existingTypesCount * 260 };
+  // ── Create single EntityTypes node positioned in Column 1 ─────────────────
+  const newNodeId = "types-entity-schemas";
+  const pos = { x: 60, y: 60 };
 
   const newNodeData: BackendNode["data"] = {
-    label: `${pascalName} Types`,
+    label: "Entity Types",
     scope: "global",
+    isEntitySchemas: true,
     sourceEntityId: entityNodeId,
-    sourceEntityName: tableName,
+    sourceEntityName: "All Entities",
     entityUpdatedAt: now,
     types: [typeItem],
   };
@@ -602,7 +626,7 @@ export function createTypesNodeFromEntity(
 
   if (!options?.silent) {
     toast.success(
-      `Generated "${typeItem.name}" TypesNode from entity "${tableName}" (${fields.length} fields)`,
+      `Generated "${typeItem.name}" in Entity Types (${fields.length} fields)`,
     );
   }
 }

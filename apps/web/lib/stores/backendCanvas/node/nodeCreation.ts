@@ -311,20 +311,29 @@ export function prepareNodeForAddition(
   // 7. Auto-generate companion TypesNode for entity or redis_schema node if not skipped
   if (
     (node.type === "entity" || node.type === "redis_schema") &&
-    !node.data?.skipTypesNode &&
-    !currentState.nodes.some(
-      (n) => n.type === "types" && n.data?.sourceEntityId === node.id,
-    )
+    !node.data?.skipTypesNode
   ) {
-    const { typesNode, typesEdge } = buildCompanionTypesNodeAndEdge(
+    const companionRes = buildCompanionTypesNodeAndEdge(
       node,
       nextNodes,
       nextEdges,
     );
-    nextNodes = [...nextNodes, typesNode];
-    nextPendingNodes = [...nextPendingNodes, typesNode];
-    nextEdges = [...nextEdges, typesEdge];
-    nextPendingEdges = [...nextPendingEdges, typesEdge];
+    if (companionRes.isExistingNode) {
+      nextNodes = nextNodes.map((n) =>
+        n.id === companionRes.typesNode.id ? companionRes.typesNode : n,
+      );
+      nextPendingNodes = [
+        ...nextPendingNodes.filter((n) => n.id !== companionRes.typesNode.id),
+        companionRes.typesNode,
+      ];
+    } else {
+      nextNodes = [...nextNodes, companionRes.typesNode];
+      nextPendingNodes = [...nextPendingNodes, companionRes.typesNode];
+    }
+    if (!nextEdges.some((e) => e.id === companionRes.typesEdge.id)) {
+      nextEdges = [...nextEdges, companionRes.typesEdge];
+      nextPendingEdges = [...nextPendingEdges, companionRes.typesEdge];
+    }
   }
 
   return {

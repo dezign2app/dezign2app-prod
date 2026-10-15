@@ -63,6 +63,7 @@ export const typesNodeDataSchema = baseNodeDataSchema
     sourceEntityName: z.string().optional(),
     entityUpdatedAt: z.number().optional(),
     entitySyncWarning: entitySyncWarningSchema.optional(),
+    isEntitySchemas: z.boolean().optional(),
   })
   .passthrough();
 

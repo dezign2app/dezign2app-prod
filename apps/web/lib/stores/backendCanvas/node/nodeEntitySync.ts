@@ -150,6 +150,22 @@ export function isNodeDerivedFromEntity(
 ): boolean {
   if (node.type !== "types") return false;
 
+  // Consolidated node containing type from this entity
+  if (
+    node.id === "types-entity-schemas" ||
+    node.data?.isEntitySchemas ||
+    node.data?.label === "Entity Types"
+  ) {
+    return Boolean(
+      node.data?.types?.some(
+        (t) =>
+          t.id === `type-entity-${entityId}` ||
+          t.id.startsWith(`type-entity-${entityId}`) ||
+          t.description?.includes(entityId),
+      ),
+    );
+  }
+
   // Explicit sourceEntityId in data
   if (node.data?.sourceEntityId === entityId) return true;
 
@@ -237,17 +253,44 @@ export function resolveCascadeDeletedNodeIds(
 
       // 3. Associated TypesNode derived from any deleted entity / redis_schema node
       if (node.type === "types") {
-        let isDerivedFromDeletedEntity = false;
-        for (const deletedId of allIdsSet) {
-          if (isNodeDerivedFromEntity(node, deletedId, edges)) {
-            isDerivedFromDeletedEntity = true;
-            break;
+        const isConsolidated =
+          node.id === "types-entity-schemas" ||
+          Boolean(node.data?.isEntitySchemas) ||
+          node.data?.label === "Entity Types";
+
+        if (!isConsolidated) {
+          let isDerivedFromDeletedEntity = false;
+          for (const deletedId of allIdsSet) {
+            if (isNodeDerivedFromEntity(node, deletedId, edges)) {
+              isDerivedFromDeletedEntity = true;
+              break;
+            }
           }
-        }
-        if (isDerivedFromDeletedEntity) {
-          allIdsSet.add(node.id);
-          addedNew = true;
-          continue;
+          if (isDerivedFromDeletedEntity) {
+            allIdsSet.add(node.id);
+            addedNew = true;
+            continue;
+          }
+        } else {
+          // If all types in the consolidated Entity Types node are from deleted entities, delete the node
+          const currentTypes = node.data?.types || [];
+          const hasRemainingType = currentTypes.some((t) => {
+            for (const deletedId of allIdsSet) {
+              if (
+                t.id === `type-entity-${deletedId}` ||
+                t.id.startsWith(`type-entity-${deletedId}`) ||
+                t.description?.includes(deletedId)
+              ) {
+                return false;
+              }
+            }
+            return true;
+          });
+          if (!hasRemainingType) {
+            allIdsSet.add(node.id);
+            addedNew = true;
+            continue;
+          }
         }
 
         // 4. Extended TypesNode extending a deleted TypesNode
@@ -473,21 +516,31 @@ export function syncEntityDerivedTypes(
       ? currentTypes.map((t) => (t.id === updatedTypeItem.id ? updatedTypeItem : t))
       : [...currentTypes, updatedTypeItem];
 
+    const isConsolidated =
+      node.id === "types-entity-schemas" ||
+      Boolean(node.data?.isEntitySchemas) ||
+      node.data?.label === "Entity Types";
+
     // Update node label if it was default/auto-generated
     const currentLabel = node.data.label || "";
     const shouldUpdateLabel =
       !currentLabel ||
       currentLabel.endsWith(" Types") ||
       currentLabel === "Types";
-    const nextLabel = shouldUpdateLabel ? `${pascalName} Types` : currentLabel;
+    const nextLabel = isConsolidated
+      ? (node.data.label || "Entity Types")
+      : shouldUpdateLabel
+        ? `${pascalName} Types`
+        : currentLabel;
 
     const updatedNode: BackendNode = {
       ...node,
       data: {
         ...node.data,
         label: nextLabel,
-        sourceEntityId: entityId,
-        sourceEntityName: tableName,
+        isEntitySchemas: isConsolidated ? true : node.data.isEntitySchemas,
+        sourceEntityId: isConsolidated ? node.data.sourceEntityId : entityId,
+        sourceEntityName: isConsolidated ? "All Entities" : tableName,
         entityUpdatedAt: Date.now(),
         entitySyncWarning: affectedSummary,
         types: nextTypes,
@@ -623,11 +676,12 @@ export function syncEntityRenameReferences(
 export interface CompanionTypesResult {
   typesNode: BackendNode;
   typesEdge: BackendEdge;
+  isExistingNode?: boolean;
 }
 
 /**
- * Builds a companion TypesNode and a "generates" type-reference edge for an entity or redis_schema node.
- * Automatically aligns the TypesNode in Column 1 (x: 60) with vertical stacking based on existing types nodes.
+ * Builds or updates the single consolidated EntityTypes TypesNode and a "generates" type-reference edge.
+ * Automatically aligns the EntityTypes node in Column 1 (x: 60, y: 60).
  */
 export function buildCompanionTypesNodeAndEdge(
   entityNode: BackendNode,
@@ -659,17 +713,74 @@ export function buildCompanionTypesNodeAndEdge(
     fields,
   };
 
-  const typesNodeId = `types-from-entity-${entityNode.id}-${now}`;
+  const existingEntityTypesNode = existingNodes.find(
+    (n) =>
+      n.type === "types" &&
+      (n.id === "types-entity-schemas" ||
+        Boolean(n.data?.isEntitySchemas) ||
+        n.data?.label === "Entity Types"),
+  );
 
-  const existingTypesCount = existingNodes.filter(
-    (n) => n.type === "types",
-  ).length;
+  if (existingEntityTypesNode) {
+    const currentTypes = existingEntityTypesNode.data?.types ?? [];
+    const typeExists = currentTypes.some(
+      (t) => t.id === typeId || t.name.toLowerCase() === pascalName.toLowerCase(),
+    );
+    const updatedTypes = typeExists
+      ? currentTypes.map((t) =>
+          t.id === typeId || t.name.toLowerCase() === pascalName.toLowerCase()
+            ? { ...t, ...typeItem, id: t.id || typeId }
+            : t,
+        )
+      : [...currentTypes, typeItem];
 
-  const typesPos =
-    customPosition ?? {
-      x: 60,
-      y: 60 + existingTypesCount * 260,
+    const updatedNode: BackendNode = {
+      ...existingEntityTypesNode,
+      data: {
+        ...existingEntityTypesNode.data,
+        label: "Entity Types",
+        isEntitySchemas: true,
+        sourceEntityName: "All Entities",
+        entityUpdatedAt: now,
+        types: updatedTypes,
+      },
     };
+
+    const existingEdge = existingEdges.find(
+      (e) =>
+        e.source === entityNode.id && e.target === existingEntityTypesNode.id,
+    );
+
+    if (existingEdge) {
+      return {
+        typesNode: updatedNode,
+        typesEdge: existingEdge,
+        isExistingNode: true,
+      };
+    }
+
+    const lastEdgeIdx = getLastIndex(existingEdges);
+    const typesEdgeIdx = generateKeyBetween(lastEdgeIdx, null);
+    const typesEdgeId = `edge-entity-types-${entityNode.id}-${existingEntityTypesNode.id}`;
+    const typesEdge: BackendEdge = {
+      id: typesEdgeId,
+      source: entityNode.id,
+      target: existingEntityTypesNode.id,
+      targetHandle: "types-in",
+      type: "type-reference",
+      fractionalIndex: typesEdgeIdx,
+      data: { label: "generates" },
+    };
+
+    return {
+      typesNode: updatedNode,
+      typesEdge,
+      isExistingNode: true,
+    };
+  }
+
+  const typesNodeId = "types-entity-schemas";
+  const typesPos = customPosition ?? { x: 60, y: 60 };
 
   const lastNodeIdx = getLastIndex(existingNodes);
   const typesIndex = generateKeyBetween(lastNodeIdx, null);
@@ -681,10 +792,11 @@ export function buildCompanionTypesNodeAndEdge(
     fractionalIndex: typesIndex,
     selected: false,
     data: {
-      label: `${pascalName} Types`,
+      label: "Entity Types",
       scope: "global",
+      isEntitySchemas: true,
       sourceEntityId: entityNode.id,
-      sourceEntityName: tableName,
+      sourceEntityName: "All Entities",
       entityUpdatedAt: now,
       types: [typeItem],
     },
@@ -704,5 +816,5 @@ export function buildCompanionTypesNodeAndEdge(
     data: { label: "generates" },
   };
 
-  return { typesNode, typesEdge };
+  return { typesNode, typesEdge, isExistingNode: false };
 }

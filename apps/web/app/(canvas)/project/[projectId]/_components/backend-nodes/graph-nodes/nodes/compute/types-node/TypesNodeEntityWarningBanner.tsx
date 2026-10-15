@@ -88,7 +88,11 @@ export const TypesNodeEntityWarningBanner: React.FC<
       <div className="flex items-center gap-1 text-[10px] text-amber-200/90 leading-tight">
         <Database size={10} className="text-amber-400 shrink-0" />
         <span className="truncate">
-          Source table: <strong>{sourceEntityName || "Entity"}</strong>
+          {sourceEntityName?.startsWith("All Entities") ? (
+            <>Source: <strong>{sourceEntityName}</strong></>
+          ) : (
+            <>Source table: <strong>{sourceEntityName || "Entity"}</strong></>
+          )}
         </span>
         {onViewEntity && (
           <button

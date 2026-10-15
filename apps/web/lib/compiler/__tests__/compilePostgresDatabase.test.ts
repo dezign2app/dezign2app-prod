@@ -162,4 +162,15 @@ describe("compilePostgresDatabase", () => {
     expect(code).toContain("return row;");
     expect(code).toContain("return res.rows[0] || null;");
   });
+
+  it("should provide prepare compatibility on postgres connection pool for better-sqlite3 style callers", () => {
+    const result = compilePostgresDatabase([orderEntity], []);
+    const conn = result.files.find((f) => f.filename === "connection.ts");
+    expect(conn).toBeDefined();
+    const code = conn!.content;
+    expect(code).toContain("export interface PreparedStatement");
+    expect(code).toContain('declare module "pg"');
+    expect(code).toContain(".prepare = function prepare");
+    expect(code).toContain("export const db = pool;");
+  });
 });

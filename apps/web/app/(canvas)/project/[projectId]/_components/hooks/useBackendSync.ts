@@ -21,6 +21,8 @@ import {
 import { BackendCanvasAdapter } from "@/lib/canvas-adapters/backendAdapter";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { buildCompanionTypesNodeAndEdge } from "@/lib/stores/backendCanvas/node";
+import { generateKeyBetween } from "fractional-indexing";
+import { getLastIndex } from "@/lib/stores/backendCanvas/utils";
 import { z } from "zod";
 import {
   endpointSchema,
@@ -134,7 +136,7 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
     );
 
     // Ensure parent nodes appear before child nodes for React Flow
-    const nodesToSet: BackendNode[] = [];
+    let nodesToSet: BackendNode[] = [];
     const addedIds = new Set<string>();
 
     const addNode = (node: BackendNode) => {
@@ -239,7 +241,7 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
     // Heal FK edges that were saved without column handles (e.g. created by AI).
     // Without handles, ReactFlow falls back to the first handle it finds on the node
     // which is `database-entity-target` at the top — making edges point to the card head.
-    const healedEdges = validEdges.map((edge) => {
+    let healedEdges = validEdges.map((edge) => {
       if (
         edge.type !== "foreign-key" ||
         (edge.sourceHandle && edge.targetHandle)
@@ -388,37 +390,147 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
       });
     }
 
-    // Auto-reconcile missing companion TypesNodes for entity & redis_schema tables
+    // Auto-reconcile and consolidate companion TypesNodes into a single EntityTypes node
     const entityNodes = nodesToSet.filter(
       (n) =>
         (n.type === "entity" || n.type === "redis_schema") &&
         !n.data?.skipTypesNode,
     );
-    const existingTypeNodeSourceIds = new Set(
-      nodesToSet
-        .filter((n) => n.type === "types" && n.data?.sourceEntityId)
-        .map((n) => n.data!.sourceEntityId),
+
+    // Identify legacy individual entity types nodes to merge and eliminate
+    const legacyEntityTypesNodes = nodesToSet.filter(
+      (n) =>
+        n.type === "types" &&
+        n.id !== "types-entity-schemas" &&
+        !n.data?.isEntitySchemas &&
+        !n.data?.isExtended &&
+        !n.data?.isPackageNode &&
+        (Boolean(n.data?.sourceEntityId) ||
+          n.id.startsWith("types-from-entity-") ||
+          n.data?.types?.some((t) => t.id.startsWith("type-entity-"))),
     );
+
+    let consolidatedNode = nodesToSet.find(
+      (n) =>
+        n.type === "types" &&
+        (n.id === "types-entity-schemas" ||
+          Boolean(n.data?.isEntitySchemas) ||
+          n.data?.label === "Entity Types"),
+    );
+
+    if (legacyEntityTypesNodes.length > 0) {
+      const mergedTypes = [...(consolidatedNode?.data?.types || [])];
+      const legacyNodeIds = new Set(legacyEntityTypesNodes.map((n) => n.id));
+
+      legacyEntityTypesNodes.forEach((legNode) => {
+        (legNode.data?.types || []).forEach((t) => {
+          if (!mergedTypes.some((existing) => existing.id === t.id || existing.name === t.name)) {
+            mergedTypes.push(t);
+          }
+        });
+      });
+
+      const firstLegacyNode = legacyEntityTypesNodes[0];
+      const fallbackIndex = generateKeyBetween(getLastIndex(nodesToSet), null);
+      const fractionalIndex = firstLegacyNode ? firstLegacyNode.fractionalIndex : fallbackIndex;
+      const initialPosition = firstLegacyNode ? firstLegacyNode.position : { x: 60, y: 60 };
+
+      if (!consolidatedNode) {
+        consolidatedNode = {
+          id: "types-entity-schemas",
+          type: "types",
+          position: initialPosition,
+          fractionalIndex,
+          data: {
+            label: "Entity Types",
+            scope: "global",
+            isEntitySchemas: true,
+            sourceEntityName: "All Entities",
+            entityUpdatedAt: Date.now(),
+            types: mergedTypes,
+          },
+        };
+        nodesToSet.push(consolidatedNode);
+      } else {
+        consolidatedNode = {
+          ...consolidatedNode,
+          data: {
+            ...consolidatedNode.data,
+            label: "Entity Types",
+            isEntitySchemas: true,
+            sourceEntityName: "All Entities",
+            types: mergedTypes,
+          },
+        };
+        const currentConsolidated = consolidatedNode;
+        nodesToSet = nodesToSet.map((n) =>
+          n.id === currentConsolidated.id ? currentConsolidated : n,
+        );
+      }
+
+      const consolidatedId = consolidatedNode.id;
+
+      const droppedEdgeIds = healedEdges
+        .filter((edge) => legacyNodeIds.has(edge.target))
+        .map((e) => e.id);
+
+      // Re-route outgoing edges from legacy nodes to consolidated node, and drop incoming 'generates' to legacy nodes
+      healedEdges = healedEdges
+        .map((edge) => {
+          if (legacyNodeIds.has(edge.source)) {
+            return { ...edge, source: consolidatedId };
+          }
+          return edge;
+        })
+        .filter((edge) => !legacyNodeIds.has(edge.target));
+
+      // Remove legacy nodes from state and record deletion in pendingNodeRemovals
+      nodesToSet = nodesToSet.filter((n) => !legacyNodeIds.has(n.id));
+      useBackendCanvasStore.setState((s) => ({
+        pendingNodeRemovals: [
+          ...s.pendingNodeRemovals,
+          ...Array.from(legacyNodeIds),
+        ],
+        pendingEdgeRemovals: [
+          ...s.pendingEdgeRemovals,
+          ...droppedEdgeIds,
+        ],
+      }));
+    }
 
     const newlyCreatedTypesNodes: BackendNode[] = [];
     const newlyCreatedTypesEdges: BackendEdge[] = [];
 
     entityNodes.forEach((entity) => {
-      if (!existingTypeNodeSourceIds.has(entity.id)) {
-        const { typesNode, typesEdge } = buildCompanionTypesNodeAndEdge(
-          entity,
-          [...nodesToSet, ...newlyCreatedTypesNodes],
-          [...healedEdges, ...newlyCreatedTypesEdges],
-        );
+      const { typesNode, typesEdge, isExistingNode } = buildCompanionTypesNodeAndEdge(
+        entity,
+        [...nodesToSet, ...newlyCreatedTypesNodes],
+        [...healedEdges, ...newlyCreatedTypesEdges],
+      );
+
+      if (isExistingNode) {
+        nodesToSet = nodesToSet.map((n) => (n.id === typesNode.id ? typesNode : n));
+        const pendingIdx = newlyCreatedTypesNodes.findIndex((n) => n.id === typesNode.id);
+        if (pendingIdx >= 0) {
+          newlyCreatedTypesNodes[pendingIdx] = typesNode;
+        } else {
+          newlyCreatedTypesNodes.push(typesNode);
+        }
+      } else {
+        nodesToSet.push(typesNode);
         newlyCreatedTypesNodes.push(typesNode);
+      }
+
+      if (
+        !healedEdges.some((e) => e.id === typesEdge.id) &&
+        !newlyCreatedTypesEdges.some((e) => e.id === typesEdge.id)
+      ) {
         newlyCreatedTypesEdges.push(typesEdge);
-        existingTypeNodeSourceIds.add(entity.id);
+        healedEdges.push(typesEdge);
       }
     });
 
     if (newlyCreatedTypesNodes.length > 0) {
-      nodesToSet.push(...newlyCreatedTypesNodes);
-      healedEdges.push(...newlyCreatedTypesEdges);
       useBackendCanvasStore.setState((s) => ({
         pendingNodeUpserts: [...s.pendingNodeUpserts, ...newlyCreatedTypesNodes],
         pendingEdgeUpserts: [...s.pendingEdgeUpserts, ...newlyCreatedTypesEdges],

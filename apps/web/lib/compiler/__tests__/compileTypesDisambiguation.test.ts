@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { BackendNode } from "@/types/canvas";
+import { Endpoint } from "@workspace/canvas/types";
 import { generateTypesPackage } from "../generators/typesGenerator";
 import { generateZustandStores } from "../webClients/nextjs/v16/storeGenerators";
 
@@ -154,5 +155,86 @@ describe("compileTypesDisambiguation", () => {
     expect(indexFile!.content).toContain('export * from "./useConversationStore";');
     expect(indexFile!.content).toContain('export { default as useConversationStore } from "./useConversationStore";');
     expect(indexFile!.content).toContain('export { useConversationStore as useConversationsStore } from "./useConversationStore";');
+  });
+
+  it("does not generate duplicate identifier collisions when an entity and service share the same name (conversations)", () => {
+    const entityNode: BackendNode = {
+      id: "entity-conversations",
+      type: "entity",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "conversations",
+        columns: [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "title", type: "string" },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "srv-conversations",
+      type: "service",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "conversations",
+      },
+    };
+
+    const endpoint: Endpoint & { nodeId: string } = {
+      id: "ep-get-conversations",
+      nodeId: "srv-conversations",
+      name: "/conversations",
+      type: "GET",
+      summary: "Get conversations",
+    };
+
+    const typesNode: BackendNode = {
+      id: "types-entity-schemas",
+      type: "types",
+      position: { x: 100, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Entity Types",
+        isEntitySchemas: true,
+        types: [
+          {
+            id: "type-entity-entity-conversations",
+            name: "Conversations",
+            kind: "type",
+            fields: [
+              { id: "f1", name: "id", type: "string", required: true },
+              { id: "f2", name: "title", type: "string", required: true },
+            ],
+          },
+        ],
+      },
+    };
+
+    const files = generateTypesPackage(
+      [entityNode, serviceNode, typesNode],
+      [endpoint],
+      [],
+      [{ id: "srv-conversations", name: "conversations", folderName: "conversations" }],
+      [],
+    );
+
+    const indexFile = files.find((f) => f.filename === "src/index.ts");
+    expect(indexFile).toBeDefined();
+
+    // Service namespace is exported with Service suffix
+    expect(indexFile!.content).toContain('export * as ConversationsService from "./conversations";');
+
+    // Entities are exported
+    expect(indexFile!.content).toContain('export * from "./entities";');
+
+    // Auto-generated entity schemas are omitted from custom.ts, so no clashing export type { Conversations }
+    expect(indexFile!.content).not.toMatch(/export\s+type\s*\{\s*Conversations\s*\}\s*from\s*"\.\/custom"/);
+
+    // Ensure Conversations is not defined twice as a top-level exported symbol
+    const occurrences = (indexFile!.content.match(/\bConversations\b/g) || []).length;
+    // Only "ConversationsService" should have Conversations in it in index.ts, or at most from entities barrel
+    expect(indexFile!.content).not.toContain("export * as Conversations from");
   });
 });
