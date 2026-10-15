@@ -19,6 +19,7 @@ import {
   Layers,
 } from "lucide-react";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
+import { useTestUsersStore } from "../test-users/useTestUsersStore";
 import { toast } from "sonner";
 import sdk from "@stackblitz/sdk";
 import {
@@ -48,6 +49,7 @@ export function CompiledCodeViewer({
   const events = useBackendCanvasStore((s) => s.events);
   const edges = useBackendCanvasStore((s) => s.edges);
   const testCases = useSimulationStore((s) => s.testCases);
+  const personas = useTestUsersStore((s) => s.personas);
 
   const [selectedFilename, setSelectedFilename] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -102,8 +104,9 @@ export function CompiledCodeViewer({
         edges,
         testCases,
         formattedProjectName,
+        personas,
       ),
-    [nodes, endpoints, events, edges, testCases, formattedProjectName],
+    [nodes, endpoints, events, edges, testCases, formattedProjectName, personas],
   );
 
   const files = overrideFiles || monorepoResult.files;

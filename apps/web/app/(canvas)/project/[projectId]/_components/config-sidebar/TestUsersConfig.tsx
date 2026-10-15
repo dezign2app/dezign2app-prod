@@ -24,9 +24,11 @@ import {
   Table2,
   Sparkles,
   Link2,
-  ChevronDown,
-  ChevronUp,
   ShieldCheck,
+  RefreshCw,
+  Terminal,
+  HelpCircle,
+  ExternalLink,
 } from "lucide-react";
 import { useTestUsersStore } from "../test-users/useTestUsersStore";
 import {
@@ -35,6 +37,15 @@ import {
   generateRecordId,
   generatePersonaId,
 } from "../test-users/types";
+import {
+  generateRealBearerJwtSync,
+  generateRealSessionToken,
+  isRealJwt,
+  inspectJwt,
+  formatBearerHeader,
+  formatCurlExample,
+  DEFAULT_AUTH_SECRET,
+} from "../test-users/tokenGenerator";
 import { toast } from "sonner";
 import { cn } from "@workspace/ui/lib/utils";
 
@@ -63,8 +74,23 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
   const addPersona = useTestUsersStore((s) => s.addPersona);
   const updatePersona = useTestUsersStore((s) => s.updatePersona);
   const deletePersona = useTestUsersStore((s) => s.deletePersona);
+  const regeneratePersonaToken = useTestUsersStore((s) => s.regeneratePersonaToken);
+  const upgradeAllToRealTokens = useTestUsersStore((s) => s.upgradeAllToRealTokens);
 
   const allNodes = useBackendCanvasStore((s) => s.nodes);
+
+  // Discover Auth node secret key if configured
+  const authNode = useMemo(
+    () => allNodes.find((n) => n.type === "auth"),
+    [allNodes],
+  );
+  const authSecret = (authNode?.data?.secretKey as string) || DEFAULT_AUTH_SECRET;
+
+  // Check if any personas have legacy placeholder tokens
+  const hasLegacyTokens = useMemo(
+    () => personas.some((p) => !isRealJwt(p.activeAuthToken || "")),
+    [personas],
+  );
 
   // 1. Discover all databases
   const databaseNodes = useMemo(() => {
@@ -170,6 +196,8 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
 
   const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
   const [copiedRecordId, setCopiedRecordId] = useState<string | null>(null);
+  const [copiedCurlId, setCopiedCurlId] = useState<string | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
 
   // Open Edit form
   const handleStartEdit = (persona: TestUserPersona) => {
@@ -181,17 +209,27 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
     setFormRecords(persona.records);
   };
 
-  // Open Create form
+  // Open Create form with real HS256 JWT
   const handleStartCreate = () => {
     const userId = generateRecordId("user");
     const sessId = generateRecordId("session");
-    const token = `token_${Math.random().toString(36).substring(2, 10)}`;
+    const defaultEmail = "test@example.com";
+    const defaultRole = "user";
+
+    const realJwt = generateRealBearerJwtSync({
+      userId,
+      name: "Test Persona",
+      email: defaultEmail,
+      role: defaultRole,
+      sessionId: sessId,
+      secret: authSecret,
+    });
 
     setEditingPersonaId(null);
     setIsCreating(true);
     setFormName("");
     setFormDescription("");
-    setFormActiveToken(token);
+    setFormActiveToken(realJwt);
     setFormRecords([
       {
         id: userId,
@@ -200,8 +238,8 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
         fields: {
           id: userId,
           name: "Test Persona",
-          email: "test@example.com",
-          role: "user",
+          email: defaultEmail,
+          role: defaultRole,
         },
       },
       {
@@ -211,7 +249,7 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
         fields: {
           id: sessId,
           userId: userId,
-          token: token,
+          token: realJwt,
           expiresAt: "2099-01-01T00:00:00.000Z",
         },
       },
@@ -224,17 +262,102 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
     setIsCreating(false);
   };
 
+  // Generate a fresh Real JWT for the current form
+  const handleGenerateFreshJwtForForm = () => {
+    const userRec =
+      formRecords.find((r) => r.tableName.toLowerCase() === "user") || formRecords[0];
+    const userId = userRec?.fields?.id ? String(userRec.fields.id) : generateRecordId("user");
+    const email = userRec?.fields?.email
+      ? String(userRec.fields.email)
+      : `${(formName || "user").toLowerCase().replace(/\s+/g, ".")}@example.com`;
+    const role = userRec?.fields?.role
+      ? String(userRec.fields.role)
+      : formName.toLowerCase().includes("admin")
+      ? "admin"
+      : "user";
+    const sessRec = formRecords.find((r) => r.tableName.toLowerCase() === "session");
+    const sessId = sessRec?.fields?.id ? String(sessRec.fields.id) : `sess_${userId}`;
+
+    const freshJwt = generateRealBearerJwtSync({
+      userId,
+      name: formName || "Test Persona",
+      email,
+      role,
+      sessionId: sessId,
+      secret: authSecret,
+    });
+
+    setFormActiveToken(freshJwt);
+
+    // Sync into session record
+    setFormRecords((prev) =>
+      prev.map((r) =>
+        r.tableName.toLowerCase() === "session"
+          ? { ...r, fields: { ...r.fields, token: freshJwt } }
+          : r,
+      ),
+    );
+
+    toast.success("Generated Real HS256 Bearer JWT", {
+      description: `Signed with sub: ${userId}, role: ${role}`,
+    });
+  };
+
+  // Generate a high-entropy session token
+  const handleGenerateSessionTokenForForm = () => {
+    const sessToken = generateRealSessionToken();
+    setFormActiveToken(sessToken);
+
+    setFormRecords((prev) =>
+      prev.map((r) =>
+        r.tableName.toLowerCase() === "session"
+          ? { ...r, fields: { ...r.fields, token: sessToken } }
+          : r,
+      ),
+    );
+
+    toast.success("Generated Better Auth Session Token", {
+      description: "64-character cryptographic token linked to session table",
+    });
+  };
+
   // Copy bearer header
   const handleCopyHeader = (persona: TestUserPersona) => {
     if (!persona.activeAuthToken) {
       toast.error("No active token found for this persona");
       return;
     }
-    const headerVal = `Bearer ${persona.activeAuthToken}`;
+    const headerVal = formatBearerHeader(persona.activeAuthToken);
     navigator.clipboard.writeText(headerVal);
     setCopiedTokenId(persona.id);
-    toast.success(`Copied: Authorization: ${headerVal}`);
+    toast.success(`Copied: Authorization: ${headerVal.slice(0, 36)}...`, {
+      description: "Paste into Postman or curl Authorization headers",
+    });
     setTimeout(() => setCopiedTokenId(null), 2000);
+  };
+
+  // Copy raw token only
+  const handleCopyRawToken = (token?: string) => {
+    if (!token) return;
+    const clean = token.replace(/^Bearer\s+/i, "").trim();
+    navigator.clipboard.writeText(clean);
+    toast.success("Copied token string to clipboard");
+  };
+
+  // Copy cURL command example
+  const handleCopyCurl = (persona: TestUserPersona) => {
+    if (!persona.activeAuthToken) return;
+    const curlSnippet = formatCurlExample(
+      "GET",
+      "http://localhost:8080/api/endpoint",
+      persona.activeAuthToken,
+    );
+    navigator.clipboard.writeText(curlSnippet);
+    setCopiedCurlId(persona.id);
+    toast.success("Copied cURL command to clipboard", {
+      description: "Ready to run in terminal or import into Postman",
+    });
+    setTimeout(() => setCopiedCurlId(null), 2000);
   };
 
   // Copy record ID
@@ -306,6 +429,10 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
         fields: {
           ...r.fields,
           id: r.fields.id || r.id,
+          // ensure session table record token always matches activeAuthToken
+          ...(r.tableName.toLowerCase() === "session" && formActiveToken.trim()
+            ? { token: formActiveToken.trim() }
+            : {}),
         },
       })),
       createdAt: new Date().toISOString(),
@@ -333,58 +460,135 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
 
   const showEditorForm = isCreating || editingPersonaId !== null;
 
+  // Live inspection of form token
+  const inspectedFormToken = useMemo(() => {
+    return inspectJwt(formActiveToken);
+  }, [formActiveToken]);
+
   return (
     <div className="flex flex-col gap-6 mt-2 pb-12 text-foreground font-sans">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-secondary text-foreground border border-border/60">
+          <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-500 border border-indigo-500/25">
             <Users className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-semibold text-foreground">
-                Test Users & Fixtures
+                Test Users & Real Bearer Tokens
               </h2>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-secondary text-muted-foreground border border-border/50">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
                 {personas.length} Personas
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Define mock identities, seed multi-table records, and link foreign keys for endpoint testing.
+              RFC 7519 signed JWT tokens & Better Auth database fixtures ready for Postman, curl, and endpoint testing.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Overview Status Card */}
-      <div className="p-4 rounded-xl bg-card border border-border/60 shadow-sm flex flex-col gap-2.5">
+      {/* Upgrade Legacy Tokens Banner if needed */}
+      {hasLegacyTokens && (
+        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+            <span className="text-amber-700 dark:text-amber-300">
+              Legacy placeholder tokens detected. Upgrade all personas to real HS256 signed JWTs for Postman compatibility.
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              upgradeAllToRealTokens(authSecret);
+              toast.success("Upgraded all personas to real HS256 Bearer JWTs!");
+            }}
+            className="h-7 text-xs px-2.5 shrink-0 bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border-amber-500/30 gap-1.5"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>Upgrade to Real JWTs</span>
+          </Button>
+        </div>
+      )}
+
+      {/* Status & Postman Ready Card */}
+      <div className="p-4 rounded-xl bg-card border border-border/60 shadow-sm flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Database Fixture Sync</span>
+            <span>Postman & External API Testing Ready</span>
           </div>
-          <span className="text-[11px] font-mono text-muted-foreground">
-            @workspace/db
+          <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+            HS256 JWT + Session DB
           </span>
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Configured test personas are automatically seeded into SQLite (<code className="text-[11px] font-mono bg-secondary/80 px-1 py-0.5 rounded">user</code> & <code className="text-[11px] font-mono bg-secondary/80 px-1 py-0.5 rounded">session</code> tables) and exposed in Endpoint Testing.
+          Every persona generates a cryptographically signed Bearer JWT token (<code className="text-[11px] font-mono bg-secondary/80 px-1 py-0.5 rounded">Authorization: Bearer &lt;jwt&gt;</code>) and is seeded into the database (<code className="text-[11px] font-mono bg-secondary/80 px-1 py-0.5 rounded">user</code> & <code className="text-[11px] font-mono bg-secondary/80 px-1 py-0.5 rounded">session</code> tables).
         </p>
+
+        <div className="pt-2 border-t border-border/40 flex items-center justify-between flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setShowGuide(!showGuide)}
+            className="text-[11px] text-indigo-500 hover:text-indigo-400 flex items-center gap-1 font-medium cursor-pointer"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span>{showGuide ? "Hide Postman Instructions" : "How to test on Postman / cURL"}</span>
+          </button>
+
+          {personas[0] && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleCopyHeader(personas[0]!)}
+              className="h-7 text-xs px-2.5 bg-background border-border gap-1.5 font-medium"
+            >
+              {copiedTokenId === personas[0]!.id ? (
+                <Check className="w-3 h-3 text-emerald-500" />
+              ) : (
+                <Copy className="w-3 h-3" />
+              )}
+              <span>Copy {personas[0]!.name} Bearer</span>
+            </Button>
+          )}
+        </div>
+
+        {/* Collapsible Quick Guide */}
+        {showGuide && (
+          <div className="p-3 rounded-lg bg-secondary/40 border border-border/50 text-xs flex flex-col gap-2 font-mono text-[11px]">
+            <div className="font-semibold text-foreground flex items-center gap-1.5 font-sans">
+              <Terminal className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Using Real Bearer Tokens Externally:</span>
+            </div>
+            <div className="space-y-1.5 text-muted-foreground">
+              <div>
+                <strong className="text-foreground">Option 1 (Headers):</strong> Add header <code className="text-foreground bg-background px-1 py-0.5 rounded">Authorization</code> with value <code className="text-foreground bg-background px-1 py-0.5 rounded">Bearer eyJhbGci...</code>
+              </div>
+              <div>
+                <strong className="text-foreground">Option 2 (Postman Auth Tab):</strong> Select <span className="text-foreground">Type: Bearer Token</span> and paste the token string.
+              </div>
+              <div>
+                <strong className="text-foreground">FastAPI & Better Auth:</strong> The token validates statelessly via HS256 signature and matches database session records.
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Actions Toolbar */}
       {!showEditorForm && (
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Active Personas ({personas.length})
+            Configured Personas ({personas.length})
           </span>
 
           <Button
             size="sm"
             variant="secondary"
             onClick={handleStartCreate}
-            className="h-8 text-xs px-3 bg-secondary/80 hover:bg-secondary text-foreground border border-border/60 gap-1.5 font-medium"
+            className="h-8 text-xs px-3 bg-secondary/80 hover:bg-secondary text-foreground border border-border/60 gap-1.5 font-medium cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Test User</span>
@@ -397,7 +601,7 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
         <div className="flex flex-col gap-4 p-4 rounded-xl border border-border/70 bg-card/60 shadow-sm">
           <div className="flex items-center justify-between border-b border-border/50 pb-3">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-muted-foreground" />
+              <Sparkles className="w-4 h-4 text-indigo-500" />
               <span className="text-xs font-semibold text-foreground">
                 {isCreating ? "Create Test User Persona" : "Edit Test User Persona"}
               </span>
@@ -425,17 +629,95 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-medium">Active Bearer Token (for Endpoint Testing)</Label>
+            {/* Active Bearer Token Field with Generators */}
+            <div className="flex flex-col gap-2 p-3 rounded-lg bg-background/50 border border-border/60">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <KeyRound className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Active Bearer Token (for Postman & Testing)</span>
+                </Label>
+
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleGenerateFreshJwtForForm}
+                    className="h-6 text-[10.5px] px-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 gap-1 font-medium cursor-pointer"
+                    title="Generate a signed RFC 7519 HS256 JWT using persona details and auth secret"
+                  >
+                    <Sparkles className="w-3 h-3 text-indigo-500" />
+                    <span>Generate Real JWT</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleGenerateSessionTokenForForm}
+                    className="h-6 text-[10.5px] px-1.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                    title="Generate 64-character Better Auth session token"
+                  >
+                    <span>Session Token</span>
+                  </Button>
+                </div>
+              </div>
+
               <div className="relative flex items-center">
-                <KeyRound className="w-3.5 h-3.5 absolute left-2.5 text-muted-foreground" />
                 <Input
                   value={formActiveToken}
-                  onChange={(e) => setFormActiveToken(e.target.value)}
-                  placeholder="e.g. fake_admin_token"
-                  className="h-8 text-xs pl-8 font-mono bg-background"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormActiveToken(val);
+                    // Sync into session record if present
+                    setFormRecords((prev) =>
+                      prev.map((r) =>
+                        r.tableName.toLowerCase() === "session"
+                          ? { ...r, fields: { ...r.fields, token: val } }
+                          : r,
+                      ),
+                    );
+                  }}
+                  placeholder="Paste or generate real bearer token (eyJ...)"
+                  className="h-8 text-xs font-mono bg-background pr-20"
                 />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleCopyRawToken(formActiveToken)}
+                  className="absolute right-1 h-6 text-[10.5px] px-2 text-muted-foreground hover:text-foreground gap-1"
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>Copy</span>
+                </Button>
               </div>
+
+              {/* Decoded JWT Claims Inspector Preview */}
+              {inspectedFormToken && (
+                <div className="p-2.5 rounded bg-secondary/30 border border-border/40 text-[10.5px] font-mono flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Valid HS256 JWT Signature</span>
+                    </span>
+                    <span>Expires: {inspectedFormToken.expiresAtFormatted}</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-border/30">
+                    <span className="text-muted-foreground">
+                      sub: <strong className="text-foreground">{String(inspectedFormToken.payload.sub || "")}</strong>
+                    </span>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="text-muted-foreground">
+                      email: <strong className="text-foreground">{String(inspectedFormToken.payload.email || "")}</strong>
+                    </span>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="text-muted-foreground">
+                      role: <strong className="text-foreground uppercase">{String(inspectedFormToken.payload.role || "user")}</strong>
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -507,7 +789,7 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
                         </Select>
                       </div>
 
-                      {/* Table Selector (Filtered) */}
+                      {/* Table Selector */}
                       <div className="flex items-center gap-1">
                         <Table2 className="w-3.5 h-3.5 text-muted-foreground" />
                         <Select
@@ -520,7 +802,12 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
                                 ...copy[recIdx]!,
                                 id: newId,
                                 tableName: val,
-                                fields: { id: newId },
+                                fields: {
+                                  id: newId,
+                                  ...(val.toLowerCase() === "session" && formActiveToken
+                                    ? { token: formActiveToken }
+                                    : {}),
+                                },
                               };
                               return copy;
                             });
@@ -638,7 +925,7 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
                                   col.name === "role"
                                     ? "admin / user / manager"
                                     : col.name === "token"
-                                    ? "token_val"
+                                    ? "Bearer token or session token"
                                     : col.defaultValue || `Enter ${col.name}`
                                 }
                                 className="h-7 text-xs bg-background"
@@ -676,120 +963,211 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
       ) : (
         /* List of Configured Personas */
         <div className="flex flex-col gap-3">
-          {personas.map((persona) => (
-            <div
-              key={persona.id}
-              className="flex flex-col gap-3 p-4 rounded-xl border border-border/60 bg-card/40 shadow-sm hover:border-border/80 transition-colors"
-            >
-              {/* Top Bar */}
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-xs text-foreground">
-                      {persona.name}
-                    </span>
-                    {persona.activeAuthToken && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        <KeyRound className="w-2.5 h-2.5" />
-                        <span>Active Token</span>
+          {personas.map((persona) => {
+            const isJwt = persona.activeAuthToken && isRealJwt(persona.activeAuthToken);
+            const inspected = persona.activeAuthToken ? inspectJwt(persona.activeAuthToken) : null;
+            const userRec = persona.records.find((r) => r.tableName === "user");
+            const role =
+              userRec?.fields?.role ||
+              inspected?.payload?.role ||
+              (persona.name.toLowerCase().includes("admin") ? "admin" : "user");
+
+            return (
+              <div
+                key={persona.id}
+                className="flex flex-col gap-3 p-4 rounded-xl border border-border/60 bg-card/40 shadow-sm hover:border-border/80 transition-colors"
+              >
+                {/* Top Bar */}
+                <div className="flex items-start justify-between gap-2 flex-wrap">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-xs text-foreground">
+                        {persona.name}
+                      </span>
+
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 uppercase">
+                        {String(role)}
+                      </span>
+
+                      {isJwt ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                          <ShieldCheck className="w-2.5 h-2.5" />
+                          <span>HS256 JWT</span>
+                        </span>
+                      ) : persona.activeAuthToken ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                          <KeyRound className="w-2.5 h-2.5" />
+                          <span>Session Token</span>
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {persona.description && (
+                      <span className="text-[11px] text-muted-foreground">
+                        {persona.description}
                       </span>
                     )}
                   </div>
-                  {persona.description && (
-                    <span className="text-[11px] text-muted-foreground">
-                      {persona.description}
-                    </span>
-                  )}
-                </div>
 
-                <div className="flex items-center gap-1">
-                  {persona.activeAuthToken && (
+                  {/* Actions for this Persona */}
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {persona.activeAuthToken && (
+                      <>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleCopyHeader(persona)}
+                          className="h-7 text-[11px] px-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 gap-1.5 font-medium cursor-pointer"
+                          title="Copy Authorization: Bearer <token> for Postman or curl"
+                        >
+                          {copiedTokenId === persona.id ? (
+                            <Check className="w-3 h-3 text-emerald-500" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                          <span>Copy Bearer</span>
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCopyCurl(persona)}
+                          className="h-7 text-[11px] px-2 text-muted-foreground hover:text-foreground gap-1 cursor-pointer"
+                          title="Copy complete cURL command example"
+                        >
+                          {copiedCurlId === persona.id ? (
+                            <Check className="w-3 h-3 text-emerald-500" />
+                          ) : (
+                            <Terminal className="w-3 h-3" />
+                          )}
+                          <span>cURL</span>
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const fresh = regeneratePersonaToken(persona.id, authSecret);
+                            if (fresh) {
+                              toast.success(`Regenerated real JWT for ${persona.name}`);
+                            }
+                          }}
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                          title="Regenerate Real Bearer JWT with fresh signature"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </Button>
+                      </>
+                    )}
+
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleCopyHeader(persona)}
-                      className="h-7 text-[11px] px-2 text-muted-foreground hover:text-foreground gap-1"
-                      title="Copy Authorization: Bearer <token>"
+                      onClick={() => handleStartEdit(persona)}
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                      title="Edit Persona"
                     >
-                      {copiedTokenId === persona.id ? (
-                        <Check className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                      <span>Copy Bearer</span>
+                      <Pencil className="w-3.5 h-3.5" />
                     </Button>
-                  )}
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleStartEdit(persona)}
-                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                    title="Edit Persona"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </Button>
-
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      deletePersona(persona.id);
-                      toast.success(`Deleted persona: ${persona.name}`);
-                    }}
-                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                    title="Delete Persona"
-                  >
-                    <Trash className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Seeded Records Summary */}
-              <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                  Seeded Table Records ({persona.records.length})
-                </span>
-
-                <div className="grid grid-cols-1 gap-2">
-                  {persona.records.map((rec, recIdx) => (
-                    <div
-                      key={recIdx}
-                      className="p-2.5 rounded-lg bg-background/50 border border-border/50 flex flex-col gap-1 text-xs"
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        deletePersona(persona.id);
+                        toast.success(`Deleted persona: ${persona.name}`);
+                      }}
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive cursor-pointer"
+                      title="Delete Persona"
                     >
-                      <div className="flex items-center justify-between text-[11px]">
-                        <div className="flex items-center gap-1.5 font-mono">
-                          <Table2 className="w-3 h-3 text-muted-foreground" />
-                          <span className="font-semibold text-foreground">{rec.tableName}</span>
-                          <span className="text-muted-foreground/60">•</span>
-                          <span className="text-muted-foreground">{rec.databaseName}</span>
-                        </div>
+                      <Trash className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
 
-                        <span className="font-mono text-[10px] text-muted-foreground bg-secondary/60 px-1.5 py-0.2 rounded border border-border/40">
-                          _id: {rec.id}
+                {/* Token Preview & Decoded Claims */}
+                {persona.activeAuthToken && (
+                  <div className="p-2.5 rounded-lg bg-background/60 border border-border/40 flex flex-col gap-1.5 text-xs">
+                    <div className="flex items-center justify-between text-[10.5px]">
+                      <span className="font-mono text-muted-foreground flex items-center gap-1.5">
+                        <KeyRound className="w-3 h-3 text-indigo-500" />
+                        <span>Bearer Token (Postman Ready):</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyRawToken(persona.activeAuthToken)}
+                        className="text-[10px] font-mono text-indigo-500 hover:text-indigo-400 hover:underline cursor-pointer"
+                      >
+                        Copy Raw Token
+                      </button>
+                    </div>
+
+                    <div className="p-1.5 rounded bg-zinc-950/70 border border-zinc-800 text-zinc-300 font-mono text-[10.5px] truncate select-all">
+                      {persona.activeAuthToken}
+                    </div>
+
+                    {inspected && (
+                      <div className="flex items-center gap-2 flex-wrap text-[10px] font-mono text-muted-foreground pt-0.5">
+                        <span className="bg-secondary/40 px-1.5 py-0.5 rounded">
+                          sub: <strong className="text-foreground">{String(inspected.payload.sub || "")}</strong>
+                        </span>
+                        <span className="bg-secondary/40 px-1.5 py-0.5 rounded">
+                          email: <strong className="text-foreground">{String(inspected.payload.email || "")}</strong>
+                        </span>
+                        <span className="bg-secondary/40 px-1.5 py-0.5 rounded">
+                          exp: <strong className="text-foreground">{inspected.expiresAtFormatted}</strong>
                         </span>
                       </div>
+                    )}
+                  </div>
+                )}
 
-                      {/* Preview fields */}
-                      <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono text-muted-foreground pt-0.5">
-                        {Object.entries(rec.fields)
-                          .filter(([k]) => k !== "id")
-                          .slice(0, 4)
-                          .map(([k, v]) => (
-                            <span key={k} className="inline-flex items-center gap-1 bg-secondary/30 px-1.5 py-0.5 rounded">
-                              <span className="text-muted-foreground/70">{k}:</span>
-                              <span className="text-foreground font-medium truncate max-w-[120px]">
-                                {String(v)}
+                {/* Seeded Records Summary */}
+                <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Seeded Table Records ({persona.records.length})
+                  </span>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    {persona.records.map((rec, recIdx) => (
+                      <div
+                        key={recIdx}
+                        className="p-2 rounded bg-background/40 border border-border/40 flex flex-col gap-1 text-xs"
+                      >
+                        <div className="flex items-center justify-between text-[11px]">
+                          <div className="flex items-center gap-1.5 font-mono">
+                            <Table2 className="w-3 h-3 text-muted-foreground" />
+                            <span className="font-semibold text-foreground">{rec.tableName}</span>
+                            <span className="text-muted-foreground/60">•</span>
+                            <span className="text-muted-foreground">{rec.databaseName}</span>
+                          </div>
+
+                          <span className="font-mono text-[10px] text-muted-foreground bg-secondary/60 px-1.5 py-0.2 rounded border border-border/40">
+                            _id: {rec.id}
+                          </span>
+                        </div>
+
+                        {/* Preview fields */}
+                        <div className="flex items-center gap-2 flex-wrap text-[10.5px] font-mono text-muted-foreground pt-0.5">
+                          {Object.entries(rec.fields)
+                            .filter(([k]) => k !== "id")
+                            .slice(0, 4)
+                            .map(([k, v]) => (
+                              <span key={k} className="inline-flex items-center gap-1 bg-secondary/30 px-1.5 py-0.5 rounded">
+                                <span className="text-muted-foreground/70">{k}:</span>
+                                <span className="text-foreground font-medium truncate max-w-[120px]">
+                                  {String(v)}
+                                </span>
                               </span>
-                            </span>
-                          ))}
+                            ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

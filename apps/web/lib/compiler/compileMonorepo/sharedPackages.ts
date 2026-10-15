@@ -26,6 +26,7 @@ import {
 } from "@workspace/canvas/types";
 import { FolderEntry } from "./folderNameResolver";
 import { compileDatabaseNodes } from "../compileDatabaseNodes";
+import { PersonaSeed } from "../types/testPersona";
 import { compileKafkaNodes } from "../compileKafkaNodes";
 import { compileRedisNodes } from "../compileRedisNodes";
 import { compileUiPackage } from "../compileUiPackage";
@@ -112,6 +113,7 @@ export function compileSharedPackages(
   projectName: string,
   testCases?: SimulationTestCase[],
   getUniqueLangGraphFolder?: (label: string, defaultName: string) => string,
+  personas: PersonaSeed[] = [],
 ): SharedPackagesResult {
   const files: CompiledFile[] = [];
 
@@ -144,7 +146,7 @@ export function compileSharedPackages(
 
   // ── step 4 | @workspace/db (database packages) ───────────────────────────
   // ✦ emits: packages/db/** or packages/db/<packageFolder>/**
-  const compiledDb = compileDatabaseNodes(nodes, edges);
+  const compiledDb = compileDatabaseNodes(nodes, edges, personas);
   if (compiledDb.packages && compiledDb.packages.length > 0) {
     compiledDb.packages.forEach((pkg) => {
       pkg.files.forEach((f) => {

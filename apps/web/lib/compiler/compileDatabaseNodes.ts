@@ -18,6 +18,7 @@ import { compilePostgresDatabase } from "./databases/postgres";
 import { compileMysqlDatabase } from "./databases/mysql";
 import { compileConvexDatabase } from "./databases/convex";
 import { generateCentralDbTest } from "./generators/databaseTestGenerator";
+import { PersonaSeed } from "./types/testPersona";
 
 /**
  * Normalizes a database engine string.
@@ -76,6 +77,7 @@ function resolveDbFolderName(dbNode: BackendNode, existingFolders: Set<string>):
 export function compileDatabaseNodes(
   allNodes: BackendNode[],
   allEdges: BackendEdge[],
+  personas: PersonaSeed[] = [],
 ): CompiledDatabaseResult {
   const entityNodes = allNodes.filter(
     (n) => n.type === "entity" || n.type === "db_ref",
@@ -468,6 +470,7 @@ export function compileDatabaseNodes(
           packageName,
           packageFolder: folderName,
           dbNode,
+          personas,
         });
         break;
       case "mysql":
@@ -490,6 +493,7 @@ export function compileDatabaseNodes(
           packageName,
           packageFolder: folderName,
           dbNode,
+          personas,
         });
         break;
     }

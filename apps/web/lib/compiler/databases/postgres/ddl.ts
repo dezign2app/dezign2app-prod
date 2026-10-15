@@ -1,6 +1,8 @@
 import { toSqlIdentifier } from "../../utils";
 import type { PgColumnMeta } from "./types";
 import { toPostgresType } from "./utils";
+import type { PersonaSeed } from "../../types/testPersona";
+import { generatePersonaSeedSql } from "../shared/generatePersonaSeedSql";
 
 /**
  * Builds PostgreSQL DDL statements (CREATE TABLE, indexes) for a canvas entity.
@@ -243,17 +245,19 @@ export const PAYMENTS_PG_DDL: string[] = [
   `CREATE INDEX IF NOT EXISTS "idx_subscription_status" ON "subscription" ("status");`,
 ];
 
-export const PG_SEED_SQL = `INSERT INTO "user" ("id", "name", "email", "createdAt") VALUES
-  ('fake_admin_1', 'Admin User', 'admin@example.com', NOW()),
-  ('fake_user_1', 'Standard User', 'user@example.com', NOW()),
-  ('fake_superadmin_1', 'Super Admin', 'superadmin@example.com', NOW())
-ON CONFLICT ("id") DO NOTHING;
+export function buildPgSeedSql(
+  personas: PersonaSeed[] = [],
+  knownTableNames?: Set<string>,
+  knownTableColumns?: Record<string, Array<{ name: string }>>,
+): string {
+  if (!personas || personas.length === 0) return "";
+  return generatePersonaSeedSql(personas, "postgres", {
+    knownTableNames,
+    knownTableColumns,
+  });
+}
 
-INSERT INTO "session" ("id", "userId", "token", "expiresAt", "createdAt") VALUES
-  ('fake_session_admin', 'fake_admin_1', 'fake_admin_token', '2099-01-01T00:00:00.000Z', NOW()),
-  ('fake_session_user', 'fake_user_1', 'fake_user_token', '2099-01-01T00:00:00.000Z', NOW()),
-  ('fake_session_superadmin', 'fake_superadmin_1', 'fake_superadmin_token', '2099-01-01T00:00:00.000Z', NOW())
-ON CONFLICT ("id") DO NOTHING;`;
+export const PG_SEED_SQL = "";
 
 // ---------------------------------------------------------------------------
 // Auto-migration schema tracking
@@ -383,7 +387,7 @@ export function generateSchemaSql(
   userDdlStatements: string[],
   authDdlStatements: string[],
   paymentsDdlStatements: string[],
-  seedSql: string = PG_SEED_SQL,
+  seedSql: string = "",
 ): string {
   const allDdl = [
     ...userDdlStatements,

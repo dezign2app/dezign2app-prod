@@ -1,96 +1,53 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { TestUserPersona, generatePersonaId } from "./types";
+import { TableSeedRecord, TestUserPersona, generatePersonaId, isUuid, generateUuid } from "./types";
+import {
+  generateRealBearerJwtSync,
+  isRealJwt,
+  DEFAULT_AUTH_SECRET,
+} from "./tokenGenerator";
+
+// ── Default Real JWT Personas ───────────────────────────────────────────────
+
+export const DEFAULT_ADMIN_USER_ID = "a0000000-0000-4000-8000-000000000001";
+export const DEFAULT_ADMIN_SESSION_ID = "b0000000-0000-4000-8000-000000000001";
+
+const adminJwt = generateRealBearerJwtSync({
+  userId: DEFAULT_ADMIN_USER_ID,
+  name: "Admin User",
+  email: "admin@example.com",
+  role: "admin",
+  sessionId: DEFAULT_ADMIN_SESSION_ID,
+  secret: DEFAULT_AUTH_SECRET,
+});
 
 export const DEFAULT_TEST_PERSONAS: TestUserPersona[] = [
   {
     id: "persona_admin",
     name: "Admin User",
     description: "Default administrator with admin role and active session",
-    activeAuthToken: "fake_admin_token",
+    activeAuthToken: adminJwt,
     createdAt: "2026-01-01T00:00:00.000Z",
     records: [
       {
-        id: "fake_admin_1",
+        id: DEFAULT_ADMIN_USER_ID,
         databaseName: "Primary Database",
         tableName: "user",
         fields: {
-          id: "fake_admin_1",
+          id: DEFAULT_ADMIN_USER_ID,
           name: "Admin User",
           email: "admin@example.com",
           role: "admin",
         },
       },
       {
-        id: "fake_session_admin",
+        id: DEFAULT_ADMIN_SESSION_ID,
         databaseName: "Primary Database",
         tableName: "session",
         fields: {
-          id: "fake_session_admin",
-          userId: "fake_admin_1",
-          token: "fake_admin_token",
-          expiresAt: "2099-01-01T00:00:00.000Z",
-        },
-      },
-    ],
-  },
-  {
-    id: "persona_user",
-    name: "Standard User",
-    description: "Standard authenticated user with user role",
-    activeAuthToken: "fake_user_token",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    records: [
-      {
-        id: "fake_user_1",
-        databaseName: "Primary Database",
-        tableName: "user",
-        fields: {
-          id: "fake_user_1",
-          name: "Standard User",
-          email: "user@example.com",
-          role: "user",
-        },
-      },
-      {
-        id: "fake_session_user",
-        databaseName: "Primary Database",
-        tableName: "session",
-        fields: {
-          id: "fake_session_user",
-          userId: "fake_user_1",
-          token: "fake_user_token",
-          expiresAt: "2099-01-01T00:00:00.000Z",
-        },
-      },
-    ],
-  },
-  {
-    id: "persona_superadmin",
-    name: "Superadmin",
-    description: "Root superadmin with all role capabilities",
-    activeAuthToken: "fake_superadmin_token",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    records: [
-      {
-        id: "fake_superadmin_1",
-        databaseName: "Primary Database",
-        tableName: "user",
-        fields: {
-          id: "fake_superadmin_1",
-          name: "Super Admin",
-          email: "superadmin@example.com",
-          role: "superadmin",
-        },
-      },
-      {
-        id: "fake_session_superadmin",
-        databaseName: "Primary Database",
-        tableName: "session",
-        fields: {
-          id: "fake_session_superadmin",
-          userId: "fake_superadmin_1",
-          token: "fake_superadmin_token",
+          id: DEFAULT_ADMIN_SESSION_ID,
+          userId: DEFAULT_ADMIN_USER_ID,
+          token: adminJwt,
           expiresAt: "2099-01-01T00:00:00.000Z",
         },
       },
@@ -103,30 +60,187 @@ interface TestUsersState {
   addPersona: (persona: TestUserPersona) => void;
   updatePersona: (id: string, updates: Partial<TestUserPersona>) => void;
   deletePersona: (id: string) => void;
+  regeneratePersonaToken: (id: string, secret?: string) => string | null;
+  upgradeAllToRealTokens: (secret?: string) => void;
   resetToDefaults: () => void;
+}
+
+function ensureRealPersonaToken(p: TestUserPersona, secret = DEFAULT_AUTH_SECRET): TestUserPersona {
+  const userRec = p.records.find((r) => r.tableName.toLowerCase() === "user") || p.records[0];
+  const rawUserId = userRec?.fields?.id ? String(userRec.fields.id) : p.id;
+  const userId: string = isUuid(rawUserId) ? rawUserId : generateUuid();
+
+  const sessRec = p.records.find((r) => r.tableName.toLowerCase() === "session");
+  const rawSessionId = sessRec?.fields?.id ? String(sessRec.fields.id) : undefined;
+  const sessionId: string = (rawSessionId && isUuid(rawSessionId)) ? rawSessionId : generateUuid();
+
+  const needNewToken = !p.activeAuthToken || !isRealJwt(p.activeAuthToken) || rawUserId !== userId;
+
+  if (!needNewToken && isUuid(rawUserId) && isUuid(rawSessionId)) {
+    return p;
+  }
+
+  const email = userRec?.fields?.email ? String(userRec.fields.email) : `${p.name.toLowerCase().replace(/\s+/g, ".")}@example.com`;
+  const role = userRec?.fields?.role ? String(userRec.fields.role) : (p.name.toLowerCase().includes("admin") ? "admin" : "user");
+
+  const realJwt = generateRealBearerJwtSync({
+    userId,
+    name: p.name,
+    email,
+    role,
+    sessionId,
+    secret,
+  });
+
+  return {
+    ...p,
+    activeAuthToken: realJwt,
+    records: p.records.map((r): TableSeedRecord => {
+      const lower = r.tableName.toLowerCase();
+      if (lower === "user") {
+        return {
+          ...r,
+          id: userId,
+          fields: {
+            ...r.fields,
+            id: userId,
+          },
+        };
+      }
+      if (lower === "session") {
+        return {
+          ...r,
+          id: sessionId,
+          fields: {
+            ...r.fields,
+            id: sessionId,
+            userId,
+            token: realJwt,
+          },
+        };
+      }
+      return r;
+    }),
+  };
 }
 
 export const useTestUsersStore = create<TestUsersState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       personas: DEFAULT_TEST_PERSONAS,
-      addPersona: (persona) =>
-        set((state) => ({ personas: [...state.personas, persona] })),
+      addPersona: (persona) => {
+        const validatedPersona = ensureRealPersonaToken(persona);
+        set((state) => ({ personas: [...state.personas, validatedPersona] }));
+      },
       updatePersona: (id, updates) =>
         set((state) => ({
-          personas: state.personas.map((p) =>
-            p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p,
-          ),
+          personas: state.personas.map((p) => {
+            if (p.id !== id) return p;
+            const updated: TestUserPersona = {
+              ...p,
+              ...updates,
+              updatedAt: new Date().toISOString(),
+            };
+            // Ensure session record token matches activeAuthToken
+            const newToken = updates.activeAuthToken;
+            if (newToken) {
+              updated.records = updated.records.map((r): TableSeedRecord => {
+                if (r.tableName.toLowerCase() === "session") {
+                  return {
+                    ...r,
+                    fields: { ...r.fields, token: newToken },
+                  };
+                }
+                return r;
+              });
+            }
+            return updated;
+          }),
         })),
       deletePersona: (id) =>
         set((state) => ({
           personas: state.personas.filter((p) => p.id !== id),
         })),
+      regeneratePersonaToken: (id, secret = DEFAULT_AUTH_SECRET) => {
+        const state = get();
+        const persona = state.personas.find((p) => p.id === id);
+        if (!persona) return null;
+
+        const userRec = persona.records.find((r) => r.tableName.toLowerCase() === "user") || persona.records[0];
+        const rawUserId = userRec?.fields?.id ? String(userRec.fields.id) : persona.id;
+        const userId: string = isUuid(rawUserId) ? rawUserId : generateUuid();
+
+        const email = userRec?.fields?.email ? String(userRec.fields.email) : `${persona.name.toLowerCase().replace(/\s+/g, ".")}@example.com`;
+        const role = userRec?.fields?.role ? String(userRec.fields.role) : (persona.name.toLowerCase().includes("admin") ? "admin" : "user");
+
+        const sessRec = persona.records.find((r) => r.tableName.toLowerCase() === "session");
+        const rawSessionId = sessRec?.fields?.id ? String(sessRec.fields.id) : undefined;
+        const sessionId: string = (rawSessionId && isUuid(rawSessionId)) ? rawSessionId : generateUuid();
+
+        const freshJwt = generateRealBearerJwtSync({
+          userId,
+          name: persona.name,
+          email,
+          role,
+          sessionId,
+          secret,
+        });
+
+        set({
+          personas: state.personas.map((p) =>
+            p.id === id
+              ? {
+                  ...p,
+                  activeAuthToken: freshJwt,
+                  records: p.records.map((r): TableSeedRecord => {
+                    const lower = r.tableName.toLowerCase();
+                    if (lower === "user") {
+                      return {
+                        ...r,
+                        id: userId,
+                        fields: { ...r.fields, id: userId },
+                      };
+                    }
+                    if (lower === "session") {
+                      return {
+                        ...r,
+                        id: sessionId,
+                        fields: { ...r.fields, id: sessionId, userId, token: freshJwt },
+                      };
+                    }
+                    return r;
+                  }),
+                  updatedAt: new Date().toISOString(),
+                }
+              : p,
+          ),
+        });
+
+        return freshJwt;
+      },
+      upgradeAllToRealTokens: (secret = DEFAULT_AUTH_SECRET) => {
+        set((state) => ({
+          personas: state.personas.map((p) => ensureRealPersonaToken(p, secret)),
+        }));
+      },
       resetToDefaults: () => set({ personas: DEFAULT_TEST_PERSONAS }),
     }),
     {
-      name: "dezign2app_test_user_personas_v1",
+      name: "dezign2app_test_user_personas_v3",
       storage: createJSONStorage(() => localStorage),
+      version: 3,
+      migrate: (persistedState: unknown) => {
+        if (!persistedState || typeof persistedState !== "object") {
+          return { personas: DEFAULT_TEST_PERSONAS };
+        }
+        const state = persistedState as { personas?: TestUserPersona[] };
+        if (!Array.isArray(state.personas) || state.personas.length === 0) {
+          return { personas: DEFAULT_TEST_PERSONAS };
+        }
+        const upgraded = state.personas.map((p) => ensureRealPersonaToken(p));
+        return { personas: upgraded };
+      },
     },
   ),
 );
+
