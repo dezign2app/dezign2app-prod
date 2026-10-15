@@ -268,6 +268,7 @@ export interface ElectronCheckDbTableSyncResult {
   tableExists: boolean;
   inSync: boolean;
   missingColumns: Array<{ name: string; type: string }>;
+  alteredColumns?: Array<{ name: string; oldType: string; newType: string }>;
   extraColumns: Array<{ name: string; type: string }>;
   existingColumns: Array<{ name: string; type: string }>;
   missingIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
@@ -282,6 +283,7 @@ export interface ElectronApplyDbTableSyncResult {
   success: boolean;
   createdTable: boolean;
   appliedColumns: string[];
+  alteredColumns?: Array<{ name: string; oldType: string; newType: string }>;
   droppedColumns?: string[];
   appliedIndexes?: string[];
   droppedIndexes?: string[];

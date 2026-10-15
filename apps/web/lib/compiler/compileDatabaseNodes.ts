@@ -144,6 +144,8 @@ export function compileDatabaseNodes(
           ? authDbEdge.target
           : authDbEdge.source
         : (authNode.data?.databaseId || dbNodes[0]?.id || dbNodes[0]?.nodeId);
+      const targetDbNode = dbNodes.find((d) => (d.id || d.nodeId) === targetDbId);
+      const targetEngine = targetDbNode?.data?.dbEngine || "postgres";
 
       // Backfill missing required columns on pre-existing canvas entities
       BETTER_AUTH_TABLE_DEFINITIONS.forEach((def) => {
@@ -193,6 +195,15 @@ export function compileDatabaseNodes(
               updated.references = defCol.references;
               colChanged = true;
             }
+            if (
+              targetEngine.toLowerCase() !== "sqlite" &&
+              defCol.type &&
+              (defCol.isPrimaryKey || defCol.isForeignKey || defCol.name.toLowerCase() === "id") &&
+              updated.type !== defCol.type
+            ) {
+              updated.type = defCol.type;
+              colChanged = true;
+            }
             if (colChanged) hasColChanges = true;
             return updated;
           });
@@ -238,6 +249,9 @@ export function compileDatabaseNodes(
       );
 
       neededDefs.forEach((def) => {
+        const resolvedCols = targetEngine.toLowerCase() === "sqlite"
+          ? def.defaultColumns.map((c) => c.type === "UUID" ? { ...c, type: "TEXT" } : c)
+          : def.defaultColumns;
         syntheticEntities.push({
           id: `synthetic-auth-${def.key}`,
           type: "entity",
@@ -246,7 +260,7 @@ export function compileDatabaseNodes(
           data: {
             label: def.name,
             description: def.description,
-            columns: def.defaultColumns,
+            columns: resolvedCols,
             indexes: def.defaultIndexes ? [...def.defaultIndexes] : [],
             databaseId: targetDbId,
           },
@@ -315,6 +329,11 @@ export function compileDatabaseNodes(
     } else if (paymentsNodes.length > 0) {
       // Synthesize default subscription entity
       const targetDbId = dbNodes[0]?.id || dbNodes[0]?.nodeId;
+      const targetDbNode = dbNodes.find((d) => (d.id || d.nodeId) === targetDbId);
+      const targetEngine = targetDbNode?.data?.dbEngine || "postgres";
+      const resolvedCols = targetEngine.toLowerCase() === "sqlite"
+        ? PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultColumns.map((c) => c.type === "UUID" ? { ...c, type: "TEXT" } : c)
+        : PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultColumns;
       const syntheticSubEntity: BackendNode = {
         id: "synthetic-payments-subscription",
         type: "entity",
@@ -323,7 +342,7 @@ export function compileDatabaseNodes(
         data: {
           label: "subscription",
           description: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.description,
-          columns: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultColumns,
+          columns: resolvedCols,
           indexes: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultIndexes
             ? [...PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultIndexes]
             : [],

@@ -424,4 +424,152 @@ describe("databaseActions Table Sync Actions", () => {
     expect(checkConv.inSync).toBe(true);
     expect(checkConv.missingIndexes).toHaveLength(0);
   });
+
+  it("should detect missing foreign keys and missing prerequisite tables", async () => {
+    // 1. Check sync for 'Order' with FK to non-existent 'Customer'
+    const checkRes = await checkDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "Order",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "customer_id", type: "TEXT" },
+      ],
+      foreignKeys: [
+        {
+          column: "customer_id",
+          foreignTable: "Customer",
+          foreignColumn: "id",
+        },
+      ],
+    });
+
+    expect(checkRes.success).toBe(true);
+    expect(checkRes.inSync).toBe(false);
+    expect(checkRes.missingForeignKeys).toHaveLength(1);
+    expect(checkRes.missingForeignKeys?.[0]?.foreignTable).toBe("Customer");
+    expect(checkRes.missingPrerequisiteTables).toContain("Customer");
+  });
+
+  it("should auto-create prerequisite tables and apply foreign keys seamlessly", async () => {
+    // 1. Apply 'Order' with prerequisite table 'Customer'
+    const applyRes = await applyDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "Order",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "customer_id", type: "TEXT" },
+        { name: "total", type: "REAL" },
+      ],
+      foreignKeys: [
+        {
+          column: "customer_id",
+          foreignTable: "Customer",
+          foreignColumn: "id",
+        },
+      ],
+      prerequisiteTables: [
+        {
+          tableName: "Customer",
+          columns: [
+            { name: "id", type: "TEXT", isPrimaryKey: true },
+            { name: "email", type: "TEXT", isUnique: true },
+          ],
+        },
+      ],
+    });
+
+    expect(applyRes.success).toBe(true);
+    expect(applyRes.createdTable).toBe(true);
+    expect(applyRes.appliedPrerequisiteTables).toContain("Customer");
+    expect(applyRes.appliedForeignKeys).toContain("customer_id");
+
+    // 2. Verify 'Order' is now in sync with Customer in the database
+    const syncedCheck = await checkDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "Order",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "customer_id", type: "TEXT" },
+        { name: "total", type: "REAL" },
+      ],
+      foreignKeys: [
+        {
+          column: "customer_id",
+          foreignTable: "Customer",
+          foreignColumn: "id",
+        },
+      ],
+    });
+
+    expect(syncedCheck.inSync).toBe(true);
+    expect(syncedCheck.tableExists).toBe(true);
+    expect(syncedCheck.missingForeignKeys).toHaveLength(0);
+    expect(syncedCheck.existingForeignKeys).toHaveLength(1);
+    expect(syncedCheck.existingForeignKeys?.[0]?.foreignTable.toLowerCase()).toBe("customer");
+    expect(syncedCheck.missingPrerequisiteTables).toHaveLength(0);
+  });
+
+  it("should detect field type changes and migrate them via checkDbTableSyncAction and applyDbTableSyncAction", async () => {
+    // 1. Create table with string 'score'
+    await applyDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "ScoreCard",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "score", type: "TEXT" },
+      ],
+    });
+
+    // 2. Check sync when canvas changes 'score' to INTEGER
+    const driftCheck = await checkDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "ScoreCard",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "score", type: "INTEGER" },
+      ],
+    });
+
+    expect(driftCheck.inSync).toBe(false);
+    expect(driftCheck.alteredColumns).toHaveLength(1);
+    expect(driftCheck.alteredColumns?.[0]).toEqual({
+      name: "score",
+      oldType: "TEXT",
+      newType: "INTEGER",
+    });
+
+    // 3. Apply sync
+    const applyRes = await applyDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "ScoreCard",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "score", type: "INTEGER" },
+      ],
+    });
+
+    expect(applyRes.success).toBe(true);
+    expect(applyRes.alteredColumns).toHaveLength(1);
+    expect(applyRes.alteredColumns?.[0]?.name).toBe("score");
+
+    // 4. Verify in sync after apply
+    const afterCheck = await checkDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "ScoreCard",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "score", type: "INTEGER" },
+      ],
+    });
+
+    expect(afterCheck.inSync).toBe(true);
+    expect(afterCheck.alteredColumns).toHaveLength(0);
+  });
 });

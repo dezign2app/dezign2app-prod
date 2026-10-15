@@ -63,7 +63,7 @@ export function buildTableDDL(
 
 export const BETTERAUTH_PG_DDL: string[] = [
   `CREATE TABLE IF NOT EXISTS "user" (
-  "id" TEXT PRIMARY KEY NOT NULL,
+  "id" UUID PRIMARY KEY NOT NULL,
   "name" TEXT,
   "email" TEXT UNIQUE,
   "emailVerified" BOOLEAN,
@@ -81,8 +81,8 @@ export const BETTERAUTH_PG_DDL: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "idx_user_email" ON "user" ("email");`,
 
   `CREATE TABLE IF NOT EXISTS "session" (
-  "id" TEXT PRIMARY KEY NOT NULL,
-  "userId" TEXT,
+  "id" UUID PRIMARY KEY NOT NULL,
+  "userId" UUID,
   "token" TEXT UNIQUE,
   "expiresAt" TIMESTAMPTZ,
   "ipAddress" TEXT,
@@ -90,15 +90,15 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "createdAt" TIMESTAMPTZ DEFAULT NOW(),
   "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
   "impersonatedBy" TEXT,
-  "activeOrganizationId" TEXT,
-  "activeTeamId" TEXT
+  "activeOrganizationId" UUID,
+  "activeTeamId" UUID
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_session_userId" ON "session" ("userId");`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "idx_session_token" ON "session" ("token");`,
 
   `CREATE TABLE IF NOT EXISTS "account" (
-  "id" TEXT PRIMARY KEY NOT NULL,
-  "userId" TEXT,
+  "id" UUID PRIMARY KEY NOT NULL,
+  "userId" UUID,
   "accountId" TEXT,
   "providerId" TEXT,
   "password" TEXT,
@@ -115,7 +115,7 @@ export const BETTERAUTH_PG_DDL: string[] = [
   `CREATE INDEX IF NOT EXISTS "idx_account_provider_account" ON "account" ("providerId", "accountId");`,
 
   `CREATE TABLE IF NOT EXISTS "verification" (
-  "id" TEXT PRIMARY KEY NOT NULL,
+  "id" UUID PRIMARY KEY NOT NULL,
   "identifier" TEXT,
   "value" TEXT,
   "expiresAt" TIMESTAMPTZ,
@@ -125,7 +125,7 @@ export const BETTERAUTH_PG_DDL: string[] = [
   `CREATE INDEX IF NOT EXISTS "idx_verification_identifier" ON "verification" ("identifier");`,
 
   `CREATE TABLE IF NOT EXISTS "organization" (
-  "id" TEXT PRIMARY KEY NOT NULL,
+  "id" UUID PRIMARY KEY NOT NULL,
   "name" TEXT NOT NULL,
   "slug" TEXT UNIQUE NOT NULL,
   "logo" TEXT,
@@ -135,9 +135,9 @@ export const BETTERAUTH_PG_DDL: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "idx_organization_slug" ON "organization" ("slug");`,
 
   `CREATE TABLE IF NOT EXISTS "member" (
-  "id" TEXT PRIMARY KEY NOT NULL,
-  "organizationId" TEXT NOT NULL,
-  "userId" TEXT NOT NULL,
+  "id" UUID PRIMARY KEY NOT NULL,
+  "organizationId" UUID NOT NULL,
+  "userId" UUID NOT NULL,
   "role" TEXT NOT NULL,
   "createdAt" TIMESTAMPTZ DEFAULT NOW()
 );`,
@@ -146,31 +146,31 @@ export const BETTERAUTH_PG_DDL: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "idx_member_org_user" ON "member" ("organizationId", "userId");`,
 
   `CREATE TABLE IF NOT EXISTS "invitation" (
-  "id" TEXT PRIMARY KEY NOT NULL,
-  "organizationId" TEXT,
+  "id" UUID PRIMARY KEY NOT NULL,
+  "organizationId" UUID,
   "email" TEXT,
   "role" TEXT,
-  "teamId" TEXT,
+  "teamId" UUID,
   "status" TEXT,
   "expiresAt" TIMESTAMPTZ,
   "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "inviterId" TEXT
+  "inviterId" UUID
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_invitation_organizationId" ON "invitation" ("organizationId");`,
   `CREATE INDEX IF NOT EXISTS "idx_invitation_email" ON "invitation" ("email");`,
 
   `CREATE TABLE IF NOT EXISTS "team" (
-  "id" TEXT PRIMARY KEY NOT NULL,
-  "organizationId" TEXT NOT NULL,
+  "id" UUID PRIMARY KEY NOT NULL,
+  "organizationId" UUID NOT NULL,
   "name" TEXT NOT NULL,
   "createdAt" TIMESTAMPTZ DEFAULT NOW()
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_team_organizationId" ON "team" ("organizationId");`,
 
   `CREATE TABLE IF NOT EXISTS "teamMember" (
-  "id" TEXT PRIMARY KEY NOT NULL,
-  "teamId" TEXT NOT NULL,
-  "userId" TEXT NOT NULL,
+  "id" UUID PRIMARY KEY NOT NULL,
+  "teamId" UUID NOT NULL,
+  "userId" UUID NOT NULL,
   "role" TEXT NOT NULL,
   "createdAt" TIMESTAMPTZ DEFAULT NOW()
 );`,
@@ -179,7 +179,7 @@ export const BETTERAUTH_PG_DDL: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "idx_teamMember_team_user" ON "teamMember" ("teamId", "userId");`,
 
   `CREATE TABLE IF NOT EXISTS "jwks" (
-  "id" TEXT PRIMARY KEY NOT NULL,
+  "id" UUID PRIMARY KEY NOT NULL,
   "publicKey" TEXT,
   "privateKey" TEXT,
   "createdAt" TIMESTAMPTZ DEFAULT NOW(),
@@ -190,10 +190,10 @@ export const BETTERAUTH_PG_DDL: string[] = [
   `CREATE INDEX IF NOT EXISTS "idx_jwks_expiresAt" ON "jwks" ("expiresAt");`,
 
   `CREATE TABLE IF NOT EXISTS "passkey" (
-  "id" TEXT PRIMARY KEY NOT NULL,
+  "id" UUID PRIMARY KEY NOT NULL,
   "name" TEXT,
   "publicKey" TEXT,
-  "userId" TEXT,
+  "userId" UUID,
   "credentialID" TEXT UNIQUE,
   "counter" INTEGER,
   "deviceType" TEXT,
@@ -206,8 +206,8 @@ export const BETTERAUTH_PG_DDL: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "idx_passkey_credentialID" ON "passkey" ("credentialID");`,
 
   `CREATE TABLE IF NOT EXISTS "twoFactor" (
-  "id" TEXT PRIMARY KEY NOT NULL,
-  "userId" TEXT,
+  "id" UUID PRIMARY KEY NOT NULL,
+  "userId" UUID,
   "secret" TEXT,
   "backupCodes" TEXT,
   "verified" BOOLEAN DEFAULT FALSE,
@@ -226,8 +226,8 @@ export const BETTERAUTH_PG_DDL: string[] = [
 
 export const PAYMENTS_PG_DDL: string[] = [
   `CREATE TABLE IF NOT EXISTS "subscription" (
-  "id" TEXT PRIMARY KEY NOT NULL,
-  "userId" TEXT,
+  "id" UUID PRIMARY KEY NOT NULL,
+  "userId" UUID,
   "plan" TEXT,
   "status" TEXT,
   "creemCustomerId" TEXT,
@@ -287,7 +287,7 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "activeTeamId", pgType: "TEXT" },
   ],
   account: [
-    { name: "userId", pgType: "TEXT" },
+    { name: "userId", pgType: "UUID" },
     { name: "accountId", pgType: "TEXT" },
     { name: "providerId", pgType: "TEXT" },
     { name: "password", pgType: "TEXT" },
@@ -315,36 +315,36 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "createdAt", pgType: "TIMESTAMPTZ" },
   ],
   member: [
-    { name: "organizationId", pgType: "TEXT" },
-    { name: "userId", pgType: "TEXT" },
+    { name: "organizationId", pgType: "UUID" },
+    { name: "userId", pgType: "UUID" },
     { name: "role", pgType: "TEXT" },
     { name: "createdAt", pgType: "TIMESTAMPTZ" },
   ],
   invitation: [
-    { name: "organizationId", pgType: "TEXT" },
+    { name: "organizationId", pgType: "UUID" },
     { name: "email", pgType: "TEXT" },
     { name: "role", pgType: "TEXT" },
-    { name: "teamId", pgType: "TEXT" },
+    { name: "teamId", pgType: "UUID" },
     { name: "status", pgType: "TEXT" },
     { name: "expiresAt", pgType: "TIMESTAMPTZ" },
     { name: "createdAt", pgType: "TIMESTAMPTZ" },
-    { name: "inviterId", pgType: "TEXT" },
+    { name: "inviterId", pgType: "UUID" },
   ],
   team: [
-    { name: "organizationId", pgType: "TEXT" },
+    { name: "organizationId", pgType: "UUID" },
     { name: "name", pgType: "TEXT" },
     { name: "createdAt", pgType: "TIMESTAMPTZ" },
   ],
   teamMember: [
-    { name: "teamId", pgType: "TEXT" },
-    { name: "userId", pgType: "TEXT" },
+    { name: "teamId", pgType: "UUID" },
+    { name: "userId", pgType: "UUID" },
     { name: "role", pgType: "TEXT" },
     { name: "createdAt", pgType: "TIMESTAMPTZ" },
   ],
   passkey: [
     { name: "name", pgType: "TEXT" },
     { name: "publicKey", pgType: "TEXT" },
-    { name: "userId", pgType: "TEXT" },
+    { name: "userId", pgType: "UUID" },
     { name: "credentialID", pgType: "TEXT" },
     { name: "counter", pgType: "INTEGER" },
     { name: "deviceType", pgType: "TEXT" },
@@ -354,7 +354,7 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "aaguid", pgType: "TEXT" },
   ],
   twoFactor: [
-    { name: "userId", pgType: "TEXT" },
+    { name: "userId", pgType: "UUID" },
     { name: "secret", pgType: "TEXT" },
     { name: "backupCodes", pgType: "TEXT" },
     { name: "verified", pgType: "BOOLEAN" },

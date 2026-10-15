@@ -11,6 +11,9 @@ import {
   renameSqliteColumn,
 } from "@/lib/utils/sqliteRunner";
 import {
+  type CanvasForeignKey,
+  type PrerequisiteTableDefinition,
+  type AlteredColumnDefinition,
   executePostgresLiveOperation,
   checkPostgresConnection,
   checkPostgresTableSync,
@@ -42,6 +45,8 @@ import {
 } from "@/lib/database-runner";
 import { executeFunctionCode } from "@/lib/database-runner/functionCodeRunner";
 
+export type { CanvasForeignKey, PrerequisiteTableDefinition, AlteredColumnDefinition };
+
 export interface CheckDbTableSyncPayload {
   engine?: string;
   connection?: DbConnectionConfig;
@@ -59,6 +64,7 @@ export interface CheckDbTableSyncPayload {
     columns: string;
     isUnique?: boolean;
   }>;
+  foreignKeys?: CanvasForeignKey[];
 }
 
 export interface CheckDbTableSyncResult {
@@ -67,23 +73,35 @@ export interface CheckDbTableSyncResult {
   tableExists: boolean;
   inSync: boolean;
   missingColumns: Array<{ name: string; type: string }>;
+  alteredColumns?: Array<AlteredColumnDefinition>;
   extraColumns: Array<{ name: string; type: string }>;
   existingColumns: Array<{ name: string; type: string }>;
   missingIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
   extraIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
   existingIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
+  missingForeignKeys?: Array<CanvasForeignKey>;
+  extraForeignKeys?: Array<CanvasForeignKey>;
+  existingForeignKeys?: Array<CanvasForeignKey>;
+  missingPrerequisiteTables?: string[];
   error?: string;
 }
 
-export interface ApplyDbTableSyncPayload extends CheckDbTableSyncPayload {}
+export interface ApplyDbTableSyncPayload extends CheckDbTableSyncPayload {
+  prerequisiteTables?: PrerequisiteTableDefinition[];
+}
 
 export interface ApplyDbTableSyncResult {
   success: boolean;
   createdTable: boolean;
   appliedColumns: string[];
+  alteredColumns?: Array<AlteredColumnDefinition>;
   droppedColumns?: string[];
   appliedIndexes?: string[];
   droppedIndexes?: string[];
+  appliedForeignKeys?: string[];
+  droppedForeignKeys?: string[];
+  appliedPrerequisiteTables?: string[];
+  foreignKeyErrors?: string[];
   error?: string;
 }
 
@@ -441,7 +459,15 @@ export async function checkDbConnectionAction(
 export async function checkDbTableSyncAction(
   payload: CheckDbTableSyncPayload,
 ): Promise<CheckDbTableSyncResult> {
-  const { engine = "postgres", connection = {}, tableName, schema, columns = [], indexes = [] } = payload;
+  const {
+    engine = "postgres",
+    connection = {},
+    tableName,
+    schema,
+    columns = [],
+    indexes = [],
+    foreignKeys = [],
+  } = payload;
   const isPostgres =
     engine === "postgres" ||
     engine === "postgresql" ||
@@ -451,7 +477,7 @@ export async function checkDbTableSyncAction(
 
   try {
     if (isPostgres) {
-      return await checkPostgresTableSync(connection, tableName, columns, schema, indexes);
+      return await checkPostgresTableSync(connection, tableName, columns, schema, indexes, foreignKeys);
     }
 
     if (isSqlite) {
@@ -460,7 +486,7 @@ export async function checkDbTableSyncAction(
         const envVal = resolveEnvValue(connection.dbFilePathEnv);
         if (envVal) dbFilePath = envVal;
       }
-      return checkSqliteTableSync(dbFilePath, tableName, columns, undefined, indexes);
+      return checkSqliteTableSync(dbFilePath, tableName, columns, undefined, indexes, foreignKeys);
     }
 
     return {
@@ -469,11 +495,16 @@ export async function checkDbTableSyncAction(
       tableExists: true,
       inSync: true,
       missingColumns: [],
+      alteredColumns: [],
       extraColumns: [],
       existingColumns: [],
       missingIndexes: [],
       extraIndexes: [],
       existingIndexes: [],
+      missingForeignKeys: [],
+      extraForeignKeys: [],
+      existingForeignKeys: [],
+      missingPrerequisiteTables: [],
     };
   } catch (err) {
     return {
@@ -482,23 +513,37 @@ export async function checkDbTableSyncAction(
       tableExists: false,
       inSync: false,
       missingColumns: [],
+      alteredColumns: [],
       extraColumns: [],
       existingColumns: [],
       missingIndexes: [],
       extraIndexes: [],
       existingIndexes: [],
+      missingForeignKeys: [],
+      extraForeignKeys: [],
+      existingForeignKeys: [],
+      missingPrerequisiteTables: [],
       error: err instanceof Error ? err.message : String(err),
     };
   }
 }
 
 /**
- * Server action to apply missing table schema, columns, or indexes to the live DB.
+ * Server action to apply missing table schema, columns, indexes, or foreign keys to the live DB.
  */
 export async function applyDbTableSyncAction(
   payload: ApplyDbTableSyncPayload,
 ): Promise<ApplyDbTableSyncResult> {
-  const { engine = "postgres", connection = {}, tableName, schema, columns = [], indexes = [] } = payload;
+  const {
+    engine = "postgres",
+    connection = {},
+    tableName,
+    schema,
+    columns = [],
+    indexes = [],
+    foreignKeys = [],
+    prerequisiteTables = [],
+  } = payload;
   const isPostgres =
     engine === "postgres" ||
     engine === "postgresql" ||
@@ -508,7 +553,15 @@ export async function applyDbTableSyncAction(
 
   try {
     if (isPostgres) {
-      return await applyPostgresTableSync(connection, tableName, columns, schema, indexes);
+      return await applyPostgresTableSync(
+        connection,
+        tableName,
+        columns,
+        schema,
+        indexes,
+        foreignKeys,
+        prerequisiteTables,
+      );
     }
 
     if (isSqlite) {
@@ -517,21 +570,35 @@ export async function applyDbTableSyncAction(
         const envVal = resolveEnvValue(connection.dbFilePathEnv);
         if (envVal) dbFilePath = envVal;
       }
-      return applySqliteTableSync(dbFilePath, tableName, columns, undefined, indexes);
+      return applySqliteTableSync(
+        dbFilePath,
+        tableName,
+        columns,
+        undefined,
+        indexes,
+        foreignKeys,
+        prerequisiteTables,
+      );
     }
 
     return {
       success: true,
       createdTable: false,
       appliedColumns: [],
+      alteredColumns: [],
       appliedIndexes: [],
+      appliedForeignKeys: [],
+      appliedPrerequisiteTables: [],
     };
   } catch (err) {
     return {
       success: false,
       createdTable: false,
       appliedColumns: [],
+      alteredColumns: [],
       appliedIndexes: [],
+      appliedForeignKeys: [],
+      appliedPrerequisiteTables: [],
       error: err instanceof Error ? err.message : String(err),
     };
   }

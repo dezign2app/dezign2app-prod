@@ -151,7 +151,13 @@ export const BetterAuthTableRow: React.FC<BetterAuthTableRowProps> = ({
               )}
               {outdatedColumns.length > 0 && (
                 <span className="font-bold underline mr-1">
-                  constraints ({outdatedColumns.map((c: CanvasEntityColumn) => `${c.name}${c.isNotNull ? " [not-null]" : ""}${c.isUnique ? " [unique]" : ""}`).join(", ")})
+                  constraints ({outdatedColumns.map((c: CanvasEntityColumn) => {
+                    const parts: string[] = [];
+                    if (c.type) parts.push(c.type);
+                    if (c.isNotNull) parts.push("not-null");
+                    if (c.isUnique) parts.push("unique");
+                    return `${c.name}${parts.length > 0 ? ` [${parts.join(", ")}]` : ""}`;
+                  }).join(", ")})
                 </span>
               )}
               {missingIndexes.length > 0 && (
