@@ -56,6 +56,103 @@ export function extractResponseFieldSuggestions(endpoint?: Endpoint): string[] {
 }
 
 /**
+ * Checks if a parameter or field name is an authentication header (e.g. Authorization)
+ */
+export function isAuthHeaderName(name?: string): boolean {
+  if (!name) return false;
+  const lower = name.toLowerCase().trim();
+  return (
+    lower === "authorization" ||
+    lower === "auth-bearer-header" ||
+    lower === "auth_token" ||
+    lower.startsWith("auth-")
+  );
+}
+
+/**
+ * Returns any auth headers configured on the endpoint, or defaults to Authorization: Bearer <token>
+ * if the endpoint is connected to a protected page (or requireAuth === true) and requireAuth !== false.
+ */
+export function getEndpointAuthHeaders(
+  endpoint?: Endpoint | null,
+  isProtected?: boolean,
+): Array<{ name: string; value: string }> {
+  if (endpoint?.requireAuth === false) {
+    return [];
+  }
+
+  // Check if endpoint already has an auth header in endpoint.headers
+  const existingAuthHeaders = (endpoint?.headers || []).filter((h) => {
+    const name = (h.name || "").toLowerCase();
+    const id = (h.id || "").toLowerCase();
+    return (
+      name === "authorization" ||
+      id === "auth-bearer-header" ||
+      id.startsWith("auth-") ||
+      h.defaultValue?.toLowerCase().includes("bearer") ||
+      h.value?.toLowerCase().includes("bearer")
+    );
+  });
+
+  if (existingAuthHeaders.length > 0) {
+    return existingAuthHeaders.map((h) => ({
+      name: h.name || "Authorization",
+      value: h.defaultValue || h.value || "Bearer <token>",
+    }));
+  }
+
+  if (isProtected || endpoint?.requireAuth === true) {
+    return [{ name: "Authorization", value: "Bearer <token>" }];
+  }
+
+  return [];
+}
+
+/**
+ * Automatically maps required authentication headers into requestBindings when calling
+ * an authenticated endpoint from a protected WebPage.
+ */
+export function autoMapAuthBindings(
+  bindings: FrontendRequestFieldBinding[] = [],
+  endpoint?: Endpoint | null,
+  isProtected?: boolean,
+): FrontendRequestFieldBinding[] {
+  const authHeaders = getEndpointAuthHeaders(endpoint, isProtected);
+
+  if (authHeaders.length === 0) {
+    // If endpoint explicitly disallows auth, remove any default Bearer <token> auth header
+    if (endpoint?.requireAuth === false) {
+      return bindings.filter(
+        (b) =>
+          !isAuthHeaderName(b.targetField) ||
+          b.source.kind !== "literal" ||
+          b.source.value !== "Bearer <token>",
+      );
+    }
+    return bindings;
+  }
+
+  const result = [...bindings];
+  for (const ah of authHeaders) {
+    const exists = result.some(
+      (b) => b.targetField.toLowerCase() === ah.name.toLowerCase(),
+    );
+    if (!exists) {
+      result.push({
+        id: `bind-auth-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        targetField: ah.name,
+        source: {
+          kind: "literal",
+          value: ah.value,
+        },
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
  * Derives FrontendActionStepDraft[] by merging canvas topology (ActionStepItem[])
  * with any existing saved drafts on the UIEventItem.
  * Canvas steps remain the source of truth for step existence, ordering, and topology.
@@ -63,6 +160,7 @@ export function extractResponseFieldSuggestions(endpoint?: Endpoint): string[] {
 export function deriveStepsFromEdges(
   canvasSteps: ActionStepItem[],
   existing?: FrontendActionStepDraft[],
+  isProtected?: boolean,
 ): FrontendActionStepDraft[] {
   const existingMap = new Map<string, FrontendActionStepDraft>();
   const orderMap = new Map<number, FrontendActionStepDraft>();
@@ -122,6 +220,12 @@ export function deriveStepsFromEdges(
     const requestBindings: FrontendRequestFieldBinding[] =
       existingDraft?.requestBindings ? [...existingDraft.requestBindings] : [];
 
+    const mappedBindings = autoMapAuthBindings(
+      requestBindings,
+      cStep.endpoint,
+      isProtected,
+    );
+
     const draft: FrontendActionStepDraft = {
       id: existingDraft?.id || cStep.edgeId,
       order,
@@ -129,7 +233,7 @@ export function deriveStepsFromEdges(
       edgeId: cStep.edgeId,
       serviceNodeId: cStep.targetNodeId,
       endpointId: cStep.endpointId,
-      requestBindings,
+      requestBindings: mappedBindings,
     };
 
     return draft;

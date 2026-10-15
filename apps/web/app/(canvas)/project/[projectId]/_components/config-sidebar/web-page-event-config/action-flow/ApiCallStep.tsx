@@ -3,6 +3,7 @@ import { Plus, Trash2, Globe, Server, ArrowRight } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
+import { Badge } from "@workspace/ui/components/badge";
 import {
   Select,
   SelectContent,
@@ -18,6 +19,7 @@ import type {
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
 import { ActionFlowCombobox, ComboboxOption } from "./ActionFlowCombobox";
 import { ensureActionServiceConnection, cleanupActionStepEdge } from "./actionStepCanvasSync";
+import { isAuthHeaderName, autoMapAuthBindings } from "./utils";
 
 type SourceKindOption =
   | "user_input"
@@ -38,6 +40,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
   endpoints = [],
   webPageNodeId,
   actionId,
+  isProtected = false,
   onChange,
 }) => {
   const bindings = draft.requestBindings || [];
@@ -70,6 +73,24 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
   const requestFieldSuggestions: ComboboxOption[] = React.useMemo(() => {
     const list: ComboboxOption[] = [];
     const seen = new Set<string>();
+
+    if (isProtected || selectedEndpoint?.requireAuth !== false) {
+      seen.add("Authorization");
+      list.push({ value: "Authorization", label: "Authorization", type: "auth" });
+    }
+
+    if (selectedEndpoint?.headers) {
+      for (const h of selectedEndpoint.headers) {
+        if (h.name && !seen.has(h.name)) {
+          seen.add(h.name);
+          list.push({
+            value: h.name,
+            label: h.name,
+            type: isAuthHeaderName(h.name) ? "auth" : "header",
+          });
+        }
+      }
+    }
 
     if (selectedEndpoint?.requestBody?.fields) {
       for (const f of selectedEndpoint.requestBody.fields) {
@@ -166,7 +187,8 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
 
   const handleServiceSelect = (newServiceId: string) => {
     const eps = endpoints.filter((ep) => ep.nodeId === newServiceId);
-    const defaultEpId = eps[0]?.id || "";
+    const defaultEp = eps[0];
+    const defaultEpId = defaultEp?.id || "";
     const oldEdgeId =
       draft.edgeId ||
       canvasStep?.edgeId ||
@@ -197,11 +219,18 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
       });
     }
 
+    const updatedBindings = autoMapAuthBindings(
+      draft.requestBindings || [],
+      defaultEp,
+      isProtected,
+    );
+
     onChange({
       ...draft,
       serviceNodeId: newServiceId,
       endpointId: defaultEpId,
       edgeId: newEdgeId || oldEdgeId,
+      requestBindings: updatedBindings,
     });
   };
 
@@ -235,10 +264,18 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
       });
     }
 
+    const newEndpoint = serviceEndpoints.find((ep) => ep.id === newEndpointId);
+    const updatedBindings = autoMapAuthBindings(
+      draft.requestBindings || [],
+      newEndpoint,
+      isProtected,
+    );
+
     onChange({
       ...draft,
       endpointId: newEndpointId,
       edgeId: newEdgeId || oldEdgeId,
+      requestBindings: updatedBindings,
     });
   };
 
@@ -409,9 +446,19 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
               >
                 <div className="flex items-center gap-2">
                   <div className="flex-1 min-w-0">
-                    <Label className="text-[10px] text-muted-foreground">
-                      Request Field Name
-                    </Label>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] text-muted-foreground">
+                        Request Field Name
+                      </Label>
+                      {isAuthHeaderName(binding.targetField) && (
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] px-1 py-0 h-3.5 font-mono text-amber-500 border-amber-500/30 bg-amber-500/10"
+                        >
+                          Auth Header
+                        </Badge>
+                      )}
+                    </div>
                     <ActionFlowCombobox
                       value={binding.targetField}
                       onChange={(val) =>
@@ -467,9 +514,16 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                 <div className="pt-1">
                   {binding.source.kind === "literal" && (
                     <div className="space-y-1">
-                      <Label className="text-[10px] text-muted-foreground">
-                        Literal Value
-                      </Label>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-[10px] text-muted-foreground">
+                          Literal Value
+                        </Label>
+                        {(isAuthHeaderName(binding.targetField) || binding.source.value.includes("<token>")) && (
+                          <span className="text-[9px] text-amber-500 font-mono">
+                            Auto-injects bearer token at runtime
+                          </span>
+                        )}
+                      </div>
                       <Input
                         value={binding.source.value}
                         onChange={(e) => {

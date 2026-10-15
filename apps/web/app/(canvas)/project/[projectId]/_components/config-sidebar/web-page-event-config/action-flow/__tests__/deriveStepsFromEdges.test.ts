@@ -222,4 +222,81 @@ describe("Frontend Action Flow: deriveStepsFromEdges", () => {
     expect(plan).toContain("Step 2: [STORAGE PUT] -> media-bucket (uploadObject)");
     expect(plan).toContain("URL: Step 1.presignedUrl");
   });
+
+  it("should automatically map Authorization header when webpage is protected", () => {
+    const derived = deriveStepsFromEdges(canvasSteps, undefined, true);
+
+    expect(derived).toHaveLength(2);
+    const apiStep = derived[0];
+    expect(apiStep?.type).toBe("api_call");
+    expect(apiStep?.requestBindings).toBeDefined();
+
+    const authBinding = apiStep?.requestBindings?.find(
+      (b) => b.targetField.toLowerCase() === "authorization",
+    );
+    expect(authBinding).toBeDefined();
+    expect(authBinding?.source.kind).toBe("literal");
+    if (authBinding?.source.kind === "literal") {
+      expect(authBinding.source.value).toBe("Bearer <token>");
+    }
+  });
+
+  it("should NOT automatically map Authorization header when webpage is not protected and endpoint does not require auth", () => {
+    const derived = deriveStepsFromEdges(canvasSteps, undefined, false);
+
+    const apiStep = derived[0];
+    expect(apiStep?.type).toBe("api_call");
+    const authBinding = apiStep?.requestBindings?.find(
+      (b) => b.targetField.toLowerCase() === "authorization",
+    );
+    expect(authBinding).toBeUndefined();
+  });
+
+  it("should not inject auth headers when endpoint explicitly sets requireAuth to false even on protected page", () => {
+    const unauthStep: ActionStepItem[] = [
+      {
+        ...canvasSteps[0]!,
+        endpoint: {
+          ...canvasSteps[0]!.endpoint!,
+          requireAuth: false,
+        },
+      },
+    ];
+
+    const derived = deriveStepsFromEdges(unauthStep, undefined, true);
+    const apiStep = derived[0];
+    const authBinding = apiStep?.requestBindings?.find(
+      (b) => b.targetField.toLowerCase() === "authorization",
+    );
+    expect(authBinding).toBeUndefined();
+  });
+
+  it("should preserve non-auth bindings when auto-mapping auth headers", () => {
+    const customBinding: FrontendRequestFieldBinding = {
+      id: "custom-field",
+      targetField: "message",
+      source: { kind: "user_input", fieldName: "userMsg" },
+    };
+
+    const existingDrafts: FrontendActionStepDraft[] = [
+      {
+        id: "edge-web-to-service-1",
+        order: 1,
+        type: "api_call",
+        serviceNodeId: "service-node-1",
+        endpointId: "ep-presign",
+        requestBindings: [customBinding],
+      },
+    ];
+
+    const derived = deriveStepsFromEdges(canvasSteps, existingDrafts, true);
+    const apiStep = derived[0];
+
+    // Preserves existing message binding
+    expect(apiStep?.requestBindings?.some((b) => b.targetField === "message")).toBe(true);
+    // Also injects Authorization header
+    expect(
+      apiStep?.requestBindings?.some((b) => b.targetField.toLowerCase() === "authorization"),
+    ).toBe(true);
+  });
 });

@@ -1,4 +1,5 @@
 import type { WorkerTask, SearchSource } from "../schemas";
+import type { DatabaseEngine } from "../techStack";
 import type {
   GatewayRoute,
   AuthRule,
@@ -84,6 +85,8 @@ export interface CanvasAuthNodeData {
   baseUrl?: string;
   version?: BetterAuthVersion | string;
   dbAdapter?: BetterAuthDbAdapter;
+  dbEngine?: DatabaseEngine | string;
+  generateId?: "uuid" | "nanoid" | "serial" | string;
   databaseId?: string;
   connectionString?: string;
   connectionStringPooled?: string;

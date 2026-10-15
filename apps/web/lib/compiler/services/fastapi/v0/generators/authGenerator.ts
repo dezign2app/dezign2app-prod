@@ -26,11 +26,53 @@ export {
  */
 export function compileAuthNode(
   node: BackendNode,
-  _allNodes: BackendNode[] = [],
-  _allEdges: BackendEdge[] = []
+  allNodes: BackendNode[] = [],
+  allEdges: BackendEdge[] = []
 ): CompiledServiceResult {
-  const data: AuthNodeData = node.data || {};
-  const serviceName = data.label || "Auth Server";
+  const rawData: AuthNodeData = node.data || {};
+  const serviceName = rawData.label || "Auth Server";
+
+  // Resolve connected DB node if any to infer dbEngine / dbAdapter
+  const connectedDbEdge = allEdges.find(
+    (e) =>
+      ((e.target === node.id || e.target === (node as any).nodeId) &&
+        allNodes.some((n) => (n.id === e.source || (n as any).nodeId === e.source) && n.type === "database")) ||
+      ((e.source === node.id || e.source === (node as any).nodeId) &&
+        allNodes.some((n) => (n.id === e.target || (n as any).nodeId === e.target) && n.type === "database"))
+  );
+  const connectedEdgeDbNode = connectedDbEdge
+    ? allNodes.find(
+        (n) =>
+          (n.id === (connectedDbEdge.target === node.id ? connectedDbEdge.source : connectedDbEdge.target) ||
+            (n as any).nodeId === (connectedDbEdge.target === node.id ? connectedDbEdge.source : connectedDbEdge.target)) &&
+          n.type === "database"
+      )
+    : undefined;
+
+  const connectedDbNode =
+    allNodes.find((n) => n.id === rawData.databaseId) ||
+    connectedEdgeDbNode ||
+    allNodes.find((n) => n.type === "database" && n.data?.dbEngine !== "redis");
+
+  const resolvedDbEngine = (
+    rawData.dbEngine ||
+    connectedDbNode?.data?.dbEngine ||
+    ""
+  ).toLowerCase();
+
+  const resolvedDbAdapter =
+    rawData.dbAdapter ||
+    (resolvedDbEngine.includes("postgres") || resolvedDbEngine.includes("pg")
+      ? "postgres"
+      : resolvedDbEngine.includes("mysql")
+      ? "mysql"
+      : "sqlite-raw");
+
+  const data: AuthNodeData = {
+    ...rawData,
+    dbEngine: resolvedDbEngine || rawData.dbEngine,
+    dbAdapter: resolvedDbAdapter,
+  };
 
   const files: CompiledFile[] = [
     {

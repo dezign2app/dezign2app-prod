@@ -20,6 +20,19 @@ export const DEFAULT_SQLITE_CONFIG: AdapterConfig = {
 export const ADAPTER_REGISTRY: Record<string, Record<string, AdapterConfig>> = {
   default: {
     "sqlite-raw": DEFAULT_SQLITE_CONFIG,
+    sqlite: DEFAULT_SQLITE_CONFIG,
+    postgres: {
+      importStatement: `import { Pool } from "pg";\nconst pool = new Pool({\n  connectionString: process.env.DATABASE_URL,\n});\n`,
+      adapterCall: `pool`,
+    },
+    postgresql: {
+      importStatement: `import { Pool } from "pg";\nconst pool = new Pool({\n  connectionString: process.env.DATABASE_URL,\n});\n`,
+      adapterCall: `pool`,
+    },
+    pg: {
+      importStatement: `import { Pool } from "pg";\nconst pool = new Pool({\n  connectionString: process.env.DATABASE_URL,\n});\n`,
+      adapterCall: `pool`,
+    },
     drizzle: {
       importStatement: `import { drizzleAdapter } from "better-auth/adapters/drizzle";\nimport { db } from "./db";`,
       adapterCall: `drizzleAdapter(db, {\n    provider: "pg",\n  })`,
@@ -291,10 +304,30 @@ export function generateAuthConfig(data: AuthNodeData): string {
     ? `import { createAuthMiddleware } from "better-auth/api";\n`
     : "";
 
+  // Advanced Database Configuration (UUID generation for PostgreSQL)
+  const isPostgres =
+    (data.dbEngine || "").toLowerCase().includes("postgres") ||
+    (data.dbEngine || "").toLowerCase().includes("pg") ||
+    dbAdapterKey.toLowerCase().includes("postgres") ||
+    dbAdapterKey.toLowerCase().includes("pg") ||
+    dbAdapterKey === "drizzle" ||
+    dbAdapterKey === "prisma";
+
+  const generateId =
+    data.generateId ||
+    (isPostgres ? "uuid" : undefined);
+
+  let advancedBlock = "";
+  if (generateId === "uuid") {
+    advancedBlock = `\n  advanced: {\n    database: {\n      generateId: () => crypto.randomUUID(),\n    },\n  },`;
+  } else if (generateId) {
+    advancedBlock = `\n  advanced: {\n    database: {\n      generateId: ${JSON.stringify(generateId)},\n    },\n  },`;
+  }
+
   return `import { betterAuth } from "better-auth";
 ${adapterConfig.importStatement}
 ${createMiddlewareImport}${pluginImportStr}${passkeyImportStr}export const auth = betterAuth({
-  database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}
+  database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}${advancedBlock}
   plugins: [
     ${pluginCalls.join(",\n    ")}
   ],

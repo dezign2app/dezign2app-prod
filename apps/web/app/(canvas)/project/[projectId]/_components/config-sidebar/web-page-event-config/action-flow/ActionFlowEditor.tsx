@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@workspace/ui/components/badge";
 import type { ActionFlowEditorProps, FrontendActionStepDraft, FrontendActionStepType } from "./types";
-import { deriveStepsFromEdges, getActionFlowRuntime } from "./utils";
+import { deriveStepsFromEdges, getActionFlowRuntime, autoMapAuthBindings } from "./utils";
 import { FrontendAddStepToolbar } from "./FrontendAddStepToolbar";
 import { FrontendStepRow } from "./FrontendStepRow";
 import { createDefaultFrontendStep } from "./frontendStepFactory";
@@ -27,26 +27,46 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
   endpoints,
   webPageNodeId = "",
   actionId = "",
+  isProtected = false,
   onSave,
   onDeleteStep,
 }) => {
   const [drafts, setDrafts] = useState<FrontendActionStepDraft[]>(() => {
     if (item?.actionSteps && item.actionSteps.length > 0) {
-      return item.actionSteps;
+      return item.actionSteps.map((s) => {
+        if (s.type === "api_call") {
+          const ep = endpoints.find((e) => e.id === s.endpointId);
+          return {
+            ...s,
+            requestBindings: autoMapAuthBindings(s.requestBindings || [], ep, isProtected),
+          };
+        }
+        return s;
+      });
     }
-    return deriveStepsFromEdges(canvasSteps, item?.actionSteps);
+    return deriveStepsFromEdges(canvasSteps, item?.actionSteps, isProtected);
   });
   const [showRuntimePreview, setShowRuntimePreview] = useState(false);
 
   // Sync with item.actionSteps or canvasSteps if external changes happen
   useEffect(() => {
     if (item?.actionSteps && item.actionSteps.length > 0) {
-      setDrafts(item.actionSteps);
+      const mapped = item.actionSteps.map((s) => {
+        if (s.type === "api_call") {
+          const ep = endpoints.find((e) => e.id === s.endpointId);
+          return {
+            ...s,
+            requestBindings: autoMapAuthBindings(s.requestBindings || [], ep, isProtected),
+          };
+        }
+        return s;
+      });
+      setDrafts(mapped);
     } else if (canvasSteps.length > 0) {
-      const derived = deriveStepsFromEdges(canvasSteps, item?.actionSteps);
+      const derived = deriveStepsFromEdges(canvasSteps, item?.actionSteps, isProtected);
       setDrafts(derived);
     }
-  }, [item?.actionSteps, canvasSteps]);
+  }, [item?.actionSteps, canvasSteps, isProtected]);
 
   const handleAddStep = (type: FrontendActionStepType) => {
     const newOrder = drafts.length + 1;
@@ -69,6 +89,7 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
           serviceNodeId: firstService.id,
           endpointId: firstEndpoint.id,
           edgeId,
+          requestBindings: autoMapAuthBindings([], firstEndpoint, isProtected),
         };
       }
     }
@@ -215,6 +236,7 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
                       endpoints={endpoints}
                       webPageNodeId={webPageNodeId}
                       actionId={actionId}
+                      isProtected={isProtected}
                       onChange={handleStepChange}
                       onDelete={() => handleDeleteStep(step.id)}
                     />

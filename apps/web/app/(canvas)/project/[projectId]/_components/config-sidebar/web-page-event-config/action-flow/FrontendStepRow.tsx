@@ -25,6 +25,7 @@ export interface FrontendStepRowProps {
   endpoints: (Endpoint & { nodeId: string })[];
   webPageNodeId?: string;
   actionId?: string;
+  isProtected?: boolean;
   onChange: (updated: FrontendActionStepDraft) => void;
   onDelete: () => void;
 }
@@ -40,6 +41,7 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
   endpoints,
   webPageNodeId,
   actionId,
+  isProtected,
   onChange,
   onDelete,
 }) => {
@@ -84,6 +86,7 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   endpoints={endpoints}
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
+                  isProtected={isProtected}
                   onChange={onChange}
                 />
               )}

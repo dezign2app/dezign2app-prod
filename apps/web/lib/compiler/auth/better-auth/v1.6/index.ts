@@ -78,6 +78,7 @@ export function compileBetterAuthV16(
   const data: BetterAuthV16NodeData = {
     ...rawData,
     dbAdapter: resolvedDbAdapter,
+    dbEngine: resolvedDbEngine || rawData.dbEngine,
     connectionString: resolvedConnectionString,
     paymentsPlugin: rawData.paymentsPlugin || (connectedPaymentsNode
       ? {

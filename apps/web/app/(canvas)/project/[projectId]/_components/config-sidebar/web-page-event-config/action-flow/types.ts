@@ -26,6 +26,7 @@ export interface ActionFlowEditorProps {
   endpoints: (Endpoint & { nodeId: string })[];
   webPageNodeId?: string;
   actionId?: string;
+  isProtected?: boolean;
   onSave: (drafts: FrontendActionStepDraft[]) => void;
   onDeleteStep?: (edgeId: string) => void;
 }
@@ -41,6 +42,7 @@ export interface ActionFlowStepProps {
   endpoints: (Endpoint & { nodeId: string })[];
   webPageNodeId?: string;
   actionId?: string;
+  isProtected?: boolean;
   onChange: (updated: FrontendActionStepDraft) => void;
   onDelete: () => void;
 }
@@ -56,6 +58,7 @@ export interface ApiCallStepProps {
   endpoints?: (Endpoint & { nodeId: string })[];
   webPageNodeId?: string;
   actionId?: string;
+  isProtected?: boolean;
   onChange: (updated: FrontendActionStepDraft) => void;
 }
 

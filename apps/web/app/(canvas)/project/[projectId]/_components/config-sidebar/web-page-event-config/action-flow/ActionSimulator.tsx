@@ -27,6 +27,7 @@ import { cn } from "@workspace/ui/lib/utils";
 import type { BackendNode, Endpoint, UIEventItem, JSONValue, JSONObject, FrontendFieldSource } from "@workspace/canvas";
 import type { FrontendActionStepDraft } from "./types";
 import type { ActionStepItem } from "../TargetEndpointSection";
+import { isAuthHeaderName } from "./utils";
 
 export interface ActionSimulatorProps {
   item: UIEventItem;
@@ -36,6 +37,7 @@ export interface ActionSimulatorProps {
   endpoints: (Endpoint & { nodeId: string })[];
   webPageNodeId?: string;
   actionId?: string;
+  isProtected?: boolean;
 }
 
 interface SimulatedStepLog {
@@ -79,6 +81,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
   allNodes = [],
   endpoints = [],
   webPageNodeId = "",
+  isProtected = false,
 }) => {
   const currentPageNode = useMemo(
     () => allNodes.find((n) => n.id === webPageNodeId),
@@ -224,15 +227,29 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
         const targetEpId = step.endpointId;
         const targetEndpoint = endpoints.find((ep) => ep.id === targetEpId);
 
+        const simHeaders: Record<string, string> = { "Content-Type": "application/json" };
         const payload: Record<string, JSONValue> = {};
+
         (step.requestBindings || []).forEach((b) => {
           if (b.targetField) {
             const resolvedVal = resolveSourceValue(b.source);
-            if (resolvedVal !== undefined) {
+            if (isAuthHeaderName(b.targetField)) {
+              simHeaders[b.targetField] = String(
+                resolvedVal !== undefined
+                  ? resolvedVal
+                  : isProtected
+                  ? "Bearer <token>"
+                  : ""
+              );
+            } else if (resolvedVal !== undefined) {
               payload[b.targetField] = resolvedVal;
             }
           }
         });
+
+        if (isProtected && !simHeaders["Authorization"] && targetEndpoint?.requireAuth !== false) {
+          simHeaders["Authorization"] = "Bearer <token>";
+        }
 
         // Mock response resolution
         let mockResponseData: JSONValue = {
@@ -266,7 +283,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
             request: {
               method: targetEndpoint?.type || "POST",
               url: targetEndpoint?.name || "/api/endpoint",
-              headers: { "Content-Type": "application/json" },
+              headers: simHeaders,
               body: Object.keys(payload).length > 0 ? payload : undefined,
             },
             response: {
