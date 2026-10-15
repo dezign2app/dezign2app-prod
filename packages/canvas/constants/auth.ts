@@ -1,4 +1,5 @@
 import type { BetterAuthTableDefinition, AuthLifecycleHookDefinition, PaymentsTableDefinition } from "../types/auth";
+import type { CanvasEntityColumn } from "../types/database";
 import type { AuthNodeData } from "../schemas/nodes/auth";
 import { DB_COLUMN_TYPES } from "./database";
 
@@ -241,8 +242,8 @@ export const PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION: PaymentsTableDefinition = {
   category: "payments",
   description: "User subscription records, plan tiers, billing cycles, and Creem customer/subscription links.",
   defaultColumns: [
-    { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true, isNotNull: true },
-    { name: "userId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: "user", column: "id" }, isNotNull: true },
+    { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
+    { name: "userId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: "user", column: "id" }, isNotNull: true },
     { name: "creemSubscriptionId", type: DB_COLUMN_TYPES.TEXT, isUnique: true, isNotNull: true },
     { name: "creemCustomerId", type: DB_COLUMN_TYPES.TEXT },
     { name: "plan", type: DB_COLUMN_TYPES.TEXT, isNotNull: true, },
@@ -344,7 +345,7 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
     category: BETTER_AUTH_CATEGORIES.CORE,
     description: "Core user accounts, emails, display names, and verification flags.",
     defaultColumns: [
-      { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true, isNotNull: true },
+      { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
       { name: "name", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "email", type: DB_COLUMN_TYPES.TEXT, isUnique: true, isNotNull: true },
       { name: "emailVerified", type: DB_COLUMN_TYPES.BOOLEAN, isNotNull: true },
@@ -369,8 +370,8 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
     category: BETTER_AUTH_CATEGORIES.CORE,
     description: "Active session tokens, expiration timestamps, IP & User-Agent metadata.",
     defaultColumns: [
-      { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true, isNotNull: true },
-      { name: "userId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
+      { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
+      { name: "userId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
       { name: "token", type: DB_COLUMN_TYPES.TEXT, isUnique: true, isNotNull: true },
       { name: "expiresAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "ipAddress", type: DB_COLUMN_TYPES.TEXT },
@@ -378,8 +379,8 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "updatedAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "impersonatedBy", type: DB_COLUMN_TYPES.TEXT },
-      { name: "activeOrganizationId", type: DB_COLUMN_TYPES.TEXT },
-      { name: "activeTeamId", type: DB_COLUMN_TYPES.TEXT },
+      { name: "activeOrganizationId", type: DB_COLUMN_TYPES.UUID },
+      { name: "activeTeamId", type: DB_COLUMN_TYPES.UUID },
     ],
     defaultIndexes: [
       { name: "idx_session_userId", columns: "userId" },
@@ -393,8 +394,8 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
     category: BETTER_AUTH_CATEGORIES.CORE,
     description: "OAuth provider credentials, hashed passwords, and token links.",
     defaultColumns: [
-      { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true, isNotNull: true },
-      { name: "userId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
+      { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
+      { name: "userId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
       { name: "accountId", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "providerId", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "password", type: DB_COLUMN_TYPES.TEXT },
@@ -418,7 +419,7 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
     category: BETTER_AUTH_CATEGORIES.CORE,
     description: "Email verification, magic link, and OTP tokens.",
     defaultColumns: [
-      { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true, isNotNull: true },
+      { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
       { name: "identifier", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "value", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "expiresAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
@@ -435,7 +436,7 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
     category: BETTER_AUTH_CATEGORIES.ORGANIZATION,
     description: "Multi-tenant workspaces, company accounts, and team scopes.",
     defaultColumns: [
-      { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true, isNotNull: true },
+      { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
       { name: "name", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "slug", type: DB_COLUMN_TYPES.TEXT, isUnique: true, isNotNull: true },
       { name: "logo", type: DB_COLUMN_TYPES.TEXT },
@@ -452,9 +453,9 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
     category: BETTER_AUTH_CATEGORIES.ORGANIZATION,
     description: "User membership mappings to organizations with roles.",
     defaultColumns: [
-      { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true, isNotNull: true },
-      { name: "organizationId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.ORG, column: "id" }, isNotNull: true },
-      { name: "userId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
+      { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
+      { name: "organizationId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.ORG, column: "id" }, isNotNull: true },
+      { name: "userId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
       { name: "role", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
     ],
@@ -470,15 +471,15 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
     category: BETTER_AUTH_CATEGORIES.ORGANIZATION,
     description: "Pending email invitations for joining organizations.",
     defaultColumns: [
-      { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true, isNotNull: true },
-      { name: "organizationId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.ORG, column: "id" }, isNotNull: true },
+      { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
+      { name: "organizationId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.ORG, column: "id" }, isNotNull: true },
       { name: "email", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "role", type: DB_COLUMN_TYPES.TEXT },
-      { name: "teamId", type: DB_COLUMN_TYPES.TEXT },
+      { name: "teamId", type: DB_COLUMN_TYPES.UUID },
       { name: "status", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "expiresAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "inviterId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
+      { name: "inviterId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
     ],
     defaultIndexes: [
       { name: "idx_invitation_organizationId", columns: "organizationId" },
@@ -491,8 +492,8 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
     category: BETTER_AUTH_CATEGORIES.ORGANIZATION,
     description: "Sub-groups and department teams within organizations.",
     defaultColumns: [
-      { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true, isNotNull: true },
-      { name: "organizationId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.ORG, column: "id" }, isNotNull: true },
+      { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
+      { name: "organizationId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.ORG, column: "id" }, isNotNull: true },
       { name: "name", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
     ],
@@ -506,9 +507,9 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
     category: BETTER_AUTH_CATEGORIES.ORGANIZATION,
     description: "User memberships mapped to organization teams.",
     defaultColumns: [
-      { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true, isNotNull: true },
-      { name: "teamId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.TEAM, column: "id" }, isNotNull: true },
-      { name: "userId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
+      { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
+      { name: "teamId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.TEAM, column: "id" }, isNotNull: true },
+      { name: "userId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
       { name: "role", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
     ],
@@ -524,10 +525,10 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
     category: BETTER_AUTH_CATEGORIES.PLUGIN,
     description: "WebAuthn / Passkey public credentials and counters.",
     defaultColumns: [
-      { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true, isNotNull: true },
+      { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
       { name: "name", type: DB_COLUMN_TYPES.TEXT },
       { name: "publicKey", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "userId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
+      { name: "userId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
       { name: "credentialID", type: DB_COLUMN_TYPES.TEXT, isUnique: true, isNotNull: true },
       { name: "counter", type: DB_COLUMN_TYPES.INTEGER, isNotNull: true },
       { name: "deviceType", type: DB_COLUMN_TYPES.TEXT },
@@ -547,8 +548,8 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
     category: BETTER_AUTH_CATEGORIES.PLUGIN,
     description: "TOTP secrets and encrypted recovery backup codes.",
     defaultColumns: [
-      { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true, isNotNull: true },
-      { name: "userId", type: DB_COLUMN_TYPES.TEXT, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
+      { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
+      { name: "userId", type: DB_COLUMN_TYPES.UUID, isForeignKey: true, references: { table: BETTER_AUTH_TABLE_NAMES.USER, column: "id" }, isNotNull: true },
       { name: "secret", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "backupCodes", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "verified", type: DB_COLUMN_TYPES.BOOLEAN },
@@ -565,7 +566,7 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
     category: BETTER_AUTH_CATEGORIES.PLUGIN,
     description: "RSA / EC keypairs for JWT signing and OIDC discovery.",
     defaultColumns: [
-      { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true, isNotNull: true },
+      { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
       { name: "publicKey", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "privateKey", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "createdAt", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
@@ -653,4 +654,32 @@ export function isBetterAuthTableRequired(
   }
 
   return false;
+}
+
+/**
+ * Resolves Better Auth table column types based on the target database engine.
+ * For SQLite, UUID primary keys and foreign keys fall back to TEXT.
+ * For PostgreSQL (and default), UUID is used.
+ */
+export function resolveBetterAuthTableColumns(
+  columns: CanvasEntityColumn[],
+  engine?: string,
+): CanvasEntityColumn[] {
+  const isSqlite = (engine || "").toLowerCase() === "sqlite";
+  return columns.map((col) => {
+    if (isSqlite && col.type === DB_COLUMN_TYPES.UUID) {
+      return { ...col, type: DB_COLUMN_TYPES.TEXT };
+    }
+    return { ...col };
+  });
+}
+
+/**
+ * Convenience helper to get engine-adapted default columns for a Better Auth table definition.
+ */
+export function getTableColumnsForEngine(
+  def: BetterAuthTableDefinition,
+  engine?: string,
+): CanvasEntityColumn[] {
+  return resolveBetterAuthTableColumns(def.defaultColumns, engine);
 }

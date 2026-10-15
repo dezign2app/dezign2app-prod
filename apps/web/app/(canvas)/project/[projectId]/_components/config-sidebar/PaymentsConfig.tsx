@@ -28,6 +28,7 @@ import {
   DEFAULT_DATABASE_ENGINE,
   DEFAULT_DATABASE_ENV_VARS,
   getUniqueNodeLabel,
+  resolveBetterAuthTableColumns,
 } from "@workspace/canvas";
 
 export const PaymentsConfig = ({
@@ -109,6 +110,13 @@ export const PaymentsConfig = ({
       });
     }
 
+    const targetDb = dbId ? nodes.find((n) => n.id === dbId) : nodes.find((n) => n.type === "database");
+    const targetEngine = targetDb?.data?.dbEngine || DEFAULT_DATABASE_ENGINE;
+    const resolvedColumns = resolveBetterAuthTableColumns(
+      PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultColumns,
+      targetEngine,
+    );
+
     const tableId = `entity-${Date.now()}-subscription`;
     addNode({
       id: tableId,
@@ -117,7 +125,7 @@ export const PaymentsConfig = ({
       data: {
         label: "subscription",
         description: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.description,
-        columns: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultColumns,
+        columns: resolvedColumns,
         indexes: PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultIndexes
           ? [...PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION.defaultIndexes]
           : [],

@@ -16,6 +16,7 @@ import {
   DEFAULT_DATABASE_ENV_VARS,
   getUniqueNodeLabel,
   isBetterAuthTableRequired,
+  resolveBetterAuthTableColumns,
   CanvasEntityColumn,
 } from "@workspace/canvas";
 import { BackendNode, BackendNodeData } from "@/types/canvas";
@@ -51,10 +52,13 @@ export type EntityIndexDef = { name: string; columns: string; isUnique?: boolean
 export function repairEntityColumns(
   currentCols: CanvasEntityColumn[],
   defCols: BetterAuthTableDefinition["defaultColumns"],
+  engine?: string,
 ): { cols: CanvasEntityColumn[]; changed: boolean } {
   let changed = false;
+  const expectedCols = resolveBetterAuthTableColumns(defCols, engine);
+
   const repaired = currentCols.map((c) => {
-    const defCol = defCols.find(
+    const defCol = expectedCols.find(
       (dc) => dc.name.toLowerCase() === c.name.toLowerCase(),
     );
     if (!defCol) return c;
@@ -77,6 +81,15 @@ export function repairEntityColumns(
       patched.references = defCol.references;
       colChanged = true;
     }
+    // Type repair: for primary key 'id' and foreign keys, ensure type matches engine (UUID for postgres, TEXT for sqlite)
+    if (
+      defCol.type &&
+      patched.type !== defCol.type &&
+      (defCol.isPrimaryKey || defCol.isForeignKey || defCol.name.toLowerCase() === "id" || defCol.name.toLowerCase().endsWith("id"))
+    ) {
+      patched.type = defCol.type;
+      colChanged = true;
+    }
     if (colChanged) {
       changed = true;
       return patched;
@@ -84,7 +97,7 @@ export function repairEntityColumns(
     return c;
   });
 
-  const missingCols = defCols.filter(
+  const missingCols = expectedCols.filter(
     (reqCol) => !repaired.some((c) => c.name.toLowerCase() === reqCol.name.toLowerCase()),
   );
   if (missingCols.length > 0) {
@@ -116,6 +129,7 @@ export function repairEntityIndexes(
 export function checkEntitySchemaDiscrepancies(
   entity: BackendNode | undefined,
   def: BetterAuthTableDefinition,
+  engine?: string,
 ): {
   isMapped: boolean;
   isValid: boolean;
@@ -123,22 +137,35 @@ export function checkEntitySchemaDiscrepancies(
   outdatedColumns: BetterAuthTableDefinition["defaultColumns"];
   missingIndexes: EntityIndexDef[];
 } {
+  let targetEngine = engine;
+  if (!targetEngine && entity?.data?.databaseId) {
+    try {
+      const storeNodes = useBackendCanvasStore.getState().nodes;
+      const dbNode = storeNodes.find((n) => n.id === entity.data?.databaseId);
+      if (dbNode?.data?.dbEngine) targetEngine = dbNode.data.dbEngine;
+    } catch {
+      // ignore
+    }
+  }
+
+  const expectedCols = resolveBetterAuthTableColumns(def.defaultColumns, targetEngine);
+
   if (!entity || entity.type !== BACKEND_NODE_ENTITY) {
     return {
       isMapped: false,
       isValid: false,
-      missingColumns: def.defaultColumns,
+      missingColumns: expectedCols,
       outdatedColumns: [],
       missingIndexes: def.defaultIndexes || [],
     };
   }
 
   const existingCols: CanvasEntityColumn[] = entity.data?.columns || [];
-  const missingColumns = def.defaultColumns.filter(
+  const missingColumns = expectedCols.filter(
     (reqCol) => !existingCols.some((c) => c.name.toLowerCase() === reqCol.name.toLowerCase()),
   );
 
-  const outdatedColumns = def.defaultColumns.filter((reqCol) => {
+  const outdatedColumns = expectedCols.filter((reqCol) => {
     const existing = existingCols.find(
       (c) => c.name.toLowerCase() === reqCol.name.toLowerCase(),
     );
@@ -146,6 +173,13 @@ export function checkEntitySchemaDiscrepancies(
     if (reqCol.isPrimaryKey && !existing.isPrimaryKey) return true;
     if (reqCol.isNotNull && !existing.isNotNull) return true;
     if (reqCol.isUnique && !existing.isUnique) return true;
+    if (
+      reqCol.type &&
+      existing.type !== reqCol.type &&
+      (reqCol.isPrimaryKey || reqCol.isForeignKey || reqCol.name.toLowerCase() === "id" || reqCol.name.toLowerCase().endsWith("id"))
+    ) {
+      return true;
+    }
     return false;
   });
 
@@ -197,6 +231,18 @@ export function useBetterAuthTableSync({
   const addNode = useBackendCanvasStore((s) => s.addNode);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const addEdge = useBackendCanvasStore((s) => s.addEdge);
+
+  const getTargetEngine = (): string => {
+    const storeNodes = useBackendCanvasStore.getState().nodes;
+    const dbId = selectedDatabaseId || data.databaseId;
+    if (dbId) {
+      const dbNode = storeNodes.find((n) => n.id === dbId);
+      if (dbNode?.data?.dbEngine) return dbNode.data.dbEngine.toLowerCase();
+    }
+    const anyDbNode = storeNodes.find((n) => n.type === BACKEND_NODE_DATABASE);
+    if (anyDbNode?.data?.dbEngine) return anyDbNode.data.dbEngine.toLowerCase();
+    return DEFAULT_DATABASE_ENGINE.toLowerCase();
+  };
 
   const syncForeignKeysForTable = (
     def: BetterAuthTableDefinition,
@@ -279,7 +325,8 @@ export function useBetterAuthTableSync({
       const currentCols: CanvasEntityColumn[] = matchingEntity.data?.columns ?? [];
       const currentIdxs: EntityIndexDef[] = matchingEntity.data?.indexes ?? [];
 
-      const colResult = repairEntityColumns(currentCols, def.defaultColumns);
+      const targetEngine = getTargetEngine();
+      const colResult = repairEntityColumns(currentCols, def.defaultColumns, targetEngine);
       const idxResult = repairEntityIndexes(currentIdxs, def.defaultIndexes ?? []);
 
       if (colResult.changed || idxResult.changed) {
@@ -318,6 +365,9 @@ export function useBetterAuthTableSync({
         }
       }
 
+      const targetEngine = getTargetEngine();
+      const resolvedCols = resolveBetterAuthTableColumns(def.defaultColumns, targetEngine);
+
       targetEntityId = `entity-${Date.now()}-${def.name}`;
       addNode({
         id: targetEntityId,
@@ -326,7 +376,7 @@ export function useBetterAuthTableSync({
         data: {
           label: def.name,
           description: def.description,
-          columns: def.defaultColumns,
+          columns: resolvedCols,
           indexes: def.defaultIndexes ? [...def.defaultIndexes] : [],
           databaseId: dbId,
         },
@@ -389,7 +439,8 @@ export function useBetterAuthTableSync({
     const currentCols: CanvasEntityColumn[] = entityNode.data?.columns || [];
     const currentIdxs: EntityIndexDef[] = entityNode.data?.indexes || [];
 
-    const colResult = repairEntityColumns(currentCols, def.defaultColumns);
+    const targetEngine = getTargetEngine();
+    const colResult = repairEntityColumns(currentCols, def.defaultColumns, targetEngine);
     const idxResult = repairEntityIndexes(currentIdxs, def.defaultIndexes ?? []);
 
     updateNode(entityId, {
@@ -486,7 +537,8 @@ export function useBetterAuthTableSync({
         const currentCols: CanvasEntityColumn[] = matchingEntity.data?.columns ?? [];
         const currentIdxs: EntityIndexDef[] = matchingEntity.data?.indexes ?? [];
 
-        const colResult = repairEntityColumns(currentCols, def.defaultColumns);
+        const targetEngine = getTargetEngine();
+        const colResult = repairEntityColumns(currentCols, def.defaultColumns, targetEngine);
         const idxResult = repairEntityIndexes(currentIdxs, def.defaultIndexes ?? []);
 
         if (colResult.changed || idxResult.changed) {
@@ -504,6 +556,9 @@ export function useBetterAuthTableSync({
         const posY = baseY + (existingEntities.length + createdCount) * 110;
         createdCount++;
 
+        const targetEngine = getTargetEngine();
+        const resolvedCols = resolveBetterAuthTableColumns(def.defaultColumns, targetEngine);
+
         const newEntityId = `entity-${Date.now()}-${def.name}`;
         addNode({
           id: newEntityId,
@@ -512,7 +567,7 @@ export function useBetterAuthTableSync({
           data: {
             label: def.name,
             description: def.description,
-            columns: def.defaultColumns,
+            columns: resolvedCols,
             indexes: def.defaultIndexes ? [...def.defaultIndexes] : [],
             databaseId: dbId,
           },
