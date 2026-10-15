@@ -1065,7 +1065,14 @@ export function applySqliteTableSync(
         );
         const exists = existsStmt.get(prereqTable);
         if (!exists) {
-          ensureSqliteTable(db, prereqTable, prereq.columns);
+          const prereqCols: CanvasEntityColumn[] = (prereq.columns || []).map((c) => ({
+            name: c.name || "col",
+            type: c.type || "TEXT",
+            isPrimaryKey: Boolean(c.isPrimaryKey),
+            isNotNull: Boolean(c.isNotNull),
+            isUnique: Boolean(c.isUnique),
+          }));
+          ensureSqliteTable(db, prereqTable, prereqCols);
           appliedPrerequisiteTables.push(prereqTable);
         }
       }
