@@ -236,6 +236,13 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
           if (res.appliedColumns.length > 0) {
             parts.push(`added ${res.appliedColumns.length} col(s) (${res.appliedColumns.join(", ")})`);
           }
+          if (res.alteredColumns && res.alteredColumns.length > 0) {
+            parts.push(
+              `altered ${res.alteredColumns.length} col type(s) (${res.alteredColumns
+                .map((c) => `${c.name}: ${c.oldType}->${c.newType}`)
+                .join(", ")})`,
+            );
+          }
           if (res.appliedIndexes && res.appliedIndexes.length > 0) {
             parts.push(`created ${res.appliedIndexes.length} index(es) (${res.appliedIndexes.join(", ")})`);
           }
@@ -272,15 +279,30 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
   const handlePullFromDb = (e: React.MouseEvent) => {
     e.stopPropagation();
     const extraCols = syncStatus?.extraColumns || [];
+    const alteredCols = syncStatus?.alteredColumns || [];
     const extraIdxs = syncStatus?.extraIndexes || [];
     const extraFks = syncStatus?.extraForeignKeys || [];
-    if (!extraCols.length && !extraIdxs.length && !extraFks.length) return;
+    if (!extraCols.length && !alteredCols.length && !extraIdxs.length && !extraFks.length) return;
     const store = useBackendCanvasStore.getState();
     const entityNode = store.nodes.find((n) => n.id === entityId);
     if (!entityNode) return;
 
     let updatedData = { ...entityNode.data };
     let currentCols = [...columns];
+
+    // Revert altered columns back to database types
+    if (alteredCols.length > 0) {
+      currentCols = currentCols.map((col) => {
+        const alt = alteredCols.find((a) => a.name.toLowerCase() === col.name.toLowerCase());
+        if (alt) {
+          return {
+            ...col,
+            type: alt.oldType,
+          };
+        }
+        return col;
+      });
+    }
 
     if (extraCols.length > 0) {
       const importedCols = extraCols.map((c) => ({
@@ -322,6 +344,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
 
     store.updateNode(entityId, { data: updatedData });
     const pulledParts = [];
+    if (alteredCols.length > 0) pulledParts.push(`${alteredCols.length} type(s) reverted`);
     if (extraCols.length > 0) pulledParts.push(`${extraCols.length} column(s)`);
     if (extraIdxs.length > 0) pulledParts.push(`${extraIdxs.length} index(es)`);
     if (extraFks.length > 0) pulledParts.push(`${extraFks.length} FK(s)`);
@@ -357,6 +380,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
 
   const isMissingTable = Boolean(syncStatus?.serverReachable && syncStatus?.tableExists === false);
   const missingCols = syncStatus?.missingColumns || [];
+  const alteredCols = syncStatus?.alteredColumns || [];
   const extraCols = syncStatus?.extraColumns || [];
   const missingIdxs = syncStatus?.missingIndexes || [];
   const extraIdxs = syncStatus?.extraIndexes || [];
@@ -365,9 +389,12 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
   const missingPrereqs = syncStatus?.missingPrerequisiteTables || [];
 
   const totalAdditions = missingCols.length + missingIdxs.length + missingFks.length;
+  const totalAltered = alteredCols.length;
   const totalRemovals = extraCols.length + extraIdxs.length + extraFks.length;
-  const hasRemovalsOnly = totalAdditions === 0 && totalRemovals > 0;
-  const hasAdditionsOnly = totalAdditions > 0 && totalRemovals === 0;
+  const totalChanges = totalAdditions + totalAltered + totalRemovals;
+  const hasRemovalsOnly = totalAdditions === 0 && totalAltered === 0 && totalRemovals > 0;
+  const hasAdditionsOnly = totalAdditions > 0 && totalAltered === 0 && totalRemovals === 0;
+  const hasAlteredOnly = totalAdditions === 0 && totalRemovals === 0 && totalAltered > 0;
 
   return (
     <div className="mx-3 my-1.5 p-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 dark:text-emerald-200 flex flex-col gap-1.5 shadow-xs nodrag transition-all animate-in fade-in duration-200">
@@ -385,7 +412,9 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
                 ? `${totalRemovals} REMOVED`
                 : hasAdditionsOnly
                   ? `${totalAdditions} PENDING`
-                  : `${totalAdditions + totalRemovals} PENDING`}
+                  : hasAlteredOnly
+                    ? `${totalAltered} TYPE MODIFIED`
+                    : `${totalChanges} PENDING`}
           </span>
         </div>
 
@@ -399,7 +428,9 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
                 ? "Create table, foreign keys, and indexes in live database"
                 : hasRemovalsOnly
                   ? "Remove deleted columns/indexes/FKs from live database"
-                  : "Push schema changes, foreign keys & indexes to live database"
+                  : hasAlteredOnly
+                    ? "Migrate column types in live database"
+                    : "Push schema changes, foreign keys & indexes to live database"
             }
           >
             {isApplying ? (
@@ -418,7 +449,9 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
                   ? "Create Table"
                   : hasRemovalsOnly
                     ? "Sync Deletions"
-                    : "Push to DB"}
+                    : hasAlteredOnly
+                      ? "Sync Types"
+                      : "Push to DB"}
             </span>
           </button>
 
@@ -474,9 +507,22 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
               </span>
             )}
           </>
+        ) : hasAlteredOnly ? (
+          <>
+            {totalAltered} column type{totalAltered === 1 ? "" : "s"} modified (
+            {alteredCols.map((c) => `${c.name}: ${c.oldType} \u2192 ${c.newType}`).join(", ")}
+            ); pending migration in{" "}
+            <span className="font-semibold text-emerald-100">{dbLabel}</span>.
+          </>
         ) : (
           <>
-            +{totalAdditions} added, -{totalRemovals} removed; pending synchronization with{" "}
+            {[
+              totalAdditions > 0 ? `+${totalAdditions} added` : "",
+              totalAltered > 0 ? `~${totalAltered} type altered` : "",
+              totalRemovals > 0 ? `-${totalRemovals} removed` : "",
+            ]
+              .filter(Boolean)
+              .join(", ")}; pending synchronization with{" "}
             <span className="font-semibold text-emerald-100">{dbLabel}</span>.
           </>
         )}
@@ -506,7 +552,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
           {missingPrereqs.length > 0 && (
             <div className="px-1.5 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-[8px] font-mono text-amber-200 flex items-center gap-1">
               <span className="text-amber-400 font-bold shrink-0">AUTO-PREREQUISITES:</span>
-              <span className="truncate">Will create canvas table(s): <strong>{missingPrereqs.join(", ")}</strong> first</span>
+              <span className="truncate">Will create canvas table(s): <strong>{missingPrereqs.join(", ")}:</strong> first</span>
             </div>
           )}
 
@@ -540,6 +586,20 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
                   >
                     <span className="text-emerald-400 font-semibold">+ {col.name}</span>
                     <span className="text-emerald-300/70 uppercase text-[8px]">{col.type}</span>
+                  </div>
+                ))}
+                {alteredCols.map((col) => (
+                  <div
+                    key={`alt-col-${col.name}`}
+                    className="px-1.5 py-0.5 rounded bg-black/40 border border-amber-500/30 text-[8.5px] font-mono text-amber-200 flex items-center justify-between"
+                  >
+                    <span className="text-amber-400 font-semibold flex items-center gap-1">
+                      ~ <span className="text-[7px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold">TYPE</span> {col.name}
+                    </span>
+                    <span className="text-amber-300/80 text-[8px]">
+                      <span className="line-through opacity-60">{col.oldType}</span> &rarr;{" "}
+                      <span className="font-bold text-amber-200">{col.newType}</span>
+                    </span>
                   </div>
                 ))}
                 {missingIdxs.map((idx) => (
@@ -608,16 +668,20 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
           </div>
 
           {/* 2-Way Sync: Option to import live DB columns/indexes onto canvas */}
-          {totalRemovals > 0 && !isMissingTable && (
+          {(totalRemovals > 0 || totalAltered > 0) && !isMissingTable && (
             <div className="pt-1.5 flex items-center justify-between border-t border-emerald-500/20 text-[8.5px]">
-              <span className="text-emerald-300/80">Want to keep these items?</span>
+              <span className="text-emerald-300/80">
+                {totalAltered > 0 && totalRemovals === 0
+                  ? "Keep database types instead?"
+                  : "Want to keep database schema?"}
+              </span>
               <button
                 onClick={handlePullFromDb}
                 className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-semibold text-[8.5px] flex items-center gap-1 cursor-pointer border border-emerald-500/40 transition-colors"
-                title="Import these columns & indexes from live database onto the canvas"
+                title="Import types, columns & indexes from live database onto the canvas"
               >
                 <Download size={9} />
-                <span>Pull {totalRemovals} to Canvas</span>
+                <span>Pull {totalRemovals + totalAltered} to Canvas</span>
               </button>
             </div>
           )}

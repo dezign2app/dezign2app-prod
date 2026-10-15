@@ -265,4 +265,65 @@ describe("Database Table Schema Sync (SQLite)", () => {
     expect(status4.missingIndexes).toHaveLength(0);
     expect(status4.extraIndexes).toHaveLength(0);
   });
+
+  it("should detect column type drift and apply type alteration while preserving data", () => {
+    const { DatabaseSync } = require("node:sqlite");
+
+    // 1. Create table with column 'age' as TEXT
+    const applyInit = applySqliteTableSync(TEST_SYNC_DB, "Profile", [
+      { name: "id", type: "TEXT", isPrimaryKey: true },
+      { name: "age", type: "TEXT" },
+    ]);
+    expect(applyInit.success).toBe(true);
+
+    // 2. Insert test data
+    const resolvedPath = resolveSqlitePath(TEST_SYNC_DB);
+    const db = new DatabaseSync(resolvedPath);
+    db.exec(`INSERT INTO "Profile" ("id", "age") VALUES ('u1', '25');`);
+    db.close();
+
+    // 3. Check drift when canvas column type is changed to INTEGER
+    const driftCheck = checkSqliteTableSync(TEST_SYNC_DB, "Profile", [
+      { name: "id", type: "TEXT", isPrimaryKey: true },
+      { name: "age", type: "INTEGER" },
+    ]);
+
+    expect(driftCheck.inSync).toBe(false);
+    expect(driftCheck.alteredColumns).toHaveLength(1);
+    expect(driftCheck.alteredColumns?.[0]).toEqual({
+      name: "age",
+      oldType: "TEXT",
+      newType: "INTEGER",
+    });
+
+    // 4. Apply sync to migrate the column type
+    const applyRes = applySqliteTableSync(TEST_SYNC_DB, "Profile", [
+      { name: "id", type: "TEXT", isPrimaryKey: true },
+      { name: "age", type: "INTEGER" },
+    ]);
+
+    expect(applyRes.success).toBe(true);
+    expect(applyRes.alteredColumns).toHaveLength(1);
+    expect(applyRes.alteredColumns?.[0]?.name).toBe("age");
+
+    // 5. Verify data is preserved and schema is updated
+    const verifyDb = new DatabaseSync(resolvedPath);
+    const row = verifyDb.prepare(`SELECT id, age FROM "Profile" WHERE id = 'u1'`).get() as { id: string; age: number | string };
+    expect(row).toBeDefined();
+    expect(row.id).toBe("u1");
+    expect(row.age).toBe(25);
+
+    const info = verifyDb.prepare(`PRAGMA table_info("Profile")`).all() as Array<{ name: string; type: string }>;
+    const ageCol = info.find((c) => c.name === "age");
+    expect(ageCol?.type).toBe("INTEGER");
+    verifyDb.close();
+
+    // 6. Verify table is now in sync
+    const finalCheck = checkSqliteTableSync(TEST_SYNC_DB, "Profile", [
+      { name: "id", type: "TEXT", isPrimaryKey: true },
+      { name: "age", type: "INTEGER" },
+    ]);
+    expect(finalCheck.inSync).toBe(true);
+    expect(finalCheck.alteredColumns).toHaveLength(0);
+  });
 });

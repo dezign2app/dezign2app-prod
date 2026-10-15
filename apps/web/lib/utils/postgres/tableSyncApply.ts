@@ -1,7 +1,7 @@
-import { normalizeToPostgresType } from "@/lib/schema/columnTypes";
+import { normalizeToPostgresType, normalizePostgresDbType, arePostgresTypesEquivalent } from "@/lib/schema/columnTypes";
 import { resolveConnectionString, isSslRequiredForConfig, resolveTableAndSchema } from "./connection";
 import { ensurePostgresTable } from "./tableSchema";
-import { CanvasForeignKey, PostgresApplySyncResult, PostgresConnectionConfig, PrerequisiteTableDefinition } from "./types";
+import { AlteredColumnDefinition, CanvasForeignKey, PostgresApplySyncResult, PostgresConnectionConfig, PrerequisiteTableDefinition } from "./types";
 
 /**
  * Helper to synchronize foreign key constraints on a table in PostgreSQL.
@@ -489,18 +489,106 @@ export async function applyPostgresTableSync(
     }
 
     // Table exists, query existing columns from the configured schema
-    const infoRes = await client.query<{ column_name: string }>(
-      `SELECT column_name FROM information_schema.columns 
+    const infoRes = await client.query<{ column_name: string; data_type: string; udt_name: string }>(
+      `SELECT column_name, data_type, udt_name FROM information_schema.columns 
        WHERE LOWER(table_name) = LOWER($1)
          AND table_schema = $2`,
       [safeTable, targetSchema],
     );
+    const existingColMap = new Map(
+      infoRes.rows.map((r) => [
+        r.column_name.toLowerCase(),
+        {
+          name: r.column_name,
+          dataType: r.data_type,
+          udtName: r.udt_name,
+          normalizedType: normalizePostgresDbType(r.data_type, r.udt_name),
+        },
+      ]),
+    );
     const existingCols = new Set(infoRes.rows.map((r) => r.column_name.toLowerCase()));
     const canvasColNames = new Set((columns || []).map((c) => (c.name || "").toLowerCase()));
     const appliedColumns: string[] = [];
+    const alteredColumns: AlteredColumnDefinition[] = [];
+    const columnTypeErrors: string[] = [];
     const droppedColumns: string[] = [];
 
-    // 1. Add missing columns
+    // 1. Alter column types for modified columns
+    for (const col of columns || []) {
+      const colName = (col.name || "").replace(/[^a-zA-Z0-9_]/g, "");
+      if (!colName) continue;
+      const existing = existingColMap.get(colName.toLowerCase());
+      if (!existing) continue;
+
+      const isPk = Boolean(
+        (col as { isPrimaryKey?: boolean }).isPrimaryKey ||
+        colName.toLowerCase() === "id"
+      );
+      const isEq = arePostgresTypesEquivalent(col.type || "TEXT", existing.dataType, existing.udtName, isPk);
+      if (!isEq) {
+        const targetType = normalizeToPostgresType(col.type || "TEXT", isPk);
+        const alterType = targetType === "BIGSERIAL" ? "BIGINT" : targetType === "SERIAL" ? "INTEGER" : targetType;
+
+        let alteredSuccessfully = false;
+        try {
+          // Drop conflicting default constraint if changing to UUID or fundamentally different type
+          if (alterType === "UUID") {
+            try {
+              await client.query(
+                `ALTER TABLE "${targetSchema}"."${safeTable}" ALTER COLUMN "${colName}" DROP DEFAULT`,
+              );
+            } catch {}
+          }
+
+          let usingClause = `USING "${colName}"::${alterType}`;
+          if (alterType === "UUID") {
+            usingClause = `USING (CASE WHEN "${colName}"::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN "${colName}"::uuid ELSE gen_random_uuid() END)`;
+          } else if (alterType === "BOOLEAN") {
+            usingClause = `USING (CASE WHEN "${colName}"::text IN ('1', 'true', 't', 'yes', 'y', 'TRUE', 'True') THEN TRUE WHEN "${colName}"::text IN ('0', 'false', 'f', 'no', 'n', 'FALSE', 'False') THEN FALSE ELSE NULL END)`;
+          } else if (alterType === "JSONB") {
+            usingClause = `USING (CASE WHEN "${colName}"::text ~ '^\\s*[\\[\\{]' THEN "${colName}"::jsonb ELSE to_jsonb("${colName}") END)`;
+          } else if (alterType === "JSON") {
+            usingClause = `USING (CASE WHEN "${colName}"::text ~ '^\\s*[\\[\\{]' THEN "${colName}"::json ELSE to_json("${colName}") END)`;
+          }
+
+          await client.query(
+            `ALTER TABLE "${targetSchema}"."${safeTable}" ALTER COLUMN "${colName}" TYPE ${alterType} ${usingClause}`,
+          );
+
+          if (alterType === "UUID" && isPk) {
+            try {
+              await client.query(
+                `ALTER TABLE "${targetSchema}"."${safeTable}" ALTER COLUMN "${colName}" SET DEFAULT gen_random_uuid()`,
+              );
+            } catch {}
+          }
+
+          alteredSuccessfully = true;
+        } catch (err) {
+          try {
+            await client.query(
+              `ALTER TABLE "${targetSchema}"."${safeTable}" ALTER COLUMN "${colName}" TYPE ${alterType} USING "${colName}"::${alterType}`,
+            );
+            alteredSuccessfully = true;
+          } catch (retryErr) {
+            const activeErr = err instanceof Error ? err : retryErr instanceof Error ? retryErr : null;
+            columnTypeErrors.push(
+              `Column "${colName}" type alteration to ${alterType}: ${activeErr ? activeErr.message : String(err || retryErr)}`,
+            );
+          }
+        }
+
+        if (alteredSuccessfully) {
+          alteredColumns.push({
+            name: colName,
+            oldType: existing.normalizedType,
+            newType: alterType,
+          });
+        }
+      }
+    }
+
+    // 2. Add missing columns
     for (const col of columns || []) {
       const colName = (col.name || "").replace(/[^a-zA-Z0-9_]/g, "");
       if (!colName || existingCols.has(colName.toLowerCase())) continue;
@@ -512,7 +600,7 @@ export async function applyPostgresTableSync(
       appliedColumns.push(colName);
     }
 
-    // 2. Drop columns that were removed from the canvas
+    // 3. Drop columns that were removed from the canvas
     for (const row of infoRes.rows) {
       const dbColLower = row.column_name.toLowerCase();
       if (
@@ -527,7 +615,7 @@ export async function applyPostgresTableSync(
       }
     }
 
-    // 3. Create missing indexes
+    // 4. Create missing indexes
     const appliedIndexes: string[] = [];
     const indexErrors: string[] = [];
     for (const missingIdx of missingIndexes) {
@@ -564,7 +652,7 @@ export async function applyPostgresTableSync(
       }
     }
 
-    // 4. Sync Foreign Keys
+    // 5. Sync Foreign Keys
     const fkSyncRes = await applyForeignKeysToTable(
       client,
       safeTable,
@@ -572,9 +660,10 @@ export async function applyPostgresTableSync(
       validCanvasFks,
     );
 
-    const allErrors = [...indexErrors, ...fkSyncRes.foreignKeyErrors];
+    const allErrors = [...columnTypeErrors, ...indexErrors, ...fkSyncRes.foreignKeyErrors];
     const hasAnyChanges =
       appliedColumns.length > 0 ||
+      alteredColumns.length > 0 ||
       droppedColumns.length > 0 ||
       appliedIndexes.length > 0 ||
       droppedIndexes.length > 0 ||
@@ -586,6 +675,7 @@ export async function applyPostgresTableSync(
       success: hasAnyChanges || allErrors.length === 0,
       createdTable: false,
       appliedColumns,
+      alteredColumns,
       droppedColumns,
       appliedIndexes,
       droppedIndexes,

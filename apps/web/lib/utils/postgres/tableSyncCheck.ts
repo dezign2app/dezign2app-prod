@@ -1,5 +1,6 @@
+import { normalizePostgresDbType, arePostgresTypesEquivalent, normalizeToPostgresType } from "@/lib/schema/columnTypes";
 import { resolveConnectionString, resolveTableAndSchema } from "./connection";
-import { CanvasForeignKey, PostgresConnectionConfig, PostgresTableSyncResult } from "./types";
+import { AlteredColumnDefinition, CanvasForeignKey, PostgresConnectionConfig, PostgresTableSyncResult } from "./types";
 
 /**
  * Checks whether a canvas table entity exists in the live PostgreSQL database
@@ -49,6 +50,7 @@ export async function checkPostgresTableSync(
       tableExists: false,
       inSync: false,
       missingColumns: [],
+      alteredColumns: [],
       extraColumns: [],
       existingColumns: [],
       missingIndexes: validCanvasIndexes,
@@ -117,6 +119,7 @@ export async function checkPostgresTableSync(
         tableExists: false,
         inSync: false,
         missingColumns: canvasCols,
+        alteredColumns: [],
         extraColumns: [],
         existingColumns: [],
         missingIndexes: validCanvasIndexes,
@@ -130,8 +133,8 @@ export async function checkPostgresTableSync(
     }
 
     // Table exists, query existing columns from the configured schema
-    const colsRes = await client.query<{ column_name: string; data_type: string }>(
-      `SELECT column_name, data_type 
+    const colsRes = await client.query<{ column_name: string; data_type: string; udt_name: string }>(
+      `SELECT column_name, data_type, udt_name 
        FROM information_schema.columns 
        WHERE LOWER(table_name) = LOWER($1)
          AND table_schema = $2`,
@@ -140,10 +143,17 @@ export async function checkPostgresTableSync(
 
     const existingColumns = colsRes.rows.map((r) => ({
       name: r.column_name,
-      type: r.data_type,
+      type: normalizePostgresDbType(r.data_type, r.udt_name),
     }));
     const existingColMap = new Map(
-      colsRes.rows.map((r) => [r.column_name.toLowerCase(), r.data_type]),
+      colsRes.rows.map((r) => [
+        r.column_name.toLowerCase(),
+        {
+          dataType: r.data_type,
+          udtName: r.udt_name,
+          normalizedType: normalizePostgresDbType(r.data_type, r.udt_name),
+        },
+      ]),
     );
 
     const missingColumns = canvasCols.filter(
@@ -157,6 +167,28 @@ export async function checkPostgresTableSync(
         c.name.toLowerCase() !== "created_at" &&
         c.name.toLowerCase() !== "updated_at",
     );
+
+    // Detect column type drift
+    const alteredColumns: AlteredColumnDefinition[] = [];
+    for (const col of canvasCols) {
+      const colNameLower = col.name.toLowerCase();
+      const existing = existingColMap.get(colNameLower);
+      if (!existing) continue;
+
+      const isPk = Boolean(
+        (col as { isPrimaryKey?: boolean }).isPrimaryKey ||
+        colNameLower === "id"
+      );
+      const isEq = arePostgresTypesEquivalent(col.type, existing.dataType, existing.udtName, isPk);
+      if (!isEq) {
+        const targetType = normalizeToPostgresType(col.type, isPk);
+        alteredColumns.push({
+          name: col.name,
+          oldType: existing.normalizedType,
+          newType: targetType,
+        });
+      }
+    }
 
     // Query existing non-primary standalone indexes
     let existingIndexes: Array<{ name: string; columns: string; isUnique?: boolean }> = [];
@@ -334,6 +366,7 @@ export async function checkPostgresTableSync(
 
     const inSync =
       missingColumns.length === 0 &&
+      alteredColumns.length === 0 &&
       extraColumns.length === 0 &&
       missingIndexes.length === 0 &&
       extraIndexes.length === 0 &&
@@ -346,6 +379,7 @@ export async function checkPostgresTableSync(
       tableExists: true,
       inSync,
       missingColumns,
+      alteredColumns,
       extraColumns,
       existingColumns,
       missingIndexes,
@@ -363,6 +397,7 @@ export async function checkPostgresTableSync(
       tableExists: false,
       inSync: false,
       missingColumns: [],
+      alteredColumns: [],
       extraColumns: [],
       existingColumns: [],
       missingIndexes: [],

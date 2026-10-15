@@ -110,3 +110,53 @@ export function normalizeToPostgresType(type?: string, isPrimaryKey?: boolean): 
   }
   return "TEXT";
 }
+
+/**
+ * Normalizes PostgreSQL data_type or udt_name from information_schema.columns to standard canonical type.
+ */
+export function normalizePostgresDbType(dataType?: string, udtName?: string): string {
+  const dt = (dataType || "").toLowerCase().trim();
+  const udt = (udtName || "").toLowerCase().trim();
+
+  if (udt === "uuid" || dt === "uuid") return "UUID";
+  if (dt === "character varying" || dt === "varchar" || udt === "varchar") return "VARCHAR";
+  if (dt === "text" || udt === "text") return "TEXT";
+  if (dt === "integer" || udt === "int4") return "INTEGER";
+  if (dt === "bigint" || udt === "int8") return "BIGINT";
+  if (dt === "smallint" || udt === "int2") return "SMALLINT";
+  if (dt === "boolean" || udt === "bool") return "BOOLEAN";
+  if (dt === "timestamp with time zone" || udt === "timestamptz") return "TIMESTAMPTZ";
+  if (dt === "timestamp without time zone" || dt === "timestamp" || udt === "timestamp") return "TIMESTAMP";
+  if (dt === "double precision" || udt === "float8") return "DOUBLE PRECISION";
+  if (dt === "real" || udt === "float4") return "REAL";
+  if (dt === "numeric" || dt === "decimal" || udt === "numeric") return "NUMERIC";
+  if (dt === "bytea" || udt === "bytea") return "BYTEA";
+  if (dt === "jsonb" || udt === "jsonb") return "JSONB";
+  if (dt === "json" || udt === "json") return "JSON";
+  if (dt === "date" || udt === "date") return "DATE";
+  if (dt.startsWith("time") || udt.startsWith("time")) return "TIME";
+
+  return normalizeToPostgresType(dt || udt);
+}
+
+/**
+ * Checks if a canvas column type is semantically equivalent to the PostgreSQL live DB column type.
+ */
+export function arePostgresTypesEquivalent(
+  canvasType?: string,
+  dbDataType?: string,
+  dbUdtName?: string,
+  isPrimaryKey?: boolean,
+): boolean {
+  const normCanvas = normalizeToPostgresType(canvasType, isPrimaryKey);
+  const normDb = normalizePostgresDbType(dbDataType, dbUdtName);
+
+  if (normCanvas === normDb) return true;
+
+  // Primary key or integer sequence synonyms
+  if ((normCanvas === "BIGSERIAL" || normCanvas === "BIGINT") && normDb === "BIGINT") return true;
+  if ((normCanvas === "SERIAL" || normCanvas === "INTEGER") && normDb === "INTEGER") return true;
+  if ((normCanvas === "NUMERIC" || normCanvas === "DECIMAL") && normDb === "NUMERIC") return true;
+
+  return false;
+}

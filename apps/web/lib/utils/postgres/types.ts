@@ -80,12 +80,19 @@ export interface PrerequisiteTableDefinition {
   }>;
 }
 
+export interface AlteredColumnDefinition {
+  name: string;
+  oldType: string;
+  newType: string;
+}
+
 export interface PostgresTableSyncResult {
   success: boolean;
   serverReachable: boolean;
   tableExists: boolean;
   inSync: boolean;
   missingColumns: Array<{ name: string; type: string }>;
+  alteredColumns?: Array<AlteredColumnDefinition>;
   extraColumns: Array<{ name: string; type: string }>;
   existingColumns: Array<{ name: string; type: string }>;
   missingIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
@@ -102,6 +109,7 @@ export interface PostgresApplySyncResult {
   success: boolean;
   createdTable: boolean;
   appliedColumns: string[];
+  alteredColumns?: Array<AlteredColumnDefinition>;
   droppedColumns?: string[];
   appliedIndexes?: string[];
   droppedIndexes?: string[];

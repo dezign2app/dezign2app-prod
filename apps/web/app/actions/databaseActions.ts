@@ -13,6 +13,7 @@ import {
 import {
   type CanvasForeignKey,
   type PrerequisiteTableDefinition,
+  type AlteredColumnDefinition,
   executePostgresLiveOperation,
   checkPostgresConnection,
   checkPostgresTableSync,
@@ -44,7 +45,7 @@ import {
 } from "@/lib/database-runner";
 import { executeFunctionCode } from "@/lib/database-runner/functionCodeRunner";
 
-export type { CanvasForeignKey, PrerequisiteTableDefinition };
+export type { CanvasForeignKey, PrerequisiteTableDefinition, AlteredColumnDefinition };
 
 export interface CheckDbTableSyncPayload {
   engine?: string;
@@ -72,6 +73,7 @@ export interface CheckDbTableSyncResult {
   tableExists: boolean;
   inSync: boolean;
   missingColumns: Array<{ name: string; type: string }>;
+  alteredColumns?: Array<AlteredColumnDefinition>;
   extraColumns: Array<{ name: string; type: string }>;
   existingColumns: Array<{ name: string; type: string }>;
   missingIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
@@ -92,6 +94,7 @@ export interface ApplyDbTableSyncResult {
   success: boolean;
   createdTable: boolean;
   appliedColumns: string[];
+  alteredColumns?: Array<AlteredColumnDefinition>;
   droppedColumns?: string[];
   appliedIndexes?: string[];
   droppedIndexes?: string[];
@@ -492,6 +495,7 @@ export async function checkDbTableSyncAction(
       tableExists: true,
       inSync: true,
       missingColumns: [],
+      alteredColumns: [],
       extraColumns: [],
       existingColumns: [],
       missingIndexes: [],
@@ -509,6 +513,7 @@ export async function checkDbTableSyncAction(
       tableExists: false,
       inSync: false,
       missingColumns: [],
+      alteredColumns: [],
       extraColumns: [],
       existingColumns: [],
       missingIndexes: [],
@@ -580,6 +585,7 @@ export async function applyDbTableSyncAction(
       success: true,
       createdTable: false,
       appliedColumns: [],
+      alteredColumns: [],
       appliedIndexes: [],
       appliedForeignKeys: [],
       appliedPrerequisiteTables: [],
@@ -589,6 +595,7 @@ export async function applyDbTableSyncAction(
       success: false,
       createdTable: false,
       appliedColumns: [],
+      alteredColumns: [],
       appliedIndexes: [],
       appliedForeignKeys: [],
       appliedPrerequisiteTables: [],

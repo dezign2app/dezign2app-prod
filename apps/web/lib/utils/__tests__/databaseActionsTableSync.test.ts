@@ -511,4 +511,65 @@ describe("databaseActions Table Sync Actions", () => {
     expect(syncedCheck.existingForeignKeys?.[0]?.foreignTable.toLowerCase()).toBe("customer");
     expect(syncedCheck.missingPrerequisiteTables).toHaveLength(0);
   });
+
+  it("should detect field type changes and migrate them via checkDbTableSyncAction and applyDbTableSyncAction", async () => {
+    // 1. Create table with string 'score'
+    await applyDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "ScoreCard",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "score", type: "TEXT" },
+      ],
+    });
+
+    // 2. Check sync when canvas changes 'score' to INTEGER
+    const driftCheck = await checkDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "ScoreCard",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "score", type: "INTEGER" },
+      ],
+    });
+
+    expect(driftCheck.inSync).toBe(false);
+    expect(driftCheck.alteredColumns).toHaveLength(1);
+    expect(driftCheck.alteredColumns?.[0]).toEqual({
+      name: "score",
+      oldType: "TEXT",
+      newType: "INTEGER",
+    });
+
+    // 3. Apply sync
+    const applyRes = await applyDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "ScoreCard",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "score", type: "INTEGER" },
+      ],
+    });
+
+    expect(applyRes.success).toBe(true);
+    expect(applyRes.alteredColumns).toHaveLength(1);
+    expect(applyRes.alteredColumns?.[0]?.name).toBe("score");
+
+    // 4. Verify in sync after apply
+    const afterCheck = await checkDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "ScoreCard",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "score", type: "INTEGER" },
+      ],
+    });
+
+    expect(afterCheck.inSync).toBe(true);
+    expect(afterCheck.alteredColumns).toHaveLength(0);
+  });
 });
