@@ -816,12 +816,18 @@ export function checkSqliteTableSync(
     const missingIndexes = validCanvasIndexes.filter((cIdx) => {
       const cName = cIdx.name.toLowerCase();
       const cCols = normalizeIndexColumns(cIdx.columns).join(",");
+      const fallbackName = `idx_${safeTable.toLowerCase()}_${cName}`;
       return !existingIndexes.some((dbIdx) => {
         const dbName = dbIdx.name.toLowerCase();
         const dbCols = normalizeIndexColumns(dbIdx.columns).join(",");
+        const nameMatches =
+          dbName === cName ||
+          dbName === fallbackName ||
+          cName === `idx_${safeTable.toLowerCase()}_${dbName}`;
         return (
-          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
-          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+          nameMatches &&
+          dbCols === cCols &&
+          Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)
         );
       });
     });
@@ -832,9 +838,15 @@ export function checkSqliteTableSync(
       return !validCanvasIndexes.some((cIdx) => {
         const cName = cIdx.name.toLowerCase();
         const cCols = normalizeIndexColumns(cIdx.columns).join(",");
+        const fallbackName = `idx_${safeTable.toLowerCase()}_${cName}`;
+        const nameMatches =
+          dbName === cName ||
+          dbName === fallbackName ||
+          cName === `idx_${safeTable.toLowerCase()}_${dbName}`;
         return (
-          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
-          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+          nameMatches &&
+          dbCols === cCols &&
+          Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)
         );
       });
     });
@@ -917,8 +929,15 @@ export function applySqliteTableSync(
     if (!exists) {
       ensureSqliteTable(db, safeTable, columns);
       const appliedIndexes: string[] = [];
+      const indexErrors: string[] = [];
       for (const idx of validCanvasIndexes) {
-        const safeIdxName = sanitizeIdentifier(idx.name, `idx_${safeTable}`);
+        let safeIdxName = sanitizeIdentifier(idx.name, `idx_${safeTable}`);
+        const existingRel = db.prepare(
+          "SELECT type, tbl_name FROM sqlite_master WHERE LOWER(name) = LOWER(?)"
+        ).get(safeIdxName) as { type: string; tbl_name: string } | undefined;
+        if (existingRel && (existingRel.type === "table" || existingRel.tbl_name.toLowerCase() !== safeTable.toLowerCase())) {
+          safeIdxName = `idx_${safeTable}_${safeIdxName}`;
+        }
         const colList = idx.columns
           .split(",")
           .map((c) => `"${sanitizeIdentifier(c.trim(), "col")}"`)
@@ -927,8 +946,20 @@ export function applySqliteTableSync(
           const uniqueStr = idx.isUnique ? "UNIQUE " : "";
           try {
             db.exec(`CREATE ${uniqueStr}INDEX IF NOT EXISTS "${safeIdxName}" ON "${safeTable}" (${colList});`);
-            appliedIndexes.push(idx.name);
-          } catch {}
+            appliedIndexes.push(safeIdxName);
+          } catch (err) {
+            const fallbackIdxName = `idx_${safeTable}_${safeIdxName}`;
+            if (safeIdxName !== fallbackIdxName) {
+              try {
+                db.exec(`CREATE ${uniqueStr}INDEX IF NOT EXISTS "${fallbackIdxName}" ON "${safeTable}" (${colList});`);
+                appliedIndexes.push(fallbackIdxName);
+              } catch (fallbackErr) {
+                indexErrors.push(`Index "${safeIdxName}": ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`);
+              }
+            } else {
+              indexErrors.push(`Index "${safeIdxName}": ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }
         }
       }
 
@@ -937,6 +968,9 @@ export function applySqliteTableSync(
         createdTable: true,
         appliedColumns: (columns || []).map((c) => c.name),
         appliedIndexes,
+        ...(indexErrors.length > 0
+          ? { error: `Table created, but index error(s): ${indexErrors.join("; ")}` }
+          : {}),
       };
     }
 
@@ -975,12 +1009,18 @@ export function applySqliteTableSync(
     const missingIndexes = validCanvasIndexes.filter((cIdx) => {
       const cName = cIdx.name.toLowerCase();
       const cCols = normalizeIndexColumns(cIdx.columns).join(",");
+      const fallbackName = `idx_${safeTable.toLowerCase()}_${cName}`;
       return !existingIndexes.some((dbIdx) => {
         const dbName = dbIdx.name.toLowerCase();
         const dbCols = normalizeIndexColumns(dbIdx.columns).join(",");
+        const nameMatches =
+          dbName === cName ||
+          dbName === fallbackName ||
+          cName === `idx_${safeTable.toLowerCase()}_${dbName}`;
         return (
-          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
-          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+          nameMatches &&
+          dbCols === cCols &&
+          Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)
         );
       });
     });
@@ -991,9 +1031,15 @@ export function applySqliteTableSync(
       return !validCanvasIndexes.some((cIdx) => {
         const cName = cIdx.name.toLowerCase();
         const cCols = normalizeIndexColumns(cIdx.columns).join(",");
+        const fallbackName = `idx_${safeTable.toLowerCase()}_${cName}`;
+        const nameMatches =
+          dbName === cName ||
+          dbName === fallbackName ||
+          cName === `idx_${safeTable.toLowerCase()}_${dbName}`;
         return (
-          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
-          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+          nameMatches &&
+          dbCols === cCols &&
+          Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)
         );
       });
     });
@@ -1042,8 +1088,15 @@ export function applySqliteTableSync(
 
     // 3. Create missing indexes
     const appliedIndexes: string[] = [];
+    const indexErrors: string[] = [];
     for (const missingIdx of missingIndexes) {
-      const safeIdxName = sanitizeIdentifier(missingIdx.name, `idx_${safeTable}`);
+      let safeIdxName = sanitizeIdentifier(missingIdx.name, `idx_${safeTable}`);
+      const existingRel = db.prepare(
+        "SELECT type, tbl_name FROM sqlite_master WHERE LOWER(name) = LOWER(?)"
+      ).get(safeIdxName) as { type: string; tbl_name: string } | undefined;
+      if (existingRel && (existingRel.type === "table" || existingRel.tbl_name.toLowerCase() !== safeTable.toLowerCase())) {
+        safeIdxName = `idx_${safeTable}_${safeIdxName}`;
+      }
       const colList = missingIdx.columns
         .split(",")
         .map((c) => `"${sanitizeIdentifier(c.trim(), "col")}"`)
@@ -1052,18 +1105,44 @@ export function applySqliteTableSync(
         const uniqueStr = missingIdx.isUnique ? "UNIQUE " : "";
         try {
           db.exec(`CREATE ${uniqueStr}INDEX IF NOT EXISTS "${safeIdxName}" ON "${safeTable}" (${colList});`);
-          appliedIndexes.push(missingIdx.name);
-        } catch {}
+          appliedIndexes.push(safeIdxName);
+        } catch (err) {
+          const fallbackIdxName = `idx_${safeTable}_${safeIdxName}`;
+          if (safeIdxName !== fallbackIdxName) {
+            try {
+              db.exec(`CREATE ${uniqueStr}INDEX IF NOT EXISTS "${fallbackIdxName}" ON "${safeTable}" (${colList});`);
+              appliedIndexes.push(fallbackIdxName);
+            } catch (fallbackErr) {
+              indexErrors.push(`Index "${safeIdxName}": ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`);
+            }
+          } else {
+            indexErrors.push(`Index "${safeIdxName}": ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
       }
     }
 
+    const hasAnyChanges =
+      appliedColumns.length > 0 ||
+      droppedColumns.length > 0 ||
+      appliedIndexes.length > 0 ||
+      droppedIndexes.length > 0;
+
     return {
-      success: true,
+      success: hasAnyChanges || indexErrors.length === 0,
       createdTable: false,
       appliedColumns,
       droppedColumns,
       appliedIndexes,
       droppedIndexes,
+      ...(indexErrors.length > 0
+        ? {
+            error:
+              (hasAnyChanges
+                ? "Schema updated, but some index(es) could not be created: "
+                : "Failed to create index: ") + indexErrors.join("; "),
+          }
+        : {}),
     };
   } catch (error) {
     return {

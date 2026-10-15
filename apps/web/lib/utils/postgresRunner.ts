@@ -760,6 +760,7 @@ export async function checkPostgresTableSync(
         .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
         .filter(Boolean)
         .join(",");
+      const fallbackName = `idx_${safeTable.toLowerCase()}_${cName}`;
       return !existingIndexes.some((dbIdx) => {
         const dbName = dbIdx.name.toLowerCase();
         const dbCols = (dbIdx.columns || "")
@@ -767,9 +768,14 @@ export async function checkPostgresTableSync(
           .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
           .filter(Boolean)
           .join(",");
+        const nameMatches =
+          dbName === cName ||
+          dbName === fallbackName ||
+          cName === `idx_${safeTable.toLowerCase()}_${dbName}`;
         return (
-          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
-          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+          nameMatches &&
+          dbCols === cCols &&
+          Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)
         );
       });
     });
@@ -788,9 +794,15 @@ export async function checkPostgresTableSync(
           .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
           .filter(Boolean)
           .join(",");
+        const fallbackName = `idx_${safeTable.toLowerCase()}_${cName}`;
+        const nameMatches =
+          dbName === cName ||
+          dbName === fallbackName ||
+          cName === `idx_${safeTable.toLowerCase()}_${dbName}`;
         return (
-          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
-          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+          nameMatches &&
+          dbCols === cCols &&
+          Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)
         );
       });
     });
@@ -892,8 +904,12 @@ export async function applyPostgresTableSync(
     if (!tableExists) {
       await ensurePostgresTable(client, safeTable, columns, targetSchema);
       const appliedIndexes: string[] = [];
+      const indexErrors: string[] = [];
       for (const idx of validCanvasIndexes) {
-        const safeIdxName = idx.name.replace(/[^a-zA-Z0-9_]/g, "");
+        let safeIdxName = idx.name.replace(/[^a-zA-Z0-9_]/g, "");
+        if (!safeIdxName) {
+          safeIdxName = `idx_${safeTable}_${idx.columns.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+        }
         const colList = idx.columns
           .split(",")
           .map((c) => `"${c.trim().replace(/[^a-zA-Z0-9_]/g, "")}"`)
@@ -905,7 +921,21 @@ export async function applyPostgresTableSync(
               `CREATE ${uniqueStr}INDEX IF NOT EXISTS "${safeIdxName}" ON "${targetSchema}"."${safeTable}" (${colList})`
             );
             appliedIndexes.push(safeIdxName);
-          } catch {}
+          } catch (err) {
+            const fallbackIdxName = `idx_${safeTable}_${safeIdxName}`;
+            if (safeIdxName !== fallbackIdxName) {
+              try {
+                await client.query(
+                  `CREATE ${uniqueStr}INDEX IF NOT EXISTS "${fallbackIdxName}" ON "${targetSchema}"."${safeTable}" (${colList})`
+                );
+                appliedIndexes.push(fallbackIdxName);
+              } catch (fallbackErr) {
+                indexErrors.push(`Index "${safeIdxName}": ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`);
+              }
+            } else {
+              indexErrors.push(`Index "${safeIdxName}": ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }
         }
       }
 
@@ -914,6 +944,9 @@ export async function applyPostgresTableSync(
         createdTable: true,
         appliedColumns: (columns || []).map((c) => c.name || "col"),
         appliedIndexes,
+        ...(indexErrors.length > 0
+          ? { error: `Table created, but index error(s): ${indexErrors.join("; ")}` }
+          : {}),
       };
     }
 
@@ -966,6 +999,7 @@ export async function applyPostgresTableSync(
         .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
         .filter(Boolean)
         .join(",");
+      const fallbackName = `idx_${safeTable.toLowerCase()}_${cName}`;
       return !existingIndexes.some((dbIdx) => {
         const dbName = dbIdx.name.toLowerCase();
         const dbCols = (dbIdx.columns || "")
@@ -973,9 +1007,14 @@ export async function applyPostgresTableSync(
           .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
           .filter(Boolean)
           .join(",");
+        const nameMatches =
+          dbName === cName ||
+          dbName === fallbackName ||
+          cName === `idx_${safeTable.toLowerCase()}_${dbName}`;
         return (
-          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
-          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+          nameMatches &&
+          dbCols === cCols &&
+          Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)
         );
       });
     });
@@ -994,9 +1033,15 @@ export async function applyPostgresTableSync(
           .map((c) => c.trim().replace(/^["'`]|["'`]$/g, "").toLowerCase())
           .filter(Boolean)
           .join(",");
+        const fallbackName = `idx_${safeTable.toLowerCase()}_${cName}`;
+        const nameMatches =
+          dbName === cName ||
+          dbName === fallbackName ||
+          cName === `idx_${safeTable.toLowerCase()}_${dbName}`;
         return (
-          (dbName === cName && dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)) ||
-          (dbCols === cCols && Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique))
+          nameMatches &&
+          dbCols === cCols &&
+          Boolean(dbIdx.isUnique) === Boolean(cIdx.isUnique)
         );
       });
     });
@@ -1053,8 +1098,12 @@ export async function applyPostgresTableSync(
 
     // 3. Create missing indexes
     const appliedIndexes: string[] = [];
+    const indexErrors: string[] = [];
     for (const missingIdx of missingIndexes) {
-      const safeIdxName = missingIdx.name.replace(/[^a-zA-Z0-9_]/g, "");
+      let safeIdxName = missingIdx.name.replace(/[^a-zA-Z0-9_]/g, "");
+      if (!safeIdxName) {
+        safeIdxName = `idx_${safeTable}_${missingIdx.columns.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+      }
       const colList = missingIdx.columns
         .split(",")
         .map((c) => `"${c.trim().replace(/[^a-zA-Z0-9_]/g, "")}"`)
@@ -1066,17 +1115,47 @@ export async function applyPostgresTableSync(
             `CREATE ${uniqueStr}INDEX IF NOT EXISTS "${safeIdxName}" ON "${targetSchema}"."${safeTable}" (${colList})`
           );
           appliedIndexes.push(safeIdxName);
-        } catch {}
+        } catch (err) {
+          // If creation failed due to relation name conflict (e.g. index named 'user' when table 'user' exists),
+          // attempt fallback with table prefix: idx_<safeTable>_<safeIdxName>
+          const fallbackIdxName = `idx_${safeTable}_${safeIdxName}`;
+          if (safeIdxName !== fallbackIdxName) {
+            try {
+              await client.query(
+                `CREATE ${uniqueStr}INDEX IF NOT EXISTS "${fallbackIdxName}" ON "${targetSchema}"."${safeTable}" (${colList})`
+              );
+              appliedIndexes.push(fallbackIdxName);
+            } catch (fallbackErr) {
+              indexErrors.push(`Index "${safeIdxName}": ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`);
+            }
+          } else {
+            indexErrors.push(`Index "${safeIdxName}": ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
       }
     }
 
+    const hasAnyChanges =
+      appliedColumns.length > 0 ||
+      droppedColumns.length > 0 ||
+      appliedIndexes.length > 0 ||
+      droppedIndexes.length > 0;
+
     return {
-      success: true,
+      success: hasAnyChanges || indexErrors.length === 0,
       createdTable: false,
       appliedColumns,
       droppedColumns,
       appliedIndexes,
       droppedIndexes,
+      ...(indexErrors.length > 0
+        ? {
+            error:
+              (hasAnyChanges
+                ? "Schema updated, but some index(es) could not be created: "
+                : "Failed to create index: ") + indexErrors.join("; "),
+          }
+        : {}),
     };
   } catch (error) {
     return {

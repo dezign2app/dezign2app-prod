@@ -379,4 +379,49 @@ describe("databaseActions Table Sync Actions", () => {
     expect(check3.inSync).toBe(true);
     expect(check3.missingIndexes).toHaveLength(0);
   });
+
+  it("should handle index name colliding with existing index via fallback", async () => {
+    // 1. Create table 'User' with an existing index 'user_idx'
+    await applyDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "User",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "name", type: "TEXT" },
+      ],
+      indexes: [{ name: "user_idx", columns: "name" }],
+    });
+
+    // 2. Create table 'Conversation' with an index also named 'user_idx' (colliding index name)
+    const applyConv = await applyDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "Conversation",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "created_by", type: "TEXT" },
+      ],
+      indexes: [{ name: "user_idx", columns: "created_by" }],
+    });
+
+    expect(applyConv.success).toBe(true);
+    // Fallback idx_Conversation_user_idx is applied
+    expect(applyConv.appliedIndexes).toContain("idx_Conversation_user_idx");
+
+    // 3. Check table sync verifies that the index is recognized as in sync
+    const checkConv = await checkDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "Conversation",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "created_by", type: "TEXT" },
+      ],
+      indexes: [{ name: "user_idx", columns: "created_by" }],
+    });
+
+    expect(checkConv.inSync).toBe(true);
+    expect(checkConv.missingIndexes).toHaveLength(0);
+  });
 });

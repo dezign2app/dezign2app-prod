@@ -98,8 +98,9 @@ export const ColumnRow = ({
     setEditingIndex(null);
   };
 
-  const isSourceVisible = col.isPrimaryKey || col.isUnique;
-  const isTargetVisible = col.isForeignKey || col.isPrimaryKey || col.name === "_id";
+  const isPrimaryKey = Boolean(col.isPrimaryKey || (col.name === "_id" && !col.isForeignKey));
+  const isSourceVisible = isPrimaryKey || col.isUnique;
+  const isTargetVisible = !isPrimaryKey && Boolean(col.isForeignKey);
 
   return (
     <div className="flex flex-col px-3 py-1.5 border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20 nodrag">
@@ -112,17 +113,19 @@ export const ColumnRow = ({
           isSourceVisible ? "opacity-100" : "opacity-0 group-hover/row:opacity-100",
         )}
       />
-      <Handle
-        type="target"
-        position={Position.Left}
-        id={`target-${index}`}
-        className={cn(
-          "w-3.5 h-3.5 !bg-zinc-200 dark:!bg-zinc-100 hover:!bg-sky-400 border-none shadow-md transition-all hover:scale-125 rounded-full z-30 cursor-crosshair !top-[14px]",
-          isTargetVisible
-            ? "opacity-100"
-            : "opacity-0 group-hover/row:opacity-100",
-        )}
-      />
+      {!isPrimaryKey && (
+        <Handle
+          type="target"
+          position={Position.Left}
+          id={`target-${index}`}
+          className={cn(
+            "w-3.5 h-3.5 !bg-zinc-200 dark:!bg-zinc-100 hover:!bg-sky-400 border-none shadow-md transition-all hover:scale-125 rounded-full z-30 cursor-crosshair !top-[14px]",
+            isTargetVisible
+              ? "opacity-100"
+              : "opacity-0 group-hover/row:opacity-100",
+          )}
+        />
+      )}
 
       {isEditing ? (
         <div
@@ -271,9 +274,17 @@ export const ColumnRow = ({
             </Label>
             <Switch
               checked={!!col.isPrimaryKey}
-              onCheckedChange={(val) =>
-                handleUpdate(index, { isPrimaryKey: val })
-              }
+              onCheckedChange={(val) => {
+                if (val) {
+                  handleUpdate(index, {
+                    isPrimaryKey: true,
+                    isForeignKey: false,
+                    references: undefined,
+                  });
+                } else {
+                  handleUpdate(index, { isPrimaryKey: false });
+                }
+              }}
               className="scale-75 origin-right"
             />
           </div>
@@ -325,6 +336,7 @@ export const ColumnRow = ({
                     }
 
                     handleUpdate(index, {
+                      isPrimaryKey: false,
                       isForeignKey: true,
                       references: {
                         table: refTable,

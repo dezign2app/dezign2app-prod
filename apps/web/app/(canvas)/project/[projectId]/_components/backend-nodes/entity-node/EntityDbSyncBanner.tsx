@@ -175,6 +175,9 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
           }
           toast.success(`Updated "${tableName}" in ${dbLabel}: ${parts.join(", ") || "synced"}!`);
         }
+        if (res.error) {
+          toast.warning(res.error);
+        }
         setJustSynced(true);
         setTimeout(() => setJustSynced(false), 4000);
         await performCheck();
