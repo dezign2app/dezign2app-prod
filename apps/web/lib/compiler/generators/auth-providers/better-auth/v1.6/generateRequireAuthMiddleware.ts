@@ -109,30 +109,56 @@ function buildSessionBlock(strategy: AuthStrategy): string {
 
 function buildDbSessionBlock(): string {
   return `      // Strategy: db — direct session lookup via shared @workspace/db (better-auth v1.6 schema)
-      type SessionRecord = { userId: string; expiresAt: string };
-      const session = (await db
-        .prepare("SELECT userId, expiresAt FROM session WHERE token = ?")
-        .get(token)) as SessionRecord | undefined;
+      type SessionRecord = { userId?: string; userid?: string; expiresAt?: string; expiresat?: string };
+      let session: SessionRecord | undefined;
+      try {
+        session = (await db
+          .prepare('SELECT "userId", "expiresAt" FROM "session" WHERE "token" = ?')
+          .get(token)) as SessionRecord | undefined;
+      } catch (_quoteErr) {
+        // Fallback for databases created with unquoted lowercase column schema
+        try {
+          session = (await db
+            .prepare('SELECT userid as "userId", expiresat as "expiresAt" FROM "session" WHERE token = ?')
+            .get(token)) as SessionRecord | undefined;
+        } catch {
+          throw _quoteErr;
+        }
+      }
 
-      if (!session?.userId) {
+      const resolvedUserId = session?.userId ?? session?.userid;
+      const resolvedExpiresAt = session?.expiresAt ?? session?.expiresat;
+
+      if (!resolvedUserId) {
         logger.warn("Auth failed: session not found", {
           tokenPrefix: token.substring(0, 8) + "...",
         });
         return res.status(401).json({ error: "Unauthorized: Invalid or expired token" });
       }
 
-      if (session.expiresAt && new Date(session.expiresAt).getTime() < Date.now()) {
-        logger.warn("Auth failed: session expired", { expiresAt: session.expiresAt });
+      if (resolvedExpiresAt && new Date(resolvedExpiresAt).getTime() < Date.now()) {
+        logger.warn("Auth failed: session expired", { expiresAt: resolvedExpiresAt });
         return res.status(401).json({ error: "Unauthorized: Session has expired" });
       }
 
       type UserRecord = { role?: string };
-      const userRecord = (await db
-        .prepare("SELECT role FROM user WHERE id = ?")
-        .get(session.userId)) as UserRecord | undefined;
+      let userRecord: UserRecord | undefined;
+      try {
+        userRecord = (await db
+          .prepare('SELECT "role" FROM "user" WHERE "id" = ?')
+          .get(resolvedUserId)) as UserRecord | undefined;
+      } catch (_userErr) {
+        try {
+          userRecord = (await db
+            .prepare('SELECT role FROM "user" WHERE id = ?')
+            .get(resolvedUserId)) as UserRecord | undefined;
+        } catch {
+          // Non-fatal if role query fails; defaults to 'user'
+        }
+      }
 
       req.user = {
-        id: String(session.userId),
+        id: String(resolvedUserId),
         role: String(userRecord?.role ?? "user"),
       };
 
