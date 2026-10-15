@@ -13,6 +13,7 @@ import {
   ActionFlowEditor,
   ActionSimulator,
 } from "./web-page-event-config";
+import { useWebPageConnectedContext } from "./web-page-config/hooks/useWebPageConnectedContext";
 import { ActionStepItem } from "./web-page-event-config/TargetEndpointSection";
 import { isStorageRefNode } from "@/lib/stores/backendCanvas/edge/utils";
 import { Label } from "@workspace/ui/components/label";
@@ -85,6 +86,14 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   const parentSection = sections.find((s) =>
     (s.actions || []).some((act) => act.id === id),
   );
+
+  const { isProtected } = useWebPageConnectedContext({
+    nodeId,
+    data: parentNode?.data,
+    allNodes: nodes,
+    allEdges: edges,
+    allEndpoints: endpoints,
+  });
 
   const initialEvent = item?.event || "click";
   const isStandard = EVENT_OPTIONS.some((opt) => opt === initialEvent);
@@ -415,6 +424,7 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
                   endpoints={endpoints}
                   webPageNodeId={nodeId}
                   actionId={id}
+                  isProtected={isProtected}
                   onSave={(drafts) =>
                     updateActionInParent({ actionSteps: drafts })
                   }
@@ -450,6 +460,7 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
                   endpoints={endpoints}
                   webPageNodeId={nodeId}
                   actionId={id}
+                  isProtected={isProtected}
                 />
               </AccordionContent>
             </AccordionItem>

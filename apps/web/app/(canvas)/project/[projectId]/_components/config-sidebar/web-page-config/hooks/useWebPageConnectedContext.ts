@@ -4,7 +4,7 @@ import { Endpoint } from "@workspace/canvas";
 
 interface UseWebPageConnectedContextParams {
   nodeId: string;
-  data: BackendNode["data"];
+  data?: Partial<BackendNode["data"]>;
   allNodes: BackendNode[];
   allEdges: BackendEdge[];
   allEndpoints: (Endpoint & { nodeId?: string })[];
@@ -12,7 +12,7 @@ interface UseWebPageConnectedContextParams {
 
 export function useWebPageConnectedContext({
   nodeId,
-  data,
+  data = {},
   allNodes,
   allEdges,
   allEndpoints,

@@ -115,6 +115,29 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
                   (e.source === targetNodeId && e.sourceHandle?.includes(item.id))),
             );
 
+            let stepBindingsChanged = false;
+            let updatedSteps = act.actionSteps;
+            if (act.actionSteps && act.actionSteps.length > 0) {
+              updatedSteps = act.actionSteps.map((step) => {
+                if (step.type === "api_call" && (step.endpointId === item.id || isActionConnected)) {
+                  const filteredBindings = (step.requestBindings || []).filter(
+                    (b) =>
+                      !(
+                        (b.targetField?.toLowerCase() === "authorization" ||
+                          b.targetField?.toLowerCase() === "auth-bearer-header") &&
+                        b.source.kind === "literal" &&
+                        b.source.value === "Bearer <token>"
+                      ),
+                  );
+                  if (filteredBindings.length !== (step.requestBindings || []).length) {
+                    stepBindingsChanged = true;
+                    return { ...step, requestBindings: filteredBindings };
+                  }
+                }
+                return step;
+              });
+            }
+
             if (isActionConnected || isDirectlyConnected) {
               const hasAuth = act.headers?.some(
                 (h: Parameter) =>
@@ -122,7 +145,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
                   h.id === "auth-bearer-header" ||
                   h.id?.startsWith("auth-"),
               );
-              if (hasAuth) {
+              if (hasAuth || stepBindingsChanged) {
                 secChanged = true;
                 return {
                   ...act,
@@ -132,8 +155,15 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
                       h.id !== "auth-bearer-header" &&
                       !h.id?.startsWith("auth-"),
                   ),
+                  ...(stepBindingsChanged ? { actionSteps: updatedSteps } : {}),
                 };
               }
+            } else if (stepBindingsChanged) {
+              secChanged = true;
+              return {
+                ...act,
+                actionSteps: updatedSteps,
+              };
             }
             return act;
           });
