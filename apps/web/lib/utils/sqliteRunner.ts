@@ -3,6 +3,7 @@ import path from "path";
 import { DatabaseSync, SqliteBindValue } from "node:sqlite";
 import { CanvasEntityColumn } from "@workspace/canvas/types";
 import { executeFunctionCode } from "../database-runner/functionCodeRunner";
+import type { CanvasForeignKey, PrerequisiteTableDefinition } from "./postgresRunner";
 
 // Strongly-typed JSON structures avoiding any / unknown
 export type JsonPrimitive = string | number | boolean | null;
@@ -80,6 +81,7 @@ export function ensureSqliteTable(
   db: DatabaseSync,
   tableName: string,
   columns?: CanvasEntityColumn[],
+  foreignKeys?: CanvasForeignKey[],
 ): string {
   const safeTable = sanitizeIdentifier(tableName, "records");
 
@@ -99,21 +101,32 @@ export function ensureSqliteTable(
           col.isPrimary ||
           col.primaryKey ||
           colName.toLowerCase() === "id";
-        colSqlList.push(isPk ? `${colName} ${colType} PRIMARY KEY` : `${colName} ${colType}`);
+        colSqlList.push(isPk ? `"${colName}" ${colType} PRIMARY KEY` : `"${colName}" ${colType}`);
       }
     }
     if (!colSqlList.some((c) => c.includes("PRIMARY KEY"))) {
-      colSqlList.unshift("id TEXT PRIMARY KEY");
+      colSqlList.unshift('"id" TEXT PRIMARY KEY');
     }
-    if (!colSqlList.some((c) => c.startsWith("created_at "))) {
-      colSqlList.push("created_at TEXT DEFAULT CURRENT_TIMESTAMP");
+    if (!colSqlList.some((c) => c.startsWith('"created_at" '))) {
+      colSqlList.push('"created_at" TEXT DEFAULT CURRENT_TIMESTAMP');
     }
-    if (!colSqlList.some((c) => c.startsWith("updated_at "))) {
-      colSqlList.push("updated_at TEXT DEFAULT CURRENT_TIMESTAMP");
+    if (!colSqlList.some((c) => c.startsWith('"updated_at" '))) {
+      colSqlList.push('"updated_at" TEXT DEFAULT CURRENT_TIMESTAMP');
     }
-    db.exec(`CREATE TABLE IF NOT EXISTS ${safeTable} (${colSqlList.join(", ")});`);
+
+    if (foreignKeys && foreignKeys.length > 0) {
+      for (const fk of foreignKeys) {
+        const fkCol = sanitizeIdentifier(fk.column, "col");
+        const fkTarget = sanitizeIdentifier(fk.foreignTable, "records");
+        const fkTargetCol = sanitizeIdentifier(fk.foreignColumn, "id");
+        const onDelete = (fk.onDelete || "CASCADE").toUpperCase();
+        colSqlList.push(`FOREIGN KEY ("${fkCol}") REFERENCES "${fkTarget}"("${fkTargetCol}") ON DELETE ${onDelete}`);
+      }
+    }
+
+    db.exec(`CREATE TABLE IF NOT EXISTS "${safeTable}" (${colSqlList.join(", ")});`);
   } else if (columns && columns.length > 0) {
-    const infoStmt = db.prepare(`PRAGMA table_info(${safeTable})`);
+    const infoStmt = db.prepare(`PRAGMA table_info("${safeTable}")`);
     const infoRows = infoStmt.all();
     const existing = new Set<string>();
     for (const r of infoRows) {
@@ -126,7 +139,7 @@ export function ensureSqliteTable(
       const colName = sanitizeIdentifier(col.name, "col");
       if (!existing.has(colName.toLowerCase())) {
         const colType = mapColumnTypeToSqlite(col.type);
-        db.exec(`ALTER TABLE ${safeTable} ADD COLUMN ${colName} ${colType};`);
+        db.exec(`ALTER TABLE "${safeTable}" ADD COLUMN "${colName}" ${colType};`);
         existing.add(colName.toLowerCase());
       }
     }
@@ -685,6 +698,10 @@ export interface SqliteTableSyncResult {
   missingIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
   extraIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
   existingIndexes?: Array<{ name: string; columns: string; isUnique?: boolean }>;
+  missingForeignKeys?: Array<CanvasForeignKey>;
+  extraForeignKeys?: Array<CanvasForeignKey>;
+  existingForeignKeys?: Array<CanvasForeignKey>;
+  missingPrerequisiteTables?: string[];
   error?: string;
 }
 
@@ -695,11 +712,15 @@ export interface SqliteApplySyncResult {
   droppedColumns?: string[];
   appliedIndexes?: string[];
   droppedIndexes?: string[];
+  appliedForeignKeys?: string[];
+  droppedForeignKeys?: string[];
+  appliedPrerequisiteTables?: string[];
+  foreignKeyErrors?: string[];
   error?: string;
 }
 
 /**
- * Checks if a table, its columns, and indexes exist in the SQLite database file.
+ * Checks if a table, its columns, indexes, and foreign keys exist in the SQLite database file.
  */
 export function checkSqliteTableSync(
   dbFilePath = "dev.db",
@@ -707,6 +728,7 @@ export function checkSqliteTableSync(
   columns?: CanvasEntityColumn[],
   projectDir?: string,
   indexes?: CanvasEntityIndex[],
+  foreignKeys?: CanvasForeignKey[],
 ): SqliteTableSyncResult {
   let db: DatabaseSync | null = null;
   const canvasCols = (columns || []).map((c) => ({
@@ -719,6 +741,22 @@ export function checkSqliteTableSync(
       name: i.name.trim(),
       columns: i.columns.trim(),
       isUnique: Boolean(i.isUnique),
+    }));
+
+  const validCanvasFks = (foreignKeys || [])
+    .filter(
+      (fk) =>
+        (fk.column || "").trim().length > 0 &&
+        (fk.foreignTable || "").trim().length > 0 &&
+        (fk.foreignColumn || "").trim().length > 0,
+    )
+    .map((fk) => ({
+      name: (fk.name || "").trim(),
+      column: fk.column.trim(),
+      foreignTable: fk.foreignTable.trim(),
+      foreignColumn: fk.foreignColumn.trim(),
+      onDelete: fk.onDelete || "CASCADE",
+      onUpdate: fk.onUpdate,
     }));
 
   try {
@@ -735,6 +773,10 @@ export function checkSqliteTableSync(
         missingIndexes: validCanvasIndexes,
         extraIndexes: [],
         existingIndexes: [],
+        missingForeignKeys: validCanvasFks,
+        extraForeignKeys: [],
+        existingForeignKeys: [],
+        missingPrerequisiteTables: Array.from(new Set(validCanvasFks.map((fk) => fk.foreignTable))),
       };
     }
 
@@ -744,6 +786,19 @@ export function checkSqliteTableSync(
       "SELECT name FROM sqlite_master WHERE type='table' AND LOWER(name) = LOWER(?)",
     );
     const exists = checkStmt.get(safeTable);
+
+    const existingTables = new Set(
+      (
+        (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() || []) as Array<{ name: string }>
+      ).map((t) => t.name.toLowerCase()),
+    );
+    const missingPrerequisiteTables = Array.from(
+      new Set(
+        validCanvasFks
+          .filter((fk) => !existingTables.has(fk.foreignTable.toLowerCase()))
+          .map((fk) => fk.foreignTable),
+      ),
+    );
 
     if (!exists) {
       return {
@@ -757,6 +812,10 @@ export function checkSqliteTableSync(
         missingIndexes: validCanvasIndexes,
         extraIndexes: [],
         existingIndexes: [],
+        missingForeignKeys: validCanvasFks,
+        extraForeignKeys: [],
+        existingForeignKeys: [],
+        missingPrerequisiteTables,
       };
     }
 
@@ -851,11 +910,60 @@ export function checkSqliteTableSync(
       });
     });
 
+    // Query existing foreign keys
+    let existingForeignKeys: Array<CanvasForeignKey> = [];
+    try {
+      const fkRows = (db.prepare(`PRAGMA foreign_key_list("${safeTable}")`).all() || []) as Array<{
+        id: number;
+        seq: number;
+        table: string;
+        from: string;
+        to: string;
+        on_update: string;
+        on_delete: string;
+      }>;
+      existingForeignKeys = fkRows.map((r) => ({
+        column: r.from,
+        foreignTable: r.table,
+        foreignColumn: r.to,
+        onDelete: r.on_delete,
+        onUpdate: r.on_update,
+      }));
+    } catch {
+      existingForeignKeys = [];
+    }
+
+    const missingForeignKeys = validCanvasFks.filter((cFk) => {
+      const cCol = cFk.column.toLowerCase();
+      const cTargetTable = cFk.foreignTable.toLowerCase();
+      const cTargetCol = cFk.foreignColumn.toLowerCase();
+      return !existingForeignKeys.some(
+        (dbFk) =>
+          dbFk.column.toLowerCase() === cCol &&
+          dbFk.foreignTable.toLowerCase() === cTargetTable &&
+          dbFk.foreignColumn.toLowerCase() === cTargetCol,
+      );
+    });
+
+    const extraForeignKeys = existingForeignKeys.filter((dbFk) => {
+      const dbCol = dbFk.column.toLowerCase();
+      const dbTargetTable = dbFk.foreignTable.toLowerCase();
+      const dbTargetCol = dbFk.foreignColumn.toLowerCase();
+      return !validCanvasFks.some(
+        (cFk) =>
+          cFk.column.toLowerCase() === dbCol &&
+          cFk.foreignTable.toLowerCase() === dbTargetTable &&
+          cFk.foreignColumn.toLowerCase() === dbTargetCol,
+      );
+    });
+
     const inSync =
       missingColumns.length === 0 &&
       extraColumns.length === 0 &&
       missingIndexes.length === 0 &&
-      extraIndexes.length === 0;
+      extraIndexes.length === 0 &&
+      missingForeignKeys.length === 0 &&
+      extraForeignKeys.length === 0;
 
     return {
       success: true,
@@ -868,6 +976,10 @@ export function checkSqliteTableSync(
       missingIndexes,
       extraIndexes,
       existingIndexes,
+      missingForeignKeys,
+      extraForeignKeys,
+      existingForeignKeys,
+      missingPrerequisiteTables,
     };
   } catch (error) {
     return {
@@ -881,6 +993,10 @@ export function checkSqliteTableSync(
       missingIndexes: [],
       extraIndexes: [],
       existingIndexes: [],
+      missingForeignKeys: [],
+      extraForeignKeys: [],
+      existingForeignKeys: [],
+      missingPrerequisiteTables: [],
       error: error instanceof Error ? error.message : String(error),
     };
   } finally {
@@ -894,7 +1010,7 @@ export function checkSqliteTableSync(
 
 /**
  * Applies table creation or adds missing columns/indexes to the live SQLite file,
- * and drops columns/indexes removed from the canvas.
+ * auto-creates prerequisite tables if provided, and drops removed columns/indexes.
  */
 export function applySqliteTableSync(
   dbFilePath = "dev.db",
@@ -902,6 +1018,8 @@ export function applySqliteTableSync(
   columns?: CanvasEntityColumn[],
   projectDir?: string,
   indexes?: CanvasEntityIndex[],
+  foreignKeys?: CanvasForeignKey[],
+  prerequisiteTables?: PrerequisiteTableDefinition[],
 ): SqliteApplySyncResult {
   let db: DatabaseSync | null = null;
   const validCanvasIndexes = (indexes || [])
@@ -912,6 +1030,22 @@ export function applySqliteTableSync(
       isUnique: Boolean(i.isUnique),
     }));
 
+  const validCanvasFks = (foreignKeys || [])
+    .filter(
+      (fk) =>
+        (fk.column || "").trim().length > 0 &&
+        (fk.foreignTable || "").trim().length > 0 &&
+        (fk.foreignColumn || "").trim().length > 0,
+    )
+    .map((fk) => ({
+      name: (fk.name || "").trim(),
+      column: fk.column.trim(),
+      foreignTable: fk.foreignTable.trim(),
+      foreignColumn: fk.foreignColumn.trim(),
+      onDelete: fk.onDelete || "CASCADE",
+      onUpdate: fk.onUpdate,
+    }));
+
   try {
     const resolvedPath = resolveSqlitePath(dbFilePath, projectDir);
     const dir = path.dirname(resolvedPath);
@@ -920,6 +1054,23 @@ export function applySqliteTableSync(
     }
 
     db = new DatabaseSync(resolvedPath);
+
+    // 1. Create prerequisite tables if missing
+    const appliedPrerequisiteTables: string[] = [];
+    if (prerequisiteTables && prerequisiteTables.length > 0) {
+      for (const prereq of prerequisiteTables) {
+        const prereqTable = sanitizeIdentifier(prereq.tableName, "records");
+        const existsStmt = db.prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND LOWER(name) = LOWER(?)",
+        );
+        const exists = existsStmt.get(prereqTable);
+        if (!exists) {
+          ensureSqliteTable(db, prereqTable, prereq.columns);
+          appliedPrerequisiteTables.push(prereqTable);
+        }
+      }
+    }
+
     const safeTable = sanitizeIdentifier(tableName, "records");
     const checkStmt = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND LOWER(name) = LOWER(?)",
@@ -927,7 +1078,7 @@ export function applySqliteTableSync(
     const exists = checkStmt.get(safeTable);
 
     if (!exists) {
-      ensureSqliteTable(db, safeTable, columns);
+      ensureSqliteTable(db, safeTable, columns, validCanvasFks);
       const appliedIndexes: string[] = [];
       const indexErrors: string[] = [];
       for (const idx of validCanvasIndexes) {
@@ -968,6 +1119,8 @@ export function applySqliteTableSync(
         createdTable: true,
         appliedColumns: (columns || []).map((c) => c.name),
         appliedIndexes,
+        appliedForeignKeys: validCanvasFks.map((fk) => fk.column),
+        appliedPrerequisiteTables,
         ...(indexErrors.length > 0
           ? { error: `Table created, but index error(s): ${indexErrors.join("; ")}` }
           : {}),
@@ -1126,7 +1279,8 @@ export function applySqliteTableSync(
       appliedColumns.length > 0 ||
       droppedColumns.length > 0 ||
       appliedIndexes.length > 0 ||
-      droppedIndexes.length > 0;
+      droppedIndexes.length > 0 ||
+      appliedPrerequisiteTables.length > 0;
 
     return {
       success: hasAnyChanges || indexErrors.length === 0,
@@ -1135,6 +1289,8 @@ export function applySqliteTableSync(
       droppedColumns,
       appliedIndexes,
       droppedIndexes,
+      appliedForeignKeys: [],
+      appliedPrerequisiteTables,
       ...(indexErrors.length > 0
         ? {
             error:
