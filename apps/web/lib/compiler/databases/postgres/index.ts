@@ -13,6 +13,7 @@ import {
   BETTERAUTH_PG_SCHEMAS,
   PAYMENTS_PG_DDL,
   PG_SEED_SQL,
+  buildPgSeedSql,
   generateSchemaSql,
 } from "./ddl";
 import { generatePostgresTableHelpers } from "./helpers";
@@ -143,6 +144,11 @@ export function compilePostgresDatabase(
   }
 
   // ── 4. schema.sql ─────────────────────────────────────────────────────────
+  const seedSql =
+    options.personas && options.personas.length > 0
+      ? buildPgSeedSql(options.personas, createdTableNames, BETTERAUTH_PG_SCHEMAS)
+      : "";
+
   files.push({
     filename: "schema.sql",
     language: "sql",
@@ -150,7 +156,7 @@ export function compilePostgresDatabase(
       userDdlStatements,
       authDdlStatements,
       paymentsDdlStatements,
-      PG_SEED_SQL,
+      seedSql,
     ),
   });
 

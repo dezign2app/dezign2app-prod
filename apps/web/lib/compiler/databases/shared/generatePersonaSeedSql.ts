@@ -1,0 +1,191 @@
+import { PersonaSeed } from "../../types/testPersona";
+
+export interface GeneratePersonaSeedOptions {
+  knownTableNames?: Set<string>;
+  knownTableColumns?:
+    | Map<string, Set<string>>
+    | Record<string, Array<{ name: string }>>
+    | Record<string, Set<string>>;
+}
+
+/**
+ * Escapes a literal value safely for SQL injection prevention.
+ * Uses ANSI single-quote doubling: 'O''Connor'
+ */
+export function escapeSqlValue(val: unknown, dialect: "sqlite" | "postgres"): string {
+  if (val === null || val === undefined) return "NULL";
+  if (typeof val === "number") {
+    return Number.isFinite(val) ? String(val) : "NULL";
+  }
+  if (typeof val === "boolean") {
+    return dialect === "postgres" ? (val ? "TRUE" : "FALSE") : val ? "1" : "0";
+  }
+  if (val instanceof Date) {
+    return `'${val.toISOString()}'`;
+  }
+  const str = String(val);
+  return `'${str.replace(/'/g, "''")}'`;
+}
+
+/**
+ * Normalizes known column lookup map for schema validation.
+ */
+function getKnownColumnsForTable(
+  tableName: string,
+  knownTableColumns?: GeneratePersonaSeedOptions["knownTableColumns"],
+): Set<string> | null {
+  if (!knownTableColumns) return null;
+
+  const lowerName = tableName.toLowerCase();
+
+  if (knownTableColumns instanceof Map) {
+    for (const [tName, cols] of knownTableColumns.entries()) {
+      if (tName.toLowerCase() === lowerName) {
+        return new Set(Array.from(cols).map((c) => c.toLowerCase()));
+      }
+    }
+    return null;
+  }
+
+  // Record<string, ...>
+  for (const [tName, colList] of Object.entries(knownTableColumns)) {
+    if (tName.toLowerCase() === lowerName) {
+      if (colList instanceof Set) {
+        return new Set(Array.from(colList).map((c) => c.toLowerCase()));
+      }
+      if (Array.isArray(colList)) {
+        return new Set(
+          colList.map((c) => (typeof c === "string" ? (c as string).toLowerCase() : c.name.toLowerCase())),
+        );
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Generates an array of safe, dialect-aware INSERT statements for persona test records.
+ */
+export function generatePersonaSeedStatements(
+  personas: PersonaSeed[],
+  dialect: "sqlite" | "postgres",
+  options: GeneratePersonaSeedOptions = {},
+): string[] {
+  if (!personas || personas.length === 0) return [];
+
+  const statements: string[] = [];
+  const knownTableNamesLower = options.knownTableNames
+    ? new Set(Array.from(options.knownTableNames).map((t) => t.toLowerCase()))
+    : null;
+
+  for (const persona of personas) {
+    if (!persona.records || persona.records.length === 0) continue;
+
+    // Find persona's user record id for session userId linkage
+    const userRec = persona.records.find(
+      (r) => (r.tableName || "").toLowerCase() === "user",
+    );
+    const personaUserId =
+      userRec?.fields?.id ||
+      userRec?.id ||
+      persona.id;
+
+    for (const record of persona.records) {
+      const rawTableName = record.tableName || "";
+      if (!rawTableName) continue;
+
+      const lowerTable = rawTableName.toLowerCase();
+
+      // Table validation: if knownTableNames is provided, skip unknown tables
+      if (knownTableNamesLower && !knownTableNamesLower.has(lowerTable)) {
+        continue;
+      }
+
+      // Clone fields so we don't mutate the original persona record
+      const fields: Record<string, unknown> = { ...(record.fields || {}) };
+
+      // Ensure primary record ID if omitted
+      if (record.id && fields.id === undefined) {
+        fields.id = record.id;
+      }
+
+      // Automatic session token synchronization
+      if (lowerTable === "session") {
+        if (persona.activeAuthToken) {
+          fields.token = persona.activeAuthToken;
+        }
+        if (!fields.userId && personaUserId) {
+          fields.userId = personaUserId;
+        }
+        if (!fields.expiresAt) {
+          fields.expiresAt = "2099-01-01T00:00:00.000Z";
+        }
+        if (!fields.createdAt) {
+          fields.createdAt = "2026-01-01T00:00:00.000Z";
+        }
+      }
+
+      // Automatic user defaults
+      if (lowerTable === "user") {
+        if (!fields.id && personaUserId) {
+          fields.id = personaUserId;
+        }
+        if (!fields.name && persona.name) {
+          fields.name = persona.name;
+        }
+        if (!fields.createdAt) {
+          fields.createdAt = "2026-01-01T00:00:00.000Z";
+        }
+      }
+
+      // Filter fields by known table columns if column metadata is available
+      const allowedCols = getKnownColumnsForTable(rawTableName, options.knownTableColumns);
+
+      const entries = Object.entries(fields).filter(([col, val]) => {
+        if (val === undefined) return false;
+        if (!allowedCols) return true;
+        // Always allow standard base columns
+        const lowerCol = col.toLowerCase();
+        if (lowerCol === "id" || lowerCol === "createdat" || lowerCol === "updatedat") return true;
+        return allowedCols.has(lowerCol);
+      });
+
+      if (entries.length === 0) continue;
+
+      const colNames = entries.map(([col]) => `"${col}"`).join(", ");
+      const colValues = entries
+        .map(([, val]) => escapeSqlValue(val, dialect))
+        .join(", ");
+
+      const cleanTableName = rawTableName.replace(/"/g, "");
+
+      if (dialect === "sqlite") {
+        statements.push(
+          `INSERT OR IGNORE INTO "${cleanTableName}" (${colNames}) VALUES (${colValues});`,
+        );
+      } else {
+        // Postgres
+        const hasId = entries.some(([col]) => col.toLowerCase() === "id");
+        const conflictClause = hasId ? `ON CONFLICT ("id") DO NOTHING` : `ON CONFLICT DO NOTHING`;
+        statements.push(
+          `INSERT INTO "${cleanTableName}" (${colNames}) VALUES (${colValues}) ${conflictClause};`,
+        );
+      }
+    }
+  }
+
+  return statements;
+}
+
+/**
+ * Builds a single SQL string containing all seed statements.
+ */
+export function generatePersonaSeedSql(
+  personas: PersonaSeed[],
+  dialect: "sqlite" | "postgres",
+  options: GeneratePersonaSeedOptions = {},
+): string {
+  const stmts = generatePersonaSeedStatements(personas, dialect, options);
+  return stmts.join("\n");
+}

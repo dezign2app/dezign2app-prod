@@ -30,6 +30,8 @@ import {
   KeyRound,
   Sparkles,
   Link2,
+  ShieldCheck,
+  RefreshCw,
 } from "lucide-react";
 import {
   TestUserPersona,
@@ -37,6 +39,13 @@ import {
   generateRecordId,
   generatePersonaId,
 } from "./types";
+import {
+  generateRealBearerJwtSync,
+  generateRealSessionToken,
+  inspectJwt,
+  isRealJwt,
+  DEFAULT_AUTH_SECRET,
+} from "./tokenGenerator";
 import { toast } from "sonner";
 import { cn } from "@workspace/ui/lib/utils";
 
@@ -197,10 +206,20 @@ export function TestUserPersonaEditor({
       } else {
         const userId = generateRecordId("user");
         const sessId = generateRecordId("session");
-        const token = `token_${Math.random().toString(36).substring(2, 10)}`;
+        const defaultEmail = "alice@company.com";
+        const defaultRole = "admin";
+
+        const realJwt = generateRealBearerJwtSync({
+          userId,
+          name: "Alice Admin",
+          email: defaultEmail,
+          role: defaultRole,
+          sessionId: sessId,
+        });
+
         setPersonaName("");
         setDescription("");
-        setActiveAuthToken(token);
+        setActiveAuthToken(realJwt);
         setRecords([
           {
             id: userId,
@@ -209,8 +228,8 @@ export function TestUserPersonaEditor({
             fields: {
               id: userId,
               name: "Alice Admin",
-              email: "alice@company.com",
-              role: "admin",
+              email: defaultEmail,
+              role: defaultRole,
             },
           },
           {
@@ -220,7 +239,7 @@ export function TestUserPersonaEditor({
             fields: {
               id: sessId,
               userId: userId,
-              token: token,
+              token: realJwt,
               expiresAt: "2099-01-01T00:00:00.000Z",
             },
           },
@@ -375,17 +394,124 @@ export function TestUserPersonaEditor({
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-medium">Active Bearer Token (for Endpoint Testing)</Label>
+            <div className="flex flex-col gap-2 p-3 rounded-lg bg-background/50 border border-border/60">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <KeyRound className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Active Bearer Token (for Postman & Testing)</span>
+                </Label>
+
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const userRec = records.find((r) => r.tableName.toLowerCase() === "user") || records[0];
+                      const userId = userRec?.fields?.id ? String(userRec.fields.id) : generateRecordId("user");
+                      const email = userRec?.fields?.email
+                        ? String(userRec.fields.email)
+                        : `${(personaName || "user").toLowerCase().replace(/\s+/g, ".")}@example.com`;
+                      const role = userRec?.fields?.role
+                        ? String(userRec.fields.role)
+                        : personaName.toLowerCase().includes("admin")
+                        ? "admin"
+                        : "user";
+                      const sessRec = records.find((r) => r.tableName.toLowerCase() === "session");
+                      const sessId = sessRec?.fields?.id ? String(sessRec.fields.id) : `sess_${userId}`;
+
+                      const freshJwt = generateRealBearerJwtSync({
+                        userId,
+                        name: personaName || "Test Persona",
+                        email,
+                        role,
+                        sessionId: sessId,
+                      });
+
+                      setActiveAuthToken(freshJwt);
+                      setRecords((prev) =>
+                        prev.map((r) =>
+                          r.tableName.toLowerCase() === "session"
+                            ? { ...r, fields: { ...r.fields, token: freshJwt } }
+                            : r,
+                        ),
+                      );
+                      toast.success("Generated Real HS256 Bearer JWT");
+                    }}
+                    className="h-6 text-[10.5px] px-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 gap-1 font-medium cursor-pointer"
+                    title="Generate a signed RFC 7519 HS256 JWT using persona details"
+                  >
+                    <Sparkles className="w-3 h-3 text-indigo-500" />
+                    <span>Generate Real JWT</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      const sessToken = generateRealSessionToken();
+                      setActiveAuthToken(sessToken);
+                      setRecords((prev) =>
+                        prev.map((r) =>
+                          r.tableName.toLowerCase() === "session"
+                            ? { ...r, fields: { ...r.fields, token: sessToken } }
+                            : r,
+                        ),
+                      );
+                      toast.success("Generated Better Auth Session Token");
+                    }}
+                    className="h-6 text-[10.5px] px-1.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    <span>Session Token</span>
+                  </Button>
+                </div>
+              </div>
+
               <div className="relative flex items-center">
-                <KeyRound className="w-3.5 h-3.5 absolute left-2.5 text-muted-foreground" />
                 <Input
                   value={activeAuthToken}
-                  onChange={(e) => setActiveAuthToken(e.target.value)}
-                  placeholder="e.g. fake_admin_token"
-                  className="h-8 text-xs pl-8 font-mono bg-background"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setActiveAuthToken(val);
+                    setRecords((prev) =>
+                      prev.map((r) =>
+                        r.tableName.toLowerCase() === "session"
+                          ? { ...r, fields: { ...r.fields, token: val } }
+                          : r,
+                      ),
+                    );
+                  }}
+                  placeholder="Paste or generate real bearer token (eyJ...)"
+                  className="h-8 text-xs font-mono bg-background"
                 />
               </div>
+
+              {/* Decoded Claims Preview */}
+              {inspectJwt(activeAuthToken) && (
+                <div className="p-2.5 rounded bg-secondary/30 border border-border/40 text-[10.5px] font-mono flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Valid HS256 JWT Signature</span>
+                    </span>
+                    <span>Expires: {inspectJwt(activeAuthToken)?.expiresAtFormatted}</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-border/30">
+                    <span className="text-muted-foreground">
+                      sub: <strong className="text-foreground">{String(inspectJwt(activeAuthToken)?.payload.sub || "")}</strong>
+                    </span>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="text-muted-foreground">
+                      email: <strong className="text-foreground">{String(inspectJwt(activeAuthToken)?.payload.email || "")}</strong>
+                    </span>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="text-muted-foreground">
+                      role: <strong className="text-foreground uppercase">{String(inspectJwt(activeAuthToken)?.payload.role || "user")}</strong>
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

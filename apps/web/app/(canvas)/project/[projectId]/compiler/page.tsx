@@ -18,6 +18,7 @@ import { MonacoEditorPane } from "./_components/MonacoEditorPane";
 import { FileExplorer } from "./_components/FileExplorer";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
 import { buildFileTree, getParentPaths } from "../_components/compiler";
+import { useTestUsersStore } from "../_components/test-users/useTestUsersStore";
 import { useBackendSync } from "../_components/hooks/useBackendSync";
 import { useTerminalWorkspace } from "../_components/terminal/hooks/useTerminalWorkspace";
 import { useStoreHydration } from "./_lib/useStoreHydration";
@@ -45,6 +46,7 @@ export default function CompilerPage({
   const edges = useBackendCanvasStore((s) => s.edges);
   const updateEndpoint = useBackendCanvasStore((s) => s.updateEndpoint);
   const testCases = useSimulationStore((s) => s.testCases);
+  const personas = useTestUsersStore((s) => s.personas);
 
   // Convex queries
   const project = useQuery(api.projects.getProjectById, {
@@ -65,8 +67,8 @@ export default function CompilerPage({
   }, [projectName]);
 
   const monorepoResult: CompiledMonorepoResult = useMemo(
-    () => compileMonorepo(nodes, endpoints, events, edges, testCases, formattedProjectName),
-    [nodes, endpoints, events, edges, testCases, formattedProjectName],
+    () => compileMonorepo(nodes, endpoints, events, edges, testCases, formattedProjectName, personas),
+    [nodes, endpoints, events, edges, testCases, formattedProjectName, personas],
   );
 
   const files = monorepoResult.files;

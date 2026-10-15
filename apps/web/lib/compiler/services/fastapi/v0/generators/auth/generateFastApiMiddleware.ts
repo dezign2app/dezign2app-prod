@@ -34,7 +34,29 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
     token = credentials.credentials
     headers = {"Authorization": f"Bearer {token}"}
     
-    # 1. Stateless JWKS Verification (Recommended for disconnected microservices)
+    BETTER_AUTH_SECRET = os.getenv("BETTER_AUTH_SECRET", "default_super_secret_key_change_in_production")
+
+    # 1. Stateless HS256 JWT Verification (Fastest, works with Postman & test persona tokens)
+    try:
+        payload = jwt.decode(
+            token,
+            BETTER_AUTH_SECRET,
+            algorithms=["HS256"],
+            options={"verify_aud": False}
+        )
+        if payload and (payload.get("sub") or payload.get("id") or payload.get("userId") or payload.get("user_id")):
+            user_id = payload.get("sub") or payload.get("id") or payload.get("userId") or payload.get("user_id")
+            return {
+                "id": user_id,
+                "email": payload.get("email", f"{user_id}@example.com"),
+                "name": payload.get("name", "Test User"),
+                "role": payload.get("role", "user"),
+                **payload
+            }
+    except Exception:
+        pass
+
+    # 2. Stateless JWKS Verification (Recommended for disconnected microservices)
     jwks_client = get_jwks_client()
     if jwks_client:
         try:
@@ -50,7 +72,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
         except Exception:
             pass
 
-    # 2. Fallback to /api/auth/get-session verification
+    # 3. Fallback to /api/auth/get-session verification
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(

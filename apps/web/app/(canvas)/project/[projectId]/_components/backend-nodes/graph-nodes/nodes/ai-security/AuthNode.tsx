@@ -1,6 +1,6 @@
 import React from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { ShieldCheck, Settings, Database, Table, Wand2, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, Settings, Database, Table, Wand2, CheckCircle2, KeyRound, Copy, Check, ExternalLink } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -24,6 +24,9 @@ import {
   BACKEND_NODE_ENTITY,
 } from "@workspace/canvas";
 import { useBetterAuthTableSync } from "../../../../config-sidebar/auth-config/core-entities";
+import { useTestUsersStore } from "../../../../test-users/useTestUsersStore";
+import { isRealJwt, formatBearerHeader } from "../../../../test-users/tokenGenerator";
+import { toast } from "sonner";
 
 function isAuthFramework(val: string): val is AuthFramework {
   return AUTH_FRAMEWORK_OPTIONS.some((o) => o.value === val);
@@ -88,6 +91,36 @@ export const AuthNode = ({
   });
 
   const isAllTablesMapped = mappedCount >= totalTables && totalTables > 0;
+
+  const personas = useTestUsersStore((s) => s.personas);
+  const [selectedPersonaId, setSelectedPersonaId] = React.useState<string>(
+    personas[0]?.id || "",
+  );
+  const [copiedToken, setCopiedToken] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!selectedPersonaId && personas.length > 0) {
+      setSelectedPersonaId(personas[0]?.id || "");
+    }
+  }, [personas, selectedPersonaId]);
+
+  const activePersona =
+    personas.find((p) => p.id === selectedPersonaId) || personas[0];
+
+  const handleCopyBearerToken = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!activePersona?.activeAuthToken) {
+      toast.error("No active token found for selected persona");
+      return;
+    }
+    const bearer = formatBearerHeader(activePersona.activeAuthToken);
+    navigator.clipboard.writeText(bearer);
+    setCopiedToken(true);
+    toast.success(`Copied: Authorization: ${bearer.slice(0, 32)}...`, {
+      description: "Paste into Postman, cURL, or endpoint test headers",
+    });
+    setTimeout(() => setCopiedToken(false), 2000);
+  };
 
   return (
     <div
@@ -266,6 +299,102 @@ export const AuthNode = ({
           </Button>
         </div>
       )}
+
+      {/* Test Personas & Real Bearer Tokens Bar */}
+      <div className="px-3 py-2 bg-indigo-500/[0.04] border-t border-border/50 flex flex-col gap-1.5 nodrag">
+        <div className="flex items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <KeyRound className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <span className="text-[10.5px] font-semibold text-foreground">
+              Test Bearer Tokens
+            </span>
+            <span className="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+              {personas.length}
+            </span>
+          </div>
+
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveConfigItem({
+                type: "testUsers",
+                id: "testUsers",
+                nodeId: id,
+              });
+            }}
+            className="h-5 px-1.5 text-[10px] text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-500/10 font-medium gap-1 cursor-pointer"
+            title="Configure test user personas, seed data & tokens"
+          >
+            <span>Manage</span>
+            <ExternalLink className="w-2.5 h-2.5" />
+          </Button>
+        </div>
+
+        {/* Quick Persona Selector & 1-Click Copy */}
+        <div className="flex items-center gap-1.5">
+          <Select
+            value={activePersona?.id || ""}
+            onValueChange={(val: string) => setSelectedPersonaId(val)}
+          >
+            <SelectTrigger className="h-6 text-[10.5px] font-mono px-2 py-0.5 flex-1 bg-background/80 border border-border nodrag focus:ring-0 shadow-none truncate">
+              <SelectValue placeholder="Select Persona..." />
+            </SelectTrigger>
+            <SelectContent className="nodrag font-mono">
+              {personas.map((p) => {
+                const userRec = p.records.find((r) => r.tableName === "user");
+                const role = userRec?.fields?.role || (p.name.toLowerCase().includes("admin") ? "admin" : "user");
+                return (
+                  <SelectItem key={p.id} value={p.id} className="text-xs font-mono">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-foreground">{p.name}</span>
+                      <span className="text-[10px] text-muted-foreground uppercase">
+                        ({String(role)})
+                      </span>
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={handleCopyBearerToken}
+            className="h-6 px-2 text-[10.5px] font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 gap-1 shrink-0 cursor-pointer"
+            title="Copy Authorization: Bearer <token> for Postman or cURL testing"
+          >
+            {copiedToken ? (
+              <>
+                <Check className="w-3 h-3 text-emerald-500" />
+                <span>Copied</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3 h-3" />
+                <span>Copy Bearer</span>
+              </>
+            )}
+          </Button>
+        </div>
+
+        {/* Live Token Status Pill */}
+        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1 truncate font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="truncate">
+              {activePersona?.activeAuthToken && isRealJwt(activePersona.activeAuthToken)
+                ? "HS256 Signed JWT"
+                : "Session Token"}
+            </span>
+          </span>
+          <span className="font-mono text-[9px] text-emerald-600 dark:text-emerald-400 font-medium">
+            Postman / cURL Ready
+          </span>
+        </div>
+      </div>
 
       <div className="p-2.5 border-t border-border/50 flex items-center justify-between gap-2 bg-muted/20 nodrag">
         <div className="flex items-center gap-1.5 flex-1 min-w-0">

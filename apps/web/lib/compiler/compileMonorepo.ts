@@ -29,6 +29,7 @@ import { assembleRoot } from "./compileMonorepo/rootAssembly";
 import { compileKafkaNodes } from "./compileKafkaNodes";
 import { compileDatabaseNodes } from "./compileDatabaseNodes";
 import { compileRedisNodes } from "./compileRedisNodes";
+import { PersonaSeed } from "./types/testPersona";
 
 /**
  * Compiles the entire system architecture canvas into a production-ready
@@ -47,6 +48,7 @@ export function compileMonorepo(
   edges: BackendEdge[] = [],
   testCases: SimulationTestCase[] = [],
   projectName: string = "Dezign2App Monorepo",
+  personas: PersonaSeed[] = [],
 ): CompiledMonorepoResult {
   // ── step 0 | classify nodes ───────────────────────────────────────────────
   const {
@@ -85,6 +87,7 @@ export function compileMonorepo(
     projectName,
     testCases,
     getUniqueLangGraphFolder,
+    personas,
   );
 
   // ── step 6 | build webApp → page-nodes mapping ───────────────────────────
@@ -121,7 +124,7 @@ export function compileMonorepo(
 
   // ── Build the raw path list for root tsconfig references ─────────────────
   const compiledKafka = compileKafkaNodes(nodes, edges);
-  const compiledDb = compileDatabaseNodes(nodes, edges);
+  const compiledDb = compileDatabaseNodes(nodes, edges, personas);
   const compiledRedis = compileRedisNodes(nodes, edges);
 
   const dbPackagePaths =

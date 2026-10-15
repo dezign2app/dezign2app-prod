@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
+import { useTestUsersStore } from "../../test-users/useTestUsersStore";
 import { compileMonorepo, CompiledMonorepoResult } from "@/lib/compiler";
 import { ServiceEndpoint } from "../types";
 
@@ -13,6 +14,7 @@ export function useMonorepoEndpoints(projectName: string = "Dezign2App") {
   const events = useBackendCanvasStore((s) => s.events);
   const edges = useBackendCanvasStore((s) => s.edges);
   const testCases = useSimulationStore((s) => s.testCases);
+  const personas = useTestUsersStore((s) => s.personas);
 
   // Formatted project name
   const formattedProjectName = useMemo(() => {
@@ -22,8 +24,8 @@ export function useMonorepoEndpoints(projectName: string = "Dezign2App") {
 
   // Compile Monorepo result on demand
   const monorepoResult: CompiledMonorepoResult = useMemo(() => {
-    return compileMonorepo(nodes, endpoints, events, edges, testCases, formattedProjectName);
-  }, [nodes, endpoints, events, edges, testCases, formattedProjectName]);
+    return compileMonorepo(nodes, endpoints, events, edges, testCases, formattedProjectName, personas);
+  }, [nodes, endpoints, events, edges, testCases, formattedProjectName, personas]);
 
   const files = monorepoResult.files;
 

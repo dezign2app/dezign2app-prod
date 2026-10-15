@@ -15,6 +15,8 @@ import {
   Loader2,
   Globe,
   Users,
+  Copy,
+  Terminal,
 } from "lucide-react";
 import { Endpoint, BackendNode } from "@/types/canvas";
 import { CanvasExternalNodeData } from "@workspace/canvas/types";
@@ -28,6 +30,8 @@ import {
   AssertionResultItem,
 } from "./utils";
 import { useActiveFakeUsers } from "./fakeUser";
+import { formatCurlExample } from "../../test-users/tokenGenerator";
+import { toast } from "sonner";
 import { EndpointResponseViewer } from "./EndpointResponseViewer";
 import { cn } from "@workspace/ui/lib/utils";
 
@@ -265,6 +269,22 @@ export function EndpointLiveRunner({
           <div className="flex-1 px-2.5 py-1 rounded-md bg-zinc-950/80 border border-zinc-800 text-zinc-300 font-mono text-[11px] truncate select-all">
             {targetUrl}
           </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              const selectedPersona = fakeUsers.find((u) => u.id === selectedPersonaId);
+              const token = selectedPersona && !selectedPersona.isAnonymous ? selectedPersona.token : undefined;
+              const curlStr = formatCurlExample(method, targetUrl, token);
+              navigator.clipboard.writeText(curlStr);
+              toast.success("Copied cURL command with Bearer token for Postman / Terminal");
+            }}
+            className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground border-border/60 gap-1 shrink-0 cursor-pointer"
+            title="Copy cURL command with Authorization Bearer header for Postman or Terminal"
+          >
+            <Terminal className="w-3 h-3 text-indigo-500" />
+            <span className="hidden sm:inline">cURL</span>
+          </Button>
           <Button
             size="sm"
             onClick={handleSend}

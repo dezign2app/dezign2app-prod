@@ -26,6 +26,7 @@ import {
 import { useTestUsersStore } from "./useTestUsersStore";
 import { TestUserPersona } from "./types";
 import { TestUserPersonaEditor } from "./TestUserPersonaEditor";
+import { formatBearerHeader, isRealJwt, inspectJwt } from "./tokenGenerator";
 import { toast } from "sonner";
 import { cn } from "@workspace/ui/lib/utils";
 
@@ -67,10 +68,12 @@ export function TestUsersSheet({ open, onOpenChange }: TestUsersSheetProps) {
       toast.error("No active token found for this persona");
       return;
     }
-    const headerVal = `Bearer ${persona.activeAuthToken}`;
+    const headerVal = formatBearerHeader(persona.activeAuthToken);
     navigator.clipboard.writeText(headerVal);
     setCopiedTokenId(persona.id);
-    toast.success(`Copied: Authorization: ${headerVal}`);
+    toast.success(`Copied: Authorization: ${headerVal.slice(0, 36)}...`, {
+      description: "Paste into Postman or cURL Authorization header",
+    });
     setTimeout(() => setCopiedTokenId(null), 2000);
   };
 
@@ -90,13 +93,13 @@ export function TestUsersSheet({ open, onOpenChange }: TestUsersSheetProps) {
                 </div>
                 <div>
                   <SheetTitle className="text-sm font-semibold flex items-center gap-2">
-                    <span>Test Users & Multi-Table Fixtures</span>
+                    <span>Test Users & Real Bearer Tokens</span>
                     <span className="px-2 py-0.2 rounded-full text-[10px] font-mono font-bold bg-secondary text-muted-foreground border border-border/50">
                       {personas.length} Personas
                     </span>
                   </SheetTitle>
                   <SheetDescription className="text-xs text-muted-foreground mt-0.5">
-                    Define mock identities, seed database records, and link foreign keys for testing.
+                    Define mock identities, seed database records, and generate real signed tokens for testing.
                   </SheetDescription>
                 </div>
               </div>
@@ -113,7 +116,7 @@ export function TestUsersSheet({ open, onOpenChange }: TestUsersSheetProps) {
               size="sm"
               variant="secondary"
               onClick={handleCreateNew}
-              className="h-7 text-xs px-2.5 bg-secondary/80 hover:bg-secondary text-muted-foreground hover:text-foreground border border-border/50 gap-1.5 font-medium shadow-none"
+              className="h-7 text-xs px-2.5 bg-secondary/80 hover:bg-secondary text-muted-foreground hover:text-foreground border border-border/50 gap-1.5 font-medium shadow-none cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Test User</span>
@@ -123,6 +126,7 @@ export function TestUsersSheet({ open, onOpenChange }: TestUsersSheetProps) {
           {/* List of Personas */}
           <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-3.5">
             {personas.map((persona) => {
+              const isJwt = persona.activeAuthToken && isRealJwt(persona.activeAuthToken);
               return (
                 <div
                   key={persona.id}
@@ -131,16 +135,21 @@ export function TestUsersSheet({ open, onOpenChange }: TestUsersSheetProps) {
                   {/* Persona Top Bar */}
                   <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-xs text-foreground">
                           {persona.name}
                         </span>
-                        {persona.activeAuthToken && (
+                        {isJwt ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                            <ShieldCheck className="w-2.5 h-2.5" />
+                            <span>HS256 JWT</span>
+                          </span>
+                        ) : persona.activeAuthToken ? (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                             <KeyRound className="w-2.5 h-2.5" />
                             <span>Active Token</span>
                           </span>
-                        )}
+                        ) : null}
                       </div>
                       {persona.description && (
                         <span className="text-[11px] text-muted-foreground">

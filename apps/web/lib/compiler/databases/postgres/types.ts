@@ -10,11 +10,14 @@ export interface PgColumnMeta {
   isNotNull?: boolean;
 }
 
+import type { PersonaSeed } from "../../types/testPersona";
+
 export interface PostgresOptions {
   packageName?: string;
   packageFolder?: string;
   connectionEnvVar?: string;
   dbNode?: BackendNode;
+  personas?: PersonaSeed[];
 }
 
 export interface InlinePgOpContext {

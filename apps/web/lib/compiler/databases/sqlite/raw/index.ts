@@ -9,6 +9,8 @@ import { sqlColumnToTsType, isSqlNumericType, isSqlBooleanType } from "@workspac
 import { toTableName, toVarName, toSqlIdentifier, toSingular, toPlural } from "../../../utils";
 import { generateDefaultDbOperations, getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 import { generateDatabaseConnectionTest, generateTableHelperTest } from "../../../generators/databaseTestGenerator";
+import { PersonaSeed } from "../../../types/testPersona";
+import { generatePersonaSeedStatements } from "../../shared/generatePersonaSeedSql";
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -594,6 +596,7 @@ export interface SqliteRawOptions {
   connectionEnvVar?: string;
   dbFilePathEnv?: string;
   dbNode?: BackendNode;
+  personas?: PersonaSeed[];
 }
 
 export function compileRawSqliteDatabase(
@@ -945,18 +948,16 @@ export function compileRawSqliteDatabase(
     }
   }
 
-  // Pre-seed default test users and active sessions for endpoint testing and dev execution
-  // Note: omit 'role' from INSERT — it only exists on the auth-managed user table, not on
-  // user-defined canvas tables. Role is auth-internal and must not be assumed to exist.
-  ddlStatements.push(`  INSERT OR IGNORE INTO "user" ("id", "name", "email", "createdAt") VALUES
-    ('fake_admin_1', 'Admin User', 'admin@example.com', '2026-01-01T00:00:00.000Z'),
-    ('fake_user_1', 'Standard User', 'user@example.com', '2026-01-01T00:00:00.000Z'),
-    ('fake_superadmin_1', 'Super Admin', 'superadmin@example.com', '2026-01-01T00:00:00.000Z');`);
-
-  ddlStatements.push(`  INSERT OR IGNORE INTO "session" ("id", "userId", "token", "expiresAt", "createdAt") VALUES
-    ('fake_session_admin', 'fake_admin_1', 'fake_admin_token', '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'),
-    ('fake_session_user', 'fake_user_1', 'fake_user_token', '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'),
-    ('fake_session_superadmin', 'fake_superadmin_1', 'fake_superadmin_token', '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');`);
+  // Pre-seed test personas for endpoint testing and dev execution
+  if (options.personas && options.personas.length > 0) {
+    const personaSeedStatements = generatePersonaSeedStatements(options.personas, "sqlite", {
+      knownTableNames: createdTableNames,
+      knownTableColumns: tableSchemas,
+    });
+    personaSeedStatements.forEach((stmt) => {
+      ddlStatements.push(`  ${stmt}`);
+    });
+  }
 
   const sqlStatementsString = JSON.stringify(ddlStatements.join("\n\n"));
   const ddlStatementsJson = JSON.stringify(ddlStatements, null, 2);

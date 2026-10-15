@@ -14,6 +14,7 @@ export * from "./compileTransformerHelpers";
 export * from "./compileFrontendHelpers";
 export * from "./compileExternalNodes";
 export * from "./compileMonorepo";
+export * from "./types/testPersona";
 
 // Tech & Version Specific Compilers
 export * from "./auth/better-auth/v1.6";
