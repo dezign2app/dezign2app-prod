@@ -114,9 +114,18 @@ export function generateTypesPackage(
       }
     });
 
-    if (conflictingTypes.length > 0) {
+    const safeConflictingTypes = conflictingTypes.filter(
+      (typeName) =>
+        !barrelExports.some(
+          (b) =>
+            b.includes(`export * as ${typeName} `) ||
+            b.includes(`export * as ${typeName} from`),
+        ),
+    );
+
+    if (safeConflictingTypes.length > 0) {
       barrelExports.push(
-        `export type { ${conflictingTypes.sort().join(", ")} } from "./custom";`,
+        `export type { ${safeConflictingTypes.sort().join(", ")} } from "./custom";`,
       );
     }
     if (conflictingValues.length > 0) {

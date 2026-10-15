@@ -43,7 +43,7 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
       (n) => n.type === "types" && n.data?.sourceEntityId === entityId,
     )!;
     expect(typesNode).toBeDefined();
-    expect(typesNode?.data?.label).toBe("Users Types");
+    expect(typesNode?.data?.label).toBe("Entity Types");
     expect(typesNode?.data?.types?.[0]?.name).toBe("Users");
     expect(typesNode?.data?.types?.[0]?.fields).toHaveLength(2);
 
@@ -147,7 +147,7 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
     const initialTypesNode = useBackendCanvasStore
       .getState()
       .nodes.find((n) => n.data?.sourceEntityId === entityId)!;
-    expect(initialTypesNode?.data?.label).toBe("OrderItems Types");
+    expect(initialTypesNode?.data?.label).toBe("Entity Types");
     expect(initialTypesNode?.data?.types?.[0]?.name).toBe("OrderItems");
 
     // Rename Entity from 'order_items' to 'customer_orders'
@@ -175,7 +175,7 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
       .nodes.find((n) => n.id === initialTypesNode.id)!;
 
     expect(isEntitySyncedWithTypes(entityBeforeSync, updatedTypesNode)).toBe(true);
-    expect(updatedTypesNode?.data?.label).toBe("CustomerOrders Types");
+    expect(updatedTypesNode?.data?.label).toBe("Entity Types");
     expect(updatedTypesNode?.data?.types?.[0]?.name).toBe("CustomerOrders");
   });
 
@@ -333,27 +333,24 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
 
     const state = useBackendCanvasStore.getState();
 
-    // Verify langgraph_checkpoints TypesNode was created
-    const checkpointsTypes = state.nodes.find(
-      (n) => n.type === "types" && n.data?.sourceEntityId === "tbl-lg-checkpoints",
+    // Verify single consolidated Entity Types node was created
+    const entityTypes = state.nodes.find(
+      (n) => n.type === "types" && (n.data?.isEntitySchemas || n.id === "types-entity-schemas"),
     );
-    expect(checkpointsTypes).toBeDefined();
-    expect(checkpointsTypes?.data?.label).toBe("LanggraphCheckpoints Types");
-    expect(checkpointsTypes?.data?.types?.[0]?.name).toBe("LanggraphCheckpoints");
-    expect(checkpointsTypes?.data?.types?.[0]?.fields).toHaveLength(5);
+    expect(entityTypes).toBeDefined();
+    expect(entityTypes?.data?.label).toBe("Entity Types");
 
-    // Verify langgraph_checkpoint_writes TypesNode was created
-    const writesTypes = state.nodes.find(
-      (n) => n.type === "types" && n.data?.sourceEntityId === "tbl-lg-writes",
-    );
-    expect(writesTypes).toBeDefined();
-    expect(writesTypes?.data?.label).toBe("LanggraphCheckpointWrites Types");
-    expect(writesTypes?.data?.types?.[0]?.name).toBe("LanggraphCheckpointWrites");
-    expect(writesTypes?.data?.types?.[0]?.fields).toHaveLength(4);
+    const checkpointsType = entityTypes?.data?.types?.find((t) => t.name === "LanggraphCheckpoints");
+    expect(checkpointsType).toBeDefined();
+    expect(checkpointsType?.fields).toHaveLength(5);
+
+    const writesType = entityTypes?.data?.types?.find((t) => t.name === "LanggraphCheckpointWrites");
+    expect(writesType).toBeDefined();
+    expect(writesType?.fields).toHaveLength(4);
 
     // Verify "generates" edges exist
     const checkpointsEdge = state.edges.find(
-      (e) => e.source === "tbl-lg-checkpoints" && e.target === checkpointsTypes?.id,
+      (e) => e.source === "tbl-lg-checkpoints" && e.target === entityTypes?.id,
     );
     expect(checkpointsEdge).toBeDefined();
     expect(checkpointsEdge?.type).toBe("type-reference");
@@ -381,10 +378,10 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
 
     const state = useBackendCanvasStore.getState();
     const typesNode = state.nodes.find(
-      (n) => n.type === "types" && n.data?.sourceEntityId === "schema-lg-redis",
+      (n) => n.type === "types" && (n.data?.isEntitySchemas || n.id === "types-entity-schemas"),
     );
     expect(typesNode).toBeDefined();
-    expect(typesNode?.data?.label).toBe("LanggraphCheckpoints Types");
+    expect(typesNode?.data?.label).toBe("Entity Types");
     expect(typesNode?.data?.types?.[0]?.name).toBe("LanggraphCheckpoints");
     expect(typesNode?.data?.types?.[0]?.fields).toHaveLength(2);
   });
@@ -456,37 +453,29 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
 
     const state = useBackendCanvasStore.getState();
 
-    // Verify companion TypesNode for 'user' table
-    const userTypesNode = state.nodes.find(
-      (n) => n.type === "types" && n.data?.sourceEntityId === "tbl-auth-user",
+    // Verify single companion Entity Types node consolidates all Better Auth tables
+    const entityTypesNode = state.nodes.find(
+      (n) => n.type === "types" && (n.data?.isEntitySchemas || n.id === "types-entity-schemas"),
     );
-    expect(userTypesNode).toBeDefined();
-    expect(userTypesNode?.data?.label).toBe("User Types");
-    expect(userTypesNode?.data?.types?.[0]?.name).toBe("User");
-    expect(userTypesNode?.data?.types?.[0]?.fields).toHaveLength(7);
+    expect(entityTypesNode).toBeDefined();
+    expect(entityTypesNode?.data?.label).toBe("Entity Types");
 
-    // Verify companion TypesNode for 'session' table
-    const sessionTypesNode = state.nodes.find(
-      (n) => n.type === "types" && n.data?.sourceEntityId === "tbl-auth-session",
-    );
-    expect(sessionTypesNode).toBeDefined();
-    expect(sessionTypesNode?.data?.label).toBe("Session Types");
-    expect(sessionTypesNode?.data?.types?.[0]?.name).toBe("Session");
-    expect(sessionTypesNode?.data?.types?.[0]?.fields).toHaveLength(6);
+    const userType = entityTypesNode?.data?.types?.find((t) => t.name === "User");
+    expect(userType).toBeDefined();
+    expect(userType?.fields).toHaveLength(7);
 
-    // Verify companion TypesNode for 'account' table
-    const accountTypesNode = state.nodes.find(
-      (n) => n.type === "types" && n.data?.sourceEntityId === "tbl-auth-account",
-    );
-    expect(accountTypesNode).toBeDefined();
-    expect(accountTypesNode?.data?.label).toBe("Account Types");
-    expect(accountTypesNode?.data?.types?.[0]?.name).toBe("Account");
-    expect(accountTypesNode?.data?.types?.[0]?.fields).toHaveLength(5);
+    const sessionType = entityTypesNode?.data?.types?.find((t) => t.name === "Session");
+    expect(sessionType).toBeDefined();
+    expect(sessionType?.fields).toHaveLength(6);
+
+    const accountType = entityTypesNode?.data?.types?.find((t) => t.name === "Account");
+    expect(accountType).toBeDefined();
+    expect(accountType?.fields).toHaveLength(5);
 
     // Verify all generated type-reference edges exist with label 'generates'
     for (const tbl of authTables) {
       const edge = state.edges.find(
-        (e) => e.source === tbl.id && e.type === "type-reference",
+        (e) => e.source === tbl.id && e.target === entityTypesNode?.id && e.type === "type-reference",
       );
       expect(edge).toBeDefined();
       expect(edge?.data?.label).toBe("generates");
@@ -600,5 +589,80 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
     expect(finalState.nodes.find((n) => n.id === entityId)).toBeUndefined();
     expect(finalState.nodes.find((n) => n.id === baseTypesNode.id)).toBeUndefined();
     expect(finalState.nodes.find((n) => n.id === extTypesNode!.id)).toBeUndefined();
+  });
+
+  it("consolidates multiple entities into 1 Entity Types node, removes only deleted entity type on partial deletion, and removes node on last entity deletion", () => {
+    const store = useBackendCanvasStore.getState();
+
+    // 1. Add two entities: users and posts
+    const usersEntity = {
+      id: "entity-users-multi",
+      type: "entity" as const,
+      position: { x: 100, y: 100 },
+      data: {
+        label: "users",
+        tableName: "users",
+        columns: [
+          { name: "id", type: "uuid", isPrimaryKey: true },
+          { name: "name", type: "varchar", isNotNull: true },
+        ],
+      },
+    };
+    const postsEntity = {
+      id: "entity-posts-multi",
+      type: "entity" as const,
+      position: { x: 100, y: 300 },
+      data: {
+        label: "posts",
+        tableName: "posts",
+        columns: [
+          { name: "id", type: "uuid", isPrimaryKey: true },
+          { name: "title", type: "varchar", isNotNull: true },
+        ],
+      },
+    };
+
+    store.addNode(usersEntity);
+    store.addNode(postsEntity);
+
+    // Verify only ONE consolidated Entity Types node exists
+    const stateAfterAdd = useBackendCanvasStore.getState();
+    const entityTypesNodes = stateAfterAdd.nodes.filter(
+      (n) => n.type === "types" && (n.data?.isEntitySchemas || n.id === "types-entity-schemas"),
+    );
+    expect(entityTypesNodes).toHaveLength(1);
+    const consolidatedNode = entityTypesNodes[0]!;
+    expect(consolidatedNode.data?.label).toBe("Entity Types");
+    expect(consolidatedNode.data?.types).toHaveLength(2);
+    expect(consolidatedNode.data?.types?.map((t) => t.name).sort()).toEqual(["Posts", "Users"]);
+
+    // Verify both edges exist
+    const userEdge = stateAfterAdd.edges.find((e) => e.source === usersEntity.id && e.target === consolidatedNode.id);
+    const postEdge = stateAfterAdd.edges.find((e) => e.source === postsEntity.id && e.target === consolidatedNode.id);
+    expect(userEdge).toBeDefined();
+    expect(postEdge).toBeDefined();
+
+    // 2. Delete the users entity
+    store.deleteNode(usersEntity.id);
+
+    const stateAfterDeleteUser = useBackendCanvasStore.getState();
+    // Consolidated node MUST still exist because posts still exists!
+    const consolidatedAfterFirstDelete = stateAfterDeleteUser.nodes.find((n) => n.id === consolidatedNode.id);
+    expect(consolidatedAfterFirstDelete).toBeDefined();
+    // Posts type remains, Users type removed
+    expect(consolidatedAfterFirstDelete?.data?.types).toHaveLength(1);
+    expect(consolidatedAfterFirstDelete?.data?.types?.[0]?.name).toBe("Posts");
+
+    // User edge should be gone, Post edge preserved
+    expect(stateAfterDeleteUser.edges.find((e) => e.source === usersEntity.id)).toBeUndefined();
+    expect(stateAfterDeleteUser.edges.find((e) => e.source === postsEntity.id)).toBeDefined();
+
+    // 3. Delete the posts entity (last entity)
+    store.deleteNode(postsEntity.id);
+
+    const stateAfterDeleteAll = useBackendCanvasStore.getState();
+    // Now that no entities remain, consolidated node should be cleaned up
+    expect(stateAfterDeleteAll.nodes.find((n) => n.id === consolidatedNode.id)).toBeUndefined();
+    expect(stateAfterDeleteAll.edges.find((e) => e.target === consolidatedNode.id)).toBeUndefined();
   });
 });

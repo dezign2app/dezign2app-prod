@@ -110,9 +110,9 @@ function buildSessionBlock(strategy: AuthStrategy): string {
 function buildDbSessionBlock(): string {
   return `      // Strategy: db — direct session lookup via shared @workspace/db (better-auth v1.6 schema)
       type SessionRecord = { userId: string; expiresAt: string };
-      const session = db
+      const session = (await db
         .prepare("SELECT userId, expiresAt FROM session WHERE token = ?")
-        .get(token) as SessionRecord | undefined;
+        .get(token)) as SessionRecord | undefined;
 
       if (!session?.userId) {
         logger.warn("Auth failed: session not found", {
@@ -127,9 +127,9 @@ function buildDbSessionBlock(): string {
       }
 
       type UserRecord = { role?: string };
-      const userRecord = db
+      const userRecord = (await db
         .prepare("SELECT role FROM user WHERE id = ?")
-        .get(session.userId) as UserRecord | undefined;
+        .get(session.userId)) as UserRecord | undefined;
 
       req.user = {
         id: String(session.userId),

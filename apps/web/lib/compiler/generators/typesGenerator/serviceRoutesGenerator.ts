@@ -186,8 +186,11 @@ export function generateServiceRouteTypes(
       });
 
       barrelExports.push(`export * from "./${serviceFolderName}";`);
+      const serviceNamespace = pascalServiceName.endsWith("Service")
+        ? pascalServiceName
+        : `${pascalServiceName}Service`;
       barrelExports.push(
-        `export * as ${pascalServiceName} from "./${serviceFolderName}";`,
+        `export * as ${serviceNamespace} from "./${serviceFolderName}";`,
       );
     }
   });

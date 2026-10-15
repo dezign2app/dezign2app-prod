@@ -78,6 +78,38 @@ export function cleanupDeletedNodesState(
         }
       }
 
+      // Clean up types derived from deleted entities in consolidated EntityTypes node
+      if (
+        node.type === "types" &&
+        (node.id === "types-entity-schemas" ||
+          Boolean(node.data?.isEntitySchemas) ||
+          node.data?.label === "Entity Types")
+      ) {
+        const currentTypes = node.data?.types || [];
+        const nextTypes = currentTypes.filter((t: any) => {
+          for (const deletedId of allIdsSet) {
+            if (
+              t.id === `type-entity-${deletedId}` ||
+              t.id.startsWith(`type-entity-${deletedId}`) ||
+              t.description?.includes(deletedId)
+            ) {
+              return false;
+            }
+          }
+          return true;
+        });
+
+        if (nextTypes.length !== currentTypes.length) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              types: nextTypes,
+            },
+          };
+        }
+      }
+
       // Clean up transformerRef if referenced transformer was deleted
       if (node.type === "transformer_ref" && node.data?.transformerRef) {
         if (allIdsSet.has(node.data.transformerRef)) {

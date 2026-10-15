@@ -44,10 +44,30 @@ export function generateCustomTypesModule(
 `;
 
   typesNodes.forEach((tNode) => {
+    const isEntityDerivedNode = Boolean(
+      tNode.data?.isEntitySchemas ||
+      tNode.id === "types-entity-schemas" ||
+      tNode.data?.label === "Entity Types" ||
+      tNode.data?.sourceEntityId,
+    );
+
     const nodeLabel = tNode.data?.label || "Custom Types";
     const isRaw = tNode.data?.definitionMode === "raw";
     const rawCode = tNode.data?.rawTypeScript;
-    const typesList = tNode.data?.types || [];
+    let typesList = tNode.data?.types || [];
+
+    // Filter out auto-derived entity schemas from custom.ts since src/entities/index.ts already exports them
+    if (isEntityDerivedNode) {
+      typesList = typesList.filter(
+        (item) =>
+          !item.id?.startsWith("type-entity-") &&
+          !item.description?.startsWith("Auto-generated TypeScript interface from"),
+      );
+    }
+
+    if (typesList.length === 0 && (!isRaw || !rawCode)) {
+      return;
+    }
 
     customTypesCode += `// ─── ${nodeLabel} ───────────────────────────────────────────\n`;
 
@@ -174,6 +194,10 @@ export function generateCustomTypesModule(
       });
     }
   });
+
+  if (exportedTypes.size === 0 && exportedValues.size === 0) {
+    return { exportedTypes, exportedValues };
+  }
 
   return {
     file: {
