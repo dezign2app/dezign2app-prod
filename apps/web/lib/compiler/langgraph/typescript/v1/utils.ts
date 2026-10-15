@@ -4,6 +4,8 @@ import {
   NODE_ID_END,
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
+  LANGGRAPH_CANVAS_NODE_AGENT_REF,
+  LANGGRAPH_CANVAS_NODE_NODE_REF,
   LANGGRAPH_CANVAS_NODE_STEP,
   LANGGRAPH_CANVAS_NODE_END,
   LANGGRAPH_CANVAS_NODE_START,
@@ -148,6 +150,19 @@ export function resolveNodeName(
 
   const node = ctx.input.nodes.find((n) => n.id === nodeId);
   if (!node) return null;
+
+  const nodeType = node.type as string | undefined;
+  if (
+    nodeType === LANGGRAPH_CANVAS_NODE_AGENT_REF ||
+    nodeType === LANGGRAPH_CANVAS_NODE_NODE_REF
+  ) {
+    const targetRefId =
+      (node.data as { agentRef?: string; nodeRef?: string })?.agentRef ||
+      (node.data as { agentRef?: string; nodeRef?: string })?.nodeRef;
+    if (targetRefId && targetRefId !== nodeId) {
+      return resolveNodeName(targetRefId, ctx, nodeMetaMap);
+    }
+  }
 
   if (
     node.type === LANGGRAPH_CANVAS_NODE_NODE ||

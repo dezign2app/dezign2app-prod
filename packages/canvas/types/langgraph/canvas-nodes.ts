@@ -13,6 +13,8 @@ import {
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
+  LANGGRAPH_CANVAS_NODE_AGENT_REF,
+  LANGGRAPH_CANVAS_NODE_NODE_REF,
   LANGGRAPH_CANVAS_NODE_MEMORY,
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
@@ -31,6 +33,7 @@ import type {
   MiddlewareNodeData,
   LangGraphMiddlewareRefNodeData,
   CanvasNodeData,
+  LangGraphAgentRefNodeData,
   MemoryNodeData,
   LangGraphMemoryRefNodeData,
   OutputNodeData,
@@ -106,6 +109,14 @@ export type CanvasNode = Node<
 
 export type AgentNode = CanvasNode;
 
+export type LangGraphAgentRefNode = Node<
+  LangGraphAgentRefNodeData,
+  typeof LANGGRAPH_CANVAS_NODE_AGENT_REF | typeof LANGGRAPH_CANVAS_NODE_NODE_REF
+> &
+  BaseCanvasNodeProps;
+
+export type LangGraphNodeRefNode = LangGraphAgentRefNode;
+
 export type MemoryNode = Node<
   MemoryNodeData,
   typeof LANGGRAPH_CANVAS_NODE_MEMORY
@@ -147,6 +158,7 @@ export type LangGraphCanvasNodeUnion =
   | MiddlewareNode
   | LangGraphMiddlewareRefNode
   | CanvasNode
+  | LangGraphAgentRefNode
   | MemoryNode
   | LangGraphMemoryRefNode
   | OutputNode
@@ -169,6 +181,8 @@ export type LangGraphCanvasNodeAddType =
   | typeof LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF
   | typeof LANGGRAPH_CANVAS_NODE_NODE
   | typeof LANGGRAPH_CANVAS_NODE_AGENT
+  | typeof LANGGRAPH_CANVAS_NODE_AGENT_REF
+  | typeof LANGGRAPH_CANVAS_NODE_NODE_REF
   | typeof LANGGRAPH_CANVAS_NODE_MEMORY
   | typeof LANGGRAPH_CANVAS_NODE_MEMORY_REF
   | typeof LANGGRAPH_CANVAS_NODE_END

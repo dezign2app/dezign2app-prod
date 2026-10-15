@@ -13,6 +13,7 @@ import type {
   MemoryNode,
   LangGraphMemoryRefNode,
   CanvasNode,
+  LangGraphAgentRefNode,
   OutputNode,
   StepNode,
   LangGraphStateReducerRefNode,
@@ -30,6 +31,8 @@ import {
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
+  LANGGRAPH_CANVAS_NODE_AGENT_REF,
+  LANGGRAPH_CANVAS_NODE_NODE_REF,
   LANGGRAPH_CANVAS_NODE_MEMORY,
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
@@ -69,6 +72,8 @@ function getNodeDimensions(type: LangGraphCanvasNodeAddType): {
     case LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF:
     case LANGGRAPH_CANVAS_NODE_MEMORY:
     case LANGGRAPH_CANVAS_NODE_MEMORY_REF:
+    case LANGGRAPH_CANVAS_NODE_AGENT_REF:
+    case LANGGRAPH_CANVAS_NODE_NODE_REF:
     case LANGGRAPH_CANVAS_NODE_OUTPUT:
       return { width: 280, height: 140 };
     case LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF:
@@ -515,6 +520,58 @@ export function useNodeFactory({
         });
         setSelectedNodeId(nodeId);
         setActiveSideTab("inspector");
+        return;
+      }
+
+      if (
+        type === LANGGRAPH_CANVAS_NODE_AGENT_REF ||
+        type === LANGGRAPH_CANVAS_NODE_NODE_REF
+      ) {
+        const refId = `agent_ref_${Date.now().toString(36).slice(-4)}`;
+        let preselectedMasterId: string | undefined = undefined;
+        let preselectedMasterLabel = "Agent";
+
+        setNodes((nds) => {
+          const master = nds.find(
+            (n) =>
+              n.type === LANGGRAPH_CANVAS_NODE_NODE ||
+              n.type === LANGGRAPH_CANVAS_NODE_AGENT ||
+              n.type === LANGGRAPH_CANVAS_NODE_STEP,
+          );
+          if (master) {
+            preselectedMasterId = master.id;
+            preselectedMasterLabel =
+              (master.data as { name?: string; label?: string })?.name ||
+              (master.data as { label?: string })?.label ||
+              "Agent";
+          }
+          const position = getCenterPosition(type, nds);
+
+          const newAgentRefNode: LangGraphAgentRefNode = {
+            id: refId,
+            type: LANGGRAPH_CANVAS_NODE_AGENT_REF,
+            position,
+            data: {
+              label: label || `↩ ${preselectedMasterLabel} (Ref)`,
+              refId,
+              agentRef: preselectedMasterId,
+              nodeRef: preselectedMasterId,
+              onDeleteAgentRef: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== refId));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== refId && edge.target !== refId,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === refId ? null : curr));
+              },
+            },
+          };
+
+          return [...nds, newAgentRefNode];
+        });
+
+        setSelectedNodeId(refId);
         return;
       }
 

@@ -19,6 +19,8 @@ import {
   LANGGRAPH_CANVAS_NODE_TOOL,
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
+  LANGGRAPH_CANVAS_NODE_AGENT_REF,
+  LANGGRAPH_CANVAS_NODE_NODE_REF,
   NODE_ID_START,
   NODE_ID_STATE_GLOBAL,
   NODE_ID_CHECKPOINTER,
@@ -233,6 +235,26 @@ export function useCanvasNodeSync({
                 setSelectedNodeId(n.id);
               },
               onDeleteStep: () => {
+                setNodes((nodes) => nodes.filter((node) => node.id !== n.id));
+                setEdges((edges) =>
+                  edges.filter(
+                    (edge) => edge.source !== n.id && edge.target !== n.id,
+                  ),
+                );
+                setSelectedNodeId((curr) => (curr === n.id ? null : curr));
+              },
+            },
+          };
+        }
+        if (
+          n.type === LANGGRAPH_CANVAS_NODE_AGENT_REF ||
+          n.type === LANGGRAPH_CANVAS_NODE_NODE_REF
+        ) {
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              onDeleteAgentRef: () => {
                 setNodes((nodes) => nodes.filter((node) => node.id !== n.id));
                 setEdges((edges) =>
                   edges.filter(

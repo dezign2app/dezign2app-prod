@@ -15,6 +15,7 @@ import { LangGraphCanvasMemoryNode } from "./LangGraphCanvasMemoryNode";
 import { LangGraphCanvasMemoryRefNode } from "./LangGraphCanvasMemoryRefNode";
 import { LangGraphCanvasOutputNode } from "./LangGraphCanvasOutputNode";
 import { LangGraphCanvasStateReducerRefNode } from "./LangGraphCanvasStateReducerRefNode";
+import { LangGraphCanvasAgentRefNode } from "./LangGraphCanvasAgentRefNode";
 
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
@@ -30,6 +31,8 @@ import {
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
+  LANGGRAPH_CANVAS_NODE_AGENT_REF,
+  LANGGRAPH_CANVAS_NODE_NODE_REF,
   LANGGRAPH_CANVAS_NODE_MEMORY,
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
@@ -50,6 +53,8 @@ export const langGraphCanvasNodeTypes = {
   [LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF]: LangGraphCanvasMiddlewareRefNode,
   [LANGGRAPH_CANVAS_NODE_NODE]: LangGraphCanvasNode,
   [LANGGRAPH_CANVAS_NODE_AGENT]: LangGraphCanvasNode,
+  [LANGGRAPH_CANVAS_NODE_AGENT_REF]: LangGraphCanvasAgentRefNode,
+  [LANGGRAPH_CANVAS_NODE_NODE_REF]: LangGraphCanvasAgentRefNode,
   [LANGGRAPH_CANVAS_NODE_MEMORY]: LangGraphCanvasMemoryNode,
   [LANGGRAPH_CANVAS_NODE_MEMORY_REF]: LangGraphCanvasMemoryRefNode,
   [LANGGRAPH_CANVAS_NODE_OUTPUT]: LangGraphCanvasOutputNode,
@@ -68,6 +73,7 @@ export {
   LangGraphCanvasMiddlewareNode,
   LangGraphCanvasMiddlewareRefNode,
   LangGraphCanvasNode,
+  LangGraphCanvasAgentRefNode,
   LangGraphCanvasStepNode,
   LangGraphCanvasRouterNode,
   LangGraphCanvasMemoryNode,

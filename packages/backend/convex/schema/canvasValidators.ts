@@ -910,6 +910,8 @@ export const langgraphConvexDataValidator = v.object({
   customToolRefNodes: v.optional(v.array(v.any())),
   customMiddlewareRefNodes: v.optional(v.array(v.any())),
   customMemoryRefNodes: v.optional(v.array(v.any())),
+  customAgentRefNodes: v.optional(v.array(v.any())),
+  customNodeRefNodes: v.optional(v.array(v.any())),
   customStateReducerRefNodes: v.optional(v.array(v.any())),
   toolDefinitions: v.optional(v.array(v.any())),
   middlewareDefinitions: v.optional(v.array(v.any())),

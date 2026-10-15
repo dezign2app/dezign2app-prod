@@ -162,6 +162,30 @@ export const langgraphDataSchema = baseNodeDataSchema
       )
       .optional()
       .default([]),
+    customAgentRefNodes: z
+      .array(
+        z.object({
+          id: z.string(),
+          label: z.string().optional(),
+          agentRef: z.string().optional(),
+          nodeRef: z.string().optional(),
+          position: z.object({ x: z.number(), y: z.number() }).optional(),
+        }),
+      )
+      .optional()
+      .default([]),
+    customNodeRefNodes: z
+      .array(
+        z.object({
+          id: z.string(),
+          label: z.string().optional(),
+          nodeRef: z.string().optional(),
+          agentRef: z.string().optional(),
+          position: z.object({ x: z.number(), y: z.number() }).optional(),
+        }),
+      )
+      .optional()
+      .default([]),
     customReducers: z
       .array(
         z.object({

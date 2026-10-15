@@ -1184,6 +1184,26 @@ export async function executeBrowserLangGraph(
     } else {
       currentNodeId = outgoing[0]?.target;
     }
+
+    // If target node is a loop-back / Agent Ref node, resolve back to the master referenced node
+    if (currentNodeId) {
+      const candidateNext = nodes.find((n) => n.id === currentNodeId);
+      if (
+        candidateNext?.type === "langgraph_agent_ref" ||
+        candidateNext?.type === "langgraph_node_ref"
+      ) {
+        const refData = candidateNext.data as { agentRef?: string; nodeRef?: string; label?: string };
+        const masterTargetId = refData?.agentRef || refData?.nodeRef;
+        if (masterTargetId) {
+          addLog(
+            "step",
+            `Looping back to node "${masterTargetId}" via loop reference "${refData.label || candidateNext.id}"`,
+          );
+          visitedNodes.push(candidateNext.id);
+          currentNodeId = masterTargetId;
+        }
+      }
+    }
   }
 
   // END Step

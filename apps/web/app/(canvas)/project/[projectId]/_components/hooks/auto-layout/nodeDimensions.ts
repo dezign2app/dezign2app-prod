@@ -161,6 +161,8 @@ export function getNodeDimensions(node: LayoutNode): {
     case "langgraph_tool_ref":
     case "langgraph_middleware_ref":
     case "langgraph_memory_ref":
+    case "langgraph_agent_ref":
+    case "langgraph_node_ref":
       return { width: 280, height: 110 };
     case "db_ref":
     case "vector_db_ref":
