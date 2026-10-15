@@ -18,8 +18,9 @@ export function buildTableDDL(
     if (c.isPrimaryKey) {
       if (pgType === "BIGSERIAL") {
         colDef += " PRIMARY KEY";
+      } else if (pgType === "UUID") {
+        colDef += " PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL";
       } else {
-        // TEXT UUID-style PK — default to gen_random_uuid() for true UUID, or just PRIMARY KEY
         colDef += " PRIMARY KEY NOT NULL";
       }
     } else {

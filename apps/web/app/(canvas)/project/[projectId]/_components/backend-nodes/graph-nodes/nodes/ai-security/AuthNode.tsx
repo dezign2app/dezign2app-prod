@@ -20,6 +20,7 @@ import {
   DEFAULT_AUTH_FRAMEWORK,
   DEFAULT_BETTER_AUTH_VERSION,
   AuthFramework,
+  DatabaseEngine,
   BACKEND_NODE_ENTITY,
 } from "@workspace/canvas";
 import { useBetterAuthTableSync } from "../../../../config-sidebar/auth-config/core-entities";
@@ -175,9 +176,24 @@ export const AuthNode = ({
         </div>
         <Select
           value={data.databaseId || "none"}
-          onValueChange={(val: string) =>
-            updateData({ databaseId: val === "none" ? undefined : val })
-          }
+          onValueChange={(val: string) => {
+            if (val === "none") {
+              updateData({ databaseId: undefined, dbEngine: undefined });
+            } else {
+              const selectedDb = databaseNodes.find((db) => db.id === val);
+              const dbEngine: DatabaseEngine = selectedDb?.data?.dbEngine || "postgres";
+              updateData({
+                databaseId: val,
+                dbEngine,
+                dbAdapter:
+                  dbEngine === "postgres"
+                    ? "postgres"
+                    : dbEngine === "sqlite"
+                    ? "sqlite-raw"
+                    : dbEngine,
+              });
+            }
+          }}
         >
           <SelectTrigger className="h-6 text-[11px] font-mono px-2 py-0.5 max-w-[200px] bg-background/80 border border-border nodrag focus:ring-0 shadow-none truncate">
             <SelectValue placeholder="Select Database..." />

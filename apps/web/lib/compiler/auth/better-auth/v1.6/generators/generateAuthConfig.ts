@@ -276,12 +276,32 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
     ? `import { createAuthMiddleware } from "better-auth/api";\n`
     : "";
 
+  // Advanced Database Configuration (UUID generation for PostgreSQL)
+  const isPostgres =
+    (data.dbEngine || "").toLowerCase().includes("postgres") ||
+    (data.dbEngine || "").toLowerCase().includes("pg") ||
+    dbAdapterKey.toLowerCase().includes("postgres") ||
+    dbAdapterKey.toLowerCase().includes("pg") ||
+    dbAdapterKey === "drizzle" ||
+    dbAdapterKey === "prisma";
+
+  const generateId =
+    data.generateId ||
+    (isPostgres ? "uuid" : undefined);
+
+  let advancedBlock = "";
+  if (generateId === "uuid") {
+    advancedBlock = `\n  advanced: {\n    database: {\n      generateId: () => crypto.randomUUID(),\n    },\n  },`;
+  } else if (generateId) {
+    advancedBlock = `\n  advanced: {\n    database: {\n      generateId: ${JSON.stringify(generateId)},\n    },\n  },`;
+  }
+
   return `import "dotenv/config";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 ${adapterConfig.importStatement}
 ${createMiddlewareImport}${pluginImportStr}${passkeyImportStr}export const auth = betterAuth({
-  database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${userBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}
+  database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${userBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}${advancedBlock}
   plugins: [
     ${pluginCalls.join(",\n    ")},
     nextCookies(),

@@ -668,7 +668,11 @@ export function resolveBetterAuthTableColumns(
   const isSqlite = (engine || "").toLowerCase() === "sqlite";
   return columns.map((col) => {
     if (isSqlite && col.type === DB_COLUMN_TYPES.UUID) {
-      return { ...col, type: DB_COLUMN_TYPES.TEXT };
+      const { defaultValue, ...rest } = col;
+      return { ...rest, type: DB_COLUMN_TYPES.TEXT };
+    }
+    if (!isSqlite && col.type === DB_COLUMN_TYPES.UUID && (col.isPrimaryKey || col.name.toLowerCase() === "id")) {
+      return { ...col, defaultValue: col.defaultValue || "gen_random_uuid()" };
     }
     return { ...col };
   });

@@ -52,7 +52,8 @@ export async function ensurePostgresTable(
         const colName = (col.name || "col").replace(/[^a-zA-Z0-9_]/g, "");
         const isPk = col.isPrimaryKey || col.isPrimary || col.primaryKey || colName === "id";
         const pgType = normalizeToPostgresType(col.type, isPk);
-        colDefs.push(isPk ? `"${colName}" ${pgType} PRIMARY KEY` : `"${colName}" ${pgType}`);
+        const defaultClause = isPk && pgType === "UUID" ? " DEFAULT gen_random_uuid()" : "";
+        colDefs.push(isPk ? `"${colName}" ${pgType}${defaultClause} PRIMARY KEY` : `"${colName}" ${pgType}`);
       }
     }
     if (!colDefs.some((d) => d.includes("PRIMARY KEY"))) {

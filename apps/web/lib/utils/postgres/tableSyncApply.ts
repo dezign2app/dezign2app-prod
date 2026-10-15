@@ -588,16 +588,26 @@ export async function applyPostgresTableSync(
       }
     }
 
-    // 2. Add missing columns
+    // 2. Add missing columns & ensure UUID primary key default
     for (const col of columns || []) {
       const colName = (col.name || "").replace(/[^a-zA-Z0-9_]/g, "");
-      if (!colName || existingCols.has(colName.toLowerCase())) continue;
-      const pgType = normalizeToPostgresType(col.type);
+      if (!colName) continue;
+      const isPk = Boolean(col.isPrimaryKey || colName.toLowerCase() === "id");
+      const pgType = normalizeToPostgresType(col.type, isPk);
 
-      await client.query(
-        `ALTER TABLE "${targetSchema}"."${safeTable}" ADD COLUMN IF NOT EXISTS "${colName}" ${pgType}`,
-      );
-      appliedColumns.push(colName);
+      if (!existingCols.has(colName.toLowerCase())) {
+        const defaultClause = isPk && pgType === "UUID" ? " DEFAULT gen_random_uuid()" : "";
+        await client.query(
+          `ALTER TABLE "${targetSchema}"."${safeTable}" ADD COLUMN IF NOT EXISTS "${colName}" ${pgType}${defaultClause}`,
+        );
+        appliedColumns.push(colName);
+      } else if (isPk && pgType === "UUID") {
+        try {
+          await client.query(
+            `ALTER TABLE "${targetSchema}"."${safeTable}" ALTER COLUMN "${colName}" SET DEFAULT gen_random_uuid()`,
+          );
+        } catch {}
+      }
     }
 
     // 3. Drop columns that were removed from the canvas
