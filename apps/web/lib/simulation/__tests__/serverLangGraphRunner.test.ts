@@ -230,4 +230,63 @@ describe("executeServerLangGraph: Official @langchain/langgraph StateGraph Execu
     expect(result.visitedNodes).toContain("agent_ref_1");
     expect(result.visitedNodes[result.visitedNodes.length - 1]).toBe("END");
   });
+
+  it("executes an AgentNode (langgraph_node) with llmConfig.enabled = false as a state mutator without requiring prompt messages", async () => {
+    const nodes: LangGraphCanvasNode[] = [
+      {
+        id: "START",
+        type: "start",
+        position: { x: 0, y: 0 },
+        data: { label: "START" },
+      },
+      {
+        id: "node_counter",
+        type: "langgraph_node",
+        position: { x: 200, y: 0 },
+        data: {
+          label: "Counter Node",
+          name: "Node",
+          llmConfig: {
+            enabled: false,
+          },
+          stateUpdates: [
+            {
+              channelKey: "count",
+              source: "expression",
+              value: "state.count + 1",
+            },
+          ],
+        },
+      },
+      {
+        id: "END",
+        type: "end",
+        position: { x: 400, y: 0 },
+        data: { label: "END" },
+      },
+    ];
+
+    const edges: LangGraphCanvasEdge[] = [
+      { id: "e1", source: "START", target: "node_counter" },
+      { id: "e2", source: "node_counter", target: "END" },
+    ];
+
+    const stateChannels: LangGraphStateChannel[] = [
+      { key: "count", type: "number", reducer: "replace", defaultValue: 0 },
+    ];
+
+    const result = await executeServerLangGraph({
+      nodes,
+      edges,
+      stateChannels,
+      inputChannels: [],
+      inputValues: { count: 10 },
+      threadId: "test-thread-agent-no-llm",
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.visitedNodes).toEqual(["START", "node_counter", "END"]);
+    expect(result.finalState.count).toBe(11);
+  });
 });
+

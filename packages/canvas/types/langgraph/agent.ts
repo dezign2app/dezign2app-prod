@@ -86,6 +86,31 @@ export interface LangGraphAgentMemoryConfig {
   saveMessages?: boolean;
 }
 
+export type LangGraphNodeStepType =
+  | "state_updates"
+  | "llm_call"
+  | "custom_code"
+  | "tools"
+  | "structured_output"
+  | "middleware"
+  | "streaming";
+
+export interface LangGraphNodePipelineStep {
+  id: string;
+  type: LangGraphNodeStepType;
+  label?: string;
+  customCode?: {
+    body?: string;
+  };
+  llmConfig?: {
+    enabled?: boolean;
+    provider?: string;
+    model?: string;
+    temperature?: number;
+  };
+  systemPrompt?: string;
+}
+
 export interface LangGraphAgentDefinition {
   id?: string;
   agentId?: string;
@@ -109,6 +134,11 @@ export interface LangGraphAgentDefinition {
   responseFormat?: LangGraphAgentResponseFormatConfig;
   memoryConfig?: LangGraphAgentMemoryConfig;
   stateUpdates?: LangGraphStateUpdateItem[];
+  customCode?: {
+    body?: string;
+  };
+  nodeSteps?: LangGraphNodeStepType[];
+  pipelineSteps?: LangGraphNodePipelineStep[];
   tools?: string[]; // Bound tool IDs
   middleware?: string[]; // Bound middleware IDs
   memory?: string[]; // Bound memory / checkpointer / db_ref IDs
