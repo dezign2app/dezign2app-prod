@@ -155,10 +155,8 @@ export function useAgentPipelineSteps({
         ...(type === "transformer" || type === "transform"
           ? {
               outputVariable: `transformedData_${activePipelineSteps.length + 1}`,
+              outputSchema: [{ name: "result", type: "string", required: true }],
               inputBindings: [],
-              customCode: {
-                body: "// TypeScript logic: (inputs, state, clone) => transformed\nreturn {\n  // return transformed fields\n};\n",
-              },
             }
           : type === "custom_code"
             ? {

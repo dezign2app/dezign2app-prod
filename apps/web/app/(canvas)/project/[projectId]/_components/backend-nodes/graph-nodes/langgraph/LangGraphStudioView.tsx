@@ -581,16 +581,34 @@ export function LangGraphStudioView({
       className="flex flex-col h-screen w-screen bg-background text-foreground outline-none overflow-hidden"
       tabIndex={0}
       onKeyDown={(e) => {
-        const target = e.target;
-        const isEditingInput =
-          target instanceof HTMLInputElement ||
-          target instanceof HTMLTextAreaElement ||
-          (target instanceof HTMLElement && target.isContentEditable);
+        const activeEl =
+          typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null;
+        const targetEl = e.target instanceof HTMLElement ? e.target : null;
+
+        const isInputTarget = (el: Element | null) => {
+          if (!el) return false;
+          const isContentEditable = el instanceof HTMLElement ? el.isContentEditable : false;
+          return (
+            el.tagName === "INPUT" ||
+            el.tagName === "TEXTAREA" ||
+            el.tagName === "SELECT" ||
+            isContentEditable ||
+            Boolean(
+              el.closest(
+                "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag, .nowheel, .nopan"
+              )
+            )
+          );
+        };
+
+        const isEditingInput = isInputTarget(targetEl) || isInputTarget(activeEl);
 
         if (e.key === "Escape") {
           e.preventDefault();
-          if (target instanceof HTMLElement) {
-            target.blur();
+          if (targetEl) {
+            targetEl.blur();
           }
           if (selectedNodeId) {
             handleCloseInspector();
@@ -602,7 +620,8 @@ export function LangGraphStudioView({
           return;
         }
 
-        if (e.key === "Delete" || e.key === "Backspace") {
+        // Only delete nodes with dedicated Delete key, never Backspace which is used for editing text
+        if (e.key === "Delete") {
           e.preventDefault();
           handleDeleteSelected();
         }
@@ -685,7 +704,25 @@ export function LangGraphStudioView({
             isValidConnection={isValidConnection}
             nodeTypes={langGraphCanvasNodeTypes}
             edgeTypes={langGraphCanvasEdgeTypes}
-            deleteKeyCode={["Backspace", "Delete"]}
+            deleteKeyCode={["Delete"]}
+            onBeforeDelete={async () => {
+              const activeEl = typeof document !== "undefined" ? document.activeElement : null;
+              if (
+                activeEl instanceof HTMLElement &&
+                (activeEl.tagName === "INPUT" ||
+                  activeEl.tagName === "TEXTAREA" ||
+                  activeEl.tagName === "SELECT" ||
+                  activeEl.isContentEditable ||
+                  Boolean(
+                    activeEl.closest(
+                      "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag"
+                    )
+                  ))
+              ) {
+                return false;
+              }
+              return true;
+            }}
             edgesReconnectable={true}
             edgesFocusable={true}
             elementsSelectable={true}

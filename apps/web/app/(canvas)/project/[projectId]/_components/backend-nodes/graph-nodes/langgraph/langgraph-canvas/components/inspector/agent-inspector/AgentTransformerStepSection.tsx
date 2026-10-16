@@ -1,14 +1,14 @@
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, useState } from "react";
 import {
   Shuffle,
   Link2,
-  Code2,
   Trash2,
   Plus,
   Sparkles,
   Variable,
   ArrowRight,
   AlertCircle,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
@@ -19,8 +19,9 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSeparator,
 } from "@workspace/ui/components/select";
-import { LocalInput, LocalTextarea } from "../../../../../common";
+import { LocalInput } from "../../../../../common";
 import type {
   LangGraphNodePipelineStep,
   PipelineStepInputBinding,
@@ -28,11 +29,17 @@ import type {
   LangGraphCanvasNode,
   TransformerCanvasNode,
   TransformerRefCanvasNode,
+  AgentNodeData,
 } from "@workspace/canvas";
 import {
   isTransformerCanvasNode,
   isTransformerRefCanvasNode,
 } from "@workspace/canvas";
+import { parseSchemaJsonToFields } from "./AgentStructuredOutputSection";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types & Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface AgentTransformerStepSectionProps {
   step: LangGraphNodePipelineStep;
@@ -40,7 +47,119 @@ export interface AgentTransformerStepSectionProps {
   stateChannels: LangGraphStateChannel[];
   nodes: LangGraphCanvasNode[];
   onUpdateStep: (updated: LangGraphNodePipelineStep) => void;
+  selectedAgentData?: AgentNodeData;
 }
+
+interface StepOutputFieldOption {
+  path: string;
+  label: string;
+  type?: string;
+  description?: string;
+}
+
+interface PriorStepInfo {
+  step: LangGraphNodePipelineStep;
+  index: number;
+  outputVariable: string;
+  label: string;
+  fields: StepOutputFieldOption[];
+}
+
+/**
+ * Derives the typed output fields available from a prior step.
+ */
+function getPriorStepOutputFields(
+  priorStep: LangGraphNodePipelineStep,
+  selectedAgentData?: AgentNodeData,
+  nodes: LangGraphCanvasNode[] = [],
+): StepOutputFieldOption[] {
+  const fields: StepOutputFieldOption[] = [];
+  const outVar =
+    priorStep.outputVariable ||
+    (priorStep.type === "llm_call" ? "response" : priorStep.id);
+
+  // 1. Whole Output Object
+  fields.push({
+    path: "",
+    label: `${outVar} (Whole Output)`,
+    type: "object",
+  });
+
+  if (priorStep.type === "llm_call") {
+    // If structured output is enabled on the agent, extract JSON Schema fields
+    if (
+      selectedAgentData?.responseFormat?.enabled &&
+      selectedAgentData.responseFormat.schemaJson
+    ) {
+      const { fields: schemaFields } = parseSchemaJsonToFields(
+        selectedAgentData.responseFormat.schemaJson,
+      );
+      for (const sf of schemaFields) {
+        if (!sf.name?.trim()) continue;
+        fields.push({
+          path: sf.name.trim(),
+          label: `${sf.name} (${sf.type || "string"})`,
+          type: sf.type || "string",
+          description: sf.description,
+        });
+      }
+    }
+
+    // Standard LLM message output fields
+    fields.push(
+      { path: "content", label: "content (AI Response Text)", type: "string" },
+      { path: "role", label: "role (string)", type: "string" },
+      { path: "tool_calls", label: "tool_calls (array)", type: "array" },
+    );
+    return fields;
+  }
+
+  if (priorStep.type === "transformer" || priorStep.type === "transform") {
+    if (priorStep.outputSchema && priorStep.outputSchema.length > 0) {
+      for (const f of priorStep.outputSchema) {
+        if (!f.name?.trim()) continue;
+        fields.push({
+          path: f.name.trim(),
+          label: `${f.name} (${f.type || "string"})`,
+          type: f.type || "string",
+        });
+      }
+      return fields;
+    }
+
+    const sourceNodeId = priorStep.transformerNodeId || priorStep.transformerRef;
+    if (sourceNodeId) {
+      const masterNode = nodes.find(
+        (n): n is TransformerCanvasNode =>
+          isTransformerCanvasNode(n) && n.id === sourceNodeId,
+      );
+      if (masterNode?.data?.returnSchema && masterNode.data.returnSchema.length > 0) {
+        for (const f of masterNode.data.returnSchema) {
+          if (!f.name?.trim()) continue;
+          fields.push({
+            path: f.name.trim(),
+            label: `${f.name} (${f.type || "string"})`,
+            type: f.type || "string",
+          });
+        }
+        return fields;
+      }
+    }
+
+    fields.push({ path: "result", label: "result (any)", type: "any" });
+    return fields;
+  }
+
+  if (priorStep.type === "custom_code") {
+    fields.push({ path: "result", label: "result (object)", type: "object" });
+  }
+
+  return fields;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Component
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function AgentTransformerStepSection({
   step,
@@ -48,104 +167,156 @@ export function AgentTransformerStepSection({
   stateChannels,
   nodes,
   onUpdateStep,
+  selectedAgentData,
 }: AgentTransformerStepSectionProps) {
-  // ─── Filter Available Canvas Transformers ─────────────────────────────────
-  const masterTransformers = useMemo(() => {
-    return nodes.filter(isTransformerCanvasNode);
-  }, [nodes]);
+  const [customFieldMode, setCustomFieldMode] = useState<Record<number, boolean>>({});
 
-  const refTransformers = useMemo(() => {
-    return nodes.filter(isTransformerRefCanvasNode);
-  }, [nodes]);
+  // ─── Available Canvas Transformers ────────────────────────────────────────
+  const availableTransformers = useMemo(() => {
+    const list: Array<{
+      id: string;
+      label: string;
+      isRef: boolean;
+      masterNode?: TransformerCanvasNode;
+    }> = [];
 
-  // Determine currently selected source
-  const selectedSourceId =
-    step.transformerNodeId ||
-    step.transformerRef ||
-    step.functionRef?.name ||
-    "__inline__";
-
-  const selectedMasterNode = useMemo(() => {
-    if (selectedSourceId === "__inline__") return undefined;
-    const directMaster = masterTransformers.find((m) => m.id === selectedSourceId);
-    if (directMaster) return directMaster;
-
-    const directRef = refTransformers.find((r) => r.id === selectedSourceId);
-    if (directRef && directRef.data.transformerRef) {
-      return masterTransformers.find((m) => m.id === directRef.data.transformerRef);
+    for (const n of nodes) {
+      if (isTransformerCanvasNode(n)) {
+        list.push({
+          id: n.id,
+          label: n.data.functionName || n.data.label || n.id,
+          isRef: false,
+          masterNode: n,
+        });
+      } else if (isTransformerRefCanvasNode(n)) {
+        const master = nodes.find(
+          (m): m is TransformerCanvasNode =>
+            isTransformerCanvasNode(m) && m.id === n.data.transformerRef,
+        );
+        list.push({
+          id: n.id,
+          label: n.data.label || n.id,
+          isRef: true,
+          masterNode: master,
+        });
+      }
     }
-    return undefined;
-  }, [masterTransformers, refTransformers, selectedSourceId]);
+    return list;
+  }, [nodes]);
 
-  const handleSourceChange = useCallback(
-    (sourceVal: string) => {
-      if (sourceVal === "__inline__") {
-        onUpdateStep({
-          ...step,
-          transformerNodeId: undefined,
-          transformerRef: undefined,
-          functionRef: undefined,
-          customCode: step.customCode || {
-            body: "// TypeScript logic: (inputs, state, clone) => transformed\nreturn {\n  // return transformed fields\n};\n",
-          },
-        });
-        return;
-      }
+  // Selected transformer node
+  const selectedTransformer = useMemo(() => {
+    const currentId = step.transformerNodeId || step.transformerRef;
+    if (currentId) {
+      const match = availableTransformers.find((t) => t.id === currentId);
+      if (match) return match;
+    }
+    // Default to first available if not set yet
+    return availableTransformers[0];
+  }, [availableTransformers, step.transformerNodeId, step.transformerRef]);
 
-      const isRef = refTransformers.some((r) => r.id === sourceVal);
-      if (isRef) {
-        const refNode = refTransformers.find((r) => r.id === sourceVal);
-        onUpdateStep({
-          ...step,
-          transformerNodeId: undefined,
-          transformerRef: sourceVal,
-          functionRef: {
-            name: refNode?.data.label || refNode?.data.transformerRef || sourceVal,
-          },
-        });
-      } else {
-        const masterNode = masterTransformers.find((m) => m.id === sourceVal);
-        onUpdateStep({
-          ...step,
-          transformerNodeId: sourceVal,
-          transformerRef: undefined,
-          functionRef: {
-            name:
-              masterNode?.data.functionName ||
-              masterNode?.data.label ||
-              sourceVal,
-          },
-        });
-      }
+  const selectedMasterNode = selectedTransformer?.masterNode;
+
+  // Expected input schema from the selected canvas transformer
+  const expectedParams = useMemo(() => {
+    return selectedMasterNode?.data.inputSchema || [];
+  }, [selectedMasterNode]);
+
+  // Return schema from the selected canvas transformer
+  const returnSchema = useMemo(() => {
+    return selectedMasterNode?.data.returnSchema || [];
+  }, [selectedMasterNode]);
+
+  // ─── Switch Selected Canvas Transformer ──────────────────────────────────
+  const handleSelectTransformer = useCallback(
+    (transformerId: string) => {
+      const target = availableTransformers.find((t) => t.id === transformerId);
+      if (!target) return;
+
+      const master = target.masterNode;
+      const targetReturnSchema = (master?.data.returnSchema || []).map((r) => ({
+        name: r.name,
+        type: r.type || "string",
+        required: r.required ?? true,
+      }));
+      const targetInputSchema = master?.data.inputSchema || [];
+
+      // Automatically map input parameters from the transformer schema
+      const existingBindings = step.inputBindings || [];
+      const nextBindings: PipelineStepInputBinding[] = targetInputSchema.map((param) => {
+        const match = existingBindings.find(
+          (b) => b.argName.toLowerCase() === param.name.toLowerCase(),
+        );
+        if (match) return match;
+
+        // Auto-bind to prior step if available
+        const firstPrior = priorSteps[0];
+        return {
+          argName: param.name,
+          source: firstPrior
+            ? {
+                kind: "step_output",
+                stepId:
+                  firstPrior.outputVariable ||
+                  (firstPrior.type === "llm_call" ? "response" : firstPrior.id),
+                field: param.name,
+              }
+            : { kind: "inline", value: "" },
+        };
+      });
+
+      onUpdateStep({
+        ...step,
+        transformerNodeId: target.isRef ? undefined : target.id,
+        transformerRef: target.isRef ? target.id : undefined,
+        customCode: undefined, // no inline code
+        functionRef: {
+          name: master?.data.functionName || target.label,
+          importPath:
+            master?.data.scope === "global"
+              ? "@workspace/transformers"
+              : `../transformers/${master?.data.functionName || target.label}`,
+        },
+        outputSchema:
+          targetReturnSchema.length > 0
+            ? targetReturnSchema
+            : [{ name: "result", type: "string", required: true }],
+        inputBindings: nextBindings.length > 0 ? nextBindings : step.inputBindings,
+      });
     },
-    [masterTransformers, onUpdateStep, refTransformers, step],
+    [availableTransformers, onUpdateStep, priorSteps, step],
   );
 
   // ─── Input Bindings Handlers ──────────────────────────────────────────────
   const bindings: PipelineStepInputBinding[] = step.inputBindings || [];
 
   const handleAddBinding = useCallback(() => {
+    const nextArgNum = bindings.length + 1;
+    const defaultPrior = priorSteps[0];
     const newBinding: PipelineStepInputBinding = {
-      argName: `arg${bindings.length + 1}`,
-      source:
-        priorSteps.length > 0 && priorSteps[0]
+      argName: `arg${nextArgNum}`,
+      source: defaultPrior
+        ? {
+            kind: "step_output",
+            stepId:
+              defaultPrior.outputVariable ||
+              (defaultPrior.type === "llm_call" ? "response" : defaultPrior.id),
+            field: "content",
+          }
+        : stateChannels.length > 0 && stateChannels[0]
           ? {
-              kind: "step_output",
-              stepId: priorSteps[0].outputVariable || priorSteps[0].id,
+              kind: "state",
+              field: stateChannels[0].key,
             }
-          : stateChannels.length > 0 && stateChannels[0]
-            ? {
-                kind: "state",
-                field: stateChannels[0].key,
-              }
-            : {
-                kind: "inline",
-                value: "",
-              },
+          : {
+              kind: "inline",
+              value: "",
+            },
     };
 
     onUpdateStep({
       ...step,
+      customCode: undefined,
       inputBindings: [...bindings, newBinding],
     });
   }, [bindings, onUpdateStep, priorSteps, stateChannels, step]);
@@ -156,6 +327,7 @@ export function AgentTransformerStepSection({
       next[index] = updated;
       onUpdateStep({
         ...step,
+        customCode: undefined,
         inputBindings: next,
       });
     },
@@ -167,63 +339,106 @@ export function AgentTransformerStepSection({
       const next = bindings.filter((_, i) => i !== index);
       onUpdateStep({
         ...step,
+        customCode: undefined,
         inputBindings: next,
       });
     },
     [bindings, onUpdateStep, step],
   );
 
+  // ─── Prior Steps Introspection ───────────────────────────────────────────
+  const priorStepsInfo: PriorStepInfo[] = useMemo(() => {
+    return priorSteps.map((ps, idx) => {
+      const outVar =
+        ps.outputVariable || (ps.type === "llm_call" ? "response" : ps.id);
+      const fields = getPriorStepOutputFields(ps, selectedAgentData, nodes);
+      return {
+        step: ps,
+        index: idx + 1,
+        outputVariable: outVar,
+        label: ps.label || ps.type,
+        fields,
+      };
+    });
+  }, [nodes, priorSteps, selectedAgentData]);
+
+  // ─── Auto-Map Arguments from Prior Steps or State ────────────────────────
   const handleAutoMapArguments = useCallback(() => {
-    if (!selectedMasterNode?.data.inputSchema) return;
+    const targetParams =
+      expectedParams.length > 0
+        ? expectedParams
+        : bindings.map((b) => ({ name: b.argName, type: "string" }));
+
+    if (targetParams.length === 0) return;
 
     const nextBindings: PipelineStepInputBinding[] = [];
-    const schemaParams = selectedMasterNode.data.inputSchema;
 
-    for (let pIdx = 0; pIdx < schemaParams.length; pIdx++) {
-      const param = schemaParams[pIdx];
+    for (const param of targetParams) {
       if (!param || !param.name) continue;
+      const cleanParamName = param.name.trim();
+      const lowerParam = cleanParamName.toLowerCase();
 
-      // Check if any prior step has an outputVariable matching this arg name
-      const matchingPriorStep = priorSteps.find(
-        (ps) => ps.outputVariable && ps.outputVariable.toLowerCase() === param.name.toLowerCase(),
-      );
+      // 1. Search prior steps' typed output fields
+      let matchedPriorStepId: string | undefined;
+      let matchedField: string | undefined;
 
-      // Check if any state channel matches this arg name
+      for (const psi of priorStepsInfo) {
+        const foundField = psi.fields.find(
+          (f) =>
+            f.path.toLowerCase() === lowerParam ||
+            f.path.toLowerCase().replace(/_/g, "") ===
+              lowerParam.replace(/_/g, ""),
+        );
+        if (foundField && foundField.path) {
+          matchedPriorStepId = psi.outputVariable;
+          matchedField = foundField.path;
+          break;
+        }
+      }
+
+      // 2. Search state channels
       const matchingStateChannel = stateChannels.find(
-        (sc) => sc.key.toLowerCase() === param.name.toLowerCase(),
+        (sc) =>
+          sc.key.toLowerCase() === lowerParam ||
+          sc.key.toLowerCase().replace(/_/g, "") ===
+            lowerParam.replace(/_/g, ""),
       );
 
-      if (matchingPriorStep) {
+      if (matchedPriorStepId && matchedField) {
         nextBindings.push({
-          argName: param.name,
+          argName: cleanParamName,
           source: {
             kind: "step_output",
-            stepId: matchingPriorStep.outputVariable || matchingPriorStep.id,
+            stepId: matchedPriorStepId,
+            field: matchedField,
           },
         });
       } else if (matchingStateChannel) {
         nextBindings.push({
-          argName: param.name,
+          argName: cleanParamName,
           source: {
             kind: "state",
             field: matchingStateChannel.key,
           },
         });
-      } else if (priorSteps.length > 0 && priorSteps[priorSteps.length - 1]) {
-        const lastStep = priorSteps[priorSteps.length - 1];
-        if (lastStep) {
-          nextBindings.push({
-            argName: param.name,
-            source: {
-              kind: "step_output",
-              stepId: lastStep.outputVariable || lastStep.id,
-              field: param.name,
-            },
-          });
-        }
+      } else if (
+        priorStepsInfo.length > 0 &&
+        priorStepsInfo[priorStepsInfo.length - 1]
+      ) {
+        const lastPsi = priorStepsInfo[priorStepsInfo.length - 1]!;
+        nextBindings.push({
+          argName: cleanParamName,
+          source: {
+            kind: "step_output",
+            stepId: lastPsi.outputVariable,
+            field: lastPsi.fields.some((f) => f.path === "content")
+              ? "content"
+              : "",
+          },
+        });
       } else {
         nextBindings.push({
-          argName: param.name,
+          argName: cleanParamName,
           source: {
             kind: "inline",
             value: "",
@@ -235,49 +450,22 @@ export function AgentTransformerStepSection({
     if (nextBindings.length > 0) {
       onUpdateStep({
         ...step,
+        customCode: undefined,
         inputBindings: nextBindings,
       });
     }
-  }, [onUpdateStep, priorSteps, selectedMasterNode, stateChannels, step]);
+  }, [bindings, expectedParams, onUpdateStep, priorStepsInfo, stateChannels, step]);
 
   return (
     <div className="flex flex-col gap-3.5">
-      {/* ─── 1. Output Variable Specification ──────────────────────────────── */}
-      <div className="flex flex-col gap-1.5 p-2.5 rounded-lg bg-purple-500/5 border border-purple-500/20">
-        <div className="flex items-center justify-between">
-          <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-            <Variable className="w-3.5 h-3.5 text-purple-400" />
-            Output Variable Name
-          </Label>
-          <span className="text-[10px] font-mono text-purple-400/80">
-            Exported to pipeline context
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <LocalInput
-            value={step.outputVariable || ""}
-            onChange={(e) => {
-              const clean = e.target.value.replace(/[^a-zA-Z0-9_$]/g, "_");
-              onUpdateStep({ ...step, outputVariable: clean });
-            }}
-            placeholder="e.g. transformedData, userProfile, processedItems"
-            className="h-7 text-xs font-mono bg-background/60 border-purple-500/30 focus:border-purple-400"
-          />
-        </div>
-        <span className="text-[10px] text-muted-foreground/75 leading-tight">
-          Subsequent steps below can bind this variable as an input via{" "}
-          <code className="text-purple-300 font-mono">step_output</code>.
-        </span>
-      </div>
-
-      {/* ─── 2. Transformer Source Selector ─────────────────────────────────── */}
+      {/* ─── 1. Select Canvas Transformer ─────────────────────────────────────── */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
             <Shuffle className="w-3.5 h-3.5 text-purple-400" />
-            Transformer Source
+            Select Transformer
           </Label>
-          {selectedMasterNode?.data.inputSchema && selectedMasterNode.data.inputSchema.length > 0 && (
+          {expectedParams.length > 0 && (
             <Button
               type="button"
               variant="ghost"
@@ -291,96 +479,77 @@ export function AgentTransformerStepSection({
           )}
         </div>
 
-        <Select value={selectedSourceId} onValueChange={handleSourceChange}>
-          <SelectTrigger className="h-8 text-xs bg-background/50 border-border/60">
-            <SelectValue placeholder="Select transformer source..." />
-          </SelectTrigger>
-          <SelectContent className="z-50">
-            <SelectItem value="__inline__" className="text-xs">
-              <div className="flex items-center gap-2 font-mono">
-                <Code2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Inline TypeScript Logic (Local to this node)</span>
-              </div>
-            </SelectItem>
-
-            {masterTransformers.length > 0 && (
-              <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-t border-border/40 mt-1">
-                Canvas Master Transformers
-              </div>
-            )}
-            {masterTransformers.map((m) => (
-              <SelectItem key={m.id} value={m.id} className="text-xs">
-                <div className="flex items-center gap-2 font-mono">
-                  <Shuffle className="w-3.5 h-3.5 text-purple-400" />
-                  <span>{m.data.label || m.data.functionName || m.id}</span>
-                  <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-purple-500/30 text-purple-300">
-                    Master
-                  </Badge>
-                </div>
-              </SelectItem>
-            ))}
-
-            {refTransformers.length > 0 && (
-              <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-t border-border/40 mt-1">
-                Canvas Transformer References
-              </div>
-            )}
-            {refTransformers.map((r) => (
-              <SelectItem key={r.id} value={r.id} className="text-xs">
-                <div className="flex items-center gap-2 font-mono">
-                  <Link2 className="w-3.5 h-3.5 text-purple-400" />
-                  <span>{r.data.label || r.id}</span>
-                  <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-purple-500/30 text-purple-300">
-                    Ref
-                  </Badge>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {selectedMasterNode && (
-          <div className="p-2 rounded-md bg-secondary/20 border border-border/40 flex flex-col gap-1 text-[11px] font-mono">
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span>Function: <strong className="text-purple-300">{selectedMasterNode.data.functionName || selectedMasterNode.data.label}</strong></span>
-              <span className="text-[10px] uppercase text-muted-foreground">{selectedMasterNode.data.scope || "global"}</span>
+        {availableTransformers.length === 0 ? (
+          <div className="p-3 rounded-lg border border-dashed border-border/60 bg-secondary/15 flex flex-col gap-1 text-xs">
+            <div className="flex items-center gap-1.5 text-amber-400 font-medium">
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>No Transformer Nodes Found on Canvas</span>
             </div>
-            {selectedMasterNode.data.code && (
-              <div className="text-[10px] text-muted-foreground/70 truncate bg-background/40 p-1 rounded border border-border/30">
-                {selectedMasterNode.data.code.slice(0, 70).replace(/[\r\n]+/g, " ")}...
-              </div>
-            )}
+            <p className="text-[11px] text-muted-foreground">
+              Add a Transformer node to your canvas from the left sidebar to connect its logic here.
+            </p>
           </div>
+        ) : (
+          <Select
+            value={selectedTransformer?.id || ""}
+            onValueChange={handleSelectTransformer}
+          >
+            <SelectTrigger className="h-8 text-xs bg-background/50 border-border/60 font-mono">
+              <SelectValue placeholder="Choose a transformer..." />
+            </SelectTrigger>
+            <SelectContent className="z-50">
+              {availableTransformers.map((t) => (
+                <SelectItem key={t.id} value={t.id} className="text-xs font-mono">
+                  <div className="flex items-center gap-2">
+                    <Shuffle className="w-3.5 h-3.5 text-purple-400" />
+                    <span className="font-semibold text-foreground">{t.label}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      ({t.masterNode?.data.inputSchema?.length || 0} in &rarr;{" "}
+                      {t.masterNode?.data.returnSchema?.length || 0} out)
+                    </span>
+                    {t.isRef && (
+                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-purple-500/30 text-purple-300">
+                        Ref
+                      </Badge>
+                    )}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
       </div>
 
-      {/* ─── 3. Inline Code Body (When Inline Selected) ───────────────────────── */}
-      {selectedSourceId === "__inline__" && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-              <Code2 className="w-3.5 h-3.5 text-emerald-400" />
-              TypeScript Logic
-            </Label>
-            <span className="text-[10px] text-muted-foreground font-mono">
-              (inputs, state, clone) =&gt; transformed
-            </span>
-          </div>
-          <LocalTextarea
-            value={step.customCode?.body || ""}
-            onChange={(e) =>
-              onUpdateStep({
-                ...step,
-                customCode: { body: e.target.value },
-              })
-            }
-            placeholder={`// Example: process mapped inputs or mutate state\nconst { text } = inputs;\nreturn {\n  summary: text ? text.slice(0, 100) : "No text",\n  timestamp: Date.now()\n};`}
-            className="text-xs min-h-[110px] font-mono bg-background/60 border border-border/60 rounded-md p-2.5 resize-y leading-relaxed"
-          />
+      {/* ─── 2. Output Variable Name ────────────────────────────────────────── */}
+      <div className="flex flex-col gap-1.5 p-2.5 rounded-lg bg-purple-500/5 border border-purple-500/20">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+            <Variable className="w-3.5 h-3.5 text-purple-400" />
+            Output Variable Name
+          </Label>
+          <span className="text-[10px] font-mono text-purple-400/80">
+            Exported to pipeline context
+          </span>
         </div>
-      )}
+        <LocalInput
+          value={step.outputVariable || ""}
+          onChange={(e) => {
+            const clean = e.target.value.replace(/[^a-zA-Z0-9_$]/g, "_");
+            onUpdateStep({ ...step, customCode: undefined, outputVariable: clean });
+          }}
+          placeholder="e.g. transformedData, userProfile, processedItems"
+          className="h-7 text-xs font-mono bg-background/60 border-purple-500/30 focus:border-purple-400"
+        />
+        <span className="text-[10px] text-muted-foreground/75 leading-tight">
+          Subsequent steps below and graph state updates can bind to{" "}
+          <code className="text-purple-300 font-mono">
+            {step.outputVariable || "transformedData"}
+          </code>{" "}
+          via <code className="text-purple-300 font-mono">step_output</code>.
+        </span>
+      </div>
 
-      {/* ─── 4. Input & Argument Bindings (Above Steps -> Below Steps) ───────── */}
+      {/* ─── 3. Input & Argument Bindings (Top Step Output -> Transformer) ─── */}
       <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -389,7 +558,10 @@ export function AgentTransformerStepSection({
               Input / Argument Bindings
             </Label>
             {bindings.length > 0 && (
-              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-purple-500/30 text-purple-400 font-mono">
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1 py-0 h-4 border-purple-500/30 text-purple-400 font-mono"
+              >
                 {bindings.length}
               </Badge>
             )}
@@ -406,7 +578,7 @@ export function AgentTransformerStepSection({
         </div>
 
         {priorSteps.length === 0 && stateChannels.length === 0 ? (
-          <div className="p-2 rounded-lg border border-dashed border-border/40 bg-secondary/10 text-center text-[11px] text-muted-foreground">
+          <div className="p-2.5 rounded-lg border border-dashed border-border/40 bg-secondary/10 text-center text-[11px] text-muted-foreground">
             No prior steps or state channels available yet to map inputs from.
           </div>
         ) : bindings.length === 0 ? (
@@ -414,8 +586,8 @@ export function AgentTransformerStepSection({
             <span className="text-[11px] text-muted-foreground">
               No argument bindings configured yet.
             </span>
-            <span className="text-[10px] text-muted-foreground/60 max-w-[260px]">
-              Map outputs from above steps (e.g. LLM Agent response) or graph state channels directly into this transformer.
+            <span className="text-[10px] text-muted-foreground/60 max-w-[280px]">
+              Map outputs from top steps (e.g. LLM Agent response) or graph state channels into this transformer.
             </span>
             <Button
               type="button"
@@ -431,15 +603,38 @@ export function AgentTransformerStepSection({
           <div className="flex flex-col gap-2">
             {bindings.map((binding, bIdx) => {
               const currentKind = binding.source.kind;
+              const expectedParam = expectedParams.find(
+                (p) => p.name.toLowerCase() === binding.argName.toLowerCase(),
+              );
+
+              const selectedStepId =
+                "stepId" in binding.source ? binding.source.stepId : "";
+              const activePriorStepInfo =
+                priorStepsInfo.find(
+                  (psi) =>
+                    psi.outputVariable === selectedStepId ||
+                    psi.step.id === selectedStepId,
+                ) || priorStepsInfo[0];
+
+              const currentField =
+                "field" in binding.source ? binding.source.field || "" : "";
+              const isCustomField = Boolean(
+                customFieldMode[bIdx] ||
+                  (currentField &&
+                    activePriorStepInfo &&
+                    !activePriorStepInfo.fields.some(
+                      (f) => f.path === currentField,
+                    )),
+              );
 
               return (
                 <div
                   key={`binding_${bIdx}`}
-                  className="flex flex-col gap-1.5 p-2 rounded-lg bg-secondary/20 border border-border/50 text-xs"
+                  className="flex flex-col gap-2 p-2.5 rounded-lg bg-secondary/20 border border-border/50 text-xs shadow-xs"
                 >
                   <div className="flex items-center justify-between gap-1.5">
                     {/* Argument Name */}
-                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
                       <span className="text-[10px] font-mono text-muted-foreground shrink-0">
                         arg:
                       </span>
@@ -448,31 +643,51 @@ export function AgentTransformerStepSection({
                         onChange={(e) =>
                           handleUpdateBinding(bIdx, {
                             ...binding,
-                            argName: e.target.value.replace(/[^a-zA-Z0-9_$]/g, "_"),
+                            argName: e.target.value.replace(
+                              /[^a-zA-Z0-9_$]/g,
+                              "_",
+                            ),
                           })
                         }
-                        placeholder="argumentName"
+                        placeholder="parameterName"
                         className="h-6 text-[11px] font-mono font-medium bg-background/50 border-border/40 flex-1 truncate"
                         title="Argument name in transformer function"
                       />
+                      {expectedParam?.type && (
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] px-1 py-0 h-4 border-purple-500/30 text-purple-300 font-mono shrink-0"
+                        >
+                          {expectedParam.type}
+                        </Badge>
+                      )}
                     </div>
 
-                    <span className="text-muted-foreground/60 text-[10px] font-mono shrink-0">
+                    <span className="text-muted-foreground/60 text-[10px] font-mono shrink-0 select-none">
                       &larr;
                     </span>
 
                     {/* Source Kind Selector */}
-                    <div className="w-[120px] shrink-0">
+                    <div className="w-[125px] shrink-0">
                       <Select
                         value={currentKind}
                         onValueChange={(newKind) => {
                           if (newKind === "step_output") {
-                            const firstPrior = priorSteps[0];
+                            const firstPrior = priorStepsInfo[0];
+                            const defaultField = firstPrior?.fields.some(
+                              (f) => f.path === "content",
+                            )
+                              ? "content"
+                              : firstPrior?.fields[1]?.path || "";
                             handleUpdateBinding(bIdx, {
                               ...binding,
                               source: {
                                 kind: "step_output",
-                                stepId: firstPrior?.outputVariable || firstPrior?.id || "step_1",
+                                stepId:
+                                  firstPrior?.outputVariable ||
+                                  firstPrior?.step.id ||
+                                  "response",
+                                field: defaultField,
                               },
                             });
                           } else if (newKind === "state") {
@@ -492,14 +707,6 @@ export function AgentTransformerStepSection({
                                 value: "",
                               },
                             });
-                          } else if (newKind === "env") {
-                            handleUpdateBinding(bIdx, {
-                              ...binding,
-                              source: {
-                                kind: "env",
-                                field: "API_KEY",
-                              },
-                            });
                           }
                         }}
                       >
@@ -515,9 +722,6 @@ export function AgentTransformerStepSection({
                           </SelectItem>
                           <SelectItem value="inline" className="text-xs">
                             Inline Value
-                          </SelectItem>
-                          <SelectItem value="env" className="text-xs">
-                            Env Var
                           </SelectItem>
                         </SelectContent>
                       </Select>
@@ -536,38 +740,51 @@ export function AgentTransformerStepSection({
                     </Button>
                   </div>
 
-                  {/* Source Value Details (Dependent on Kind) */}
+                  {/* ─── Source Value Details ──────────────────────────────── */}
                   <div className="flex items-center gap-1.5 pl-5">
+                    {/* CASE 1: Step Output (Top Step -> Below Step) */}
                     {currentKind === "step_output" && (
                       <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                        {/* Prior Step Selector */}
+                        {/* 1. Prior Top Step Selector */}
                         <div className="flex-1 min-w-0">
                           <Select
-                            value={"stepId" in binding.source ? binding.source.stepId : ""}
+                            value={
+                              selectedStepId ||
+                              (activePriorStepInfo?.outputVariable ?? "")
+                            }
                             onValueChange={(val) => {
+                              const targetPsi = priorStepsInfo.find(
+                                (p) =>
+                                  p.outputVariable === val ||
+                                  p.step.id === val,
+                              );
+                              const defaultField = targetPsi?.fields.some(
+                                (f) => f.path === "content",
+                              )
+                                ? "content"
+                                : targetPsi?.fields[1]?.path || "";
                               handleUpdateBinding(bIdx, {
                                 ...binding,
                                 source: {
                                   kind: "step_output",
                                   stepId: val,
-                                  field: "field" in binding.source ? binding.source.field : undefined,
+                                  field: defaultField,
                                 },
                               });
                             }}
                           >
                             <SelectTrigger className="h-6 text-[10px] bg-background/40 border-border/40 truncate font-mono">
-                              <SelectValue placeholder="Select prior step..." />
+                              <SelectValue placeholder="Select top step..." />
                             </SelectTrigger>
                             <SelectContent className="z-50">
-                              {priorSteps.map((ps, psIdx) => (
+                              {priorStepsInfo.map((psi) => (
                                 <SelectItem
-                                  key={ps.id}
-                                  value={ps.outputVariable || ps.id}
+                                  key={psi.step.id}
+                                  value={psi.outputVariable}
                                   className="text-xs font-mono"
                                 >
                                   <span>
-                                    {psIdx + 1}. {ps.label || ps.type}{" "}
-                                    {ps.outputVariable ? `(${ps.outputVariable})` : ""}
+                                    {psi.index}. {psi.label} ({psi.outputVariable})
                                   </span>
                                 </SelectItem>
                               ))}
@@ -575,35 +792,113 @@ export function AgentTransformerStepSection({
                           </Select>
                         </div>
 
-                        {/* Optional Subfield Path */}
-                        <div className="w-[110px] shrink-0">
-                          <LocalInput
-                            value={"field" in binding.source && binding.source.field ? binding.source.field : ""}
-                            onChange={(e) => {
-                              const stepId = "stepId" in binding.source ? binding.source.stepId : "";
-                              handleUpdateBinding(bIdx, {
-                                ...binding,
-                                source: {
-                                  kind: "step_output",
-                                  stepId,
-                                  field: e.target.value.trim() || undefined,
-                                },
-                              });
-                            }}
-                            placeholder="path (optional)"
-                            className="h-6 text-[10px] font-mono bg-background/40 border-border/40"
-                            title="Optional subfield path e.g. user.name or response"
-                          />
+                        {/* 2. Output Field Selector */}
+                        <div className="flex-1 min-w-0">
+                          {isCustomField ? (
+                            <div className="flex items-center gap-1">
+                              <LocalInput
+                                value={currentField}
+                                onChange={(e) => {
+                                  handleUpdateBinding(bIdx, {
+                                    ...binding,
+                                    source: {
+                                      kind: "step_output",
+                                      stepId:
+                                        selectedStepId ||
+                                        (activePriorStepInfo?.outputVariable ??
+                                          "response"),
+                                      field: e.target.value.trim() || undefined,
+                                    },
+                                  });
+                                }}
+                                placeholder="nested.field.path"
+                                className="h-6 text-[10px] font-mono bg-background/40 border-border/40 flex-1"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setCustomFieldMode((prev) => ({
+                                    ...prev,
+                                    [bIdx]: false,
+                                  }))
+                                }
+                                className="h-6 px-1.5 text-[9px] text-muted-foreground hover:text-foreground"
+                                title="Switch back to predefined fields"
+                              >
+                                Presets
+                              </Button>
+                            </div>
+                          ) : (
+                            <Select
+                              value={currentField || "__whole__"}
+                              onValueChange={(fVal) => {
+                                if (fVal === "__custom_path__") {
+                                  setCustomFieldMode((prev) => ({
+                                    ...prev,
+                                    [bIdx]: true,
+                                  }));
+                                  return;
+                                }
+                                handleUpdateBinding(bIdx, {
+                                  ...binding,
+                                  source: {
+                                    kind: "step_output",
+                                    stepId:
+                                      selectedStepId ||
+                                      (activePriorStepInfo?.outputVariable ??
+                                        "response"),
+                                    field: fVal === "__whole__" ? "" : fVal,
+                                  },
+                                });
+                              }}
+                            >
+                              <SelectTrigger className="h-6 text-[10px] bg-background/40 border-border/40 truncate font-mono">
+                                <SelectValue placeholder="Select output field..." />
+                              </SelectTrigger>
+                              <SelectContent className="z-50">
+                                {activePriorStepInfo?.fields.map((f, fIdx) => (
+                                  <SelectItem
+                                    key={`f_${fIdx}_${f.path}`}
+                                    value={f.path || "__whole__"}
+                                    className="text-xs font-mono"
+                                  >
+                                    <div className="flex items-center justify-between gap-2 w-full">
+                                      <span>{f.label}</span>
+                                      {f.type && (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[9px] px-1 py-0 h-3.5 border-border/50 text-muted-foreground"
+                                        >
+                                          {f.type}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                                <SelectSeparator />
+                                <SelectItem
+                                  value="__custom_path__"
+                                  className="text-xs font-mono text-purple-400"
+                                >
+                                  <span>+ Custom field path...</span>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
                         </div>
                       </div>
                     )}
 
+                    {/* CASE 2: Graph State */}
                     {currentKind === "state" && (
                       <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                        {/* State Channel Selector */}
                         <div className="flex-1 min-w-0">
                           <Select
-                            value={"field" in binding.source ? binding.source.field : ""}
+                            value={
+                              "field" in binding.source ? binding.source.field : ""
+                            }
                             onValueChange={(channelKey) => {
                               handleUpdateBinding(bIdx, {
                                 ...binding,
@@ -619,8 +914,14 @@ export function AgentTransformerStepSection({
                             </SelectTrigger>
                             <SelectContent className="z-50">
                               {stateChannels.map((sc) => (
-                                <SelectItem key={sc.key} value={sc.key} className="text-xs font-mono">
-                                  <span>{sc.key} ({sc.type})</span>
+                                <SelectItem
+                                  key={sc.key}
+                                  value={sc.key}
+                                  className="text-xs font-mono"
+                                >
+                                  <span>
+                                    {sc.key} ({sc.type})
+                                  </span>
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -629,10 +930,15 @@ export function AgentTransformerStepSection({
                       </div>
                     )}
 
+                    {/* CASE 3: Inline Value */}
                     {currentKind === "inline" && (
                       <div className="flex-1 min-w-0">
                         <LocalInput
-                          value={"value" in binding.source ? String(binding.source.value) : ""}
+                          value={
+                            "value" in binding.source
+                              ? String(binding.source.value)
+                              : ""
+                          }
                           onChange={(e) => {
                             handleUpdateBinding(bIdx, {
                               ...binding,
@@ -642,29 +948,9 @@ export function AgentTransformerStepSection({
                               },
                             });
                           }}
-                          placeholder="literal value or ${state.var}"
+                          placeholder="literal value"
                           className="h-6 text-[10px] font-mono bg-background/40 border-border/40 flex-1"
-                          title="Inline literal string or interpolated expression"
-                        />
-                      </div>
-                    )}
-
-                    {currentKind === "env" && (
-                      <div className="flex-1 min-w-0">
-                        <LocalInput
-                          value={"field" in binding.source && binding.source.field ? binding.source.field : ""}
-                          onChange={(e) => {
-                            handleUpdateBinding(bIdx, {
-                              ...binding,
-                              source: {
-                                kind: "env",
-                                field: e.target.value.trim(),
-                              },
-                            });
-                          }}
-                          placeholder="ENV_VARIABLE_NAME"
-                          className="h-6 text-[10px] font-mono bg-background/40 border-border/40 flex-1"
-                          title="Process environment variable"
+                          title="Inline literal string or value"
                         />
                       </div>
                     )}

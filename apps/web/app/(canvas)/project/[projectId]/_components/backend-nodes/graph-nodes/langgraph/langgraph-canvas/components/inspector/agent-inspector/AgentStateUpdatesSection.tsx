@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  Shuffle,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
@@ -68,6 +69,14 @@ export function AgentStateUpdatesSection({
     if (!isStructured || !schemaJson.trim()) return [];
     return parseSchemaJsonToFields(schemaJson).fields;
   }, [isStructured, schemaJson]);
+
+  // Extract pipeline transformer steps
+  const transformerSteps = useMemo(() => {
+    const pSteps = selectedAgentData.pipelineSteps || [];
+    return pSteps.filter(
+      (s) => s.type === "transformer" || s.type === "transform",
+    );
+  }, [selectedAgentData.pipelineSteps]);
 
   // Helper to get channel details and its active reducer
   const getChannelMeta = (channelKey: string) => {
@@ -513,7 +522,9 @@ export function AgentStateUpdatesSection({
                     value={
                       currentSource === "structured_field"
                         ? `field:${su.schemaField || su.value || ""}`
-                        : currentSource
+                        : currentSource === "expression" && su.value && transformerSteps.some((ts) => ts.outputVariable && (su.value === ts.outputVariable || su.value?.startsWith(`${ts.outputVariable}.`)))
+                          ? `step_var:${su.value}`
+                          : currentSource
                     }
                     onValueChange={(val: string) => {
                       const updated = [...stateUpdates];
@@ -527,6 +538,15 @@ export function AgentStateUpdatesSection({
                           source: "structured_field",
                           schemaField: fieldName,
                           value: fieldName,
+                          mode: "set",
+                        };
+                      } else if (val.startsWith("step_var:")) {
+                        const varPath = val.replace("step_var:", "");
+                        updated[sIdx] = {
+                          ...current,
+                          source: "expression",
+                          schemaField: undefined,
+                          value: varPath,
                           mode: "set",
                         };
                       } else if (val === "structured_full") {
@@ -634,6 +654,41 @@ export function AgentStateUpdatesSection({
                           </div>
                         </SelectItem>
                       </SelectGroup>
+
+                      {/* Transformer Step Outputs */}
+                      {transformerSteps.length > 0 && (
+                        <>
+                          <SelectSeparator />
+                          <SelectGroup>
+                            <SelectLabel className="text-[10px] uppercase font-bold text-purple-400">
+                              Pipeline Transformer Outputs
+                            </SelectLabel>
+                            {transformerSteps.map((ts) => {
+                              const varName = ts.outputVariable || ts.id;
+                              const returnFields = ts.outputSchema || ts.functionRef?.returnSchema || [];
+                              return (
+                                <React.Fragment key={ts.id}>
+                                  <SelectItem value={`step_var:${varName}`}>
+                                    <div className="flex items-center gap-1.5 font-mono text-purple-300">
+                                      <Shuffle className="w-3 h-3 text-purple-400" />
+                                      <span>{varName}</span>
+                                      <span className="text-[9px] text-muted-foreground">(whole)</span>
+                                    </div>
+                                  </SelectItem>
+                                  {returnFields.map((f) => (
+                                    <SelectItem key={`${varName}.${f.name}`} value={`step_var:${varName}.${f.name}`}>
+                                      <div className="flex items-center gap-1.5 font-mono text-purple-300 pl-2">
+                                        <span>{varName}.{f.name}</span>
+                                        <span className="text-[9px] text-muted-foreground">({f.type})</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </React.Fragment>
+                              );
+                            })}
+                          </SelectGroup>
+                        </>
+                      )}
 
                       <SelectSeparator />
 

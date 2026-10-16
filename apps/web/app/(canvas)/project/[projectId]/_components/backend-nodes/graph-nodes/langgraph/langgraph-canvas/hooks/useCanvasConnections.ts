@@ -82,15 +82,54 @@ export function useCanvasConnections({
   setEdges,
 }: UseCanvasConnectionsProps) {
   const onNodesChange = useCallback(
-    (changes: NodeChange<LangGraphCanvasNode>[]) =>
-      setNodes((nds) => applyNodeChanges<LangGraphCanvasNode>(changes, nds)),
+    (changes: NodeChange<LangGraphCanvasNode>[]) => {
+      // Prevent accidental node deletion when user is typing in an input/textarea/inspector
+      const activeEl = typeof document !== "undefined" ? document.activeElement : null;
+      const isTyping =
+        activeEl instanceof HTMLElement &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.tagName === "SELECT" ||
+          activeEl.isContentEditable ||
+          Boolean(
+            activeEl.closest(
+              "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag"
+            )
+          ));
+
+      const effectiveChanges = isTyping
+        ? changes.filter((c) => c.type !== "remove")
+        : changes;
+
+      if (effectiveChanges.length === 0) return;
+
+      setNodes((nds) => applyNodeChanges<LangGraphCanvasNode>(effectiveChanges, nds));
+    },
     [setNodes],
   );
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
+      // Prevent accidental edge deletion when user is typing in an input/textarea/inspector
+      const activeEl = typeof document !== "undefined" ? document.activeElement : null;
+      const isTyping =
+        activeEl instanceof HTMLElement &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.tagName === "SELECT" ||
+          activeEl.isContentEditable ||
+          Boolean(
+            activeEl.closest(
+              "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag"
+            )
+          ));
+
+      const effectiveChanges = isTyping
+        ? changes.filter((c) => c.type !== "remove")
+        : changes;
+
       const removedEdgeIds = new Set(
-        changes.filter((c) => c.type === "remove").map((c) => c.id),
+        effectiveChanges.filter((c) => c.type === "remove").map((c) => c.id),
       );
 
       if (removedEdgeIds.size > 0) {

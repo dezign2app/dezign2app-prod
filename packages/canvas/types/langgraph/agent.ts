@@ -117,8 +117,11 @@ export interface LangGraphNodePipelineStep {
   functionRef?: {
     name?: string;
     importPath?: string;
+    inputSchema?: Array<{ name: string; type: string; required?: boolean; description?: string }>;
+    returnSchema?: Array<{ name: string; type: string; required?: boolean; description?: string }>;
   };
   outputVariable?: string;
+  outputSchema?: Array<{ name: string; type: string; required?: boolean; description?: string }>;
   inputBindings?: PipelineStepInputBinding[];
 }
 

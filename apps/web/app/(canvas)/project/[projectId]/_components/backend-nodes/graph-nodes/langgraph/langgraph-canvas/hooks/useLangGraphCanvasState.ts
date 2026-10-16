@@ -491,6 +491,23 @@ export function useLangGraphCanvasState({
   };
 
   const handleDeleteSelected = useCallback(() => {
+    // Never delete nodes while user is focused on an input, textarea, select, or inspector field
+    const activeEl = typeof document !== "undefined" ? document.activeElement : null;
+    const isTyping =
+      activeEl instanceof HTMLElement &&
+      (activeEl.tagName === "INPUT" ||
+        activeEl.tagName === "TEXTAREA" ||
+        activeEl.tagName === "SELECT" ||
+        activeEl.isContentEditable ||
+        Boolean(
+          activeEl.closest(
+            "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag"
+          )
+        ));
+    if (isTyping) {
+      return;
+    }
+
     const selectedEdges = edges.filter((e) => e.selected);
     const selectedNodes = nodes.filter((n) => n.selected);
 
