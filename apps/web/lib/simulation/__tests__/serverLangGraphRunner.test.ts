@@ -208,6 +208,8 @@ describe("executeServerLangGraph: Official @langchain/langgraph StateGraph Execu
       { id: "e2", source: "agent_node", target: "router_node" },
       { id: "e3", source: "router_node", target: "agent_ref_1", sourceHandle: "branch_agent" },
       { id: "e4", source: "router_node", target: "END", sourceHandle: "branch_end" },
+      // Reference edge between master node and ref node (present on real canvas)
+      { id: "edge-agent-ref-link-agent_node-agent_ref_1", source: "agent_node", target: "agent_ref_1", type: "langgraph-reference", hidden: true } as unknown as LangGraphCanvasEdge,
     ];
 
     const stateChannels: LangGraphStateChannel[] = [

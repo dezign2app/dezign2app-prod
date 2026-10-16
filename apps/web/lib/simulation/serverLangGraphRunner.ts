@@ -1067,10 +1067,17 @@ export async function executeServerLangGraph(
   // 4. Edges & Flow Configuration
   const flowEdges = edges.filter(
     (e) =>
+      e.type !== "langgraph-reference" &&
       e.targetHandle !== "llm_in" &&
       e.targetHandle !== "tool_in" &&
       e.targetHandle !== "middleware_in" &&
-      e.targetHandle !== "memory_in",
+      e.targetHandle !== "memory_in" &&
+      e.targetHandle !== "state_in" &&
+      e.sourceHandle !== "llm_out" &&
+      e.sourceHandle !== "tool_out" &&
+      e.sourceHandle !== "middleware_out" &&
+      e.sourceHandle !== "memory_out" &&
+      e.sourceHandle !== "state_out",
   );
 
   // Helper to resolve any target node ID (resolving AgentRef / NodeRef proxies to their master executable node)
@@ -1130,8 +1137,7 @@ export async function executeServerLangGraph(
     const isRouter = node.type === "step" && stepData?.stepType === "router";
 
     const outgoing = flowEdges.filter((e) => e.source === node.id);
-    const firstTarget = outgoing[0]?.target;
-    if (!firstTarget) {
+    if (outgoing.length === 0) {
       builder.addEdge(node.id, END);
       continue;
     }
@@ -1157,7 +1163,12 @@ export async function executeServerLangGraph(
         pathMap,
       );
     } else {
-      builder.addEdge(node.id, resolveTargetNodeId(firstTarget));
+      const uniqueTargets = Array.from(
+        new Set(outgoing.map((e) => resolveTargetNodeId(e.target))),
+      );
+      for (const target of uniqueTargets) {
+        builder.addEdge(node.id, target);
+      }
     }
   }
 

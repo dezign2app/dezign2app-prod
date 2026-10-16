@@ -159,6 +159,7 @@ export function buildFlowEdges(
   // Filter to only flow edges (exclude wiring edges like LLM/tool/memory connections)
   const flowEdges = edges.filter((e) => {
     return (
+      e.type !== "langgraph-reference" &&
       e.targetHandle !== HANDLE_LLM_IN &&
       e.targetHandle !== HANDLE_TOOL_IN &&
       e.targetHandle !== HANDLE_MIDDLEWARE_IN &&

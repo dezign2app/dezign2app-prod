@@ -242,10 +242,17 @@ export async function executeBrowserLangGraph(
   // 4. Find outgoing flow edges from START
   const flowEdges = edges.filter(
     (e) =>
+      e.type !== "langgraph-reference" &&
       e.targetHandle !== "llm_in" &&
       e.targetHandle !== "tool_in" &&
       e.targetHandle !== "middleware_in" &&
-      e.targetHandle !== "memory_in",
+      e.targetHandle !== "memory_in" &&
+      e.targetHandle !== "state_in" &&
+      e.sourceHandle !== "llm_out" &&
+      e.sourceHandle !== "tool_out" &&
+      e.sourceHandle !== "middleware_out" &&
+      e.sourceHandle !== "memory_out" &&
+      e.sourceHandle !== "state_out",
   );
 
   let currentEdge = flowEdges.find((e) => e.source === "START");
