@@ -278,6 +278,7 @@ export function AgentStepCard({
             stateChannels={stateChannels}
             nodes={nodes}
             onUpdateStep={onUpdateStep}
+            selectedAgentData={selectedAgentData}
           />
         );
 

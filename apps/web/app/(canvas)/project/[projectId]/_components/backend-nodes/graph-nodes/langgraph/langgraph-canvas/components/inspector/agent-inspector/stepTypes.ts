@@ -155,10 +155,8 @@ export function deriveInitialPipelineSteps(
           type: "transformer",
           label: `Transformer ${codeIndex}`,
           outputVariable: `transformedData_${codeIndex}`,
+          outputSchema: [{ name: "result", type: "string", required: true }],
           inputBindings: [],
-          customCode: data.customCode || {
-            body: "// TypeScript logic: (inputs, state, clone) => transformed\nreturn {\n  // mutate or compute\n};\n",
-          },
         });
       } else if (s === "custom_code") {
         codeIndex++;

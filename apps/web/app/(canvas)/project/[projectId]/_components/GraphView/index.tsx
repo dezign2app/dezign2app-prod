@@ -441,7 +441,25 @@ export function GraphView({ projectId }: GraphViewProps) {
         onEdgesChange={onEdgesChange}
         onNodeDragStart={handleNodeDragStart}
         onSelectionDragStart={handleSelectionDragStart}
-        deleteKeyCode={["Backspace", "Delete"]}
+        deleteKeyCode={["Delete"]}
+        onBeforeDelete={async () => {
+          const activeEl = typeof document !== "undefined" ? document.activeElement : null;
+          if (
+            activeEl instanceof HTMLElement &&
+            (activeEl.tagName === "INPUT" ||
+              activeEl.tagName === "TEXTAREA" ||
+              activeEl.tagName === "SELECT" ||
+              activeEl.isContentEditable ||
+              Boolean(
+                activeEl.closest(
+                  "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag"
+                )
+              ))
+          ) {
+            return false;
+          }
+          return true;
+        }}
         onConnect={onConnect}
         isValidConnection={(connection: Connection) => {
           const src = nodes.find((n) => n.id === connection.source);

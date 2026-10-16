@@ -9,8 +9,26 @@ export function useCanvasHandlers(projectId: string, view: BackendCanvasView) {
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      const removals = changes.filter((c) => c.type === "remove");
-      const otherChanges = changes.filter((c) => c.type !== "remove");
+      // Prevent accidental node deletion when user is typing in an input/textarea/inspector
+      const activeEl = typeof document !== "undefined" ? document.activeElement : null;
+      const isTyping =
+        activeEl instanceof HTMLElement &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.tagName === "SELECT" ||
+          activeEl.isContentEditable ||
+          Boolean(
+            activeEl.closest(
+              "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag"
+            )
+          ));
+
+      const filteredChanges = isTyping
+        ? changes.filter((c) => c.type !== "remove")
+        : changes;
+
+      const removals = filteredChanges.filter((c) => c.type === "remove");
+      const otherChanges = filteredChanges.filter((c) => c.type !== "remove");
 
       const store = useBackendCanvasStore.getState();
 

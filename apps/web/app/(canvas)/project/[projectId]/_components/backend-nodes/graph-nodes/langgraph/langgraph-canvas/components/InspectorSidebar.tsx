@@ -281,10 +281,21 @@ export function InspectorSidebar({
 
   return (
     <div
+      data-inspector="true"
       style={{ width: `${width}px` }}
-      className={`relative shrink-0 h-full flex flex-col ${
+      className={`inspector-sidebar relative shrink-0 h-full flex flex-col ${
         isResizing ? "select-none" : ""
       }`}
+      onKeyDown={(e) => {
+        if (e.key === "Backspace" || e.key === "Delete") {
+          e.stopPropagation();
+        }
+      }}
+      onKeyDownCapture={(e) => {
+        if (e.key === "Backspace" || e.key === "Delete") {
+          e.stopPropagation();
+        }
+      }}
     >
       {/* Resize handle — sits on the very left edge of the outer shell */}
       <div

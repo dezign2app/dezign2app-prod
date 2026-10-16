@@ -111,6 +111,9 @@ export const LocalInput = React.forwardRef<HTMLInputElement, LocalInputProps>(
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Backspace" || e.key === "Delete") {
+        e.stopPropagation();
+      }
       if (e.key === "Enter") {
         flush();
       }
@@ -264,6 +267,9 @@ export const LocalTextarea = React.forwardRef<
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Backspace" || e.key === "Delete") {
+        e.stopPropagation();
+      }
       if (e.key === "Tab") {
         e.preventDefault();
         const target = e.target as HTMLTextAreaElement;
