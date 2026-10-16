@@ -499,7 +499,9 @@ export function useNodeFactory({
               label: label || "Node",
               agentId: nodeId,
               name: label || "Node",
-              systemPrompt: "System prompt / instructions for this node...",
+              systemPrompt: "",
+              pipelineSteps: [],
+              nodeSteps: [],
               llmConfig: {
                 enabled: false,
                 provider: DEFAULT_LLM_PROVIDER,
