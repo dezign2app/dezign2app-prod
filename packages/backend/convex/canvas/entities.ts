@@ -16,14 +16,14 @@ export const upsertBackendEndpoint = mutation({
     data: backendEndpointDataValidator,
   },
   async handler(ctx, args) {
-    await assertActiveSubscriptionForProject(ctx, args.projectId);
-
     log(
-      "upsertBackendEndpoint called with:",
-      args.endpointId,
-      "businessLogic:",
-      args.data.businessLogic,
+      `[upsertBackendEndpoint] Upserting endpoint ${args.endpointId} on node ${args.nodeId} in project ${args.projectId}:`,
+      {
+        name: args.data.name,
+        type: args.data.type,
+      },
     );
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
       .query("canvas_backend_endpoints")
@@ -33,8 +33,10 @@ export const upsertBackendEndpoint = mutation({
       .unique();
 
     if (existing) {
+      log(`[upsertBackendEndpoint] Patching existing endpoint document ${existing._id}`);
       await ctx.db.patch(existing._id, { data: args.data });
     } else {
+      log(`[upsertBackendEndpoint] Inserting new endpoint document ${args.endpointId}`);
       await ctx.db.insert("canvas_backend_endpoints", {
         projectId: args.projectId,
         nodeId: args.nodeId,
@@ -52,6 +54,7 @@ export const removeBackendEndpoint = mutation({
     endpointId: v.string(),
   },
   async handler(ctx, args) {
+    log(`[removeBackendEndpoint] Removing endpoint ${args.endpointId} on node ${args.nodeId} in project ${args.projectId}`);
     await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
@@ -62,6 +65,7 @@ export const removeBackendEndpoint = mutation({
       .unique();
 
     if (existing) {
+      log(`[removeBackendEndpoint] Deleting endpoint document ${existing._id}`);
       await ctx.db.delete(existing._id);
     }
   },
@@ -75,6 +79,9 @@ export const upsertBackendIdentityProvider = mutation({
     data: backendIdentityProviderDataValidator,
   },
   async handler(ctx, args) {
+    log(`[upsertBackendIdentityProvider] Upserting identity provider ${args.providerId} on node ${args.nodeId} in project ${args.projectId}:`, {
+      provider: args.data.provider,
+    });
     await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
@@ -85,8 +92,10 @@ export const upsertBackendIdentityProvider = mutation({
       .unique();
 
     if (existing) {
+      log(`[upsertBackendIdentityProvider] Patching existing provider document ${existing._id}`);
       await ctx.db.patch(existing._id, { data: args.data });
     } else {
+      log(`[upsertBackendIdentityProvider] Inserting new provider document ${args.providerId}`);
       await ctx.db.insert("canvas_backend_identity_providers", {
         projectId: args.projectId,
         nodeId: args.nodeId,
@@ -104,6 +113,7 @@ export const removeBackendIdentityProvider = mutation({
     providerId: v.string(),
   },
   async handler(ctx, args) {
+    log(`[removeBackendIdentityProvider] Removing identity provider ${args.providerId} on node ${args.nodeId} in project ${args.projectId}`);
     await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
@@ -114,6 +124,7 @@ export const removeBackendIdentityProvider = mutation({
       .unique();
 
     if (existing) {
+      log(`[removeBackendIdentityProvider] Deleting provider document ${existing._id}`);
       await ctx.db.delete(existing._id);
     }
   },
@@ -128,6 +139,13 @@ export const upsertBackendEvent = mutation({
     data: backendEventDataValidator,
   },
   async handler(ctx, args) {
+    log(
+      `[upsertBackendEvent] Upserting event ${args.eventId} (${args.variant}) on node ${args.nodeId} in project ${args.projectId}:`,
+      {
+        name: args.data.name,
+        brokerNodeId: args.data.brokerNodeId,
+      },
+    );
     await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
@@ -138,11 +156,13 @@ export const upsertBackendEvent = mutation({
       .unique();
 
     if (existing) {
+      log(`[upsertBackendEvent] Patching existing event document ${existing._id}`);
       await ctx.db.patch(existing._id, {
         variant: args.variant,
         data: args.data,
       });
     } else {
+      log(`[upsertBackendEvent] Inserting new event document ${args.eventId}`);
       await ctx.db.insert("canvas_backend_events", {
         projectId: args.projectId,
         nodeId: args.nodeId,
@@ -161,6 +181,7 @@ export const removeBackendEvent = mutation({
     eventId: v.string(),
   },
   async handler(ctx, args) {
+    log(`[removeBackendEvent] Removing event ${args.eventId} on node ${args.nodeId} in project ${args.projectId}`);
     await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
@@ -171,6 +192,7 @@ export const removeBackendEvent = mutation({
       .unique();
 
     if (existing) {
+      log(`[removeBackendEvent] Deleting event document ${existing._id}`);
       await ctx.db.delete(existing._id);
     }
   },

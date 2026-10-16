@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
+import { log } from "./logger";
 
 // ----------------------------------------------------------------------------
 // LANGGRAPH PIPELINE STEPS MUTATIONS & QUERIES
@@ -22,6 +23,9 @@ export const upsertLangGraphStep = mutation({
     retryPolicy: v.optional(v.any()),
   },
   async handler(ctx, args) {
+    log(
+      `[upsertLangGraphStep] Upserting step "${args.name}" (${args.stepId}) on node ${args.nodeId} in project ${args.projectId}`,
+    );
     const existing = await ctx.db
       .query("canvas_backend_langgraph_steps")
       .withIndex("by_node_step", (q) =>
@@ -30,9 +34,11 @@ export const upsertLangGraphStep = mutation({
       .first();
 
     if (existing) {
+      log(`[upsertLangGraphStep] Patching existing step document ${existing._id}`);
       await ctx.db.patch(existing._id, args);
       return existing._id;
     } else {
+      log(`[upsertLangGraphStep] Inserting new step document for step ${args.stepId}`);
       return await ctx.db.insert("canvas_backend_langgraph_steps", args);
     }
   },
@@ -44,12 +50,15 @@ export const getLangGraphSteps = query({
     nodeId: v.string(),
   },
   async handler(ctx, args) {
-    return await ctx.db
+    log(`[getLangGraphSteps] Querying steps for node ${args.nodeId} in project ${args.projectId}`);
+    const steps = await ctx.db
       .query("canvas_backend_langgraph_steps")
       .withIndex("by_project_node", (q) =>
         q.eq("projectId", args.projectId).eq("nodeId", args.nodeId),
       )
       .collect();
+    log(`[getLangGraphSteps] Found ${steps.length} steps for node ${args.nodeId}`);
+    return steps;
   },
 });
 
@@ -69,6 +78,9 @@ export const upsertLangGraphEdge = mutation({
     sendConfig: v.optional(v.any()),
   },
   async handler(ctx, args) {
+    log(
+      `[upsertLangGraphEdge] Upserting edge ${args.edgeId} (source=${args.source}) on node ${args.nodeId} in project ${args.projectId}`,
+    );
     const existing = await ctx.db
       .query("canvas_backend_langgraph_edges")
       .withIndex("by_node_edge", (q) =>
@@ -77,9 +89,11 @@ export const upsertLangGraphEdge = mutation({
       .first();
 
     if (existing) {
+      log(`[upsertLangGraphEdge] Patching existing edge document ${existing._id}`);
       await ctx.db.patch(existing._id, args);
       return existing._id;
     } else {
+      log(`[upsertLangGraphEdge] Inserting new edge document for edge ${args.edgeId}`);
       return await ctx.db.insert("canvas_backend_langgraph_edges", args);
     }
   },
@@ -91,12 +105,15 @@ export const getLangGraphEdges = query({
     nodeId: v.string(),
   },
   async handler(ctx, args) {
-    return await ctx.db
+    log(`[getLangGraphEdges] Querying edges for node ${args.nodeId} in project ${args.projectId}`);
+    const edges = await ctx.db
       .query("canvas_backend_langgraph_edges")
       .withIndex("by_project_node", (q) =>
         q.eq("projectId", args.projectId).eq("nodeId", args.nodeId),
       )
       .collect();
+    log(`[getLangGraphEdges] Found ${edges.length} edges for node ${args.nodeId}`);
+    return edges;
   },
 });
 
@@ -114,6 +131,9 @@ export const saveCheckpoint = mutation({
     waitingPortId: v.optional(v.string()),
   },
   async handler(ctx, args) {
+    log(
+      `[saveCheckpoint] Saving checkpoint ${args.checkpointId} (status=${args.status}) for thread ${args.threadId}`,
+    );
     const existing = await ctx.db
       .query("langgraph_checkpoints")
       .withIndex("by_thread", (q) => q.eq("threadId", args.threadId))
@@ -121,9 +141,11 @@ export const saveCheckpoint = mutation({
 
     const updatedAt = Date.now();
     if (existing) {
+      log(`[saveCheckpoint] Patching existing checkpoint ${existing._id}`);
       await ctx.db.patch(existing._id, { ...args, updatedAt });
       return existing._id;
     } else {
+      log(`[saveCheckpoint] Inserting new checkpoint for thread ${args.threadId}`);
       return await ctx.db.insert("langgraph_checkpoints", {
         ...args,
         updatedAt,
@@ -137,6 +159,7 @@ export const getCheckpoint = query({
     threadId: v.string(),
   },
   async handler(ctx, args) {
+    log(`[getCheckpoint] Fetching checkpoint for thread ${args.threadId}`);
     return await ctx.db
       .query("langgraph_checkpoints")
       .withIndex("by_thread", (q) => q.eq("threadId", args.threadId))
@@ -156,6 +179,7 @@ export const createResumeToken = mutation({
     timeoutMs: v.number(),
   },
   async handler(ctx, args) {
+    log(`[createResumeToken] Creating token for thread ${args.threadId} (timeout=${args.timeoutMs}ms)`);
     const now = Date.now();
     const expiresAt = now + args.timeoutMs;
     return await ctx.db.insert("langgraph_resume_tokens", {
@@ -174,6 +198,7 @@ export const atomicConsumeResumeToken = mutation({
     tokenInput: v.string(),
   },
   async handler(ctx, args) {
+    log(`[atomicConsumeResumeToken] Consuming token for thread ${args.threadId}`);
     // ATOMIC OPERATIONAL DELETE: The deletion IS the verification.
     const tokenDoc = await ctx.db
       .query("langgraph_resume_tokens")
@@ -181,6 +206,7 @@ export const atomicConsumeResumeToken = mutation({
       .first();
 
     if (!tokenDoc) {
+      log(`[atomicConsumeResumeToken] Token not found or already consumed`);
       // Zero rows affected / token not found: Token was already consumed, expired, or invalid
       throw new ConvexError(
         "InvalidResumeTokenError: Resume token is invalid, expired, or already consumed.",
@@ -188,12 +214,14 @@ export const atomicConsumeResumeToken = mutation({
     }
 
     if (tokenDoc.threadId !== args.threadId) {
+      log(`[atomicConsumeResumeToken] Token thread mismatch`);
       throw new ConvexError(
         "InvalidResumeTokenError: Token does not match active thread session.",
       );
     }
 
     if (tokenDoc.expiresAt < Date.now()) {
+      log(`[atomicConsumeResumeToken] Token expired`);
       await ctx.db.delete(tokenDoc._id);
       throw new ConvexError(
         "InvalidResumeTokenError: Resume token has expired.",
@@ -202,6 +230,7 @@ export const atomicConsumeResumeToken = mutation({
 
     // IMMEDIATELY INVALIDATE (DELETE) TOKEN IN THE ATOMIC TRANSACTION
     await ctx.db.delete(tokenDoc._id);
+    log(`[atomicConsumeResumeToken] Token consumed and deleted atomically`);
 
     // Fetch and return associated thread checkpoint
     const checkpointDoc = await ctx.db

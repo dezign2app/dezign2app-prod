@@ -110,6 +110,7 @@ export const getProjectsByOrganization = query({
     }
 
     if (targetOrgId) {
+      log(`[getProjectsByOrganization] Querying projects for org: ${targetOrgId}`);
       // Verify user is authorized for this organization
       const authorized = await isUserAuthorizedForOrg(
         ctx,
@@ -132,6 +133,7 @@ export const getProjectsByOrganization = query({
         .paginate(args.paginationOpts);
     }
 
+    log(`[getProjectsByOrganization] Querying personal projects for user: ${userId}`);
     // Personal Workspace: Strictly personal projects created by this user
     return await ctx.db
       .query("projects")
@@ -146,6 +148,7 @@ export const getProjectsByOrganization = query({
 export const getProjectById = query({
   args: { projectId: v.id("projects") },
   async handler(ctx, args) {
+    log(`[getProjectById] Querying project ${args.projectId}`);
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       return null;
@@ -221,6 +224,7 @@ export const updateProject = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    log(`[updateProject] Updating project ${args.projectId}:`, { name: args.name, description: args.description });
     await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const patches: Partial<Doc<"projects">> = {
@@ -239,6 +243,7 @@ export const removeProject = mutation({
     projectId: v.id("projects"),
   },
   handler: async (ctx, args) => {
+    log(`[removeProject] Removing project ${args.projectId} with cascade delete`);
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new ConvexError("Not authenticated");
@@ -390,6 +395,7 @@ export const removeProject = mutation({
 
     // Finally delete the project itself
     await ctx.db.delete(args.projectId);
+    log(`[removeProject] Successfully deleted project ${args.projectId}`);
   },
 });
 
@@ -398,6 +404,7 @@ export const duplicateProject = mutation({
     projectId: v.id("projects"),
   },
   handler: async (ctx, args) => {
+    log(`[duplicateProject] Duplicating project ${args.projectId}`);
     const { project } = await assertActiveSubscriptionForProject(
       ctx,
       args.projectId,
@@ -411,6 +418,7 @@ export const duplicateProject = mutation({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
+    log(`[duplicateProject] Created copy with new ID ${newProjectId}`);
     return newProjectId;
   },
 });

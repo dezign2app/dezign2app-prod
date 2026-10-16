@@ -96,6 +96,7 @@ export const upsertBackendNode = mutation({
       .unique();
 
     if (existing) {
+      log(`[upsertBackendNode] Patching existing node ${args.nodeId} (${args.type}) in project ${args.projectId}`);
       await ctx.db.patch(existing._id, {
         type: args.type,
         position: args.position,
@@ -103,6 +104,7 @@ export const upsertBackendNode = mutation({
         fractionalIndex: args.fractionalIndex,
       });
     } else {
+      log(`[upsertBackendNode] Inserting new node ${args.nodeId} (${args.type}) in project ${args.projectId}`);
       await ctx.db.insert("canvas_backend_nodes", {
         projectId: args.projectId,
         nodeId: args.nodeId,
@@ -121,6 +123,7 @@ export const upsertBackendNode = mutation({
 export const removeBackendNode = mutation({
   args: { projectId: v.id("projects"), nodeId: v.string() },
   async handler(ctx, args) {
+    log(`[removeBackendNode] Removing node ${args.nodeId} in project ${args.projectId}`);
     await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
@@ -131,6 +134,7 @@ export const removeBackendNode = mutation({
       .unique();
 
     if (existing) {
+      log(`[removeBackendNode] Deleting node document ${existing._id}`);
       await ctx.db.delete(existing._id);
     }
 
@@ -140,10 +144,15 @@ export const removeBackendNode = mutation({
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
 
+    let removedEdgeCount = 0;
     for (const edge of connectedEdges) {
       if (edge.source === args.nodeId || edge.target === args.nodeId) {
         await ctx.db.delete(edge._id);
+        removedEdgeCount++;
       }
+    }
+    if (removedEdgeCount > 0) {
+      log(`[removeBackendNode] Deleted ${removedEdgeCount} connected edges for node ${args.nodeId}`);
     }
   },
 });
@@ -160,6 +169,7 @@ export const patchNodeData = mutation({
     patch: v.any(),
   },
   async handler(ctx, args) {
+    log(`[patchNodeData] Patching node ${args.nodeId} in project ${args.projectId}:`, args.patch);
     await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db

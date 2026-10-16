@@ -498,6 +498,9 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
       }));
     }
 
+    // Track truly-new nodes (not yet in DB) vs existing ones (already persisted).
+    // Only new nodes go into pendingNodeUpserts — re-queuing existing nodes on every
+    // Convex delivery was the source of the infinite upsertBackendNode write loop.
     const newlyCreatedTypesNodes: BackendNode[] = [];
     const newlyCreatedTypesEdges: BackendEdge[] = [];
 
@@ -509,14 +512,10 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
       );
 
       if (isExistingNode) {
+        // Node already exists in Convex — only update local state, do NOT enqueue a write.
         nodesToSet = nodesToSet.map((n) => (n.id === typesNode.id ? typesNode : n));
-        const pendingIdx = newlyCreatedTypesNodes.findIndex((n) => n.id === typesNode.id);
-        if (pendingIdx >= 0) {
-          newlyCreatedTypesNodes[pendingIdx] = typesNode;
-        } else {
-          newlyCreatedTypesNodes.push(typesNode);
-        }
       } else {
+        // Genuinely new node — add to local state AND queue a DB write.
         nodesToSet.push(typesNode);
         newlyCreatedTypesNodes.push(typesNode);
       }

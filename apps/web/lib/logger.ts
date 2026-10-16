@@ -49,13 +49,18 @@ export function getActiveLogLevel(): LogLevel {
   };
 
   // 1. Explicit LOG_LEVEL / NEXT_PUBLIC_LOG_LEVEL takes precedence
+  // Literal process.env.NEXT_PUBLIC_* is required for Next.js compile-time bundle inlining on client
   const explicitLevel =
+    normalizeLevel(process.env.NEXT_PUBLIC_LOG_LEVEL) ||
     normalizeLevel(getEnvVar("NEXT_PUBLIC_LOG_LEVEL")) ||
     normalizeLevel(getEnvVar("LOG_LEVEL"));
   if (explicitLevel) return explicitLevel;
 
   // 2. Boolean LOG / NEXT_PUBLIC_LOG fallback
-  const rawFlag = getEnvVar("NEXT_PUBLIC_LOG") ?? getEnvVar("LOG");
+  const rawFlag =
+    process.env.NEXT_PUBLIC_LOG ??
+    getEnvVar("NEXT_PUBLIC_LOG") ??
+    getEnvVar("LOG");
   if (rawFlag !== undefined) {
     const logFlag = rawFlag.trim().toLowerCase();
     if (logFlag === "true" || logFlag === "1") return "debug";
