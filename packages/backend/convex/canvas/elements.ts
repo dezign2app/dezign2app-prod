@@ -1,9 +1,11 @@
 import { v } from "convex/values";
 import { query } from "../_generated/server";
+import { log } from "../logger";
 
 export const getBackendElements = query({
   args: { projectId: v.id("projects") },
   async handler(ctx, args) {
+    log(`[getBackendElements] Querying canvas elements for project: ${args.projectId}`);
     const nodes = await ctx.db
       .query("canvas_backend_nodes")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
@@ -37,6 +39,8 @@ export const getBackendElements = query({
     // Sort by fractionalIndex for correct ordering
     nodes.sort((a, b) => (a.fractionalIndex < b.fractionalIndex ? -1 : 1));
     edges.sort((a, b) => (a.fractionalIndex < b.fractionalIndex ? -1 : 1));
+
+    log(`[getBackendElements] Returning: ${nodes.length} nodes, ${edges.length} edges, ${endpoints.length} endpoints, ${events.length} events, ${identityProviders.length} idps, ${testCases.length} testCases for project: ${args.projectId}`);
 
     return {
       nodes,

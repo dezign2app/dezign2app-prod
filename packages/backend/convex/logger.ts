@@ -28,11 +28,17 @@ export function getActiveLogLevel(): LogLevel {
   };
 
   // 1. Explicit LOG_LEVEL takes precedence
-  const explicitLevel = normalizeLevel(getEnvVar("LOG_LEVEL"));
+  const explicitLevel =
+    normalizeLevel(getEnvVar("LOG_LEVEL")) ||
+    normalizeLevel(getEnvVar("CONVEX_LOG_LEVEL")) ||
+    normalizeLevel(getEnvVar("NEXT_PUBLIC_LOG_LEVEL"));
   if (explicitLevel) return explicitLevel;
 
   // 2. Boolean LOG fallback: true/1 -> debug, false/0 -> silent
-  const rawFlag = getEnvVar("LOG");
+  const rawFlag =
+    getEnvVar("LOG") ??
+    getEnvVar("CONVEX_LOG") ??
+    getEnvVar("NEXT_PUBLIC_LOG");
   if (rawFlag !== undefined) {
     const logFlag = rawFlag.trim().toLowerCase();
     if (logFlag === "true" || logFlag === "1") return "debug";

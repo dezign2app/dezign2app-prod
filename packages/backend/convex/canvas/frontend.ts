@@ -1,9 +1,11 @@
 import { v, ConvexError } from "convex/values";
 import { mutation, query } from "../_generated/server";
+import { log } from "../logger";
 
 export const getFrontendRecords = query({
   args: { projectId: v.id("projects") },
   async handler(ctx, args) {
+    log(`[getFrontendRecords] Reading frontend records for project ${args.projectId}`);
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 
@@ -13,7 +15,9 @@ export const getFrontendRecords = query({
       .collect();
 
     // Return only live records (not soft-deleted)
-    return rows.filter((r) => !r.isDeleted).map((r) => r.record);
+    const live = rows.filter((r) => !r.isDeleted).map((r) => r.record);
+    log(`[getFrontendRecords] Returning ${live.length} live records for project ${args.projectId}`);
+    return live;
   },
 });
 
@@ -24,6 +28,9 @@ export const syncFrontendRecords = mutation({
     remove: v.array(v.string()), // recordIds to soft-delete
   },
   async handler(ctx, args) {
+    log(
+      `[syncFrontendRecords] Syncing records for project ${args.projectId}: ${args.put.length} put, ${args.remove.length} remove`,
+    );
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 

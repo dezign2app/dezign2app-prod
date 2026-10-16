@@ -5,6 +5,7 @@ import { isBackendNode } from "@workspace/canvas/utils";
 import { RULES_VERSION } from "@workspace/canvas/constants";
 import { backendEdgeDataValidator } from "../schema/canvasValidators";
 import { assertActiveSubscriptionForProject } from "../auth_guards";
+import { log } from "../logger";
 
 // Validates and upserts canvas backend edges with strict connection taxonomy
 
@@ -21,6 +22,7 @@ export const upsertBackendEdge = mutation({
     fractionalIndex: v.string(),
   },
   async handler(ctx, args) {
+    log(`[upsertBackendEdge] Upserting edge ${args.edgeId} (${args.source} -> ${args.target}, type: ${args.type}) in project ${args.projectId}`);
     await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     // --- Edge Validation (Primary Enforcement) ---
@@ -106,6 +108,7 @@ export const upsertBackendEdge = mutation({
       .unique();
 
     if (existing) {
+      log(`[upsertBackendEdge] Patching existing edge ${args.edgeId} (_id: ${existing._id})`);
       await ctx.db.patch(existing._id, {
         source: args.source,
         target: args.target,
@@ -117,6 +120,7 @@ export const upsertBackendEdge = mutation({
         rulesVersion: RULES_VERSION,
       });
     } else {
+      log(`[upsertBackendEdge] Inserting new edge ${args.edgeId}`);
       await ctx.db.insert("canvas_backend_edges", {
         projectId: args.projectId,
         edgeId: args.edgeId,
@@ -136,6 +140,7 @@ export const upsertBackendEdge = mutation({
 export const removeBackendEdge = mutation({
   args: { projectId: v.id("projects"), edgeId: v.string() },
   async handler(ctx, args) {
+    log(`[removeBackendEdge] Removing edge ${args.edgeId} in project ${args.projectId}`);
     await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     const existing = await ctx.db
@@ -146,6 +151,7 @@ export const removeBackendEdge = mutation({
       .unique();
 
     if (existing) {
+      log(`[removeBackendEdge] Deleting edge document ${existing._id}`);
       await ctx.db.delete(existing._id);
     }
   },

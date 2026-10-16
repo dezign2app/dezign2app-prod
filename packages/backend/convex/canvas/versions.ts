@@ -17,6 +17,7 @@ import type {
 } from "@workspace/canvas/types";
 import type { SimulationTestCase } from "@workspace/canvas/types";
 import { assertActiveSubscriptionForProject } from "../auth_guards";
+import { log } from "../logger";
 
 export type { VersionChangeSummary, VersionListItem };
 
@@ -84,6 +85,7 @@ function parseSnapshot(json: string): WireSnapshot {
 export const getProjectVersions = query({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args): Promise<VersionListItem[]> => {
+    log(`[getProjectVersions] Listing versions for project ${args.projectId}`);
     const versions = await ctx.db
       .query("project_versions")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
@@ -113,6 +115,7 @@ export const getVersionById = query({
     ctx,
     args,
   ): Promise<(VersionListItem & { snapshot: WireSnapshot }) | null> => {
+    log(`[getVersionById] Fetching version ${args.versionId}`);
     const version = await ctx.db.get(args.versionId);
     if (!version) return null;
 
@@ -142,6 +145,9 @@ export const createProjectVersion = mutation({
     isAutoSave: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<Id<"project_versions">> => {
+    log(
+      `[createProjectVersion] Creating version for project ${args.projectId}: "${args.title}" (autoSave=${args.isAutoSave ?? false})`,
+    );
     const { identity } = await assertActiveSubscriptionForProject(
       ctx,
       args.projectId,
@@ -344,6 +350,9 @@ export const restoreProjectVersion = mutation({
     ctx,
     args,
   ): Promise<{ restoredVersionNumber: number; newVersionId: Id<"project_versions"> }> => {
+    log(
+      `[restoreProjectVersion] Restoring project ${args.projectId} to version ${args.versionId}`,
+    );
     const { identity } = await assertActiveSubscriptionForProject(
       ctx,
       args.projectId,
