@@ -222,6 +222,13 @@ export interface LangGraphAgentRefNodeData extends Record<string, unknown> {
   nodeRef?: string;
   onDeleteAgentRef?: () => void;
   onSelectMaster?: (masterId: string) => void;
+  loopWarning?: {
+    id: string;
+    type: "dead_end_cycle" | "unconditional_cycle" | "self_loop";
+    message: string;
+    severity: "error" | "warning";
+    cycleLabels?: string[];
+  };
 }
 
 export interface LangGraphStateReducerRefNodeData extends Record<string, unknown> {

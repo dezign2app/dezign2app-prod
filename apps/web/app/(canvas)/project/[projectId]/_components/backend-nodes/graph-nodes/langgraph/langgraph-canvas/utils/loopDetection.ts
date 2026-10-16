@@ -179,7 +179,11 @@ export function detectInfiniteLoops({
   const visited = new Set<string>();
   const recStack = new Set<string>();
   const pathStack: { node: string; refNodeId?: string }[] = [];
-  const rawCycles: { path: string[]; refs: (string | undefined)[] }[] = [];
+  interface RawCycle {
+    startNode: string;
+    steps: { node: string; refNodeId?: string }[];
+  }
+  const rawCycles: RawCycle[] = [];
 
   const dfs = (u: string) => {
     visited.add(u);
@@ -196,10 +200,11 @@ export function detectInfiniteLoops({
         // Back edge detected: extract cycle
         const cycleStartIndex = pathStack.findIndex((item) => item.node === v);
         if (cycleStartIndex !== -1) {
-          const cycleSlice = pathStack.slice(cycleStartIndex);
-          const path = [v, ...cycleSlice.map((item) => item.node)];
-          const refs = cycleSlice.map((item) => item.refNodeId);
-          rawCycles.push({ path, refs });
+          const steps = pathStack.slice(cycleStartIndex + 1);
+          rawCycles.push({
+            startNode: v,
+            steps,
+          });
         }
       }
 
@@ -222,8 +227,9 @@ export function detectInfiniteLoops({
   const seenCycleKeys = new Set<string>();
 
   for (const cycle of rawCycles) {
-    // Unique node IDs in the cycle (excluding the repeated tail)
-    const uniqueNodes = Array.from(new Set(cycle.path.slice(0, -1)));
+    // Unique main node IDs in the cycle (excluding the repeated tail)
+    const cycleMainNodes = [cycle.startNode, ...cycle.steps.map((s) => s.node).slice(0, -1)];
+    const uniqueNodes = Array.from(new Set(cycleMainNodes));
     if (uniqueNodes.length === 0) continue;
 
     // Canonical key: rotate to start with smallest ID to deduplicate identical cycles
@@ -243,23 +249,19 @@ export function detectInfiniteLoops({
     const displayLabels: string[] = [];
     const displayIds: string[] = [];
 
-    for (let i = 0; i < uniqueNodes.length; i++) {
-      const curr = uniqueNodes[i];
-      if (!curr) continue;
-      displayIds.push(curr);
-      displayLabels.push(getNodeLabel(curr));
+    displayIds.push(cycle.startNode);
+    displayLabels.push(getNodeLabel(cycle.startNode));
 
-      // Check if this transition went through an AgentRef node
-      const refId = cycle.refs[i];
-      if (refId && refId !== curr && nodeMap.has(refId)) {
-        displayIds.push(refId);
-        displayLabels.push(getNodeLabel(refId));
+    for (const step of cycle.steps) {
+      if (step.refNodeId && nodeMap.has(step.refNodeId)) {
+        displayIds.push(step.refNodeId);
+        displayLabels.push(getNodeLabel(step.refNodeId));
       }
+      displayIds.push(step.node);
+      displayLabels.push(getNodeLabel(step.node));
     }
-    // Append the cycle loop-back label
-    if (displayLabels.length > 0 && displayLabels[0]) {
-      displayLabels.push(displayLabels[0]);
-    }
+
+    const allCycleNodeIds = Array.from(new Set(displayIds));
 
     // Check A: Does ANY node in this cycle have a path to END?
     const cycleCanReachEnd = uniqueNodes.some((id) => canReachEnd.has(id));
@@ -268,7 +270,7 @@ export function detectInfiniteLoops({
       warnings.push({
         id: `dead_end_${canonicalKey}`,
         type: "dead_end_cycle",
-        cycleNodeIds: displayIds,
+        cycleNodeIds: allCycleNodeIds,
         cycleLabels: displayLabels,
         message: `Infinite loop detected: Cycle [${displayLabels.join(" → ")}] has no path to the END state.`,
         severity: "error",
@@ -316,7 +318,7 @@ export function detectInfiniteLoops({
       warnings.push({
         id: `unconditional_${canonicalKey}`,
         type: "unconditional_cycle",
-        cycleNodeIds: displayIds,
+        cycleNodeIds: allCycleNodeIds,
         cycleLabels: displayLabels,
         message: `Unconditional loop detected: Cycle [${displayLabels.join(" → ")}] has no conditional router or branch to exit. It will loop indefinitely until recursion limit.`,
         severity: "warning",
