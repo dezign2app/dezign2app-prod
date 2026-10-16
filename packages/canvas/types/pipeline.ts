@@ -26,6 +26,10 @@ export type StepSource = PipelineStepInputSource;
 export type StepBinding = PipelineStepInputBinding;
 
 export type {
+  PipelineStep,
+  PipelineStepType,
+  PipelineStepInputBinding,
+  PipelineStepInputSource,
   ConditionOperator,
   ConditionClause,
   ConditionExpr,

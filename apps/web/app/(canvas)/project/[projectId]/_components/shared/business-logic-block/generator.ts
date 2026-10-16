@@ -7,6 +7,7 @@ import {
 import { toVarName, toPascalCase, toTopicKey } from "./utils";
 import { CanvasEntityColumn } from "@workspace/canvas/types";
 import { log } from "@/lib/logger";
+import { generateDefaultTransformerCode } from "@/lib/utils/transformerCodeGenerator";
 
 export interface GenerateEndpointCodeParams {
   prompt?: string;
@@ -389,6 +390,14 @@ export async function generateCodeWithAI(params: GenerateEndpointCodeParams): Pr
   ) {
     log("[generateCodeWithAI] Executing client-side deterministic fallback for database operation");
     return generateSyncedDbOperationCode(params);
+  }
+
+  if (params.contextType === "transformer") {
+    log("[generateCodeWithAI] Executing client-side deterministic fallback generator for transformer");
+    return generateDefaultTransformerCode({
+      prompt: params.prompt,
+      inputSchema: params.requestBody?.fields,
+    });
   }
 
   log("[generateCodeWithAI] Executing client-side deterministic fallback generator for endpoint");

@@ -93,6 +93,8 @@ export const pipelineStepInputSourceSchema = z.discriminatedUnion("kind", [
     kind: z.literal("inline"),
     value: z.union([z.string(), z.number(), z.boolean()]),
   }),
+  /** A field from LangGraph graph state */
+  z.object({ kind: z.literal("state"), field: z.string().optional() }),
 ]);
 export type PipelineStepInputSource = z.infer<typeof pipelineStepInputSourceSchema>;
 

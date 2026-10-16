@@ -9,6 +9,8 @@ export const STEP_TYPE_TOOL_NODE = "tool_node" as const;
 export const STEP_TYPE_EVALUATOR = "evaluator" as const;
 export const STEP_TYPE_SUMMARIZER = "summarizer" as const;
 export const STEP_TYPE_CUSTOM_CODE = "custom_code" as const;
+export const STEP_TYPE_TRANSFORMER = "transformer" as const;
+export const STEP_TYPE_TRANSFORM = "transform" as const;
 export const STEP_TYPE_HUMAN_GATE = "human_gate" as const;
 export const STEP_TYPE_INTERRUPT = "interrupt" as const;
 export const STEP_TYPE_VECTOR_SEARCH = "vector_search" as const;
@@ -55,6 +57,8 @@ export const HANDLE_OUTPUT_IN = "output_in" as const;
 export const HANDLE_OUTPUT_OUT = "output_out" as const;
 export const HANDLE_STATE_IN = "state_in" as const;
 export const HANDLE_STATE_OUT = "state_out" as const;
+export const HANDLE_TRANSFORMER_IN = "transformer_in" as const;
+export const HANDLE_TRANSFORMER_OUT = "transformer-out" as const;
 
 // ─── LangGraph Canvas React Flow Node Types ────────────────────────────────────
 export const LANGGRAPH_CANVAS_NODE_STEP = "step" as const;
@@ -76,6 +80,8 @@ export const LANGGRAPH_CANVAS_NODE_MEMORY = "langgraph_memory" as const;
 export const LANGGRAPH_CANVAS_NODE_MEMORY_REF = "langgraph_memory_ref" as const;
 export const LANGGRAPH_CANVAS_NODE_OUTPUT = "langgraph_output" as const;
 export const LANGGRAPH_CANVAS_NODE_STATE_REDUCER_REF = "langgraph_state_reducer_ref" as const;
+export const LANGGRAPH_CANVAS_NODE_TRANSFORMER = "transformer" as const;
+export const LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF = "transformer_ref" as const;
 
 // ─── Tool Sources ─────────────────────────────────────────────────────────────
 export const TOOL_SOURCE_INLINE = "inline" as const;

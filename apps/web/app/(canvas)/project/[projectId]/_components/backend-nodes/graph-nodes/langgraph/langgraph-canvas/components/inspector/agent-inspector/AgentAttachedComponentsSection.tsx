@@ -53,6 +53,8 @@ interface AgentAttachedComponentsSectionProps {
   onToggleMiddleware?: (mwId: string, connect: boolean) => void;
   embedded?: boolean;
   hideMiddleware?: boolean;
+  hideLLM?: boolean;
+  hideTools?: boolean;
 }
 
 interface ToolComboboxOption {
@@ -97,6 +99,8 @@ export function AgentAttachedComponentsSection({
   onToggleMiddleware,
   embedded = false,
   hideMiddleware = false,
+  hideLLM = false,
+  hideTools = false,
 }: AgentAttachedComponentsSectionProps) {
   const [isLlmOpen, setIsLlmOpen] = useState(Boolean(connectedLLMId));
   const [isToolsOpen, setIsToolsOpen] = useState(connectedToolIds.length > 0);
@@ -352,7 +356,8 @@ export function AgentAttachedComponentsSection({
       )}
 
       {/* ─── 1. LLM Model Selection ────────────────────────────────────────── */}
-      <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-secondary/20 border border-border/50">
+      {!hideLLM && (
+        <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-secondary/20 border border-border/50">
         <div
           className="flex items-center justify-between cursor-pointer select-none"
           onClick={() => setIsLlmOpen((prev) => !prev)}
@@ -435,10 +440,12 @@ export function AgentAttachedComponentsSection({
               No LLMs on canvas. Add an LLM from toolbar to connect.
             </p>
           ))}
-      </div>
+        </div>
+      )}
 
       {/* ─── 2. Tool References Section (Combobox + Add Button) ─────────────── */}
-      <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-secondary/20 border border-border/50">
+      {!hideTools && (
+        <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-secondary/20 border border-border/50">
         <div
           className="flex items-center justify-between cursor-pointer select-none"
           onClick={() => setIsToolsOpen((prev) => !prev)}
@@ -637,6 +644,7 @@ export function AgentAttachedComponentsSection({
           </div>
         )}
       </div>
+      )}
 
       {/* ─── 3. Middleware References Section (Combobox + Add Button) ────────── */}
       {!hideMiddleware && (

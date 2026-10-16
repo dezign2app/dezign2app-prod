@@ -17,6 +17,7 @@ import type {
   LangGraphMemoryDefinition,
 } from "./memory";
 import type { LangGraphMiddlewareDefinition } from "./middleware";
+import type { PipelineStepInputBinding } from "../pipeline";
 
 export type LangGraphEventStreamType =
   | "stream.messages"
@@ -86,6 +87,41 @@ export interface LangGraphAgentMemoryConfig {
   saveMessages?: boolean;
 }
 
+export type LangGraphNodeStepType =
+  | "state_updates"
+  | "llm_call"
+  | "custom_code"
+  | "transformer"
+  | "transform"
+  | "tools"
+  | "structured_output"
+  | "middleware"
+  | "streaming";
+
+export interface LangGraphNodePipelineStep {
+  id: string;
+  type: LangGraphNodeStepType;
+  label?: string;
+  customCode?: {
+    body?: string;
+  };
+  llmConfig?: {
+    enabled?: boolean;
+    provider?: string;
+    model?: string;
+    temperature?: number;
+  };
+  systemPrompt?: string;
+  transformerNodeId?: string;
+  transformerRef?: string;
+  functionRef?: {
+    name?: string;
+    importPath?: string;
+  };
+  outputVariable?: string;
+  inputBindings?: PipelineStepInputBinding[];
+}
+
 export interface LangGraphAgentDefinition {
   id?: string;
   agentId?: string;
@@ -109,8 +145,14 @@ export interface LangGraphAgentDefinition {
   responseFormat?: LangGraphAgentResponseFormatConfig;
   memoryConfig?: LangGraphAgentMemoryConfig;
   stateUpdates?: LangGraphStateUpdateItem[];
+  customCode?: {
+    body?: string;
+  };
+  nodeSteps?: LangGraphNodeStepType[];
+  pipelineSteps?: LangGraphNodePipelineStep[];
   tools?: string[]; // Bound tool IDs
   middleware?: string[]; // Bound middleware IDs
+  transformers?: string[]; // Bound transformer IDs
   memory?: string[]; // Bound memory / checkpointer / db_ref IDs
   position?: { x: number; y: number };
 }
@@ -151,6 +193,36 @@ export interface CustomAgentRefNodeDefinition {
   position?: { x: number; y: number };
 }
 
+export interface CustomTransformerNodeDefinition {
+  id: string;
+  label?: string;
+  functionName?: string;
+  scope?: "global" | "local";
+  isGlobal?: boolean;
+  code?: string;
+  inputSchema?: {
+    name: string;
+    type: string;
+    required?: boolean;
+    description?: string;
+  }[];
+  returnSchema?: {
+    id: string;
+    name: string;
+    type: string;
+    required: boolean;
+    description?: string;
+  }[];
+  position?: { x: number; y: number };
+}
+
+export interface CustomTransformerRefNodeDefinition {
+  id: string;
+  label?: string;
+  transformerRef?: string;
+  position?: { x: number; y: number };
+}
+
 /** LangGraph Agent node fields — the parent graph node (canvas type). */
 export interface CanvasLangGraphNodeData {
   label?: string;
@@ -184,6 +256,9 @@ export interface CanvasLangGraphNodeData {
   customMiddlewareRefNodes?: CustomMiddlewareRefNodeDefinition[];
   customMemoryRefNodes?: CustomMemoryRefNodeDefinition[];
   customAgentRefNodes?: CustomAgentRefNodeDefinition[];
+  customTransformerNodes?: CustomTransformerNodeDefinition[];
+  customTransformerRefNodes?: CustomTransformerRefNodeDefinition[];
+  transformerDefinitions?: CustomTransformerNodeDefinition[];
   toolDefinitions?: LangGraphToolDefinition[];
   middlewareDefinitions?: LangGraphMiddlewareDefinition[];
   agentDefinitions?: LangGraphAgentDefinition[];

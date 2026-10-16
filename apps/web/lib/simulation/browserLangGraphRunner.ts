@@ -8,6 +8,7 @@ import type {
   LangGraphLLMNodeData,
   ToolNodeData,
   AgentNodeData,
+  MiddlewareNodeData,
   LangGraphAgentResponseFormatConfig,
 } from "@workspace/canvas";
 import {
@@ -242,10 +243,17 @@ export async function executeBrowserLangGraph(
   // 4. Find outgoing flow edges from START
   const flowEdges = edges.filter(
     (e) =>
+      e.type !== "langgraph-reference" &&
       e.targetHandle !== "llm_in" &&
       e.targetHandle !== "tool_in" &&
       e.targetHandle !== "middleware_in" &&
-      e.targetHandle !== "memory_in",
+      e.targetHandle !== "memory_in" &&
+      e.targetHandle !== "state_in" &&
+      e.sourceHandle !== "llm_out" &&
+      e.sourceHandle !== "tool_out" &&
+      e.sourceHandle !== "middleware_out" &&
+      e.sourceHandle !== "memory_out" &&
+      e.sourceHandle !== "state_out",
   );
 
   let currentEdge = flowEdges.find((e) => e.source === "START");
@@ -309,11 +317,27 @@ export async function executeBrowserLangGraph(
         node.type === "langgraph_node";
       const isStep = node.type === "step";
 
-      // ─── A. AGENT NODE ──────────────────────────────────────────────
+      // ─── A. AGENT / COMPONENT NODE ──────────────────────────────────
       if (isAgent) {
         const agentData = node.data as AgentNodeData;
         const systemPrompt =
           agentData.systemPrompt || "You are a helpful assistant.";
+
+        // Detect LLM node connected to this agent on the canvas
+        const llmEdge = edges.find(
+          (e) => e.target === node.id && e.targetHandle === "llm_in",
+        );
+        const llmNode = llmEdge ? nodes.find((n) => n.id === llmEdge.source) : null;
+        const llmData = llmNode?.data as LangGraphLLMNodeData | undefined;
+
+        // Is LLM actually enabled/configured for this node?
+        const isExplicitlyDisabled = agentData.llmConfig?.enabled === false;
+        const hasConnectedLlm = Boolean(llmNode && llmData?.enabled !== false);
+        const isLlmActive =
+          !isExplicitlyDisabled &&
+          (hasConnectedLlm ||
+            agentData.llmConfig?.enabled === true ||
+            node.type === "langgraph_agent");
 
         // Gather real conversation messages with strict typing (no any)
         let messages: GraphChatMessage[] = extractMessages(state.messages);
@@ -337,18 +361,11 @@ export async function executeBrowserLangGraph(
           }
         }
 
-        if (messages.length === 0) {
+        if (isLlmActive && messages.length === 0) {
           throw new Error(
             `Agent "${nodeName}" execution failed: No user input message or prompt was provided. Please type a message in the input box before running the graph.`
           );
         }
-
-        // Detect LLM node connected to this agent on the canvas
-        const llmEdge = edges.find(
-          (e) => e.target === node.id && e.targetHandle === "llm_in",
-        );
-        const llmNode = llmEdge ? nodes.find((n) => n.id === llmEdge.source) : null;
-        const llmData = llmNode?.data as LangGraphLLMNodeData | undefined;
 
         const effectiveProvider =
           (llmData?.provider as typeof provider) || provider || "groq";
@@ -371,7 +388,7 @@ export async function executeBrowserLangGraph(
           effectiveApiKey = process.env.NEXT_PUBLIC_GROQ_API_KEY;
         }
 
-        if (!effectiveApiKey && effectiveProvider !== "custom") {
+        if (isLlmActive && !effectiveApiKey && effectiveProvider !== "custom") {
           throw new Error(
             `Missing API Key: Agent node "${nodeName}" requires a valid ${effectiveProvider.toUpperCase()} API key. Please enter your API key in the toolbar.`
           );
@@ -390,20 +407,28 @@ export async function executeBrowserLangGraph(
         );
         for (const e of toolEdges) {
           const tn = nodes.find((n) => n.id === e.source);
+          const tnData = tn?.data as ToolNodeData | undefined;
           const tId = tn?.id || e.source;
           if (!seenToolIds.has(tId)) {
             seenToolIds.add(tId);
             connectedTools.push({
               id: tId,
-              name: (tn?.data as any)?.name || (tn?.data as any)?.label || "Tool",
-              source: (tn?.data as any)?.source,
+              name: tnData?.name || tnData?.label || "Tool",
+              source: tnData?.source,
             });
           }
         }
         if (Array.isArray(agentData.tools)) {
           for (const item of agentData.tools) {
-            const tName = typeof item === "string" ? item : (item as any)?.name || (item as any)?.id;
-            const tId = typeof item === "string" ? item : (item as any)?.id || tName;
+            const tName =
+              typeof item === "string"
+                ? item
+                : (item as { name?: string; id?: string })?.name ||
+                  (item as { name?: string; id?: string })?.id;
+            const tId =
+              typeof item === "string"
+                ? item
+                : (item as { name?: string; id?: string })?.id || tName;
             if (tId && !seenToolIds.has(tId)) {
               seenToolIds.add(tId);
               connectedTools.push({ id: tId, name: tName || "Tool" });
@@ -422,20 +447,28 @@ export async function executeBrowserLangGraph(
         );
         for (const e of mwEdges) {
           const mn = nodes.find((n) => n.id === e.source);
+          const mnData = mn?.data as MiddlewareNodeData | undefined;
           const mId = mn?.id || e.source;
           if (!seenMwIds.has(mId)) {
             seenMwIds.add(mId);
             connectedMiddleware.push({
               id: mId,
-              name: (mn?.data as any)?.name || (mn?.data as any)?.label || "Middleware",
-              type: (mn?.data as any)?.middlewareType,
+              name: mnData?.name || mnData?.label || "Middleware",
+              type: mnData?.type,
             });
           }
         }
         if (Array.isArray(agentData.middleware)) {
           for (const item of agentData.middleware) {
-            const mName = typeof item === "string" ? item : (item as any)?.name || (item as any)?.id;
-            const mId = typeof item === "string" ? item : (item as any)?.id || mName;
+            const mName =
+              typeof item === "string"
+                ? item
+                : (item as { name?: string; id?: string })?.name ||
+                  (item as { name?: string; id?: string })?.id;
+            const mId =
+              typeof item === "string"
+                ? item
+                : (item as { name?: string; id?: string })?.id || mName;
             if (mId && !seenMwIds.has(mId)) {
               seenMwIds.add(mId);
               connectedMiddleware.push({ id: mId, name: mName || "Middleware" });
@@ -454,25 +487,38 @@ export async function executeBrowserLangGraph(
         const agentName = agentData.name || agentData.label || nodeName;
         addLog(
           "config",
-          `[Config 1/5 - Identity & Prompt] Agent: "${agentName}" | System Prompt: "${systemPrompt.length > 90 ? systemPrompt.slice(0, 90) + "..." : systemPrompt}" (${systemPrompt.length} chars)`,
+          `[Config 1/5 - Identity & Prompt] Node: "${agentName}" | Mode: ${isLlmActive ? "LLM Agent" : "State Mutator / Component Orchestrator"} | System Prompt: "${systemPrompt.length > 90 ? systemPrompt.slice(0, 90) + "..." : systemPrompt}" (${systemPrompt.length} chars)`,
           {
             agentName,
             systemPrompt,
             agentId: agentData.agentId || node.id,
+            isLlmActive,
           }
         );
 
         // ── CONFIG 2/5: MODEL & TOOLS ──
-        addLog(
-          "config",
-          `[Config 2/5 - Model & Tools] Model: ${effectiveProvider.toUpperCase()} / ${effectiveModel} | Tools: ${connectedTools.length > 0 ? connectedTools.map((t) => t.name).join(", ") : "None attached"} (${connectedTools.length}) | Middleware: ${connectedMiddleware.length > 0 ? connectedMiddleware.map((m) => m.name).join(", ") : "0 active"}`,
-          {
-            provider: effectiveProvider,
-            model: effectiveModel,
-            tools: connectedTools,
-            middleware: connectedMiddleware,
-          }
-        );
+        if (isLlmActive) {
+          addLog(
+            "config",
+            `[Config 2/5 - Model & Tools] Model: ${effectiveProvider.toUpperCase()} / ${effectiveModel} | Tools: ${connectedTools.length > 0 ? connectedTools.map((t) => t.name).join(", ") : "None attached"} (${connectedTools.length}) | Middleware: ${connectedMiddleware.length > 0 ? connectedMiddleware.map((m) => m.name).join(", ") : "0 active"}`,
+            {
+              provider: effectiveProvider,
+              model: effectiveModel,
+              tools: connectedTools,
+              middleware: connectedMiddleware,
+            }
+          );
+        } else {
+          addLog(
+            "config",
+            `[Config 2/5 - Model & Tools] LLM is disabled for node "${agentName}". Executing state channel mutations and connected components. | Tools: ${connectedTools.length} | Middleware: ${connectedMiddleware.length}`,
+            {
+              isLlmActive: false,
+              tools: connectedTools,
+              middleware: connectedMiddleware,
+            }
+          );
+        }
 
         // ── CONFIG 3/5: STRUCTURED OUTPUT ──
         const responseFormat = agentData.responseFormat;
@@ -529,72 +575,84 @@ export async function executeBrowserLangGraph(
           }
         );
 
-        // Call the real LLM endpoint directly in the browser
-        const streamEnabled = isStreamActive;
-        addLog("llm", `Calling LLM: ${effectiveProvider.toUpperCase()} / ${effectiveModel} (${messages.length} message(s))`);
-        const { text: responseText, streamBatches } = await callBrowserLLM({
-          provider: effectiveProvider,
-          apiKey: effectiveApiKey,
-          modelName: effectiveModel,
-          systemPrompt,
-          messages,
-          customUrl: llmData?.url || llmData?.baseUrl,
-          responseFormat,
-          streamEnabled,
-        });
+        if (isLlmActive) {
+          // Call the real LLM endpoint directly in the browser
+          const streamEnabled = isStreamActive;
+          addLog("llm", `Calling LLM: ${effectiveProvider.toUpperCase()} / ${effectiveModel} (${messages.length} message(s))`);
+          const { text: responseText, streamBatches } = await callBrowserLLM({
+            provider: effectiveProvider,
+            apiKey: effectiveApiKey,
+            modelName: effectiveModel,
+            systemPrompt,
+            messages,
+            customUrl: llmData?.url || llmData?.baseUrl,
+            responseFormat,
+            streamEnabled,
+          });
 
-        latestAssistantResponse = responseText;
-        addLog("llm", `Received LLM response (${responseText.length} chars, ${streamBatches.length} streaming batch(es))`);
+          latestAssistantResponse = responseText;
+          addLog("llm", `Received LLM response (${responseText.length} chars, ${streamBatches.length} streaming batch(es))`);
 
-        if (responseFormat?.enabled) {
-          let parsed: Record<string, unknown> | null = extractJsonFromText(responseText);
-          if (!parsed) {
-            const trimmedClean = responseText.trim().replace(/^["']|["']$/g, "");
-            if (
-              parsedSchemaFields.length === 1 &&
-              parsedSchemaFields[0]?.name &&
-              trimmedClean.length < 100 &&
-              !trimmedClean.startsWith("{")
-            ) {
-              parsed = { [parsedSchemaFields[0].name]: trimmedClean };
-            } else {
-              parsed = { raw: responseText };
+          if (responseFormat?.enabled) {
+            let parsed: Record<string, unknown> | null = extractJsonFromText(responseText);
+            if (!parsed) {
+              const trimmedClean = responseText.trim().replace(/^["']|["']$/g, "");
+              if (
+                parsedSchemaFields.length === 1 &&
+                parsedSchemaFields[0]?.name &&
+                trimmedClean.length < 100 &&
+                !trimmedClean.startsWith("{")
+              ) {
+                parsed = { [parsedSchemaFields[0].name]: trimmedClean };
+              } else {
+                parsed = { raw: responseText };
+              }
+            }
+            state.structuredResponse = parsed;
+            outputDelta.structuredResponse = parsed;
+            const formattedContent = JSON.stringify(parsed, null, 2);
+            const newMessages = [...messages, { role: "assistant", content: formattedContent }];
+            state.messages = newMessages;
+            outputDelta.messages = newMessages;
+            outputDelta.response = formattedContent;
+            addLog("llm", `Structured Output Parsed: ${JSON.stringify(parsed)}`, { structuredResponse: parsed });
+          } else {
+            const newMessages = [...messages, { role: "assistant", content: responseText }];
+            state.messages = newMessages;
+            outputDelta.messages = newMessages;
+            outputDelta.response = responseText;
+          }
+
+          if (streamBatches && streamBatches.length > 0) {
+            const runId = `run_${threadId.slice(0, 8)}_${Math.random().toString(36).slice(2, 6)}`;
+            const stripEmpty = agentData.streamConfig?.envelope?.stripEmptyDeltas !== false;
+            const filtered = streamBatches.filter((b) => (stripEmpty ? Boolean(b.delta) : true));
+            const formattedBatches: StreamBatchItem[] = filtered.map((b, newIdx) => ({
+              ...b,
+              index: newIdx,
+              formatted: formatStreamingBatch({
+                batch: b,
+                nodeName,
+                runId,
+                streamConfig: agentData.streamConfig,
+              }),
+            }));
+
+            outputDelta.streamBatches = formattedBatches;
+            outputDelta.streamBatchCount = formattedBatches.length;
+            if (agentData?.streamConfig) {
+              outputDelta.streamConfig = agentData.streamConfig;
             }
           }
-          state.structuredResponse = parsed;
-          outputDelta.structuredResponse = parsed;
-          const formattedContent = JSON.stringify(parsed, null, 2);
-          const newMessages = [...messages, { role: "assistant", content: formattedContent }];
-          state.messages = newMessages;
-          outputDelta.messages = newMessages;
-          outputDelta.response = formattedContent;
-          addLog("llm", `Structured Output Parsed: ${JSON.stringify(parsed)}`, { structuredResponse: parsed });
         } else {
-          const newMessages = [...messages, { role: "assistant", content: responseText }];
-          state.messages = newMessages;
-          outputDelta.messages = newMessages;
-          outputDelta.response = responseText;
-        }
-
-        if (streamBatches && streamBatches.length > 0) {
-          const runId = `run_${threadId.slice(0, 8)}_${Math.random().toString(36).slice(2, 6)}`;
-          const stripEmpty = agentData.streamConfig?.envelope?.stripEmptyDeltas !== false;
-          const filtered = streamBatches.filter((b) => (stripEmpty ? Boolean(b.delta) : true));
-          const formattedBatches: StreamBatchItem[] = filtered.map((b, newIdx) => ({
-            ...b,
-            index: newIdx,
-            formatted: formatStreamingBatch({
-              batch: b,
-              nodeName,
-              runId,
-              streamConfig: agentData.streamConfig,
-            }),
-          }));
-
-          outputDelta.streamBatches = formattedBatches;
-          outputDelta.streamBatchCount = formattedBatches.length;
-          if (agentData?.streamConfig) {
-            outputDelta.streamConfig = agentData.streamConfig;
+          // If custom code was configured on this node, execute it
+          if (agentData.customCode?.body?.trim()) {
+            const runner = new Function("state", "clone", agentData.customCode.body);
+            const res = await runner(state, clone);
+            if (res && typeof res === "object") {
+              Object.assign(outputDelta, res);
+              Object.assign(state, res);
+            }
           }
         }
 
@@ -627,13 +685,30 @@ export async function executeBrowserLangGraph(
           } else if (update.source === "message_object") {
             const msgs = (outputDelta as Record<string, unknown>).messages;
             val = Array.isArray(msgs) && msgs.length > 0 ? msgs[msgs.length - 1] : undefined;
+          } else if (update.source === "expression" || update.mode === "expression") {
+            try {
+              const exprFn = new Function("state", "clone", `return (${update.value});`);
+              val = exprFn(state, clone);
+            } catch {
+              val = update.value;
+            }
           } else {
             val = update.value;
             if (typeof val === "string") {
-              try {
-                val = JSON.parse(val);
-              } catch {
-                // Keep plain string
+              if (/\bstate\b/.test(val)) {
+                try {
+                  const exprFn = new Function("state", "clone", `return (${val});`);
+                  val = exprFn(state, clone);
+                } catch {
+                  // fallback to JSON parse
+                }
+              }
+              if (typeof val === "string") {
+                try {
+                  val = JSON.parse(val);
+                } catch {
+                  // Keep plain string
+                }
               }
             }
           }

@@ -48,7 +48,7 @@ import {
 } from "./langgraph-canvas/constants";
 
 import { useConnectedRoutes } from "./LangGraphNode";
-import { detectInfiniteLoops } from "./langgraph-canvas/utils/loopDetection";
+import { detectInfiniteLoops, type LoopWarning } from "./langgraph-canvas/utils/loopDetection";
 
 const langGraphCanvasEdgeTypes = {
   "langgraph-reference": LangGraphReferenceEdge,
@@ -130,6 +130,9 @@ export function LangGraphStudioView({
     updateSelectedAgent,
     updateSelectedMemory,
     updateSelectedOutput,
+    updateSelectedTransformer,
+    selectedTransformerData,
+    selectedTransformerRefData,
     handleDeleteStep,
     handleDeleteSelected,
     handleSave,
@@ -389,19 +392,53 @@ export function LangGraphStudioView({
   }, [edges, nodes, selectedNodeId, activeEdgeIds, currentEdgeId]);
 
   const displayNodes = useMemo(() => {
-    const loopNodeIdSet = new Set(loopWarnings.flatMap((w) => w.cycleNodeIds));
+    // Build a map of nodeId -> loopWarning
+    const loopWarningMap = new Map<string, LoopWarning>();
+    for (const warning of loopWarnings) {
+      for (const id of warning.cycleNodeIds) {
+        if (!loopWarningMap.has(id)) {
+          loopWarningMap.set(id, warning);
+        }
+      }
+    }
+
+    // Also associate warning with any AgentRef node that links to a master node in the cycle
+    for (const node of nodes) {
+      if (
+        node.type === "langgraph_agent_ref" ||
+        node.type === "langgraph_node_ref"
+      ) {
+        const refData = node.data as { agentRef?: string; nodeRef?: string } | undefined;
+        const targetMasterId = refData?.agentRef || refData?.nodeRef;
+        if (targetMasterId && loopWarningMap.has(targetMasterId) && !loopWarningMap.has(node.id)) {
+          loopWarningMap.set(node.id, loopWarningMap.get(targetMasterId)!);
+        }
+      }
+    }
+
     return nodes.map((n) => {
       const isCurrent = currentNodeId === n.id;
       const isActive = activeNodeIds.includes(n.id);
-      const isLoopNode = loopNodeIdSet.has(n.id);
+      const loopWarning = loopWarningMap.get(n.id);
+      const isLoopNode = Boolean(loopWarning);
       const isPill =
         n.id === "START" || n.type === "end" || n.id.startsWith("end_");
       const baseRounded = isPill ? "rounded-full" : "rounded-2xl";
+
+      // Pass loopWarning directly into node data so AgentRef node can render it
+      const nextData = {
+        ...n.data,
+        loopWarning,
+      };
+
       if (!isCurrent && !isActive) {
         return {
           ...n,
+          data: nextData,
           className: `${n.className || ""} ${baseRounded} ${
-            isLoopNode ? "ring-2 ring-amber-500/70 shadow-[0_0_12px_rgba(245,158,11,0.2)]" : ""
+            isLoopNode && (n.type === "langgraph_agent_ref" || n.type === "langgraph_node_ref")
+              ? "ring-2 ring-amber-500/80 shadow-[0_0_15px_rgba(245,158,11,0.25)]"
+              : ""
           }`,
         };
       }
@@ -409,6 +446,7 @@ export function LangGraphStudioView({
       const existingClass = n.className || "";
       return {
         ...n,
+        data: nextData,
         className: `${existingClass} ${baseRounded} ${
           isCurrent
             ? "ring-4 ring-sky-400 ring-offset-2 ring-offset-background transition-all duration-300"
@@ -619,36 +657,6 @@ export function LangGraphStudioView({
         </div>
       )}
 
-      {/* Infinite Loop Warning Banner */}
-      {loopWarnings.length > 0 && (
-        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 flex items-center justify-between text-xs text-amber-700 dark:text-amber-300 font-medium backdrop-blur-sm z-20">
-          <div className="flex items-center gap-2 min-w-0 flex-1 mr-4">
-            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500" />
-            <span className="truncate">{loopWarnings[0]?.message}</span>
-            {loopWarnings.length > 1 && (
-              <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-amber-500/20 text-[10px] font-bold">
-                +{loopWarnings.length - 1} more
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-6 text-[11px] px-2.5 py-0 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
-              onClick={() => {
-                const firstLoopNodeId = loopWarnings[0]?.cycleNodeIds[0];
-                if (firstLoopNodeId) {
-                  setSelectedNodeId(firstLoopNodeId);
-                }
-              }}
-            >
-              Focus Loop Node
-            </Button>
-          </div>
-        </div>
-      )}
-
       {/* Main Workspace */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Left Sidebar Tools */}
@@ -825,6 +833,10 @@ export function LangGraphStudioView({
           onUpdateAgent={updateSelectedAgent}
           onUpdateMemory={updateSelectedMemory}
           onUpdateOutput={updateSelectedOutput}
+          selectedTransformerData={selectedTransformerData}
+          selectedTransformerRefData={selectedTransformerRefData}
+          onUpdateTransformer={updateSelectedTransformer}
+          onSelectNode={(nodeId) => setSelectedNodeId(nodeId)}
           inputChannels={inputChannels}
           setInputChannels={setInputChannels}
           stateChannels={stateChannels}

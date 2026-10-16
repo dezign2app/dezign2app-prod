@@ -21,6 +21,7 @@ import type {
   LangGraphMemoryRefNode,
   OutputNode,
   LangGraphCanvasNode,
+  TransformerCanvasNodeData,
 } from "@workspace/canvas";
 import { LLMNodeInspector } from "./LLMNodeInspector";
 import { StepNodeInspector } from "./StepNodeInspector";
@@ -29,6 +30,7 @@ import { MiddlewareNodeInspector } from "./MiddlewareNodeInspector";
 import { AgentNodeInspector } from "./AgentNodeInspector";
 import { MemoryNodeInspector } from "./MemoryNodeInspector";
 import { OutputNodeInspector } from "./OutputNodeInspector";
+import { TransformerNodeInspector } from "./TransformerNodeInspector";
 import type { ConnectedRouteInfo } from "../../../LangGraphNode";
 
 interface InspectorTabContentProps {
@@ -39,6 +41,8 @@ interface InspectorTabContentProps {
   selectedAgentData?: AgentNodeData | null;
   selectedMemoryData?: MemoryNodeData | null;
   selectedOutputData?: OutputNodeData | null;
+  selectedTransformerData?: TransformerCanvasNodeData | null;
+  selectedTransformerRefData?: TransformerCanvasNodeData | null;
   connectedToolsCount?: number;
   connectedMiddlewareCount?: number;
   availableLLMNodes?: (LangGraphLLMNode | LangGraphLLMRefNode)[];
@@ -69,6 +73,8 @@ interface InspectorTabContentProps {
   onUpdateAgent?: (changes: Partial<AgentNodeData>) => void;
   onUpdateMemory?: (changes: Partial<MemoryNodeData>) => void;
   onUpdateOutput?: (changes: Partial<OutputNodeData>) => void;
+  onUpdateTransformer?: (changes: Partial<TransformerCanvasNodeData>) => void;
+  onSelectNode?: (nodeId: string) => void;
   stateChannels: LangGraphStateChannel[];
   customReducers?: LangGraphCustomReducer[];
   onClose?: () => void;
@@ -82,6 +88,8 @@ export function InspectorTabContent({
   selectedAgentData,
   selectedMemoryData,
   selectedOutputData,
+  selectedTransformerData,
+  selectedTransformerRefData,
   connectedToolsCount = 0,
   connectedMiddlewareCount = 0,
   availableLLMNodes,
@@ -112,6 +120,8 @@ export function InspectorTabContent({
   onUpdateAgent,
   onUpdateMemory,
   onUpdateOutput,
+  onUpdateTransformer,
+  onSelectNode,
   stateChannels,
   customReducers,
   onClose,
@@ -194,6 +204,15 @@ export function InspectorTabContent({
           onRemoveMiddlewareRef={onRemoveMiddlewareRef}
           stateChannels={stateChannels}
           customReducers={customReducers}
+        />
+      ) : selectedTransformerData || selectedTransformerRefData ? (
+        <TransformerNodeInspector
+          selectedTransformerData={selectedTransformerData}
+          selectedTransformerRefData={selectedTransformerRefData}
+          onDeleteTransformer={onDeleteStep}
+          onUpdateTransformer={onUpdateTransformer || (() => {})}
+          nodes={nodes}
+          onSelectNode={onSelectNode}
         />
       ) : selectedStepData ? (
         <StepNodeInspector

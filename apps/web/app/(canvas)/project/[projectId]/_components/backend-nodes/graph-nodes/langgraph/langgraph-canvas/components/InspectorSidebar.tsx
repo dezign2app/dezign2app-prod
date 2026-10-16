@@ -23,6 +23,7 @@ import type {
   LangGraphMemoryRefNode,
   LangGraphCanvasNode,
   LangGraphCanvasEdge,
+  TransformerCanvasNodeData,
 } from "@workspace/canvas";
 import { InspectorTabContent } from "./inspector/InspectorTabContent";
 import { LangGraphTestCasesInspector } from "./inspector/LangGraphTestCasesInspector";
@@ -49,6 +50,8 @@ export interface InspectorSidebarProps {
   selectedAgentData?: AgentNodeData | null;
   selectedMemoryData?: MemoryNodeData | null;
   selectedOutputData?: OutputNodeData | null;
+  selectedTransformerData?: TransformerCanvasNodeData | null;
+  selectedTransformerRefData?: TransformerCanvasNodeData | null;
   selectedStartData?: { inputChannels?: LangGraphInputChannel[] } | null;
   /** Params from connected endpoint used as default suggestions */
   suggestedParams?: Array<{ key: string; type: LangGraphInputChannel["type"]; description?: string; required?: boolean }>;
@@ -90,6 +93,8 @@ export interface InspectorSidebarProps {
   onUpdateAgent?: (changes: Partial<AgentNodeData>) => void;
   onUpdateMemory?: (changes: Partial<MemoryNodeData>) => void;
   onUpdateOutput?: (changes: Partial<OutputNodeData>) => void;
+  onUpdateTransformer?: (changes: Partial<TransformerCanvasNodeData>) => void;
+  onSelectNode?: (nodeId: string) => void;
   inputChannels?: LangGraphInputChannel[];
   setInputChannels?: React.Dispatch<
     React.SetStateAction<LangGraphInputChannel[]>
@@ -121,6 +126,8 @@ export function InspectorSidebar({
   selectedAgentData,
   selectedMemoryData,
   selectedOutputData,
+  selectedTransformerData,
+  selectedTransformerRefData,
   selectedStartData,
   graphNodeId,
   graphSteps = [],
@@ -156,6 +163,8 @@ export function InspectorSidebar({
   onUpdateAgent,
   onUpdateMemory,
   onUpdateOutput,
+  onUpdateTransformer,
+  onSelectNode,
   stateChannels,
   setStateChannels,
   customReducers,
@@ -260,6 +269,8 @@ export function InspectorSidebar({
         selectedAgentData ||
         selectedMemoryData ||
         selectedOutputData ||
+        selectedTransformerData ||
+        selectedTransformerRefData ||
         selectedStartData ||
         isStateSelected ||
         isStartSelected ||
@@ -384,6 +395,10 @@ export function InspectorSidebar({
           onUpdateAgent={onUpdateAgent}
           onUpdateMemory={onUpdateMemory}
           onUpdateOutput={onUpdateOutput}
+          selectedTransformerData={selectedTransformerData}
+          selectedTransformerRefData={selectedTransformerRefData}
+          onUpdateTransformer={onUpdateTransformer}
+          onSelectNode={onSelectNode}
           stateChannels={stateChannels}
           customReducers={customReducers}
           onClose={onClose}
