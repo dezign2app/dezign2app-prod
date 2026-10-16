@@ -1073,14 +1073,55 @@ export async function executeServerLangGraph(
       e.targetHandle !== "memory_in",
   );
 
+  // Helper to resolve any target node ID (resolving AgentRef / NodeRef proxies to their master executable node)
+  const resolveTargetNodeId = (rawTargetId: string | undefined): string | typeof END => {
+    if (!rawTargetId || rawTargetId === "END" || rawTargetId.startsWith("end_")) {
+      return END;
+    }
+
+    let currentId = rawTargetId;
+    const visitedRefs = new Set<string>();
+
+    while (currentId && !visitedRefs.has(currentId)) {
+      visitedRefs.add(currentId);
+      const targetNode = nodes.find((n) => n.id === currentId);
+      if (!targetNode) break;
+
+      if (
+        targetNode.type === "langgraph_agent_ref" ||
+        targetNode.type === "langgraph_node_ref"
+      ) {
+        const refData = targetNode.data as { agentRef?: string; nodeRef?: string } | undefined;
+        const masterId = refData?.agentRef || refData?.nodeRef;
+        if (masterId) {
+          if (masterId === "END" || masterId.startsWith("end_")) {
+            return END;
+          }
+          currentId = masterId;
+          continue;
+        }
+      }
+      break;
+    }
+
+    if (currentId === "END" || currentId.startsWith("end_")) {
+      return END;
+    }
+
+    // Ensure the target is actually an executable node in builder
+    const isTargetExecutable = executableNodes.some((n) => n.id === currentId);
+    if (!isTargetExecutable) {
+      console.warn(`[serverLangGraphRunner] Target node "${currentId}" is not executable. Falling back to END.`);
+      return END;
+    }
+
+    return currentId;
+  };
+
   // START edges
   const startEdge = flowEdges.find((e) => e.source === "START");
   if (startEdge) {
-    if (startEdge.target === "END" || startEdge.target.startsWith("end_")) {
-      builder.addEdge(START, END);
-    } else {
-      builder.addEdge(START, startEdge.target);
-    }
+    builder.addEdge(START, resolveTargetNodeId(startEdge.target));
   }
 
   // Node to Node / Router Edges
@@ -1101,9 +1142,7 @@ export async function executeServerLangGraph(
 
       for (const branch of branches) {
         const edge = outgoing.find((e) => e.sourceHandle === branch.id) || outgoing[0];
-        const target =
-          !edge?.target || edge.target === "END" || edge.target.startsWith("end_") ? END : edge.target;
-        pathMap[branch.id] = target;
+        pathMap[branch.id] = resolveTargetNodeId(edge?.target);
       }
 
       builder.addConditionalEdges(
@@ -1118,11 +1157,7 @@ export async function executeServerLangGraph(
         pathMap,
       );
     } else {
-      const target =
-        firstTarget === "END" || firstTarget.startsWith("end_")
-          ? END
-          : firstTarget;
-      builder.addEdge(node.id, target);
+      builder.addEdge(node.id, resolveTargetNodeId(firstTarget));
     }
   }
 
@@ -1212,8 +1247,35 @@ export async function executeServerLangGraph(
       streamMode: "updates",
     });
 
+    let previousNodeId: string | null = null;
     for await (const chunk of stream) {
       for (const [nodeId, outputDelta] of Object.entries(chunk)) {
+        if (previousNodeId) {
+          const transitionEdge = flowEdges.find(
+            (e) => e.source === previousNodeId && resolveTargetNodeId(e.target) === nodeId,
+          );
+          if (transitionEdge && transitionEdge.target !== nodeId) {
+            const intermediateNode = nodes.find((n) => n.id === transitionEdge.target);
+            if (
+              intermediateNode &&
+              (intermediateNode.type === "langgraph_agent_ref" ||
+                intermediateNode.type === "langgraph_node_ref")
+            ) {
+              const refLabel =
+                (intermediateNode.data as { label?: string })?.label ||
+                intermediateNode.id;
+              visitedNodes.push(intermediateNode.id);
+              allRunLogs.push({
+                timestamp: Date.now(),
+                level: "step",
+                nodeId: intermediateNode.id,
+                nodeLabel: refLabel,
+                message: `Looping back to "${nodeLabelMap.get(nodeId) || nodeId}" via loop reference "${refLabel}"`,
+              });
+            }
+          }
+        }
+        previousNodeId = nodeId;
         visitedNodes.push(nodeId);
         const nodeName = nodeLabelMap.get(nodeId) || nodeId;
 

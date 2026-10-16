@@ -113,6 +113,8 @@ describe("executeServerLangGraph: Official @langchain/langgraph StateGraph Execu
       { key: "stepCount", type: "number", reducer: "replace", defaultValue: 0 },
     ];
 
+    const memoryConfig = { enabled: true, checkpointer: "memory" as const };
+
     // Turn 1
     const res1 = await executeServerLangGraph({
       nodes,
@@ -121,6 +123,7 @@ describe("executeServerLangGraph: Official @langchain/langgraph StateGraph Execu
       inputChannels: [],
       inputValues: {},
       threadId,
+      memoryConfig,
     });
 
     expect(res1.error).toBeUndefined();
@@ -135,6 +138,7 @@ describe("executeServerLangGraph: Official @langchain/langgraph StateGraph Execu
       inputChannels: [],
       inputValues: {},
       threadId,
+      memoryConfig,
     });
 
     expect(res2.error).toBeUndefined();
@@ -142,5 +146,86 @@ describe("executeServerLangGraph: Official @langchain/langgraph StateGraph Execu
     expect(res2.finalState.logs).toEqual(["entry_0", "entry_1"]);
 
     clearServerThread(threadId);
+  });
+
+  it("compiles and executes graphs containing an AgentRef loop node (e.g. Router -> AgentRef -> Master Agent)", async () => {
+    const nodes: LangGraphCanvasNode[] = [
+      {
+        id: "START",
+        type: "start",
+        position: { x: 0, y: 0 },
+        data: { label: "START" },
+      },
+      {
+        id: "agent_node",
+        type: "step",
+        position: { x: 150, y: 0 },
+        data: {
+          label: "Agent Node",
+          stepId: "agent_node",
+          stepType: "custom_code",
+          customCode: {
+            body: "return { count: (state.count || 0) + 1 };",
+          },
+        },
+      },
+      {
+        id: "router_node",
+        type: "step",
+        position: { x: 300, y: 0 },
+        data: {
+          label: "Conditional Router",
+          stepId: "router_node",
+          stepType: "router",
+          routerConfig: {
+            branches: [
+              { id: "branch_agent", label: "Loop to Agent", field: "count", operator: "eq", value: "1" },
+              { id: "branch_end", label: "Exit to END", field: "count", operator: "gte", value: "2" },
+            ],
+          },
+        },
+      },
+      {
+        id: "agent_ref_1",
+        type: "langgraph_agent_ref",
+        position: { x: 450, y: 100 },
+        data: {
+          label: "Agent Node Ref",
+          refId: "agent_node",
+          agentRef: "agent_node",
+        },
+      },
+      {
+        id: "END",
+        type: "end",
+        position: { x: 600, y: 0 },
+        data: { label: "END" },
+      },
+    ];
+
+    const edges: LangGraphCanvasEdge[] = [
+      { id: "e1", source: "START", target: "agent_node" },
+      { id: "e2", source: "agent_node", target: "router_node" },
+      { id: "e3", source: "router_node", target: "agent_ref_1", sourceHandle: "branch_agent" },
+      { id: "e4", source: "router_node", target: "END", sourceHandle: "branch_end" },
+    ];
+
+    const stateChannels: LangGraphStateChannel[] = [
+      { key: "count", type: "number", reducer: "replace", defaultValue: 0 },
+    ];
+
+    const result = await executeServerLangGraph({
+      nodes,
+      edges,
+      stateChannels,
+      inputChannels: [],
+      inputValues: { count: 0 },
+      threadId: "test-thread-agent-ref",
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.finalState.count).toBe(2);
+    expect(result.visitedNodes).toContain("agent_ref_1");
+    expect(result.visitedNodes[result.visitedNodes.length - 1]).toBe("END");
   });
 });
