@@ -16,4 +16,5 @@ export * from "./components/EditCustomReducerForm";
 export * from "./components/CoreChatHistoryCard";
 export * from "./components/CustomReducerItem";
 export * from "./components/TargetVariableCombobox";
+export * from "./components/ChannelReducerConfig";
 export * from "./components/StateTestingTab";

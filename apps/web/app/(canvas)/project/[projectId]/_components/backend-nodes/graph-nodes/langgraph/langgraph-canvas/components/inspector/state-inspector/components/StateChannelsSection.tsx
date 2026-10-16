@@ -16,8 +16,12 @@ interface StateChannelsSectionProps {
   ) => void;
   onDeleteField: (index: number) => void;
   onTestChannel?: (channelKey: string, reducerName: string) => void;
-  onStartEditCustomReducer?: (reducer: LangGraphCustomReducer) => void;
-  onAddCustomReducerForField?: (fieldKey: string) => void;
+  onAddCustomReducer?: (reducer: LangGraphCustomReducer) => void;
+  onUpdateCustomReducer?: (
+    idOrName: string,
+    changes: Partial<LangGraphCustomReducer>,
+  ) => void;
+  onDeleteCustomReducer?: (idOrName: string) => void;
 }
 
 export function StateChannelsSection({
@@ -29,8 +33,9 @@ export function StateChannelsSection({
   onUpdateField,
   onDeleteField,
   onTestChannel,
-  onStartEditCustomReducer,
-  onAddCustomReducerForField,
+  onAddCustomReducer,
+  onUpdateCustomReducer,
+  onDeleteCustomReducer,
 }: StateChannelsSectionProps) {
   return (
     <div className="flex flex-col gap-2.5">
@@ -59,8 +64,9 @@ export function StateChannelsSection({
               onUpdateField={onUpdateField}
               onDeleteField={onDeleteField}
               onTestChannel={onTestChannel}
-              onStartEditCustomReducer={onStartEditCustomReducer}
-              onAddCustomReducerForField={onAddCustomReducerForField}
+              onAddCustomReducer={onAddCustomReducer}
+              onUpdateCustomReducer={onUpdateCustomReducer}
+              onDeleteCustomReducer={onDeleteCustomReducer}
             />
           ))}
         </>

@@ -11,13 +11,11 @@ import {
   BUILT_IN_REDUCERS,
   StateTabHeader,
   StateChannelsSection,
-  ReducersSection,
   StateTestingTab,
   useStateChannelsManager,
   useCustomReducersManager,
 } from "./state-inspector";
 import type { StateTabContentProps } from "./state-inspector/types";
-import type { LangGraphCustomReducer } from "@/types/canvas";
 
 export type { StateTabContentProps };
 export { BUILT_IN_REDUCERS };
@@ -52,38 +50,7 @@ export function StateTabContent({
 
   const {
     customReducers,
-    showReducersSection,
-    setShowReducersSection,
-    isAddingReducer,
-    setIsAddingReducer,
-    newReducerName,
-    setNewReducerName,
-    newReducerCode,
-    setNewReducerCode,
-    newReducerDesc,
-    setNewReducerDesc,
-    newTargetField,
-    newTargetFieldInput,
-    setNewTargetFieldInput,
-    handleSelectNewTargetField,
-    handleCreateCustomReducer,
-    resetNewReducerForm,
-    editingReducerId,
-    editReducerName,
-    setEditReducerName,
-    editReducerCode,
-    setEditReducerCode,
-    editReducerDesc,
-    setEditReducerDesc,
-    editTargetField,
-    setEditTargetField,
-    editTargetFieldInput,
-    setEditTargetFieldInput,
-    handleStartEditCustomReducer,
-    handleCancelEditCustomReducer,
-    handleSaveEditCustomReducer,
     handleDeleteCustomReducer,
-    handleOpenCustomizeChatHistory,
   } = useCustomReducersManager({
     externalCustomReducers,
     stateChannels,
@@ -93,46 +60,12 @@ export function StateTabContent({
     onDeleteCustomReducer,
   });
 
-  const handleTestReducer = useCallback((reducerName: string) => {
-    setTargetTestReducer(reducerName);
-    setActiveTab("testing");
-  }, []);
-
   const handleTestChannel = useCallback(
     (_channelKey: string, reducerName: string) => {
       setTargetTestReducer(reducerName);
       setActiveTab("testing");
     },
     [],
-  );
-
-  const handleEditCustomReducerFromField = useCallback(
-    (reducer: LangGraphCustomReducer) => {
-      setShowReducersSection(true);
-      handleStartEditCustomReducer(reducer);
-      setTimeout(() => {
-        const target =
-          document.getElementById("edit-custom-reducer-form") ||
-          document.getElementById("reducers-section");
-        target?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 50);
-    },
-    [handleStartEditCustomReducer, setShowReducersSection],
-  );
-
-  const handleCreateCustomReducerForField = useCallback(
-    (fieldKey: string) => {
-      setShowReducersSection(true);
-      handleSelectNewTargetField(fieldKey);
-      setIsAddingReducer(true);
-      setTimeout(() => {
-        const target =
-          document.getElementById("create-custom-reducer-form") ||
-          document.getElementById("reducers-section");
-        target?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 50);
-    },
-    [handleSelectNewTargetField, setIsAddingReducer, setShowReducersSection],
   );
 
   return (
@@ -202,50 +135,9 @@ export function StateTabContent({
             onUpdateField={handleUpdateField}
             onDeleteField={handleDeleteField}
             onTestChannel={handleTestChannel}
-            onStartEditCustomReducer={handleEditCustomReducerFromField}
-            onAddCustomReducerForField={handleCreateCustomReducerForField}
-          />
-
-          <ReducersSection
-            customReducers={customReducers}
-            stateChannels={stateChannels}
-            availableFieldKeys={availableFieldKeys}
-            showReducersSection={showReducersSection}
-            onToggleShow={() => setShowReducersSection((prev) => !prev)}
-            isAddingReducer={isAddingReducer}
-            onStartAddReducer={() => {
-              setShowReducersSection(true);
-              setIsAddingReducer(true);
-            }}
-            newReducerName={newReducerName}
-            setNewReducerName={setNewReducerName}
-            newReducerCode={newReducerCode}
-            setNewReducerCode={setNewReducerCode}
-            newReducerDesc={newReducerDesc}
-            setNewReducerDesc={setNewReducerDesc}
-            newTargetField={newTargetField}
-            newTargetFieldInput={newTargetFieldInput}
-            setNewTargetFieldInput={setNewTargetFieldInput}
-            onSelectNewTargetField={handleSelectNewTargetField}
-            onCreateCustomReducer={handleCreateCustomReducer}
-            onResetNewReducerForm={resetNewReducerForm}
-            editingReducerId={editingReducerId}
-            editReducerName={editReducerName}
-            setEditReducerName={setEditReducerName}
-            editReducerCode={editReducerCode}
-            setEditReducerCode={setEditReducerCode}
-            editReducerDesc={editReducerDesc}
-            setEditReducerDesc={setEditReducerDesc}
-            editTargetField={editTargetField}
-            setEditTargetField={setEditTargetField}
-            editTargetFieldInput={editTargetFieldInput}
-            setEditTargetFieldInput={setEditTargetFieldInput}
-            onStartEditCustomReducer={handleStartEditCustomReducer}
-            onCancelEditCustomReducer={handleCancelEditCustomReducer}
-            onSaveEditCustomReducer={handleSaveEditCustomReducer}
+            onAddCustomReducer={onAddCustomReducer}
+            onUpdateCustomReducer={onUpdateCustomReducer}
             onDeleteCustomReducer={handleDeleteCustomReducer}
-            onOpenCustomizeChatHistory={handleOpenCustomizeChatHistory}
-            onTestReducer={handleTestReducer}
           />
         </TabsContent>
 

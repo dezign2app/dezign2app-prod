@@ -1,7 +1,8 @@
-import React from "react";
-import { Trash2, Code2, Lock, Play, ArrowDown } from "lucide-react";
+import React, { useState } from "react";
+import { Trash2, Lock, Play, ChevronDown, GitMerge, Code2 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
+import { Badge } from "@workspace/ui/components/badge";
 import {
   Select,
   SelectContent,
@@ -10,11 +11,12 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { LocalInput } from "../../../../../../common";
-import { BUILT_IN_REDUCERS } from "../constants";
+import { BUILT_IN_REDUCERS, getSuggestedReducerCodeForChannelType } from "../constants";
 import { isLangGraphChannelType } from "@workspace/canvas";
+import { ChannelReducerConfig } from "./ChannelReducerConfig";
 import type { LangGraphStateChannel, LangGraphCustomReducer } from "@/types/canvas";
 
-interface StateChannelItemProps {
+export interface StateChannelItemProps {
   channel: LangGraphStateChannel;
   index: number;
   customReducers: LangGraphCustomReducer[];
@@ -24,8 +26,12 @@ interface StateChannelItemProps {
   ) => void;
   onDeleteField: (index: number) => void;
   onTestChannel?: (channelKey: string, reducerName: string) => void;
-  onStartEditCustomReducer?: (reducer: LangGraphCustomReducer) => void;
-  onAddCustomReducerForField?: (fieldKey: string) => void;
+  onAddCustomReducer?: (reducer: LangGraphCustomReducer) => void;
+  onUpdateCustomReducer?: (
+    idOrName: string,
+    changes: Partial<LangGraphCustomReducer>,
+  ) => void;
+  onDeleteCustomReducer?: (idOrName: string) => void;
 }
 
 export function StateChannelItem({
@@ -35,8 +41,9 @@ export function StateChannelItem({
   onUpdateField,
   onDeleteField,
   onTestChannel,
-  onStartEditCustomReducer,
-  onAddCustomReducerForField,
+  onAddCustomReducer,
+  onUpdateCustomReducer,
+  onDeleteCustomReducer,
 }: StateChannelItemProps) {
   const isCustom = !BUILT_IN_REDUCERS.some((r) => r.name === ch.reducer);
   const isBuiltin = ch.key === "messages";
@@ -44,18 +51,25 @@ export function StateChannelItem({
     (r) => r.name === ch.reducer || r.id === ch.reducer || r.targetField === ch.key,
   );
 
+  // Collapsible state for this variable's Reducers section (defaults to expanded)
+  const [isExpanded, setIsExpanded] = useState<boolean>(true);
 
   return (
     <div
-      className={`flex flex-col gap-3 p-3 rounded-xl border border-border/60 bg-card/60 shadow-sm backdrop-blur-sm text-xs ${
-        isBuiltin ? "border-blue-500/30 bg-blue-500/[0.03]" : ""
+      className={`flex flex-col gap-3 p-3.5 rounded-xl border border-border/70 bg-card/70 shadow-xs backdrop-blur-sm text-xs transition-all ${
+        isBuiltin
+          ? "border-blue-500/30 bg-blue-500/[0.03]"
+          : isCustom
+            ? "border-purple-500/30 bg-purple-500/[0.02]"
+            : ""
       }`}
     >
+      {/* ── State Var Header: Key & Actions ── */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-col gap-1 flex-1">
           <div className="flex items-center justify-between">
             <Label className="text-[10px] text-muted-foreground font-mono">
-              Field Key #{idx + 1}
+              State Variable #{idx + 1}
             </Label>
             {isBuiltin && (
               <div className="flex items-center gap-1 text-[9px] text-blue-400 font-mono">
@@ -68,7 +82,7 @@ export function StateChannelItem({
             className={`h-7 text-xs font-mono font-medium bg-background ${
               isBuiltin ? "cursor-not-allowed opacity-80" : ""
             }`}
-            placeholder="e.g. messages, user_query"
+            placeholder="e.g. messages, user_query, count"
             autoFocus={!ch.key && !isBuiltin}
             disabled={isBuiltin}
             value={ch.key}
@@ -84,25 +98,28 @@ export function StateChannelItem({
             }}
           />
         </div>
+
         <div className="self-end pb-0.5 flex items-center gap-0.5">
           {onTestChannel && (
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 shrink-0 cursor-pointer"
               onClick={() => onTestChannel(ch.key, ch.reducer)}
-              title={`Test ${ch.key} reducer in testing tab`}
+              title={`Test ${ch.key} in testing tab`}
             >
               <Play className="w-3.5 h-3.5 fill-current" />
             </Button>
           )}
           {!isBuiltin && (
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 cursor-pointer"
               onClick={() => onDeleteField(idx)}
-              title="Delete state field"
+              title="Delete state variable"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </Button>
@@ -110,28 +127,38 @@ export function StateChannelItem({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/40">
-        <div className="flex flex-col gap-1">
-          <Label className="text-[10px] text-muted-foreground">Type</Label>
+      {/* ── State Var Type & Summary ── */}
+      <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/40">
+        <div className="flex items-center gap-2 flex-1">
+          <Label className="text-[10px] text-muted-foreground font-mono shrink-0">
+            Type
+          </Label>
           <Select
             value={ch.type}
             disabled={isBuiltin}
             onValueChange={(v) => {
               if (isLangGraphChannelType(v)) {
-                const defaultReducer =
-                  v === "messages"
-                    ? "add_messages"
-                    : v === "array"
-                      ? "append"
-                      : v === "object"
-                        ? "merge_object"
-                        : "replace";
-                onUpdateField(idx, { type: v, reducer: defaultReducer });
+                const suggestedCode = getSuggestedReducerCodeForChannelType(v);
+                const reducerName = `${ch.key || v}_reducer`;
+                onUpdateField(idx, {
+                  type: v,
+                  reducer: reducerName,
+                  customReducerCode: suggestedCode,
+                });
+                if (matchedCustom && onUpdateCustomReducer) {
+                  onUpdateCustomReducer(matchedCustom.id, {
+                    name: reducerName,
+                    code: suggestedCode,
+                    targetField: ch.key,
+                  });
+                }
               }
             }}
           >
             <SelectTrigger
-              className={`h-7 text-xs bg-background font-mono ${isBuiltin ? "cursor-not-allowed opacity-80" : ""}`}
+              className={`h-7 text-xs bg-background font-mono flex-1 ${
+                isBuiltin ? "cursor-not-allowed opacity-80" : ""
+              }`}
             >
               <SelectValue />
             </SelectTrigger>
@@ -147,132 +174,84 @@ export function StateChannelItem({
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between">
-            <Label className="text-[10px] text-muted-foreground">Reducer</Label>
-            {isCustom && (
-              <span className="text-[9px] text-purple-400 font-mono font-semibold">
-                custom
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="flex-1 min-w-0">
-              <Select
-                disabled={isBuiltin}
-                value={
-                  isBuiltin
-                    ? "add_messages"
-                    : ch.reducer === "add_message"
-                      ? "add_messages"
-                      : ch.reducer
-                }
-                onValueChange={(v) => {
-                  if (v === "__CREATE_NEW_CUSTOM__") {
-                    onAddCustomReducerForField?.(ch.key);
-                    return;
-                  }
-                  const matched = customReducers.find((r) => r.name === v);
-                  onUpdateField(idx, {
-                    reducer: v,
-                    customReducerCode: matched?.code || ch.customReducerCode,
-                  });
-                }}
-              >
-                <SelectTrigger
-                  className={`h-7 text-xs bg-background font-mono ${isBuiltin ? "cursor-not-allowed opacity-80" : ""}`}
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="font-mono text-xs">
-                  <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase">
-                    Built-in Reducers
-                  </div>
-                  {BUILT_IN_REDUCERS.map((r) => (
-                    <SelectItem key={r.name} value={r.name}>
-                      {r.label}
-                    </SelectItem>
-                  ))}
-
-                  {customReducers.length > 0 && (
-                    <>
-                      <div className="px-2 py-1 text-[10px] font-bold text-purple-400 uppercase border-t border-border/40 mt-1">
-                        Custom Reducers
-                      </div>
-                      {customReducers.map((r) => (
-                        <SelectItem key={r.id} value={r.name} className="text-purple-300">
-                          {r.name} {r.targetField ? `(tied to ${r.targetField})` : "(custom)"}
-                        </SelectItem>
-                      ))}
-                    </>
-                  )}
-
-                  {onAddCustomReducerForField && (
-                    <SelectItem
-                      value="__CREATE_NEW_CUSTOM__"
-                      className="text-purple-400 font-semibold cursor-pointer border-t border-border/30 mt-1"
-                    >
-                      + Add Custom Reducer...
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {isCustom && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  if (matchedCustom && onStartEditCustomReducer) {
-                    onStartEditCustomReducer(matchedCustom);
-                  } else if (onAddCustomReducerForField) {
-                    onAddCustomReducerForField(ch.key);
-                  }
-                }}
-                className="h-7 w-7 text-purple-400 hover:text-purple-200 hover:bg-purple-500/20 shrink-0 rounded-md border border-purple-500/30 cursor-pointer"
-                title={
-                  matchedCustom
-                    ? `Edit '${matchedCustom.name}' reducer in the section below`
-                    : "Configure custom reducer in the section below"
-                }
-              >
-                <ArrowDown className="w-3.5 h-3.5" />
-              </Button>
-            )}
-
-            {(ch.reducer === "add_messages" || ch.reducer === "add_message") && !isCustom && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  const el =
-                    document.getElementById("core-chat-history-card") ||
-                    document.getElementById("reducers-section");
-                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                }}
-                className="h-7 w-7 text-blue-400 hover:text-blue-200 hover:bg-blue-500/20 shrink-0 rounded-md border border-blue-500/30 cursor-pointer"
-                title="View core chat history reducer in the section below"
-              >
-                <ArrowDown className="w-3.5 h-3.5" />
-              </Button>
-            )}
-          </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-[10px] text-muted-foreground font-mono">Reducer:</span>
+          <Badge
+            variant="secondary"
+            className="text-[9px] h-5 px-1.5 font-mono bg-purple-500/20 text-purple-300 border border-purple-500/30"
+          >
+            {ch.reducer || `${ch.key || "state"}_reducer`}
+          </Badge>
         </div>
       </div>
 
-      {(ch.type === "messages" || ch.reducer === "add_messages") && (
-        <div className="p-1.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-sans text-muted-foreground flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-          <span>
-            Chat history channel:{" "}
-            <code className="font-mono text-blue-300 font-semibold">add_messages</code>{" "}
-            automatically deduplicates by message ID &amp; appends.
-          </span>
+      {/* ── Collapsible Reducer Function ── */}
+      <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
+        <div className="flex items-center justify-between w-full">
+          <button
+            type="button"
+            onClick={() => setIsExpanded((prev) => !prev)}
+            className="flex items-center gap-1.5 text-left transition-colors cursor-pointer group py-0.5"
+          >
+            <Code2 className="w-3.5 h-3.5 text-purple-400 group-hover:text-purple-300 transition-colors" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-foreground group-hover:text-primary transition-colors">
+              Reducer Function
+            </span>
+            <Badge
+              variant="outline"
+              className="text-[8px] h-3.5 px-1 py-0 uppercase font-mono text-purple-300 border-purple-500/40"
+            >
+              (prev, next) =&gt; merged
+            </Badge>
+          </button>
+
+          <div className="flex items-center gap-2">
+            {onTestChannel && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-6 text-[10px] text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 border-emerald-500/30 gap-1 font-medium cursor-pointer"
+                onClick={() =>
+                  onTestChannel(ch.key, ch.reducer || `${ch.key || "var"}_reducer`)
+                }
+                title="Test reducer in the testing playground"
+              >
+                <Play className="w-2.5 h-2.5 fill-current" />
+                <span>Test Reducer</span>
+              </Button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsExpanded((prev) => !prev)}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer py-0.5"
+            >
+              <span>{isExpanded ? "Collapse" : "Expand"}</span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                  isExpanded ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+          </div>
         </div>
-      )}
+
+        {isExpanded && (
+          <div className="animate-in fade-in-50 slide-in-from-top-1 duration-150 pt-1">
+            <ChannelReducerConfig
+              channel={ch}
+              index={idx}
+              customReducers={customReducers}
+              onUpdateField={onUpdateField}
+              onTestChannel={onTestChannel}
+              onAddCustomReducer={onAddCustomReducer}
+              onUpdateCustomReducer={onUpdateCustomReducer}
+              onDeleteCustomReducer={onDeleteCustomReducer}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
