@@ -21,6 +21,7 @@ import type {
   LangGraphMiddlewareRefNode,
   MemoryNode,
   LangGraphMemoryRefNode,
+  LangGraphAgentRefNode,
   AgentNode,
   StepNode,
   OutputNode,
@@ -39,6 +40,7 @@ import {
   LANGGRAPH_CANVAS_NODE_MEMORY,
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_NODE,
+  LANGGRAPH_CANVAS_NODE_AGENT_REF,
   LANGGRAPH_CANVAS_NODE_STEP,
   LANGGRAPH_CANVAS_NODE_END,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
@@ -162,6 +164,22 @@ export function reconstructNodes(
         label: memRef.label || "Memory Ref",
         refId: memRef.id,
         memoryRef: memRef.memoryRef,
+      },
+    };
+    reconstructedNodes.push(customRefNode);
+  });
+
+  const customAgentRefs = data.customAgentRefNodes || [];
+  customAgentRefs.forEach((aRef) => {
+    const customRefNode: LangGraphAgentRefNode = {
+      id: aRef.id,
+      type: LANGGRAPH_CANVAS_NODE_AGENT_REF,
+      position: aRef.position || { x: 500, y: 220 },
+      data: {
+        label: aRef.label || "Agent Ref",
+        refId: aRef.id,
+        agentRef: aRef.agentRef || aRef.nodeRef,
+        nodeRef: aRef.agentRef || aRef.nodeRef,
       },
     };
     reconstructedNodes.push(customRefNode);

@@ -17,6 +17,8 @@ export interface LangGraphRefinementData {
   customToolRefNodes?: Array<{ id: string }>;
   customMiddlewareRefNodes?: Array<{ id: string }>;
   customMemoryRefNodes?: Array<{ id: string }>;
+  customAgentRefNodes?: Array<{ id: string }>;
+  customNodeRefNodes?: Array<{ id: string }>;
   outputChannels?: OutputChannel[];
   graphEdges: GraphEdge[];
 }
@@ -38,11 +40,13 @@ export function validateLangGraphTopology(
       .filter((id): id is string => Boolean(id)),
     ...(data.customMiddlewareRefNodes?.map((m) => m.id) || []),
   ]);
-  const agentIds = new Set(
-    data.agentDefinitions
+  const agentIds = new Set([
+    ...data.agentDefinitions
       .map((a) => a.agentId || a.id)
       .filter((id): id is string => Boolean(id)),
-  );
+    ...(data.customAgentRefNodes?.map((a) => a.id) || []),
+    ...(data.customNodeRefNodes?.map((n) => n.id) || []),
+  ]);
   const memoryIds = new Set([
     ...data.memoryDefinitions
       .map((m) => m.memoryId || m.id)

@@ -83,6 +83,8 @@ export const LANGGRAPH_CANVAS_NODE_MIDDLEWARE = "langgraph_middleware" as const;
 export const LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF = "langgraph_middleware_ref" as const;
 export const LANGGRAPH_CANVAS_NODE_NODE = "langgraph_node" as const;
 export const LANGGRAPH_CANVAS_NODE_AGENT = "langgraph_agent" as const;
+export const LANGGRAPH_CANVAS_NODE_AGENT_REF = "langgraph_agent_ref" as const;
+export const LANGGRAPH_CANVAS_NODE_NODE_REF = "langgraph_node_ref" as const;
 export const LANGGRAPH_CANVAS_NODE_MEMORY = "langgraph_memory" as const;
 export const LANGGRAPH_CANVAS_NODE_MEMORY_REF = "langgraph_memory_ref" as const;
 export const LANGGRAPH_CANVAS_NODE_OUTPUT = "langgraph_output" as const;
@@ -464,7 +466,7 @@ export type ToolPaletteItem = {
 export const TOOL_PALETTE_ITEMS: ToolPaletteItem[] = [
   {
     type: LANGGRAPH_CANVAS_NODE_NODE,
-    label: "Node",
+    label: "Agent Node",
     desc: "LangGraph node with optional LLM, tools, middleware & memory",
     icon: Bot,
   },

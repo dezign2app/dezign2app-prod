@@ -50,8 +50,9 @@ export const LangGraphReferenceEdge: React.FC<EdgeProps> = ({
   }
 
   const isLLM = id.includes("llm") || source.startsWith("llm_");
-  const color = isLLM ? "#38bdf8" : "#10b981"; // sky-400 for LLM, emerald-500 for Tool
-  const glowColor = isLLM ? "#38bdf825" : "#10b98125";
+  const isAgent = id.includes("agent") || source.startsWith("node_") || target.startsWith("agent_ref_");
+  const color = isLLM ? "#38bdf8" : isAgent ? "#818cf8" : "#10b981"; // sky-400 for LLM, indigo-400 for Agent, emerald-500 for Tool
+  const glowColor = isLLM ? "#38bdf825" : isAgent ? "#818cf825" : "#10b98125";
 
   return (
     <g className="react-flow__edge-langgraph-reference pointer-events-none">

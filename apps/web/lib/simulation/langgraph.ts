@@ -331,6 +331,13 @@ export async function simulateLangGraphTestCase(args: {
     }
     incomingEdge = nextEdge;
     currentId = nextEdge?.targets?.[0]?.id;
+    if (currentId) {
+      const agentRef = (args.graph.data as { customAgentRefNodes?: Array<{ id: string; agentRef?: string; nodeRef?: string }> })?.customAgentRefNodes?.find((r) => r.id === currentId);
+      if (agentRef && (agentRef.agentRef || agentRef.nodeRef)) {
+        actualPath.push(currentId);
+        currentId = agentRef.agentRef || agentRef.nodeRef;
+      }
+    }
   }
 
   if (

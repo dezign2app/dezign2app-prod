@@ -11,10 +11,12 @@ import {
   HelpCircle,
   Link2,
   GitMerge,
+  RotateCcw,
 } from "lucide-react";
 import type { LangGraphCanvasNodeAddType } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_NODE,
+  LANGGRAPH_CANVAS_NODE_AGENT_REF,
   LANGGRAPH_CANVAS_NODE_END,
   LANGGRAPH_CANVAS_NODE_LLM,
   LANGGRAPH_CANVAS_NODE_LLM_REF,
@@ -39,9 +41,15 @@ export type ToolPaletteItem = {
 export const TOOL_PALETTE_ITEMS: ToolPaletteItem[] = [
   {
     type: LANGGRAPH_CANVAS_NODE_NODE,
-    label: "Node",
+    label: "Agent Node",
     desc: "LangGraph node with optional LLM, tools, middleware & memory",
     icon: Bot,
+  },
+  {
+    type: LANGGRAPH_CANVAS_NODE_AGENT_REF,
+    label: "Agent Node Ref",
+    desc: "Loop back to a previous node in circular graphs without crossing wires",
+    icon: RotateCcw,
   },
   {
     type: STEP_TYPE_ROUTER,

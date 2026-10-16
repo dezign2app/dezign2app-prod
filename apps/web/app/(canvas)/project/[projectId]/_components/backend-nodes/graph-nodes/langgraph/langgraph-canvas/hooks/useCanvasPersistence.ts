@@ -81,6 +81,7 @@ export function useCanvasPersistence({
         customToolRefNodes: data.customToolRefNodes || [],
         customMiddlewareRefNodes: data.customMiddlewareRefNodes || [],
         customMemoryRefNodes: data.customMemoryRefNodes || [],
+        customAgentRefNodes: data.customAgentRefNodes || [],
         toolDefinitions: data.toolDefinitions || [],
         middlewareDefinitions: data.middlewareDefinitions || [],
         memoryDefinitions: data.memoryDefinitions || [],

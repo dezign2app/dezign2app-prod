@@ -1096,9 +1096,27 @@ describe("Convex canvasValidators exact schema", () => {
     const lgPayload = {
       label: "Chatbot Agent",
       stackOrder: 0,
+      customAgentRefNodes: [
+        {
+          id: "agent_ref_1",
+          label: "Agent Loop Ref",
+          agentRef: "master_agent_1",
+          position: { x: 100, y: 200 },
+        },
+      ],
+      customNodeRefNodes: [
+        {
+          id: "node_ref_1",
+          label: "Node Loop Ref",
+          nodeRef: "master_node_1",
+          position: { x: 300, y: 400 },
+        },
+      ],
     };
-    expect(lgPayload).toBeDefined();
+    expect(langgraphDataSchema.safeParse(lgPayload).success).toBe(true);
     expect(langgraphConvexDataValidator.fields.stackOrder).toBeDefined();
+    expect(langgraphConvexDataValidator.fields.customAgentRefNodes).toBeDefined();
+    expect(langgraphConvexDataValidator.fields.customNodeRefNodes).toBeDefined();
   });
 
   it("validates web page node with section componentBindings from user error payload in Convex & Zod schemas", async () => {

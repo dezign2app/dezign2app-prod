@@ -215,6 +215,15 @@ export interface LangGraphMemoryRefNodeData extends Record<string, unknown> {
   onDeleteMemoryRef?: () => void;
 }
 
+export interface LangGraphAgentRefNodeData extends Record<string, unknown> {
+  label: string;
+  refId: string;
+  agentRef?: string;
+  nodeRef?: string;
+  onDeleteAgentRef?: () => void;
+  onSelectMaster?: (masterId: string) => void;
+}
+
 export interface LangGraphStateReducerRefNodeData extends Record<string, unknown> {
   label: string;
   refId: string;

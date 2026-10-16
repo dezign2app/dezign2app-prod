@@ -32,6 +32,7 @@ import type {
   LangGraphToolRefNode,
   LangGraphMiddlewareRefNode,
   LangGraphMemoryRefNode,
+  LangGraphAgentRefNode,
 } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_STEP,
@@ -44,6 +45,8 @@ import {
   LANGGRAPH_CANVAS_NODE_MIDDLEWARE_REF,
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT,
+  LANGGRAPH_CANVAS_NODE_AGENT_REF,
+  LANGGRAPH_CANVAS_NODE_NODE_REF,
   LANGGRAPH_CANVAS_NODE_MEMORY,
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
@@ -145,6 +148,20 @@ export function buildGraphData({
       id: n.id,
       label: n.data.label,
       memoryRef: n.data.memoryRef,
+      position: n.position,
+    }));
+
+  const customAgentRefNodes = nodes
+    .filter(
+      (n): n is LangGraphAgentRefNode =>
+        n.type === LANGGRAPH_CANVAS_NODE_AGENT_REF ||
+        n.type === LANGGRAPH_CANVAS_NODE_NODE_REF,
+    )
+    .map((n) => ({
+      id: n.id,
+      label: n.data.label,
+      agentRef: n.data.agentRef || n.data.nodeRef,
+      nodeRef: n.data.agentRef || n.data.nodeRef,
       position: n.position,
     }));
 
@@ -474,6 +491,7 @@ export function buildGraphData({
     customToolRefNodes,
     customMiddlewareRefNodes,
     customMemoryRefNodes,
+    customAgentRefNodes,
     toolDefinitions,
     middlewareDefinitions,
     memoryDefinitions,
