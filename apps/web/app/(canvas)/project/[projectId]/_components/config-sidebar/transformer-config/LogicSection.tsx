@@ -15,6 +15,7 @@ interface LogicSectionProps {
   returnSchema?: Array<{ name: string; type: string; required?: boolean }>;
   importedTransformers?: import("../../shared/business-logic-block/types").ImportedTransformerItem[];
   packageImports?: import("@workspace/canvas").TransformerPackageImport[];
+  onGenerateCode?: () => Promise<void> | void;
   onModeChange: (mode: "natural_language" | "code") => void;
   onPromptChange: (prompt: string) => void;
   onCodeChange: (code: string) => void;
@@ -33,11 +34,17 @@ export const LogicSection = React.memo<LogicSectionProps>(({
   returnSchema,
   importedTransformers,
   packageImports,
+  onGenerateCode,
   onModeChange,
   onPromptChange,
   onCodeChange,
   onAsyncChange,
 }) => {
+  const firstInputParam = inputSchema?.[0]?.name;
+  const dynamicPlaceholder = firstInputParam
+    ? `return {\n  result: ${firstInputParam},\n};`
+    : `return {\n  result: "transformed",\n};`;
+
   return (
     <div className="flex flex-col gap-2">
       <BusinessLogicBlock
@@ -47,10 +54,11 @@ export const LogicSection = React.memo<LogicSectionProps>(({
         onPromptChange={onPromptChange}
         code={code || ""}
         onCodeChange={onCodeChange}
+        onGenerateCode={onGenerateCode}
         title="2. Transformation Logic"
         description="Pure TypeScript function implementation or natural language transformation instructions."
         promptPlaceholder="Describe how the input fields should be mapped and transformed into the return fields..."
-        codePlaceholder={`return {\n  result: input.name.toLowerCase().replace(/\\s+/g, '-'),\n};`}
+        codePlaceholder={dynamicPlaceholder}
         codeLanguageLabel="TypeScript Function"
         functionName={functionName}
         inputTypeName={inputTypeName}

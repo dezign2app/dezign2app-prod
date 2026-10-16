@@ -41,6 +41,11 @@ import {
 import type { Parameter } from "@/types/canvas";
 import { toVarName, toPascalCase } from "@/lib/compiler/utils";
 import { inferReturnSchemaFromCode } from "@/lib/utils/inferReturnSchema";
+import {
+  generateDefaultTransformerCode,
+  isLegacyOrEmptyTransformerCode,
+  isDefaultStarterTransformerCode,
+} from "@/lib/utils/transformerCodeGenerator";
 import { LocalInput } from "../../../../common";
 import { InputSchemaSection } from "../../../../../../config-sidebar/transformer-config/InputSchemaSection";
 import { LogicSection } from "../../../../../../config-sidebar/transformer-config/LogicSection";
@@ -65,7 +70,7 @@ const DEFAULT_TRANSFORMER_DATA: TransformerCanvasNodeData = {
   functionName: "transformData",
   scope: "global",
   isGlobal: true,
-  code: "// TypeScript transformer logic: (inputs, state, clone) => any\nreturn {\n  ...inputs\n};\n",
+  code: generateDefaultTransformerCode({ functionName: "transformData" }),
   inputSchema: [],
   returnSchema: [],
 };
@@ -153,6 +158,36 @@ export function TransformerNodeInspector({
       onUpdateTransformer({ returnSchema: fresh });
     }
   }, [data.code, inputSchema, onUpdateTransformer]);
+
+  // Auto-upgrade legacy flawed code or empty code to match current input schema
+  useEffect(() => {
+    if (!isRef && isLegacyOrEmptyTransformerCode(data.code)) {
+      const nextCode = generateDefaultTransformerCode({
+        functionName,
+        inputSchema,
+        returnSchema,
+        outputTypeName,
+        prompt: data.prompt,
+      });
+      const inferred = inferReturnSchemaFromCode(nextCode, inputSchema);
+      onUpdateTransformer({
+        code: nextCode,
+        ...(inferred.length > 0 && (!data.returnSchema || data.returnSchema.length === 0)
+          ? { returnSchema: inferred }
+          : {}),
+      });
+    }
+  }, [
+    isRef,
+    data.code,
+    functionName,
+    inputSchema,
+    returnSchema,
+    outputTypeName,
+    data.prompt,
+    data.returnSchema,
+    onUpdateTransformer,
+  ]);
 
   const customDependencies: NodeDependencyItem[] = useMemo(
     () => data.customDependencies || [],
@@ -438,18 +473,43 @@ export function TransformerNodeInspector({
             inputSchema={inputSchema}
             rawJson={data.inputSchemaRawJson || ""}
             onModeChange={(mode) => onUpdateTransformer({ inputSchemaMode: mode })}
-            onSchemaChange={(fields, rawJson) =>
-              onUpdateTransformer({
-                inputSchema: fields.map((f, idx) => ({
-                  id: f.id || `in_field_${idx}`,
-                  name: f.name || "",
-                  type: f.type || "string",
-                  required: f.required ?? true,
-                  description: f.description,
-                })),
-                inputSchemaRawJson: rawJson,
-              })
-            }
+            onSchemaChange={(fields, rawJson) => {
+              const updatedFields: Parameter[] = fields.map((f, idx) => ({
+                id: f.id || `in_field_${idx}`,
+                name: f.name || "",
+                type: f.type || "string",
+                required: f.required ?? true,
+                description: f.description,
+              }));
+
+              const shouldRegenerate =
+                isLegacyOrEmptyTransformerCode(data.code) ||
+                isDefaultStarterTransformerCode(data.code);
+
+              if (shouldRegenerate) {
+                const nextCode = generateDefaultTransformerCode({
+                  functionName,
+                  inputSchema: updatedFields,
+                  returnSchema,
+                  outputTypeName,
+                  prompt: data.prompt,
+                });
+                const inferred = inferReturnSchemaFromCode(nextCode, updatedFields);
+                onUpdateTransformer({
+                  inputSchema: updatedFields,
+                  inputSchemaRawJson: rawJson,
+                  code: nextCode,
+                  ...(inferred.length > 0 && (!data.returnSchema || data.returnSchema.length === 0)
+                    ? { returnSchema: inferred }
+                    : {}),
+                });
+              } else {
+                onUpdateTransformer({
+                  inputSchema: updatedFields,
+                  inputSchemaRawJson: rawJson,
+                });
+              }
+            }}
           />
 
           {/* 2. LOGIC SECTION */}
@@ -466,6 +526,23 @@ export function TransformerNodeInspector({
             packageImports={packageImports}
             onModeChange={(mode) => onUpdateTransformer({ logicMode: mode })}
             onPromptChange={(prompt) => onUpdateTransformer({ prompt })}
+            onGenerateCode={() => {
+              const generatedCode = generateDefaultTransformerCode({
+                functionName,
+                inputSchema,
+                returnSchema,
+                outputTypeName,
+                prompt: data.prompt,
+              });
+              const inferred = inferReturnSchemaFromCode(generatedCode, inputSchema);
+              onUpdateTransformer({
+                code: generatedCode,
+                logicMode: "code",
+                ...(inferred.length > 0 && (!data.returnSchema || data.returnSchema.length === 0)
+                  ? { returnSchema: inferred }
+                  : {}),
+              });
+            }}
             onCodeChange={(code) => {
               const inferred = inferReturnSchemaFromCode(code, inputSchema);
               if (inferred.length > 0) {

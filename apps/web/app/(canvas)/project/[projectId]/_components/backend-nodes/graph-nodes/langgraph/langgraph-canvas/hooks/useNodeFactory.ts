@@ -51,6 +51,7 @@ import {
   DEFAULT_LLM_TEMPERATURE,
   STEP_TYPE_ROUTER,
 } from "../constants";
+import { generateDefaultTransformerCode } from "@/lib/utils/transformerCodeGenerator";
 
 interface UseNodeFactoryProps {
   setNodes: React.Dispatch<React.SetStateAction<LangGraphCanvasNode[]>>;
@@ -660,7 +661,7 @@ export function useNodeFactory({
               functionName: "transformData",
               scope: "global",
               isGlobal: true,
-              code: "// TypeScript transformer logic: (inputs, state, clone) => any\nreturn {\n  ...inputs\n};\n",
+              code: generateDefaultTransformerCode({ functionName: "transformData" }),
               inputSchema: [],
               returnSchema: [],
               onDeleteTransformer: () => {
