@@ -48,6 +48,7 @@ import {
 } from "./langgraph-canvas/constants";
 
 import { useConnectedRoutes } from "./LangGraphNode";
+import { detectInfiniteLoops } from "./langgraph-canvas/utils/loopDetection";
 
 const langGraphCanvasEdgeTypes = {
   "langgraph-reference": LangGraphReferenceEdge,
@@ -317,6 +318,10 @@ export function LangGraphStudioView({
     return null;
   }, [memoryConfig, allCanvasNodes, hasStorageNodes]);
 
+  const loopWarnings = useMemo(() => {
+    return detectInfiniteLoops({ nodes, edges });
+  }, [nodes, edges]);
+
   const activeNodeIds = useSimulationStore((s) => s.activeNodeIds);
   const activeEdgeIds = useSimulationStore((s) => s.activeEdgeIds);
   const currentNodeId = useSimulationStore((s) => s.currentNodeId);
@@ -384,16 +389,20 @@ export function LangGraphStudioView({
   }, [edges, nodes, selectedNodeId, activeEdgeIds, currentEdgeId]);
 
   const displayNodes = useMemo(() => {
+    const loopNodeIdSet = new Set(loopWarnings.flatMap((w) => w.cycleNodeIds));
     return nodes.map((n) => {
       const isCurrent = currentNodeId === n.id;
       const isActive = activeNodeIds.includes(n.id);
+      const isLoopNode = loopNodeIdSet.has(n.id);
       const isPill =
         n.id === "START" || n.type === "end" || n.id.startsWith("end_");
       const baseRounded = isPill ? "rounded-full" : "rounded-2xl";
       if (!isCurrent && !isActive) {
         return {
           ...n,
-          className: `${n.className || ""} ${baseRounded}`,
+          className: `${n.className || ""} ${baseRounded} ${
+            isLoopNode ? "ring-2 ring-amber-500/70 shadow-[0_0_12px_rgba(245,158,11,0.2)]" : ""
+          }`,
         };
       }
 
@@ -407,7 +416,7 @@ export function LangGraphStudioView({
         }`,
       };
     });
-  }, [nodes, activeNodeIds, currentNodeId]);
+  }, [nodes, activeNodeIds, currentNodeId, loopWarnings]);
 
   const runGraphTestCase = async (testCase: SimulationTestCase) => {
     // If the test case has explicit mock overrides configured, simulate with those mocks.
@@ -605,6 +614,36 @@ export function LangGraphStudioView({
             >
               <span>Open Schema View</span>
               <ExternalLink className="w-3 h-3" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Infinite Loop Warning Banner */}
+      {loopWarnings.length > 0 && (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 flex items-center justify-between text-xs text-amber-700 dark:text-amber-300 font-medium backdrop-blur-sm z-20">
+          <div className="flex items-center gap-2 min-w-0 flex-1 mr-4">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500" />
+            <span className="truncate">{loopWarnings[0]?.message}</span>
+            {loopWarnings.length > 1 && (
+              <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-amber-500/20 text-[10px] font-bold">
+                +{loopWarnings.length - 1} more
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[11px] px-2.5 py-0 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+              onClick={() => {
+                const firstLoopNodeId = loopWarnings[0]?.cycleNodeIds[0];
+                if (firstLoopNodeId) {
+                  setSelectedNodeId(firstLoopNodeId);
+                }
+              }}
+            >
+              Focus Loop Node
             </Button>
           </div>
         </div>

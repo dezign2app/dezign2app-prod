@@ -8,6 +8,7 @@ describe("Custom Test Accounts Seeding Integration", () => {
   const authNode: BackendNode = {
     id: "auth-1",
     type: "auth",
+    fractionalIndex: "a0",
     position: { x: 0, y: 0 },
     data: {
       label: "Better Auth",
@@ -20,6 +21,7 @@ describe("Custom Test Accounts Seeding Integration", () => {
   const sqliteDbNode: BackendNode = {
     id: "db-1",
     type: "database",
+    fractionalIndex: "a1",
     position: { x: 200, y: 0 },
     data: {
       label: "SqliteDB",
@@ -30,6 +32,7 @@ describe("Custom Test Accounts Seeding Integration", () => {
   const postgresDbNode: BackendNode = {
     id: "db-2",
     type: "database",
+    fractionalIndex: "a2",
     position: { x: 200, y: 0 },
     data: {
       label: "PostgresDB",
@@ -41,6 +44,8 @@ describe("Custom Test Accounts Seeding Integration", () => {
     id: "e-auth-db",
     source: "auth-1",
     target: "db-1",
+    type: "connection",
+    fractionalIndex: "e0",
   };
 
   const customPersonas: PersonaSeed[] = [
@@ -96,6 +101,8 @@ describe("Custom Test Accounts Seeding Integration", () => {
       id: "e-auth-pg",
       source: "auth-1",
       target: "db-2",
+      type: "connection",
+      fractionalIndex: "e1",
     };
 
     const dbResult = compileDatabaseNodes([authNode, postgresDbNode], [pgEdge], customPersonas);

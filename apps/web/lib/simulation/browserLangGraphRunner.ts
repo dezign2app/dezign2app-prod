@@ -1206,6 +1206,56 @@ export async function executeBrowserLangGraph(
     }
   }
 
+  // Handle Infinite Loop timeout
+  const exceededMaxSteps = safetyLoopGuard >= maxSteps && currentNodeId !== "END";
+  if (exceededMaxSteps) {
+    const loopCycle = visitedNodes.slice(-6).map((id) => {
+      const n = nodes.find((node) => node.id === id);
+      return (n?.data as { label?: string; name?: string })?.label || id;
+    });
+    const loopMsg = `Infinite loop detected! Execution exceeded maximum limit of ${maxSteps} steps without reaching END. Repeating path: ${loopCycle.join(" → ")}`;
+
+    allRunLogs.push({
+      timestamp: Date.now(),
+      level: "error",
+      message: loopMsg,
+      nodeId: currentNodeId || "LOOP_GUARD",
+      nodeLabel: "Infinite Loop Guard",
+    });
+
+    const errorTrace: SimulationTraceEntry = {
+      id: `trace_${generateId()}`,
+      kind: "step",
+      label: "Infinite Loop Exceeded",
+      status: "failed",
+      nodeId: currentNodeId || "LOOP_GUARD",
+      input: clone(state),
+      output: clone(state),
+      logs: [
+        {
+          timestamp: Date.now(),
+          level: "error",
+          message: loopMsg,
+          nodeId: currentNodeId || "LOOP_GUARD",
+          nodeLabel: "Infinite Loop Guard",
+        },
+      ],
+    };
+    trace.push(errorTrace);
+    onStepStart?.(currentNodeId || "LOOP_GUARD", "Infinite Loop Guard", clone(state));
+    onStepEnd?.(currentNodeId || "LOOP_GUARD", "Infinite Loop Guard", clone(state), 2);
+
+    return {
+      finalState: state,
+      trace,
+      logs: allRunLogs,
+      totalDurationMs: Date.now() - startTime,
+      visitedNodes,
+      latestAssistantResponse,
+      error: loopMsg,
+    };
+  }
+
   // END Step
   visitedNodes.push("END");
   const endLogs: SimulationStepLogEntry[] = [
