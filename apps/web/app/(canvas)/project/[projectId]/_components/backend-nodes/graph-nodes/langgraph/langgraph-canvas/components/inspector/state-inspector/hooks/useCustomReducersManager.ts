@@ -31,7 +31,7 @@ export function useCustomReducersManager({
     return [...(externalCustomReducers || [])];
   }, [externalCustomReducers]);
 
-  const [showReducersSection, setShowReducersSection] = useState(true);
+  const [showReducersSection, setShowReducersSection] = useState(false);
 
   // New reducer state
   const [isAddingReducer, setIsAddingReducer] = useState(false);
